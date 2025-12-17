@@ -468,7 +468,7 @@
                         localStorage.setItem('userEmail', data.email);
                         localStorage.setItem('userRole', data.role);
                         
-                        alertEl.innerHTML = '[OK] Demo Mode: Full access granted - redirecting...';
+                        alertEl.innerHTML = '✅ Demo Mode: Full access granted - redirecting...';
                         
                         // Redirect to admin dashboard
                         setTimeout(() => {
@@ -480,7 +480,7 @@
                 } catch (error) {
                     console.error('Demo auto-login error:', error);
                     alertEl.className = 'alert error';
-                    alertEl.innerHTML = '[WARNING] Demo auto-login failed. Please try manual login.';
+                    alertEl.innerHTML = '⚠️ Demo auto-login failed. Please try manual login.';
                     
                     // Show the login form as fallback
                     document.getElementById('loginForm').style.display = 'block';

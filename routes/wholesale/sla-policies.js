@@ -283,7 +283,7 @@ router.post('/violations', async (req, res) => {
     slaViolations.set(violationId, violation);
     
     // Send notification to farm
-    console.log(`[WARNING] SLA Violation recorded: ${rule.name}`);
+    console.log(`⚠️ SLA Violation recorded: ${rule.name}`);
     console.log(`  Sub-Order: ${sub_order_id}`);
     console.log(`  Farm: ${farm_id}`);
     console.log(`  Delay: ${delay_hours} hours`);
@@ -533,7 +533,7 @@ router.post('/find', async (req, res) => {
       }
     ];
     
-    console.log(`[REFRESH] Found ${substitutes.length} substitutes for ${original_sku_id}`);
+    console.log(`🔄 Found ${substitutes.length} substitutes for ${original_sku_id}`);
     console.log(`  Policy: ${policy.name}`);
     console.log(`  Requires Approval: ${policy.requires_buyer_approval}`);
     
@@ -665,7 +665,7 @@ router.post('/respond/:approval_id', (req, res) => {
     approval.response_notes = notes;
     approval.responded_at = new Date().toISOString();
     
-    console.log(`[OK] Substitution ${approval.status}: ${approval_id}`);
+    console.log(`✓ Substitution ${approval.status}: ${approval_id}`);
     
     // In production, would:
     // 1. Update order with substitution
@@ -732,7 +732,7 @@ router.post('/buyer/preferences', (req, res) => {
     
     buyerPreferences.set(buyer_id, preferences);
     
-    console.log(`[OK] Updated buyer preferences: ${buyer_id}`);
+    console.log(`✓ Updated buyer preferences: ${buyer_id}`);
     console.log(`  Default Policy: ${default_policy_id}`);
     console.log(`  Never Substitute: ${never_substitute.length} SKUs`);
     

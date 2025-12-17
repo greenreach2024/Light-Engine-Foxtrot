@@ -370,7 +370,7 @@
       </div>
 
       <div class="action-card" onclick="openPlacementFlow()">
-        <h2><span class="icon">[LOCATION]</span> Move Tray</h2>
+        <h2><span class="icon">📍</span> Move Tray</h2>
         <p>Scan tray and location QR to update placement</p>
       </div>
 
@@ -863,7 +863,7 @@
         
         if (!trayData || trayData.length === 0) {
           document.getElementById('harvestStatus').innerHTML = 
-            '<span style="color: #ef4444;">[ERROR] Tray not found. Scan again or enter manually.</span>';
+            '<span style="color: #ef4444;">❌ Tray not found. Scan again or enter manually.</span>';
           setTimeout(() => startQRScanner('qrReaderHarvest', handleHarvestTrayScan), 2000);
           return;
         }
@@ -873,7 +873,7 @@
         // Check for active tray run
         if (!tray.trayRunId) {
           document.getElementById('harvestStatus').innerHTML = 
-            '<span style="color: #ef4444;">[ERROR] No active crop cycle on this tray.</span>';
+            '<span style="color: #ef4444;">❌ No active crop cycle on this tray.</span>';
           setTimeout(() => startQRScanner('qrReaderHarvest', handleHarvestTrayScan), 2000);
           return;
         }
@@ -895,7 +895,7 @@
       } catch (error) {
         console.error('Harvest scan error:', error);
         document.getElementById('harvestStatus').innerHTML = 
-          '<span style="color: #ef4444;">[ERROR] Error loading tray data. Try again.</span>';
+          '<span style="color: #ef4444;">❌ Error loading tray data. Try again.</span>';
       }
     }
 

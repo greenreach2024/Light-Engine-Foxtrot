@@ -11,9 +11,9 @@ const router = express.Router();
 // In production, this would come from database
 const REGISTERED_FARMS = [
   {
-    farmId: 'demo-farm-1',
+    farmId: 'light-engine-demo',
     name: 'Light Engine Demo Farm',
-    url: 'http://light-engine-demo-env.eba-smmuh8fc.us-east-1.elasticbeanstalk.com',
+    url: 'http://light-engine-demo-env2.eba-vypvd5rj.us-east-1.elasticbeanstalk.com',
     location: 'AWS us-east-1',
     region: 'Pacific Northwest',
     status: 'active'

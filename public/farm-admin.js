@@ -33,7 +33,7 @@ function initLogin() {
     // Check if user is already logged in
     const session = getSession();
     if (session && session.token) {
-        console.log('[OK] Active session found, redirecting to dashboard...');
+        console.log('✅ Active session found, redirecting to dashboard...');
         window.location.href = '/farm-admin.html';
         return;
     }
@@ -56,7 +56,7 @@ function initLogin() {
     
     // Auto-fill demo credentials
     if (window.location.search.includes('demo=true')) {
-        document.getElementById('farmId').value = 'TEST-FARM-001';
+        document.getElementById('farmId').value = 'GR-00001';
         document.getElementById('email').value = 'admin@demo-farm.com';
         document.getElementById('password').value = 'demo123';
     }
@@ -66,13 +66,13 @@ function initLogin() {
  * Initialize dashboard
  */
 async function initDashboard() {
-    console.log('[STATS] Initializing farm admin dashboard...');
+    console.log('📊 Initializing farm admin dashboard...');
     
     // AUTHENTICATION DISABLED - Direct access granted
     // Create a default session for farm operations
     currentSession = {
         token: 'local-access',
-        farmId: 'TEST-FARM-001',
+        farmId: 'LOCAL-FARM',
         farmName: 'Light Engine Farm',
         email: 'admin@local-farm.com',
         role: 'admin'
@@ -163,7 +163,7 @@ async function handleLogin(e) {
         }
         
     } catch (error) {
-        console.error('[ERROR] Login error:', error);
+        console.error('❌ Login error:', error);
         showAlert('error', 'Connection error. Please check your network and try again.');
         loginBtn.innerHTML = originalText;
         loginBtn.disabled = false;
@@ -207,7 +207,7 @@ async function loadFarmData() {
         }
         
     } catch (error) {
-        console.error('[ERROR] Error loading farm data:', error);
+        console.error('❌ Error loading farm data:', error);
     }
 }
 
@@ -216,7 +216,7 @@ async function loadFarmData() {
  */
 async function loadDashboardData() {
     try {
-        console.log('[STATS] Loading dashboard data...');
+        console.log('📊 Loading dashboard data...');
         
         // Load inventory data from demo mode endpoint
         const inventoryRes = await fetch(`${API_BASE}/api/inventory/current`, {
@@ -227,7 +227,7 @@ async function loadDashboardData() {
         
         if (inventoryRes.ok) {
             const inventoryData = await inventoryRes.json();
-            console.log('[OK] Inventory data loaded:', inventoryData);
+            console.log('✅ Inventory data loaded:', inventoryData);
             
             // Check if data is at root level (demo mode) or nested in data property
             const data = inventoryData.data || inventoryData;
@@ -241,7 +241,7 @@ async function loadDashboardData() {
                 document.getElementById('kpi-plants-change').textContent = '+324 this week';
             } else {
                 // Fallback to demo values if data structure is unexpected
-                console.warn('[WARNING] Unexpected data structure, using fallback values');
+                console.warn('⚠️ Unexpected data structure, using fallback values');
                 document.getElementById('kpi-trays').textContent = '320';
                 document.getElementById('kpi-plants').textContent = '7,680';
                 document.getElementById('kpi-trays-change').textContent = '+12 this week';
@@ -249,7 +249,7 @@ async function loadDashboardData() {
             }
         } else {
             // Fallback to demo values
-            console.warn('[WARNING] Using demo inventory values');
+            console.warn('⚠️ Using demo inventory values');
             document.getElementById('kpi-trays').textContent = '320';
             document.getElementById('kpi-plants').textContent = '7,680';
             document.getElementById('kpi-trays-change').textContent = '+12 this week';
@@ -265,7 +265,7 @@ async function loadDashboardData() {
         
         if (forecastRes.ok) {
             const forecastData = await forecastRes.json();
-            console.log('[OK] Forecast data loaded:', forecastData);
+            console.log('✅ Forecast data loaded:', forecastData);
             
             if (forecastData.status === 'success' && forecastData.data && forecastData.data.length > 0) {
                 const nextHarvest = forecastData.data[0];
@@ -277,7 +277,7 @@ async function loadDashboardData() {
             }
         } else {
             // Fallback to demo values
-            console.warn('[WARNING] Using demo forecast values');
+            console.warn('⚠️ Using demo forecast values');
             document.getElementById('kpi-harvest').textContent = '14d';
             document.getElementById('kpi-harvest-change').textContent = 'Butterhead Lettuce';
         }
@@ -292,10 +292,10 @@ async function loadDashboardData() {
         // Load activity
         await loadRecentActivity();
         
-        console.log('[OK] Dashboard data loaded successfully');
+        console.log('✅ Dashboard data loaded successfully');
         
     } catch (error) {
-        console.error('[ERROR] Error loading dashboard data:', error);
+        console.error('❌ Error loading dashboard data:', error);
         
         // Use fallback demo values
         document.getElementById('kpi-trays').textContent = '48';
@@ -338,7 +338,7 @@ async function loadSubscriptionUsage() {
         }
         
     } catch (error) {
-        console.warn('[WARNING] Could not load subscription usage (using defaults):', error.message);
+        console.warn('⚠️ Could not load subscription usage (using defaults):', error.message);
         
         // Use mock data
         updateUsageMeter('devices', 24, 50);
@@ -431,7 +431,7 @@ async function loadRecentActivity() {
         }
         
     } catch (error) {
-        console.warn('[WARNING] Could not load activity (using mock data):', error.message);
+        console.warn('⚠️ Could not load activity (using mock data):', error.message);
         
         // Keep mock data from above
     }
@@ -485,7 +485,7 @@ function setupNavigation() {
  * Refresh data
  */
 async function refreshData() {
-    console.log('[REFRESH] Refreshing dashboard data...');
+    console.log('🔄 Refreshing dashboard data...');
     await loadDashboardData();
 }
 
@@ -518,14 +518,14 @@ function getSession() {
         
         // Check if expired
         if (session.expiresAt && session.expiresAt < Date.now()) {
-            console.warn('[WARNING] Session expired');
+            console.warn('⚠️ Session expired');
             localStorage.removeItem(STORAGE_KEY_SESSION);
             return null;
         }
         
         return session;
     } catch (error) {
-        console.error('[ERROR] Error parsing session:', error);
+        console.error('❌ Error parsing session:', error);
         localStorage.removeItem(STORAGE_KEY_SESSION);
         return null;
     }
@@ -626,7 +626,7 @@ async function loadCropsFromDatabase() {
         // Check pricing version and clear old localStorage if needed
         const savedVersion = localStorage.getItem('pricing_version');
         if (savedVersion !== PRICING_VERSION) {
-            console.log(`[REFRESH] Pricing version mismatch (${savedVersion} → ${PRICING_VERSION}). Clearing old prices...`);
+            console.log(`🔄 Pricing version mismatch (${savedVersion} → ${PRICING_VERSION}). Clearing old prices...`);
             // Clear all pricing keys
             Object.keys(localStorage).forEach(key => {
                 if (key.startsWith('pricing_')) {
@@ -634,7 +634,7 @@ async function loadCropsFromDatabase() {
                 }
             });
             localStorage.setItem('pricing_version', PRICING_VERSION);
-            console.log('[OK] Pricing cache cleared. Loading new defaults.');
+            console.log('✅ Pricing cache cleared. Loading new defaults.');
         }
         
         const response = await fetch(`${API_BASE}/data/groups.json`);
@@ -664,7 +664,7 @@ async function loadCropsFromDatabase() {
         renderPricingTable();
         
     } catch (error) {
-        console.error('[ERROR] Error loading crops:', error);
+        console.error('❌ Error loading crops:', error);
         
         // Fallback to default crops
         pricingData = Object.keys(defaultPricing).map(crop => ({
@@ -810,18 +810,46 @@ function updatePricing(index, field, value) {
 /**
  * Save pricing data
  */
-function savePricing() {
+async function savePricing() {
     try {
+        // Save to localStorage
         pricingData.forEach(item => {
             localStorage.setItem(`pricing_${item.crop}`, JSON.stringify(item));
         });
         
+        // Also save to backend API for Farm Sales Terminal
+        try {
+            const crops = pricingData.map(item => ({
+                crop: item.crop,
+                unit: 'lb',
+                retailPrice: parseFloat(item.retail),
+                wholesalePrice: parseFloat(calculateWholesalePrice(item.retail, item.ws1Discount)),
+                ws1Discount: item.ws1Discount,
+                ws2Discount: item.ws2Discount,
+                ws3Discount: item.ws3Discount
+            }));
+            
+            const response = await fetch(`${API_BASE}/crop-pricing`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ crops })
+            });
+            
+            if (response.ok) {
+                console.log('✅ Pricing saved to backend API');
+            } else {
+                console.warn('⚠️  Failed to save to backend API (localStorage only)');
+            }
+        } catch (apiError) {
+            console.warn('⚠️  Backend API unavailable (localStorage only):', apiError.message);
+        }
+        
         // Show success message
         alert('Pricing saved successfully!');
-        console.log('[OK] Pricing data saved:', pricingData);
+        console.log('✅ Pricing data saved:', pricingData);
         
     } catch (error) {
-        console.error('[ERROR] Error saving pricing:', error);
+        console.error('❌ Error saving pricing:', error);
         alert('Error saving pricing data. Please try again.');
     }
 }
@@ -1589,14 +1617,14 @@ function getGrowthStage(crop, daysPostSeed) {
  */
 async function loadCropValueData() {
     try {
-        console.log('[STATS] Loading crop value data...');
+        console.log('📊 Loading crop value data...');
         
         // Fetch current inventory
         const inventoryResponse = await fetch(`${API_BASE}/api/inventory/current`);
         const inventoryData = await inventoryResponse.json();
         
         if (!inventoryData || !inventoryData.byFarm || inventoryData.byFarm.length === 0) {
-            console.warn('[WARNING] No inventory data available');
+            console.warn('⚠️ No inventory data available');
             return null;
         }
         
@@ -1681,11 +1709,11 @@ async function loadCropValueData() {
             timestamp: new Date().toISOString()
         };
         
-        console.log('[OK] Crop value data loaded:', cropValueData);
+        console.log('✅ Crop value data loaded:', cropValueData);
         return cropValueData;
         
     } catch (error) {
-        console.error('[ERROR] Error loading crop value data:', error);
+        console.error('❌ Error loading crop value data:', error);
         return null;
     }
 }
@@ -1697,11 +1725,11 @@ async function renderCropValue() {
     const data = await loadCropValueData();
     
     if (!data) {
-        console.error('[ERROR] No crop value data to display');
+        console.error('❌ No crop value data to display');
         return;
     }
     
-    console.log('[OK] Rendering crop value with data:', {
+    console.log('✅ Rendering crop value with data:', {
         totalValue: data.totalValue,
         activeTrays: data.activeTrays,
         cropCount: data.cropCount
@@ -1819,7 +1847,7 @@ async function renderCropValue() {
  * Refresh crop value data
  */
 function refreshCropValue() {
-    console.log('[REFRESH] Refreshing crop value data...');
+    console.log('🔄 Refreshing crop value data...');
     renderCropValue();
 }
 

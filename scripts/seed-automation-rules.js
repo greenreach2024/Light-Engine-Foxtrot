@@ -142,7 +142,7 @@ const AUTOMATION_RULES = [
 async function seedRules() {
   const baseUrl = process.env.BASE_URL || 'http://localhost:8091';
   
-  console.log(' Seeding automation rules...\n');
+  console.log('🌱 Seeding automation rules...\n');
   
   for (const rule of AUTOMATION_RULES) {
     try {
@@ -153,13 +153,13 @@ async function seedRules() {
       });
       
       if (response.ok) {
-        console.log(`[OK] ${rule.name}`);
+        console.log(`✅ ${rule.name}`);
       } else {
         const error = await response.text();
-        console.log(`[ERROR] ${rule.name}: ${error}`);
+        console.log(`❌ ${rule.name}: ${error}`);
       }
     } catch (error) {
-      console.log(`[ERROR] ${rule.name}: ${error.message}`);
+      console.log(`❌ ${rule.name}: ${error.message}`);
     }
   }
   

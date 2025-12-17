@@ -642,7 +642,7 @@
     }
     
     .plan-features li::before {
-      content: "[OK]";
+      content: "✓";
       color: var(--success);
       font-weight: bold;
     }
@@ -684,7 +684,7 @@
 <body>
   <!-- Hero Header -->
   <section class="hero">
-    <h1> Fresh Farm Produce</h1>
+    <h1>🌱 Fresh Farm Produce</h1>
     <p>Local, Sustainable, Delicious</p>
     <div class="farm-selector">
       <select id="farm-select" onchange="selectFarm(this.value)">
@@ -733,7 +733,7 @@
     
     <!-- Subscriptions Section -->
     <section id="subscriptions">
-      <h2 class="section-title"> CSA Subscription Boxes</h2>
+      <h2 class="section-title">📦 CSA Subscription Boxes</h2>
       <p style="color: var(--text-light); margin-bottom: 2rem;">
         Join our Community Supported Agriculture program! Get a weekly box of fresh, seasonal produce delivered to your door.
       </p>
@@ -876,8 +876,8 @@
     // Category icons
     const categoryIcons = {
       leafy_greens: '🥬',
-      herbs: '',
-      microgreens: '',
+      herbs: '🌿',
+      microgreens: '🌱',
       produce: '🍅'
     };
     
@@ -1052,7 +1052,7 @@
       updateCart();
       
       // Show brief success animation
-      event.target.textContent = '[OK] Added';
+      event.target.textContent = '✓ Added';
       setTimeout(() => {
         event.target.innerHTML = '<span>Add</span><span>+</span>';
       }, 1000);
@@ -1223,7 +1223,7 @@
         
         if (result.ok) {
           document.getElementById('checkout-success').textContent = 
-            `[OK] Order placed successfully! Order ID: ${result.order.order_id}. We'll contact you to confirm delivery.`;
+            `✓ Order placed successfully! Order ID: ${result.order.order_id}. We'll contact you to confirm delivery.`;
           document.getElementById('checkout-success').classList.remove('hidden');
           document.getElementById('checkout-error').classList.add('hidden');
           

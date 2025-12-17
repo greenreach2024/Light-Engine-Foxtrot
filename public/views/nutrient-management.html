@@ -2356,7 +2356,7 @@
       warnings.forEach((warning) => {
         const div = document.createElement('div');
         div.className = 'warning';
-        const badge = warning.level === 'critical' ? '[WARNING]' : '[FAST]️';
+        const badge = warning.level === 'critical' ? '⚠️' : '⚡️';
         div.innerHTML = `<strong>${badge} ${warning.title}</strong><span>${warning.detail}</span>`;
         host.appendChild(div);
       });

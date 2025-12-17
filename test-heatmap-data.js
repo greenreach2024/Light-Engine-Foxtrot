@@ -13,10 +13,10 @@ async function testHeatmapDataFlow() {
     const res = await fetch(`${baseUrl}/data/room-map.json`);
     const roomMap = await res.json();
     
-    console.log(`   [OK] Loaded room map: ${roomMap.name}`);
-    console.log(`   [OK] Grid: ${roomMap.gridSize}x${roomMap.gridSize}`);
-    console.log(`   [OK] Zones: ${roomMap.zones.length}`);
-    console.log(`   [OK] Devices: ${roomMap.devices.length}`);
+    console.log(`   ✓ Loaded room map: ${roomMap.name}`);
+    console.log(`   ✓ Grid: ${roomMap.gridSize}x${roomMap.gridSize}`);
+    console.log(`   ✓ Zones: ${roomMap.zones.length}`);
+    console.log(`   ✓ Devices: ${roomMap.devices.length}`);
     
     // Check device structure
     const device = roomMap.devices[0];
@@ -41,7 +41,7 @@ async function testHeatmapDataFlow() {
     const sensors = roomMap.devices.filter(d => {
       // Check position
       if (d.x == null || d.y == null) {
-        console.log(`   [FAIL] Device ${d.deviceId} rejected: no position`);
+        console.log(`   ✗ Device ${d.deviceId} rejected: no position`);
         return false;
       }
       
@@ -50,25 +50,25 @@ async function testHeatmapDataFlow() {
       const category = (d.snapshot?.category || '').toLowerCase();
       const isSensor = type.includes('sensor') || category.includes('sensor');
       if (!isSensor) {
-        console.log(`   [FAIL] Device ${d.deviceId} rejected: not a sensor (type: ${d.snapshot?.type}, category: ${d.snapshot?.category})`);
+        console.log(`   ✗ Device ${d.deviceId} rejected: not a sensor (type: ${d.snapshot?.type}, category: ${d.snapshot?.category})`);
         return false;
       }
       
       // Check name validity
       const name = (d.snapshot?.name || '').trim().toLowerCase();
       if (!name || name === 'none' || name === 'null' || name === 'undefined') {
-        console.log(`   [FAIL] Device ${d.deviceId} rejected: invalid name "${d.snapshot?.name}"`);
+        console.log(`   ✗ Device ${d.deviceId} rejected: invalid name "${d.snapshot?.name}"`);
         return false;
       }
       
-      console.log(`   [OK] Device ${d.deviceId} accepted: ${d.snapshot?.name}`);
+      console.log(`   ✓ Device ${d.deviceId} accepted: ${d.snapshot?.name}`);
       return true;
     });
     
-    console.log(`\n   [OK] Filtered sensors: ${sensors.length}/${roomMap.devices.length}`);
+    console.log(`\n   ✓ Filtered sensors: ${sensors.length}/${roomMap.devices.length}`);
     
   } catch (err) {
-    console.error(`   [FAIL] Failed to load room-map:`, err.message);
+    console.error(`   ✗ Failed to load room-map:`, err.message);
     return;
   }
   
@@ -78,8 +78,8 @@ async function testHeatmapDataFlow() {
     const res = await fetch(`${baseUrl}/env?hours=24`);
     const envData = await res.json();
     
-    console.log(`   [OK] Loaded env data`);
-    console.log(`   [OK] Zones: ${envData.zones?.length || 0}`);
+    console.log(`   ✓ Loaded env data`);
+    console.log(`   ✓ Zones: ${envData.zones?.length || 0}`);
     
     if (envData.zones?.length > 0) {
       const zone = envData.zones[0];
@@ -96,7 +96,7 @@ async function testHeatmapDataFlow() {
     }
     
   } catch (err) {
-    console.error(`   [FAIL] Failed to load env data:`, err.message);
+    console.error(`   ✗ Failed to load env data:`, err.message);
   }
   
   console.log(`\n=== Test Complete ===`);

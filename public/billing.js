@@ -12,7 +12,7 @@ let usageData = null;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[START] Initializing billing page...');
+    console.log('🚀 Initializing billing page...');
     await loadPlans();
     await loadUsage();
     await loadSubscription();
@@ -27,11 +27,11 @@ async function loadPlans() {
         const data = await response.json();
         
         if (data.status === 'success') {
-            console.log('[OK] Loaded plans:', data.plans);
+            console.log('✅ Loaded plans:', data.plans);
             renderPlans(data.plans);
         }
     } catch (error) {
-        console.error('[ERROR] Error loading plans:', error);
+        console.error('❌ Error loading plans:', error);
     }
 }
 
@@ -95,7 +95,7 @@ function selectPlan(plan) {
     
     document.getElementById('select-plan-btn').disabled = false;
     
-    console.log('[OK] Selected plan:', plan.name);
+    console.log('✅ Selected plan:', plan.name);
 }
 
 /**
@@ -191,7 +191,7 @@ async function processPayment() {
     
     try {
         // Step 1: Create customer
-        console.log('[NOTE] Creating customer...');
+        console.log('📝 Creating customer...');
         const customerResponse = await fetch(`${API_BASE}/api/billing/customers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -209,10 +209,10 @@ async function processPayment() {
             throw new Error('Failed to create customer');
         }
         
-        console.log('[OK] Customer created:', customerData.customer.customer_id);
+        console.log('✅ Customer created:', customerData.customer.customer_id);
         
         // Step 2: Create subscription
-        console.log('[NOTE] Creating subscription...');
+        console.log('📝 Creating subscription...');
         const subscriptionResponse = await fetch(`${API_BASE}/api/billing/subscriptions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -229,10 +229,10 @@ async function processPayment() {
             throw new Error('Failed to create subscription');
         }
         
-        console.log('[OK] Subscription created:', subscriptionData.subscription.subscription_id);
+        console.log('✅ Subscription created:', subscriptionData.subscription.subscription_id);
         
         // Success!
-        showPaymentStatus('success', `[SUCCESS] Successfully subscribed to ${selectedPlan.name} plan!`);
+        showPaymentStatus('success', `🎉 Successfully subscribed to ${selectedPlan.name} plan!`);
         
         setTimeout(() => {
             closePaymentModal();
@@ -241,7 +241,7 @@ async function processPayment() {
         }, 2000);
         
     } catch (error) {
-        console.error('[ERROR] Payment error:', error);
+        console.error('❌ Payment error:', error);
         showPaymentStatus('error', error.message || 'Payment failed. Please try again.');
         payBtn.disabled = false;
         payBtn.textContent = 'Subscribe Now';
@@ -337,7 +337,7 @@ async function loadUsage() {
             }
         }
     } catch (error) {
-        console.error('[ERROR] Error loading usage:', error);
+        console.error('❌ Error loading usage:', error);
         // Use mock data
         usageData = {
             devices: 12,
@@ -414,7 +414,7 @@ async function loadOverage() {
             showOverageWarning(data.overage);
         }
     } catch (error) {
-        console.error('[ERROR] Error loading overage:', error);
+        console.error('❌ Error loading overage:', error);
     }
 }
 
@@ -462,7 +462,7 @@ async function cancelSubscription() {
     currentSubscription = null;
     
     document.getElementById('current-subscription').innerHTML = `
-        <h2>[STATS] Current Subscription</h2>
+        <h2>📊 Current Subscription</h2>
         <div class="empty-state">
             <div class="empty-state-icon">📭</div>
             <p>No active subscription</p>
@@ -473,7 +473,7 @@ async function cancelSubscription() {
     document.getElementById('usage-section').style.display = 'none';
     document.getElementById('usage-details').style.display = 'none';
     
-    alert('[OK] Subscription canceled successfully.');
+    alert('✅ Subscription canceled successfully.');
 }
 
 /**

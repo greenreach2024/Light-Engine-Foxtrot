@@ -411,12 +411,12 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1> Tray Setup</h1>
+      <h1>⚙️ Tray Setup</h1>
       <p style="color: #6b7280; margin-top: 0.5rem;">Manage tray formats and register physical trays for accurate inventory forecasting</p>
       <div class="header-nav">
         <a href="/" class="nav-link">🏠 Dashboard</a>
-        <a href="/views/tray-inventory.html" class="nav-link"> Tray Inventory</a>
-        <a href="/views/tray-setup.html" class="nav-link active"> Tray Setup</a>
+        <a href="/views/tray-inventory.html" class="nav-link">📦 Tray Inventory</a>
+        <a href="/views/tray-setup.html" class="nav-link active">⚙️ Tray Setup</a>
         <a href="/farm-sales.html" class="nav-link">🔬 Lot Traceability</a>
       </div>
     </div>
@@ -520,7 +520,7 @@
       <div class="card">
         <h2>Register Physical Tray</h2>
         <div class="info-box warning">
-          <strong>[WARNING] Note:</strong> Each physical tray must be registered and assigned a format before use in the scanning tool.
+          <strong>⚠️ Note:</strong> Each physical tray must be registered and assigned a format before use in the scanning tool.
         </div>
         <form id="register-tray-form">
           <div class="form-group">
@@ -761,7 +761,7 @@
         loadFormats();
       } catch (error) {
         console.error('Create format error:', error);
-        alert('[ERROR] Error creating format: ' + error.message);
+        alert('❌ Error creating format: ' + error.message);
       }
     });
 
@@ -787,7 +787,7 @@
         e.target.reset();
       } catch (error) {
         console.error('Register tray error:', error);
-        alert('[ERROR] Error: ' + error.message);
+        alert('❌ Error: ' + error.message);
       }
     });
 
@@ -843,7 +843,7 @@
         closeModal();
         loadFormats();
       } catch (error) {
-        alert('[ERROR] Error: ' + error.message);
+        alert('❌ Error: ' + error.message);
       }
     });
 
@@ -861,7 +861,7 @@
         alert('Format deleted');
         loadFormats();
       } catch (error) {
-        alert('[ERROR] Error: ' + error.message);
+        alert('❌ Error: ' + error.message);
       }
     }
 

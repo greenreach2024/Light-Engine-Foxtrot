@@ -7,7 +7,7 @@ import { setupConsoleWrapper } from './server/utils/console-wrapper.js';
 setupConsoleWrapper();
 
 // LOG ENVIRONMENT ON STARTUP (will be suppressed in demo mode)
-console.log('[SEARCH] [STARTUP] Environment variables:');
+console.log('🔍 [STARTUP] Environment variables:');
 console.log('  DEMO_MODE:', process.env.DEMO_MODE);
 console.log('  DEMO_FARM_ID:', process.env.DEMO_FARM_ID);
 console.log('  DEMO_REALTIME:', process.env.DEMO_REALTIME);
@@ -30,9 +30,9 @@ import {
 console.log('[charlie] 🎬 Module loading - initializing demo mode...');
 try {
   initializeDemoMode();
-  console.log('[charlie] [OK] Demo mode initialized at module scope');
+  console.log('[charlie] ✅ Demo mode initialized at module scope');
 } catch (error) {
-  console.error('[charlie] [ERROR] Demo mode initialization failed:', error?.message || error);
+  console.error('[charlie] ❌ Demo mode initialization failed:', error?.message || error);
 }
 
 import { createProxyMiddleware } from "http-proxy-middleware";
@@ -63,6 +63,7 @@ import adminHealthRouter from './routes/admin-health.js';
 import wholesaleSyncRouter from './routes/wholesale-sync.js';
 import wholesaleReservationsRouter from './routes/wholesale-reservations.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
+import cropPricingRouter from './routes/crop-pricing.js';
 import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
 import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
 import wholesaleWebhooksRouter from './routes/wholesale/webhooks.js';
@@ -1683,13 +1684,13 @@ if (!RUNNING_UNDER_NODE_TEST && !hasPersistedController) {
 
 // Global error handlers to prevent server crashes
 process.on('uncaughtException', (error) => {
-  console.error('[ERROR] Uncaught Exception:', error);
+  console.error('❌ Uncaught Exception:', error);
   console.error('Stack:', error.stack);
   // Don't exit the process for now - log and continue
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('[ERROR] Unhandled Promise Rejection at:', promise);
+  console.error('❌ Unhandled Promise Rejection at:', promise);
   console.error('Reason:', reason);
   // Don't exit the process for now - log and continue
 });
@@ -1739,7 +1740,7 @@ async function createKasaClient() {
 function asyncHandler(fn) {
   return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch((error) => {
-      console.error(`[ERROR] Async route error: ${req.method} ${req.url}`, error);
+      console.error(`❌ Async route error: ${req.method} ${req.url}`, error);
       next(error);
     });
   };
@@ -2071,9 +2072,9 @@ console.log('[automation] Rules engine initialized with default farm automation 
 const preAutomationContext = createPreAutomationLayer({
   dataDir: path.resolve('./data/automation'),
   publicDataDir: path.resolve('./public/data'),
-  autoStart: true, // [OK] ENABLED for testing
+  autoStart: true, // ✅ ENABLED for testing
   fanRotation: {
-    enabled: true, // [OK] ENABLED for airflow distribution
+    enabled: true, // ✅ ENABLED for airflow distribution
     intervalMs: 15 * 60 * 1000 // 15 minutes
   }
 });
@@ -4053,7 +4054,7 @@ async function patchControllerLight(deviceId, hexPayload, shouldPowerOn) {
     const base = controller.replace(/\/$/, '');
     const url = `${base}/api/devicedatas/device/${encodeURIComponent(deviceId)}`;
     
-    // [OK] CORRECT: Use channelsValue (not value)
+    // ✅ CORRECT: Use channelsValue (not value)
     const payload = {
       status: shouldPowerOn ? 'on' : 'off',
       channelsValue: hexPayload
@@ -4250,7 +4251,7 @@ async function runDailyPlanResolver(trigger = 'manual') {
           if (!patchResult?.ok && !patchResult?.skipped) {
             console.warn(`[daily] failed to patch ${deviceId} for group ${group.id || group.name || 'unknown'}:`, patchResult?.error || patchResult?.status || 'unknown error');
           } else if (patchResult?.ok) {
-            console.log(`[daily] [OK] Light ID ${deviceId} → ${planName} Day ${effectiveDay} (${stage}): CW:${calibratedMix.cw.toFixed(1)}% WW:${calibratedMix.ww.toFixed(1)}% BL:${calibratedMix.bl.toFixed(1)}% RD:${calibratedMix.rd.toFixed(1)}% | Hex: ${hex}`);
+            console.log(`[daily] ✓ Light ID ${deviceId} → ${planName} Day ${effectiveDay} (${stage}): CW:${calibratedMix.cw.toFixed(1)}% WW:${calibratedMix.ww.toFixed(1)}% BL:${calibratedMix.bl.toFixed(1)}% RD:${calibratedMix.rd.toFixed(1)}% | Hex: ${hex}`);
           }
           const mixSummary = {
             cw: Number(clampPercent(calibratedMix.cw).toFixed(2)),
@@ -6663,7 +6664,7 @@ app.get("/api/kasa/devices", asyncHandler(async (req, res) => {
     const client = await createKasaClient();
     const devices = [];
     
-    console.log('[SEARCH] Discovering Kasa devices...');
+    console.log('🔍 Discovering Kasa devices...');
     
     // Start discovery
     client.startDiscovery({
@@ -7997,10 +7998,16 @@ app.use('/api/health', healthRouter);
 app.use('/api/admin/health', adminHealthRouter);
 
 /**
+ * Crop Pricing Configuration Routes
+ * Manage farm crop pricing for sales terminal and wholesale
+ * - GET /api/crop-pricing: Get all crop pricing
+ * - PUT /api/crop-pricing: Update crop pricing (admin)
+ * - GET /api/crop-pricing/:cropName: Get specific crop pricing
+ */
+app.use('/api/crop-pricing', cropPricingRouter);
+
+/**
  * Light Engine: Wholesale Inventory Sync Routes
-// Admin test farm creation endpoint
-const createTestFarmRouter = require("./routes/admin/create-test-farm");
-app.use("/api/admin", createTestFarmRouter);
  * Exposes farm inventory to GreenReach for catalog aggregation
  * - GET /api/wholesale/inventory: Farm inventory lots with availability
  * - GET /api/wholesale/schedule: Pickup windows and delivery logistics
@@ -8108,7 +8115,7 @@ app.use('/api/audit', createAuditRoutes());
 // Apply audit middleware to all wholesale routes
 app.use('/api/wholesale', auditMiddleware);
 
-console.log('[OK] Audit logging initialized - capturing all wholesale operations');
+console.log('✓ Audit logging initialized - capturing all wholesale operations');
 
 /**
  * ===========================================
@@ -8141,12 +8148,11 @@ app.use('/api/farm-auth', createAuthRoutes());
 // Apply security isolation middleware
 app.use(blockFarmManagementEndpoints);
 
-console.log('[OK] Farm authentication system initialized - multi-tenant JWT with security isolation');
+console.log('✓ Farm authentication system initialized - multi-tenant JWT with security isolation');
 
 // Import farm-sales routes
 import farmSalesOrdersRouter from './routes/farm-sales/orders.js';
 import farmSalesInventoryRouter from './routes/farm-sales/inventory.js';
-import farmSalesInventoryIntegrationRouter from './routes/farm-sales/inventory-integration.js';
 import farmSalesPaymentsRouter from './routes/farm-sales/payments.js';
 import farmSalesPOSRouter from './routes/farm-sales/pos.js';
 import farmSalesDeliveryRouter from './routes/farm-sales/delivery.js';
@@ -8195,7 +8201,6 @@ app.use('/api/farm-sales/orders', farmSalesOrdersRouter);
  * - GET /api/farm-sales/inventory/categories/list: Get product categories
  */
 app.use('/api/farm-sales/inventory', farmSalesInventoryRouter);
-app.use('/api/farm-sales/inventory', farmSalesInventoryIntegrationRouter); // Tray-based integration
 
 /**
  * Farm Sales: Payment Processing
@@ -8318,7 +8323,7 @@ app.use('/api/farm-sales/lots', farmSalesLotTrackingRouter);
  */
 app.use('/api/farm-sales/donations', farmSalesDonationsRouter);
 
-console.log('[OK] Farm sales terminal initialized - POS, D2C, B2B, food security programs, and lot traceability enabled');
+console.log('✓ Farm sales terminal initialized - POS, D2C, B2B, food security programs, and lot traceability enabled');
 
 /**
  * ML Predictive Forecasting Endpoint
@@ -11483,8 +11488,8 @@ app.get('/api/admin/farms/:farmId', createDemoModeHandler(), asyncHandler(async 
     return res.status(404).json({ error: 'Farm not found' });
   }
   
-  // Check if this is TEST-FARM-001 and load detailed data
-  if (farmId === 'TEST-FARM-001') {
+  // Check if this is GR-00001 (demo farm) and load detailed data
+  if (farmId === 'GR-00001') {
     try {
       const demoDataPath = path.join(__dirname, 'public/data/demo-farm-data.json');
       const demoData = JSON.parse(fs.readFileSync(demoDataPath, 'utf8'));
@@ -11602,7 +11607,7 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
     // Create demo session
     const demoSession = {
       token: demoToken,
-      farmId: farmId || process.env.DEMO_FARM_ID || 'TEST-FARM-001',
+      farmId: farmId || process.env.DEMO_FARM_ID || 'GR-00001',
       email: email || 'admin@demo-farm.com',
       role: 'admin',
       createdAt: new Date(),
@@ -11703,7 +11708,7 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
     renewsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   };
   
-  console.log(`[farm-auth] [OK] Login successful for ${email} at ${farmId}`);
+  console.log(`[farm-auth] ✅ Login successful for ${email} at ${farmId}`);
   
   res.json({
     status: 'success',
@@ -12018,7 +12023,7 @@ app.post('/api/billing/customers', asyncHandler(async (req, res) => {
     created_at: new Date().toISOString()
   };
   
-  console.log(`[billing] [OK] Created customer: ${customerId}`);
+  console.log(`[billing] ✅ Created customer: ${customerId}`);
   
   res.json({
     status: 'success',
@@ -12054,7 +12059,7 @@ app.post('/api/billing/subscriptions', asyncHandler(async (req, res) => {
     next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   };
   
-  console.log(`[billing] [OK] Created subscription: ${subscriptionId}`);
+  console.log(`[billing] ✅ Created subscription: ${subscriptionId}`);
   
   res.json({
     status: 'success',
@@ -12230,9 +12235,9 @@ app.get('/api/demo/intro-cards', (req, res) => {
  */
 app.get('/api/inventory/current', (req, res) => {
   try {
-    // In demo mode, generate inventory from groups data
-    const farm = loadDemoFarmSnapshot();
-    if (!farm) {
+    // Load from groups.json (real crop data)
+    const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
+    if (!fs.existsSync(groupsPath)) {
       return res.json({
         activeTrays: 0,
         totalPlants: 0,
@@ -12240,49 +12245,51 @@ app.get('/api/inventory/current', (req, res) => {
         byFarm: []
       });
     }
+    
+    const groupsData = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+    const groups = groupsData.groups || [];
 
     let totalTrays = 0;
     let totalPlants = 0;
     const allTrays = [];
     let trayCounter = 1;
 
-    // Calculate seeding date based on daysOld
+    // Calculate seeding date based on daysOld and seedDate
     const today = new Date();
 
     // Build detailed tray data from groups
-    (farm.rooms || []).forEach((room) => {
-      (room.zones || []).forEach((zone) => {
-        (zone.groups || []).forEach((group) => {
-          const trayCount = group.trays || 4;
-          const plantsPerTray = Math.floor((group.plants || 48) / trayCount);
-          const daysOld = group.daysOld || 0;
-          
-          // Calculate seeding date
-          const seedingDate = new Date(today);
-          seedingDate.setDate(seedingDate.getDate() - daysOld);
-          
-          // Create individual tray records
-          for (let i = 0; i < trayCount; i++) {
-            allTrays.push({
-              trayId: `TRAY-${String(trayCounter).padStart(4, '0')}`,
-              groupId: group.groupId,
-              roomId: room.roomId,
-              zoneId: zone.zoneId,
-              crop: group.crop,
-              plantCount: plantsPerTray,
-              seedingDate: seedingDate.toISOString(),
-              daysOld: daysOld,
-              harvestIn: group.harvestIn || 0,
-              health: group.health || 'unknown',
-              recipe: group.recipe
-            });
-            trayCounter++;
-          }
-          
-          totalTrays += trayCount;
-          totalPlants += group.plants || 0;
+    groups.forEach((group) => {
+      const trayCount = group.trays || 4;
+      const plantsPerTray = Math.floor((group.plants || 48) / trayCount);
+      
+      // Calculate days old from seedDate
+      let daysOld = 0;
+      let seedingDate = today;
+      if (group.planConfig?.anchor?.seedDate) {
+        seedingDate = new Date(group.planConfig.anchor.seedDate);
+        daysOld = Math.floor((today - seedingDate) / (1000 * 60 * 60 * 24));
+      }
+      
+      // Create individual tray records
+      for (let i = 0; i < trayCount; i++) {
+        allTrays.push({
+          trayId: `${group.id}-T${i + 1}`,
+          groupId: group.id,
+          roomId: group.roomId,
+          zoneId: group.zoneId,
+          crop: group.crop,
+          plantCount: plantsPerTray,
+          seedingDate: seedingDate.toISOString(),
+          daysOld: daysOld,
+          harvestIn: Math.max(0, 45 - daysOld), // Estimate 45 day cycle
+          health: group.health || 'healthy',
+          recipe: group.recipe
         });
-      });
+        trayCounter++;
+      }
+      
+      totalTrays += trayCount;
+      totalPlants += group.plants || 0;
     });
 
     res.json({
@@ -12291,7 +12298,7 @@ app.get('/api/inventory/current', (req, res) => {
       farmCount: 1,
       byFarm: [
         {
-          farmId: 'TEST-FARM-001',
+          farmId: 'GR-00001',
           name: 'Demo Vertical Farm',
           activeTrays: totalTrays,
           totalPlants: totalPlants,
@@ -12311,8 +12318,9 @@ app.get('/api/inventory/current', (req, res) => {
  */
 app.get('/api/inventory/forecast', (req, res) => {
   try {
-    const farm = loadDemoFarmSnapshot();
-    if (!farm) {
+    // Load from groups.json (real crop data)
+    const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
+    if (!fs.existsSync(groupsPath)) {
       return res.json({
         next7Days: { count: 0, trays: [] },
         next14Days: { count: 0, trays: [] },
@@ -12320,38 +12328,23 @@ app.get('/api/inventory/forecast', (req, res) => {
         beyond30Days: { count: 0, trays: [] }
       });
     }
+    
+    const groupsData = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+    const groups = groupsData.groups || [];
 
-    const TRAYS_PER_GROUP = 4;
-    const PLANTS_PER_TRAY = 12;
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    // Load plans to get harvest durations
-    const plansData = loadPlansFile();
-    const plans = plansData?.plans || [];
-
-    // Variety-specific grow times (in days) - based on commercial CEA standards
+    // Real crop grow times from lighting-recipes.json
     const VARIETY_GROW_DAYS = {
-      'Butterhead Lettuce': 50,
-      'Romaine Lettuce': 35,
-      'Oak Leaf Lettuce': 45,
-      'Red Leaf Lettuce': 45,
-      'Mixed Lettuce': 40,
-      'Genovese Basil': 75,
-      'Thai Basil': 75,
-      'Lemon Basil': 70,
-      'Purple Basil': 75,
-      'Holy Basil': 70,
-      'Baby Arugula': 28,
-      'Cultivated Arugula': 38,
-      'Red Arugula': 35,
-      'Wild Arugula': 40,
-      'Wasabi Arugula': 35,
-      'Curly Kale': 55,
-      'Lacinato Kale': 60,
-      'Dinosaur Kale': 60,
-      'Baby Kale': 30,
-      'Red Russian Kale': 50
+      'Mei Qing Pak Choi': 28,
+      'Lacinato Kale': 45,
+      'Bibb Butterhead': 35,
+      'Frisée Endive': 45,
+      'Red Russian Kale': 50,
+      'Buttercrunch Lettuce': 42,
+      'Tatsoi': 28,
+      'Watercress': 21
     };
 
     const buckets = {
@@ -12362,63 +12355,51 @@ app.get('/api/inventory/forecast', (req, res) => {
     };
 
     // Process each group
-    (farm.rooms || []).forEach((room) => {
-      (room.zones || []).forEach((zone) => {
-        (zone.groups || []).forEach((group) => {
-          // Calculate harvest date from group's daysOld
-          const daysOld = group.daysOld || 0;
-          const seedDate = new Date(now);
-          seedDate.setDate(now.getDate() - daysOld);
+    groups.forEach((group) => {
+      const trayCount = group.trays || 4;
+      const plantsPerTray = Math.floor((group.plants || 48) / trayCount);
+      
+      // Calculate daysOld from planConfig.anchor.seedDate
+      let daysOld = 0;
+      let seedDate = new Date(now);
+      if (group.planConfig?.anchor?.seedDate) {
+        seedDate = new Date(group.planConfig.anchor.seedDate);
+        daysOld = Math.floor((now - seedDate) / (1000 * 60 * 60 * 24));
+      }
 
-          // Find plan to get total duration
-          const cropLower = (group.crop || '').toLowerCase();
-          let planId = `crop-${cropLower.split(' ')[0]}`;
-          if (cropLower.includes('basil')) planId = 'crop-basil';
-          else if (cropLower.includes('arugula')) planId = 'crop-arugula';
-          else if (cropLower.includes('lettuce')) planId = 'crop-lettuce';
-          else if (cropLower.includes('kale')) planId = 'crop-kale';
+      // Use real crop grow times
+      const actualGrowDays = VARIETY_GROW_DAYS[group.crop] || 35;
+      
+      const harvestDate = new Date(seedDate);
+      harvestDate.setDate(seedDate.getDate() + actualGrowDays);
+      
+      const daysToHarvest = Math.floor((harvestDate - now) / (1000 * 60 * 60 * 24));
 
-          const plan = plans.find(p => p.id === planId);
-          const planDays = plan?.light?.days || plan?.days || [];
-          const maxDay = planDays.length > 0 
-            ? Math.max(...planDays.map(d => d.day || 0)) 
-            : 21; // Default 21 days
+      // Create tray records for this group
+      for (let trayNum = 1; trayNum <= trayCount; trayNum++) {
+        const tray = {
+          trayId: `${group.id}-T${trayNum}`,
+          groupId: group.id,
+          groupName: group.name,
+          recipe: group.crop,  // Real crop name
+          plantCount: plantsPerTray,
+          estimatedHarvestDate: harvestDate.toISOString().split('T')[0],
+          location: `${group.roomId || 'Room-1'} - ${group.zone || 'Zone-1'}`,
+          daysToHarvest: daysToHarvest,
+          currentDay: daysOld + 1
+        };
 
-          // Use variety-specific grow time if available, otherwise fall back to plan maxDay
-          const actualGrowDays = VARIETY_GROW_DAYS[group.crop] || maxDay;
-
-          const harvestDate = new Date(seedDate);
-          harvestDate.setDate(seedDate.getDate() + actualGrowDays);
-          
-          const daysToHarvest = Math.floor((harvestDate - now) / (1000 * 60 * 60 * 24));
-
-          // Create tray records for this group (4 trays per group)
-          for (let trayNum = 1; trayNum <= TRAYS_PER_GROUP; trayNum++) {
-            const tray = {
-              trayId: `${group.groupId}-T${trayNum}`,
-              groupId: group.groupId,
-              groupName: group.name,
-              recipe: group.crop,
-              plantCount: PLANTS_PER_TRAY,
-              estimatedHarvestDate: harvestDate.toISOString().split('T')[0],
-              location: `${room.roomId} - ${zone.zoneId}`,
-              daysToHarvest: daysToHarvest,
-              currentDay: daysOld + 1
-            };
-
-            // Bucket by days to harvest
-            if (daysToHarvest <= 7) {
-              buckets.next7Days.push(tray);
-            } else if (daysToHarvest <= 14) {
-              buckets.next14Days.push(tray);
-            } else if (daysToHarvest <= 30) {
-              buckets.next30Days.push(tray);
-            } else {
-              buckets.beyond30Days.push(tray);
-            }
-          }
-        });
-      });
+        // Bucket by days to harvest
+        if (daysToHarvest <= 7) {
+          buckets.next7Days.push(tray);
+        } else if (daysToHarvest <= 14) {
+          buckets.next14Days.push(tray);
+        } else if (daysToHarvest <= 30) {
+          buckets.next30Days.push(tray);
+        } else {
+          buckets.beyond30Days.push(tray);
+        }
+      }
     });
 
     res.json({
@@ -12739,6 +12720,43 @@ app.get('/api/losses/current', async (req, res) => {
   }
 });
 
+// Farm configuration endpoint - MUST be before proxy middleware
+app.get('/api/config/app', (req, res) => {
+  try {
+    setCors(req, res);
+    
+    // Try to load farm configuration from farm.json
+    let farmData = null;
+    try {
+      farmData = readJSONSafe(FARM_PATH, null);
+    } catch (readError) {
+      console.log('[API] Could not read farm.json, using defaults:', readError.message);
+    }
+    
+    // Return configuration with fallback
+    const config = {
+      ok: true,
+      farmId: (farmData && farmData.farmId) ? farmData.farmId : 'light-engine-demo',
+      farmName: (farmData && farmData.name) ? farmData.name : 'GreenReach Demo Farm',
+      region: (farmData && farmData.region) ? farmData.region : 'Pacific Northwest',
+      status: (farmData && farmData.status) ? farmData.status : 'online'
+    };
+    
+    console.log('[API] /api/config/app returning:', config);
+    res.json(config);
+  } catch (e) {
+    console.error('[API] Error in /api/config/app:', e);
+    // Even on error, return valid config with defaults
+    res.json({
+      ok: true,
+      farmId: 'light-engine-demo',
+      farmName: 'GreenReach Demo Farm',
+      region: 'Pacific Northwest',
+      status: 'online'
+    });
+  }
+});
+
 // Circuit-breaker short-circuit when controller is unhealthy
 app.use('/api', (req, res, next) => {
   console.log(`[API Middleware] path=${req.path}, originalUrl=${req.originalUrl}`);
@@ -12789,7 +12807,13 @@ app.use('/api', proxyCorsMiddleware, createProxyMiddleware({
       '/api/crops',          // Crop definitions
       '/api/trays/',         // Tray operations (register, seed, etc.)
       '/api/tray-runs/',     // Tray run operations (place, harvest, loss)
-      '/api/losses/'         // Loss tracking and statistics
+      '/api/losses/',        // Loss tracking and statistics
+      '/api/config/',        // Farm configuration endpoints
+      '/api/crop-pricing',   // Crop pricing configuration
+      '/api/farm-auth/',     // Farm authentication for Sales Terminal
+      '/api/farm/auth/',     // Farm authentication alternate path
+      '/api/farm-sales/',    // Farm Sales Terminal inventory and POS
+      '/api/wholesale/'      // Wholesale inventory and catalog
     ];
     
     // Also check without /api prefix (in case pathname is just the path without /api)
@@ -13551,25 +13575,25 @@ app.use('/data', (req, res, next) => {
       return res.json({ rooms: farm.rooms });
     }
     
-    // Intercept groups.json - flattened array of all groups
-    if (req.path === '/groups.json' && farm) {
-      console.log('[demo] Serving demo groups data for /data/groups.json');
-      const groups = [];
-      farm.rooms.forEach(room => {
-        room.zones.forEach(zone => {
-          zone.groups.forEach(group => {
-            groups.push({
-              id: group.groupId,
-              name: group.name,
-              roomId: room.id,
-              zoneId: zone.id,
-              deviceCount: group.devices.length
-            });
-          });
-        });
-      });
-      return res.json({ groups });
-    }
+    // DON'T intercept groups.json - serve the actual file with real crops
+    // if (req.path === '/groups.json' && farm) {
+    //   console.log('[demo] Serving demo groups data for /data/groups.json');
+    //   const groups = [];
+    //   farm.rooms.forEach(room => {
+    //     room.zones.forEach(zone => {
+    //       zone.groups.forEach(group => {
+    //         groups.push({
+    //           id: group.groupId,
+    //           name: group.name,
+    //           roomId: room.id,
+    //           zoneId: zone.id,
+    //           deviceCount: group.devices.length
+    //         });
+    //       });
+    //     });
+    //   });
+    //   return res.json({ groups });
+    // }
     
     // Intercept ctrl-map.json - device control mapping
     if (req.path === '/ctrl-map.json') {
@@ -16030,7 +16054,7 @@ app.get('/discovery/devices', async (req, res) => {
       const body = await localResponse.json();
       console.log('[Discovery] Local backend returned:', body);
       if (Array.isArray(body?.devices)) {
-        console.log(`[Discovery] [OK] Found ${body.devices.length} devices from local Python backend`);
+        console.log(`[Discovery] ✅ Found ${body.devices.length} devices from local Python backend`);
         return res.json({ 
           startedAt, 
           completedAt: new Date().toISOString(), 
@@ -16054,7 +16078,7 @@ app.get('/discovery/devices', async (req, res) => {
       if (response && response.ok) {
         const body = await response.json();
         if (Array.isArray(body?.devices)) {
-          console.log(`[Discovery] [OK] Found ${body.devices.length} devices from remote controller`);
+          console.log(`[Discovery] ✅ Found ${body.devices.length} devices from remote controller`);
           return res.json({ 
             startedAt, 
             completedAt: new Date().toISOString(), 
@@ -16069,7 +16093,7 @@ app.get('/discovery/devices', async (req, res) => {
   }
   
   // LIVE DEVICE DISCOVERY - Scan greenreach network for real devices
-  console.log('[SEARCH] Starting live device discovery on greenreach network...');
+  console.log('🔍 Starting live device discovery on greenreach network...');
   
   try {
     const discoveredDevices = [];
@@ -16130,7 +16154,7 @@ app.get('/discovery/devices', async (req, res) => {
       console.warn('BLE device discovery failed:', e.message);
     }
     
-    console.log(`[OK] Discovery complete: Found ${discoveredDevices.length} live devices`);
+    console.log(`✅ Discovery complete: Found ${discoveredDevices.length} live devices`);
     
     // Analyze discovered devices and suggest setup wizards
     const deviceAnalysis = analyzeDiscoveredDevices(discoveredDevices);
@@ -16146,7 +16170,7 @@ app.get('/discovery/devices', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('[ERROR] Live device discovery failed:', error);
+    console.error('❌ Live device discovery failed:', error);
     res.status(500).json({ 
       startedAt, 
       completedAt: new Date().toISOString(), 
@@ -16215,7 +16239,7 @@ async function discoverNetworkDevices() {
       const Client = kasaModule.default?.Client || kasaModule.Client;
       const client = new Client();
       
-      console.log('[SEARCH] Scanning for Kasa devices on local network...');
+      console.log('🔍 Scanning for Kasa devices on local network...');
       
       // Start device discovery
       client.startDiscovery({
@@ -16290,9 +16314,9 @@ async function discoverNetworkDevices() {
       kasaDevices.forEach(device => devices.push(device));
       
       if (kasaDevices.size > 0) {
-        console.log(`[OK] Found ${kasaDevices.size} Kasa device(s)`);
+        console.log(`✅ Found ${kasaDevices.size} Kasa device(s)`);
       } else {
-        console.log('[WARNING]  No Kasa devices found on local network');
+        console.log('⚠️  No Kasa devices found on local network');
       }
       
     } catch (kasaError) {
@@ -16329,7 +16353,7 @@ async function scanNetworkForDevices() {
     
     const currentIP = ipMatch[1];
     const networkBase = currentIP.split('.').slice(0, 3).join('.');
-    console.log(`[SEARCH] Scanning network range ${networkBase}.0/24 for IoT devices...`);
+    console.log(`🔍 Scanning network range ${networkBase}.0/24 for IoT devices...`);
     
     // Scan for devices with common IoT ports
     const commonPorts = [80, 443, 8080, 8081, 1883, 8883, 9999, 10002, 502, 8000];
@@ -16541,7 +16565,7 @@ function analyzeDiscoveredDevices(devices) {
 // ===== UNIVERSAL DEVICE SCANNER =====
 // Simplified multi-protocol scan endpoint for Integrations panel
 app.post('/discovery/scan', async (req, res) => {
-  console.log('[SEARCH] Universal device scan initiated');
+  console.log('🔍 Universal device scan initiated');
   const startedAt = new Date().toISOString();
   
   try {
@@ -16620,7 +16644,7 @@ app.post('/discovery/scan', async (req, res) => {
       console.warn('Kasa direct discovery failed:', e.message);
     }
     
-    console.log(`[OK] Universal scan complete: ${allDevices.length} devices found`);
+    console.log(`✅ Universal scan complete: ${allDevices.length} devices found`);
     
     res.json({
       status: 'success',
@@ -16631,7 +16655,7 @@ app.post('/discovery/scan', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('[ERROR] Universal scan failed:', error);
+    console.error('❌ Universal scan failed:', error);
     res.status(500).json({
       status: 'error',
       startedAt,
@@ -16796,9 +16820,9 @@ async function loadWizardStates() {
         wizardDiscoveryContext.set(state.wizardId, state.discoveryContext);
       }
     }
-    console.log(`[OK] Loaded ${states.length} wizard state(s) from database`);
+    console.log(`✅ Loaded ${states.length} wizard state(s) from database`);
   } catch (error) {
-    console.error('[ERROR] Failed to load wizard states:', error.message);
+    console.error('❌ Failed to load wizard states:', error.message);
   }
 }
 
@@ -16822,7 +16846,7 @@ async function persistWizardState(wizardId) {
       { upsert: true }
     );
   } catch (error) {
-    console.error(`[ERROR] Failed to persist wizard state for ${wizardId}:`, error.message);
+    console.error(`❌ Failed to persist wizard state for ${wizardId}:`, error.message);
   }
 }
 
@@ -16838,7 +16862,7 @@ async function cleanupOldWizardStates() {
       console.log(`🧹 Cleaned up ${result} old wizard state(s)`);
     }
   } catch (error) {
-    console.error('[ERROR] Failed to cleanup old wizard states:', error.message);
+    console.error('❌ Failed to cleanup old wizard states:', error.message);
   }
 }
 
@@ -17097,7 +17121,7 @@ async function executeMQTTWizardStep(stepId, data) {
       }
       
     case 'topic-discovery':
-      console.log(`[SEARCH] Discovering MQTT topics with pattern: ${data.baseTopic}`);
+      console.log(`🔍 Discovering MQTT topics with pattern: ${data.baseTopic}`);
       
       // Simulate topic discovery
       const discoveredTopics = [
@@ -17138,7 +17162,7 @@ async function executeModbusWizardStep(stepId, data) {
       };
       
     case 'register-mapping':
-      console.log(`[STATS] Mapping registers starting at address ${data.startAddress}`);
+      console.log(`📊 Mapping registers starting at address ${data.startAddress}`);
       
       // Simulate register discovery
       const registerMap = Array.from({ length: data.registerCount }, (_, i) => ({
@@ -17162,7 +17186,7 @@ async function executeModbusWizardStep(stepId, data) {
 async function executeKasaWizardStep(stepId, data) {
   switch (stepId) {
     case 'device-discovery':
-      console.log(`[SEARCH] Discovering Kasa devices (timeout: ${data.discoveryTimeout}s)`);
+      console.log(`🔍 Discovering Kasa devices (timeout: ${data.discoveryTimeout}s)`);
       
       // Test/CI guardrail: avoid real network waits during unit tests
       // Short-circuit when running our test harness (flag set by __resetWizardSystemForTests)
@@ -17262,7 +17286,7 @@ async function executeKasaWizardStep(stepId, data) {
       }
       
     case 'device-configuration':
-      console.log(` Configuring Kasa device: ${data.alias}`);
+      console.log(`⚙️ Configuring Kasa device: ${data.alias}`);
       
       try {
         // If we have device info from discovery, use it to configure
@@ -17342,7 +17366,7 @@ async function executeKasaWizardStep(stepId, data) {
 async function executeSensorHubWizardStep(stepId, data) {
   switch (stepId) {
     case 'hub-identification':
-      console.log(`[TARGET] Connecting to ${data.hubType} at ${data.endpoint}`);
+      console.log(`🎯 Connecting to ${data.hubType} at ${data.endpoint}`);
       
       return {
         success: true,
@@ -17358,7 +17382,7 @@ async function executeSensorHubWizardStep(stepId, data) {
       };
       
     case 'sensor-configuration':
-      console.log(` Configuring ${data.sensorType} sensor on channel ${data.channel}`);
+      console.log(`⚙️ Configuring ${data.sensorType} sensor on channel ${data.channel}`);
       
       return {
         success: true,
@@ -17474,7 +17498,7 @@ async function executeWizardStep(wizardId, stepId, data) {
     } else {
       state.completed = true;
       state.completedAt = new Date().toISOString();
-      console.log(`[OK] Wizard ${wizardId} completed successfully`);
+      console.log(`✅ Wizard ${wizardId} completed successfully`);
       
       // Execute post-completion actions
       await executeWizardCompletion(wizardId, state);
@@ -17491,7 +17515,7 @@ async function executeWizardStep(wizardId, stepId, data) {
     );
     
   } catch (error) {
-    console.error(`[ERROR] Wizard step execution failed: ${wizardId}/${stepId}`, error);
+    console.error(`❌ Wizard step execution failed: ${wizardId}/${stepId}`, error);
     result = {
       success: false,
       error: error.message,
@@ -17504,7 +17528,7 @@ async function executeWizardStep(wizardId, stepId, data) {
 
 // Execute wizard completion actions
 async function executeWizardCompletion(wizardId, state) {
-  console.log(`[SUCCESS] Executing completion actions for wizard: ${wizardId}`);
+  console.log(`🎉 Executing completion actions for wizard: ${wizardId}`);
   
   switch (wizardId) {
     case 'mqtt-setup':
@@ -17549,7 +17573,7 @@ async function completeModbusSetup(state) {
   const connectionData = state.data['connection-setup']?.input;
   const registerData = state.data['register-mapping']?.input;
   
-  console.log(`[STATS] Configuring Modbus integration for ${connectionData?.host}:${connectionData?.port}`);
+  console.log(`📊 Configuring Modbus integration for ${connectionData?.host}:${connectionData?.port}`);
   
   return {
     modbusClientConfigured: true,
@@ -17802,7 +17826,7 @@ app.post('/api/device/:deviceId/power', async (req, res) => {
   const { deviceId } = req.params;
   const { state } = req.body; // 'on' or 'off'
   
-  console.log(`[IDEA] Farm Light Control: ${deviceId} → ${state}`);
+  console.log(`💡 Farm Light Control: ${deviceId} → ${state}`);
   
   res.json({
     deviceId,
@@ -17845,7 +17869,7 @@ app.post('/api/device/:deviceId/dimming', async (req, res) => {
 
 // Express error handling middleware - must be last
 app.use((error, req, res, next) => {
-  console.error('[ERROR] Express Error Handler:', error);
+  console.error('❌ Express Error Handler:', error);
   console.error('Stack:', error.stack);
   console.error('Request URL:', req.url);
   console.error('Request Method:', req.method);
@@ -18049,7 +18073,7 @@ function calculateWizardConfidence(device, wizard) {
 
 // Bulk wizard operations
 async function executeBulkWizardOperation(operation, wizardIds, data) {
-  console.log(`[REFRESH] Executing bulk operation: ${operation} on ${wizardIds.length} wizards`);
+  console.log(`🔄 Executing bulk operation: ${operation} on ${wizardIds.length} wizards`);
   
   const results = [];
   
@@ -18182,7 +18206,7 @@ async function applyWizardTemplate(templateId, devices, customPresets = {}) {
     throw new Error(`Unknown wizard template: ${templateId}`);
   }
   
-  console.log(` Applying wizard template: ${template.name}`);
+  console.log(`📋 Applying wizard template: ${template.name}`);
   
   const results = {
     templateId,
@@ -18545,7 +18569,7 @@ app.post('/discovery/suggest-wizards', async (req, res) => {
 
 // 404 handler for undefined routes (must be registered after all routes)
 app.use((req, res) => {
-  console.warn(`[WARNING]  404 Not Found: ${req.method} ${req.url}`);
+  console.warn(`⚠️  404 Not Found: ${req.method} ${req.url}`);
   res.status(404).json({
     error: 'Not Found',
     message: `Route ${req.method} ${req.url} not found`,
@@ -19204,7 +19228,7 @@ function setupLiveSensorSync() {
         }
       }
 
-      // [OK] ML-ENHANCED ROOM-LEVEL ENVIRONMENTAL AUTOMATION
+      // ✅ ML-ENHANCED ROOM-LEVEL ENVIRONMENTAL AUTOMATION
       try {
         // Read groups.json to find active zones
         let groups = [];
@@ -19387,11 +19411,11 @@ app.post('/api/bus-mapping', asyncHandler(async (req, res) => {
 
 
 async function startServer() {
-  console.log('[charlie] [START] startServer() called');
+  console.log('[charlie] 🚀 startServer() called');
   try {
     const resolvedPort = await resolveAvailablePort(PORT);
     PORT = resolvedPort;
-    console.log('[charlie] [OK] Port resolved:', PORT);
+    console.log('[charlie] ✅ Port resolved:', PORT);
   } catch (error) {
     if (error && error.code === 'EADDRINUSE') {
       console.error(`[charlie] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
@@ -19405,14 +19429,14 @@ async function startServer() {
   console.log('[charlie] 🔧 About to call initializeDemoMode()...');
   try {
     initializeDemoMode();
-    console.log('[charlie] [OK] initializeDemoMode() completed');
+    console.log('[charlie] ✅ initializeDemoMode() completed');
   } catch (error) {
-    console.error('[charlie] [ERROR] Demo mode initialization failed:', error?.message || error);
+    console.error('[charlie] ❌ Demo mode initialization failed:', error?.message || error);
     console.error('[charlie] Stack trace:', error?.stack);
   }
 
   // Pre-startup diagnostics
-  console.log('[charlie] [START] Starting server...');
+  console.log('[charlie] 🚀 Starting server...');
   console.log('[charlie] PORT:', PORT);
   console.log('[charlie] NODE_ENV:', process.env.NODE_ENV);
   console.log('[charlie] DEMO_MODE:', process.env.DEMO_MODE);
@@ -19421,7 +19445,7 @@ async function startServer() {
 
   SERVER = app.listen(PORT, '0.0.0.0', () => {
     const address = SERVER.address();
-    console.log(`[charlie] [OK] Server successfully started on ${address.address}:${address.port}`);
+    console.log(`[charlie] ✅ Server successfully started on ${address.address}:${address.port}`);
     console.log(`[charlie] running http://127.0.0.1:${PORT} → ${getController()}`);
     console.log(`[charlie] Demo mode check: isDemoMode() = ${isDemoMode()}`);
     if (isDemoMode()) {
@@ -19508,7 +19532,7 @@ async function startServer() {
 
   // Add error handler for server startup failures
   SERVER.on('error', (error) => {
-    console.error('[charlie] [ERROR] Server startup failed:', error);
+    console.error('[charlie] ❌ Server startup failed:', error);
     console.error('[charlie] Error code:', error.code);
     console.error('[charlie] Error message:', error.message);
     console.error('[charlie] Stack trace:', error.stack);
@@ -19560,7 +19584,3 @@ export const __testUtils = {
   evaluateRoomAutomationConfig,
   computeEnergy,
 };
-
-// Admin test farm creation endpoint
-const createTestFarmRouter = require('./routes/admin/create-test-farm');
-app.use('/api/admin', createTestFarmRouter);

@@ -1,263 +1,233 @@
-#!/usr/bin/env node
-/**
- * Create a complete test farm from scratch
- * Tests the entire system: Farm Admin → Inventory → Farm Sales → Wholesale → GreenReach Admin
- * 
- * Farm Structure:
- * - 1 Room (Grow Room A)
- * - 2 Zones (Zone 1, Zone 2)
- * - 4 Groups (2 per zone)
- * - 4 Crops from lighting-recipes.json
- * - Full inventory setup
- */
+const sqlite3 = require('sqlite3').verbose();
+const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcrypt');
+const fs = require('fs');
+const path = require('path');
 
-import sqlite3 from 'sqlite3';
-import { promisify } from 'util';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { v4 as uuidv4 } from 'uuid';
+const DB_PATH = path.join(__dirname, '..', 'lightengine.db');
+const RECIPES_PATH = path.join(__dirname, '..', 'public', 'data', 'lighting-recipes.json');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const dbPath = path.join(__dirname, '../lightengine.db');
-const db = new sqlite3.Database(dbPath);
-
-const dbRun = promisify(db.run.bind(db));
-const dbGet = promisify(db.get.bind(db));
-const dbAll = promisify(db.all.bind(db));
+// Farm configuration
+const FARM_CONFIG = {
+  farmId: 'TEST-FARM-001',
+  farmName: 'GreenReach Test Farm',
+  location: 'Denver, CO',
+  timezone: 'America/Denver',
+  rooms: [
+    {
+      name: 'Grow Room A',
+      zones: [
+        { name: 'Zone 1', groups: ['Group A1', 'Group A2'] },
+        { name: 'Zone 2', groups: ['Group B1', 'Group B2'] }
+      ]
+    }
+  ],
+  trayFormat: {
+    name: '12-Hole Standard',
+    plantSiteCount: 12,
+    systemType: 'NFT',
+    isWeightBased: true,
+    targetWeightPerSite: 4.0,
+    weightUnit: 'oz'
+  },
+  locationsPerGroup: 3,
+  traysPerCrop: 3,
+  adminUser: {
+    email: 'admin@test-farm.com',
+    password: 'test123',
+    name: 'Test Admin'
+  }
+};
 
 // Load lighting recipes
-const recipesPath = path.join(__dirname, '../public/data/lighting-recipes.json');
-const recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
-const cropNames = Object.keys(recipes.crops).slice(0, 4); // Take first 4 crops
-
-console.log('\n=== Creating Test Farm ===\n');
-console.log('Crops to use:', cropNames);
+function loadLightingRecipes() {
+  const recipesData = fs.readFileSync(RECIPES_PATH, 'utf8');
+  const recipes = JSON.parse(recipesData);
+  return recipes.slice(0, 4); // Get first 4 crops
+}
 
 async function createTestFarm() {
-  const farmId = 'TEST-FARM-001';
-  const farmName = 'GreenReach Test Farm';
+  const db = new sqlite3.Database(DB_PATH);
   
-  console.log(`\n[STEP 1] Creating farm: ${farmName} (${farmId})`);
-  
-  // Clean up existing test farm
-  await dbRun('DELETE FROM tray_placements WHERE tray_run_id IN (SELECT tray_run_id FROM tray_runs WHERE tray_id IN (SELECT tray_id FROM trays WHERE tray_id IN (SELECT tray_id FROM tray_runs WHERE tray_id IN (SELECT tray_id FROM trays))))');
-  await dbRun('DELETE FROM tray_runs');
-  await dbRun('DELETE FROM trays');
-  await dbRun('DELETE FROM locations WHERE group_id IN (SELECT group_id FROM groups WHERE zone_id IN (SELECT zone_id FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?)))' , farmId);
-  await dbRun('DELETE FROM groups WHERE zone_id IN (SELECT zone_id FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?))', farmId);
-  await dbRun('DELETE FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?)', farmId);
-  await dbRun('DELETE FROM rooms WHERE farm_id = ?', farmId);
-  await dbRun('DELETE FROM farms WHERE farm_id = ?', farmId);
-  
-  console.log('[STEP 1] Cleaned up existing test farm data');
-  
-  // Create farm
-  const farmUuid = uuidv4();
-  await dbRun(
-    'INSERT INTO farms (farm_id, name, location, timezone) VALUES (?, ?, ?, ?)',
-    [farmId, farmName, 'Test Location, CA', 'America/Los_Angeles']
-  );
-  console.log('[STEP 1] ✓ Farm created');
-  
-  // Create room
-  console.log('\n[STEP 2] Creating room structure');
-  const roomId = uuidv4();
-  await dbRun(
-    'INSERT INTO rooms (room_id, farm_id, name, description) VALUES (?, ?, ?, ?)',
-    [roomId, farmId, 'Grow Room A', 'Main growing area']
-  );
-  console.log('[STEP 2] ✓ Room created: Grow Room A');
-  
-  // Create zones
-  const zones = [
-    { id: uuidv4(), name: 'Zone 1', description: 'North section' },
-    { id: uuidv4(), name: 'Zone 2', description: 'South section' }
-  ];
-  
-  for (const zone of zones) {
-    await dbRun(
-      'INSERT INTO zones (zone_id, room_id, name, description) VALUES (?, ?, ?, ?)',
-      [zone.id, roomId, zone.name, zone.description]
-    );
-    console.log(`[STEP 2] ✓ Zone created: ${zone.name}`);
-  }
-  
-  // Create groups (2 per zone = 4 total)
-  console.log('\n[STEP 3] Creating groups');
-  const groups = [];
-  for (let i = 0; i < zones.length; i++) {
-    for (let j = 1; j <= 2; j++) {
-      const groupId = uuidv4();
-      const groupName = `Group ${zones[i].name}-${j}`;
-      await dbRun(
-        'INSERT INTO groups (group_id, zone_id, name, type) VALUES (?, ?, ?, ?)',
-        [groupId, zones[i].id, groupName, 'rack']
+  return new Promise(async (resolve, reject) => {
+    try {
+      console.log('\n=== Creating Test Farm ===\n');
+      
+      const crops = loadLightingRecipes();
+      console.log('Crops to use:', crops.map(c => c.name));
+      
+      // Clean up existing test farm data
+      console.log('\n[CLEANUP] Removing existing TEST-FARM-001 data...');
+      await runQuery(db, 'DELETE FROM tray_placements WHERE tray_run_id IN (SELECT tray_run_id FROM tray_runs WHERE tray_id IN (SELECT tray_id FROM trays WHERE farm_id = ?))', [FARM_CONFIG.farmId]);
+      await runQuery(db, 'DELETE FROM tray_runs WHERE tray_id IN (SELECT tray_id FROM trays WHERE farm_id = ?)', [FARM_CONFIG.farmId]);
+      await runQuery(db, 'DELETE FROM trays WHERE farm_id = ?', [FARM_CONFIG.farmId]);
+      await runQuery(db, 'DELETE FROM locations WHERE group_id IN (SELECT group_id FROM groups WHERE zone_id IN (SELECT zone_id FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?)))', [FARM_CONFIG.farmId]);
+      await runQuery(db, 'DELETE FROM groups WHERE zone_id IN (SELECT zone_id FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?))', [FARM_CONFIG.farmId]);
+      await runQuery(db, 'DELETE FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?)', [FARM_CONFIG.farmId]);
+      await runQuery(db, 'DELETE FROM rooms WHERE farm_id = ?', [FARM_CONFIG.farmId]);
+      await runQuery(db, 'DELETE FROM users WHERE farm_id = ?', [FARM_CONFIG.farmId]);
+      await runQuery(db, 'DELETE FROM farms WHERE farm_id = ?', [FARM_CONFIG.farmId]);
+      
+      // STEP 1: Create farm
+      console.log(`\n[STEP 1] Creating farm: ${FARM_CONFIG.farmName} (${FARM_CONFIG.farmId})`);
+      await runQuery(db, 
+        'INSERT INTO farms (farm_id, name, location, timezone, created_at) VALUES (?, ?, ?, ?, datetime("now"))',
+        [FARM_CONFIG.farmId, FARM_CONFIG.farmName, FARM_CONFIG.location, FARM_CONFIG.timezone]
       );
-      groups.push({ id: groupId, name: groupName, zoneId: zones[i].id });
-      console.log(`[STEP 3] ✓ Group created: ${groupName}`);
+      
+      // STEP 2: Create tray format
+      console.log('\n[STEP 2] Creating tray format...');
+      const trayFormatId = uuidv4();
+      await runQuery(db,
+        'INSERT INTO tray_formats (tray_format_id, name, plant_site_count, system_type, is_weight_based, target_weight_per_site, weight_unit) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [trayFormatId, FARM_CONFIG.trayFormat.name, FARM_CONFIG.trayFormat.plantSiteCount, FARM_CONFIG.trayFormat.systemType, FARM_CONFIG.trayFormat.isWeightBased ? 1 : 0, FARM_CONFIG.trayFormat.targetWeightPerSite, FARM_CONFIG.trayFormat.weightUnit]
+      );
+      
+      // STEP 3: Create room structure
+      console.log('\n[STEP 3] Creating room structure...');
+      const roomData = FARM_CONFIG.rooms[0];
+      const roomId = uuidv4();
+      await runQuery(db,
+        'INSERT INTO rooms (room_id, farm_id, name, description, created_at) VALUES (?, ?, ?, ?, datetime("now"))',
+        [roomId, FARM_CONFIG.farmId, roomData.name, 'Main growing area', ]
+      );
+      
+      const locationIds = [];
+      let groupIndex = 0;
+      
+      for (const zoneData of roomData.zones) {
+        const zoneId = uuidv4();
+        console.log(`  Creating ${zoneData.name}...`);
+        await runQuery(db,
+          'INSERT INTO zones (zone_id, room_id, name, description, created_at) VALUES (?, ?, ?, ?, datetime("now"))',
+          [zoneId, roomId, zoneData.name, `${zoneData.name} in ${roomData.name}`]
+        );
+        
+        for (const groupName of zoneData.groups) {
+          const groupId = uuidv4();
+          console.log(`    Creating ${groupName}...`);
+          await runQuery(db,
+            'INSERT INTO groups (group_id, zone_id, name, type, created_at) VALUES (?, ?, ?, ?, datetime("now"))',
+            [groupId, zoneId, groupName, 'NFT']
+          );
+          
+          // Create locations for this group
+          for (let i = 1; i <= FARM_CONFIG.locationsPerGroup; i++) {
+            const locationId = uuidv4();
+            const qrCode = `${FARM_CONFIG.farmId}-${groupName}-L${i}`;
+            await runQuery(db,
+              'INSERT INTO locations (location_id, group_id, name, qr_code_value, created_at) VALUES (?, ?, ?, ?, datetime("now"))',
+              [locationId, groupId, `Location ${i}`, qrCode]
+            );
+            locationIds.push(locationId);
+          }
+          groupIndex++;
+        }
+      }
+      
+      console.log(`  Created ${locationIds.length} locations total`);
+      
+      // STEP 4: Create trays and plant crops
+      console.log('\n[STEP 4] Planting crops...');
+      let trayCount = 0;
+      let locationIndex = 0;
+      
+      for (let cropIndex = 0; cropIndex < crops.length; cropIndex++) {
+        const crop = crops[cropIndex];
+        console.log(`  Planting ${FARM_CONFIG.traysPerCrop} trays of ${crop.name}...`);
+        
+        for (let trayNum = 1; trayNum <= FARM_CONFIG.traysPerCrop; trayNum++) {
+          const trayId = uuidv4();
+          const trayQrCode = `${FARM_CONFIG.farmId}-TRAY-${String(trayCount + 1).padStart(3, '0')}`;
+          
+          // Create tray
+          await runQuery(db,
+            'INSERT INTO trays (tray_id, farm_id, qr_code_value, tray_format_id, created_at) VALUES (?, ?, ?, ?, datetime("now"))',
+            [trayId, FARM_CONFIG.farmId, trayQrCode, trayFormatId]
+          );
+          
+          // Create tray run (planting record)
+          const trayRunId = uuidv4();
+          const seedDate = new Date();
+          const expectedHarvestDate = new Date(seedDate);
+          expectedHarvestDate.setDate(seedDate.getDate() + crop.daysToHarvest);
+          
+          await runQuery(db,
+            'INSERT INTO tray_runs (tray_run_id, tray_id, recipe_id, seed_date, expected_harvest_date, status, planted_site_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime("now"))',
+            [trayRunId, trayId, crop.id, seedDate.toISOString(), expectedHarvestDate.toISOString(), 'active', FARM_CONFIG.trayFormat.plantSiteCount]
+          );
+          
+          // Place tray in location
+          const locationId = locationIds[locationIndex % locationIds.length];
+          await runQuery(db,
+            'INSERT INTO tray_placements (tray_placement_id, tray_run_id, location_id, placed_at, created_at) VALUES (?, ?, ?, datetime("now"), datetime("now"))',
+            [uuidv4(), trayRunId, locationId]
+          );
+          
+          trayCount++;
+          locationIndex++;
+        }
+      }
+      
+      console.log(`  Created ${trayCount} trays with active crops`);
+      
+      // STEP 5: Create admin user
+      console.log('\n[STEP 5] Creating admin user...');
+      const userId = uuidv4();
+      const passwordHash = await bcrypt.hash(FARM_CONFIG.adminUser.password, 10);
+      await runQuery(db,
+        'INSERT INTO users (user_id, farm_id, email, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime("now"))',
+        [userId, FARM_CONFIG.farmId, FARM_CONFIG.adminUser.email, passwordHash, 'admin', FARM_CONFIG.adminUser.name]
+      );
+      
+      console.log('\n=== Test Farm Created Successfully ===\n');
+      console.log('Farm Details:');
+      console.log(`  Farm ID: ${FARM_CONFIG.farmId}`);
+      console.log(`  Name: ${FARM_CONFIG.farmName}`);
+      console.log(`  Location: ${FARM_CONFIG.location}`);
+      console.log('\nStructure:');
+      console.log(`  Rooms: 1`);
+      console.log(`  Zones: 2`);
+      console.log(`  Groups: 4`);
+      console.log(`  Locations: ${locationIds.length}`);
+      console.log('\nInventory:');
+      console.log(`  Trays: ${trayCount}`);
+      console.log(`  Crops: ${crops.length}`);
+      crops.forEach((crop, idx) => {
+        console.log(`    - ${crop.name} (${FARM_CONFIG.traysPerCrop} trays, ${crop.daysToHarvest} days to harvest)`);
+      });
+      console.log('\nAdmin Access:');
+      console.log(`  Email: ${FARM_CONFIG.adminUser.email}`);
+      console.log(`  Password: ${FARM_CONFIG.adminUser.password}`);
+      console.log('\nAccess URLs:');
+      console.log(`  Farm Admin: http://localhost:8091/farm-admin.html`);
+      console.log(`  Farm Sales: http://localhost:8091/farm-sales.html`);
+      console.log(`  Wholesale: http://localhost:8091/wholesale.html`);
+      console.log('\n');
+      
+      db.close();
+      resolve();
+    } catch (error) {
+      console.error('\n[ERROR] Failed to create test farm:', error);
+      db.close();
+      reject(error);
     }
-  }
-  
-  // Create tray formats
-  console.log('\n[STEP 4] Creating tray formats');
-  const formatId = uuidv4();
-  await dbRun(
-    'INSERT OR REPLACE INTO tray_formats (tray_format_id, name, plant_site_count, system_type, is_weight_based, target_weight_per_site, weight_unit) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [formatId, '12-Hole Standard', 12, 'NFT', 1, 4.0, 'oz']
-  );
-  console.log('[STEP 4] ✓ Tray format created: 12-Hole Standard (12 sites, 4oz per site)');
-  
-  // Create locations (3 per group = 12 total)
-  console.log('\n[STEP 5] Creating locations');
-  const locations = [];
-  for (const group of groups) {
-    for (let i = 1; i <= 3; i++) {
-      const locationId = uuidv4();
-      const locationName = `${group.name}-L${i}`;
-      await dbRun(
-        'INSERT INTO locations (location_id, group_id, name, qr_code_value) VALUES (?, ?, ?, ?)',
-        [locationId, group.id, locationName, `QR-${locationName}`]
-      );
-      locations.push({ id: locationId, name: locationName, groupId: group.id });
-    }
-  }
-  console.log(`[STEP 5] ✓ Created ${locations.length} locations`);
-  
-  // Create trays with crops
-  console.log('\n[STEP 6] Creating trays and planting crops');
-  const today = new Date();
-  let trayCount = 0;
-  
-  for (let i = 0; i < cropNames.length; i++) {
-    const cropName = cropNames[i];
-    const cropData = recipes.crops[cropName];
-    const harvestDay = cropData[cropData.length - 1]?.day || 21;
-    const expectedHarvest = new Date(today);
-    expectedHarvest.setDate(expectedHarvest.getDate() + Math.round(harvestDay));
-    
-    // Create 3 trays per crop
-    for (let j = 0; j < 3; j++) {
-      const trayId = uuidv4();
-      const trayRunId = uuidv4();
-      const qrCode = `TRAY-${cropName.substring(0, 3).toUpperCase()}-${String(j + 1).padStart(3, '0')}`;
-      
-      // Create tray
-      await dbRun(
-        'INSERT INTO trays (tray_id, qr_code_value, tray_format_id) VALUES (?, ?, ?)',
-        [trayId, qrCode, formatId]
-      );
-      
-      // Create tray run (seeded and placed)
-      await dbRun(
-        'INSERT INTO tray_runs (tray_run_id, tray_id, recipe_id, seed_date, expected_harvest_date, status, planted_site_count) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [trayRunId, trayId, cropName, today.toISOString().split('T')[0], expectedHarvest.toISOString().split('T')[0], 'growing', 12]
-      );
-      
-      // Place tray in a location
-      const location = locations[trayCount % locations.length];
-      await dbRun(
-        'INSERT INTO tray_placements (tray_placement_id, tray_run_id, location_id, placed_at) VALUES (?, ?, ?, ?)',
-        [uuidv4(), trayRunId, location.id, today.toISOString()]
-      );
-      
-      trayCount++;
-    }
-    
-    console.log(`[STEP 6] ✓ Created 3 trays for ${cropName} (${Math.round(harvestDay)} days to harvest)`);
-  }
-  
-  console.log(`[STEP 6] ✓ Total trays created: ${trayCount}`);
-  
-  // Generate inventory summary
-  console.log('\n[STEP 7] Generating inventory summary');
-  const inventory = await dbAll(`
-    SELECT 
-      tr.recipe_id as crop,
-      COUNT(DISTINCT t.tray_id) as tray_count,
-      SUM(tr.planted_site_count) as total_sites,
-      tf.target_weight_per_site,
-      tf.weight_unit,
-      MIN(tr.expected_harvest_date) as earliest_harvest,
-      MAX(tr.expected_harvest_date) as latest_harvest
-    FROM tray_runs tr
-    JOIN trays t ON tr.tray_id = t.tray_id
-    JOIN tray_formats tf ON t.tray_format_id = tf.tray_format_id
-    JOIN tray_placements tp ON tr.tray_run_id = tp.tray_run_id
-    JOIN locations l ON tp.location_id = l.location_id
-    JOIN groups g ON l.group_id = g.group_id
-    JOIN zones z ON g.zone_id = z.zone_id
-    JOIN rooms r ON z.room_id = r.room_id
-    WHERE r.farm_id = ? AND tr.status = 'growing' AND tp.removed_at IS NULL
-    GROUP BY tr.recipe_id
-  `, farmId);
-  
-  console.log('\n=== FARM INVENTORY ===');
-  inventory.forEach(item => {
-    const totalWeight = item.total_sites * item.target_weight_per_site;
-    console.log(`\n${item.crop}:`);
-    console.log(`  - ${item.tray_count} trays`);
-    console.log(`  - ${item.total_sites} plants`);
-    console.log(`  - ${totalWeight} ${item.weight_unit} estimated yield`);
-    console.log(`  - Harvest: ${item.earliest_harvest} to ${item.latest_harvest}`);
   });
-  
-  // Create farm authentication
-  console.log('\n[STEP 8] Setting up farm authentication');
-  const users = await dbAll('SELECT * FROM users WHERE farm_id = ?', farmId);
-  if (users.length === 0) {
-    const userId = uuidv4();
-    const bcrypt = await import('bcrypt');
-    const hashedPassword = await bcrypt.hash('test123', 10);
-    
-    await dbRun(
-      'INSERT INTO users (user_id, farm_id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, farmId, 'admin@test-farm.com', hashedPassword, 'farm_admin', 'Test Admin']
-    );
-    console.log('[STEP 8] ✓ Admin user created: admin@test-farm.com (password: test123)');
-  }
-  
-  // Summary
-  console.log('\n=== FARM CREATION COMPLETE ===\n');
-  console.log(`Farm ID: ${farmId}`);
-  console.log(`Farm Name: ${farmName}`);
-  console.log(`Structure: 1 room → 2 zones → 4 groups → ${locations.length} locations`);
-  console.log(`Inventory: ${trayCount} trays across ${cropNames.length} crops`);
-  console.log(`\nLogin credentials:`);
-  console.log(`  Email: admin@test-farm.com`);
-  console.log(`  Password: test123`);
-  console.log(`\nAccess URLs:`);
-  console.log(`  - Farm Admin: http://localhost:8091/farm-admin.html`);
-  console.log(`  - Farm Sales: http://localhost:8091/farm-sales.html`);
-  console.log(`  - Wholesale: http://localhost:8091/wholesale.html`);
-  console.log(`\nAPI Endpoints:`);
-  console.log(`  - Inventory: GET /api/inventory/current?farmId=${farmId}`);
-  console.log(`  - Farm Sales: GET /api/farm-sales/inventory (requires auth)`);
-  console.log(`  - Wholesale: GET /api/wholesale/catalog`);
-  
-  return {
-    farmId,
-    farmName,
-    rooms: 1,
-    zones: 2,
-    groups: 4,
-    locations: locations.length,
-    trays: trayCount,
-    crops: cropNames
-  };
+}
+
+function runQuery(db, query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(query, params, function(err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
 }
 
 // Run the script
 createTestFarm()
-  .then(result => {
-    console.log('\n[SUCCESS] Test farm created successfully!');
-    db.close();
-    process.exit(0);
-  })
-  .catch(error => {
-    console.error('\n[ERROR] Failed to create test farm:', error);
-    db.close();
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error(err);
     process.exit(1);
   });

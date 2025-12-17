@@ -25,10 +25,10 @@ let failed = 0;
 function test(name, fn) {
   try {
     fn();
-    console.log(`[OK] ${name}`);
+    console.log(`✅ ${name}`);
     passed++;
   } catch (err) {
-    console.error(`[ERROR] ${name}`);
+    console.error(`❌ ${name}`);
     console.error(`   ${err.message}`);
     failed++;
   }
@@ -283,9 +283,9 @@ test('Full workflow: mix → bands → YPF', () => {
 
 // Summary
 console.log(`\n${'='.repeat(50)}`);
-console.log(`[OK] Passed: ${passed}`);
-console.log(`[ERROR] Failed: ${failed}`);
-console.log(`[STATS] Total: ${passed + failed}`);
+console.log(`✅ Passed: ${passed}`);
+console.log(`❌ Failed: ${failed}`);
+console.log(`📊 Total: ${passed + failed}`);
 console.log(`${'='.repeat(50)}\n`);
 
 process.exit(failed > 0 ? 1 : 0);

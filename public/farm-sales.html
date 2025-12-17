@@ -464,22 +464,12 @@
   <!-- Login Screen -->
   <div id="login-screen">
     <div class="login-card">
-      <h1> Farm Sales Terminal</h1>
+      <h1>Farm Sales Terminal</h1>
       <p>Sign in to access your farm's point-of-sale system</p>
       
       <div id="login-error" class="alert alert-error hidden"></div>
       
       <form id="login-form">
-        <div class="form-group">
-          <label for="farm-select">Select Farm</label>
-          <select id="farm-select" required>
-            <option value="">Choose your farm...</option>
-            <option value="FARM-001">Sunrise Acres</option>
-            <option value="FARM-002">Green Valley Farm</option>
-            <option value="FARM-003">Urban Harvest Co</option>
-          </select>
-        </div>
-        
         <div class="form-group">
           <label for="role-select">Role</label>
           <select id="role-select" required>
@@ -493,7 +483,7 @@
       </form>
       
       <p style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-light);">
-        Demo mode: Select any farm and role to access the system
+        Testing mode: Connected to current Light Engine farm
       </p>
     </div>
   </div>
@@ -501,7 +491,7 @@
   <!-- Main App -->
   <div id="app">
     <header class="header">
-      <h1> Farm Sales Terminal</h1>
+      <h1>Farm Sales Terminal</h1>
       <div class="user-info">
         <span class="farm-badge" id="farm-name">Loading...</span>
         <span id="user-role">Manager</span>
@@ -510,12 +500,12 @@
     </header>
     
     <nav class="tabs">
-      <button class="tab active" data-tab="pos">💳 POS Checkout</button>
-      <button class="tab" data-tab="orders"> Orders</button>
-      <button class="tab" data-tab="inventory">[STATS] Inventory</button>
-      <button class="tab" data-tab="delivery">🚚 Deliveries</button>
-      <button class="tab" data-tab="donations">🤝 Food Security</button>
-      <button class="tab" data-tab="traceability">🔬 Lot Traceability</button>
+      <button class="tab active" data-tab="pos">POS Checkout</button>
+      <button class="tab" data-tab="orders">Orders</button>
+      <button class="tab" data-tab="inventory">Inventory</button>
+      <button class="tab" data-tab="delivery">Deliveries</button>
+      <button class="tab" data-tab="donations">Food Security</button>
+      <button class="tab" data-tab="traceability">Lot Traceability</button>
     </nav>
     
     <main class="content">
@@ -690,14 +680,14 @@
               </form>
               
               <div id="lot-generated" class="hidden" style="margin-top: 1.5rem; padding: 1rem; background: #e8f5e9; border-radius: 4px; border: 2px solid var(--success);">
-                <h3 style="margin-bottom: 0.5rem; color: var(--success);">[OK] Lot Code Generated</h3>
+                <h3 style="margin-bottom: 0.5rem; color: var(--success);">✓ Lot Code Generated</h3>
                 <div style="font-size: 1.5rem; font-weight: bold; margin: 1rem 0; font-family: monospace;" id="lot-code-display"></div>
                 <div style="text-align: center; margin: 1rem 0;">
                   <img id="lot-barcode" alt="Barcode" style="max-width: 100%; height: auto;">
                 </div>
                 <div style="display: flex; gap: 0.5rem;">
                   <button class="btn btn-secondary btn-sm" onclick="printBarcode()">🖨️ Print Label</button>
-                  <button class="btn btn-sm" onclick="copyLotCode()" style="background: #2196f3; color: white;"> Copy Code</button>
+                  <button class="btn btn-sm" onclick="copyLotCode()" style="background: #2196f3; color: white;">📋 Copy Code</button>
                 </div>
               </div>
             </div>
@@ -705,7 +695,7 @@
           
           <!-- Right Column: Lot Lookup & Recall -->
           <div>
-            <h2 style="margin-bottom: 1rem;">[SEARCH] Lot Lookup & Recall</h2>
+            <h2 style="margin-bottom: 1rem;">🔍 Lot Lookup & Recall</h2>
             <div class="card">
               <div class="form-group">
                 <label for="lot-search">Search Lot Code</label>
@@ -729,13 +719,13 @@
                 </table>
                 
                 <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                  <button class="btn btn-secondary btn-sm" onclick="generateRecallReport()">[WARNING] Generate Recall Report</button>
+                  <button class="btn btn-secondary btn-sm" onclick="generateRecallReport()">⚠️ Generate Recall Report</button>
                   <button class="btn btn-sm" onclick="viewBarcode()" style="background: #2196f3; color: white;">🔬 View Barcode</button>
                 </div>
               </div>
               
               <div id="recall-report" class="hidden" style="margin-top: 1.5rem; padding: 1rem; background: #fff3e0; border-radius: 4px; border: 2px solid var(--warning);">
-                <h3 style="margin-bottom: 0.5rem; color: var(--warning);">[WARNING] Recall Report</h3>
+                <h3 style="margin-bottom: 0.5rem; color: var(--warning);">⚠️ Recall Report</h3>
                 <div id="recall-summary"></div>
                 <div id="recall-customers"></div>
                 <button class="btn btn-secondary btn-sm" onclick="exportRecallCSV()" style="margin-top: 1rem;">📥 Export to CSV</button>
@@ -804,6 +794,9 @@
     
     // API helper
     async function api(endpoint, options = {}) {
+      // Refresh token if expired
+      await refreshTokenIfNeeded();
+      
       const url = `/api${endpoint}`;
       const headers = {
         'Content-Type': 'application/json',
@@ -817,6 +810,28 @@
       
       const data = await response.json();
       
+      // If unauthorized, try refreshing token once and retry
+      if (response.status === 401) {
+        console.log('[auth] Got 401, refreshing token and retrying...');
+        const refreshed = await refreshTokenIfNeeded();
+        if (refreshed) {
+          // Retry request with new token
+          const retryResponse = await fetch(url, {
+            ...options,
+            headers: {
+              ...headers,
+              'Authorization': `Bearer ${token}`,
+              ...options.headers
+            }
+          });
+          const retryData = await retryResponse.json();
+          if (!retryResponse.ok) {
+            throw new Error(retryData.message || retryData.error || 'Request failed');
+          }
+          return retryData;
+        }
+      }
+      
       if (!response.ok) {
         throw new Error(data.message || data.error || 'Request failed');
       }
@@ -828,11 +843,18 @@
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      const selectedFarmId = document.getElementById('farm-select').value;
       const selectedRole = document.getElementById('role-select').value;
       
       try {
-        // Get demo tokens
+        // Get current farm from Light Engine API
+        const response = await fetch('/api/config/app');
+        const config = await response.json();
+        
+        farmId = config.farmId || 'FARM-001';
+        farmName = config.farmName || 'Demo Farm';
+        userRole = selectedRole;
+        
+        // Get demo tokens for the current farm
         const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
         const tokensData = await tokensResponse.json();
         
@@ -840,17 +862,7 @@
           throw new Error('Failed to get demo tokens');
         }
         
-        token = tokensData.tokens[selectedFarmId][selectedRole];
-        farmId = selectedFarmId;
-        userRole = selectedRole;
-        
-        // Get farm name
-        const farmNames = {
-          'FARM-001': 'Sunrise Acres',
-          'FARM-002': 'Green Valley Farm',
-          'FARM-003': 'Urban Harvest Co'
-        };
-        farmName = farmNames[farmId];
+        token = tokensData.tokens[farmId][selectedRole];
         
         // Save to localStorage
         localStorage.setItem('farm_token', token);
@@ -861,7 +873,7 @@
         // Show app
         showApp();
       } catch (error) {
-        document.getElementById('login-error').textContent = error.message;
+        document.getElementById('login-error').textContent = 'Failed to connect: ' + error.message;
         document.getElementById('login-error').classList.remove('hidden');
       }
     });
@@ -886,19 +898,85 @@
       loadPrograms();
     }
     
+    // Check if token is expired
+    function isTokenExpired(token) {
+      if (!token) return true;
+      try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return true;
+        const payload = JSON.parse(atob(parts[1]));
+        const exp = payload.exp * 1000; // Convert to milliseconds
+        return Date.now() >= exp;
+      } catch (e) {
+        return true;
+      }
+    }
+    
+    // Refresh token if expired
+    async function refreshTokenIfNeeded() {
+      if (!token || isTokenExpired(token)) {
+        console.log('[auth] Token expired, refreshing...');
+        try {
+          const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+          const tokensData = await tokensResponse.json();
+          if (tokensData.ok && tokensData.tokens[farmId]) {
+            token = tokensData.tokens[farmId][userRole];
+            localStorage.setItem('farm_token', token);
+            console.log('[auth] Token refreshed successfully');
+            return true;
+          }
+        } catch (error) {
+          console.error('[auth] Failed to refresh token:', error);
+          return false;
+        }
+      }
+      return true;
+    }
+    
     // Check if already logged in
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       const savedToken = localStorage.getItem('farm_token');
       const savedFarmId = localStorage.getItem('farm_id');
       const savedFarmName = localStorage.getItem('farm_name');
       const savedRole = localStorage.getItem('user_role');
       
       if (savedToken && savedFarmId) {
-        token = savedToken;
-        farmId = savedFarmId;
-        farmName = savedFarmName;
-        userRole = savedRole;
-        showApp();
+        // Verify farm is still current
+        try {
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          // If farm changed, clear and require re-login
+          if (config.farmId && config.farmId !== savedFarmId) {
+            localStorage.clear();
+            return;
+          }
+          
+          token = savedToken;
+          farmId = savedFarmId;
+          farmName = savedFarmName || config.farmName || 'Demo Farm';
+          userRole = savedRole;
+          
+          // Check if token expired and refresh
+          if (isTokenExpired(token)) {
+            console.log('[auth] Saved token expired, refreshing...');
+            const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+            const tokensData = await tokensResponse.json();
+            if (tokensData.ok && tokensData.tokens[farmId]) {
+              token = tokensData.tokens[farmId][userRole];
+              localStorage.setItem('farm_token', token);
+            } else {
+              // Can't refresh, require re-login
+              localStorage.clear();
+              return;
+            }
+          }
+          
+          showApp();
+        } catch (error) {
+          console.error('Failed to verify farm:', error);
+          localStorage.clear();
+        }
       }
     });
     
@@ -925,21 +1003,16 @@
     // Load inventory
     async function loadInventory() {
       try {
-        // Use tray-based inventory from recipes
-        const farmIdParam = farmId ? `?farmId=${farmId}` : '';
-        const data = await api(`/farm-sales/inventory/from-trays${farmIdParam}`);
+        const data = await api('/farm-sales/inventory');
         inventory = data.inventory;
-        
-        console.log(`[farm-sales] Loaded ${inventory.length} products from ${data.recipe_source}`);
         
         // Render product grid
         const grid = document.getElementById('product-grid');
         grid.innerHTML = inventory.map(product => `
           <div class="product-card" onclick="addToCart('${product.sku_id}')">
             <h3>${product.name}</h3>
-            <div class="price">$${product.retail_price.toFixed(2)} per ${product.unit}</div>
-            <div class="stock">${product.available} ${product.unit}${product.available !== 1 ? 's' : ''} available</div>
-            ${product.harvest_days ? `<div style="font-size: 0.75rem; color: var(--text-light); margin-top: 0.5rem;">${product.harvest_days} days to harvest</div>` : ''}
+            <div class="price">$${product.retail_price.toFixed(2)}</div>
+            <div class="stock">${product.available} ${product.unit} available</div>
           </div>
         `).join('');
         
@@ -957,39 +1030,7 @@
           </tr>
         `).join('');
       } catch (error) {
-        console.error('[farm-sales] Failed to load inventory:', error);
-        // Fallback to regular endpoint
-        try {
-          const data = await api('/farm-sales/inventory');
-          inventory = data.inventory;
-          
-          const grid = document.getElementById('product-grid');
-          grid.innerHTML = inventory.map(product => `
-            <div class="product-card" onclick="addToCart('${product.sku_id}')">
-              <h3>${product.name}</h3>
-              <div class="price">$${product.retail_price.toFixed(2)}</div>
-              <div class="stock">${product.available} ${product.unit} available</div>
-            </div>
-          `).join('');
-          
-          const table = document.getElementById('inventory-table');
-          table.innerHTML = inventory.map(product => `
-            <tr>
-              <td>${product.sku_id}</td>
-              <td>${product.name}</td>
-              <td>${product.category}</td>
-              <td>${product.available}</td>
-              <td>${product.reserved}</td>
-              <td>${product.unit}</td>
-              <td>$${product.retail_price.toFixed(2)}</td>
-            </tr>
-          `).join('');
-        } catch (fallbackError) {
-          console.error('[farm-sales] Fallback also failed:', fallbackError);
-          // If both fail, show empty inventory
-          const grid = document.getElementById('product-grid');
-          grid.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-light);">No inventory available. Please log in to see products.</div>';
-        }
+        console.error('Failed to load inventory:', error);
       }
     }
     
@@ -1143,7 +1184,7 @@
         });
         
         document.getElementById('checkout-success').textContent = 
-          `[OK] Sale completed! Order ID: ${result.receipt.order_id}`;
+          `✓ Sale completed! Order ID: ${result.receipt.order_id}`;
         document.getElementById('checkout-success').classList.remove('hidden');
         document.getElementById('checkout-error').classList.add('hidden');
         
@@ -1378,7 +1419,7 @@
             `;
           } else {
             document.getElementById('recall-customers').innerHTML = `
-              <p style="color: var(--success); margin-top: 1rem;">[OK] No customers affected - lot has not been sold.</p>
+              <p style="color: var(--success); margin-top: 1rem;">✓ No customers affected - lot has not been sold.</p>
             `;
           }
           

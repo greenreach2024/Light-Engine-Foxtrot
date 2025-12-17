@@ -67,7 +67,7 @@ function httpsGet(path) {
 }
 
 async function discoverRealDevices() {
-  console.log('[SEARCH] Discovering actual SwitchBot devices...');
+  console.log('🔍 Discovering actual SwitchBot devices...');
   
   let attempts = 0;
   const maxAttempts = 5;
@@ -87,20 +87,20 @@ async function discoverRealDevices() {
       }
       
       if (response.status !== 200) {
-        console.error(`[ERROR] API Error: ${response.status}`, response.body);
+        console.error(`❌ API Error: ${response.status}`, response.body);
         throw new Error(`API returned status ${response.status}`);
       }
       
       if (response.body.statusCode !== 100) {
-        console.error('[ERROR] SwitchBot API Error:', response.body);
+        console.error('❌ SwitchBot API Error:', response.body);
         throw new Error(`SwitchBot API error: ${response.body.message}`);
       }
       
       const deviceList = response.body.body?.deviceList || [];
-      console.log(`[OK] Found ${deviceList.length} real devices!`);
+      console.log(`✅ Found ${deviceList.length} real devices!`);
       
       if (deviceList.length === 0) {
-        console.warn('[WARNING]  No devices found in your SwitchBot account');
+        console.warn('⚠️  No devices found in your SwitchBot account');
         return null;
       }
       
@@ -125,7 +125,7 @@ async function discoverRealDevices() {
       console.log(`💾 Saved real device data to: ${rawDataPath}`);
       
       // Print device summary
-      console.log('\n Discovered Devices:');
+      console.log('\n📋 Discovered Devices:');
       deviceList.forEach((device, index) => {
         console.log(`  ${index + 1}. ${device.deviceName} (${device.deviceType})`);
         console.log(`     ID: ${device.deviceId}`);
@@ -136,7 +136,7 @@ async function discoverRealDevices() {
       return realDeviceData;
       
     } catch (error) {
-      console.error(`[ERROR] Attempt ${attempts} failed:`, error.message);
+      console.error(`❌ Attempt ${attempts} failed:`, error.message);
       if (attempts < maxAttempts) {
         console.log('⏳ Waiting 30 seconds before retry...');
         await new Promise(resolve => setTimeout(resolve, 30000));
@@ -144,23 +144,23 @@ async function discoverRealDevices() {
     }
   }
   
-  console.error('[ERROR] Failed to discover devices after all attempts');
+  console.error('❌ Failed to discover devices after all attempts');
   return null;
 }
 
 async function main() {
-  console.log('[START] SwitchBot Real Device Discovery');
+  console.log('🚀 SwitchBot Real Device Discovery');
   console.log('==================================');
   
   const realDevices = await discoverRealDevices();
   
   if (realDevices) {
-    console.log('\n[OK] SUCCESS: Real device data captured and saved!');
+    console.log('\n✅ SUCCESS: Real device data captured and saved!');
     console.log(`📁 Check: public/data/switchbot-devices-real.json`);
-    console.log('\n[REFRESH] You can now use this data to replace mock devices in your application.');
+    console.log('\n🔄 You can now use this data to replace mock devices in your application.');
   } else {
-    console.log('\n[ERROR] FAILED: Could not discover real devices');
-    console.log('[IDEA] This could be due to:');
+    console.log('\n❌ FAILED: Could not discover real devices');
+    console.log('💡 This could be due to:');
     console.log('   - Rate limiting (try again later)');
     console.log('   - No devices in your SwitchBot account');
     console.log('   - Invalid API credentials');

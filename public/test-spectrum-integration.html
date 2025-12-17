@@ -92,14 +92,14 @@
                      'calculateYPF', 'calculateVPD', 'calculateBlueAdjustment'];
       const missing = funcs.filter(f => !window.SpectrumMath[f]);
       if (missing.length === 0) {
-        loadTest.textContent = '[OK] All spectrum math functions loaded successfully';
+        loadTest.textContent = '✅ All spectrum math functions loaded successfully';
         loadTest.className = 'result pass';
       } else {
-        loadTest.textContent = `[ERROR] Missing functions: ${missing.join(', ')}`;
+        loadTest.textContent = `❌ Missing functions: ${missing.join(', ')}`;
         loadTest.className = 'result fail';
       }
     } else {
-      loadTest.textContent = '[ERROR] window.SpectrumMath not available';
+      loadTest.textContent = '❌ window.SpectrumMath not available';
       loadTest.className = 'result fail';
     }
   </script>
@@ -110,7 +110,7 @@
       const result = document.getElementById('greenResult');
       
       if (!window.SpectrumMath || !window.SpectrumMath.splitGreenIntoWhites) {
-        result.textContent = '[ERROR] SpectrumMath.splitGreenIntoWhites not available';
+        result.textContent = '❌ SpectrumMath.splitGreenIntoWhites not available';
         result.className = 'result fail';
         return;
       }
@@ -126,12 +126,12 @@
           <strong>Input:</strong> ${greenInput}% green<br>
           <strong>CW:</strong> ${split.cw.toFixed(2)}% (${cwPercent}% of total)<br>
           <strong>WW:</strong> ${split.ww.toFixed(2)}% (${wwPercent}% of total)<br>
-          <strong>Sum:</strong> ${sum.toFixed(2)}% ${sumOk ? '[OK]' : '[ERROR]'}<br>
+          <strong>Sum:</strong> ${sum.toFixed(2)}% ${sumOk ? '✅' : '❌'}<br>
           <strong>Ratio:</strong> ${(split.cw / split.ww).toFixed(2)} CW:WW (expected ~0.54 for 35:65 split)
         `;
         result.className = sumOk ? 'result pass' : 'result fail';
       } catch (err) {
-        result.textContent = `[ERROR] Error: ${err.message}`;
+        result.textContent = `❌ Error: ${err.message}`;
         result.className = 'result fail';
       }
     }
@@ -144,7 +144,7 @@
       const result = document.getElementById('mixResult');
 
       if (!window.SpectrumMath || !window.SpectrumMath.mixSPD) {
-        result.textContent = '[ERROR] SpectrumMath.mixSPD not available';
+        result.textContent = '❌ SpectrumMath.mixSPD not available';
         result.className = 'result fail';
         return;
       }
@@ -163,11 +163,11 @@
           &nbsp;&nbsp;Red: ${bands.RED.toFixed(1)}%<br>
           &nbsp;&nbsp;Far-Red: ${bands.FAR_RED.toFixed(1)}%<br>
           <strong>YPF Score:</strong> ${ypf.toFixed(2)} (higher = better photosynthetic efficiency)<br>
-          <strong>Status:</strong> [OK] Spectrum calculated successfully
+          <strong>Status:</strong> ✅ Spectrum calculated successfully
         `;
         result.className = 'result pass';
       } catch (err) {
-        result.textContent = `[ERROR] Error: ${err.message}`;
+        result.textContent = `❌ Error: ${err.message}`;
         result.className = 'result fail';
       }
     }
@@ -178,7 +178,7 @@
       const result = document.getElementById('envResult');
 
       if (!window.SpectrumMath) {
-        result.textContent = '[ERROR] SpectrumMath not available';
+        result.textContent = '❌ SpectrumMath not available';
         result.className = 'result fail';
         return;
       }
@@ -188,8 +188,8 @@
         const blueAdj = window.SpectrumMath.calculateBlueAdjustment(vpd, 1.0);
         const ppfdAdj = window.SpectrumMath.calculatePPFDAdjustment(temp, 24);
 
-        const vpdStatus = vpd >= 0.8 && vpd <= 1.2 ? '[OK] Optimal' : 
-                         vpd < 0.8 ? '[WARNING] Low (stomata open)' : '[WARNING] High (stomata close)';
+        const vpdStatus = vpd >= 0.8 && vpd <= 1.2 ? '✅ Optimal' : 
+                         vpd < 0.8 ? '⚠️ Low (stomata open)' : '⚠️ High (stomata close)';
         const blueDir = blueAdj > 0 ? '↑ Increase' : blueAdj < 0 ? '↓ Decrease' : '→ No change';
         const ppfdDir = ppfdAdj > 0 ? '↑ Increase' : ppfdAdj < 0 ? '↓ Decrease' : '→ No change';
 
@@ -198,11 +198,11 @@
           <strong>VPD:</strong> ${vpd.toFixed(2)} kPa ${vpdStatus}<br>
           <strong>Blue Adjustment:</strong> ${blueAdj > 0 ? '+' : ''}${blueAdj.toFixed(1)}% ${blueDir}<br>
           <strong>PPFD Adjustment:</strong> ${ppfdAdj > 0 ? '+' : ''}${ppfdAdj.toFixed(1)}% ${ppfdDir}<br>
-          <strong>Status:</strong> [OK] Environmental calculations complete
+          <strong>Status:</strong> ✅ Environmental calculations complete
         `;
         result.className = 'result pass';
       } catch (err) {
-        result.textContent = `[ERROR] Error: ${err.message}`;
+        result.textContent = `❌ Error: ${err.message}`;
         result.className = 'result fail';
       }
     }

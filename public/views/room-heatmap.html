@@ -2024,7 +2024,7 @@
         // Check if sensors exist but aren't positioned
         const unpositionedSensors = STATE.sensors.filter(s => s.x == null || s.y == null).length;
         if (unpositionedSensors > 0) {
-          ctx.fillText('[WARNING] Sensors detected but not positioned on grid', width / 2, height / 2 - 20);
+          ctx.fillText('⚠️ Sensors detected but not positioned on grid', width / 2, height / 2 - 20);
           ctx.font = '14px sans-serif';
           ctx.fillStyle = '#cbd5e1';
           ctx.fillText(`${unpositionedSensors} sensor(s) need to be placed in Room Mapper`, width / 2, height / 2 + 10);
@@ -2266,7 +2266,7 @@
         }
 
         if (value != null) {
-          console.log('[Heat Map] [OK]', sensor.name, '=', value, '(source:', source + ')');
+          console.log('[Heat Map] ✓', sensor.name, '=', value, '(source:', source + ')');
           readings.push({
             x: sensor.x,
             y: sensor.y,
@@ -2275,7 +2275,7 @@
             name: sensor.name || sensor.deviceId
           });
         } else {
-          console.warn('[Heat Map] [FAIL] No value for', sensor.name, '- checked sources/zone/telemetry');
+          console.warn('[Heat Map] ✗ No value for', sensor.name, '- checked sources/zone/telemetry');
         }
       }
 

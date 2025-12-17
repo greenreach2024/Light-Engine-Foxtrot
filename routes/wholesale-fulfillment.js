@@ -179,7 +179,7 @@ router.post('/status', async (req, res) => {
       if (!webhookResponse.ok) {
         console.warn(`Failed to send webhook to GreenReach: ${webhookResponse.status}`);
       } else {
-        console.log(`[OK] Sent fulfillment webhook for ${sub_order_id}: ${oldStatus} → ${status}`);
+        console.log(`✓ Sent fulfillment webhook for ${sub_order_id}: ${oldStatus} → ${status}`);
       }
     } catch (webhookError) {
       console.error('Webhook send error:', webhookError.message);
@@ -388,7 +388,7 @@ router.post('/invoice-required', async (req, res) => {
     // 3. Email invoice to buyer
     // 4. Update order record with invoice_id
     
-    console.log(`[OK] Invoice request received for sub-order ${sub_order_id}`);
+    console.log(`✓ Invoice request received for sub-order ${sub_order_id}`);
     console.log(`  Buyer: ${buyer.name} (${buyer.email})`);
     console.log(`  Items: ${items.length}`);
     console.log(`  Total: $${total.toFixed(2)}`);

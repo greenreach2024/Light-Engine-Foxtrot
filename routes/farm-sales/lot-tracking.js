@@ -77,7 +77,7 @@ function getNextBatchNumber(farmId, baseCode) {
  */
 router.post('/generate', (req, res) => {
   try {
-    const farmId = req.farmId || 'TEST-FARM-001'; // From auth middleware
+    const farmId = req.farmId || 'FARM-001'; // From auth middleware
     const { zone_id, crop_type, variety, harvest_date, quantity, unit } = req.body;
     
     // Validation
@@ -144,7 +144,7 @@ router.post('/generate', (req, res) => {
  */
 router.get('/', (req, res) => {
   try {
-    const farmId = req.farmId || 'TEST-FARM-001';
+    const farmId = req.farmId || 'FARM-001';
     const { status, zone_id, crop_type, from_date, to_date } = req.query;
     
     let lots = farmStores.lotTracking.getAllForFarm(farmId);
@@ -196,7 +196,7 @@ router.get('/', (req, res) => {
  */
 router.get('/:lotCode', (req, res) => {
   try {
-    const farmId = req.farmId || 'TEST-FARM-001';
+    const farmId = req.farmId || 'FARM-001';
     const { lotCode } = req.params;
     
     const lot = farmStores.lotTracking.get(farmId, lotCode);
@@ -235,7 +235,7 @@ router.get('/:lotCode', (req, res) => {
  */
 router.post('/:lotCode/assign', (req, res) => {
   try {
-    const farmId = req.farmId || 'TEST-FARM-001';
+    const farmId = req.farmId || 'FARM-001';
     const { lotCode } = req.params;
     const { order_id, customer_id, quantity } = req.body;
     
@@ -304,7 +304,7 @@ router.post('/:lotCode/assign', (req, res) => {
  */
 router.get('/:lotCode/recall', (req, res) => {
   try {
-    const farmId = req.farmId || 'TEST-FARM-001';
+    const farmId = req.farmId || 'FARM-001';
     const { lotCode } = req.params;
     
     const lot = farmStores.lotTracking.get(farmId, lotCode);
@@ -374,7 +374,7 @@ router.get('/:lotCode/recall', (req, res) => {
  */
 router.get('/:lotCode/barcode', (req, res) => {
   try {
-    const farmId = req.farmId || 'TEST-FARM-001';
+    const farmId = req.farmId || 'FARM-001';
     const { lotCode } = req.params;
     const { 
       format = 'CODE128', 
@@ -432,7 +432,7 @@ router.get('/:lotCode/barcode', (req, res) => {
  */
 router.patch('/:lotCode', (req, res) => {
   try {
-    const farmId = req.farmId || 'TEST-FARM-001';
+    const farmId = req.farmId || 'FARM-001';
     const { lotCode } = req.params;
     const { status, reason } = req.body;
     
@@ -476,7 +476,7 @@ router.patch('/:lotCode', (req, res) => {
         reason: reason || 'Not specified'
       });
       
-      console.log(`[lot-tracking] [WARNING]  RECALL INITIATED for lot ${lotCode}: ${reason}`);
+      console.log(`[lot-tracking] ⚠️  RECALL INITIATED for lot ${lotCode}: ${reason}`);
     }
     
     farmStores.lotTracking.set(farmId, lotCode, lot);
@@ -501,7 +501,7 @@ router.patch('/:lotCode', (req, res) => {
  */
 router.delete('/:lotCode', (req, res) => {
   try {
-    const farmId = req.farmId || 'TEST-FARM-001';
+    const farmId = req.farmId || 'FARM-001';
     const { lotCode } = req.params;
     
     const lot = farmStores.lotTracking.get(farmId, lotCode);
