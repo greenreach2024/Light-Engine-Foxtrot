@@ -66,10 +66,10 @@
         const sensorsWithZone = sensors.filter(s => s.zone != null);
         
         document.getElementById('test1').innerHTML = `
-          <p class="success">✓ Found ${iotDevices.length} total IoT devices</p>
-          <p class="success">✓ Found ${sensors.length} sensors (with telemetry)</p>
+          <p class="success">[OK] Found ${iotDevices.length} total IoT devices</p>
+          <p class="success">[OK] Found ${sensors.length} sensors (with telemetry)</p>
           <p class="${sensorsWithZone.length > 0 ? 'success' : 'error'}">
-            ${sensorsWithZone.length > 0 ? '✓' : '✗'} Found ${sensorsWithZone.length} sensors with zone assignments
+            ${sensorsWithZone.length > 0 ? '[OK]' : '[FAIL]'} Found ${sensorsWithZone.length} sensors with zone assignments
           </p>
           <pre>${JSON.stringify(sensorsWithZone.map(s => ({
             id: s.id,

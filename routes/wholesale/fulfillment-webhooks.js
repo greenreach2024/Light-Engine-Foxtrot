@@ -60,7 +60,7 @@ router.post('/', async (req, res) => {
     //   return res.status(401).json({ status: 'error', message: 'Invalid signature' });
     // }
     
-    console.log(`📦 Fulfillment webhook received: ${event_type}`);
+    console.log(` Fulfillment webhook received: ${event_type}`);
     console.log(`  Sub-Order: ${sub_order_id}`);
     console.log(`  Farm: ${farm_id}`);
     console.log(`  Status: ${old_status} → ${new_status}`);
@@ -121,7 +121,7 @@ router.post('/', async (req, res) => {
     // Send buyer notification
     await notifyBuyer(subOrder, new_status, notes);
     
-    console.log(`✓ Sub-order updated: ${sub_order_id}`);
+    console.log(`[OK] Sub-order updated: ${sub_order_id}`);
     
     res.json({
       status: 'ok',
@@ -164,7 +164,7 @@ async function checkSLAViolation(subOrder, actualDeliveryTime) {
     const delayHours = delayMs / (1000 * 60 * 60);
     
     if (delayHours > 0) {
-      console.log(`⚠️ SLA violation detected: ${delayHours.toFixed(1)} hours late`);
+      console.log(`[WARNING] SLA violation detected: ${delayHours.toFixed(1)} hours late`);
       
       // Record violation via SLA API
       const violationResponse = await fetch('http://localhost:8091/api/wholesale/sla/violations', {
@@ -182,7 +182,7 @@ async function checkSLAViolation(subOrder, actualDeliveryTime) {
       });
       
       if (violationResponse.ok) {
-        console.log(`✓ SLA violation recorded for ${subOrder.id}`);
+        console.log(`[OK] SLA violation recorded for ${subOrder.id}`);
       }
     }
   } catch (error) {

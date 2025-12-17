@@ -51,14 +51,14 @@ async function registerPlugs() {
 
       if (!response.ok) {
         const error = await response.text();
-        console.error(`❌ Failed to register ${plug.name}: ${error}`);
+        console.error(`[ERROR] Failed to register ${plug.name}: ${error}`);
         continue;
       }
 
       const result = await response.json();
-      console.log(`✅ Registered: ${plug.name}`);
+      console.log(`[OK] Registered: ${plug.name}`);
     } catch (error) {
-      console.error(`❌ Error registering ${plug.name}:`, error.message);
+      console.error(`[ERROR] Error registering ${plug.name}:`, error.message);
     }
   }
 

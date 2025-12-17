@@ -1573,7 +1573,7 @@
         Farm Inventory
       </button>
       <button class="close-btn secondary" onclick="window.location.href='planting-scheduler.html'">
-        🌱 Planting Scheduler
+         Planting Scheduler
       </button>
       <button class="close-btn secondary" onclick="window.location.href='nutrient-management.html'">
         Nutrient Management
@@ -1858,8 +1858,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <script>
-    console.log('🔄 FARM SUMMARY - CODE VERSION 2.1 LOADED - Oct 27, 2025 - Zone seed date fix');
-    console.log('🔄 If you see this message, the updated file is being served!');
+    console.log('[REFRESH] FARM SUMMARY - CODE VERSION 2.1 LOADED - Oct 27, 2025 - Zone seed date fix');
+    console.log('[REFRESH] If you see this message, the updated file is being served!');
     
     const queryParams = new URLSearchParams(window.location.search);
     const requestedZoneToken = (queryParams.get('zone') || queryParams.get('scope') || queryParams.get('room') || '').trim();
@@ -3888,7 +3888,7 @@
         if (!data.zones || data.zones.length === 0) {
           container.innerHTML = `
             <div class="health-no-data">
-              <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
+              <div style="font-size: 3rem; margin-bottom: 1rem;"></div>
               <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">No Environmental Data Yet</div>
               <div>${data.message || 'Waiting for sensors to report...'}</div>
             </div>
@@ -3937,7 +3937,7 @@
         if (data.insights && data.insights.length > 0) {
           insightsHTML = `
             <div class="health-insights">
-              <h3>💡 Insights & Recommendations</h3>
+              <h3>[IDEA] Insights & Recommendations</h3>
               ${data.insights.map(insight => `<div class="health-insight-item">${insight}</div>`).join('')}
             </div>
           `;
@@ -3976,7 +3976,7 @@
         console.error('Failed to load health status:', error);
         container.innerHTML = `
           <div class="health-no-data">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+            <div style="font-size: 2rem; margin-bottom: 1rem;">[WARNING]</div>
             <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">Failed to Load Health Data</div>
             <div style="font-size: 0.875rem;">${error.message}</div>
           </div>
@@ -5884,13 +5884,13 @@
         let details = '';
         
         if (variance === 0) {
-          message = '🎯 Harvest recorded on schedule!';
+          message = '[TARGET] Harvest recorded on schedule!';
           details = 'Perfect timing - no variance from plan.';
         } else if (variance < 0) {
           message = `⏰ Harvest recorded ${Math.abs(variance)} day${Math.abs(variance) !== 1 ? 's' : ''} early`;
           details = `This data will help optimize future schedules.`;
         } else {
-          message = `📅 Harvest recorded ${variance} day${variance !== 1 ? 's' : ''} late`;
+          message = `[DATE] Harvest recorded ${variance} day${variance !== 1 ? 's' : ''} late`;
           details = `This data will help optimize future schedules.`;
         }
         
@@ -6267,7 +6267,7 @@
 
       } catch (error) {
         console.error('Failed to create new planting:', error);
-        alert(`❌ Failed to create planting: ${error.message}\n\nPlease try again or contact support.`);
+        alert(`[ERROR] Failed to create planting: ${error.message}\n\nPlease try again or contact support.`);
       }
     }
 

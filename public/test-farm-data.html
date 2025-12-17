@@ -32,7 +32,7 @@
   </style>
 </head>
 <body>
-  <h1>🔍 Farm Data Diagnostic</h1>
+  <h1>[SEARCH] Farm Data Diagnostic</h1>
   
   <div id="output"></div>
 
@@ -47,7 +47,7 @@
         const envResp = await fetch('/env');
         const envData = await envResp.json();
         
-        html += `<p class="good">✓ Endpoint accessible</p>`;
+        html += `<p class="good">[OK] Endpoint accessible</p>`;
         html += `<p>Total zones: <strong>${envData.zones?.length || 0}</strong></p>`;
         
         if (envData.zones && envData.zones.length > 0) {
@@ -66,7 +66,7 @@
           html += '<p class="warn">⚠ No zones returned</p>';
         }
       } catch (err) {
-        html += `<p class="bad">✗ Error: ${err.message}</p>`;
+        html += `<p class="bad">[FAIL] Error: ${err.message}</p>`;
       }
       html += '</div>';
 
@@ -76,7 +76,7 @@
         const mapResp = await fetch('/data/room-map.json');
         const mapData = await mapResp.json();
         
-        html += `<p class="good">✓ File accessible</p>`;
+        html += `<p class="good">[OK] File accessible</p>`;
         html += `<p>Room: <strong>${mapData.name || 'N/A'}</strong></p>`;
         html += `<p>Zones defined: <strong>${mapData.zones?.length || 0}</strong></p>`;
         
@@ -113,7 +113,7 @@
           html += '</pre>';
         }
       } catch (err) {
-        html += `<p class="bad">✗ Error: ${err.message}</p>`;
+        html += `<p class="bad">[FAIL] Error: ${err.message}</p>`;
       }
       html += '</div>';
 
@@ -123,7 +123,7 @@
         const iotResp = await fetch('/data/iot-devices.json');
         const iotData = await iotResp.json();
         
-        html += `<p class="good">✓ File accessible</p>`;
+        html += `<p class="good">[OK] File accessible</p>`;
         html += `<p>Total devices: <strong>${iotData?.length || 0}</strong></p>`;
         
         if (Array.isArray(iotData)) {
@@ -156,7 +156,7 @@
           }
         }
       } catch (err) {
-        html += `<p class="bad">✗ Error: ${err.message}</p>`;
+        html += `<p class="bad">[FAIL] Error: ${err.message}</p>`;
       }
       html += '</div>';
 
@@ -185,16 +185,16 @@
         html += `<p>Zones returned by /env: <strong>${envZones}</strong></p>`;
         
         if (mapZones > 0 && iotSensors > 0 && envZones > 0) {
-          html += '<p class="good">✓ All data sources populated</p>';
+          html += '<p class="good">[OK] All data sources populated</p>';
         } else if (mapZones > 0 && iotSensors === 0) {
           html += '<p class="warn">⚠ Zones defined but no sensors assigned</p>';
         } else if (mapZones > 0 && envZones === 0) {
-          html += '<p class="bad">✗ Zones defined but /env returns none</p>';
+          html += '<p class="bad">[FAIL] Zones defined but /env returns none</p>';
         } else {
           html += '<p class="warn">⚠ Partial data available</p>';
         }
       } catch (err) {
-        html += `<p class="bad">✗ Error: ${err.message}</p>`;
+        html += `<p class="bad">[FAIL] Error: ${err.message}</p>`;
       }
       html += '</div>';
 

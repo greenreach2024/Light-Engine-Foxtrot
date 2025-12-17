@@ -77,7 +77,7 @@
                 const modal = document.getElementById(`intro-modal-overlay-${pageId}`);
                 if (modal) {
                     const computedStyle = window.getComputedStyle(modal);
-                    updateStatus(`✅ Modal for ${pageId} is in DOM!<br>
+                    updateStatus(`[OK] Modal for ${pageId} is in DOM!<br>
                         Display: ${computedStyle.display}<br>
                         Position: ${computedStyle.position}<br>
                         Z-index: ${computedStyle.zIndex}<br>
@@ -103,7 +103,7 @@
                     `;
                     updateStatus(`🔴 Forced modal to be SUPER VISIBLE (red background). If you still don't see it, something is very wrong!`);
                 } else {
-                    updateStatus(`❌ Modal for ${pageId} was not added to DOM`);
+                    updateStatus(`[ERROR] Modal for ${pageId} was not added to DOM`);
                 }
             }, 100);
         }

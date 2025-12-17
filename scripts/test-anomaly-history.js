@@ -12,7 +12,7 @@ console.log('🧪 Testing Anomaly History System\n');
 // Test 1: Clear history for clean test
 console.log('1️⃣  Clearing existing history...');
 await anomalyHistory.clearHistory();
-console.log('   ✓ History cleared\n');
+console.log('   [OK] History cleared\n');
 
 // Test 2: Add test anomalies
 console.log('2️⃣  Adding test anomalies...');
@@ -53,35 +53,35 @@ const testAnomalies = [
 ];
 
 const addResult = await anomalyHistory.addAnomalies(testAnomalies);
-console.log(`   ✓ Added ${addResult.added} anomalies (total: ${addResult.total})\n`);
+console.log(`   [OK] Added ${addResult.added} anomalies (total: ${addResult.total})\n`);
 
 // Test 3: Get full history
 console.log('3️⃣  Getting full history...');
 const history = await anomalyHistory.getHistory({ limit: 10 });
-console.log(`   ✓ Total events: ${history.stats.total}`);
-console.log(`   ✓ By severity: critical=${history.stats.by_severity.critical}, warning=${history.stats.by_severity.warning}, info=${history.stats.by_severity.info}`);
-console.log(`   ✓ By zone:`, Object.entries(history.stats.by_zone).map(([z, c]) => `${z}=${c}`).join(', '));
+console.log(`   [OK] Total events: ${history.stats.total}`);
+console.log(`   [OK] By severity: critical=${history.stats.by_severity.critical}, warning=${history.stats.by_severity.warning}, info=${history.stats.by_severity.info}`);
+console.log(`   [OK] By zone:`, Object.entries(history.stats.by_zone).map(([z, c]) => `${z}=${c}`).join(', '));
 console.log('');
 
 // Test 4: Filter by severity
 console.log('4️⃣  Filtering by severity=critical...');
 const criticalOnly = await anomalyHistory.getHistory({ severity: 'critical' });
-console.log(`   ✓ Found ${criticalOnly.stats.total} critical anomalies`);
+console.log(`   [OK] Found ${criticalOnly.stats.total} critical anomalies`);
 console.log('');
 
 // Test 5: Filter by zone
 console.log('5️⃣  Filtering by zone=veg...');
 const vegOnly = await anomalyHistory.getHistory({ zone: 'veg' });
-console.log(`   ✓ Found ${vegOnly.stats.total} anomalies in veg zone`);
+console.log(`   [OK] Found ${vegOnly.stats.total} anomalies in veg zone`);
 console.log('');
 
 // Test 6: Get statistics
 console.log('6️⃣  Getting 24-hour statistics...');
 const stats = await anomalyHistory.getStatistics(24);
-console.log(`   ✓ Total events: ${stats.total_events}`);
-console.log(`   ✓ Hourly buckets: ${stats.hourly_buckets.length}`);
+console.log(`   [OK] Total events: ${stats.total_events}`);
+console.log(`   [OK] Hourly buckets: ${stats.hourly_buckets.length}`);
 const recentBuckets = stats.hourly_buckets.filter(b => b.total > 0);
-console.log(`   ✓ Active buckets: ${recentBuckets.length}`);
+console.log(`   [OK] Active buckets: ${recentBuckets.length}`);
 console.log('');
 
 // Test 7: Test retention policy
@@ -99,9 +99,9 @@ const oldAnomaly = [{
 }];
 
 const retentionResult = await anomalyHistory.addAnomalies(oldAnomaly);
-console.log(`   ✓ Added ${retentionResult.added} old anomaly`);
-console.log(`   ✓ Cleaned ${retentionResult.cleaned} anomalies beyond retention period`);
-console.log(`   ✓ Total after cleanup: ${retentionResult.total}`);
+console.log(`   [OK] Added ${retentionResult.added} old anomaly`);
+console.log(`   [OK] Cleaned ${retentionResult.cleaned} anomalies beyond retention period`);
+console.log(`   [OK] Total after cleanup: ${retentionResult.total}`);
 console.log('');
 
 // Test 8: Verify old anomaly was cleaned
@@ -109,9 +109,9 @@ console.log('8️⃣  Verifying old anomaly removal...');
 const finalHistory = await anomalyHistory.getHistory();
 const hasOldAnomaly = finalHistory.events.some(e => e.zone === 'test-old');
 if (!hasOldAnomaly) {
-  console.log('   ✓ Old anomaly was correctly cleaned by retention policy');
+  console.log('   [OK] Old anomaly was correctly cleaned by retention policy');
 } else {
-  console.log('   ✗ FAIL: Old anomaly should have been cleaned');
+  console.log('   [FAIL] FAIL: Old anomaly should have been cleaned');
 }
 console.log('');
 
@@ -122,15 +122,15 @@ const ascHistory = await anomalyHistory.getHistory({ sort: 'asc', limit: 1 });
 const descTime = new Date(descHistory.events[0].timestamp).getTime();
 const ascTime = new Date(ascHistory.events[0].timestamp).getTime();
 if (descTime > ascTime) {
-  console.log('   ✓ Sort order working correctly (desc > asc)');
+  console.log('   [OK] Sort order working correctly (desc > asc)');
 } else {
-  console.log('   ✗ FAIL: Sort order incorrect');
+  console.log('   [FAIL] FAIL: Sort order incorrect');
 }
 console.log('');
 
-console.log('✅ All anomaly history tests passed!');
+console.log('[OK] All anomaly history tests passed!');
 console.log('');
-console.log('📊 Final Statistics:');
+console.log('[STATS] Final Statistics:');
 console.log(`   Total events: ${finalHistory.stats.total}`);
 console.log(`   Retention period: ${history.retention_days} days`);
 console.log(`   Oldest event: ${finalHistory.events[0].timestamp}`);

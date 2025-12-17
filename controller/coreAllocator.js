@@ -173,7 +173,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
     const highZones = exceeded.rh.zones;
     const multiZoneProblem = highZones.length > 1;
     
-    console.log(`[allocator] 💧 HIGH RH detected in ${highZones.length} zone(s) (max: ${exceeded.rh.maxValue.toFixed(1)}%)`);
+    console.log(`[allocator] [WATER] HIGH RH detected in ${highZones.length} zone(s) (max: ${exceeded.rh.maxValue.toFixed(1)}%)`);
     highZones.forEach(z => {
       console.log(`  - ${z.id}: ${z.value.toFixed(1)}% > ${z.target}%`);
     });
@@ -189,7 +189,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
           try {
             console.log(`[allocator] → Activating dehumidifier: ${device.name} (zone ${device.zone})`);
             const result = await plugManager.turnOn(device.deviceId);
-            console.log(`[allocator] ✓ ${device.name} activation result:`, result?.on ? 'ON' : result);
+            console.log(`[allocator] [OK] ${device.name} activation result:`, result?.on ? 'ON' : result);
             
             // Log action detail for API
             lastActions[`zone-${device.zone}-dehumidifier`] = {
@@ -209,7 +209,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
           try {
             console.log(`[allocator] → Activating circulation fan: ${fan.name} (zone ${fan.zone})`);
             const result = await plugManager.turnOn(fan.deviceId);
-            console.log(`[allocator] ✓ ${fan.name} activation result:`, result?.on ? 'ON' : result);
+            console.log(`[allocator] [OK] ${fan.name} activation result:`, result?.on ? 'ON' : result);
             
             // Log action detail for API
             lastActions[`zone-${fan.zone}-fan`] = {
@@ -225,7 +225,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
         }
         
         lastActions[key] = now;
-        console.log(`[allocator] 📊 ML will learn: How do Zone-1 & Zone-3 dehumidifiers affect each other?`);
+        console.log(`[allocator] [STATS] ML will learn: How do Zone-1 & Zone-3 dehumidifiers affect each other?`);
       }
     } else {
       // Single zone issue - check if we need to escalate to both dehumidifiers
@@ -248,9 +248,9 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
         const escalateKey = 'rh-high-escalated';
         if (!lastActions[escalateKey] || (now - lastActions[escalateKey]) > cooldown) {
           if (shouldEscalate) {
-            console.log(`[allocator] ⚠️ ESCALATION: RH still high after 15 minutes - activating ALL dehumidifiers`);
+            console.log(`[allocator] [WARNING] ESCALATION: RH still high after 15 minutes - activating ALL dehumidifiers`);
           } else {
-            console.log(`[allocator] ⚠️ ESCALATION: No RH improvement detected - activating ALL dehumidifiers`);
+            console.log(`[allocator] [WARNING] ESCALATION: No RH improvement detected - activating ALL dehumidifiers`);
           }
           console.log(`[allocator]    Start: ${escalation.startRH?.toFixed(1)}% @ ${new Date(escalation.startTime).toLocaleTimeString()}`);
           console.log(`[allocator]    Now: ${problemZone.value.toFixed(1)}% @ ${new Date(now).toLocaleTimeString()}`);
@@ -260,7 +260,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
             try {
               console.log(`[allocator] → Activating dehumidifier: ${device.name} (zone ${device.zone})`);
               const result = await plugManager.turnOn(device.deviceId);
-              console.log(`[allocator] ✓ ${device.name} activation result:`, result?.on ? 'ON' : result);
+              console.log(`[allocator] [OK] ${device.name} activation result:`, result?.on ? 'ON' : result);
               
               // Log action detail for API
               lastActions[`zone-${device.zone}-dehumidifier`] = {
@@ -280,7 +280,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
             try {
               console.log(`[allocator] → Activating circulation fan: ${fan.name} (zone ${fan.zone})`);
               const result = await plugManager.turnOn(fan.deviceId);
-              console.log(`[allocator] ✓ ${fan.name} activation result:`, result?.on ? 'ON' : result);
+              console.log(`[allocator] [OK] ${fan.name} activation result:`, result?.on ? 'ON' : result);
               
               // Log action detail for API
               lastActions[`zone-${fan.zone}-fan`] = {
@@ -297,18 +297,18 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
           
           lastActions[escalateKey] = now;
           escalation.singleDehumidifierActive = false; // Reset since we escalated
-          console.log(`[allocator] 📊 ML will learn: Escalation effectiveness for stubborn RH`);
+          console.log(`[allocator] [STATS] ML will learn: Escalation effectiveness for stubborn RH`);
         }
       } else if (!escalation.singleDehumidifierActive || (!lastActions[key] || (now - lastActions[key]) > zoneCooldown)) {
         // Start with single zone-specific dehumidifier
-        console.log(`[allocator] 🎯 Single zone problem (${problemZone.id}) - targeted dehumidification`);
+        console.log(`[allocator] [TARGET] Single zone problem (${problemZone.id}) - targeted dehumidification`);
         
         // Track escalation start time FIRST (before activating)
         if (!escalation.singleDehumidifierActive) {
           escalation.startTime = now;
           escalation.startRH = problemZone.value;
           escalation.singleDehumidifierActive = true;
-          console.log(`[allocator] 🕐 Starting 15-minute escalation timer at RH ${problemZone.value.toFixed(1)}%`);
+          console.log(`[allocator] [TIME] Starting 15-minute escalation timer at RH ${problemZone.value.toFixed(1)}%`);
         } else {
           // Timer already running - show progress
           const elapsed = Math.round((now - escalation.startTime) / 1000 / 60);
@@ -323,7 +323,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
           try {
             console.log(`[allocator] → Activating ${zoneDehumidifier.name} for ${problemZone.id}`);
             const result = await plugManager.turnOn(zoneDehumidifier.deviceId);
-            console.log(`[allocator] ✓ ${zoneDehumidifier.name} activation result:`, result?.on ? 'ON' : result);
+            console.log(`[allocator] [OK] ${zoneDehumidifier.name} activation result:`, result?.on ? 'ON' : result);
             
             // Log action detail for API
             lastActions[problemZone.id] = {
@@ -343,7 +343,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
             try {
               console.log(`[allocator] → Activating circulation fan: ${zoneFan.name}`);
               const result = await plugManager.turnOn(zoneFan.deviceId);
-              console.log(`[allocator] ✓ ${zoneFan.name} activation result:`, result?.on ? 'ON' : result);
+              console.log(`[allocator] [OK] ${zoneFan.name} activation result:`, result?.on ? 'ON' : result);
               
               // Log action detail for API
               lastActions[`${problemZone.id}-fan`] = {
@@ -359,7 +359,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
           }
           
           lastActions[key] = now;
-          console.log(`[allocator] 📊 ML will learn: How effective is Zone-${zoneNum} dehumidifier at reducing RH?`);
+          console.log(`[allocator] [STATS] ML will learn: How effective is Zone-${zoneNum} dehumidifier at reducing RH?`);
         } else {
           console.warn(`[allocator] No dehumidifier found for ${problemZone.id}`);
           
@@ -386,7 +386,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
   if (exceeded.rh.low && (dehumidifiers.length > 0 || humidifiers.length > 0)) {
     const key = 'rh-low';
     if (!lastActions[key] || (now - lastActions[key]) > cooldown) {
-      console.log(`[allocator] 💧 LOW RH detected (min: ${exceeded.rh.minValue.toFixed(1)}%)`);
+      console.log(`[allocator] [WATER] LOW RH detected (min: ${exceeded.rh.minValue.toFixed(1)}%)`);
       
       // Deactivate dehumidifiers
       for (const device of dehumidifiers) {
@@ -414,14 +414,14 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
   // RH NORMAL: Deactivate humidity control equipment per zone
   if (!exceeded.rh.high && !exceeded.rh.low) {
     // All zones are within target - turn off all dehumidifiers
-    console.log(`[allocator] ✓ All zones within RH targets - deactivating equipment`);
+    console.log(`[allocator] [OK] All zones within RH targets - deactivating equipment`);
     
     // Reset escalation tracking
     if (lastActions._rhEscalation) {
       lastActions._rhEscalation.singleDehumidifierActive = false;
       lastActions._rhEscalation.startTime = null;
       lastActions._rhEscalation.startRH = null;
-      console.log(`[allocator] 🔄 Reset escalation timer - RH normalized`);
+      console.log(`[allocator] [REFRESH] Reset escalation timer - RH normalized`);
     }
     
     for (const device of dehumidifiers) {
@@ -430,7 +430,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
         if (status?.on === true || status?.power === 'on') {
           console.log(`[allocator] → Deactivating ${device.name} (zone ${device.zone})`);
           const result = await plugManager.turnOff(device.deviceId);
-          console.log(`[allocator] ✓ ${device.name} deactivation result:`, result?.on === false ? 'OFF' : result);
+          console.log(`[allocator] [OK] ${device.name} deactivation result:`, result?.on === false ? 'OFF' : result);
           
           // Log action detail for API
           lastActions[`zone-${device.zone}`] = {
@@ -459,9 +459,9 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
         try {
           const status = await plugManager.getStatus(device.deviceId);
           if (status?.on === true || status?.power === 'on') {
-            console.log(`[allocator] ✓ ${deviceZoneId} normalized → Deactivating ${device.name}`);
+            console.log(`[allocator] [OK] ${deviceZoneId} normalized → Deactivating ${device.name}`);
             const result = await plugManager.turnOff(device.deviceId);
-            console.log(`[allocator] ✓ ${device.name} deactivation result:`, result?.on === false ? 'OFF' : result);
+            console.log(`[allocator] [OK] ${device.name} deactivation result:`, result?.on === false ? 'OFF' : result);
           }
         } catch (error) {
           console.warn(`[allocator] Error checking/deactivating ${device.name}:`, error.message);
@@ -488,7 +488,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
   }
   
   if (activeEquipment.length > 0) {
-    console.log(`[allocator] 📊 ML Learning State: ${activeEquipment.length} device(s) active`);
+    console.log(`[allocator] [STATS] ML Learning State: ${activeEquipment.length} device(s) active`);
     activeEquipment.forEach(eq => {
       console.log(`  - ${eq.type} in zone-${eq.zone}: "${eq.name}"`);
     });
@@ -501,7 +501,7 @@ export async function coreAllocator(zones, iotDevices, ml, options = {}) {
         rhSnapshot[zoneId] = zone.sensors.rh.current;
       }
     }
-    console.log(`[allocator] 📊 RH Snapshot:`, JSON.stringify(rhSnapshot));
+    console.log(`[allocator] [STATS] RH Snapshot:`, JSON.stringify(rhSnapshot));
     
     // Store for ML effect analysis (effects-learner.py can read server logs)
     // Format: timestamp, equipment_state, zone_rh_values

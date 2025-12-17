@@ -7,7 +7,7 @@ const API_BASE = window.location.origin.replace(':8091', ':8000');
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Initializing admin dashboard...');
+    console.log('[START] Initializing admin dashboard...');
     
     // Auto-authenticate in demo/sandbox mode
     await autoAuthenticate();
@@ -23,7 +23,7 @@ async function autoAuthenticate() {
     // Check if already authenticated
     const existingToken = localStorage.getItem('adminAuthToken');
     if (existingToken) {
-        console.log('✅ Already authenticated');
+        console.log('[OK] Already authenticated');
         return;
     }
     
@@ -50,12 +50,12 @@ async function autoAuthenticate() {
             localStorage.setItem('adminAuthToken', data.token);
             localStorage.setItem('adminFarmId', data.farmId);
             localStorage.setItem('adminEmail', data.email);
-            console.log('✅ Auto-authentication successful');
+            console.log('[OK] Auto-authentication successful');
         } else {
-            console.warn('⚠️ Auto-authentication failed, continuing in demo mode');
+            console.warn('[WARNING] Auto-authentication failed, continuing in demo mode');
         }
     } catch (error) {
-        console.warn('⚠️ Auto-authentication error:', error.message);
+        console.warn('[WARNING] Auto-authentication error:', error.message);
         // Continue anyway - admin page works without auth in demo mode
     }
 }
@@ -85,7 +85,7 @@ function switchTab(tabName) {
 async function loadDashboardData() {
     try {
         // In production, these would be real API calls
-        console.log('📊 Loading dashboard data...');
+        console.log('[STATS] Loading dashboard data...');
         
         // Simulate API calls
         updateMetrics();
@@ -95,7 +95,7 @@ async function loadDashboardData() {
         await loadFleetHealth();
         
     } catch (error) {
-        console.error('❌ Error loading dashboard data:', error);
+        console.error('[ERROR] Error loading dashboard data:', error);
     }
 }
 
@@ -126,7 +126,7 @@ function updateMetrics() {
  */
 async function loadTenants() {
     // In production, this would fetch from /api/admin/tenants
-    console.log('👥 Loading tenants...');
+    console.log('[USERS] Loading tenants...');
     
     // Sample data is already in HTML
     // In production, we'd populate tenantsTableBody dynamically
@@ -149,7 +149,7 @@ function filterTenants() {
  * View tenant details
  */
 function viewTenant(tenantId) {
-    console.log(`🔍 Viewing tenant: ${tenantId}`);
+    console.log(`[SEARCH] Viewing tenant: ${tenantId}`);
     
     // In production, redirect to tenant detail page or open modal
     alert(`View details for tenant: ${tenantId}\n\nIn production, this would show:\n- Subscription history\n- Usage analytics\n- Device list\n- Payment history\n- Support tickets`);
@@ -168,9 +168,9 @@ function createTenant() {
     if (!email) return;
     
     // In production, POST to /api/admin/tenants
-    console.log('📝 Creating tenant:', { name, email });
+    console.log('[NOTE] Creating tenant:', { name, email });
     
-    alert(`✅ Tenant created successfully!\n\nName: ${name}\nEmail: ${email}\n\nIn production, this would:\n1. Create tenant record\n2. Send welcome email\n3. Generate API keys\n4. Start trial period`);
+    alert(`[OK] Tenant created successfully!\n\nName: ${name}\nEmail: ${email}\n\nIn production, this would:\n1. Create tenant record\n2. Send welcome email\n3. Generate API keys\n4. Start trial period`);
 }
 
 /**
@@ -341,7 +341,7 @@ async function loadFleetHealth() {
             ${insightsHTML}
         `;
         
-        console.log(`✅ Fleet health loaded: ${fleet.fleet_score}/100 (${fleet.fleet_grade})`);
+        console.log(`[OK] Fleet health loaded: ${fleet.fleet_score}/100 (${fleet.fleet_grade})`);
         
     } catch (error) {
         console.error('Failed to load fleet health:', error);
@@ -362,6 +362,6 @@ async function loadFleetHealth() {
 
 // Auto-refresh metrics every 30 seconds
 setInterval(() => {
-    console.log('🔄 Auto-refreshing metrics...');
+    console.log('[REFRESH] Auto-refreshing metrics...');
     updateMetrics();
 }, 30000);

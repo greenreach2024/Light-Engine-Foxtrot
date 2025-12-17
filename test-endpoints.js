@@ -47,22 +47,22 @@ async function testEndpoint(name, url, validator) {
     const result = await httpGet(url);
     
     if (result.statusCode !== 200) {
-      console.log(`  ❌ ${name}: HTTP ${result.statusCode}`);
+      console.log(`  [ERROR] ${name}: HTTP ${result.statusCode}`);
       return false;
     }
     
     if (validator) {
       const isValid = validator(result.data, result);
       if (!isValid) {
-        console.log(`  ❌ ${name}: Invalid response`);
+        console.log(`  [ERROR] ${name}: Invalid response`);
         return false;
       }
     }
     
-    console.log(colorize(`  ✅ ${name}`, 'green'));
+    console.log(colorize(`  [OK] ${name}`, 'green'));
     return true;
   } catch (error) {
-    console.log(colorize(`  ❌ ${name}: ${error.message}`, 'red'));
+    console.log(colorize(`  [ERROR] ${name}: ${error.message}`, 'red'));
     return false;
   }
 }

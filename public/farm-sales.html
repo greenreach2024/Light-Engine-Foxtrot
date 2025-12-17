@@ -464,7 +464,7 @@
   <!-- Login Screen -->
   <div id="login-screen">
     <div class="login-card">
-      <h1>🌱 Farm Sales Terminal</h1>
+      <h1> Farm Sales Terminal</h1>
       <p>Sign in to access your farm's point-of-sale system</p>
       
       <div id="login-error" class="alert alert-error hidden"></div>
@@ -501,7 +501,7 @@
   <!-- Main App -->
   <div id="app">
     <header class="header">
-      <h1>🌱 Farm Sales Terminal</h1>
+      <h1> Farm Sales Terminal</h1>
       <div class="user-info">
         <span class="farm-badge" id="farm-name">Loading...</span>
         <span id="user-role">Manager</span>
@@ -511,8 +511,8 @@
     
     <nav class="tabs">
       <button class="tab active" data-tab="pos">💳 POS Checkout</button>
-      <button class="tab" data-tab="orders">📦 Orders</button>
-      <button class="tab" data-tab="inventory">📊 Inventory</button>
+      <button class="tab" data-tab="orders"> Orders</button>
+      <button class="tab" data-tab="inventory">[STATS] Inventory</button>
       <button class="tab" data-tab="delivery">🚚 Deliveries</button>
       <button class="tab" data-tab="donations">🤝 Food Security</button>
       <button class="tab" data-tab="traceability">🔬 Lot Traceability</button>
@@ -690,14 +690,14 @@
               </form>
               
               <div id="lot-generated" class="hidden" style="margin-top: 1.5rem; padding: 1rem; background: #e8f5e9; border-radius: 4px; border: 2px solid var(--success);">
-                <h3 style="margin-bottom: 0.5rem; color: var(--success);">✓ Lot Code Generated</h3>
+                <h3 style="margin-bottom: 0.5rem; color: var(--success);">[OK] Lot Code Generated</h3>
                 <div style="font-size: 1.5rem; font-weight: bold; margin: 1rem 0; font-family: monospace;" id="lot-code-display"></div>
                 <div style="text-align: center; margin: 1rem 0;">
                   <img id="lot-barcode" alt="Barcode" style="max-width: 100%; height: auto;">
                 </div>
                 <div style="display: flex; gap: 0.5rem;">
                   <button class="btn btn-secondary btn-sm" onclick="printBarcode()">🖨️ Print Label</button>
-                  <button class="btn btn-sm" onclick="copyLotCode()" style="background: #2196f3; color: white;">📋 Copy Code</button>
+                  <button class="btn btn-sm" onclick="copyLotCode()" style="background: #2196f3; color: white;"> Copy Code</button>
                 </div>
               </div>
             </div>
@@ -705,7 +705,7 @@
           
           <!-- Right Column: Lot Lookup & Recall -->
           <div>
-            <h2 style="margin-bottom: 1rem;">🔍 Lot Lookup & Recall</h2>
+            <h2 style="margin-bottom: 1rem;">[SEARCH] Lot Lookup & Recall</h2>
             <div class="card">
               <div class="form-group">
                 <label for="lot-search">Search Lot Code</label>
@@ -729,13 +729,13 @@
                 </table>
                 
                 <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                  <button class="btn btn-secondary btn-sm" onclick="generateRecallReport()">⚠️ Generate Recall Report</button>
+                  <button class="btn btn-secondary btn-sm" onclick="generateRecallReport()">[WARNING] Generate Recall Report</button>
                   <button class="btn btn-sm" onclick="viewBarcode()" style="background: #2196f3; color: white;">🔬 View Barcode</button>
                 </div>
               </div>
               
               <div id="recall-report" class="hidden" style="margin-top: 1.5rem; padding: 1rem; background: #fff3e0; border-radius: 4px; border: 2px solid var(--warning);">
-                <h3 style="margin-bottom: 0.5rem; color: var(--warning);">⚠️ Recall Report</h3>
+                <h3 style="margin-bottom: 0.5rem; color: var(--warning);">[WARNING] Recall Report</h3>
                 <div id="recall-summary"></div>
                 <div id="recall-customers"></div>
                 <button class="btn btn-secondary btn-sm" onclick="exportRecallCSV()" style="margin-top: 1rem;">📥 Export to CSV</button>
@@ -1106,7 +1106,7 @@
         });
         
         document.getElementById('checkout-success').textContent = 
-          `✓ Sale completed! Order ID: ${result.receipt.order_id}`;
+          `[OK] Sale completed! Order ID: ${result.receipt.order_id}`;
         document.getElementById('checkout-success').classList.remove('hidden');
         document.getElementById('checkout-error').classList.add('hidden');
         
@@ -1341,7 +1341,7 @@
             `;
           } else {
             document.getElementById('recall-customers').innerHTML = `
-              <p style="color: var(--success); margin-top: 1rem;">✓ No customers affected - lot has not been sold.</p>
+              <p style="color: var(--success); margin-top: 1rem;">[OK] No customers affected - lot has not been sold.</p>
             `;
           }
           

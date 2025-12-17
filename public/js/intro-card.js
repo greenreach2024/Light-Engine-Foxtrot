@@ -176,7 +176,7 @@
                           font-weight: 700;
                           flex-shrink: 0;
                           font-size: 1.25rem;
-                        ">✓</span>
+                        ">[OK]</span>
                         <span>${feature}</span>
                       </div>
                     `).join('')}

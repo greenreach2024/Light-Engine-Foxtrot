@@ -2391,7 +2391,7 @@ function createDeviceEntryElement(device) {
   
   // Category-specific colors
   const categoryColors = {
-    'sensor': { bg: '#f0fdf4', border: '#86efac', icon: '📊' },
+    'sensor': { bg: '#f0fdf4', border: '#86efac', icon: '[STATS]' },
     'plug': { bg: '#fef3c7', border: '#fcd34d', icon: '🔌' },
     'controller': { bg: '#e0e7ff', border: '#a5b4fc', icon: '🎛️' },
     'device': { bg: '#f8fafc', border: '#e2e8f0', icon: '📱' }
@@ -3649,7 +3649,7 @@ async function addDeviceToIoT(device, deviceIndex, credentials = null) {
         if (remainingRows.length === 0) {
           const resultsTable = document.getElementById('universalScanResultsTable');
           if (resultsTable) {
-            resultsTable.innerHTML = '<div style="padding: 24px; text-align: center; color: #10b981;">✓ All devices processed. Run scan again to discover more.</div>';
+            resultsTable.innerHTML = '<div style="padding: 24px; text-align: center; color: #10b981;">[OK] All devices processed. Run scan again to discover more.</div>';
           }
         }
       }, 300);
@@ -4009,7 +4009,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnDance = document.getElementById('btnGrow3DanceParty');
         if (btnDance) {
           btnDance.disabled = false;
-          btnDance.textContent = '🎉 Dance Party';
+          btnDance.textContent = '[SUCCESS] Dance Party';
         }
         // Wait a moment for any pending dance party requests to complete
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -4085,9 +4085,9 @@ document.addEventListener('DOMContentLoaded', function() {
         clearInterval(activeDanceInterval);
         activeDanceInterval = null;
         btnGrow3DanceParty.disabled = false;
-        btnGrow3DanceParty.textContent = '🎉 Dance Party';
+        btnGrow3DanceParty.textContent = '[SUCCESS] Dance Party';
         showToast({
-          title: '🎉 Dance Party Stopped',
+          title: '[SUCCESS] Dance Party Stopped',
           msg: 'Light show cancelled',
           kind: 'info'
         });
@@ -4108,7 +4108,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btnGrow3DanceParty.textContent = '⏹️ Stop Party';
         
         showToast({
-          title: '🎉 Dance Party Started!',
+          title: '[SUCCESS] Dance Party Started!',
           msg: '30 seconds of random light phasing (click button to stop)',
           kind: 'success'
         });
@@ -4139,10 +4139,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Re-enable button
             btnGrow3DanceParty.disabled = false;
-            btnGrow3DanceParty.textContent = '🎉 Dance Party';
+            btnGrow3DanceParty.textContent = '[SUCCESS] Dance Party';
             
             showToast({
-              title: '🎉 Dance Party Complete',
+              title: '[SUCCESS] Dance Party Complete',
               msg: 'Lights returned to off state',
               kind: 'success'
             });
@@ -4183,7 +4183,7 @@ document.addEventListener('DOMContentLoaded', function() {
           activeDanceInterval = null;
         }
         btnGrow3DanceParty.disabled = false;
-        btnGrow3DanceParty.textContent = '🎉 Dance Party';
+        btnGrow3DanceParty.textContent = '[SUCCESS] Dance Party';
         showToast({
           title: 'Dance Party Failed',
           msg: error.message || 'Failed to start dance party',
@@ -6612,7 +6612,7 @@ class FarmWizard {
       title: 'Edit WiFi Network',
       msg: 'Select a new network or enter SSID manually',
       kind: 'info',
-      icon: '🔄'
+      icon: '[REFRESH]'
     });
   }
 
@@ -6748,7 +6748,7 @@ class FarmWizard {
         // Add manual entry option with highly visible styling
         networkList.innerHTML = `
           <div style="width: 100%; padding: 20px; background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <p style="margin: 0 0 12px; font-weight: 700; font-size: 16px; color: #92400e;">⚠️ WiFi Scan Unavailable</p>
+            <p style="margin: 0 0 12px; font-weight: 700; font-size: 16px; color: #92400e;">[WARNING] WiFi Scan Unavailable</p>
             <p style="margin: 0 0 12px; font-size: 14px; color: #78350f; line-height: 1.5;">
               Automatic network detection failed. You can enter your WiFi details manually below.
             </p>
@@ -6803,7 +6803,7 @@ class FarmWizard {
         title: 'WiFi Scan Failed', 
         msg: 'Automatic scan unavailable. Use manual entry or check controller connection.', 
         kind: 'warning', 
-        icon: '⚠️' 
+        icon: '[WARNING]' 
       });
     }
 
@@ -7102,7 +7102,7 @@ class FarmWizard {
 
   validateCurrentStep() {
     const stepId = this.steps[this.currentStep];
-    console.debug('🔍 Validating step:', stepId, 'with data:', JSON.parse(JSON.stringify(this.data)));
+    console.debug('[SEARCH] Validating step:', stepId, 'with data:', JSON.parse(JSON.stringify(this.data)));
     if (!stepId) {
       console.warn('[FarmWizard] validateCurrentStep: No stepId for currentStep', this.currentStep);
       return false;
@@ -7142,7 +7142,7 @@ class FarmWizard {
       this.data.location.city = cityValue;
       this.data.location.state = stateValue;
       this.data.location.postal = postalValue;
-      console.debug('✅ Location data captured for subscriptions:', {
+      console.debug('[OK] Location data captured for subscriptions:', {
         farmName: farmNameValue || '(blank)',
         address: addressValue || '(blank)',
         city: cityValue || '(blank)', 
@@ -7227,7 +7227,7 @@ class FarmWizard {
     
     host.innerHTML = `
       ${brandingSection}
-      <div><strong>Connection:</strong> ${conn.type === 'wifi' ? `Wi‑Fi · ${escapeHtml(conn.wifi.ssid || '')}` : 'Ethernet'} ${conn.wifi.testResult?.status === 'connected' ? '✅' : ''}</div>
+      <div><strong>Connection:</strong> ${conn.type === 'wifi' ? `Wi‑Fi · ${escapeHtml(conn.wifi.ssid || '')}` : 'Ethernet'} ${conn.wifi.testResult?.status === 'connected' ? '[OK]' : ''}</div>
       <div><strong>Farm:</strong> ${escapeHtml(this.data.location.farmName || 'Untitled')}</div>
       <div><strong>Address:</strong> ${escapeHtml(addressParts.join(', ') || '—')}</div>
       <div><strong>Timezone:</strong> ${escapeHtml(timezone)}</div>
@@ -7495,7 +7495,7 @@ class FarmWizard {
     
     try {
       button.disabled = true;
-      button.textContent = '🔍 Searching...';
+      button.textContent = '[SEARCH] Searching...';
       status.textContent = 'Looking up location...';
       status.style.color = '#666';
       
@@ -7540,7 +7540,7 @@ class FarmWizard {
       status.style.color = '#EF4444';
     } finally {
       button.disabled = false;
-      button.textContent = '📍 Find Location';
+      button.textContent = '[LOCATION] Find Location';
     }
   }
   
@@ -7609,7 +7609,7 @@ class FarmWizard {
       console.error('Weather loading error:', error);
       weatherContent.innerHTML = `
         <div style="color: #EF4444; font-size: 14px;">
-          ⚠️ Unable to load weather data
+          [WARNING] Unable to load weather data
         </div>
       `;
     }
@@ -7687,7 +7687,7 @@ class FarmWizard {
         brandingPreview.style.display = 'block';
         const previewParts = [];
         if (farmName) previewParts.push(`🏡 <strong>${farmName}</strong>`);
-        if (contactName) previewParts.push(`👤 ${contactName}`);
+        if (contactName) previewParts.push(`[USER] ${contactName}`);
         if (website) {
           const domain = this.extractDomain(website);
           previewParts.push(`🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" target="_blank" style="color:var(--gr-primary)">${domain}</a>`);
@@ -7797,7 +7797,7 @@ class FarmWizard {
             <div style="font-size:20px;font-weight:600;margin-bottom:8px;display:flex;align-items:center">
               ${logoHtml}<span>${farmName || 'Your Farm Name'}</span>
             </div>
-            ${contactName ? `<div style="color:var(--medium);margin-bottom:4px">👤 Contact: ${contactName}</div>` : ''}
+            ${contactName ? `<div style="color:var(--medium);margin-bottom:4px">[USER] Contact: ${contactName}</div>` : ''}
             ${website ? `<div style="color:var(--gr-primary)">🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" target="_blank" style="color:var(--gr-primary);text-decoration:none">${domain}</a></div>` : ''}
             ${(!farmName && !contactName && !website) ? '<div style="color:var(--medium);font-style:italic">Complete your farm details to see branding preview</div>' : ''}
           </div>
@@ -7882,7 +7882,7 @@ class FarmWizard {
         <div style="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;margin:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
           <div style="display:flex;align-items:center;margin-bottom:20px">
             <h3 style="margin:0;flex:1">🎨 ${farmName} Branding Editor</h3>
-            ${website ? `<div id="autoExtractionStatus" style="padding:6px 12px;margin-right:8px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:4px;font-size:12px">🔄 Auto-extracting...</div>` : ''}
+            ${website ? `<div id="autoExtractionStatus" style="padding:6px 12px;margin-right:8px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:4px;font-size:12px">[REFRESH] Auto-extracting...</div>` : ''}
             <button id="closeBrandingWizard" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666">&times;</button>
           </div>
           
@@ -7938,7 +7938,7 @@ class FarmWizard {
           <div style="margin-bottom:20px">
             <h4 style="margin:0 0 12px;color:var(--gr-text)">Logo</h4>
             <input type="url" id="logoUrl" placeholder="Logo URL (or leave blank to use website favicon)" value="${currentBranding.logo}" style="width:100%;padding:8px;border:1px solid var(--gr-border);border-radius:4px;margin-bottom:8px">
-            <div style="font-size:12px;color:var(--medium)">💡 We'll automatically use your website's favicon if no logo is provided</div>
+            <div style="font-size:12px;color:var(--medium)">[IDEA] We'll automatically use your website's favicon if no logo is provided</div>
             ${domain ? `<div style="font-size:12px;color:var(--gr-primary);margin-top:4px">🔗 Auto-detected from ${domain}</div>` : ''}
           </div>
           
@@ -8502,7 +8502,7 @@ class FarmWizard {
         
         // Update status to success
         if (statusEl) {
-          statusEl.textContent = '✅ Branding extracted!';
+          statusEl.textContent = '[OK] Branding extracted!';
           statusEl.style.background = '#d1fae5';
           statusEl.style.color = '#065f46';
           setTimeout(() => {
@@ -8515,7 +8515,7 @@ class FarmWizard {
         
         // Update status to partial success
         if (statusEl) {
-          statusEl.textContent = '⚠️ Partial extraction';
+          statusEl.textContent = '[WARNING] Partial extraction';
           statusEl.style.background = '#fef3c7';
           statusEl.style.color = '#92400e';
         }
@@ -8531,7 +8531,7 @@ class FarmWizard {
       
       // Update status to error
       if (statusEl) {
-        statusEl.textContent = '❌ Extraction failed';
+        statusEl.textContent = '[ERROR] Extraction failed';
         statusEl.style.background = '#fee2e2';
         statusEl.style.color = '#991b1b';
       }
@@ -10676,7 +10676,7 @@ class RoomWizard {
         .then(data => {
           if (data && Array.isArray(data.equipment)) {
             STATE.equipmentKB = data;
-            console.log('✅ Successfully loaded equipment database on-demand:', data.equipment.length, 'items');
+            console.log('[OK] Successfully loaded equipment database on-demand:', data.equipment.length, 'items');
             // Retry the search
             this.searchEquipment(category, query, resultsElementId);
           } else {
@@ -11452,7 +11452,7 @@ class RoomWizard {
 
   categoryStatusMessage(status, note = '') {
     const map = {
-      'complete': '✅ Ready',
+      'complete': '[OK] Ready',
       'needs-hub': '⚠ Needs hub',
       'needs-energy': '⚠ Needs energy meter',
       'needs-setup': '⚠ Needs setup',
@@ -11638,7 +11638,7 @@ class RoomWizard {
       const cacheFreshness = (headers.freshness || '').toLowerCase();
 
       if ((meta.cached && meta.stale) || (cacheStatus === 'hit' && cacheFreshness === 'stale')) {
-        console.warn('⚠️ Using stale cached SwitchBot data:', meta.error || 'Unknown error');
+        console.warn('[WARNING] Using stale cached SwitchBot data:', meta.error || 'Unknown error');
         showToast({
           title: 'Using Cached Data',
           msg: 'SwitchBot API unavailable, using cached device data.',
@@ -11646,14 +11646,14 @@ class RoomWizard {
           icon: ''
         });
       } else if (meta.cached || cacheStatus === 'hit') {
-        console.info('📋 Using cached SwitchBot device list (within TTL).');
+        console.info(' Using cached SwitchBot device list (within TTL).');
       }
 
       const rawDevices = interpreted.rawDevices.length ? interpreted.rawDevices : interpreted.devices;
       const normalizedDevices = normalizeSwitchBotDevicesList(rawDevices);
 
       if (!normalizedDevices.length) {
-        console.warn('⚠️ No SwitchBot devices found in your account');
+        console.warn('[WARNING] No SwitchBot devices found in your account');
         showToast({
           title: 'No Devices Found',
           msg: 'No SwitchBot devices found in your account. Add devices in the SwitchBot app first.',
@@ -11687,7 +11687,7 @@ class RoomWizard {
 
       this.renderDeviceList();
 
-      console.log(`✅ Loaded ${normalizedDevices.length} LIVE SwitchBot device(s) from greenreach network`, meta);
+      console.log(`[OK] Loaded ${normalizedDevices.length} LIVE SwitchBot device(s) from greenreach network`, meta);
       showToast({
         title: 'Live Devices Connected',
         msg: `Successfully connected to ${normalizedDevices.length} live SwitchBot devices on greenreach network.`,
@@ -11699,7 +11699,7 @@ class RoomWizard {
         this.statusEl.textContent = `${normalizedDevices.length} live devices connected on greenreach`;
       }
     } catch (error) {
-      console.error('❌ Failed to load live SwitchBot devices:', error);
+      console.error('[ERROR] Failed to load live SwitchBot devices:', error);
       
       // NO FALLBACK TO MOCK DATA - Show error instead
       showToast({ 
@@ -11848,7 +11848,7 @@ class RoomWizard {
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         try { window.dispatchEvent(new CustomEvent('farmDataChanged')); } catch {}
       }
-      showToast({ title:'Room saved', msg:`${this.data.name} saved`, kind:'success', icon:'✅' });
+      showToast({ title:'Room saved', msg:`${this.data.name} saved`, kind:'success', icon:'[OK]' });
       try { localStorage.removeItem('gr.roomWizard.progress'); } catch {}
       // Only close if explicitly requested and not part of a multi-room workflow
       if (shouldAutoClose && (!this.multiRoomList || this.multiRoomList.length <= 1)) {
@@ -11887,7 +11887,7 @@ class RoomWizard {
     
       // Show enhanced scanning radar
       if (progressEl) progressEl.style.display = 'flex';
-      if (statusEl) statusEl.innerHTML = '<span style="color:#0ea5e9">🔍 Multi-protocol scan in progress...</span>';
+      if (statusEl) statusEl.innerHTML = '<span style="color:#0ea5e9">[SEARCH] Multi-protocol scan in progress...</span>';
       if (runBtn) {
         runBtn.style.display = 'none';
         runBtn.disabled = true;
@@ -11903,12 +11903,12 @@ class RoomWizard {
         await deviceManagerWindow.runDiscovery();
         this.discoveredDevices = deviceManagerWindow.devices || [];
         
-          if (statusEl) statusEl.innerHTML = `<span style="color:#059669">✅ Found ${this.discoveredDevices.length} devices across all protocols</span>`;
+          if (statusEl) statusEl.innerHTML = `<span style="color:#059669">[OK] Found ${this.discoveredDevices.length} devices across all protocols</span>`;
         this.renderDiscoveredDevices();
         if (resultsEl) resultsEl.style.display = 'block';
       }
     } catch (error) {
-        if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">❌ Multi-protocol discovery failed</span>';
+        if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">[ERROR] Multi-protocol discovery failed</span>';
       console.error('Device discovery failed:', error);
     }
     
@@ -12144,7 +12144,7 @@ async function loadAllData() {
     }
     STATE.iotDevices = uniqueDevices;
     window.LAST_IOT_SCAN = uniqueDevices.slice();
-    console.log('✅ [loadAllData] Loaded IoT devices:', STATE.iotDevices.length);
+    console.log('[OK] [loadAllData] Loaded IoT devices:', STATE.iotDevices.length);
     setTimeout(() => {
       if (typeof window.renderIoTDeviceCards === 'function') {
         window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
@@ -12205,9 +12205,9 @@ async function loadAllData() {
     STATE.farm = normalizeFarmDoc(rawFarm);
     try { if (STATE.farm && Object.keys(STATE.farm).length) localStorage.setItem('gr.farm', JSON.stringify(STATE.farm)); } catch {}
     STATE.rooms = rooms?.rooms || [];
-    console.log('✅ [loadAllData] Loaded STATE.rooms:', STATE.rooms.length, 'rooms');
+    console.log('[OK] [loadAllData] Loaded STATE.rooms:', STATE.rooms.length, 'rooms');
     STATE.equipmentMetadata = equipmentMetadata || {};
-    console.log('✅ [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
+    console.log('[OK] [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
     if (STATE.rooms.length > 0) {
       console.log('   Room details:', STATE.rooms.map(r => `${r.name} (id: ${r.id})`).join(', '));
     }
@@ -12219,18 +12219,18 @@ async function loadAllData() {
       }
     });
     STATE.deviceKB = deviceKB;
-    console.log('✅ Loaded device fixtures database:', deviceKB.fixtures.length, 'fixtures');
+    console.log('[OK] Loaded device fixtures database:', deviceKB.fixtures.length, 'fixtures');
     console.log('Sample fixtures:', deviceKB.fixtures.slice(0, 3).map(f => `${f.vendor} ${f.model} [${f.id}]`));
   }
   if (equipmentKB && Array.isArray(equipmentKB.equipment)) {
     STATE.equipmentKB = equipmentKB;
-    console.log('✅ Loaded equipment database:', equipmentKB.equipment.length, 'equipment items');
+    console.log('[OK] Loaded equipment database:', equipmentKB.equipment.length, 'equipment items');
     console.log('Sample equipment:', equipmentKB.equipment.slice(0, 3).map(e => `${e.vendor} ${e.model} (${e.category})`));
   }
   // load manufacturers into a global for lookups and selects
   if (deviceManufacturers && Array.isArray(deviceManufacturers.manufacturers)) {
     window.DEVICE_MANUFACTURERS = deviceManufacturers.manufacturers;
-    console.log('✅ Loaded device manufacturers:', deviceManufacturers.manufacturers.length, 'manufacturers');
+    console.log('[OK] Loaded device manufacturers:', deviceManufacturers.manufacturers.length, 'manufacturers');
   } else {
     window.DEVICE_MANUFACTURERS = window.DEVICE_MANUFACTURERS || [];
   }
@@ -14243,7 +14243,7 @@ function renderControllerMetadata(control) {
         const energy = telemetry.electricityOfDay >= 1000 
           ? `${(telemetry.electricityOfDay / 1000).toFixed(2)} kWh`
           : `${telemetry.electricityOfDay} Wh`;
-        parts.push(`📊 ${energy} today`);
+        parts.push(`[STATS] ${energy} today`);
       }
       
       return parts.length > 0 ? parts.join(' • ') : '';
@@ -14992,7 +14992,7 @@ function renderLightControlActions(lightId, control, lightName) {
     return `
       <a href="#" onclick="event.preventDefault(); navigateToScheduler('${escapeHtml(lightId)}'); return false;" 
          style="font-size:11px;color:#3b82f6;text-decoration:none;display:flex;align-items:center;gap:4px;">
-        📅 Configure Schedule
+        [DATE] Configure Schedule
       </a>
     `;
   }
@@ -15158,7 +15158,7 @@ function navigateToScheduler(lightId) {
       title: 'Opening Scheduler',
       msg: 'Configure schedule for this light',
       kind: 'info',
-      icon: '📅'
+      icon: '[DATE]'
     }, 1500);
   } else {
     showToast({
@@ -16112,7 +16112,7 @@ async function refreshSwitchBotDevices() {
   const usedCache = cacheStatus === 'hit';
   const stale = cacheFreshness === 'stale';
   const toastKind = usedCache && stale ? 'warn' : 'success';
-  const icon = toastKind === 'warn' ? '⚠️' : '🏠';
+  const icon = toastKind === 'warn' ? '[WARNING]' : '🏠';
   const msg = usedCache && stale
     ? `Loaded ${result.devices.length} cached device(s); live refresh failed`
     : `Found ${result.devices.length} device(s) from SwitchBot API`;
@@ -16522,7 +16522,7 @@ async function pollHealthz() {
       displayText = 'System Healthy';
       color = '#16a34a'; // green
       state = 'ok';
-      tooltip = `✅ System Healthy\n\nAll systems operational. The Light Engine Charlie server is running and can communicate with the Code3 controller.\n\nController: ${controllerTarget}\nResponse time: ${responseTime}\nStatus: All connections active`;
+      tooltip = `[OK] System Healthy\n\nAll systems operational. The Light Engine Charlie server is running and can communicate with the Code3 controller.\n\nController: ${controllerTarget}\nResponse time: ${responseTime}\nStatus: All connections active`;
     } else if (status === 'degraded' || !controllerReachable) {
       const reason = body?.controller?.status || 'unknown';
       displayText = 'System Degraded';
@@ -16530,11 +16530,11 @@ async function pollHealthz() {
       state = 'degraded';
       
       if (reason === 'unconfigured') {
-        tooltip = `⚠️ System Degraded\n\nThe server is running but no controller is configured. Light control features may be unavailable.\n\nController: Not configured\nAction: Configure controller target in settings\nImpact: Limited functionality - some features unavailable`;
+        tooltip = `[WARNING] System Degraded\n\nThe server is running but no controller is configured. Light control features may be unavailable.\n\nController: Not configured\nAction: Configure controller target in settings\nImpact: Limited functionality - some features unavailable`;
       } else if (reason === 'timeout' || reason.includes('timeout')) {
-        tooltip = `⚠️ System Degraded\n\nThe Code3 controller is not responding within the timeout period (1.5s). Network issues or controller may be offline.\n\nController: ${controllerTarget}\nStatus: Connection timeout\nAction: Check controller power and network connectivity\nImpact: Light control unavailable`;
+        tooltip = `[WARNING] System Degraded\n\nThe Code3 controller is not responding within the timeout period (1.5s). Network issues or controller may be offline.\n\nController: ${controllerTarget}\nStatus: Connection timeout\nAction: Check controller power and network connectivity\nImpact: Light control unavailable`;
       } else {
-        tooltip = `⚠️ System Degraded\n\nThe Code3 controller is unreachable or returning errors. Some features may be limited.\n\nController: ${controllerTarget}\nStatus: ${reason}\nResponse time: ${responseTime}\nImpact: Light control may be unavailable`;
+        tooltip = `[WARNING] System Degraded\n\nThe Code3 controller is unreachable or returning errors. Some features may be limited.\n\nController: ${controllerTarget}\nStatus: ${reason}\nResponse time: ${responseTime}\nImpact: Light control may be unavailable`;
       }
     } else {
       // Fallback for unknown statuses
@@ -16574,7 +16574,7 @@ async function pollHealthz() {
       statusEl.textContent = 'Server Offline';
       statusEl.style.color = '#b91c1c'; // red
       statusEl.dataset.state = 'error';
-      statusEl.title = `❌ Server Offline\n\nUnable to reach the Light Engine Charlie server. The application cannot check system health.\n\nError: ${error?.message || 'Connection failed'}\nAction: Verify server is running and check network connectivity\nImpact: All features unavailable`;
+      statusEl.title = `[ERROR] Server Offline\n\nUnable to reach the Light Engine Charlie server. The application cannot check system health.\n\nError: ${error?.message || 'Connection failed'}\nAction: Verify server is running and check network connectivity\nImpact: All features unavailable`;
     }
     // Indicate unknown controller when server unreachable
     const ctrlChip = document.getElementById('controllerTargetChip');
@@ -16646,7 +16646,7 @@ function wireGlobalEvents() {
     });
     await Promise.all(promises);
     setStatus("All devices ON (Safe mode)");
-    showToast({title:'All ON', msg:'Sent safe ON to all devices', kind:'success', icon:'✅'});
+    showToast({title:'All ON', msg:'Sent safe ON to all devices', kind:'success', icon:'[OK]'});
   });
   $('#allOff')?.addEventListener('click', async () => {
     const promises = STATE.devices.map(device => 
@@ -16654,7 +16654,7 @@ function wireGlobalEvents() {
     );
     await Promise.all(promises);
     setStatus("All devices OFF");
-    showToast({title:'All OFF', msg:'Turned off all devices', kind:'success', icon:'✅'});
+    showToast({title:'All OFF', msg:'Turned off all devices', kind:'success', icon:'[OK]'});
   });
 
   // Environment actions
@@ -17551,7 +17551,7 @@ function wireGlobalEvents() {
                 title: 'Controller Updated', 
                 msg: `Controller assigned to ${title}`, 
                 kind: 'success', 
-                icon: '✓' 
+                icon: '[OK]' 
               }, 2000);
             }
             
@@ -17604,7 +17604,7 @@ function wireGlobalEvents() {
             document.dispatchEvent(new Event('groups-updated'));
             updateGroupUI(group);
             if (typeof showToast === 'function') {
-              showToast({ title: 'Light removed', msg: `${title} removed from group.`, kind: 'success', icon: '✓' }, 2000);
+              showToast({ title: 'Light removed', msg: `${title} removed from group.`, kind: 'success', icon: '[OK]' }, 2000);
             }
           });
 
@@ -17675,7 +17675,7 @@ function wireGlobalEvents() {
           document.dispatchEvent(new Event('groups-updated'));
           updateGroupUI(group);
           if (typeof showToast === 'function') {
-            showToast({ title: 'Lights removed', msg: `${ids.length} light${ids.length === 1 ? '' : 's'} removed from group.`, kind: 'success', icon: '✓' }, 2000);
+            showToast({ title: 'Lights removed', msg: `${ids.length} light${ids.length === 1 ? '' : 's'} removed from group.`, kind: 'success', icon: '[OK]' }, 2000);
           }
         });
         removeSelectedBtn._handlerAttached = true;
@@ -17811,7 +17811,7 @@ function wireGlobalEvents() {
       }
       const { errors, onTotal } = validateSchedule(mode, cycles);
       if (errors.length || onTotal > 24*60 + 1e-6) {
-        showToast({ title:'Fix schedule', msg: errors[0] || 'Total ON exceeds 24 h', kind:'warn', icon:'⚠️' });
+        showToast({ title:'Fix schedule', msg: errors[0] || 'Total ON exceeds 24 h', kind:'warn', icon:'[WARNING]' });
         return;
       }
       const edited = { id:`group:${groupId}`, name:`${group?.name||groupId} Schedule`, mode, timezone:'America/Toronto', cycles };
@@ -17851,7 +17851,7 @@ function wireGlobalEvents() {
         title: 'Schedule Saved', 
         msg: `${group?.name || groupId} schedule: ${cycleDesc}`, 
         kind: 'success', 
-        icon: '✓' 
+        icon: '[OK]' 
       });
     };
     const done = ()=>{ editor.style.display = 'none'; STATE.editingGroupId = null; };
@@ -17880,7 +17880,7 @@ function wireGlobalEvents() {
     nameAutoSaveTimeout = setTimeout(async () => {
       const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
       if (ok) {
-        showToast({ title: 'Auto-saved', msg: `Group name updated to "${STATE.currentGroup.name}"`, kind: 'success', icon: '✓' });
+        showToast({ title: 'Auto-saved', msg: `Group name updated to "${STATE.currentGroup.name}"`, kind: 'success', icon: '[OK]' });
         setStatus('Group name saved');
       }
     }, 1000);
@@ -17948,7 +17948,7 @@ function wireGlobalEvents() {
     STATE.currentGroup.plan = groupPlan.value || '';
     const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
     if (ok) {
-      showToast({ title: 'Auto-saved', msg: `Plan changed to "${planName}"`, kind: 'success', icon: '✓' });
+      showToast({ title: 'Auto-saved', msg: `Plan changed to "${planName}"`, kind: 'success', icon: '[OK]' });
       setStatus('Plan saved');
     }
     updateGroupUI(STATE.currentGroup);
@@ -17959,7 +17959,7 @@ function wireGlobalEvents() {
     STATE.currentGroup.schedule = groupSchedule.value || '';
     const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
     if (ok) {
-      showToast({ title: 'Auto-saved', msg: `Schedule changed to "${schedName}"`, kind: 'success', icon: '✓' });
+      showToast({ title: 'Auto-saved', msg: `Schedule changed to "${schedName}"`, kind: 'success', icon: '[OK]' });
       setStatus('Schedule saved');
     }
     updateGroupUI(STATE.currentGroup);
@@ -18339,14 +18339,14 @@ function wireGlobalEvents() {
     const name = edited.name?.trim();
     if (!name) {
       if (trigger === 'manual') {
-        showToast({ title: 'Name required', msg: 'Enter a schedule name before saving.', kind: 'warn', icon: '⚠️' });
+        showToast({ title: 'Name required', msg: 'Enter a schedule name before saving.', kind: 'warn', icon: '[WARNING]' });
       }
       return false;
     }
     const { errors, onTotal } = validateSchedule(edited.mode, edited.cycles);
     if (errors.length || onTotal > 24 * 60 + 1e-6) {
       if (trigger === 'manual') {
-        showToast({ title: 'Fix schedule', msg: errors[0] || 'Total ON exceeds 24 h', kind: 'warn', icon: '⚠️' });
+        showToast({ title: 'Fix schedule', msg: errors[0] || 'Total ON exceeds 24 h', kind: 'warn', icon: '[WARNING]' });
       }
       return false;
     }
@@ -18392,7 +18392,7 @@ function wireGlobalEvents() {
     const failureMsg = trigger === 'auto'
       ? 'Auto-save failed. Check your connection and try again.'
       : 'Could not save schedule. Please try again.';
-    showToast({ title: 'Save failed', msg: failureMsg, kind: 'warn', icon: '⚠️' });
+    showToast({ title: 'Save failed', msg: failureMsg, kind: 'warn', icon: '[WARNING]' });
     return false;
   }
 
@@ -18426,7 +18426,7 @@ function wireGlobalEvents() {
     const ids = (STATE.currentGroup.lights||[]).map(l=>l.id);
     const targets = STATE.devices.filter(d=>ids.includes(d.id));
     const online = targets.filter(d=>d.online);
-    if (!online.length) { setStatus('No online devices to power ON'); showToast({title:'No devices online', msg:'Skipped group power ON. All devices offline.', kind:'warn', icon:'⚠️'}); return; }
+    if (!online.length) { setStatus('No online devices to power ON'); showToast({title:'No devices online', msg:'Skipped group power ON. All devices offline.', kind:'warn', icon:'[WARNING]'}); return; }
     const payloadMix = normalizeMixInput(45);
     const commands = online.map((d) => ({ device: d, entry: buildDeviceHexForMix(payloadMix, d.id) }));
     await Promise.all(commands.map(({ device, entry }) => patch(device.id, { status: 'on', value: entry.hex })));
@@ -18438,17 +18438,17 @@ function wireGlobalEvents() {
     if (chip) chip.setAttribute('title', `Last payload: ${summaryHex}`);
     document.getElementById('groupLastHex')?.replaceChildren(document.createTextNode(`Last payload: ${summaryHex}`));
     setStatus(`Powered ON ${online.length} device(s)`);
-    showToast({title:'Powered ON', msg:`Sent safe ON to ${online.length} device(s)`, kind:'success', icon:'✅'});
+    showToast({title:'Powered ON', msg:`Sent safe ON to ${online.length} device(s)`, kind:'success', icon:'[OK]'});
   });
   $('#grpOff')?.addEventListener('click', async () => {
     if (!STATE.currentGroup) return alert('Select a group first');
     const ids = (STATE.currentGroup.lights||[]).map(l=>l.id);
     const targets = STATE.devices.filter(d=>ids.includes(d.id));
     const online = targets.filter(d=>d.online);
-    if (!online.length) { setStatus('No online devices to power OFF'); showToast({title:'No devices online', msg:'Skipped group power OFF. All devices offline.', kind:'warn', icon:'⚠️'}); return; }
+    if (!online.length) { setStatus('No online devices to power OFF'); showToast({title:'No devices online', msg:'Skipped group power OFF. All devices offline.', kind:'warn', icon:'[WARNING]'}); return; }
     await Promise.all(online.map(d => patch(d.id, { status: 'off', value: null })));
     setStatus(`Powered OFF ${online.length} device(s)`);
-    showToast({title:'Powered OFF', msg:`Turned off ${online.length} device(s)`, kind:'success', icon:'✅'});
+    showToast({title:'Powered OFF', msg:`Turned off ${online.length} device(s)`, kind:'success', icon:'[OK]'});
   });
   // Inject Live/File-only toggle next to Apply button if not present
   try {
@@ -18474,7 +18474,7 @@ function wireGlobalEvents() {
     const targets = STATE.devices.filter(d=>ids.includes(d.id));
     const online = targets.filter(d=>d.online);
     const offline = targets.filter(d=>!d.online);
-    if (live && !online.length) { setStatus('No online devices to apply spectrum'); showToast({title:'No devices online', msg:'Skipped Apply Spectrum. All devices offline.', kind:'warn', icon:'⚠️'}); return; }
+    if (live && !online.length) { setStatus('No online devices to apply spectrum'); showToast({title:'No devices online', msg:'Skipped Apply Spectrum. All devices offline.', kind:'warn', icon:'[WARNING]'}); return; }
     // Guardrail: basic power-cap autoscale (if any channel > 100, clamp and notify)
     const over = ['cw','ww','bl','rd'].filter(k => mix[k] > 100);
     let scaledMix = { ...mix };
@@ -18496,9 +18496,9 @@ function wireGlobalEvents() {
       }));
       setStatus(`Applied spectrum to ${online.length} device(s)${offline.length?`, skipped ${offline.length} offline`:''}`);
       if (offline.length) {
-        showToast({title:'Skipped offline devices', msg:`${offline.length} device(s) were offline and skipped.`, kind:'warn', icon:'⚠️'});
+        showToast({title:'Skipped offline devices', msg:`${offline.length} device(s) were offline and skipped.`, kind:'warn', icon:'[WARNING]'});
       }
-      showToast({title:'Spectrum applied', msg:`Sent to ${online.length} device(s)`, kind:'success', icon:'✅'});
+      showToast({title:'Spectrum applied', msg:`Sent to ${online.length} device(s)`, kind:'success', icon:'[OK]'});
     } else {
       // File-only: persist to groups.json as a pending mix so a Room Wizard or future apply can use it
       try {
@@ -20450,7 +20450,7 @@ function initializeAIFeatures() {
           title: featureData.name,
           msg: `${featureData.name} is now ${featureData.status.toUpperCase()}`,
           kind: featureData.status === 'on' ? 'success' : 'info',
-          icon: featureData.status === 'on' ? '✅' : '⏸️'
+          icon: featureData.status === 'on' ? '[OK]' : '⏸️'
         });
 
         renderGrowRoomOverview();
@@ -21276,19 +21276,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         link.click();
         document.body.removeChild(link);
         
-        showToast({ title: 'Export successful', msg: 'Field matrix exported to CSV', kind: 'success', icon: '📊' });
+        showToast({ title: 'Export successful', msg: 'Field matrix exported to CSV', kind: 'success', icon: '[STATS]' });
         console.log('[FieldMatrix] Exported', lights.length, 'lights to CSV');
         
       } catch (err) {
         console.error('[FieldMatrix] Export error:', err);
-        showToast({ title: 'Export failed', msg: err.message, kind: 'error', icon: '❌' });
+        showToast({ title: 'Export failed', msg: err.message, kind: 'error', icon: '[ERROR]' });
       }
     }
     
     // Wire Field Matrix buttons
     document.getElementById('btnRefreshFieldMatrix')?.addEventListener('click', () => {
       renderFieldMatrix();
-      showToast({ title: 'Matrix refreshed', msg: 'Field matrix data reloaded', kind: 'success', icon: '🔄' });
+      showToast({ title: 'Matrix refreshed', msg: 'Field matrix data reloaded', kind: 'success', icon: '[REFRESH]' });
     });
     
     document.getElementById('btnExportFieldMatrix')?.addEventListener('click', () => {
@@ -21992,7 +21992,7 @@ async function loadGroupsForBusMapping() {
     
     const suggested = suggestGroupName();
     const suggestedOption = suggested ? 
-      `<option value="${suggested}" style="font-style: italic; background: #f0f9ff;">💡 Suggested: ${suggested}</option>` : '';
+      `<option value="${suggested}" style="font-style: italic; background: #f0f9ff;">[IDEA] Suggested: ${suggested}</option>` : '';
     
     select.innerHTML = '<option value="">-- Select Group --</option>' +
       suggestedOption +

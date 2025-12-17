@@ -42,7 +42,7 @@ async function backupMetrics() {
   try {
     await fs.access(CONFIG.metricsFile);
     await fs.copyFile(CONFIG.metricsFile, BACKUP_FILE);
-    console.log('✓ Backed up existing metrics file');
+    console.log('[OK] Backed up existing metrics file');
   } catch {
     console.log('ℹ No existing metrics file to backup');
   }
@@ -58,7 +58,7 @@ async function restoreMetrics() {
   // Clean test file
   try {
     await fs.unlink(TEST_METRICS_FILE);
-    console.log('✓ Cleaned up test metrics file');
+    console.log('[OK] Cleaned up test metrics file');
   } catch {}
   
   // Restore backup if exists
@@ -66,7 +66,7 @@ async function restoreMetrics() {
     await fs.access(BACKUP_FILE);
     await fs.copyFile(BACKUP_FILE, CONFIG.metricsFile);
     await fs.unlink(BACKUP_FILE);
-    console.log('✓ Restored original metrics file');
+    console.log('[OK] Restored original metrics file');
   } catch {}
 }
 
@@ -92,12 +92,12 @@ async function testStorageInitialization() {
       throw new Error('Metrics structure invalid');
     }
     
-    console.log('✓ PASSED: Storage initialized correctly');
+    console.log('[OK] PASSED: Storage initialized correctly');
     console.log(`  - File created: ${TEST_METRICS_FILE}`);
     console.log(`  - Structure valid: zones, drift_alerts, created_at`);
     return true;
   } catch (err) {
-    console.error('✗ FAILED:', err.message);
+    console.error('[FAIL] FAILED:', err.message);
     return false;
   }
 }
@@ -118,7 +118,7 @@ async function testCalculateAccuracyMetrics() {
       throw new Error('Perfect predictions should have RMSE=0, MAE=0');
     }
     
-    console.log('✓ Test case 1: Perfect predictions (RMSE=0, MAE=0)');
+    console.log('[OK] Test case 1: Perfect predictions (RMSE=0, MAE=0)');
     
     // Test case 2: Constant error (+1°C)
     const predictions2 = [20, 21, 22, 23, 24];
@@ -129,7 +129,7 @@ async function testCalculateAccuracyMetrics() {
       throw new Error(`Expected RMSE≈1.0, MAE≈1.0, got RMSE=${metrics2.rmse}, MAE=${metrics2.mae}`);
     }
     
-    console.log('✓ Test case 2: Constant +1°C error (RMSE≈1.0, MAE≈1.0)');
+    console.log('[OK] Test case 2: Constant +1°C error (RMSE≈1.0, MAE≈1.0)');
     
     // Test case 3: Variable error
     const predictions3 = [20, 21, 22, 23, 24];
@@ -142,11 +142,11 @@ async function testCalculateAccuracyMetrics() {
       throw new Error(`Metrics calculation incorrect: RMSE=${metrics3.rmse}, MAE=${metrics3.mae}`);
     }
     
-    console.log('✓ Test case 3: Variable error (RMSE≈1.1, MAE≈0.8)');
-    console.log('✓ PASSED: Accuracy metrics calculated correctly');
+    console.log('[OK] Test case 3: Variable error (RMSE≈1.1, MAE≈0.8)');
+    console.log('[OK] PASSED: Accuracy metrics calculated correctly');
     return true;
   } catch (err) {
-    console.error('✗ FAILED:', err.message);
+    console.error('[FAIL] FAILED:', err.message);
     return false;
   }
 }
@@ -168,7 +168,7 @@ async function testDataDriftDetection() {
       console.log(`⚠ Warning: No drift expected but detected (score=${drift1.drift_score.toFixed(3)})`);
       // Not failing - drift detection is probabilistic
     } else {
-      console.log('✓ Test case 1: No drift detected (similar distributions)');
+      console.log('[OK] Test case 1: No drift detected (similar distributions)');
     }
     
     // Test case 2: Clear drift (shifted distribution)
@@ -181,7 +181,7 @@ async function testDataDriftDetection() {
       throw new Error('Expected drift detection for shifted distribution');
     }
     
-    console.log(`✓ Test case 2: Drift detected (score=${drift2.drift_score.toFixed(3)}, threshold=${drift2.threshold})`);
+    console.log(`[OK] Test case 2: Drift detected (score=${drift2.drift_score.toFixed(3)}, threshold=${drift2.threshold})`);
     
     // Test case 3: Insufficient data
     const drift3 = detectDataDrift([20, 21], [19, 20, 21]);
@@ -190,11 +190,11 @@ async function testDataDriftDetection() {
       throw new Error('Should not detect drift with insufficient data');
     }
     
-    console.log('✓ Test case 3: Insufficient data handled correctly');
-    console.log('✓ PASSED: Data drift detection working');
+    console.log('[OK] Test case 3: Insufficient data handled correctly');
+    console.log('[OK] PASSED: Data drift detection working');
     return true;
   } catch (err) {
-    console.error('✗ FAILED:', err.message);
+    console.error('[FAIL] FAILED:', err.message);
     return false;
   }
 }
@@ -215,7 +215,7 @@ async function testConceptDriftDetection() {
     if (drift1.drift_detected) {
       console.log(`⚠ Warning: No drift expected but detected (ratio=${drift1.rmse_ratio.toFixed(2)})`);
     } else {
-      console.log('✓ Test case 1: No drift detected (similar performance)');
+      console.log('[OK] Test case 1: No drift detected (similar performance)');
     }
     
     // Test case 2: Clear degradation
@@ -228,11 +228,11 @@ async function testConceptDriftDetection() {
       throw new Error('Expected concept drift for 2x RMSE increase');
     }
     
-    console.log(`✓ Test case 2: Drift detected (RMSE ratio=${drift2.rmse_ratio.toFixed(2)}x, severity=${drift2.severity})`);
-    console.log('✓ PASSED: Concept drift detection working');
+    console.log(`[OK] Test case 2: Drift detected (RMSE ratio=${drift2.rmse_ratio.toFixed(2)}x, severity=${drift2.severity})`);
+    console.log('[OK] PASSED: Concept drift detection working');
     return true;
   } catch (err) {
-    console.error('✗ FAILED:', err.message);
+    console.error('[FAIL] FAILED:', err.message);
     return false;
   }
 }
@@ -259,7 +259,7 @@ async function testRecordAndCalculateAccuracy() {
       await recordPrediction('test_zone', p.predicted, p.actual);
     }
     
-    console.log(`✓ Recorded ${predictions.length} predictions for test_zone`);
+    console.log(`[OK] Recorded ${predictions.length} predictions for test_zone`);
     
     // Calculate accuracy
     const accuracy = await calculateZoneAccuracy('test_zone', 24);
@@ -272,18 +272,18 @@ async function testRecordAndCalculateAccuracy() {
       throw new Error(`Expected ${predictions.length} samples, got ${accuracy.sample_count}`);
     }
     
-    console.log(`✓ Zone accuracy calculated: RMSE=${accuracy.rmse.toFixed(2)}°C, MAE=${accuracy.mae.toFixed(2)}°C, Alert=${accuracy.alert_level}`);
+    console.log(`[OK] Zone accuracy calculated: RMSE=${accuracy.rmse.toFixed(2)}°C, MAE=${accuracy.mae.toFixed(2)}°C, Alert=${accuracy.alert_level}`);
     
     // Check alert level logic
     if (accuracy.rmse < 3.0 && accuracy.alert_level !== 'ok') {
       throw new Error('Alert level should be "ok" for RMSE < 3.0');
     }
     
-    console.log('✓ Alert level logic correct');
-    console.log('✓ PASSED: Prediction recording and accuracy calculation working');
+    console.log('[OK] Alert level logic correct');
+    console.log('[OK] PASSED: Prediction recording and accuracy calculation working');
     return true;
   } catch (err) {
-    console.error('✗ FAILED:', err.message);
+    console.error('[FAIL] FAILED:', err.message);
     return false;
   }
 }
@@ -312,7 +312,7 @@ async function testHealthStatusAndSummary() {
       await calculateZoneAccuracy(zone, 24);
     }
     
-    console.log(`✓ Recorded test data for ${zones.length} zones`);
+    console.log(`[OK] Recorded test data for ${zones.length} zones`);
     
     // Get health status
     const health = await getHealthStatus();
@@ -325,7 +325,7 @@ async function testHealthStatusAndSummary() {
       throw new Error(`Expected at least ${zones.length} zones, got ${actualZones}`);
     }
     
-    console.log(`✓ Health status retrieved for ${actualZones} zones`);
+    console.log(`[OK] Health status retrieved for ${actualZones} zones`);
     console.log(`  - Overall health: ${health.overall}`);
     
     // Get zone summary
@@ -335,14 +335,14 @@ async function testHealthStatusAndSummary() {
       throw new Error('Zone summary structure invalid');
     }
     
-    console.log(`✓ Zone summary retrieved for 'main':`);
+    console.log(`[OK] Zone summary retrieved for 'main':`);
     console.log(`  - Predictions: ${summary.predictions.count}`);
     console.log(`  - Avg RMSE: ${summary.accuracy.avg_rmse?.toFixed(2) || 'N/A'}°C`);
     
-    console.log('✓ PASSED: Health status and summary working');
+    console.log('[OK] PASSED: Health status and summary working');
     return true;
   } catch (err) {
-    console.error('✗ FAILED:', err.message);
+    console.error('[FAIL] FAILED:', err.message);
     return false;
   }
 }
@@ -374,14 +374,14 @@ async function testRetentionPolicy() {
     if (oldCount > 0) {
       console.log(`⚠ Warning: ${oldCount} predictions older than 30 days found (may be retained temporarily)`);
     } else {
-      console.log('✓ Old predictions cleaned up correctly');
+      console.log('[OK] Old predictions cleaned up correctly');
     }
     
-    console.log(`✓ Retention policy working (${predictions.length} predictions retained)`);
-    console.log('✓ PASSED: Retention policy test');
+    console.log(`[OK] Retention policy working (${predictions.length} predictions retained)`);
+    console.log('[OK] PASSED: Retention policy test');
     return true;
   } catch (err) {
-    console.error('✗ FAILED:', err.message);
+    console.error('[FAIL] FAILED:', err.message);
     return false;
   }
 }
@@ -418,7 +418,7 @@ async function testConfiguration() {
       throw new Error('RMSE thresholds must be positive and critical > warning');
     }
     
-    console.log('✓ Configuration validated:');
+    console.log('[OK] Configuration validated:');
     console.log(`  - Retention: ${CONFIG.retentionDays} days`);
     console.log(`  - Max metrics per zone: ${CONFIG.maxMetricsPerZone}`);
     console.log(`  - Data drift threshold: ${CONFIG.dataInputDriftThreshold}`);
@@ -426,10 +426,10 @@ async function testConfiguration() {
     console.log(`  - Min samples for drift: ${CONFIG.minSamplesForDrift}`);
     console.log(`  - RMSE thresholds: warning=${CONFIG.rmseWarningThreshold}°C, critical=${CONFIG.rmseCriticalThreshold}°C`);
     
-    console.log('✓ PASSED: Configuration validation');
+    console.log('[OK] PASSED: Configuration validation');
     return true;
   } catch (err) {
-    console.error('✗ FAILED:', err.message);
+    console.error('[FAIL] FAILED:', err.message);
     return false;
   }
 }

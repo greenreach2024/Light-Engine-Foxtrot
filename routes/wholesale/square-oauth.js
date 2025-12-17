@@ -271,7 +271,7 @@ router.get('/callback', async (req, res) => {
       last_refresh_at: null
     });
     
-    console.log(`✓ Farm ${farm_name} (${farm_id}) onboarded successfully`);
+    console.log(`[OK] Farm ${farm_name} (${farm_id}) onboarded successfully`);
     console.log(`  Merchant ID: ${merchantId}`);
     console.log(`  Location: ${locationName} (${locationId})`);
     console.log(`  Token expires: ${expiresAt}`);
@@ -402,7 +402,7 @@ router.post('/refresh', async (req, res) => {
     
     farmTokens.set(farm_id, farmTokenData);
     
-    console.log(`✓ Refreshed token for farm ${farm_id}, expires ${newExpiresAt}`);
+    console.log(`[OK] Refreshed token for farm ${farm_id}, expires ${newExpiresAt}`);
     
     res.json({
       status: 'ok',
@@ -594,7 +594,7 @@ router.delete('/disconnect/:farm_id', async (req, res) => {
         clientId: SQUARE_APPLICATION_ID,
         accessToken: accessToken
       });
-      console.log(`✓ Revoked Square token for farm ${farm_id}`);
+      console.log(`[OK] Revoked Square token for farm ${farm_id}`);
     } catch (revokeError) {
       console.warn(`Warning: Failed to revoke token with Square:`, revokeError.message);
       // Continue with local deletion even if Square revocation fails
@@ -682,13 +682,13 @@ setInterval(() => {
         .then(response => response.json())
         .then(data => {
           if (data.status === 'ok') {
-            console.log(`✓ Auto-refreshed token for farm ${farm_id}`);
+            console.log(`[OK] Auto-refreshed token for farm ${farm_id}`);
           } else {
-            console.error(`✗ Failed to auto-refresh token for farm ${farm_id}:`, data.message);
+            console.error(`[FAIL] Failed to auto-refresh token for farm ${farm_id}:`, data.message);
           }
         })
         .catch(error => {
-          console.error(`✗ Auto-refresh error for farm ${farm_id}:`, error.message);
+          console.error(`[FAIL] Auto-refresh error for farm ${farm_id}:`, error.message);
         });
     }
   }

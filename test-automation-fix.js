@@ -31,8 +31,8 @@ async function testAutomation() {
   
   plugManager.registerDriver(vendorName, switchbotDriver);
 
-  console.log('✓ Plug manager initialized');
-  console.log('✓ SwitchBot driver registered\n');
+  console.log('[OK] Plug manager initialized');
+  console.log('[OK] SwitchBot driver registered\n');
 
   // Test device IDs from automation rules
   const testDevices = [
@@ -50,22 +50,22 @@ async function testAutomation() {
       // Test 1: Check if driver can be found
       const driver = plugManager.getDriverForPlug(deviceId);
       if (!driver) {
-        console.error(`  ✗ Driver not found for ${deviceId}`);
+        console.error(`  [FAIL] Driver not found for ${deviceId}`);
         continue;
       }
-      console.log(`  ✓ Driver found: ${driver.vendor()}`);
+      console.log(`  [OK] Driver found: ${driver.vendor()}`);
 
       // Test 2: Get current state
       try {
         const state = await plugManager.getState(deviceId);
-        console.log(`  ✓ Current state: ${state.on ? 'ON' : 'OFF'}`);
+        console.log(`  [OK] Current state: ${state.on ? 'ON' : 'OFF'}`);
       } catch (error) {
-        console.error(`  ✗ Failed to get state: ${error.message}`);
+        console.error(`  [FAIL] Failed to get state: ${error.message}`);
       }
 
       console.log('');
     } catch (error) {
-      console.error(`  ✗ Error testing ${deviceId}: ${error.message}\n`);
+      console.error(`  [FAIL] Error testing ${deviceId}: ${error.message}\n`);
     }
   }
 
@@ -75,14 +75,14 @@ async function testAutomation() {
   try {
     const driver = plugManager.getDriverForPlug(normalizedId);
     if (driver) {
-      console.log(`✓ Driver found for normalized ID: ${driver.vendor()}`);
+      console.log(`[OK] Driver found for normalized ID: ${driver.vendor()}`);
       const state = await plugManager.getState(normalizedId);
-      console.log(`✓ Current state: ${state.on ? 'ON' : 'OFF'}`);
+      console.log(`[OK] Current state: ${state.on ? 'ON' : 'OFF'}`);
     } else {
-      console.error('✗ Driver not found for normalized ID');
+      console.error('[FAIL] Driver not found for normalized ID');
     }
   } catch (error) {
-    console.error(`✗ Error: ${error.message}`);
+    console.error(`[FAIL] Error: ${error.message}`);
   }
 
   console.log('\n=== Test Complete ===');

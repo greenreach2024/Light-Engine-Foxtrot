@@ -92,7 +92,7 @@ console.log('='.repeat(80));
 // Test 1: Get initial configuration
 console.log('\nTest 1: Get initial configuration');
 const initialConfig = mlAutomation.getConfig();
-console.log('✓ Config loaded:');
+console.log('[OK] Config loaded:');
 console.log(`  - Enabled: ${initialConfig.enabled}`);
 console.log(`  - Anomaly response: ${initialConfig.anomaly_response_enabled}`);
 console.log(`  - Forecast response: ${initialConfig.forecast_response_enabled}`);
@@ -109,7 +109,7 @@ for (const anomaly of testAnomalies) {
     if (response.action === 'none') {
       console.log(`  ⏸ No action: ${response.reason} (${response.cooldown_remaining_minutes}m cooldown remaining)`);
     } else {
-      console.log(`  ✓ Action: ${response.action}`);
+      console.log(`  [OK] Action: ${response.action}`);
       console.log(`    Reason: ${response.reason}`);
       console.log(`    Severity: ${response.severity}`);
       console.log(`    Targets: ${JSON.stringify(response.targets)}`);
@@ -124,7 +124,7 @@ for (const anomaly of testAnomalies) {
 console.log('\nTest 3: Check cooldown status');
 const cooldowns = mlAutomation.getCooldownStatus();
 if (Object.keys(cooldowns).length > 0) {
-  console.log('✓ Cooldowns active:');
+  console.log('[OK] Cooldowns active:');
   for (const [key, status] of Object.entries(cooldowns)) {
     console.log(`  - ${key}: ${status.remaining_minutes}m remaining`);
   }
@@ -139,7 +139,7 @@ for (const forecast of testForecasts) {
   console.log(`\n  Forecast: ${forecast.zone}`);
   
   if (response) {
-    console.log(`  ✓ Action: ${response.action}`);
+    console.log(`  [OK] Action: ${response.action}`);
     console.log(`    Reason: ${response.reason}`);
     console.log(`    Targets: ${JSON.stringify(response.targets)}`);
     if (response.predicted_max_temp) {
@@ -160,7 +160,7 @@ const updates = {
   precool_temp_target: 21.0
 };
 const updatedConfig = mlAutomation.updateConfig(updates);
-console.log('✓ Config updated:');
+console.log('[OK] Config updated:');
 console.log(`  - Cooldown: ${updatedConfig.action_cooldown_minutes} minutes`);
 console.log(`  - Precool target: ${updatedConfig.precool_temp_target}°C`);
 
@@ -168,10 +168,10 @@ console.log(`  - Precool target: ${updatedConfig.precool_temp_target}°C`);
 console.log('\nTest 6: Disable and re-enable automation');
 mlAutomation.updateConfig({ enabled: false });
 const disabledResponse = mlAutomation.evaluateAnomalyResponse(testAnomalies[0]);
-console.log(`✓ Disabled - Response: ${disabledResponse ? 'triggered' : 'null (correct)'}`);
+console.log(`[OK] Disabled - Response: ${disabledResponse ? 'triggered' : 'null (correct)'}`);
 
 mlAutomation.updateConfig({ enabled: true });
-console.log('✓ Re-enabled');
+console.log('[OK] Re-enabled');
 
 // Test 7: Test anomaly response with cooldown
 console.log('\nTest 7: Test cooldown behavior');
@@ -181,7 +181,7 @@ console.log(`  First evaluation: ${response1 ? response1.action : 'null'}`);
 
 const response2 = mlAutomation.evaluateAnomalyResponse(anomaly);
 if (response2 && response2.action === 'none') {
-  console.log(`  ✓ Second evaluation blocked by cooldown (${response2.cooldown_remaining_minutes}m remaining)`);
+  console.log(`  [OK] Second evaluation blocked by cooldown (${response2.cooldown_remaining_minutes}m remaining)`);
 } else {
   console.log(`  - Second evaluation: ${response2 ? response2.action : 'null'}`);
 }
@@ -189,7 +189,7 @@ if (response2 && response2.action === 'none') {
 // Test 8: Get final cooldown status
 console.log('\nTest 8: Final cooldown status');
 const finalCooldowns = mlAutomation.getCooldownStatus();
-console.log(`✓ Active cooldowns: ${Object.keys(finalCooldowns).length}`);
+console.log(`[OK] Active cooldowns: ${Object.keys(finalCooldowns).length}`);
 for (const [key, status] of Object.entries(finalCooldowns)) {
   console.log(`  - ${key}: ${status.elapsed_minutes}m elapsed, ${status.remaining_minutes}m remaining`);
 }
@@ -199,11 +199,11 @@ console.log('ALL TESTS COMPLETE');
 console.log('='.repeat(80));
 console.log(`
 Summary:
-  ✓ Configuration management working
-  ✓ Anomaly response evaluation working
-  ✓ Forecast response evaluation working
-  ✓ Cooldown mechanism working
-  ✓ Enable/disable controls working
+  [OK] Configuration management working
+  [OK] Anomaly response evaluation working
+  [OK] Forecast response evaluation working
+  [OK] Cooldown mechanism working
+  [OK] Enable/disable controls working
   
 Next steps:
   1. Test API endpoints: GET /api/ml/automation/config
