@@ -8143,6 +8143,7 @@ console.log('[OK] Farm authentication system initialized - multi-tenant JWT with
 // Import farm-sales routes
 import farmSalesOrdersRouter from './routes/farm-sales/orders.js';
 import farmSalesInventoryRouter from './routes/farm-sales/inventory.js';
+import farmSalesInventoryIntegrationRouter from './routes/farm-sales/inventory-integration.js';
 import farmSalesPaymentsRouter from './routes/farm-sales/payments.js';
 import farmSalesPOSRouter from './routes/farm-sales/pos.js';
 import farmSalesDeliveryRouter from './routes/farm-sales/delivery.js';
@@ -8191,6 +8192,7 @@ app.use('/api/farm-sales/orders', farmSalesOrdersRouter);
  * - GET /api/farm-sales/inventory/categories/list: Get product categories
  */
 app.use('/api/farm-sales/inventory', farmSalesInventoryRouter);
+app.use('/api/farm-sales/inventory', farmSalesInventoryIntegrationRouter); // Tray-based integration
 
 /**
  * Farm Sales: Payment Processing

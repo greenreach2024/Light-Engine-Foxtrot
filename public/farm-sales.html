@@ -925,16 +925,20 @@
     // Load inventory
     async function loadInventory() {
       try {
-        const data = await api('/farm-sales/inventory');
+        // Use tray-based inventory from recipes
+        const data = await api('/farm-sales/inventory/from-trays');
         inventory = data.inventory;
+        
+        console.log(`[farm-sales] Loaded ${inventory.length} products from ${data.recipe_source}`);
         
         // Render product grid
         const grid = document.getElementById('product-grid');
         grid.innerHTML = inventory.map(product => `
           <div class="product-card" onclick="addToCart('${product.sku_id}')">
             <h3>${product.name}</h3>
-            <div class="price">$${product.retail_price.toFixed(2)}</div>
-            <div class="stock">${product.available} ${product.unit} available</div>
+            <div class="price">$${product.retail_price.toFixed(2)} per ${product.unit}</div>
+            <div class="stock">${product.available} ${product.unit}${product.available !== 1 ? 's' : ''} available</div>
+            ${product.harvest_days ? `<div style="font-size: 0.75rem; color: var(--text-light); margin-top: 0.5rem;">${product.harvest_days} days to harvest</div>` : ''}
           </div>
         `).join('');
         
@@ -952,7 +956,36 @@
           </tr>
         `).join('');
       } catch (error) {
-        console.error('Failed to load inventory:', error);
+        console.error('[farm-sales] Failed to load inventory:', error);
+        // Fallback to regular endpoint
+        try {
+          const data = await api('/farm-sales/inventory');
+          inventory = data.inventory;
+          
+          const grid = document.getElementById('product-grid');
+          grid.innerHTML = inventory.map(product => `
+            <div class="product-card" onclick="addToCart('${product.sku_id}')">
+              <h3>${product.name}</h3>
+              <div class="price">$${product.retail_price.toFixed(2)}</div>
+              <div class="stock">${product.available} ${product.unit} available</div>
+            </div>
+          `).join('');
+          
+          const table = document.getElementById('inventory-table');
+          table.innerHTML = inventory.map(product => `
+            <tr>
+              <td>${product.sku_id}</td>
+              <td>${product.name}</td>
+              <td>${product.category}</td>
+              <td>${product.available}</td>
+              <td>${product.reserved}</td>
+              <td>${product.unit}</td>
+              <td>$${product.retail_price.toFixed(2)}</td>
+            </tr>
+          `).join('');
+        } catch (fallbackError) {
+          console.error('[farm-sales] Fallback also failed:', fallbackError);
+        }
       }
     }
     
