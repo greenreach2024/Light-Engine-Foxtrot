@@ -1,0 +1,41 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo "Installing dependencies..."
+      - node --version
+      - npm --version
+  
+  pre_build:
+    commands:
+      - echo "Running pre-build checks..."
+      - npm ci --production
+      - echo "Verifying demo data exists..."
+      - ls -la data/demo/demo-farm-complete.json || echo "WARNING: Demo data not found!"
+  
+  build:
+    commands:
+      - echo "Build phase - no build step needed for Node.js"
+      - echo "Files to be deployed:"
+      - ls -la
+  
+  post_build:
+    commands:
+      - echo "Post-build - preparing deployment package"
+      - echo "Demo mode will be enabled via .ebextensions/nodejs.config"
+
+artifacts:
+  files:
+    - '**/*'
+  exclude-paths:
+    - node_modules/**/*
+    - .git/**/*
+    - .github/**/*
+    - tests/**/*
+    - docs/**/*
+    - '*.md'
+    - .env*
+    - '*.log'

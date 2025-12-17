@@ -1,0 +1,50 @@
+# Elastic Beanstalk ignore file
+# Don't upload these to Beanstalk
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Node modules (will be installed on server)
+node_modules/
+
+# Development files
+.git/
+.github/
+.vscode/
+*.log
+npm-debug.log*
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Test files
+test/
+tests/
+*.test.js
+
+# Mobile app
+mobile-app/
+
+# Large deployment files
+*.zip
+external/
+venv/
+firmware/
+logs/
+*.log
+
+# Database files (if any)
+*.db
+*.sqlite
+
+# Environment files
+.env.local
+.env.development
+
+# OS files
+.DS_Store
+Thumbs.db

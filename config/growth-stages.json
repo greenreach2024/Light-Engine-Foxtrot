@@ -1,0 +1,140 @@
+{
+  "$schema": "./growth-stages-schema.json",
+  "description": "VPD bands and environmental setpoints for leafy greens growth stages",
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-17T00:00:00Z",
+  "stages": {
+    "propagation": {
+      "name": "Propagation",
+      "description": "Seed germination and early seedling development (0-10 days)",
+      "vpd": {
+        "min": 0.4,
+        "max": 0.8,
+        "target": 0.6,
+        "unit": "kPa"
+      },
+      "temperature": {
+        "min": 20,
+        "max": 24,
+        "target": 22,
+        "unit": "°C"
+      },
+      "humidity": {
+        "min": 70,
+        "max": 85,
+        "target": 78,
+        "unit": "%"
+      },
+      "photoperiod": {
+        "lightHours": 16,
+        "darkHours": 8,
+        "description": "16/8 light/dark cycle"
+      },
+      "notes": "High humidity to prevent seed desiccation. Narrow VPD band to encourage root development."
+    },
+    "vegetative": {
+      "name": "Vegetative Growth",
+      "description": "Active leaf development and biomass accumulation (10-21 days)",
+      "vpd": {
+        "min": 0.6,
+        "max": 1.0,
+        "target": 0.8,
+        "unit": "kPa"
+      },
+      "temperature": {
+        "min": 18,
+        "max": 24,
+        "target": 21,
+        "unit": "°C"
+      },
+      "humidity": {
+        "min": 60,
+        "max": 75,
+        "target": 68,
+        "unit": "%"
+      },
+      "photoperiod": {
+        "lightHours": 18,
+        "darkHours": 6,
+        "description": "18/6 light/dark cycle"
+      },
+      "notes": "Moderate VPD to drive transpiration and nutrient uptake without stressing plants."
+    },
+    "finishing": {
+      "name": "Finishing / Pre-Harvest",
+      "description": "Final growth and hardening before harvest (21-35 days)",
+      "vpd": {
+        "min": 0.8,
+        "max": 1.2,
+        "target": 1.0,
+        "unit": "kPa"
+      },
+      "temperature": {
+        "min": 16,
+        "max": 22,
+        "target": 19,
+        "unit": "°C"
+      },
+      "humidity": {
+        "min": 50,
+        "max": 65,
+        "target": 58,
+        "unit": "%"
+      },
+      "photoperiod": {
+        "lightHours": 16,
+        "darkHours": 8,
+        "description": "16/8 light/dark cycle"
+      },
+      "notes": "Higher VPD to reduce disease risk and improve shelf life. Lower humidity to reduce post-harvest rot."
+    }
+  },
+  "transitions": {
+    "description": "Gradual setpoint changes to avoid shocking plants",
+    "rampDurationHours": 6,
+    "stepIntervalMinutes": 30,
+    "notes": "When transitioning between stages, ramp setpoints linearly over 6 hours in 30-minute increments."
+  },
+  "cultivarVariations": {
+    "description": "Adjust these base setpoints for specific cultivars",
+    "examples": {
+      "basil": {
+        "adjustments": "Prefer warmer temps (24-26°C vegetative) and higher VPD (1.0-1.4 kPa finishing)",
+        "vpdOffset": 0.2
+      },
+      "lettuce_butterhead": {
+        "adjustments": "Cooler temps (16-20°C finishing) to prevent bolting, moderate VPD",
+        "tempOffset": -2
+      },
+      "kale": {
+        "adjustments": "Tolerates wider VPD range (0.5-1.3 kPa), cooler temps improve flavor",
+        "tempOffset": -1
+      },
+      "microgreens": {
+        "adjustments": "Short cycle (7-14 days), maintain propagation-like conditions throughout",
+        "stageOverride": "propagation"
+      }
+    }
+  },
+  "safeLimits": {
+    "description": "Absolute bounds - never exceed these regardless of stage",
+    "temperature": {
+      "absoluteMin": 14,
+      "absoluteMax": 26,
+      "unit": "°C",
+      "reason": "Below 14°C slows growth; above 26°C increases disease risk and respiration losses"
+    },
+    "humidity": {
+      "absoluteMin": 45,
+      "absoluteMax": 95,
+      "unit": "%",
+      "reason": "Below 45% causes excessive transpiration; above 95% high disease risk"
+    },
+    "vpd": {
+      "absoluteMin": 0.3,
+      "absoluteMax": 1.5,
+      "unit": "kPa",
+      "reason": "Below 0.3 kPa condensation risk; above 1.5 kPa plant stress"
+    }
+  }
+}

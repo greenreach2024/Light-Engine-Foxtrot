@@ -1,0 +1,44 @@
+{
+  "name": "light-engine-charlie",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Light Engine Charlie single-server app",
+  "main": "server-charlie.js",
+  "scripts": {
+    "start": "node server-charlie.js",
+    "start:pm2": "pm2 start ecosystem.config.cjs && pm2 status",
+    "start:local": "PORT=8091 node server-charlie.js",
+    "start:cloud": "ENV_SOURCE=cloud node server-charlie.js",
+    "smoke": "node scripts/smoke.js",
+    "test": "node --test --test-timeout=10000 \"tests/**/*.mjs\"",
+    "nutrient:setpoints": "node scripts/nutrient-push-setpoints.js",
+    "mock:heatmap": "node scripts/generate-mock-heatmap-data.cjs"
+  },
+  "dependencies": {
+    "canvas": "^3.2.0",
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^2.0.6",
+    "jsbarcode": "^3.12.1",
+    "jsonwebtoken": "^9.0.3",
+    "mqtt": "^5.3.4",
+    "nedb-promises": "^6.2.3",
+    "node-quickbooks": "^2.0.47",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "square": "^37.1.1",
+    "tplink-smarthome-api": "^5.0.0"
+  },
+  "keywords": [
+    "lighting",
+    "control",
+    "automation"
+  ],
+  "author": "Peter Gilbert",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2"
+  }
+}

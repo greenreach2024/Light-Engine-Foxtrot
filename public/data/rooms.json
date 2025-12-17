@@ -1,0 +1,812 @@
+{
+  "rooms": [
+    {
+      "id": "ROOM-A",
+      "roomId": "ROOM-A",
+      "name": "Room A - Leafy Greens Production",
+      "temperature": 20.6,
+      "humidity": 67,
+      "co2": 1131,
+      "vpd": 0.97,
+      "status": "online",
+      "zones": [
+        {
+          "zoneId": "ROOM-A-Z1",
+          "name": "Zone 1 - Lettuce Production",
+          "crop": "Lettuce",
+          "temperature": 23.2,
+          "humidity": 61,
+          "co2": 1019,
+          "ppfd": 511,
+          "vpd": 0.97,
+          "status": "online",
+          "groups": [
+            {
+              "groupId": "ROOM-A-Z1-G01",
+              "name": "Butterhead Lettuce Rack 1",
+              "crop": "Butterhead Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 13,
+              "harvestIn": 14,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z1-G01-LIGHT",
+                "ROOM-A-Z1-G01-SENSOR"
+              ],
+              "intensity": 85,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z1-G02",
+              "name": "Romaine Lettuce Rack 2",
+              "crop": "Romaine Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 13,
+              "harvestIn": 12,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-A-Z1-G02-LIGHT",
+                "ROOM-A-Z1-G02-SENSOR"
+              ],
+              "intensity": 89,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z1-G03",
+              "name": "Red Leaf Lettuce Rack 3",
+              "crop": "Red Leaf Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 17,
+              "harvestIn": 10,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z1-G03-LIGHT",
+                "ROOM-A-Z1-G03-SENSOR"
+              ],
+              "intensity": 76,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z1-G04",
+              "name": "Oak Leaf Lettuce Rack 4",
+              "crop": "Oak Leaf Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 20,
+              "harvestIn": 8,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z1-G04-LIGHT",
+                "ROOM-A-Z1-G04-SENSOR"
+              ],
+              "intensity": 79,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z1-G05",
+              "name": "Mixed Lettuce Rack 5",
+              "crop": "Mixed Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 6,
+              "harvestIn": 21,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z1-G05-LIGHT",
+                "ROOM-A-Z1-G05-SENSOR"
+              ],
+              "intensity": 86,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            }
+          ]
+        },
+        {
+          "zoneId": "ROOM-A-Z2",
+          "name": "Zone 2 - Basil Production",
+          "crop": "Basil",
+          "temperature": 20.1,
+          "humidity": 61,
+          "co2": 902,
+          "ppfd": 554,
+          "vpd": 0.91,
+          "status": "online",
+          "groups": [
+            {
+              "groupId": "ROOM-A-Z2-G01",
+              "name": "Genovese Basil Rack 1",
+              "crop": "Genovese Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 25,
+              "harvestIn": 4,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z2-G01-LIGHT",
+                "ROOM-A-Z2-G01-SENSOR"
+              ],
+              "intensity": 91,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z2-G02",
+              "name": "Thai Basil Rack 2",
+              "crop": "Thai Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 13,
+              "harvestIn": 14,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z2-G02-LIGHT",
+                "ROOM-A-Z2-G02-SENSOR"
+              ],
+              "intensity": 78,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z2-G03",
+              "name": "Purple Basil Rack 3",
+              "crop": "Purple Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 20,
+              "harvestIn": 5,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z2-G03-LIGHT",
+                "ROOM-A-Z2-G03-SENSOR"
+              ],
+              "intensity": 90,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z2-G04",
+              "name": "Lemon Basil Rack 4",
+              "crop": "Lemon Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 20,
+              "harvestIn": 9,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z2-G04-LIGHT",
+                "ROOM-A-Z2-G04-SENSOR"
+              ],
+              "intensity": 92,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z2-G05",
+              "name": "Holy Basil Rack 5",
+              "crop": "Holy Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 8,
+              "harvestIn": 17,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-A-Z2-G05-LIGHT",
+                "ROOM-A-Z2-G05-SENSOR"
+              ],
+              "intensity": 86,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            }
+          ]
+        },
+        {
+          "zoneId": "ROOM-A-Z3",
+          "name": "Zone 3 - Arugula Production",
+          "crop": "Arugula",
+          "temperature": 23,
+          "humidity": 62,
+          "co2": 1070,
+          "ppfd": 543,
+          "vpd": 0.96,
+          "status": "online",
+          "groups": [
+            {
+              "groupId": "ROOM-A-Z3-G01",
+              "name": "Wild Arugula Rack 1",
+              "crop": "Wild Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 11,
+              "harvestIn": 14,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-A-Z3-G01-LIGHT",
+                "ROOM-A-Z3-G01-SENSOR"
+              ],
+              "intensity": 94,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z3-G02",
+              "name": "Cultivated Arugula Rack 2",
+              "crop": "Cultivated Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 18,
+              "harvestIn": 11,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z3-G02-LIGHT",
+                "ROOM-A-Z3-G02-SENSOR"
+              ],
+              "intensity": 78,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z3-G03",
+              "name": "Baby Arugula Rack 3",
+              "crop": "Baby Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 22,
+              "harvestIn": 5,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z3-G03-LIGHT",
+                "ROOM-A-Z3-G03-SENSOR"
+              ],
+              "intensity": 84,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z3-G04",
+              "name": "Red Arugula Rack 4",
+              "crop": "Red Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 24,
+              "harvestIn": 6,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z3-G04-LIGHT",
+                "ROOM-A-Z3-G04-SENSOR"
+              ],
+              "intensity": 86,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z3-G05",
+              "name": "Wasabi Arugula Rack 5",
+              "crop": "Wasabi Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 19,
+              "harvestIn": 11,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z3-G05-LIGHT",
+                "ROOM-A-Z3-G05-SENSOR"
+              ],
+              "intensity": 75,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            }
+          ]
+        },
+        {
+          "zoneId": "ROOM-A-Z4",
+          "name": "Zone 4 - Kale Production",
+          "crop": "Kale",
+          "temperature": 23.9,
+          "humidity": 64,
+          "co2": 1154,
+          "ppfd": 502,
+          "vpd": 0.85,
+          "status": "online",
+          "groups": [
+            {
+              "groupId": "ROOM-A-Z4-G01",
+              "name": "Lacinato Kale Rack 1",
+              "crop": "Lacinato Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 9,
+              "harvestIn": 16,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z4-G01-LIGHT",
+                "ROOM-A-Z4-G01-SENSOR"
+              ],
+              "intensity": 82,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z4-G02",
+              "name": "Red Russian Kale Rack 2",
+              "crop": "Red Russian Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 26,
+              "harvestIn": 4,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z4-G02-LIGHT",
+                "ROOM-A-Z4-G02-SENSOR"
+              ],
+              "intensity": 92,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z4-G03",
+              "name": "Curly Kale Rack 3",
+              "crop": "Curly Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 13,
+              "harvestIn": 13,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-A-Z4-G03-LIGHT",
+                "ROOM-A-Z4-G03-SENSOR"
+              ],
+              "intensity": 78,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z4-G04",
+              "name": "Baby Kale Rack 4",
+              "crop": "Baby Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 29,
+              "harvestIn": 0,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-A-Z4-G04-LIGHT",
+                "ROOM-A-Z4-G04-SENSOR"
+              ],
+              "intensity": 93,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-A-Z4-G05",
+              "name": "Dinosaur Kale Rack 5",
+              "crop": "Dinosaur Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 19,
+              "harvestIn": 11,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-A-Z4-G05-LIGHT",
+                "ROOM-A-Z4-G05-SENSOR"
+              ],
+              "intensity": 86,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ROOM-B",
+      "roomId": "ROOM-B",
+      "name": "Room B - Herb Garden",
+      "temperature": 21.7,
+      "humidity": 65,
+      "co2": 1147,
+      "vpd": 1.12,
+      "status": "online",
+      "zones": [
+        {
+          "zoneId": "ROOM-B-Z1",
+          "name": "Zone 1 - Lettuce Production",
+          "crop": "Lettuce",
+          "temperature": 21.3,
+          "humidity": 61,
+          "co2": 941,
+          "ppfd": 438,
+          "vpd": 1.11,
+          "status": "online",
+          "groups": [
+            {
+              "groupId": "ROOM-B-Z1-G01",
+              "name": "Butterhead Lettuce Rack 1",
+              "crop": "Butterhead Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 7,
+              "harvestIn": 18,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z1-G01-LIGHT",
+                "ROOM-B-Z1-G01-SENSOR"
+              ],
+              "intensity": 83,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z1-G02",
+              "name": "Romaine Lettuce Rack 2",
+              "crop": "Romaine Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 12,
+              "harvestIn": 18,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z1-G02-LIGHT",
+                "ROOM-B-Z1-G02-SENSOR"
+              ],
+              "intensity": 81,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z1-G03",
+              "name": "Red Leaf Lettuce Rack 3",
+              "crop": "Red Leaf Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 10,
+              "harvestIn": 16,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z1-G03-LIGHT",
+                "ROOM-B-Z1-G03-SENSOR"
+              ],
+              "intensity": 90,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z1-G04",
+              "name": "Oak Leaf Lettuce Rack 4",
+              "crop": "Oak Leaf Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 29,
+              "harvestIn": 0,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z1-G04-LIGHT",
+                "ROOM-B-Z1-G04-SENSOR"
+              ],
+              "intensity": 85,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z1-G05",
+              "name": "Mixed Lettuce Rack 5",
+              "crop": "Mixed Lettuce",
+              "recipe": "Buttercrunch Lettuce (21 day)",
+              "daysOld": 12,
+              "harvestIn": 17,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z1-G05-LIGHT",
+                "ROOM-B-Z1-G05-SENSOR"
+              ],
+              "intensity": 81,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            }
+          ]
+        },
+        {
+          "zoneId": "ROOM-B-Z2",
+          "name": "Zone 2 - Basil Production",
+          "crop": "Basil",
+          "temperature": 22.2,
+          "humidity": 61,
+          "co2": 1010,
+          "ppfd": 424,
+          "vpd": 0.86,
+          "status": "online",
+          "groups": [
+            {
+              "groupId": "ROOM-B-Z2-G01",
+              "name": "Genovese Basil Rack 1",
+              "crop": "Genovese Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 9,
+              "harvestIn": 17,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z2-G01-LIGHT",
+                "ROOM-B-Z2-G01-SENSOR"
+              ],
+              "intensity": 93,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z2-G02",
+              "name": "Thai Basil Rack 2",
+              "crop": "Thai Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 20,
+              "harvestIn": 6,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-B-Z2-G02-LIGHT",
+                "ROOM-B-Z2-G02-SENSOR"
+              ],
+              "intensity": 82,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z2-G03",
+              "name": "Purple Basil Rack 3",
+              "crop": "Purple Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 13,
+              "harvestIn": 17,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-B-Z2-G03-LIGHT",
+                "ROOM-B-Z2-G03-SENSOR"
+              ],
+              "intensity": 85,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z2-G04",
+              "name": "Lemon Basil Rack 4",
+              "crop": "Lemon Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 20,
+              "harvestIn": 8,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-B-Z2-G04-LIGHT",
+                "ROOM-B-Z2-G04-SENSOR"
+              ],
+              "intensity": 85,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z2-G05",
+              "name": "Holy Basil Rack 5",
+              "crop": "Holy Basil",
+              "recipe": "Genovese Basil (28 day)",
+              "daysOld": 22,
+              "harvestIn": 3,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z2-G05-LIGHT",
+                "ROOM-B-Z2-G05-SENSOR"
+              ],
+              "intensity": 86,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            }
+          ]
+        },
+        {
+          "zoneId": "ROOM-B-Z3",
+          "name": "Zone 3 - Arugula Production",
+          "crop": "Arugula",
+          "temperature": 23.3,
+          "humidity": 66,
+          "co2": 1152,
+          "ppfd": 430,
+          "vpd": 0.94,
+          "status": "online",
+          "groups": [
+            {
+              "groupId": "ROOM-B-Z3-G01",
+              "name": "Wild Arugula Rack 1",
+              "crop": "Wild Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 5,
+              "harvestIn": 24,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z3-G01-LIGHT",
+                "ROOM-B-Z3-G01-SENSOR"
+              ],
+              "intensity": 83,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z3-G02",
+              "name": "Cultivated Arugula Rack 2",
+              "crop": "Cultivated Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 16,
+              "harvestIn": 9,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-B-Z3-G02-LIGHT",
+                "ROOM-B-Z3-G02-SENSOR"
+              ],
+              "intensity": 85,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z3-G03",
+              "name": "Baby Arugula Rack 3",
+              "crop": "Baby Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 8,
+              "harvestIn": 21,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z3-G03-LIGHT",
+                "ROOM-B-Z3-G03-SENSOR"
+              ],
+              "intensity": 90,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z3-G04",
+              "name": "Red Arugula Rack 4",
+              "crop": "Red Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 15,
+              "harvestIn": 12,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z3-G04-LIGHT",
+                "ROOM-B-Z3-G04-SENSOR"
+              ],
+              "intensity": 80,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z3-G05",
+              "name": "Wasabi Arugula Rack 5",
+              "crop": "Wasabi Arugula",
+              "recipe": "Astro Arugula (14 day)",
+              "daysOld": 25,
+              "harvestIn": 3,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-B-Z3-G05-LIGHT",
+                "ROOM-B-Z3-G05-SENSOR"
+              ],
+              "intensity": 80,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            }
+          ]
+        },
+        {
+          "zoneId": "ROOM-B-Z4",
+          "name": "Zone 4 - Kale Production",
+          "crop": "Kale",
+          "temperature": 22.5,
+          "humidity": 65,
+          "co2": 1053,
+          "ppfd": 417,
+          "vpd": 1.1,
+          "status": "online",
+          "groups": [
+            {
+              "groupId": "ROOM-B-Z4-G01",
+              "name": "Lacinato Kale Rack 1",
+              "crop": "Lacinato Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 27,
+              "harvestIn": 2,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z4-G01-LIGHT",
+                "ROOM-B-Z4-G01-SENSOR"
+              ],
+              "intensity": 87,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z4-G02",
+              "name": "Red Russian Kale Rack 2",
+              "crop": "Red Russian Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 24,
+              "harvestIn": 3,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z4-G02-LIGHT",
+                "ROOM-B-Z4-G02-SENSOR"
+              ],
+              "intensity": 81,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z4-G03",
+              "name": "Curly Kale Rack 3",
+              "crop": "Curly Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 19,
+              "harvestIn": 6,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z4-G03-LIGHT",
+                "ROOM-B-Z4-G03-SENSOR"
+              ],
+              "intensity": 91,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z4-G04",
+              "name": "Baby Kale Rack 4",
+              "crop": "Baby Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 9,
+              "harvestIn": 18,
+              "trays": 8,
+              "plants": 192,
+              "health": "healthy",
+              "devices": [
+                "ROOM-B-Z4-G04-LIGHT",
+                "ROOM-B-Z4-G04-SENSOR"
+              ],
+              "intensity": 90,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            },
+            {
+              "groupId": "ROOM-B-Z4-G05",
+              "name": "Dinosaur Kale Rack 5",
+              "crop": "Dinosaur Kale",
+              "recipe": "Red Russian Kale (35 day)",
+              "daysOld": 9,
+              "harvestIn": 17,
+              "trays": 8,
+              "plants": 192,
+              "health": "watch",
+              "devices": [
+                "ROOM-B-Z4-G05-LIGHT",
+                "ROOM-B-Z4-G05-SENSOR"
+              ],
+              "intensity": 93,
+              "spectrum": "CW/WW + 450nm + 660nm"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

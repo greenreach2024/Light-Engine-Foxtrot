@@ -1,0 +1,59 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+build/
+dist/
+*.egg-info/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.development
+
+# Database (runtime only)
+*.db
+*.sqlite
+lightengine.db
+
+# Logs
+logs/
+*.log
+
+# Runtime cache/data (don't commit)
+public/data/env-cache.json
+public/data/devices.cache.json
+public/data/anomaly-history.json
+public/data/harvest-log.json
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# AWS
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
+# Backups
+backups/
+*.backup
+*.bak
