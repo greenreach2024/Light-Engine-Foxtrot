@@ -1,0 +1,447 @@
+/**
+ * Farm Sales - Inventory Management
+ * Real-time inventory tracking for farm products (MULTI-TENANT)
+ */
+
+import express from 'express';
+import { farmAuthMiddleware } from '../../lib/farm-auth.js';
+import { farmStores } from '../../lib/farm-store.js';
+import { convertToWholesaleLots } from '../../lib/wholesale-integration.js';
+
+const router = express.Router();
+
+// Apply authentication to all routes
+router.use(farmAuthMiddleware);
+
+/**
+ * GET /api/farm-sales/inventory
+ * Get current inventory with availability (farm-scoped)
+ * 
+ * Query params:
+ * - category: Filter by category
+ * - available_only: Only show items with quantity > 0
+ * - search: Search by name
+ */
+router.get('/', (req, res) => {
+  try {
+    const { category, available_only, search } = req.query;
+    const farmId = req.farm_id; // From auth middleware
+    
+    let products = farmStores.inventory.getAllForFarm(farmId);
+
+    // Apply filters
+    if (category) {
+      products = products.filter(p => p.category === category);
+    }
+    if (available_only === 'true') {
+      products = products.filter(p => p.available > 0);
+    }
+    if (search) {
+      const term = search.toLowerCase();
+      products = products.filter(p => 
+        p.name.toLowerCase().includes(term) ||
+        p.sku_id.toLowerCase().includes(term)
+      );
+    }
+
+    // Calculate totals
+    const totals = {
+      total_skus: products.length,
+      total_quantity: products.reduce((sum, p) => sum + p.quantity, 0),
+      total_available: products.reduce((sum, p) => sum + p.available, 0),
+      total_reserved: products.reduce((sum, p) => sum + p.reserved, 0),
+      total_value: products.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0)
+    };
+
+    res.json({
+      ok: true,
+      farm_id: farmId,
+      inventory: products,
+      totals,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('[farm-sales] Inventory list failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'inventory_list_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/inventory/wholesale
+ * Export farm inventory in wholesale catalog format
+ * Used by GreenReach to aggregate multi-farm inventory
+ * 
+ * Returns:
+ * {
+ *   farm_id: string,
+ *   farm_name: string,
+ *   inventory_timestamp: ISO timestamp,
+ *   lots: [{
+ *     lot_id, sku_id, sku_name, qty_available, price_per_unit,
+ *     harvest_date_start, harvest_date_end, quality_flags, location
+ *   }]
+ * }
+ */
+router.get('/wholesale', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const products = farmStores.inventory.getAllForFarm(farmId);
+    
+    // Convert farm inventory to wholesale lot format
+    const wholesaleInventory = convertToWholesaleLots(farmId, products);
+    
+    console.log(`[farm-sales] Wholesale inventory sync for ${farmId}`);
+    console.log(`  Total lots: ${wholesaleInventory.lots.length}`);
+    console.log(`  Available SKUs: ${wholesaleInventory.lots.length}`);
+    
+    res.json({
+      ok: true,
+      ...wholesaleInventory
+    });
+    
+  } catch (error) {
+    console.error('[farm-sales] Wholesale inventory sync failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'wholesale_sync_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/inventory/:skuId
+ * Get single product inventory (farm-scoped)
+ */
+router.get('/:skuId', (req, res) => {
+  const { skuId } = req.params;
+  const farmId = req.farm_id;
+  const product = farmStores.inventory.get(farmId, skuId);
+
+  if (!product) {
+    return res.status(404).json({
+      ok: false,
+      error: 'product_not_found',
+      sku_id: skuId
+    });
+  }
+
+  res.json({
+    ok: true,
+    product
+  });
+});
+
+/**
+ * POST /api/farm-sales/inventory/reserve
+ * Reserve inventory for pending order (TTL hold)
+ * 
+ * Body:
+ * {
+ *   items: [{ sku_id, quantity }],
+ *   order_id: string,
+ *   ttl_seconds?: number (default 900 = 15min)
+ * }
+ */
+router.post('/reserve', (req, res) => {
+  try {
+    const { items, order_id, ttl_seconds = 900 } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'items_required'
+      });
+    }
+
+    const reservations = [];
+    const failures = [];
+
+    // Check availability for all items first
+    for (const item of items) {
+      const product = inventory.get(item.sku_id);
+      
+      if (!product) {
+        failures.push({
+          sku_id: item.sku_id,
+          reason: 'product_not_found'
+        });
+        continue;
+      }
+
+      if (product.available < item.quantity) {
+        failures.push({
+          sku_id: item.sku_id,
+          requested: item.quantity,
+          available: product.available,
+          reason: 'insufficient_quantity'
+        });
+        continue;
+      }
+    }
+
+    // If any failures, abort entire reservation
+    if (failures.length > 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'reservation_failed',
+        failures
+      });
+    }
+
+    // All items available - reserve them
+    const timestamp = new Date().toISOString();
+    const expires_at = new Date(Date.now() + ttl_seconds * 1000).toISOString();
+
+    for (const item of items) {
+      const product = inventory.get(item.sku_id);
+      product.reserved += item.quantity;
+      product.available = product.quantity - product.reserved;
+      product.updated_at = timestamp;
+      inventory.set(item.sku_id, product);
+
+      reservations.push({
+        sku_id: item.sku_id,
+        name: product.name,
+        quantity: item.quantity,
+        reserved_at: timestamp,
+        expires_at
+      });
+    }
+
+    // TODO: Set TTL auto-release timer
+
+    res.status(201).json({
+      ok: true,
+      order_id,
+      reservations,
+      expires_at
+    });
+
+  } catch (error) {
+    console.error('[farm-sales] Reservation failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'reservation_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/farm-sales/inventory/release
+ * Release reserved inventory (order cancelled)
+ * 
+ * Body:
+ * {
+ *   items: [{ sku_id, quantity }],
+ *   order_id: string
+ * }
+ */
+router.post('/release', (req, res) => {
+  try {
+    const { items, order_id } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'items_required'
+      });
+    }
+
+    const released = [];
+    const timestamp = new Date().toISOString();
+
+    for (const item of items) {
+      const product = inventory.get(item.sku_id);
+      
+      if (!product) {
+        continue; // Skip if product doesn't exist
+      }
+
+      // Release reservation
+      product.reserved = Math.max(0, product.reserved - item.quantity);
+      product.available = product.quantity - product.reserved;
+      product.updated_at = timestamp;
+      inventory.set(item.sku_id, product);
+
+      released.push({
+        sku_id: item.sku_id,
+        quantity: item.quantity,
+        released_at: timestamp
+      });
+    }
+
+    res.json({
+      ok: true,
+      order_id,
+      released
+    });
+
+  } catch (error) {
+    console.error('[farm-sales] Release failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'release_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/farm-sales/inventory/confirm
+ * Confirm reservation and decrement inventory (order completed)
+ * 
+ * Body:
+ * {
+ *   items: [{ sku_id, quantity }],
+ *   order_id: string
+ * }
+ */
+router.post('/confirm', (req, res) => {
+  try {
+    const { items, order_id } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'items_required'
+      });
+    }
+
+    const confirmed = [];
+    const timestamp = new Date().toISOString();
+
+    for (const item of items) {
+      const product = inventory.get(item.sku_id);
+      
+      if (!product) {
+        continue; // Skip if product doesn't exist
+      }
+
+      // Decrement total quantity and release reservation
+      product.quantity = Math.max(0, product.quantity - item.quantity);
+      product.reserved = Math.max(0, product.reserved - item.quantity);
+      product.available = product.quantity - product.reserved;
+      product.updated_at = timestamp;
+      inventory.set(item.sku_id, product);
+
+      confirmed.push({
+        sku_id: item.sku_id,
+        quantity: item.quantity,
+        new_quantity: product.quantity,
+        new_available: product.available,
+        confirmed_at: timestamp
+      });
+    }
+
+    res.json({
+      ok: true,
+      order_id,
+      confirmed
+    });
+
+  } catch (error) {
+    console.error('[farm-sales] Confirmation failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'confirmation_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PATCH /api/farm-sales/inventory/:skuId
+ * Update product inventory (restock, adjust pricing)
+ * 
+ * Body:
+ * {
+ *   quantity?: number,
+ *   unit_price?: number,
+ *   retail_price?: number
+ * }
+ */
+router.patch('/:skuId', (req, res) => {
+  try {
+    const { skuId } = req.params;
+    const updates = req.body;
+    const product = inventory.get(skuId);
+
+    if (!product) {
+      return res.status(404).json({
+        ok: false,
+        error: 'product_not_found',
+        sku_id: skuId
+      });
+    }
+
+    const timestamp = new Date().toISOString();
+
+    // Update fields
+    if (typeof updates.quantity === 'number') {
+      product.quantity = Math.max(0, updates.quantity);
+      product.available = product.quantity - product.reserved;
+    }
+    if (typeof updates.unit_price === 'number') {
+      product.unit_price = Math.max(0, updates.unit_price);
+    }
+    if (typeof updates.retail_price === 'number') {
+      product.retail_price = Math.max(0, updates.retail_price);
+    }
+    if (updates.lot_code !== undefined) {
+      product.lot_code = updates.lot_code; // Link to lot tracking system
+    }
+
+    product.updated_at = timestamp;
+    inventory.set(skuId, product);
+
+    res.json({
+      ok: true,
+      product
+    });
+
+  } catch (error) {
+    console.error('[farm-sales] Inventory update failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'update_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/inventory/categories/list
+ * Get list of product categories
+ */
+router.get('/categories/list', (req, res) => {
+  const products = Array.from(inventory.values());
+  const categories = {};
+
+  products.forEach(product => {
+    if (!categories[product.category]) {
+      categories[product.category] = {
+        category: product.category,
+        count: 0,
+        total_quantity: 0,
+        total_available: 0
+      };
+    }
+    categories[product.category].count++;
+    categories[product.category].total_quantity += product.quantity;
+    categories[product.category].total_available += product.available;
+  });
+
+  res.json({
+    ok: true,
+    categories: Object.values(categories)
+  });
+});
+
+export default router;
