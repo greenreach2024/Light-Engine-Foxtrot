@@ -7998,6 +7998,9 @@ app.use('/api/admin/health', adminHealthRouter);
 
 /**
  * Light Engine: Wholesale Inventory Sync Routes
+// Admin test farm creation endpoint
+const createTestFarmRouter = require("./routes/admin/create-test-farm");
+app.use("/api/admin", createTestFarmRouter);
  * Exposes farm inventory to GreenReach for catalog aggregation
  * - GET /api/wholesale/inventory: Farm inventory lots with availability
  * - GET /api/wholesale/schedule: Pickup windows and delivery logistics
@@ -19557,3 +19560,7 @@ export const __testUtils = {
   evaluateRoomAutomationConfig,
   computeEnergy,
 };
+
+// Admin test farm creation endpoint
+const createTestFarmRouter = require('./routes/admin/create-test-farm');
+app.use('/api/admin', createTestFarmRouter);
