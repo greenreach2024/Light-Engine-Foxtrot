@@ -926,7 +926,8 @@
     async function loadInventory() {
       try {
         // Use tray-based inventory from recipes
-        const data = await api('/farm-sales/inventory/from-trays');
+        const farmIdParam = farmId ? `?farmId=${farmId}` : '';
+        const data = await api(`/farm-sales/inventory/from-trays${farmIdParam}`);
         inventory = data.inventory;
         
         console.log(`[farm-sales] Loaded ${inventory.length} products from ${data.recipe_source}`);
@@ -985,6 +986,9 @@
           `).join('');
         } catch (fallbackError) {
           console.error('[farm-sales] Fallback also failed:', fallbackError);
+          // If both fail, show empty inventory
+          const grid = document.getElementById('product-grid');
+          grid.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-light);">No inventory available. Please log in to see products.</div>';
         }
       }
     }

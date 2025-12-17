@@ -14,6 +14,9 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+// Note: These endpoints work without auth for demo mode
+// farmId can be passed as query param or from auth middleware
+
 // Load lighting recipes (source of truth for crops)
 let lightingRecipes = null;
 function loadLightingRecipes() {
@@ -71,9 +74,10 @@ function getCropPricing(cropName) {
  * Get farm sales inventory derived from actual tray inventory
  * Uses lighting-recipes.json for crop data
  */
-router.get('/from-trays', farmAuthMiddleware, async (req, res) => {
+router.get('/from-trays', async (req, res) => {
   try {
-    const farmId = req.farm_id;
+    // Get farm_id from auth middleware or query param (for demo mode)
+    const farmId = req.farm_id || req.query.farmId || 'FARM-001';
     
     // Fetch tray inventory from backend
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
