@@ -1,8 +1,8 @@
 module.exports = {
   apps: [
     {
-      name: 'node-server',
-      script: 'server-charlie.js',
+      name: 'foxtrot-node',
+      script: 'server-foxtrot.js',
       interpreter: 'node',
       exec_mode: 'fork',
       instances: 1,

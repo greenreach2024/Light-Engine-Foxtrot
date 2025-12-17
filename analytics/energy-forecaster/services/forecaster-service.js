@@ -4,7 +4,7 @@ import { UtilityRateAdapter } from '../adapters/utility-rate-adapter.js';
 
 /**
  * Lightweight Express router exposing REST endpoints for the energy forecaster.
- * Intended to be mounted under /api/energy on server-charlie.js.
+ * Intended to be mounted under /api/energy on server-foxtrot.js.
  */
 export class EnergyForecasterService {
   constructor(options = {}) {

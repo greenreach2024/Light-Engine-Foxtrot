@@ -22,7 +22,7 @@ fi
 cd "$FOXTROT_DIR"
 
 echo "📦 Copying core server files..."
-cp "$DELTA_DIR/server-charlie.js" .
+cp "$DELTA_DIR/server-foxtrot.js" .
 cp "$DELTA_DIR/package.json" .
 cp "$DELTA_DIR/package-lock.json" .
 cp "$DELTA_DIR/ecosystem.config.cjs" .
@@ -43,7 +43,7 @@ cp "$DELTA_DIR/requirements.txt" backend/
 echo "🌐 Copying frontend files..."
 mkdir -p public/data
 cp "$DELTA_DIR/public/index.html" public/ 2>/dev/null || true
-cp "$DELTA_DIR/public/app.charlie.js" public/
+cp "$DELTA_DIR/public/app.foxtrot.js" public/
 cp "$DELTA_DIR/public/styles.charlie.css" public/
 cp "$DELTA_DIR/public/tray-inventory.html" public/ 2>/dev/null || true
 cp "$DELTA_DIR/public/tray-setup.html" public/ 2>/dev/null || true

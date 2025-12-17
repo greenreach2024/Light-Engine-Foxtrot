@@ -115,4 +115,4 @@ echo -e "${GREEN}╚════════════════════
 echo ""
 echo -e "${YELLOW}⚠️  Remember to restart the application:${NC}"
 echo "  • Backend:  python3 -m backend"
-echo "  • Frontend: node server-charlie.js"
+echo "  • Frontend: node server-foxtrot.js"

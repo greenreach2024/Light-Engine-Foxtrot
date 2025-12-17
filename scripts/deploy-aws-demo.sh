@@ -16,7 +16,7 @@ if ! command -v eb &> /dev/null; then
 fi
 
 # Check if we're in the right directory
-if [ ! -f "server-charlie.js" ]; then
+if [ ! -f "server-foxtrot.js" ]; then
     echo "❌ Error: Must run from project root directory"
     exit 1
 fi

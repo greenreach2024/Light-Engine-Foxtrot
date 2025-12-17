@@ -54,7 +54,7 @@ function checkServer() {
   });
 }
 
-// Simple matrix solver implementation (matches the one in app.charlie.js)
+// Simple matrix solver implementation (matches the one in app.foxtrot.js)
 function solveChannelsFromBands(targets, calibMatrix, options = {}) {
   const { intensityPct = 100, tolerance = 0.05 } = options;
   
@@ -294,7 +294,7 @@ checkServer()
   })
   .catch((err) => {
     console.log(`❌ Server check failed: ${err.message}`);
-    console.log('Please start the server: PORT=8091 node server-charlie.js');
+    console.log('Please start the server: PORT=8091 node server-foxtrot.js');
     console.log();
   });
 

@@ -2,8 +2,8 @@
 # Check DOM boot shape and basic CORS hints
 set -euo pipefail
 
-FILE="public/app.charlie.js"
-SERVER="server-charlie.js"
+FILE="public/app.foxtrot.js"
+SERVER="server-foxtrot.js"
 
 if ! grep -q "document.addEventListener('DOMContentLoaded', async () =>" "$FILE"; then
   echo "ERROR: DOMContentLoaded async boot listener not found in $FILE"
@@ -13,7 +13,7 @@ fi
 echo "DOM boot listener shape OK in $FILE"
 
 if ! grep -q "Access-Control-Allow-Origin" "$SERVER"; then
-  echo "WARNING: server may not explicitly set Access-Control-Allow-Origin (check server-charlie.js)"
+  echo "WARNING: server may not explicitly set Access-Control-Allow-Origin (check server-foxtrot.js)"
 else
   echo "CORS header hint found in $SERVER"
 fi

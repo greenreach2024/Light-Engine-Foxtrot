@@ -244,7 +244,7 @@ WorkingDirectory=$PROJECT_DIR
 Environment="PORT=8091"
 Environment="HOST=0.0.0.0"
 EnvironmentFile=$PROJECT_DIR/.env
-ExecStart=$(which node) server-charlie.js
+ExecStart=$(which node) server-foxtrot.js
 Restart=always
 RestartSec=10
 StandardOutput=append:$PROJECT_DIR/logs/node-server.log

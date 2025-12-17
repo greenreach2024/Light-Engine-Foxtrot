@@ -70,9 +70,9 @@ async function runTests() {
   console.log('='.repeat(80));
   
   // ============================================================================
-  // CRITICAL: Node.js Server (server-charlie.js)
+  // CRITICAL: Node.js Server (server-foxtrot.js)
   // ============================================================================
-  console.log('\n📦 CORE ENDPOINTS (Node.js server-charlie.js on :8091)');
+  console.log('\n📦 CORE ENDPOINTS (Node.js server-foxtrot.js on :8091)');
   console.log('-'.repeat(80));
   
   await testEndpoint('Central Admin Portal', '/central-admin.html', { critical: true });
@@ -230,7 +230,7 @@ async function runTests() {
   console.log('='.repeat(80));
   
   console.log(`
-1. ✅ Node.js server (server-charlie.js) is PRODUCTION READY
+1. ✅ Node.js server (server-foxtrot.js) is PRODUCTION READY
    - All core endpoints responding
    - Multi-farm monitoring working
    - Device integration functional

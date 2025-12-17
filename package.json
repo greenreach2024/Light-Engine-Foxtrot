@@ -1,12 +1,12 @@
 {
-  "name": "light-engine-charlie",
+  "name": "light-engine-foxtrot",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Light Engine Charlie single-server app",
-  "main": "server-charlie.js",
+  "description": "Light Engine Foxtrot single-server app",
+  "main": "server-foxtrot.js",
   "scripts": {
-    "start": "node server-charlie.js",
+    "start": "node server-foxtrot.js",
     "start:pm2": "pm2 start ecosystem.config.cjs && pm2 status",
     "start:local": "PORT=8091 node server-charlie.js",
     "start:cloud": "ENV_SOURCE=cloud node server-charlie.js",

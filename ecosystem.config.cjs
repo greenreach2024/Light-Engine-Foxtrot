@@ -1,8 +1,8 @@
 module.exports = {
   apps: [
     {
-      name: 'charlie-node',
-      script: 'server-charlie.js',
+      name: 'foxtrot-node',
+      script: 'server-foxtrot.js',
       node_args: '',
       watch: false,
       env: {
@@ -34,7 +34,7 @@ module.exports = {
       merge_logs: true
     },
     {
-      name: 'charlie-py',
+      name: 'foxtrot-py',
       script: 'uvicorn',
       args: 'backend:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 30 --graceful-timeout 15',
       interpreter: 'none',

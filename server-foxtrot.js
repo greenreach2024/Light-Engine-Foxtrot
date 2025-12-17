@@ -27,12 +27,12 @@ import {
 } from './server/middleware/demo-mode-handler.js';
 
 // Initialize demo mode immediately at module load
-console.log('[charlie] 🎬 Module loading - initializing demo mode...');
+console.log('[foxtrot] 🎬 Module loading - initializing demo mode...');
 try {
   initializeDemoMode();
-  console.log('[charlie] ✅ Demo mode initialized at module scope');
+  console.log('[foxtrot] ✅ Demo mode initialized at module scope');
 } catch (error) {
-  console.error('[charlie] ❌ Demo mode initialization failed:', error?.message || error);
+  console.error('[foxtrot] ❌ Demo mode initialization failed:', error?.message || error);
 }
 
 import { createProxyMiddleware } from "http-proxy-middleware";
@@ -164,9 +164,9 @@ const __dirname = path.dirname(__filename);
 const STRICT_DEVICE_VALIDATION = ['1', 'true', 'yes'].includes(String(process.env.STRICT_DEVICE_VALIDATION || '').toLowerCase());
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const BUILD_TIME = Date.now().toString();
-const INDEX_CHARLIE_PATH = path.join(PUBLIC_DIR, 'index.charlie.html');
-let INDEX_CHARLIE_HTML = null;
-let indexCharlieLoadErrorLogged = false;
+const INDEX_FOXTROT_PATH = path.join(PUBLIC_DIR, 'index.foxtrot.html');
+let INDEX_FOXTROT_HTML = null;
+let indexFoxtrotLoadErrorLogged = false;
 
 // Demo data helper so /data/*.json can fall back even if demo middleware is skipped
 function loadDemoFarmSnapshot() {
@@ -357,15 +357,15 @@ let __zoneBindingsSnapshot = { bindings: [], meta: { source: 'init', bindings: 0
 let __zoneBindingsTimer = null;
 
 function loadIndexCharlieHtml() {
-  if (INDEX_CHARLIE_HTML) return INDEX_CHARLIE_HTML;
+  if (INDEX_FOXTROT_HTML) return INDEX_FOXTROT_HTML;
   try {
-    const template = fs.readFileSync(INDEX_CHARLIE_PATH, 'utf8');
-    INDEX_CHARLIE_HTML = template.replace(/\{\{BUILD_TIME\}\}/g, BUILD_TIME);
-    return INDEX_CHARLIE_HTML;
+    const template = fs.readFileSync(INDEX_FOXTROT_PATH, 'utf8');
+    INDEX_FOXTROT_HTML = template.replace(/\{\{BUILD_TIME\}\}/g, BUILD_TIME);
+    return INDEX_FOXTROT_HTML;
   } catch (error) {
-    if (!indexCharlieLoadErrorLogged) {
-      indexCharlieLoadErrorLogged = true;
-      console.error('[charlie] Failed to load index.charlie.html:', error?.message || error);
+    if (!indexFoxtrotLoadErrorLogged) {
+      indexFoxtrotLoadErrorLogged = true;
+      console.error('[foxtrot] Failed to load index.foxtrot.html:', error?.message || error);
     }
     return null;
   }
@@ -1582,7 +1582,7 @@ function persistControllerToDisk(url){
   } catch {}
 }
 function getController(){ return CURRENT_CONTROLLER; }
-function setController(url){ CURRENT_CONTROLLER = url; persistControllerToDisk(url); console.log(`[charlie] controller set → ${url}`); }
+function setController(url){ CURRENT_CONTROLLER = url; persistControllerToDisk(url); console.log(`[foxtrot] controller set → ${url}`); }
 
 // Initialize controller from disk if available
 loadControllerFromDisk();
@@ -1617,7 +1617,7 @@ function setForwarder(url) {
   if (!url) {
     CURRENT_FORWARDER = null;
     persistForwarderToDisk(null);
-    console.log('[charlie] forwarder cleared');
+    console.log('[foxtrot] forwarder cleared');
     return;
   }
   if (typeof url !== 'string' || !isHttpUrl(url)) {
@@ -1626,7 +1626,7 @@ function setForwarder(url) {
   const normalized = url.trim().replace(/\/+$/, '');
   CURRENT_FORWARDER = normalized;
   persistForwarderToDisk(normalized);
-  console.log(`[charlie] forwarder set → ${normalized}`);
+  console.log(`[foxtrot] forwarder set → ${normalized}`);
 }
 
 function getNetworkBridgeUrl() {
@@ -1658,7 +1658,7 @@ async function maybeAutoDetectLocalController() {
         const res = await fetch(`${normalized}/healthz`, { method: 'GET', signal: ac.signal });
         if (res.ok) {
           setController(normalized);
-          console.log(`[charlie] auto-detected Python backend controller at ${normalized}`);
+          console.log(`[foxtrot] auto-detected Python backend controller at ${normalized}`);
           return;
         }
       } finally {
@@ -1667,7 +1667,7 @@ async function maybeAutoDetectLocalController() {
     } catch (error) {
       const message = error?.message || String(error);
       if (process.env.NODE_ENV === 'development') {
-        console.debug(`[charlie] Python backend candidate ${candidate} unavailable: ${message}`);
+        console.debug(`[foxtrot] Python backend candidate ${candidate} unavailable: ${message}`);
       }
     }
   }
@@ -1678,7 +1678,7 @@ async function maybeAutoDetectLocalController() {
 if (!RUNNING_UNDER_NODE_TEST && !hasPersistedController) {
   maybeAutoDetectLocalController().catch((error) => {
     const message = error?.message || String(error);
-    console.debug('[charlie] python backend auto-detect failed:', message);
+    console.debug('[foxtrot] python backend auto-detect failed:', message);
   });
 }
 
@@ -5357,9 +5357,9 @@ async function seedDevicesFromMetaNedb(store){
       };
     });
     await store.insert(rows);
-    console.log(`[charlie] seeded ${rows.length} device(s) from device-meta.json`);
+    console.log(`[foxtrot] seeded ${rows.length} device(s) from device-meta.json`);
   } catch (e) {
-    console.warn('[charlie] seedDevicesFromMeta (NeDB) failed:', e.message);
+    console.warn('[foxtrot] seedDevicesFromMeta (NeDB) failed:', e.message);
   }
 }
 
@@ -5369,7 +5369,7 @@ const devicesStore = createDeviceStore();
   try {
     await seedDevicesFromMetaNedb(devicesStore);
   } catch (error) {
-    console.warn('[charlie] Device seeding failed:', error.message);
+    console.warn('[foxtrot] Device seeding failed:', error.message);
   }
 })();
 
@@ -5743,7 +5743,7 @@ app.get('/devices', createDemoModeHandler(), async (req, res) => {
     if (isDemoMode()) {
       const demoData = getDemoData();
       const devices = demoData.getDevices();
-      console.log('[charlie] Demo mode: serving demo devices (' + devices.length + ' devices)');
+      console.log('[foxtrot] Demo mode: serving demo devices (' + devices.length + ' devices)');
       return res.json({ devices });
     }
     
@@ -6589,7 +6589,7 @@ app.get("/api/switchbot/status", asyncHandler(async (req, res) => {
 app.get("/api/switchbot/devices/:deviceId/status", asyncHandler(async (req, res) => {
   try {
     const { deviceId } = req.params;
-    console.log(`[charlie] Fetching status for device: ${deviceId}`);
+    console.log(`[foxtrot] Fetching status for device: ${deviceId}`);
 
     const force = ['1', 'true', 'yes'].includes(String(req.query.refresh || '').toLowerCase());
     const result = await fetchSwitchBotDeviceStatus(deviceId, { force });
@@ -6627,7 +6627,7 @@ app.post("/api/switchbot/devices/:deviceId/commands", async (req, res) => {
     const { deviceId } = req.params;
     const { command, parameter } = req.body;
     
-    console.log(`[charlie] Sending command to device ${deviceId}: ${command} ${parameter || ''}`);
+    console.log(`[foxtrot] Sending command to device ${deviceId}: ${command} ${parameter || ''}`);
     
     const commandData = {
       command: command,
@@ -9672,7 +9672,7 @@ app.get('/api/geocode', async (req, res) => {
     if (!address) return res.status(400).json({ ok: false, error: 'Address parameter required' });
     const encodedAddress = encodeURIComponent(address);
     const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=5`;
-    const response = await fetch(geocodeUrl, { headers: { 'User-Agent': 'Light-Engine-Charlie/1.0 (Farm Management System)' } });
+    const response = await fetch(geocodeUrl, { headers: { 'User-Agent': 'Light-Engine-Foxtrot/1.0 (Farm Management System)' } });
     if (!response.ok) throw new Error(`Geocoding API error: ${response.status}`);
     const data = await response.json();
     const results = data.map(item => ({ display_name: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon), formatted_address: item.display_name }));
@@ -9721,7 +9721,7 @@ app.get('/api/reverse-geocode', async (req, res) => {
     const { lat, lng } = req.query;
     if (!lat || !lng) return res.status(400).json({ ok: false, error: 'Latitude and longitude required' });
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'Light-Engine-Charlie/1.0 (Farm Management System)' } });
+    const r = await fetch(url, { headers: { 'User-Agent': 'Light-Engine-Foxtrot/1.0 (Farm Management System)' } });
     if (!r.ok) throw new Error(`Reverse geocoding error: ${r.status}`);
     const data = await r.json();
     const addr = data.address || {};
@@ -10949,7 +10949,7 @@ app.get('/tmp/live.index.html', (req, res) => {
 });
 
 app.get('/tmp/live.app.new.js', (req, res) => {
-  const filePath = path.join(PUBLIC_DIR, 'app.charlie.js');
+  const filePath = path.join(PUBLIC_DIR, 'app.foxtrot.js');
   streamLiveFile(res, filePath, 'application/javascript');
 });
 
@@ -11323,7 +11323,7 @@ async function fetchFarmData(url, timeout = 5000) {
       signal: controller.signal,
       headers: { 
         'Accept': 'application/json',
-        'User-Agent': 'Light-Engine-Charlie-Central/1.0'
+        'User-Agent': 'Light-Engine-Foxtrot-Central/1.0'
       }
     });
     clearTimeout(timeoutId);
@@ -12994,15 +12994,15 @@ app.get('/tmp/live.index.html', (req, res) => {
     return;
   }
   res.setHeader('Cache-Control', 'no-store, max-age=0');
-  res.type('html').sendFile(path.join(__dirname, 'public', 'index.charlie.html'));
+  res.type('html').sendFile(path.join(__dirname, 'public', 'index.foxtrot.html'));
 });
 
-app.get('/tmp/live.app.charlie.js', (req, res) => {
-  res.type('text').sendFile(path.join(__dirname, 'public', 'app.charlie.js'));
+app.get('/tmp/live.app.foxtrot.js', (req, res) => {
+  res.type('text').sendFile(path.join(__dirname, 'public', 'app.foxtrot.js'));
 });
 
 // Static files
-app.get(['/', '/index.charlie.html'], (req, res, next) => {
+app.get(['/', '/index.foxtrot.html'], (req, res, next) => {
   const html = loadIndexCharlieHtml();
   if (!html) return next();
   res.setHeader('Cache-Control', 'no-store, max-age=0');
@@ -13815,7 +13815,7 @@ app.get('/api/geocode', async (req, res) => {
     
     const response = await fetch(geocodeUrl, {
       headers: {
-        'User-Agent': 'Light-Engine-Charlie/1.0 (Farm Management System)'
+        'User-Agent': 'Light-Engine-Foxtrot/1.0 (Farm Management System)'
       }
     });
     
@@ -13891,7 +13891,7 @@ app.get('/ifttt/v1/user/info', (req, res) => {
   res.json({
     data: {
       name: "Light Engine Charlie",
-      id: "light_engine_charlie_user"
+      id: "light_engine_foxtrot_user"
     }
   });
 });
@@ -18688,7 +18688,7 @@ async function resolveAvailablePort(initialPort) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (await isPortAvailable(candidate)) {
       if (candidate !== initialPort) {
-        console.warn(`[charlie] Port ${initialPort} in use, falling back to ${candidate}.`);
+        console.warn(`[foxtrot] Port ${initialPort} in use, falling back to ${candidate}.`);
       }
       return candidate;
     }
@@ -19464,45 +19464,45 @@ app.post('/api/bus-mapping', asyncHandler(async (req, res) => {
 
 
 async function startServer() {
-  console.log('[charlie] 🚀 startServer() called');
+  console.log('[foxtrot] 🚀 startServer() called');
   try {
     const resolvedPort = await resolveAvailablePort(PORT);
     PORT = resolvedPort;
-    console.log('[charlie] ✅ Port resolved:', PORT);
+    console.log('[foxtrot] ✅ Port resolved:', PORT);
   } catch (error) {
     if (error && error.code === 'EADDRINUSE') {
-      console.error(`[charlie] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
+      console.error(`[foxtrot] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
     } else {
-      console.error('[charlie] Failed to determine available port:', error?.message || error);
+      console.error('[foxtrot] Failed to determine available port:', error?.message || error);
     }
     process.exit(1);
   }
 
   // Initialize demo mode if enabled
-  console.log('[charlie] 🔧 About to call initializeDemoMode()...');
+  console.log('[foxtrot] 🔧 About to call initializeDemoMode()...');
   try {
     initializeDemoMode();
-    console.log('[charlie] ✅ initializeDemoMode() completed');
+    console.log('[foxtrot] ✅ initializeDemoMode() completed');
   } catch (error) {
-    console.error('[charlie] ❌ Demo mode initialization failed:', error?.message || error);
-    console.error('[charlie] Stack trace:', error?.stack);
+    console.error('[foxtrot] ❌ Demo mode initialization failed:', error?.message || error);
+    console.error('[foxtrot] Stack trace:', error?.stack);
   }
 
   // Pre-startup diagnostics
-  console.log('[charlie] 🚀 Starting server...');
-  console.log('[charlie] PORT:', PORT);
-  console.log('[charlie] NODE_ENV:', process.env.NODE_ENV);
-  console.log('[charlie] DEMO_MODE:', process.env.DEMO_MODE);
-  console.log('[charlie] Controller:', getController());
-  console.log('[charlie] Forwarder:', getForwarder());
+  console.log('[foxtrot] 🚀 Starting server...');
+  console.log('[foxtrot] PORT:', PORT);
+  console.log('[foxtrot] NODE_ENV:', process.env.NODE_ENV);
+  console.log('[foxtrot] DEMO_MODE:', process.env.DEMO_MODE);
+  console.log('[foxtrot] Controller:', getController());
+  console.log('[foxtrot] Forwarder:', getForwarder());
 
   SERVER = app.listen(PORT, '0.0.0.0', () => {
     const address = SERVER.address();
-    console.log(`[charlie] ✅ Server successfully started on ${address.address}:${address.port}`);
-    console.log(`[charlie] running http://127.0.0.1:${PORT} → ${getController()}`);
-    console.log(`[charlie] Demo mode check: isDemoMode() = ${isDemoMode()}`);
+    console.log(`[foxtrot] ✅ Server successfully started on ${address.address}:${address.port}`);
+    console.log(`[foxtrot] running http://127.0.0.1:${PORT} → ${getController()}`);
+    console.log(`[foxtrot] Demo mode check: isDemoMode() = ${isDemoMode()}`);
     if (isDemoMode()) {
-      console.log(`[charlie] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
+      console.log(`[foxtrot] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
     }
     try { setupWeatherPolling(); } catch {}
     
@@ -19585,16 +19585,16 @@ async function startServer() {
 
   // Add error handler for server startup failures
   SERVER.on('error', (error) => {
-    console.error('[charlie] ❌ Server startup failed:', error);
-    console.error('[charlie] Error code:', error.code);
-    console.error('[charlie] Error message:', error.message);
-    console.error('[charlie] Stack trace:', error.stack);
+    console.error('[foxtrot] ❌ Server startup failed:', error);
+    console.error('[foxtrot] Error code:', error.code);
+    console.error('[foxtrot] Error message:', error.message);
+    console.error('[foxtrot] Stack trace:', error.stack);
     
     // Specific error diagnostics
     if (error.code === 'EADDRINUSE') {
-      console.error(`[charlie] Port ${PORT} is already in use. Try a different port or kill the process using it.`);
+      console.error(`[foxtrot] Port ${PORT} is already in use. Try a different port or kill the process using it.`);
     } else if (error.code === 'EACCES') {
-      console.error(`[charlie] Permission denied to bind to port ${PORT}. Ports below 1024 require root/admin privileges.`);
+      console.error(`[foxtrot] Permission denied to bind to port ${PORT}. Ports below 1024 require root/admin privileges.`);
     }
     
     process.exit(1);
@@ -19602,9 +19602,9 @@ async function startServer() {
 
   SERVER.on('error', (error) => {
     if (error && error.code === 'EADDRINUSE') {
-      console.error(`[charlie] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
+      console.error(`[foxtrot] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
     } else {
-      console.error('[charlie] Server failed to start:', error?.message || error);
+      console.error('[foxtrot] Server failed to start:', error?.message || error);
     }
     process.exit(1);
   });
@@ -19613,7 +19613,7 @@ async function startServer() {
 // Start the server after all routes are defined when executed directly
 if (process.argv[1] === __filename) {
   startServer().catch((error) => {
-    console.error('[charlie] Unexpected startup failure:', error?.message || error);
+    console.error('[foxtrot] Unexpected startup failure:', error?.message || error);
     process.exit(1);
   });
 }

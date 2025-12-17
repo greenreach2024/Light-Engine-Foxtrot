@@ -178,11 +178,11 @@ async function runTests() {
     failed++;
   }
 
-  // Test 6: Check if app.charlie.js dispatches groups-updated event
-  console.log('\n📋 Test 6: Verify app.charlie.js dispatches groups-updated event');
+  // Test 6: Check if app.foxtrot.js dispatches groups-updated event
+  console.log('\n📋 Test 6: Verify app.foxtrot.js dispatches groups-updated event');
   try {
     const js = await new Promise((resolve, reject) => {
-      http.get(`${BASE_URL}/app.charlie.js`, (res) => {
+      http.get(`${BASE_URL}/app.foxtrot.js`, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => resolve(data));
@@ -193,16 +193,16 @@ async function runTests() {
     const hasGroupsUpdatedDispatch = js.includes("document.dispatchEvent(new Event('groups-updated'))");
     
     if (hasGroupsUpdatedDispatch) {
-      console.log('✅ app.charlie.js dispatches groups-updated event');
+      console.log('✅ app.foxtrot.js dispatches groups-updated event');
       console.log('   This should trigger dropdown population after data loads');
       passed++;
     } else {
-      console.log('❌ app.charlie.js does NOT dispatch groups-updated event');
+      console.log('❌ app.foxtrot.js does NOT dispatch groups-updated event');
       console.log('   Dropdowns may not populate when page loads!');
       failed++;
     }
   } catch (err) {
-    console.log(`❌ Failed to load app.charlie.js: ${err.message}`);
+    console.log(`❌ Failed to load app.foxtrot.js: ${err.message}`);
     failed++;
   }
 

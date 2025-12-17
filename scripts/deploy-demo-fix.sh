@@ -97,7 +97,7 @@ echo ""
 echo -e "${YELLOW}→ Restarting application...${NC}"
 ssh "$EC2_HOST" << 'ENDSSH'
   # Stop existing process
-  pm2 stop light-engine || pkill -f server-charlie.js || true
+  pm2 stop light-engine || pkill -f server-foxtrot.js || true
   
   # Start with demo mode
   cd ~/Light-Engine-Delta

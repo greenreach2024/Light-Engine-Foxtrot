@@ -1,6 +1,6 @@
 # GreenReach Energy Forecaster
 
-The Energy Forecaster extends Light Engine Charlie with data models that translate crop lighting recipes into energy and operating cost projections. It is designed to operate as a sidecar analytics service that draws from the existing Groups V2 state, spectral solver outputs, and fixture inventories stored in `public/data/`.
+The Energy Forecaster extends Light Engine Foxtrot with data models that translate crop lighting recipes into energy and operating cost projections. It is designed to operate as a sidecar analytics service that draws from the existing Groups V2 state, spectral solver outputs, and fixture inventories stored in `public/data/`.
 
 ## Capabilities
 
@@ -36,7 +36,7 @@ The CLI prints daily kWh, forecast cost, and per-channel watt distribution using
 
 ## Integration Hooks
 
-- `forecaster-service.js` exposes a class that can be mounted in `server-charlie.js`
+- `forecaster-service.js` exposes a class that can be mounted in `server-foxtrot.js`
 - Aggregated metrics can be published to `public/data/` or streamed over WebSocket
 - Pipelines produce CSV summaries suitable for finance or sustainability teams
 

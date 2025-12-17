@@ -153,6 +153,6 @@ makeRequest('GET', '/health')
     return testWizardSystem();
   })
   .catch(() => {
-    console.log('🔴 Server not running. Please start server-charlie.js first.');
-    console.log('Run: node server-charlie.js');
+    console.log('🔴 Server not running. Please start server-foxtrot.js first.');
+    console.log('Run: node server-foxtrot.js');
   });

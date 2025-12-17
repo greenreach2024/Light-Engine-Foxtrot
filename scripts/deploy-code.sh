@@ -77,7 +77,7 @@ DEPLOY_DIR=$(mktemp -d)
 echo "  Using temp dir: $DEPLOY_DIR"
 
 # Copy files
-cp -r backend public server-charlie.js package.json requirements.txt scripts "$DEPLOY_DIR/"
+cp -r backend public server-foxtrot.js package.json requirements.txt scripts "$DEPLOY_DIR/"
 
 # Create tarball
 tar -czf light-engine-deploy.tar.gz -C "$DEPLOY_DIR" .
@@ -235,7 +235,7 @@ module.exports = {
   apps: [
     {
       name: 'light-engine-nodejs',
-      script: 'server-charlie.js',
+      script: 'server-foxtrot.js',
       cwd: '/opt/light-engine',
       instances: 1,
       exec_mode: 'cluster',
