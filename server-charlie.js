@@ -12428,16 +12428,69 @@ app.get('/api/inventory/forecast', (req, res) => {
 
 /**
  * GET /api/tray-formats
- * Returns available tray format definitions
+ * Returns available tray format definitions - proxied to backend
  */
-app.get('/api/tray-formats', (req, res) => {
-  const formats = [
-    { id: 'microgreens-10x20', name: '10x20 Microgreens Tray', plantCount: 200 },
-    { id: 'lettuce-5x10', name: '5x10 Lettuce Tray', plantCount: 24 },
-    { id: 'tower-24', name: '24-Slot Tower', plantCount: 24 },
-    { id: 'custom', name: 'Custom Format', plantCount: 0 }
-  ];
-  res.json(formats);
+app.get('/api/tray-formats', async (req, res) => {
+  try {
+    const backendUrl = 'http://localhost:8000/api/tray-formats';
+    const response = await fetch(backendUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`);
+    }
+    
+    const formats = await response.json();
+    res.json(formats);
+  } catch (error) {
+    console.error('[tray-formats] Failed to load formats from backend:', error);
+    // Fallback to default formats if backend is unavailable
+    res.json([
+      {
+        trayFormatId: 'microgreens-10x20',
+        name: '10x20 Microgreens Tray',
+        plantSiteCount: 200,
+        systemType: 'NFT',
+        isWeightBased: false,
+        isCustom: false
+      },
+      {
+        trayFormatId: 'lettuce-5x10',
+        name: '5x10 Lettuce Tray',
+        plantSiteCount: 24,
+        systemType: 'DWC',
+        isWeightBased: false,
+        isCustom: false
+      }
+    ]);
+  }
+});
+
+/**
+ * POST /api/tray-formats
+ * Create a new custom tray format - proxied to backend
+ */
+app.post('/api/tray-formats', async (req, res) => {
+  try {
+    const backendUrl = 'http://localhost:8000/api/tray-formats';
+    const response = await fetch(backendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(req.body)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(errorData.detail || `Backend returned ${response.status}`);
+    }
+    
+    const result = await response.json();
+    res.json(result);
+  } catch (error) {
+    console.error('[tray-formats] Failed to create format:', error);
+    res.status(500).json({ error: error.message || 'Failed to create format' });
+  }
 });
 
 /**
