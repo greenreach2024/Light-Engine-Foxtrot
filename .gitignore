@@ -1,59 +1,73 @@
-# Python
+node_modules
 venv/
+.venv
+.venv312/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-build/
-dist/
-*.egg-info/
-
-# Node
-node_modules/
-npm-debug.log*
-yarn-error.log*
-
-# Environment
+.pytest_cache/
+.mypy_cache/
 .env
 .env.local
-.env.development
+.env.*.local
 
-# Database (runtime only)
-*.db
-*.sqlite
-lightengine.db
+.DS_Store
 
-# Logs
-logs/
+# AWS credentials and config
+.env.aws
+~/.aws/credentials
+~/.aws/config
+*.pem
+*.key
+cloudfront-config*.json
+iam-policy*.json
+budget.json
+cors-config.json
+lifecycle-policy.json
+
+# Logs & backups
 *.log
+nohup.out
+*backup*
+* 2.js
+* 2.json
 
-# Runtime cache/data (don't commit)
+# Runtime state
+data/automation/
+
+# Runtime cache files (don't commit)
 public/data/env-cache.json
 public/data/devices.cache.json
 public/data/anomaly-history.json
 public/data/harvest-log.json
 
-# OS
-.DS_Store
-Thumbs.db
-.AppleDouble
-.LSOverride
+# Database files (runtime only)
+*.db
+*.sqlite
+lightengine.db
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Backups directory
+backups/
+*.bak
 
-# AWS
+# Old markdown docs (if regenerated)
+*_COMPLETE.md
+*_FIX.md
+*_SUMMARY.md
+*_STATUS.md
+*_TROUBLESHOOTING.md
+
+# Duplicates & logs
+* 2.js
+* 2.json
+*.log
+nohup.out
+
+# Firmware builds
+firmware/**/.pio/
+firmware/**/.pioenvs/
+firmware/**/.piolibdeps/
+*.zip
+
+# Elastic Beanstalk Files
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
-
-# Backups
-backups/
-*.backup
-*.bak

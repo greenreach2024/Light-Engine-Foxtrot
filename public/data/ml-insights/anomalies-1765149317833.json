@@ -1,0 +1,12 @@
+{
+  "job": "anomalies",
+  "timestamp": "2025-12-07T23:15:17.833Z",
+  "data": {
+    "error": "No JSON output from anomaly detector",
+    "stdout": "Not enough data yet (need at least 10 readings)\n"
+  },
+  "metadata": {
+    "generatedAt": "2025-12-07T23:15:17.833Z",
+    "validUntil": "2025-12-08T23:15:17.833Z"
+  }
+}

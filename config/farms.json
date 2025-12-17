@@ -1,0 +1,201 @@
+{
+  "farms": [
+    {
+      "farmId": "GR-00001",
+      "name": "Sandbox Test Farm",
+      "url": "http://192.168.2.80:8091",
+      "region": "west",
+      "enabled": true,
+      "description": "Local development farm",
+      "contact": {
+        "email": "admin@sandbox.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 37.7749,
+        "lng": -122.4194
+      }
+    },
+    {
+      "farmId": "GR-00002",
+      "name": "Farm Site 2",
+      "url": "http://farm2.greenreach.local:8091",
+      "region": "west",
+      "enabled": false,
+      "description": "Production farm - West Coast",
+      "contact": {
+        "email": "admin@farm2.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 37.8044,
+        "lng": -122.2712
+      }
+    },
+    {
+      "farmId": "GR-00003",
+      "name": "Farm Site 3",
+      "url": "http://farm3.greenreach.local:8091",
+      "region": "west",
+      "enabled": false,
+      "description": "Production farm - West Coast",
+      "contact": {
+        "email": "admin@farm3.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 34.0522,
+        "lng": -118.2437
+      }
+    },
+    {
+      "farmId": "GR-00004",
+      "name": "Farm Site 4",
+      "url": "http://farm4.greenreach.local:8091",
+      "region": "central",
+      "enabled": false,
+      "description": "Production farm - Central",
+      "contact": {
+        "email": "admin@farm4.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 41.8781,
+        "lng": -87.6298
+      }
+    },
+    {
+      "farmId": "GR-00005",
+      "name": "Farm Site 5",
+      "url": "http://farm5.greenreach.local:8091",
+      "region": "central",
+      "enabled": false,
+      "description": "Production farm - Central",
+      "contact": {
+        "email": "admin@farm5.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 39.7392,
+        "lng": -104.9903
+      }
+    },
+    {
+      "farmId": "GR-00006",
+      "name": "Farm Site 6",
+      "url": "http://farm6.greenreach.local:8091",
+      "region": "east",
+      "enabled": false,
+      "description": "Production farm - East Coast",
+      "contact": {
+        "email": "admin@farm6.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 40.7128,
+        "lng": -74.0060
+      }
+    },
+    {
+      "farmId": "GR-00007",
+      "name": "Farm Site 7",
+      "url": "http://farm7.greenreach.local:8091",
+      "region": "east",
+      "enabled": false,
+      "description": "Production farm - East Coast",
+      "contact": {
+        "email": "admin@farm7.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 42.3601,
+        "lng": -71.0589
+      }
+    },
+    {
+      "farmId": "GR-00008",
+      "name": "Farm Site 8",
+      "url": "http://farm8.greenreach.local:8091",
+      "region": "east",
+      "enabled": false,
+      "description": "Production farm - East Coast",
+      "contact": {
+        "email": "admin@farm8.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 33.7490,
+        "lng": -84.3880
+      }
+    },
+    {
+      "farmId": "GR-00009",
+      "name": "Farm Site 9",
+      "url": "http://farm9.greenreach.local:8091",
+      "region": "west",
+      "enabled": false,
+      "description": "Production farm - West Coast",
+      "contact": {
+        "email": "admin@farm9.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 45.5152,
+        "lng": -122.6784
+      }
+    },
+    {
+      "farmId": "GR-00010",
+      "name": "Farm Site 10",
+      "url": "http://farm10.greenreach.local:8091",
+      "region": "central",
+      "enabled": false,
+      "description": "Production farm - Central",
+      "contact": {
+        "email": "admin@farm10.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 29.7604,
+        "lng": -95.3698
+      }
+    },
+    {
+      "farmId": "GR-00011",
+      "name": "Farm Site 11",
+      "url": "http://farm11.greenreach.local:8091",
+      "region": "central",
+      "enabled": false,
+      "description": "Production farm - Central",
+      "contact": {
+        "email": "admin@farm11.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 32.7767,
+        "lng": -96.7970
+      }
+    },
+    {
+      "farmId": "GR-00012",
+      "name": "Farm Site 12",
+      "url": "http://farm12.greenreach.local:8091",
+      "region": "east",
+      "enabled": false,
+      "description": "Production farm - East Coast",
+      "contact": {
+        "email": "admin@farm12.greenreach.local",
+        "phone": ""
+      },
+      "coordinates": {
+        "lat": 25.7617,
+        "lng": -80.1918
+      }
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "updated": "2025-12-07T00:00:00Z",
+    "description": "GreenReach multi-farm registry. Add new farms by appending to the farms array. Set enabled: true when farm is ready for production."
+  }
+}

@@ -1,0 +1,5 @@
+2025-10-13T17:01:57Z | Automation moved to Sidebar; IA Assist header opens same drawer
+2025-10-13T17:33:56Z | 2 confirmed
+2025-10-13T20:20:50Z | Relocated Dehumidifier/Unassigned/Spectragraph into Equipment+Groups v2
+2025-10-13T21:09:22Z | Relocated Dehumidifier to Equipment; Unassigned Lights + Spectragraph to Groups v2
+2025-10-13T22:45:34Z | FastAPI env aligned. Charlie single-origin verified.

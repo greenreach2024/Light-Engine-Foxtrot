@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build & Upload ESP32 firmware with pH calibration",
+			"type": "shell",
+			"command": "pio run --target upload"
+		}
+	]
+}

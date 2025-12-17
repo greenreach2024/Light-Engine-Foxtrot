@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Light Engine Charlie - Sensor Data Aggregator
+
+Parameters:
+  SwitchBotToken:
+    Type: String
+    Description: SwitchBot API Token
+    NoEcho: true
+  
+  SwitchBotSecret:
+    Type: String
+    Description: SwitchBot API Secret
+    NoEcho: true
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256
+    Runtime: nodejs20.x
+    Architectures:
+      - arm64
+
+Resources:
+  SensorAggregatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: index.handler
+      Description: Aggregates SwitchBot sensor data for Light Engine Charlie
+      Environment:
+        Variables:
+          SWITCHBOT_TOKEN: !Ref SwitchBotToken
+          SWITCHBOT_SECRET: !Ref SwitchBotSecret
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+          AllowHeaders:
+            - "*"
+
+Outputs:
+  FunctionUrl:
+    Description: "Lambda Function URL"
+    Value: !GetAtt SensorAggregatorFunctionUrl.FunctionUrl
+  
+  FunctionArn:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt SensorAggregatorFunction.Arn

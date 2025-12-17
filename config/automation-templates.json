@@ -1,0 +1,486 @@
+{
+  "farm_automation_templates": {
+    "greenhouse_climate_control": {
+      "name": "Complete Greenhouse Climate Control",
+      "description": "Comprehensive temperature, humidity, and CO2 management for greenhouse zones",
+      "rules": [
+        {
+          "id": "greenhouse-high-temp-exhaust",
+          "name": "High Temperature → Exhaust Fans",
+          "trigger": {
+            "type": "temperature",
+            "value": { "operator": "gt", "threshold": 28 }
+          },
+          "actions": [
+            {
+              "type": "kasa_control",
+              "deviceId": "exhaust-fan-north",
+              "command": "turnOn"
+            },
+            {
+              "type": "kasa_control", 
+              "deviceId": "exhaust-fan-south",
+              "command": "turnOn"
+            },
+            {
+              "type": "ifttt_trigger",
+              "event": "greenhouse_high_temp",
+              "data": {
+                "value1": "High temperature alert",
+                "value2": "Temperature: {value}°C", 
+                "value3": "Zone: {deviceId}"
+              }
+            }
+          ],
+          "conditions": {
+            "timeRange": { "start": 6, "end": 20 }
+          },
+          "options": {
+            "debounceMs": 300000
+          }
+        },
+        {
+          "id": "greenhouse-low-humidity-misters", 
+          "name": "Low Humidity → Misting System",
+          "trigger": {
+            "type": "humidity",
+            "value": { "operator": "lt", "threshold": 60 }
+          },
+          "actions": [
+            {
+              "type": "switchbot_control",
+              "deviceId": "mister-zone-1",
+              "command": "turnOn"
+            },
+            {
+              "type": "switchbot_control",
+              "deviceId": "mister-zone-2", 
+              "command": "turnOn"
+            }
+          ],
+          "conditions": {
+            "timeRange": { "start": 8, "end": 18 }
+          },
+          "options": {
+            "debounceMs": 600000
+          }
+        },
+        {
+          "id": "greenhouse-high-co2-ventilation",
+          "name": "High CO2 → Ventilation System", 
+          "trigger": {
+            "type": "co2",
+            "value": { "operator": "gt", "threshold": 1500 }
+          },
+          "actions": [
+            {
+              "type": "kasa_control",
+              "deviceId": "ventilation-intake",
+              "command": "turnOn"
+            },
+            {
+              "type": "kasa_control",
+              "deviceId": "ventilation-exhaust", 
+              "command": "turnOn"
+            },
+            {
+              "type": "notification",
+              "title": "High CO2 Alert",
+              "message": "CO2 level {value} ppm in {deviceId} - ventilation activated"
+            }
+          ],
+          "options": {
+            "debounceMs": 900000
+          }
+        }
+      ]
+    },
+    
+    "security_monitoring": {
+      "name": "Farm Security & Monitoring",
+      "description": "Motion detection, perimeter monitoring, and security lighting automation",
+      "rules": [
+        {
+          "id": "motion-security-lights",
+          "name": "Motion Detection → Security Lighting",
+          "trigger": {
+            "type": "motion",
+            "value": { "operator": "eq", "threshold": 1 }
+          },
+          "actions": [
+            {
+              "type": "scenario",
+              "scenarioId": "security-lighting-full",
+              "parameters": { "duration": 600000 }
+            }
+          ],
+          "conditions": {
+            "timeRange": { "start": 20, "end": 6 }
+          },
+          "options": {
+            "debounceMs": 30000
+          }
+        },
+        {
+          "id": "door-contact-alert",
+          "name": "Door/Gate Contact → Security Alert",
+          "trigger": {
+            "source": "switchbot",
+            "type": "contact",
+            "value": { "operator": "eq", "threshold": 1 }
+          },
+          "actions": [
+            {
+              "type": "ifttt_trigger",
+              "event": "security_breach_alert",
+              "data": {
+                "value1": "Unauthorized access detected",
+                "value2": "Device: {deviceId}",
+                "value3": "Time: {timestamp}"
+              }
+            },
+            {
+              "type": "kasa_control",
+              "deviceId": "security-camera-power",
+              "command": "turnOn"
+            }
+          ],
+          "options": {
+            "debounceMs": 10000
+          }
+        }
+      ]
+    },
+
+    "irrigation_management": {
+      "name": "Smart Irrigation Control",
+      "description": "Weather-based and soil moisture irrigation automation",
+      "rules": [
+        {
+          "id": "low-soil-moisture-irrigation",
+          "name": "Low Soil Moisture → Irrigation",
+          "trigger": {
+            "type": "soil_moisture", 
+            "value": { "operator": "lt", "threshold": 30 }
+          },
+          "actions": [
+            {
+              "type": "switchbot_control",
+              "deviceId": "irrigation-valve-main",
+              "command": "turnOn"
+            },
+            {
+              "type": "ifttt_trigger",
+              "event": "irrigation_started",
+              "data": {
+                "value1": "Irrigation started",
+                "value2": "Soil moisture: {value}%",
+                "value3": "Zone: {deviceId}"
+              }
+            }
+          ],
+          "conditions": {
+            "timeRange": { "start": 6, "end": 10 }
+          },
+          "options": {
+            "debounceMs": 1800000
+          }
+        },
+        {
+          "id": "weather-rain-irrigation-disable",
+          "name": "Rain Detection → Disable Irrigation",
+          "trigger": {
+            "source": "ifttt-weather",
+            "type": "precipitation",
+            "value": { "operator": "gt", "threshold": 0.1 }
+          },
+          "actions": [
+            {
+              "type": "switchbot_control",
+              "deviceId": "irrigation-valve-main",
+              "command": "turnOff"
+            },
+            {
+              "type": "switchbot_control",
+              "deviceId": "irrigation-valve-secondary",
+              "command": "turnOff"
+            },
+            {
+              "type": "notification",
+              "title": "Irrigation Disabled",
+              "message": "Rain detected - irrigation system disabled"
+            }
+          ],
+          "options": {
+            "debounceMs": 300000
+          }
+        }
+      ]
+    },
+
+    "energy_optimization": {
+      "name": "Energy Management & Optimization",
+      "description": "Smart power management based on time-of-use and demand",
+      "rules": [
+        {
+          "id": "peak-hours-load-reduction",
+          "name": "Peak Hours → Reduce Non-Critical Loads",
+          "trigger": {
+            "source": "ifttt-schedule",
+            "type": "schedule",
+            "value": { "operator": "eq", "threshold": 1 }
+          },
+          "actions": [
+            {
+              "type": "kasa_control",
+              "deviceId": "auxiliary-lighting",
+              "command": "turnOff"
+            },
+            {
+              "type": "kasa_control",
+              "deviceId": "backup-pumps",
+              "command": "turnOff"
+            },
+            {
+              "type": "notification",
+              "title": "Energy Optimization",
+              "message": "Peak hours - reducing non-critical electrical loads"
+            }
+          ],
+          "schedule": {
+            "hours": { "start": 16, "end": 20 },
+            "days": [1, 2, 3, 4, 5]
+          }
+        },
+        {
+          "id": "off-peak-charging",
+          "name": "Off-Peak Hours → Enable Equipment Charging",
+          "trigger": {
+            "source": "ifttt-schedule", 
+            "type": "schedule",
+            "value": { "operator": "eq", "threshold": 2 }
+          },
+          "actions": [
+            {
+              "type": "kasa_control",
+              "deviceId": "equipment-chargers",
+              "command": "turnOn"
+            },
+            {
+              "type": "kasa_control",
+              "deviceId": "battery-backup-charger",
+              "command": "turnOn"
+            }
+          ],
+          "schedule": {
+            "hours": { "start": 22, "end": 6 }
+          }
+        }
+      ]
+    },
+
+    "livestock_monitoring": {
+      "name": "Livestock Area Monitoring",
+      "description": "Temperature, air quality, and safety monitoring for animal areas",
+      "rules": [
+        {
+          "id": "livestock-high-temp-cooling",
+          "name": "High Temperature → Livestock Cooling",
+          "trigger": {
+            "type": "temperature",
+            "value": { "operator": "gt", "threshold": 25 }
+          },
+          "actions": [
+            {
+              "type": "kasa_control",
+              "deviceId": "livestock-fans",
+              "command": "turnOn"
+            },
+            {
+              "type": "switchbot_control",
+              "deviceId": "water-mister-livestock",
+              "command": "turnOn"
+            },
+            {
+              "type": "ifttt_trigger",
+              "event": "livestock_heat_stress_alert",
+              "data": {
+                "value1": "Heat stress prevention activated",
+                "value2": "Temperature: {value}°C"
+              }
+            }
+          ],
+          "conditions": {
+            "timeRange": { "start": 10, "end": 18 }
+          },
+          "options": {
+            "debounceMs": 600000
+          }
+        },
+        {
+          "id": "livestock-low-temp-heating",
+          "name": "Low Temperature → Livestock Heating",
+          "trigger": {
+            "type": "temperature",
+            "value": { "operator": "lt", "threshold": 5 }
+          },
+          "actions": [
+            {
+              "type": "kasa_control",
+              "deviceId": "livestock-heaters",
+              "command": "turnOn"
+            },
+            {
+              "type": "ifttt_trigger",
+              "event": "livestock_cold_alert",
+              "data": {
+                "value1": "Cold weather protection activated",
+                "value2": "Temperature: {value}°C"
+              }
+            }
+          ],
+          "conditions": {
+            "timeRange": { "start": 20, "end": 8 }
+          },
+          "options": {
+            "debounceMs": 900000
+          }
+        }
+      ]
+    },
+
+    "equipment_maintenance": {
+      "name": "Equipment Health & Maintenance",
+      "description": "Proactive equipment monitoring and maintenance alerts",
+      "rules": [
+        {
+          "id": "equipment-runtime-maintenance",
+          "name": "High Equipment Runtime → Maintenance Alert",
+          "trigger": {
+            "type": "runtime_hours",
+            "value": { "operator": "gt", "threshold": 100 }
+          },
+          "actions": [
+            {
+              "type": "ifttt_trigger",
+              "event": "equipment_maintenance_due",
+              "data": {
+                "value1": "Equipment maintenance required",
+                "value2": "Device: {deviceId}",
+                "value3": "Runtime: {value} hours"
+              }
+            },
+            {
+              "type": "notification",
+              "title": "Maintenance Alert",
+              "message": "Equipment {deviceId} has {value} runtime hours - maintenance recommended"
+            }
+          ],
+          "options": {
+            "debounceMs": 86400000
+          }
+        },
+        {
+          "id": "power-consumption-anomaly",
+          "name": "Abnormal Power Consumption → Investigation Alert",
+          "trigger": {
+            "type": "power_consumption",
+            "value": { "operator": "outside", "range": { "min": 100, "max": 500 } }
+          },
+          "actions": [
+            {
+              "type": "ifttt_trigger",
+              "event": "power_anomaly_detected",
+              "data": {
+                "value1": "Power consumption anomaly",
+                "value2": "Device: {deviceId}",
+                "value3": "Power: {value}W"
+              }
+            }
+          ],
+          "options": {
+            "debounceMs": 300000
+          }
+        }
+      ]
+    }
+  },
+
+  "device_mapping_examples": {
+    "kasa_devices": {
+      "exhaust-fan-north": "TP-Link Kasa smart plug controlling north exhaust fan",
+      "exhaust-fan-south": "TP-Link Kasa smart plug controlling south exhaust fan", 
+      "ventilation-intake": "Kasa switch for intake ventilation system",
+      "ventilation-exhaust": "Kasa switch for exhaust ventilation system",
+      "security-camera-power": "Kasa plug providing power to security cameras",
+      "auxiliary-lighting": "Kasa dimmer for non-essential lighting",
+      "backup-pumps": "Kasa switch for backup water pumps",
+      "equipment-chargers": "Kasa plug for equipment charging station",
+      "battery-backup-charger": "Kasa switch for battery backup charging",
+      "livestock-fans": "Kasa switch controlling livestock cooling fans",
+      "livestock-heaters": "Kasa switch for livestock heating elements"
+    },
+    
+    "switchbot_devices": {
+      "mister-zone-1": "SwitchBot controlling misting system zone 1",
+      "mister-zone-2": "SwitchBot controlling misting system zone 2",
+      "irrigation-valve-main": "SwitchBot bot pressing irrigation valve button",
+      "irrigation-valve-secondary": "SwitchBot controlling secondary irrigation",
+      "water-mister-livestock": "SwitchBot mister for livestock cooling"
+    },
+
+    "sensor_mappings": {
+      "temperature": "°C - from SwitchBot meters, IFTTT weather, env ingest",
+      "humidity": "% RH - from SwitchBot meters, IFTTT weather, env ingest", 
+      "co2": "ppm - from CO2 sensors via env ingest",
+      "soil_moisture": "% - from soil moisture sensors",
+      "motion": "0/1 - from SwitchBot motion sensors or IFTTT security",
+      "contact": "0/1 - from SwitchBot contact sensors (doors/gates)",
+      "precipitation": "mm - from IFTTT weather services",
+      "runtime_hours": "hours - from equipment monitoring systems",
+      "power_consumption": "watts - from smart plugs with energy monitoring"
+    }
+  },
+
+  "ifttt_integration_examples": {
+    "weather_triggers": {
+      "service": "Weather Underground",
+      "webhook_events": [
+        "weather_temp_change",
+        "weather_humidity_change", 
+        "weather_rain_detected",
+        "weather_wind_speed_high"
+      ],
+      "sample_applet": {
+        "if": "Weather Underground - Current condition changes to",
+        "then": "Webhooks - Make a web request",
+        "url": "https://your-domain.com/integrations/ifttt/incoming/weather_temp_change",
+        "method": "POST",
+        "body": "{\"value1\": \"{{TempCelsius}}\", \"value2\": \"{{Humidity}}\", \"device_id\": \"outdoor_weather\"}"
+      }
+    },
+    
+    "schedule_triggers": {
+      "service": "Date & Time",
+      "webhook_events": [
+        "schedule_peak_hours_start",
+        "schedule_peak_hours_end",
+        "schedule_maintenance_window"
+      ],
+      "sample_applet": {
+        "if": "Date & Time - Every day at",
+        "then": "Webhooks - Make a web request", 
+        "url": "https://your-domain.com/integrations/ifttt/incoming/schedule_trigger",
+        "body": "{\"value1\": \"peak_hours_start\", \"device_id\": \"scheduler\"}"
+      }
+    },
+
+    "notification_outputs": {
+      "farm_alert_high_temp": "Send email/SMS for high temperature alerts",
+      "security_breach_alert": "Send push notification for security breaches",
+      "irrigation_started": "Log irrigation events to Google Sheets",
+      "equipment_maintenance_due": "Create task in project management system",
+      "livestock_heat_stress_alert": "Send urgent alert to farm manager"
+    }
+  }
+}

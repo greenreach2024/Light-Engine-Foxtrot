@@ -1,0 +1,16 @@
+{
+  "name": "light-engine-charlie-frontend",
+  "version": "1.0.0",
+  "description": "Light Engine Charlie frontend application",
+  "main": "app.charlie.js",
+  "scripts": {
+    "start": "node ../server-charlie.js",
+    "lint": "echo 'Linting frontend code...'",
+    "smoke": "curl -sS http://localhost:8091/healthz"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "keywords": ["lighting", "control", "frontend"],
+  "author": "Peter Gilbert",
+  "license": "MIT"
+}

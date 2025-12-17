@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sensor Zone Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #1a1a2e;
+      color: #e4e4e7;
+      padding: 20px;
+    }
+    pre {
+      background: #0f172a;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      background: rgba(59, 130, 246, 0.1);
+      border-left: 3px solid #3b82f6;
+    }
+    .success { color: #10b981; }
+    .error { color: #ef4444; }
+    .warning { color: #f59e0b; }
+  </style>
+</head>
+<body>
+  <h1>Sensor Zone Assignment Test</h1>
+  
+  <div class="section">
+    <h2>Test 1: IoT Devices with Zones</h2>
+    <div id="test1">Loading...</div>
+  </div>
+  
+  <div class="section">
+    <h2>Test 2: Zone Summaries</h2>
+    <div id="test2">Loading...</div>
+  </div>
+  
+  <div class="section">
+    <h2>Test 3: Sensor Filtering Logic</h2>
+    <div id="test3">Loading...</div>
+  </div>
+
+  <script>
+    async function runTests() {
+      try {
+        // Test 1: Check IoT devices
+        const iotResponse = await fetch('/data/iot-devices.json');
+        const iotDevices = await iotResponse.json();
+        
+        const sensors = iotDevices.filter(device => {
+          if (!device.telemetry) return false;
+          const category = (device.category || '').toLowerCase();
+          const type = (device.type || '').toLowerCase();
+          return category.includes('sensor') || 
+                 type.includes('sensor') ||
+                 category === 'woiosensor' ||
+                 category === 'wosensorth' ||
+                 (device.telemetry.temperature != null || device.telemetry.humidity != null);
+        });
+        
+        const sensorsWithZone = sensors.filter(s => s.zone != null);
+        
+        document.getElementById('test1').innerHTML = `
+          <p class="success">✓ Found ${iotDevices.length} total IoT devices</p>
+          <p class="success">✓ Found ${sensors.length} sensors (with telemetry)</p>
+          <p class="${sensorsWithZone.length > 0 ? 'success' : 'error'}">
+            ${sensorsWithZone.length > 0 ? '✓' : '✗'} Found ${sensorsWithZone.length} sensors with zone assignments
+          </p>
+          <pre>${JSON.stringify(sensorsWithZone.map(s => ({
+            id: s.id,
+            name: s.name,
+            zone: s.zone,
+            room: s.room,
+            category: s.category,
+            temp: s.telemetry?.temperature,
+            humidity: s.telemetry?.humidity
+          })), null, 2)}</pre>
+        `;
+        
+        // Test 2: Check zone summaries
+        const roomMapResponse = await fetch('/data/room-map.json');
+        const roomMap = await roomMapResponse.json();
+        const zones = roomMap.zones || [];
+        
+        let zoneSummary = '<table border="1" cellpadding="5" style="border-collapse: collapse; color: #e4e4e7;">';
+        zoneSummary += '<tr><th>Zone</th><th>Name</th><th>Sensors</th><th>Avg Temp</th><th>Avg Humidity</th></tr>';
+        
+        for (const zone of zones) {
+          const zoneSensors = sensors.filter(s => s.zone === zone.zone);
+          
+          let avgTemp = null, avgHumidity = null;
+          if (zoneSensors.length > 0) {
+            const temps = zoneSensors.map(s => s.telemetry?.temperature).filter(t => t != null);
+            const humidities = zoneSensors.map(s => s.telemetry?.humidity).filter(h => h != null);
+            
+            if (temps.length > 0) avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+            if (humidities.length > 0) avgHumidity = (humidities.reduce((a, b) => a + b, 0) / humidities.length).toFixed(0);
+          }
+          
+          zoneSummary += `<tr>
+            <td>${zone.zone}</td>
+            <td>${zone.name}</td>
+            <td class="${zoneSensors.length > 0 ? 'success' : 'warning'}">${zoneSensors.length}</td>
+            <td>${avgTemp || '--'}</td>
+            <td>${avgHumidity || '--'}</td>
+          </tr>`;
+        }
+        zoneSummary += '</table>';
+        
+        document.getElementById('test2').innerHTML = zoneSummary;
+        
+        // Test 3: Show filtering logic details
+        const allDevices = iotDevices.slice(0, 10);
+        let filterDetails = '<table border="1" cellpadding="5" style="border-collapse: collapse; color: #e4e4e7;">';
+        filterDetails += '<tr><th>Device</th><th>Category</th><th>Type</th><th>Has Telemetry</th><th>Is Sensor?</th></tr>';
+        
+        for (const device of allDevices) {
+          const category = (device.category || '').toLowerCase();
+          const type = (device.type || '').toLowerCase();
+          const hasTelemetry = device.telemetry != null;
+          const isSensor = category.includes('sensor') || 
+                          type.includes('sensor') ||
+                          category === 'woiosensor' ||
+                          category === 'wosensorth' ||
+                          (device.telemetry?.temperature != null || device.telemetry?.humidity != null);
+          
+          filterDetails += `<tr>
+            <td>${device.name || device.id}</td>
+            <td>${device.category || '--'}</td>
+            <td>${device.type || '--'}</td>
+            <td class="${hasTelemetry ? 'success' : 'warning'}">${hasTelemetry ? 'Yes' : 'No'}</td>
+            <td class="${isSensor ? 'success' : ''}">${isSensor ? 'YES' : 'no'}</td>
+          </tr>`;
+        }
+        filterDetails += '</table>';
+        
+        document.getElementById('test3').innerHTML = filterDetails;
+        
+      } catch (error) {
+        document.body.innerHTML += `<div class="section"><p class="error">Error: ${error.message}</p></div>`;
+      }
+    }
+    
+    runTests();
+  </script>
+</body>
+</html>

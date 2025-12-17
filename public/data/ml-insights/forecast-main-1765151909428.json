@@ -1,0 +1,16 @@
+{
+  "job": "forecast-main",
+  "timestamp": "2025-12-07T23:58:29.428Z",
+  "data": {
+    "error": "Outdoor sensor validation failed",
+    "reason": "no_outdoor_sensor",
+    "outdoor_sensor": null,
+    "zone": "main",
+    "timestamp": "2025-12-07T23:58:29.428Z",
+    "ml_gated": true
+  },
+  "metadata": {
+    "generatedAt": "2025-12-07T23:58:29.428Z",
+    "validUntil": "2025-12-08T23:58:29.428Z"
+  }
+}

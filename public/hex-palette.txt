@@ -1,0 +1,27 @@
+# Light Engine Charlie - Color Palette
+# Brand colors from GreenReach website
+
+Primary Green: #16A34A
+Secondary Green: #22C55E
+Dark Green: #15803D
+Light Green: #86EFAC
+
+Accent Colors:
+Blue: #3B82F6
+Orange: #F97316
+Red: #EF4444
+Yellow: #EAB308
+
+Neutral Colors:
+Dark: #0F172A
+Medium: #475569
+Light: #CBD5E1
+Background: #F8FAFC
+
+Channel Colors (Spectral):
+Cool White: #E0F2FE
+Warm White: #FEF3C7
+Blue: #DBEAFE
+Red: #FECACA
+Far Red: #FCE7F3
+UV: #F3E8FF

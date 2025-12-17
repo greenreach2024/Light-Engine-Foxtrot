@@ -1,0 +1,5 @@
+{"scope":"GH-1","sensors":{"temp":24.1,"rh":61.5,"vpd":1.2,"co2":850},"meta":{"name":"Greenhouse 1","battery":88,"rssi":-62,"source":"SwitchBot"}}
+{"scope":"GH-2","sensors":{"temp":22.6,"rh":58.2,"vpd":1.0,"co2":780},"meta":{"name":"Greenhouse 2","battery":76,"rssi":-70,"source":"Azure"}}
+{"scope":"GH-1","sensors":{"temp":24.3}}
+{"scope":"GH-1","sensors":{"rh":62.1}}
+{"scope":"GH-2","sensors":{"co2":820}}

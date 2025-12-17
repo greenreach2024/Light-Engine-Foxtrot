@@ -1,0 +1,59 @@
+{
+  "plans": {
+    "lettuce-buttercrunch-21d": {
+      "name": "Buttercrunch Lettuce (21 day)",
+      "crop": "Lettuce",
+      "variety": "Buttercrunch",
+      "daysToHarvest": 21,
+      "stages": [
+        {"name": "Germination", "days": 3},
+        {"name": "Vegetative", "days": 14},
+        {"name": "Finishing", "days": 4}
+      ]
+    },
+    "basil-genovese-28d": {
+      "name": "Genovese Basil (28 day)",
+      "crop": "Basil",
+      "variety": "Genovese",
+      "daysToHarvest": 28,
+      "stages": [
+        {"name": "Germination", "days": 5},
+        {"name": "Vegetative", "days": 18},
+        {"name": "Finishing", "days": 5}
+      ]
+    },
+    "arugula-astro-14d": {
+      "name": "Astro Arugula (14 day)",
+      "crop": "Arugula",
+      "variety": "Astro",
+      "daysToHarvest": 14,
+      "stages": [
+        {"name": "Germination", "days": 3},
+        {"name": "Vegetative", "days": 8},
+        {"name": "Finishing", "days": 3}
+      ]
+    },
+    "kale-red-russian-35d": {
+      "name": "Red Russian Kale (35 day)",
+      "crop": "Kale",
+      "variety": "Red Russian",
+      "daysToHarvest": 35,
+      "stages": [
+        {"name": "Germination", "days": 4},
+        {"name": "Vegetative", "days": 25},
+        {"name": "Finishing", "days": 6}
+      ]
+    },
+    "spinach-bloomsdale-21d": {
+      "name": "Bloomsdale Spinach (21 day)",
+      "crop": "Spinach",
+      "variety": "Bloomsdale",
+      "daysToHarvest": 21,
+      "stages": [
+        {"name": "Germination", "days": 4},
+        {"name": "Vegetative", "days": 14},
+        {"name": "Finishing", "days": 3}
+      ]
+    }
+  }
+}

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Farm Data Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1a1a2e;
+      color: #e4e4e7;
+    }
+    pre {
+      background: #16213e;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    h2 {
+      color: #60a5fa;
+      margin-top: 30px;
+    }
+    .section {
+      margin-bottom: 30px;
+      border: 1px solid #3b82f6;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    .good { color: #10b981; }
+    .warn { color: #f59e0b; }
+    .bad { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Farm Data Diagnostic</h1>
+  
+  <div id="output"></div>
+
+  <script>
+    async function runDiagnostics() {
+      const output = document.getElementById('output');
+      let html = '';
+
+      // Test 1: /env endpoint
+      html += '<div class="section"><h2>1. /env Endpoint</h2>';
+      try {
+        const envResp = await fetch('/env');
+        const envData = await envResp.json();
+        
+        html += `<p class="good">✓ Endpoint accessible</p>`;
+        html += `<p>Total zones: <strong>${envData.zones?.length || 0}</strong></p>`;
+        
+        if (envData.zones && envData.zones.length > 0) {
+          html += '<h3>Zones:</h3>';
+          envData.zones.forEach((zone, i) => {
+            const temp = zone.sensors?.tempC?.current;
+            const humidity = zone.sensors?.rh?.current;
+            const vpd = zone.sensors?.vpd?.current;
+            
+            html += `<pre>${i + 1}. ${zone.id} - ${zone.name}
+   Temperature: ${temp != null ? temp.toFixed(1) + '°C' : 'N/A'}
+   Humidity: ${humidity != null ? humidity.toFixed(0) + '%' : 'N/A'}
+   VPD: ${vpd != null ? vpd.toFixed(2) + ' kPa' : 'N/A'}</pre>`;
+          });
+        } else {
+          html += '<p class="warn">⚠ No zones returned</p>';
+        }
+      } catch (err) {
+        html += `<p class="bad">✗ Error: ${err.message}</p>`;
+      }
+      html += '</div>';
+
+      // Test 2: room-map.json
+      html += '<div class="section"><h2>2. Room Map</h2>';
+      try {
+        const mapResp = await fetch('/data/room-map.json');
+        const mapData = await mapResp.json();
+        
+        html += `<p class="good">✓ File accessible</p>`;
+        html += `<p>Room: <strong>${mapData.name || 'N/A'}</strong></p>`;
+        html += `<p>Zones defined: <strong>${mapData.zones?.length || 0}</strong></p>`;
+        
+        if (mapData.zones && mapData.zones.length > 0) {
+          html += '<h3>Zone Definitions:</h3>';
+          mapData.zones.forEach(zone => {
+            html += `<pre>Zone ${zone.zone}: ${zone.name}
+   Grid: (${zone.x1},${zone.y1}) to (${zone.x2},${zone.y2})
+   Color: ${zone.color}</pre>`;
+          });
+        }
+        
+        html += `<p>Devices mapped: <strong>${mapData.devices?.length || 0}</strong></p>`;
+        
+        if (mapData.devices && mapData.devices.length > 0) {
+          html += '<h3>Device Zones:</h3><pre>';
+          const devicesByZone = {};
+          mapData.devices.forEach(d => {
+            const zone = d.snapshot?.zone || d.zone || 'unassigned';
+            if (!devicesByZone[zone]) devicesByZone[zone] = [];
+            devicesByZone[zone].push({
+              id: d.deviceId,
+              name: d.snapshot?.name || 'Unknown',
+              type: d.snapshot?.type || 'Unknown'
+            });
+          });
+          
+          Object.entries(devicesByZone).sort().forEach(([zone, devices]) => {
+            html += `\nZone ${zone}:\n`;
+            devices.forEach(d => {
+              html += `  - ${d.id}: ${d.name} (${d.type})\n`;
+            });
+          });
+          html += '</pre>';
+        }
+      } catch (err) {
+        html += `<p class="bad">✗ Error: ${err.message}</p>`;
+      }
+      html += '</div>';
+
+      // Test 3: iot-devices.json
+      html += '<div class="section"><h2>3. IoT Devices</h2>';
+      try {
+        const iotResp = await fetch('/data/iot-devices.json');
+        const iotData = await iotResp.json();
+        
+        html += `<p class="good">✓ File accessible</p>`;
+        html += `<p>Total devices: <strong>${iotData?.length || 0}</strong></p>`;
+        
+        if (Array.isArray(iotData)) {
+          const sensorsWithZones = iotData.filter(d => 
+            d.zone != null && 
+            (d.telemetry?.temperature != null || d.telemetry?.humidity != null)
+          );
+          
+          html += `<p>Sensors with telemetry: <strong>${sensorsWithZones.length}</strong></p>`;
+          
+          if (sensorsWithZones.length > 0) {
+            html += '<h3>Sensors by Zone:</h3>';
+            const byZone = {};
+            sensorsWithZones.forEach(d => {
+              if (!byZone[d.zone]) byZone[d.zone] = [];
+              byZone[d.zone].push(d);
+            });
+            
+            Object.entries(byZone).sort().forEach(([zone, devices]) => {
+              html += `<pre>Zone ${zone}:\n`;
+              devices.forEach(d => {
+                html += `  ${d.id} - ${d.name}
+    Temp: ${d.telemetry.temperature != null ? d.telemetry.temperature.toFixed(1) + '°C' : 'N/A'}
+    Humidity: ${d.telemetry.humidity != null ? d.telemetry.humidity.toFixed(0) + '%' : 'N/A'}\n`;
+              });
+              html += '</pre>';
+            });
+          } else {
+            html += '<p class="warn">⚠ No sensors with zone assignments and telemetry found</p>';
+          }
+        }
+      } catch (err) {
+        html += `<p class="bad">✗ Error: ${err.message}</p>`;
+      }
+      html += '</div>';
+
+      // Test 4: Data alignment
+      html += '<div class="section"><h2>4. Data Alignment Check</h2>';
+      try {
+        const [envResp, mapResp, iotResp] = await Promise.all([
+          fetch('/env'),
+          fetch('/data/room-map.json'),
+          fetch('/data/iot-devices.json')
+        ]);
+        
+        const envData = await envResp.json();
+        const mapData = await mapResp.json();
+        const iotData = await iotResp.json();
+        
+        const envZones = envData.zones?.length || 0;
+        const mapZones = mapData.zones?.length || 0;
+        const iotSensors = iotData.filter(d => 
+          d.zone != null && 
+          (d.telemetry?.temperature != null || d.telemetry?.humidity != null)
+        ).length;
+        
+        html += `<p>Zone definitions in room-map.json: <strong>${mapZones}</strong></p>`;
+        html += `<p>Sensors with zone assignments: <strong>${iotSensors}</strong></p>`;
+        html += `<p>Zones returned by /env: <strong>${envZones}</strong></p>`;
+        
+        if (mapZones > 0 && iotSensors > 0 && envZones > 0) {
+          html += '<p class="good">✓ All data sources populated</p>';
+        } else if (mapZones > 0 && iotSensors === 0) {
+          html += '<p class="warn">⚠ Zones defined but no sensors assigned</p>';
+        } else if (mapZones > 0 && envZones === 0) {
+          html += '<p class="bad">✗ Zones defined but /env returns none</p>';
+        } else {
+          html += '<p class="warn">⚠ Partial data available</p>';
+        }
+      } catch (err) {
+        html += `<p class="bad">✗ Error: ${err.message}</p>`;
+      }
+      html += '</div>';
+
+      output.innerHTML = html;
+    }
+
+    runDiagnostics();
+  </script>
+</body>
+</html>

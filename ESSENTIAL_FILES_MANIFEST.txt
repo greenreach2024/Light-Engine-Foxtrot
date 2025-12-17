@@ -1,0 +1,76 @@
+# Light Engine - Essential Production Files
+# Files to keep for production deployment and easy reinstall
+
+## Core Server Files
+server-charlie.js
+package.json
+package-lock.json
+ecosystem.config.cjs
+ecosystem.ml-jobs.config.cjs
+.env.example
+Procfile
+
+## Backend - Python/FastAPI
+backend/__init__.py
+backend/main.py
+backend/inventory_routes.py
+backend/auth.py
+backend/database.py
+backend/models.py
+backend/config.py
+backend/requirements.txt
+
+## Frontend - Web Application
+public/index.html
+public/app.charlie.js
+public/styles.charlie.css
+public/tray-inventory.html
+public/tray-setup.html
+public/farm-admin.html
+public/central-admin.html
+public/dashboard.html
+public/mobile-dashboard.html
+public/nutrient-dashboard.html
+public/billing-preview.html
+
+## Frontend - Essential Data Files
+public/data/lighting-recipes.json
+public/data/demo-farm-data.json
+public/data/env.json
+public/data/farm.json
+public/data/rooms.json
+public/data/groups.json
+public/data/schedules.json
+public/data/target-ranges.json
+public/data/controller.json
+public/data/nutrient-dashboard.json
+
+## Database Migrations
+alembic.ini
+alembic/env.py
+alembic/script.py.mako
+alembic/versions/*.py
+
+## Configuration Files
+config/growth-stages.json
+config/bus-map.yml
+
+## Essential Scripts
+scripts/convert-recipes-to-json.py
+scripts/smoke.js
+scripts/nutrient-push-setpoints.js
+
+## AWS Deployment (KEEP FOR REINSTALL)
+.ebignore
+.elasticbeanstalk/config.yml
+buildspec.yml
+deploy-aws-simple.sh
+
+## Documentation - Essential Only
+README.md
+QUICKSTART.md
+.github/copilot-instructions.md
+
+## Git Configuration
+.gitignore
+.gitattributes

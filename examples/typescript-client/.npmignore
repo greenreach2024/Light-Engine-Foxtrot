@@ -1,0 +1,30 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Development
+node_modules/
+.git/
+.gitignore
+tsconfig.json
+jest.config.js
+.eslintrc.js
+
+# Documentation (keep README but exclude others)
+docs/
+*.md
+!README.md
+
+# Build artifacts
+*.log
+npm-debug.log*
+.DS_Store
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

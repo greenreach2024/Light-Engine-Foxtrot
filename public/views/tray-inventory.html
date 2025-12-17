@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tray Inventory | Light Engine</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .nav-bar {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding: 0.75rem;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 8px;
+      flex-wrap: wrap;
+    }
+
+    .nav-bar a {
+      color: #94a3b8;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.9rem;
+    }
+
+    .nav-bar a:hover {
+      background: rgba(96, 165, 250, 0.1);
+      color: #60a5fa;
+    }
+
+    .nav-bar a.active {
+      background: rgba(96, 165, 250, 0.2);
+      color: #60a5fa;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(90deg, #60a5fa, #34d399);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header p {
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+
+    .action-cards {
+      display: grid;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .action-card {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .action-card:hover {
+      background: rgba(30, 41, 59, 1);
+      border-color: rgba(96, 165, 250, 0.5);
+      transform: translateY(-2px);
+    }
+
+    .action-card h2 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .action-card .icon {
+      font-size: 2rem;
+    }
+
+    .action-card p {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: #1e293b;
+      border-radius: 16px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .modal-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      font-size: 1.5rem;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.25rem;
+      line-height: 1;
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+    }
+
+    .scan-step {
+      display: none;
+    }
+
+    .scan-step.active {
+      display: block;
+    }
+
+    #qrReader {
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+
+    .button {
+      width: 100%;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .button-primary {
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      color: white;
+    }
+
+    .button-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    .button-secondary {
+      background: rgba(148, 163, 184, 0.2);
+      color: #f8fafc;
+      margin-top: 0.5rem;
+    }
+
+    .button-secondary:hover {
+      background: rgba(148, 163, 184, 0.3);
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 0.75rem;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 8px;
+      color: #f8fafc;
+      font-size: 1rem;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .recipe-list {
+      display: grid;
+      gap: 0.75rem;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+
+    .recipe-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 2px solid transparent;
+      border-radius: 8px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .recipe-card:hover {
+      border-color: rgba(96, 165, 250, 0.5);
+    }
+
+    .recipe-card.selected {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    .recipe-card h3 {
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .recipe-card p {
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+
+    .info-box {
+      background: rgba(52, 211, 153, 0.1);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .info-box.success {
+      background: rgba(34, 197, 94, 0.1);
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    .info-box h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .info-box dl {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .info-box dt {
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+
+    .info-box dd {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-left: 0;
+    }
+
+    .status-message {
+      text-align: center;
+      padding: 1rem;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(148, 163, 184, 0.3);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .back-link {
+      display: inline-block;
+      color: #60a5fa;
+      text-decoration: none;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav-bar">
+      <a href="/">Dashboard</a>
+      <a href="/views/tray-inventory.html" class="active">Tray Inventory</a>
+      <a href="/views/tray-setup.html">Tray Setup</a>
+      <a href="/farm-sales.html">Lot Traceability</a>
+    </div>
+    
+    <div class="header">
+      <h1>Tray Inventory</h1>
+      <p>Scan QR codes to manage tray lifecycle</p>
+    </div>
+
+    <div class="action-cards">
+      <div class="action-card" onclick="openSeedingFlow()">
+        <h2><span class="icon">+</span> Seed New Tray</h2>
+        <p>Scan tray QR, select crop recipe, record seed date</p>
+      </div>
+
+      <div class="action-card" onclick="openPlacementFlow()">
+        <h2><span class="icon">📍</span> Move Tray</h2>
+        <p>Scan tray and location QR to update placement</p>
+      </div>
+
+      <div class="action-card" onclick="openHarvestFlow()">
+        <h2><span class="icon">🌾</span> Record Harvest</h2>
+        <p>Scan tray QR and record harvest details</p>
+      </div>
+
+      <div class="action-card" onclick="window.location.href='/views/farm-inventory.html'">
+        <h2><span class="icon">&#9776;</span> View Inventory</h2>
+        <p>See current inventory and harvest forecast</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Seeding Flow Modal -->
+  <div id="seedingModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Seed New Tray</h2>
+        <button class="close-btn" onclick="closeModal('seedingModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Step 1: Scan Tray -->
+        <div class="scan-step active" data-step="1">
+          <h3 style="margin-bottom: 1rem;">Step 1: Scan Tray QR Code</h3>
+          <div id="qrReader"></div>
+          <button class="button button-secondary" onclick="manualTrayEntry()">Enter QR Manually</button>
+          <div id="scanStatus" class="status-message"></div>
+        </div>
+
+        <!-- Step 2: Select Recipe -->
+        <div class="scan-step" data-step="2">
+          <h3 style="margin-bottom: 1rem;">Step 2: Select Crop Recipe</h3>
+          <input type="search" id="recipeSearch" class="form-group" placeholder="Search recipes..." 
+                 style="margin-bottom: 1rem;" oninput="filterRecipes()">
+          <div id="recipeList" class="recipe-list"></div>
+        </div>
+
+        <!-- Step 3: Seed Date -->
+        <div class="scan-step" data-step="3">
+          <h3 style="margin-bottom: 1rem;">Step 3: Seed Details</h3>
+          <div id="yieldForecast" class="info-box" style="margin-bottom: 1rem; display: none;">
+            <strong>Expected Yield:</strong> <span id="forecastValue">-</span>
+          </div>
+          <div class="form-group">
+            <label>Seed Date</label>
+            <input type="date" id="seedDate">
+          </div>
+          <div class="form-group">
+            <label>Plant Count (optional)</label>
+            <input type="number" id="plantCount" min="1" placeholder="Defaults to tray capacity">
+          </div>
+          <button class="button button-primary" onclick="createTrayRun()">Start Tray Run</button>
+        </div>
+
+        <!-- Step 4: Confirmation -->
+        <div class="scan-step" data-step="4">
+          <div class="info-box success">
+            <h3>Tray Run Created</h3>
+            <dl>
+              <dt>Tray ID</dt>
+              <dd id="confirmTrayId">-</dd>
+              <dt>Recipe</dt>
+              <dd id="confirmRecipe">-</dd>
+              <dt>Seed Date</dt>
+              <dd id="confirmSeedDate">-</dd>
+              <dt>Expected Harvest</dt>
+              <dd id="confirmHarvestDate">-</dd>
+            </dl>
+          </div>
+          <button class="button button-primary" onclick="resetSeedingFlow()">Seed Another Tray</button>
+          <button class="button button-secondary" onclick="closeModal('seedingModal')">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Placement Flow Modal -->
+  <div id="placementModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Move Tray</h2>
+        <button class="close-btn" onclick="closeModal('placementModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="scan-step active" data-step="1">
+          <h3 style="margin-bottom: 1rem;">Step 1: Scan Tray QR</h3>
+          <div id="qrReaderPlace"></div>
+          <div id="placementStatus" class="status-message"></div>
+        </div>
+
+        <div class="scan-step" data-step="2">
+          <h3 style="margin-bottom: 1rem;">Step 2: Scan Location QR</h3>
+          <div class="info-box">
+            <p><strong>Tray:</strong> <span id="placeTrayName">-</span></p>
+            <p><strong>Recipe:</strong> <span id="placeRecipeName">-</span></p>
+          </div>
+          <div id="qrReaderLocation"></div>
+          <div id="locationStatus" class="status-message"></div>
+        </div>
+
+        <div class="scan-step" data-step="3">
+          <div class="info-box success">
+            <h3>Tray Placed</h3>
+            <dl>
+              <dt>Location</dt>
+              <dd id="confirmLocation">-</dd>
+              <dt>Group</dt>
+              <dd id="confirmGroup">-</dd>
+            </dl>
+          </div>
+          <button class="button button-primary" onclick="resetPlacementFlow()">Place Another Tray</button>
+          <button class="button button-secondary" onclick="closeModal('placementModal')">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Harvest Flow Modal -->
+  <div id="harvestModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Record Harvest</h2>
+        <button class="close-btn" onclick="closeModal('harvestModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="scan-step active" data-step="1">
+          <h3 style="margin-bottom: 1rem;">Step 1: Scan Tray QR</h3>
+          <div id="qrReaderHarvest"></div>
+          <div id="harvestStatus" class="status-message"></div>
+        </div>
+
+        <div class="scan-step" data-step="2">
+          <h3 style="margin-bottom: 1rem;">Step 2: Harvest Details</h3>
+          <div class="info-box">
+            <p><strong>Tray:</strong> <span id="harvestTrayName">-</span></p>
+            <p><strong>Recipe:</strong> <span id="harvestRecipeName">-</span></p>
+            <p><strong>Expected Harvest:</strong> <span id="harvestExpectedDate">-</span></p>
+          </div>
+          <div class="form-group">
+            <label>Harvest Date</label>
+            <input type="date" id="harvestDate">
+          </div>
+          <div class="form-group">
+            <label>Actual Harvest Count (optional)</label>
+            <input type="number" id="harvestCount" min="0" placeholder="Number of plants harvested">
+          </div>
+          <div class="form-group">
+            <label>Notes (optional)</label>
+            <input type="text" id="harvestNote" placeholder="Quality, issues, observations">
+          </div>
+          <button class="button button-primary" onclick="recordHarvest()">Record Harvest</button>
+        </div>
+
+        <div class="scan-step" data-step="3">
+          <div class="info-box success">
+            <h3>Harvest Recorded</h3>
+            <dl>
+              <dt>Harvest Date</dt>
+              <dd id="confirmHarvestDateFinal">-</dd>
+              <dt>Count</dt>
+              <dd id="confirmHarvestCount">-</dd>
+              <dt>Lot Code</dt>
+              <dd id="confirmLotCode" style="font-family: monospace; font-size: 1.2rem; font-weight: bold; color: #10b981;">-</dd>
+            </dl>
+            <div style="text-align: center; margin-top: 1rem;">
+              <img id="harvestBarcodeImg" style="display: none; max-width: 100%; height: auto; border: 1px solid #e5e7eb; padding: 8px; border-radius: 4px;" alt="Barcode">
+            </div>
+          </div>
+          <button class="button button-primary" onclick="printBarcode()">Print Label</button>
+          <button class="button button-secondary" onclick="resetHarvestFlow()">Record Another Harvest</button>
+          <button class="button button-secondary" onclick="closeModal('harvestModal')">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    // Use current server origin for API calls (works on localhost and AWS)
+    const API_BASE = window.location.origin;
+    let qrScanner = null;
+    let currentFlow = {};
+
+    // Modal management
+    function openModal(modalId) {
+      document.getElementById(modalId).classList.add('active');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+      if (qrScanner) {
+        qrScanner.stop().catch(err => console.error('Error stopping scanner:', err));
+        qrScanner = null;
+      }
+    }
+
+    function showStep(modalId, stepNum) {
+      const modal = document.getElementById(modalId);
+      modal.querySelectorAll('.scan-step').forEach(step => {
+        step.classList.remove('active');
+      });
+      modal.querySelector(`[data-step="${stepNum}"]`).classList.add('active');
+    }
+
+    // Seeding Flow
+    async function openSeedingFlow() {
+      currentFlow = { trayId: null, trayFormatId: null, recipeId: null };
+      openModal('seedingModal');
+      showStep('seedingModal', 1);
+      startQRScanner('qrReader', handleTrayScan);
+    }
+
+    function startQRScanner(elementId, onSuccess) {
+      const element = document.getElementById(elementId);
+      element.innerHTML = '';
+      
+      qrScanner = new Html5Qrcode(elementId);
+      qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onSuccess,
+        (errorMessage) => {
+          // Ignore scan failures, only show success
+        }
+      ).catch(err => {
+        console.error('Scanner error:', err);
+        document.getElementById('scanStatus').innerHTML = 
+          '<span style="color: #ef4444;">Camera not available. Use manual entry.</span>';
+      });
+    }
+
+    async function handleTrayScan(decodedText) {
+      if (qrScanner) {
+        qrScanner.stop();
+        qrScanner = null;
+      }
+
+      document.getElementById('scanStatus').innerHTML = '<div class="loading"></div> Processing...';
+
+      try {
+        // Check if tray already exists
+        const trayCheckResp = await fetch(`${API_BASE}/api/trays?qr_code=${encodeURIComponent(decodedText)}`);
+        const existingTrays = await trayCheckResp.json();
+
+        if (existingTrays && existingTrays.length > 0) {
+          // Tray exists - check if it has a format
+          const tray = existingTrays[0];
+          
+          if (!tray.trayFormatId) {
+            // Prompt user to assign a format
+            const formats = await loadFormatsForSelection();
+            const selectedFormatId = await promptFormatSelection(formats);
+            
+            if (!selectedFormatId) {
+              document.getElementById('scanStatus').innerHTML = 
+                '<span style="color: #ef4444;">Format selection required to continue</span>';
+              return;
+            }
+
+            // Update tray with selected format
+            const updateResp = await fetch(`${API_BASE}/api/trays/${tray.trayId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ trayFormatId: selectedFormatId })
+            });
+
+            if (!updateResp.ok) throw new Error('Failed to update tray format');
+            
+            tray.trayFormatId = selectedFormatId;
+          }
+
+          currentFlow.trayId = tray.trayId;
+          currentFlow.trayFormatId = tray.trayFormatId;
+          currentFlow.qrCode = decodedText;
+        } else {
+          // New tray - get format and register
+          const formats = await loadFormatsForSelection();
+          const selectedFormatId = await promptFormatSelection(formats);
+          
+          if (!selectedFormatId) {
+            document.getElementById('scanStatus').innerHTML = 
+              '<span style="color: #ef4444;">Format selection required to continue</span>';
+            return;
+          }
+
+          const resp = await fetch(`${API_BASE}/api/trays/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              qrCodeValue: decodedText,
+              trayFormatId: selectedFormatId
+            })
+          });
+
+          if (!resp.ok) throw new Error('Failed to register tray');
+
+          const data = await resp.json();
+          currentFlow.trayId = data.trayId;
+          currentFlow.trayFormatId = data.trayFormatId;
+          currentFlow.qrCode = decodedText;
+        }
+
+        // Calculate forecasted yield
+        const format = await fetch(`${API_BASE}/api/tray-formats`).then(r => r.json())
+          .then(formats => formats.find(f => f.trayFormatId === currentFlow.trayFormatId));
+        
+        if (format) {
+          currentFlow.forecastedYield = format.isWeightBased
+            ? `${(format.plantSiteCount * (format.targetWeightPerSite || 0)).toFixed(1)} ${format.weightUnit || 'oz'}`
+            : `${Math.floor(format.plantSiteCount * 0.9)} heads (90% success)`;
+        }
+
+        // Load recipes
+        await loadRecipes();
+        showStep('seedingModal', 2);
+      } catch (error) {
+        alert('Error: ' + error.message);
+        document.getElementById('scanStatus').innerHTML = 
+          `<span style="color: #ef4444;">Error: ${error.message}</span>`;
+      }
+    }
+
+    async function loadFormatsForSelection() {
+      const resp = await fetch(`${API_BASE}/api/tray-formats`);
+      return await resp.json();
+    }
+
+    function promptFormatSelection(formats) {
+      return new Promise((resolve) => {
+        const formatOptions = formats.map(f => 
+          `${f.name} (${f.plantSiteCount} sites${f.isWeightBased ? ', ' + f.targetWeightPerSite + ' ' + f.weightUnit + '/site' : ''})`
+        ).join('\n');
+        
+        const choice = prompt(
+          `Select a tray format:\n\n${formats.map((f, i) => `${i + 1}. ${f.name} (${f.plantSiteCount} sites)`).join('\n')}\n\nEnter number:`,
+          '1'
+        );
+        
+        if (!choice) {
+          resolve(null);
+          return;
+        }
+        
+        const index = parseInt(choice) - 1;
+        if (index >= 0 && index < formats.length) {
+          resolve(formats[index].trayFormatId);
+        } else {
+          resolve(null);
+        }
+      });
+    }
+
+    async function loadRecipes() {
+      try {
+        const resp = await fetch(`${API_BASE}/api/recipes`);
+        const recipes = await resp.json();
+
+        const recipeList = document.getElementById('recipeList');
+        recipeList.innerHTML = recipes
+          .filter(r => r.id && r.name)
+          .map(r => `
+            <div class="recipe-card" onclick="selectRecipe('${r.id}', '${r.name}', ${r.daysToHarvest || 21})">
+              <h3>${r.name}</h3>
+              <p>${r.crop || ''} ${r.variety || ''} • ${r.daysToHarvest || 21} days to harvest</p>
+            </div>
+          `).join('');
+      } catch (error) {
+        console.error('Error loading recipes:', error);
+        alert('Failed to load recipes: ' + error.message);
+      }
+    }
+
+    function selectRecipe(id, name, daysToHarvest) {
+      currentFlow.recipeId = id;
+      currentFlow.recipeName = name;
+      currentFlow.daysToHarvest = daysToHarvest;
+
+      // Highlight selected
+      document.querySelectorAll('.recipe-card').forEach(card => {
+        card.classList.remove('selected');
+      });
+      event.target.closest('.recipe-card').classList.add('selected');
+
+      // Set default seed date to today
+      document.getElementById('seedDate').valueAsDate = new Date();
+      
+      // Show forecasted yield if available
+      if (currentFlow.forecastedYield) {
+        document.getElementById('yieldForecast').style.display = 'block';
+        document.getElementById('forecastValue').textContent = currentFlow.forecastedYield;
+      }
+      
+      // Auto-advance after 500ms
+      setTimeout(() => showStep('seedingModal', 3), 500);
+    }
+
+    function filterRecipes() {
+      const search = document.getElementById('recipeSearch').value.toLowerCase();
+      document.querySelectorAll('.recipe-card').forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(search) ? 'block' : 'none';
+      });
+    }
+
+    async function createTrayRun() {
+      const seedDate = document.getElementById('seedDate').value;
+      const plantCount = document.getElementById('plantCount').value;
+
+      if (!seedDate) {
+        alert('Please select a seed date');
+        return;
+      }
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/trays/${currentFlow.trayId}/seed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipeId: currentFlow.recipeId,
+            seedDate,
+            ...(plantCount && { plantedSiteCount: parseInt(plantCount) })
+          })
+        });
+
+        if (!resp.ok) throw new Error('Failed to create tray run');
+
+        const data = await resp.json();
+
+        document.getElementById('confirmTrayId').textContent = currentFlow.qrCode;
+        document.getElementById('confirmRecipe').textContent = currentFlow.recipeName;
+        document.getElementById('confirmSeedDate').textContent = seedDate;
+        document.getElementById('confirmHarvestDate').textContent = data.expectedHarvestDate;
+
+        showStep('seedingModal', 4);
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function resetSeedingFlow() {
+      currentFlow = {};
+      showStep('seedingModal', 1);
+      document.getElementById('recipeSearch').value = '';
+      document.getElementById('plantCount').value = '';
+      startQRScanner('qrReader', handleTrayScan);
+    }
+
+    function manualTrayEntry() {
+      const qrCode = prompt('Enter Tray QR Code:');
+      if (qrCode) {
+        handleTrayScan(qrCode);
+      }
+    }
+
+    // Placement Flow
+    function openPlacementFlow() {
+      alert('Placement flow not yet implemented. This requires location QR codes to be set up.');
+      // TODO: Implement placement flow
+    }
+
+    function resetPlacementFlow() {
+      // TODO: Implement
+    }
+
+    // Harvest Flow
+    let harvestTrayRunId = null;
+    let harvestTrayData = null;
+
+    async function openHarvestFlow() {
+      currentFlow = { trayId: null, trayRunId: null };
+      openModal('harvestModal');
+      showStep('harvestModal', 1);
+      startQRScanner('qrReaderHarvest', handleHarvestTrayScan);
+    }
+
+    async function handleHarvestTrayScan(decodedText) {
+      if (qrScanner) {
+        qrScanner.stop();
+        qrScanner = null;
+      }
+      
+      document.getElementById('harvestStatus').innerHTML = '<div class="loading"></div> Loading tray data...';
+      
+      try {
+        // Fetch tray data (includes recipe, placement, location)
+        const trayResp = await fetch(`${API_BASE}/api/trays?qr_code=${decodedText}`);
+        const trayData = await trayResp.json();
+        
+        if (!trayData || trayData.length === 0) {
+          document.getElementById('harvestStatus').innerHTML = 
+            '<span style="color: #ef4444;">❌ Tray not found. Scan again or enter manually.</span>';
+          setTimeout(() => startQRScanner('qrReaderHarvest', handleHarvestTrayScan), 2000);
+          return;
+        }
+        
+        const tray = trayData[0];
+        
+        // Check for active tray run
+        if (!tray.trayRunId) {
+          document.getElementById('harvestStatus').innerHTML = 
+            '<span style="color: #ef4444;">❌ No active crop cycle on this tray.</span>';
+          setTimeout(() => startQRScanner('qrReaderHarvest', handleHarvestTrayScan), 2000);
+          return;
+        }
+        
+        harvestTrayRunId = tray.trayRunId;
+        harvestTrayData = tray;
+        
+        // Display tray info
+        document.getElementById('harvestTrayName').textContent = tray.qrCodeValue;
+        document.getElementById('harvestRecipeName').textContent = tray.recipeId;
+        document.getElementById('harvestExpectedDate').textContent = tray.expectedHarvestDate;
+        
+        // Set default harvest date to today
+        document.getElementById('harvestDate').valueAsDate = new Date();
+        
+        // Move to step 2
+        showStep('harvestModal', 2);
+        
+      } catch (error) {
+        console.error('Harvest scan error:', error);
+        document.getElementById('harvestStatus').innerHTML = 
+          '<span style="color: #ef4444;">❌ Error loading tray data. Try again.</span>';
+      }
+    }
+
+    async function recordHarvest() {
+      const harvestDate = document.getElementById('harvestDate').value;
+      const harvestCount = document.getElementById('harvestCount').value;
+      const harvestNote = document.getElementById('harvestNote').value;
+      
+      if (!harvestDate) {
+        alert('Please select a harvest date');
+        return;
+      }
+      
+      try {
+        // Get tray format for weight verification
+        let actualWeight = null;
+        let weightUnit = null;
+        let trayFormat = null;
+        
+        if (harvestTrayData.trayFormatId) {
+          const formatResp = await fetch(`${API_BASE}/api/tray-formats`);
+          const formats = await formatResp.json();
+          trayFormat = formats.find(f => f.trayFormatId === harvestTrayData.trayFormatId);
+          
+          // Prompt for weight if format is weight-based
+          if (trayFormat && trayFormat.isWeightBased) {
+            const targetWeight = (trayFormat.plantSiteCount * (trayFormat.targetWeightPerSite || 0)).toFixed(2);
+            const enteredWeight = prompt(
+              `Weight Verification\n\n` +
+              `Target: ${targetWeight} ${trayFormat.weightUnit}\n` +
+              `Enter actual harvest weight (or leave blank to skip):`
+            );
+            
+            if (enteredWeight) {
+              actualWeight = parseFloat(enteredWeight);
+              weightUnit = trayFormat.weightUnit;
+              
+              // Calculate variance
+              const variance = ((actualWeight - parseFloat(targetWeight)) / parseFloat(targetWeight) * 100).toFixed(1);
+              
+              // If variance > 10%, offer to update target
+              if (Math.abs(variance) > 10) {
+                const shouldUpdate = confirm(
+                  `Variance: ${variance}%\n\n` +
+                  `Target: ${targetWeight} ${weightUnit}\n` +
+                  `Actual: ${actualWeight} ${weightUnit}\n\n` +
+                  `Update target weight for this format?`
+                );
+                
+                if (shouldUpdate) {
+                  const newTargetPerSite = (actualWeight / trayFormat.plantSiteCount).toFixed(2);
+                  await fetch(`${API_BASE}/api/tray-formats/${trayFormat.trayFormatId}/update-target`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      targetWeightPerSite: parseFloat(newTargetPerSite)
+                    })
+                  });
+                  alert(`Target updated to ${newTargetPerSite} ${weightUnit}/site`);
+                }
+              }
+            }
+          }
+        }
+        
+        // Step 1: Generate lot code
+        const lotPayload = {
+          zone_id: harvestTrayData.placement?.locationQr || 'ZONE-UNKNOWN',
+          crop_type: parseRecipeCrop(harvestTrayData.recipeId),
+          variety: parseRecipeVariety(harvestTrayData.recipeId),
+          harvest_date: new Date(harvestDate).toISOString(),
+          quantity: parseInt(harvestCount) || harvestTrayData.plantedSiteCount,
+          unit: actualWeight ? weightUnit : 'heads'
+        };
+        
+        const lotResp = await fetch(`${API_BASE}/api/farm-sales/lots/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(lotPayload)
+        });
+        
+        if (!lotResp.ok) {
+          throw new Error('Failed to generate lot code');
+        }
+        
+        const lotData = await lotResp.json();
+        const lotCode = lotData.lot_code;
+        
+        // Step 2: Record harvest with lot code
+        const harvestPayload = {
+          harvestedAt: new Date(harvestDate).toISOString(),
+          actualHarvestCount: parseInt(harvestCount) || null,
+          note: harvestNote || null,
+          lot_code: lotCode,
+          actualWeight: actualWeight,
+          weightUnit: weightUnit
+        };
+        
+        const harvestResp = await fetch(`${API_BASE}/api/tray-runs/${harvestTrayRunId}/harvest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(harvestPayload)
+        });
+        
+        if (!harvestResp.ok) {
+          throw new Error('Failed to record harvest');
+        }
+        
+        // Step 3: Display confirmation with barcode
+        document.getElementById('confirmHarvestDateFinal').textContent = harvestDate;
+        document.getElementById('confirmHarvestCount').textContent = 
+          parseInt(harvestCount) || harvestTrayData.plantedSiteCount;
+        document.getElementById('confirmLotCode').textContent = lotCode;
+        
+        // Load barcode image
+        const barcodeImg = document.getElementById('harvestBarcodeImg');
+        barcodeImg.src = `${API_BASE}/api/farm-sales/lots/${lotCode}/barcode?format=CODE128`;
+        barcodeImg.style.display = 'block';
+        
+        showStep('harvestModal', 3);
+        
+      } catch (error) {
+        console.error('Record harvest error:', error);
+        alert('Error recording harvest: ' + error.message);
+      }
+    }
+
+    function resetHarvestFlow() {
+      harvestTrayRunId = null;
+      harvestTrayData = null;
+      document.getElementById('harvestCount').value = '';
+      document.getElementById('harvestNote').value = '';
+      document.getElementById('harvestDate').value = '';
+      closeModal('harvestModal');
+      openHarvestFlow();
+    }
+
+    function printBarcode() {
+      const lotCode = document.getElementById('confirmLotCode').textContent;
+      const barcodeUrl = `${API_BASE}/api/farm-sales/lots/${lotCode}/barcode?format=CODE128&width=4&height=200`;
+      const printWindow = window.open(barcodeUrl, '_blank', 'width=400,height=300');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+    }
+
+    // Helper: Parse crop from recipe ID
+    function parseRecipeCrop(recipeId) {
+      // "DEMO-Lettuce-28Day" → "Lettuce"
+      if (!recipeId) return 'Unknown';
+      const parts = recipeId.split('-');
+      if (parts.length >= 2) {
+        return parts[1];
+      }
+      return recipeId;
+    }
+
+    // Helper: Parse variety from recipe ID
+    function parseRecipeVariety(recipeId) {
+      // For now, return generic. Could fetch from recipe API.
+      const crop = parseRecipeCrop(recipeId);
+      return `${crop} Mix`;
+    }
+  </script>
+</body>
+</html>

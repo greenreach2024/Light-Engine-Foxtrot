@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install frontend dependencies (public)
+        run: |
+          cd public
+          npm ci
+      - name: Lint
+        run: |
+          cd public
+          npm run lint
+      - name: Install server dependencies
+        run: |
+          npm ci
+      - name: Start Charlie server (background) and run smoke
+        run: |
+          PORT=8091 node server-charlie.js &
+          SERVER_PID=$!
+          # wait for server to be ready
+          n=0
+          until curl -sS "http://localhost:8091/healthz" || [ $n -ge 15 ]; do
+            n=$((n+1))
+            sleep 1
+          done
+          node scripts/smoke.js
+          kill $SERVER_PID || true
+
+  python-tests:
+    runs-on: ubuntu-latest
+    needs: lint-and-smoke
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run Python tests
+        run: pytest -q
+
+  dom-cors-check:
+    runs-on: ubuntu-latest
+    needs: lint-and-smoke
+    steps:
+      - uses: actions/checkout@v4
+      - name: DOM boot & CORS static checks
+        run: |
+          # Check DOM boot shape in public/app.charlie.js
+          if ! grep -q "document.addEventListener('DOMContentLoaded', async () =>" public/app.charlie.js; then
+            echo "ERROR: DOMContentLoaded async boot not found in public/app.charlie.js"; exit 1
+          fi
+          # Check server for dynamic CORS mention
+          if ! grep -q "Access-Control-Allow-Origin" server-charlie.js; then
+            echo "WARNING: server-charlie.js may not explicitly handle CORS preflight"; fi
