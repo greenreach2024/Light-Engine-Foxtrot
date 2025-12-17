@@ -31,7 +31,7 @@ async function autoAuthenticate() {
     console.log('🔐 Auto-authenticating in demo mode...');
     
     const credentials = {
-        farmId: 'GR-00001',
+        farmId: 'TEST-FARM-001',
         email: 'admin@demo-farm.com',
         password: 'demo123'
     };

@@ -56,7 +56,7 @@ function initLogin() {
     
     // Auto-fill demo credentials
     if (window.location.search.includes('demo=true')) {
-        document.getElementById('farmId').value = 'GR-00001';
+        document.getElementById('farmId').value = 'TEST-FARM-001';
         document.getElementById('email').value = 'admin@demo-farm.com';
         document.getElementById('password').value = 'demo123';
     }
@@ -72,7 +72,7 @@ async function initDashboard() {
     // Create a default session for farm operations
     currentSession = {
         token: 'local-access',
-        farmId: 'LOCAL-FARM',
+        farmId: 'TEST-FARM-001',
         farmName: 'Light Engine Farm',
         email: 'admin@local-farm.com',
         role: 'admin'

@@ -9,10 +9,10 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         DEMO_MODE: 'true',
-        DEMO_FARM_ID: 'GR-00001',
+        DEMO_FARM_ID: 'TEST-FARM-001',
         DEMO_REALTIME: 'true'
         DEMO_MODE: 'true',
-        DEMO_FARM_ID: 'GR-00001',
+        DEMO_FARM_ID: 'TEST-FARM-001',
         DEMO_REALTIME: 'true'
       },
       time: true,

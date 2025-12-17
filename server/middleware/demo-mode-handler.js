@@ -37,7 +37,7 @@ export function initializeDemoMode() {
   console.log('[demo-mode-handler] process.env.DEMO_MODE =', process.env.DEMO_MODE);
   
   const DEMO_MODE = process.env.DEMO_MODE === 'true';
-  const DEMO_FARM_ID = process.env.DEMO_FARM_ID || 'GR-00001';
+  const DEMO_FARM_ID = process.env.DEMO_FARM_ID || 'TEST-FARM-001';
   const DEMO_REALTIME = process.env.DEMO_REALTIME === 'true';
 
   console.log('[demo-mode-handler] DEMO_MODE evaluated to:', DEMO_MODE);

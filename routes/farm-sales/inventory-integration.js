@@ -77,7 +77,7 @@ function getCropPricing(cropName) {
 router.get('/from-trays', async (req, res) => {
   try {
     // Get farm_id from auth middleware or query param (for demo mode)
-    const farmId = req.farm_id || req.query.farmId || 'FARM-001';
+    const farmId = req.farm_id || req.query.farmId || 'TEST-FARM-001';
     
     // Fetch tray inventory from backend
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';

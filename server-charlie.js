@@ -11483,8 +11483,8 @@ app.get('/api/admin/farms/:farmId', createDemoModeHandler(), asyncHandler(async 
     return res.status(404).json({ error: 'Farm not found' });
   }
   
-  // Check if this is GR-00001 (demo farm) and load detailed data
-  if (farmId === 'GR-00001') {
+  // Check if this is TEST-FARM-001 and load detailed data
+  if (farmId === 'TEST-FARM-001') {
     try {
       const demoDataPath = path.join(__dirname, 'public/data/demo-farm-data.json');
       const demoData = JSON.parse(fs.readFileSync(demoDataPath, 'utf8'));
@@ -11602,7 +11602,7 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
     // Create demo session
     const demoSession = {
       token: demoToken,
-      farmId: farmId || process.env.DEMO_FARM_ID || 'GR-00001',
+      farmId: farmId || process.env.DEMO_FARM_ID || 'TEST-FARM-001',
       email: email || 'admin@demo-farm.com',
       role: 'admin',
       createdAt: new Date(),
@@ -12291,7 +12291,7 @@ app.get('/api/inventory/current', (req, res) => {
       farmCount: 1,
       byFarm: [
         {
-          farmId: 'GR-00001',
+          farmId: 'TEST-FARM-001',
           name: 'Demo Vertical Farm',
           activeTrays: totalTrays,
           totalPlants: totalPlants,
