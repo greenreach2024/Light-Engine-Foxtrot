@@ -754,9 +754,34 @@
       <div id="checkout-error" class="alert alert-error hidden"></div>
       
       <form id="checkout-form">
-        <div class="form-group">
-          <label for="customer-name">Customer Name (Optional)</label>
-          <input type="text" id="customer-name" placeholder="Walk-up customer">
+        <!-- Customer Profile Section (Optional) -->
+        <div style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; background: var(--bg);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <label style="font-weight: 500; margin: 0;">Customer Profile (Optional)</label>
+            <button type="button" onclick="toggleCustomerProfile()" style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 0.875rem;">
+              <span id="customer-toggle-text">+ Add Customer</span>
+            </button>
+          </div>
+          
+          <div id="customer-profile-fields" style="display: none; margin-top: 1rem;">
+            <div class="form-group">
+              <label for="customer-name">Customer Name</label>
+              <input type="text" id="customer-name" placeholder="John Doe">
+            </div>
+            
+            <div class="form-group">
+              <label for="customer-email">Email Address</label>
+              <input type="email" id="customer-email" placeholder="customer@example.com">
+            </div>
+            
+            <div class="form-group">
+              <label for="customer-gift-card">Gift Card Number</label>
+              <input type="text" id="customer-gift-card" placeholder="Enter gift card number">
+              <div style="font-size: 0.75rem; color: var(--text-light); margin-top: 0.25rem;">
+                If using gift card for payment
+              </div>
+            </div>
+          </div>
         </div>
         
         <div class="form-group">
@@ -764,6 +789,7 @@
           <select id="payment-method" required>
             <option value="cash">Cash</option>
             <option value="card">Card</option>
+            <option value="gift_card">Gift Card</option>
           </select>
         </div>
         
@@ -1120,12 +1146,45 @@
       document.getElementById('checkout-modal').classList.remove('active');
       document.getElementById('checkout-success').classList.add('hidden');
       document.getElementById('checkout-error').classList.add('hidden');
+      // Reset customer profile section
+      document.getElementById('customer-profile-fields').style.display = 'none';
+      document.getElementById('customer-toggle-text').textContent = '+ Add Customer';
+      document.getElementById('customer-name').value = '';
+      document.getElementById('customer-email').value = '';
+      document.getElementById('customer-gift-card').value = '';
+    }
+    
+    // Toggle customer profile section
+    function toggleCustomerProfile() {
+      const fields = document.getElementById('customer-profile-fields');
+      const toggleText = document.getElementById('customer-toggle-text');
+      
+      if (fields.style.display === 'none') {
+        fields.style.display = 'block';
+        toggleText.textContent = '- Hide Customer';
+      } else {
+        fields.style.display = 'none';
+        toggleText.textContent = '+ Add Customer';
+      }
     }
     
     // Payment method change
     document.getElementById('payment-method').addEventListener('change', (e) => {
       const cashGroup = document.getElementById('cash-tendered-group');
-      cashGroup.style.display = e.target.value === 'cash' ? 'block' : 'none';
+      if (e.target.value === 'cash') {
+        cashGroup.style.display = 'block';
+      } else if (e.target.value === 'gift_card') {
+        cashGroup.style.display = 'none';
+        // Auto-expand customer profile if gift card selected
+        const fields = document.getElementById('customer-profile-fields');
+        const toggleText = document.getElementById('customer-toggle-text');
+        if (fields.style.display === 'none') {
+          fields.style.display = 'block';
+          toggleText.textContent = '- Hide Customer';
+        }
+      } else {
+        cashGroup.style.display = 'none';
+      }
     });
     
     // Cash tendered change
@@ -1153,6 +1212,8 @@
       e.preventDefault();
       
       const customerName = document.getElementById('customer-name').value;
+      const customerEmail = document.getElementById('customer-email').value;
+      const giftCardNumber = document.getElementById('customer-gift-card').value;
       const paymentMethod = document.getElementById('payment-method').value;
       const cashTendered = parseFloat(document.getElementById('cash-tendered').value) || 0;
       
@@ -1166,11 +1227,21 @@
         return;
       }
       
+      if (paymentMethod === 'gift_card' && !giftCardNumber) {
+        document.getElementById('checkout-error').textContent = 'Gift card number required';
+        document.getElementById('checkout-error').classList.remove('hidden');
+        return;
+      }
+      
       try {
         const result = await api('/farm-sales/pos/checkout', {
           method: 'POST',
           body: JSON.stringify({
-            customer: customerName ? { name: customerName } : null,
+            customer: (customerName || customerEmail) ? { 
+              name: customerName || 'Customer', 
+              email: customerEmail || null,
+              gift_card: giftCardNumber || null
+            } : null,
             items: cart.map(item => ({
               sku_id: item.sku_id,
               quantity: item.quantity
