@@ -1075,8 +1075,8 @@
         container.innerHTML = cart.map(item => `
           <div class="cart-item">
             <div>
-              <div class="cart-item-name">${item.name}</div>
-              <div style="font-size: 0.875rem; color: var(--text-light);">$${item.retail_price.toFixed(2)} each</div>
+              <div class="cart-item-name">${item.name} <span style="font-size: 0.875rem; color: var(--text-light);">($${item.retail_price.toFixed(2)}/${item.unit})</span></div>
+              <div style="font-size: 0.875rem; color: var(--text-light);">$${item.retail_price.toFixed(2)}</div>
             </div>
             <div class="cart-item-qty">
               <button class="qty-btn" onclick="updateCartQuantity('${item.sku_id}', -1)">−</button>
