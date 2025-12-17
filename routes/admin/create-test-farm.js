@@ -17,11 +17,55 @@ const FARM_CONFIG = {
   adminUser: { email: 'admin@test-farm.com', password: 'test123', name: 'Test Admin' }
 };
 
+// Demo farms to remove
+const DEMO_FARM_IDS = ['FARM-001', 'FARM-002', 'FARM-003', 'LOCAL-FARM', 'GR-00001'];
+
 function loadCrops() {
   const data = JSON.parse(fs.readFileSync(RECIPES_PATH, 'utf8'));
   return Object.keys(data.crops).slice(0, 4).map((name, idx) => ({
     id: `crop-${idx + 1}`, name, daysToHarvest: 28
   }));
+}
+
+async function cleanDemoData(db) {
+  const run = (sql, params = []) => new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) { err ? reject(err) : resolve(this); });
+  });
+  
+  console.log('[create-test-farm] Cleaning demo farm data...');
+  
+  // Clean all demo farms
+  for (const farmId of DEMO_FARM_IDS) {
+    try {
+      await run('DELETE FROM tray_placements WHERE tray_run_id IN (SELECT tray_run_id FROM tray_runs WHERE tray_id IN (SELECT tray_id FROM trays WHERE tray_id IN (SELECT tray_id FROM trays)))');
+      await run('DELETE FROM tray_runs WHERE tray_id IN (SELECT tray_id FROM trays)');
+      await run('DELETE FROM trays');
+      await run('DELETE FROM locations WHERE group_id IN (SELECT group_id FROM groups WHERE zone_id IN (SELECT zone_id FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?)))', [farmId]);
+      await run('DELETE FROM groups WHERE zone_id IN (SELECT zone_id FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?))', [farmId]);
+      await run('DELETE FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?)', [farmId]);
+      await run('DELETE FROM rooms WHERE farm_id = ?', [farmId]);
+      await run('DELETE FROM users WHERE tenant_id = ?', [farmId]);
+      await run('DELETE FROM farms WHERE farm_id = ?', [farmId]);
+      console.log(`[create-test-farm] Cleaned ${farmId}`);
+    } catch (error) {
+      console.log(`[create-test-farm] Warning cleaning ${farmId}:`, error.message);
+    }
+  }
+  
+  // Also clean TEST-FARM-001 if it exists
+  try {
+    await run('DELETE FROM tray_placements WHERE tray_run_id IN (SELECT tray_run_id FROM tray_runs WHERE tray_id IN (SELECT tray_id FROM trays))');
+    await run('DELETE FROM tray_runs');
+    await run('DELETE FROM trays');
+    await run('DELETE FROM locations WHERE group_id IN (SELECT group_id FROM groups WHERE zone_id IN (SELECT zone_id FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?)))', [FARM_CONFIG.farmId]);
+    await run('DELETE FROM groups WHERE zone_id IN (SELECT zone_id FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?))', [FARM_CONFIG.farmId]);
+    await run('DELETE FROM zones WHERE room_id IN (SELECT room_id FROM rooms WHERE farm_id = ?)', [FARM_CONFIG.farmId]);
+    await run('DELETE FROM rooms WHERE farm_id = ?', [FARM_CONFIG.farmId]);
+    await run('DELETE FROM users WHERE tenant_id = ?', [FARM_CONFIG.farmId]);
+    await run('DELETE FROM farms WHERE farm_id = ?', [FARM_CONFIG.farmId]);
+  } catch (error) {
+    console.log('[create-test-farm] Note: TEST-FARM-001 may not exist yet');
+  }
 }
 
 async function createFarm(db) {
@@ -31,7 +75,7 @@ async function createFarm(db) {
   });
   
   // 1. Farm
-  await run('INSERT OR REPLACE INTO farms (farm_id, name, created_at, updated_at) VALUES (?, ?, datetime("now"), datetime("now"))', [FARM_CONFIG.farmId, FARM_CONFIG.farmName]);
+  await run('INSERT INTO farms (farm_id, name, created_at, updated_at) VALUES (?, ?, datetime("now"), datetime("now"))', [FARM_CONFIG.farmId, FARM_CONFIG.farmName]);
   
   // 2. Tray format
   const formatId = uuidv4();
@@ -88,12 +132,20 @@ router.post('/create-test-farm', async (req, res) => {
   const db = new sqlite3.Database(DB_PATH);
   
   try {
+    console.log('[create-test-farm] Starting test farm creation...');
+    
+    // Clean all demo data first
+    await cleanDemoData(db);
+    
+    // Create test farm
     const result = await createFarm(db);
     db.close();
     
+    console.log('[create-test-farm] Test farm created successfully');
+    
     res.json({
       success: true,
-      message: 'Test farm created successfully',
+      message: 'Test farm created successfully. All demo data removed.',
       farm: {
         id: FARM_CONFIG.farmId,
         name: FARM_CONFIG.farmName,
@@ -107,11 +159,12 @@ router.post('/create-test-farm', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('[create-test-farm] Error:', error);
     db.close();
     res.status(500).json({ 
       success: false, 
       error: error.message,
-      stack: error.stack 
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
