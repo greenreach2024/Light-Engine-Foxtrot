@@ -1,0 +1,514 @@
+openapi: 3.1.0
+info:
+  title: Light Engine Charlie API
+  description: Environmental sensor data API with MQTT ingestion
+  version: 1.0.0
+paths:
+  /:
+    get:
+      summary: Root
+      description: API health check
+      operationId: root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health:
+    get:
+      summary: Health Check
+      description: Health check endpoint
+      operationId: health_check_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/env/ingest:
+    post:
+      summary: Ingest Sensor Data
+      description: "Ingest sensor data (called by MQTT worker or manual testing)\n\
+        \nExample payload:\n```json\n{\n    \"scope\": \"NutrientRoom\",\n    \"ts\"\
+        : \"2025-11-01T14:30:00Z\",\n    \"sensors\": {\n        \"ph\": {\"value\"\
+        : 6.02},\n        \"ec\": {\"value\": 0.71, \"unit\": \"mS/cm\"},\n      \
+        \  \"temperature\": {\"value\": 21.8}\n    }\n}\n```"
+      operationId: ingest_sensor_data_api_env_ingest_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SensorPayload'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/env/latest:
+    get:
+      summary: Get Latest Readings
+      description: 'Get latest sensor readings for a specific scope
+
+
+        Example: GET /api/env/latest?scope=NutrientRoom'
+      operationId: get_latest_readings_api_env_latest_get
+      parameters:
+      - name: scope
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Scope/room identifier (e.g., 'NutrientRoom')
+          title: Scope
+        description: Scope/room identifier (e.g., 'NutrientRoom')
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LatestReadingsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/env/scopes:
+    get:
+      summary: List Scopes
+      description: List all available scopes with sensor counts
+      operationId: list_scopes_api_env_scopes_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/env/history:
+    get:
+      summary: Get Sensor History
+      description: Get historical readings for a specific sensor
+      operationId: get_sensor_history_api_env_history_get
+      parameters:
+      - name: scope
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Scope identifier
+          title: Scope
+        description: Scope identifier
+      - name: sensor
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Sensor key (e.g., 'ph', 'ec', 'temperature')
+          title: Sensor
+        description: Sensor key (e.g., 'ph', 'ec', 'temperature')
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Number of readings to return
+          default: 50
+          title: Limit
+        description: Number of readings to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /discovery/run:
+    post:
+      summary: Trigger Discovery Scan
+      description: 'Trigger an asynchronous device discovery scan.
+
+        Returns immediately. Poll GET /discovery/devices for results.'
+      operationId: trigger_discovery_scan_discovery_run_post
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /discovery/devices:
+    get:
+      summary: Get Discovery Devices
+      description: Get all discovered devices (placeholder - returns empty for now)
+      operationId: get_discovery_devices_discovery_devices_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/devices/kasa:
+    get:
+      summary: Get Kasa Devices
+      description: Get raw Kasa discovery payload for debugging
+      operationId: get_kasa_devices_api_devices_kasa_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/devices/mqtt:
+    get:
+      summary: Get Mqtt Devices
+      description: Get MQTT devices from registry
+      operationId: get_mqtt_devices_api_devices_mqtt_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/devices/ble:
+    get:
+      summary: Get Ble Devices
+      description: Get raw BLE discovery payload for debugging
+      operationId: get_ble_devices_api_devices_ble_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/devices/mdns:
+    get:
+      summary: Get Mdns Devices
+      description: Get raw mDNS discovery payload for debugging
+      operationId: get_mdns_devices_api_devices_mdns_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/network/wifi/scan:
+    get:
+      summary: Wifi Scan
+      description: Scan for available WiFi networks (returns placeholder data)
+      operationId: wifi_scan_api_network_wifi_scan_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/network/test:
+    post:
+      summary: Network Test
+      description: Test network connectivity to a host
+      operationId: network_test_api_network_test_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Request
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/device/command:
+    post:
+      summary: Send Device Command
+      description: Send a direct command to a device (placeholder)
+      operationId: send_device_command_api_device_command_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Request
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /lighting/fixtures:
+    get:
+      summary: Get Lighting Fixtures
+      description: Get configured lighting fixture metadata
+      operationId: get_lighting_fixtures_lighting_fixtures_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /lighting/failsafe:
+    post:
+      summary: Lighting Failsafe
+      description: Broadcast immediate power change to fixtures
+      operationId: lighting_failsafe_lighting_failsafe_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Request
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /rules:
+    get:
+      summary: List Automation Rules
+      description: List all automation rules
+      operationId: list_automation_rules_rules_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+    post:
+      summary: Create Automation Rule
+      description: Create a new automation rule
+      operationId: create_automation_rule_rules_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Rule
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /rules/{rule_id}:
+    patch:
+      summary: Update Automation Rule
+      description: Update an existing automation rule
+      operationId: update_automation_rule_rules__rule_id__patch
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Rule
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Automation Rule
+      description: Delete an automation rule
+      operationId: delete_automation_rule_rules__rule_id__delete
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /devices:
+    get:
+      summary: List Devices
+      description: List all discovered devices
+      operationId: list_devices_devices_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /ai/setup-assist:
+    post:
+      summary: Setup Assist
+      description: AI-powered setup assistance (placeholder)
+      operationId: setup_assist_ai_setup_assist_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Request
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LatestReadingsResponse:
+      properties:
+        scope:
+          type: string
+          title: Scope
+        sensors:
+          type: object
+          title: Sensors
+        observedAt:
+          type: string
+          title: Observedat
+      type: object
+      required:
+      - scope
+      - sensors
+      - observedAt
+      title: LatestReadingsResponse
+      description: Response for /api/env/latest endpoint
+    SensorPayload:
+      properties:
+        scope:
+          type: string
+          title: Scope
+          description: Room/zone identifier (e.g., 'NutrientRoom')
+        ts:
+          type: string
+          title: Ts
+          description: ISO 8601 timestamp
+        sensors:
+          additionalProperties:
+            $ref: '#/components/schemas/SensorReading'
+          type: object
+          title: Sensors
+          description: Sensor readings
+      type: object
+      required:
+      - scope
+      - ts
+      - sensors
+      title: SensorPayload
+      description: MQTT sensor payload schema
+    SensorReading:
+      properties:
+        value:
+          type: number
+          title: Value
+        unit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unit
+      type: object
+      required:
+      - value
+      title: SensorReading
+      description: Individual sensor reading
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

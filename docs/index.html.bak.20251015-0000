@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Light Engine Charlie</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.charlie.css?v=charlie-0.5">
+  <!-- Copilot: API base guardrail (C0) -->
+  <script>
+    // Copilot: keep this minimal, no styling changes.
+    (function () {
+      const qs = new URLSearchParams(location.search);
+      const fromQS = qs.get('api');
+      if (fromQS) localStorage.setItem('apiBase', fromQS);
+
+      window.API_BASE =
+        fromQS ||
+        localStorage.getItem('apiBase') ||
+        window.API_BASE ||
+        location.origin; // default: same origin
+    })();
+  </script>
+  <script>window.API_BASE = window.API_BASE || location.origin;</script>
+  <script src="./app.charlie.js?v=charlie-0.5" defer></script>
+</head>
+<body>
+  <div class="dashboard-shell">
+
+<aside class="dashboard-sidebar" aria-label="Setup and management navigation">
+  <div class="sidebar-header">
+    <h2 class="sidebar-title">Setup &amp; Management</h2>
+    <p class="tiny text-muted">Organize farm setup, device control, and daily grow operations.</p>
+  </div>
+  <nav class="sidebar-nav" data-role="sidebar-nav">
+    <button class="sidebar-link sidebar-link--overview is-active" type="button" data-sidebar-link data-target="overview" aria-current="page">
+      <span>Grow Room Overview</span>
+    </button>
+
+    <div class="sidebar-group" data-group="farm-setup">
+      <button class="sidebar-group__trigger" type="button" aria-expanded="false">
+        <span>Farm Setup</span>
+        <span class="sidebar-group__icon" aria-hidden="true"></span>
+      </button>
+      <div class="sidebar-group__items" role="menu" hidden>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="farm-registration">
+          Farm Registration
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="grow-rooms">
+          Grow Rooms
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="light-setup">
+          Light Setup
+        </button>
+      </div>

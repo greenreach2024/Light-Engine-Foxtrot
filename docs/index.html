@@ -1,0 +1,2081 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Light Engine Charlie</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.charlie.css?v=charlie-0.8-clean2">
+  <link rel="stylesheet" href="./styles/switchbot-manager.css?v=charlie-0.9">
+  <link rel="stylesheet" href="./styles/iot-manager.css?v=charlie-0.9">
+  <!-- AWS Demo Mode Configuration - MUST load before any other scripts -->
+  <script>
+    // Auto-enable demo mode for AWS S3 deployment
+    (function() {
+      const hostname = window.location.hostname;
+      const isAWS = hostname.includes('s3-website') || 
+                    hostname.includes('.amazonaws.com') ||
+                    hostname.includes('s3.') ||
+                    hostname.startsWith('light-engine-demo');
+      
+      // Always show this log for debugging
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[AWS Demo] Hostname:', hostname, '| isAWS:', isAWS);
+      }
+      
+      if (isAWS) {
+        console.log('[AWS Demo] Detected AWS hosting, enabling demo mode');
+        
+        // Force demo mode on AWS
+        window.DEMO_MODE = true;
+        localStorage.setItem('demoMode', 'true');
+        
+        // Intercept fetch to handle API endpoints that don't exist on S3
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+          let url = args[0];
+          
+          // Handle URL objects
+          if (url && typeof url === 'object' && url.href) {
+            url = url.href;
+          }
+          
+          console.log('[AWS Demo] Fetch intercepted:', url);
+          
+          // Handle intro-cards endpoint
+          if (url && String(url).includes('/intro-cards')) {
+            console.log('[AWS Demo] Returning stub for intro-cards');
+            return Promise.resolve(new Response(JSON.stringify({
+              ok: true,
+              demo: true,
+              card: {
+                title: 'Light Engine Demo',
+                icon: '',
+                description: 'Welcome to the Light Engine platform demo. This is a read-only demonstration showing our indoor farming automation capabilities.',
+                features: [
+                  'Real-time environmental monitoring',
+                  'Intelligent lighting control',
+                  'Automated nutrient management',
+                  'Harvest planning and tracking'
+                ]
+              }
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+          }
+          
+          // Handle inventory endpoints - Generate from rooms.json data
+          if (url && String(url).includes('/api/inventory/current')) {
+            console.log('[AWS Demo] Generating inventory from rooms.json');
+            
+            // Fetch rooms.json to calculate inventory dynamically
+            return originalFetch('/data/rooms.json')
+              .then(res => res.json())
+              .then(roomsData => {
+                let totalTrays = 0;
+                let totalPlants = 0;
+                const allTrays = [];
+                let trayCounter = 1;
+                const today = new Date();
+
+                (roomsData.rooms || []).forEach((room) => {
+                  (room.zones || []).forEach((zone) => {
+                    (zone.groups || []).forEach((group) => {
+                      const trayCount = group.trays || 4;
+                      const plantsPerTray = Math.floor((group.plants || 48) / trayCount);
+                      const daysOld = group.daysOld || 0;
+                      
+                      const seedingDate = new Date(today);
+                      seedingDate.setDate(seedingDate.getDate() - daysOld);
+                      
+                      for (let i = 0; i < trayCount; i++) {
+                        allTrays.push({
+                          trayId: `TRAY-${String(trayCounter).padStart(4, '0')}`,
+                          groupId: group.groupId,
+                          roomId: room.roomId,
+                          zoneId: zone.zoneId,
+                          crop: group.crop,
+                          plantCount: plantsPerTray,
+                          seedingDate: seedingDate.toISOString(),
+                          daysOld: daysOld,
+                          harvestIn: group.harvestIn || 0,
+                          health: group.health || 'unknown',
+                          recipe: group.recipe
+                        });
+                        trayCounter++;
+                      }
+                      
+                      totalTrays += trayCount;
+                      totalPlants += group.plants || 0;
+                    });
+                  });
+                });
+
+                return new Response(JSON.stringify({
+                  activeTrays: totalTrays,
+                  totalPlants: totalPlants,
+                  farmCount: 1,
+                  byFarm: [{
+                    farmId: 'GR-00001',
+                    name: 'Demo Vertical Farm',
+                    activeTrays: totalTrays,
+                    totalPlants: totalPlants,
+                    trays: allTrays
+                  }]
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+              })
+              .catch(err => {
+                console.error('[AWS Demo] Failed to load rooms.json:', err);
+                return new Response(JSON.stringify({
+                  activeTrays: 0,
+                  totalPlants: 0,
+                  farmCount: 0,
+                  byFarm: []
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+              });
+          }
+          
+          if (url && String(url).includes('/api/inventory/forecast')) {
+            console.log('[AWS Demo] Generating harvest forecast from rooms.json');
+            
+            const TRAYS_PER_GROUP = 4;
+            const PLANTS_PER_TRAY = 12;
+            
+            // Variety-specific grow times (in days)
+            const VARIETY_GROW_DAYS = {
+              'Butterhead Lettuce': 50, 'Romaine Lettuce': 35, 'Oak Leaf Lettuce': 45,
+              'Red Leaf Lettuce': 45, 'Mixed Lettuce': 40, 'Genovese Basil': 75,
+              'Thai Basil': 75, 'Lemon Basil': 70, 'Purple Basil': 75,
+              'Baby Arugula': 28, 'Cultivated Arugula': 38, 'Red Arugula': 35,
+              'Curly Kale': 55, 'Lacinato Kale': 60, 'Baby Kale': 30
+            };
+            
+            return originalFetch('/data/rooms.json')
+              .then(res => res.json())
+              .then(roomsData => {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                const buckets = {
+                  next7Days: [],
+                  next14Days: [],
+                  next30Days: [],
+                  beyond30Days: []
+                };
+
+                (roomsData.rooms || []).forEach((room) => {
+                  (room.zones || []).forEach((zone) => {
+                    (zone.groups || []).forEach((group) => {
+                      const daysOld = group.daysOld || 0;
+                      const seedDate = new Date(now);
+                      seedDate.setDate(now.getDate() - daysOld);
+
+                      const actualGrowDays = VARIETY_GROW_DAYS[group.crop] || 40;
+                      const harvestDate = new Date(seedDate);
+                      harvestDate.setDate(seedDate.getDate() + actualGrowDays);
+                      const daysToHarvest = Math.floor((harvestDate - now) / (1000 * 60 * 60 * 24));
+
+                      for (let trayNum = 1; trayNum <= TRAYS_PER_GROUP; trayNum++) {
+                        const tray = {
+                          trayId: `${group.groupId}-T${trayNum}`,
+                          groupId: group.groupId,
+                          groupName: group.name,
+                          recipe: group.crop,
+                          plantCount: PLANTS_PER_TRAY,
+                          estimatedHarvestDate: harvestDate.toISOString().split('T')[0],
+                          location: `${room.roomId} - ${zone.zoneId}`,
+                          daysToHarvest: daysToHarvest,
+                          currentDay: daysOld + 1
+                        };
+
+                        if (daysToHarvest <= 7) {
+                          buckets.next7Days.push(tray);
+                        } else if (daysToHarvest <= 14) {
+                          buckets.next14Days.push(tray);
+                        } else if (daysToHarvest <= 30) {
+                          buckets.next30Days.push(tray);
+                        } else {
+                          buckets.beyond30Days.push(tray);
+                        }
+                      }
+                    });
+                  });
+                });
+
+                return new Response(JSON.stringify({
+                  next7Days: {
+                    count: buckets.next7Days.reduce((sum, t) => sum + t.plantCount, 0),
+                    trays: buckets.next7Days
+                  },
+                  next14Days: {
+                    count: buckets.next14Days.reduce((sum, t) => sum + t.plantCount, 0),
+                    trays: buckets.next14Days
+                  },
+                  next30Days: {
+                    count: buckets.next30Days.reduce((sum, t) => sum + t.plantCount, 0),
+                    trays: buckets.next30Days
+                  },
+                  beyond30Days: {
+                    count: buckets.beyond30Days.reduce((sum, t) => sum + t.plantCount, 0),
+                    trays: buckets.beyond30Days
+                  }
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+              })
+              .catch(err => {
+                console.error('[AWS Demo] Failed to load rooms.json:', err);
+                return new Response(JSON.stringify({
+                  next7Days: { count: 0, trays: [] },
+                  next14Days: { count: 0, trays: [] },
+                  next30Days: { count: 0, trays: [] },
+                  beyond30Days: { count: 0, trays: [] }
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+              });
+          }
+          
+          // Handle ML forecast endpoints (temperature forecast)
+          if (url && (String(url).includes('/api/ml/forecast') || String(url).includes('/api/ml/energy-forecast'))) {
+            console.log('[AWS Demo] Returning ML forecast data');
+            return Promise.resolve(new Response(JSON.stringify({
+              timestamp: new Date().toISOString(),
+              forecast: Array.from({ length: 24 }, (_, i) => ({
+                hour: i,
+                temperature: 22 + Math.sin(i * Math.PI / 12) * 3,
+                humidity: 65 + Math.cos(i * Math.PI / 8) * 10,
+                vpd: 0.8 + Math.random() * 0.4
+              }))
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+          }
+          
+          // Handle environmental heatmap
+          if (url && String(url).includes('/api/env/heatmap')) {
+            console.log('[AWS Demo] Returning heatmap data');
+            return Promise.resolve(new Response(JSON.stringify({
+              timestamp: new Date().toISOString(),
+              zones: [
+                { zone: 'Zone A', temperature: 23.5, humidity: 68, co2: 850, ppfd: 420 },
+                { zone: 'Zone B', temperature: 22.8, humidity: 65, co2: 920, ppfd: 450 },
+                { zone: 'Zone C', temperature: 24.1, humidity: 70, co2: 880, ppfd: 400 },
+                { zone: 'Nutrient Room', temperature: 21.5, humidity: 72, co2: 780, ppfd: 0 }
+              ]
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+          }
+          
+          // Handle admin authentication
+          if (url && String(url).includes('/api/auth/login')) {
+            console.log('[AWS Demo] Handling demo login');
+            return Promise.resolve(new Response(JSON.stringify({
+              success: true,
+              demo: true,
+              message: 'Demo mode - authentication simulated',
+              user: {
+                username: 'demo',
+                role: 'admin',
+                farmId: 'DEMO-FARM-001'
+              }
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+          }
+          
+          // Handle other API endpoints that don't exist on S3
+          const stubEndpoints = ['/healthz', '/devicedatas', '/weather', '/catalog', '/plans', '/sched'];
+          for (const endpoint of stubEndpoints) {
+            if (url && String(url).includes(endpoint)) {
+              console.log('[AWS Demo] Returning stub for', endpoint);
+              return Promise.resolve(new Response(JSON.stringify({ status: 'demo', data: [] }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              }));
+            }
+          }
+          
+          // Pass through all other requests
+          return originalFetch.apply(this, args);
+        };
+        
+        console.log('[AWS Demo] Fetch interceptor installed');
+      }
+    })();
+  </script>
+  <!-- Console Guard - Disable console in production -->
+  <script src="./js/console-guard.js" defer></script>
+  <!-- Copilot: API base guardrail (C0) -->
+  <script>
+    // Splash screen redirect - show splash on first visit or explicit request
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const skipSplash = urlParams.get('skip') === 'splash';
+      const fromSplash = sessionStorage.getItem('splashShown');
+      
+      if (!fromSplash && !skipSplash && !window.location.pathname.includes('splash')) {
+        sessionStorage.setItem('splashShown', 'true');
+        window.location.href = './splash.html';
+      }
+    })();
+    
+    // Copilot: keep this minimal, no styling changes.
+    (function () {
+      const qs = new URLSearchParams(location.search);
+      const fromQS = qs.get('api');
+      if (fromQS) localStorage.setItem('apiBase', fromQS);
+
+      window.API_BASE =
+        fromQS ||
+        localStorage.getItem('apiBase') ||
+        window.API_BASE ||
+        location.origin; // default: same origin
+    })();
+  </script>
+  <script>window.API_BASE = window.API_BASE || location.origin;</script>
+  <!-- Spectrum math utilities (loaded as module for SPD-weighted calculations) -->
+  <script type="module">
+    import * as SpectrumMath from './spectrum_env_math.js';
+    window.SpectrumMath = SpectrumMath;
+  </script>
+  <script src="./js/net.guard.js?v=charlie-0.9" defer></script>
+  <script src="./js/iot-manager.js?v=charlie-0.9" defer></script>
+  <script src="./app.charlie.js?v=1761603573" defer></script>
+  <!-- Groups V2 module: handles plan dropdown, anchor toggle, and schedule UI -->
+  <script src="./groups-v2.js?v=1761603572" defer></script>
+</head>
+<body>
+  <template id="iot-device-template">
+    <div class="iot-device-card">
+      <div class="device-header">
+        <h4 class="device-name"></h4>
+        <span class="device-type"></span>
+      </div>
+      <div class="device-content">
+        <div class="device-info">
+          <p class="device-id"></p>
+          <p class="device-last-seen"></p>
+        </div>
+        <div class="device-assignments">
+          <select class="room-select">
+            <option value="">Select Room</option>
+          </select>
+          <select class="zone-select" required>
+            <option value="">Select Zone (Required)</option>
+          </select>
+          <select class="group-select">
+            <option value="">Select Group (Optional)</option>
+          </select>
+          <select class="equipment-select">
+            <option value="">Select Equipment</option>
+          </select>
+        </div>
+      </div>
+      <div class="device-footer">
+        <button type="button" class="button button--small button--secondary setup-device">Setup</button>
+        <button type="button" class="button button--small button--danger remove-device">Remove</button>
+      </div>
+    </div>
+  </template>
+  <div class="dashboard-shell">
+
+<aside class="dashboard-sidebar" aria-label="Setup and management navigation">
+  <div class="sidebar-header">
+    <h2 class="sidebar-title">Setup &amp; Management</h2>
+    <p class="tiny text-muted">Organize farm setup, device control, and daily grow operations.</p>
+  </div>
+  <nav class="sidebar-nav" data-role="sidebar-nav">
+    <button class="sidebar-link sidebar-link--overview is-active" type="button" data-sidebar-link data-target="overview" aria-current="page">
+      <span>Grow Room Overview</span>
+    </button>
+
+    <div class="sidebar-group" data-group="farm-setup">
+      <button class="sidebar-group__trigger" type="button" aria-expanded="false">
+        <span>Farm Setup</span>
+        <span class="sidebar-group__icon" aria-hidden="true"></span>
+      </button>
+      <div class="sidebar-group__items" role="menu" hidden>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="farm-registration">
+          Farm Registration
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="iot-devices">
+          IoT Devices
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="grow-rooms">
+          Grow Rooms
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="light-setup">
+          Light Setup
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="integrations">
+          Integrations <span id="integrationsBadge" class="badge tiny" aria-live="polite" style="margin-left:6px"></span>
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="equipment-overview">
+          Equipment Overview
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-group" data-group="control-devices">
+      <button class="sidebar-group__trigger" type="button" aria-expanded="false">
+        <span>Control Devices</span>
+        <span class="sidebar-group__icon" aria-hidden="true"></span>
+      </button>
+      <div class="sidebar-group__items" role="menu" hidden>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="control-devices" data-target="iot-devices">
+          IoT Devices
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="control-devices" data-target="control-assignments">
+          Control Assignments
+        </button>
+        <a class="sidebar-link" href="./views/room-mapper.html" target="_blank" rel="noopener" role="menuitem" data-room-mapper-link>
+          Room Mapper
+        </a>
+        <a class="sidebar-link" href="./vpd.html" target="_blank" rel="noopener" role="menuitem" data-vpd-dashboard-link>
+          VPD Dashboard
+        </a>
+      </div>
+    </div>
+
+    <div class="sidebar-group" data-group="grow-management">
+      <button class="sidebar-group__trigger" type="button" aria-expanded="false">
+        <span>Grow Management</span>
+        <span class="sidebar-group__icon" aria-hidden="true"></span>
+      </button>
+      <div class="sidebar-group__items" role="menu" hidden>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="grow-management" data-target="plans">
+          Plans (Grow Recipes)
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="grow-management" data-target="schedules">
+          Schedules
+        </button>
+        <a class="sidebar-link" href="./views/farm-inventory.html" target="_blank" rel="noopener" role="menuitem" data-farm-inventory-link>
+          Farm Inventory
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="sidebar-standalone">
+    <button type="button" class="sidebar-link" data-sidebar-link data-target="groups">
+      Groups
+    </button>
+    <button type="button" class="sidebar-link" data-sidebar-link data-target="groups-v2">
+      Groups V2
+    </button>
+    <button type="button" class="sidebar-link" data-sidebar-link data-target="field-matrix">
+      Field Matrix
+    </button>
+    <a href="./views/field-mapping.html" class="sidebar-link" data-field-matrix-link>
+      Field Mapping Matrix
+    </a>
+    <a href="./views/nutrient-management.html" class="sidebar-link" target="_blank" rel="noopener">
+      Nutrient Management
+    </a>
+  </div>
+</aside>
+
+
+
+    <main class="dashboard-main">
+
+      <!-- Merged Hero Card: Light Engine Charlie + AI Features -->
+      <section id="topCard" class="card card--hero hero-platform-card">
+        <div class="hero-platform__header">
+          <!-- Left: Farm Branding -->
+          <div class="hero-platform__branding">
+            <img id="farmLogo" src="" alt="Farm logo" class="hero-platform__logo" onerror="this.style.display='none'">
+            <div id="farmBrandingSection" class="hero-platform__farm-info">
+              <h1 id="farmName" class="hero-platform__farm-name"></h1>
+              <div id="farmTagline" class="hero-platform__farm-tagline"></div>
+            </div>
+          </div>
+
+          <!-- Center: Platform Title & Status -->
+          <div class="hero-platform__title-section">
+            <h1 id="lightEngineTitle" class="hero-platform__title">
+              <span class="hero-platform__title-icon">⚡</span>
+              Light Engine Charlie
+            </h1>
+            <div class="hero-platform__automation-status" id="automationIndicator" aria-live="polite">
+              <span class="automation-status__dot" id="automationStatusDot" aria-hidden="true"></span>
+              <span class="automation-status__text">
+                <span class="automation-status__label">Centralized Automation</span>
+                <span class="automation-status__state" id="automationIndicatorStatus">Idle</span>
+              </span>
+            </div>
+            <div id="communicationStatus" class="hero-platform__comm-status">System Online</div>
+            <div id="controllerTargetChip" class="chip" title="Controller target">CTRL: not configured</div>
+          </div>
+
+          <!-- Right: Action Buttons -->
+          <div class="hero-platform__actions" style="display: flex; gap: 1rem; align-items: center;">
+            <a href="./views/farm-summary.html" target="_blank" class="hero-action-btn" style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: all 0.2s; display: inline-block; white-space: nowrap; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);">
+              Farm Summary
+            </a>
+            <a href="/farm-admin-login.html" target="_blank" class="hero-action-btn" style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: all 0.2s; display: inline-block; white-space: nowrap; box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);">
+              Farm Admin
+            </a>
+          </div>
+        </div>
+
+        <!-- AI Features Showcase -->
+        <div class="hero-platform__features">
+          <div class="hero-platform__features-header">
+            <h2 class="hero-platform__features-title">Platform Capabilities</h2>
+            <span class="hero-platform__features-subtitle">Autonomous Growing Intelligence</span>
+          </div>
+
+          <div class="ai-features-showcase">
+            <!-- SpectraSync Feature -->
+            <div class="ai-showcase-card active" id="spectraSyncFeature" data-feature="spectrasync">
+              <div class="ai-showcase-card__icon spectrasync-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M3 12L6 8L9 14L12 6L15 12L18 4L21 12" stroke="url(#spectrumGradient)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <defs>
+                    <linearGradient id="spectrumGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" style="stop-color:#EF4444"/>
+                      <stop offset="33%" style="stop-color:#3B82F6"/>
+                      <stop offset="66%" style="stop-color:#E0F2FE"/>
+                      <stop offset="100%" style="stop-color:#FEF3C7"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              <div class="ai-showcase-card__content">
+                <h3>SpectraSync®</h3>
+                <div class="ai-showcase-card__status on">ON</div>
+                <p class="ai-showcase-card__description">Real-time spectrum optimization synchronized with plant growth cycles</p>
+              </div>
+            </div>
+
+            <!-- E.V.I.E Feature -->
+            <div class="ai-showcase-card" id="evieFeature" data-feature="evie">
+              <div class="ai-showcase-card__icon evie-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M8 12L10 14L12 10L14 14L16 12" fill="currentColor" opacity="0.3"/>
+                  <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.6"/>
+                </svg>
+              </div>
+              <div class="ai-showcase-card__content">
+                <h3>E.V.I.E</h3>
+                <div class="ai-showcase-card__status off">OFF</div>
+                <p class="ai-showcase-card__description">Environmental Virtual Intelligence Engine for autonomous climate control</p>
+              </div>
+            </div>
+
+            <!-- IA In Training Feature -->
+            <div class="ai-showcase-card active" id="iaTrainingFeature" data-feature="ia-training">
+              <div class="ai-showcase-card__icon ia-training-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <polygon points="12,2 22,20 2,20" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  <path d="M12 8L12 14" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="12" cy="16" r="1" fill="currentColor"/>
+                  <circle cx="8" cy="18" r="1" fill="currentColor" opacity="0.3"/>
+                  <circle cx="16" cy="18" r="1" fill="currentColor" opacity="0.3"/>
+                </svg>
+              </div>
+              <div class="ai-showcase-card__content">
+                <h3>IA In Training</h3>
+                <div class="ai-showcase-card__status always-on">ALWAYS ON</div>
+                <p class="ai-showcase-card__description">Intelligent Agent continuously learning from farm operations and outcomes</p>
+              </div>
+            </div>
+
+            <!-- IA Assist Feature -->
+            <div class="ai-showcase-card active" id="iaAssistFeature" data-feature="ia-assist">
+              <div class="ai-showcase-card__icon ia-assist-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2L15 9L22 9L17 14L19 22L12 18L5 22L7 14L2 9L9 9L12 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  <path d="M12 8L12 14" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+              </div>
+              <div class="ai-showcase-card__content">
+                <h3>IA Assist</h3>
+                <div class="ai-showcase-card__status always-on">ALWAYS ON</div>
+                <p class="ai-showcase-card__description">AI-powered recommendations and automated decision support system</p>
+              </div>
+            </div>
+
+            <!-- Environmental Impact Index Feature -->
+            <div class="ai-showcase-card" id="eiiFeature" data-feature="eii">
+              <div class="ai-showcase-card__icon eii-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M8 12L10 10L12 14L16 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="12" cy="12" r="1" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="ai-showcase-card__content">
+                <h3>E.I²</h3>
+                <div class="ai-showcase-card__status dev">DEV</div>
+                <p class="ai-showcase-card__description">Environmental Impact Index measuring sustainability metrics and carbon footprint</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dashboard Panel: Overview -->
+      <section class="dashboard-panel dashboard-panel--overview is-active" data-panel="overview">
+      
+      <!-- Overview hero -->
+      <section id="overview" class="overview" aria-labelledby="overviewTitle">
+        <header class="overview__hdr">
+          <div>
+            <h1 id="overviewTitle">Overview</h1>
+            <p class="overview__subtitle">Tour-ready status for every grow room</p>
+          </div>
+          <div class="overview__legend" aria-label="Status legend">
+            <span class="overview__legend-item"><span class="icon ai" aria-hidden="true"></span>AI</span>
+            <span class="overview__legend-item"><span class="icon auto" aria-hidden="true"></span>Automation</span>
+            <span class="overview__legend-item"><span class="icon spectra" aria-hidden="true"></span>SpectraSync</span>
+            <div class="overview__demo" role="group" aria-label="Demo mode controls">
+              <label for="demoRoom">Room</label>
+              <select id="demoRoom" name="demoRoom" aria-label="Demo room"></select>
+              <label for="demoBpm">BPM</label>
+              <input id="demoBpm" type="number" min="60" max="140" step="1" value="90" aria-label="Demo tempo">
+              <button id="demoStart" type="button" class="primary">Start Demo</button>
+              <button id="demoStop" type="button" class="ghost" disabled>Stop</button>
+            </div>
+          </div>
+        </header>
+        <div id="overviewGrid" class="overview__grid" aria-live="polite"></div>
+        
+        <!-- Grow Room Sensor Overview -->
+        <div style="margin-top: 24px;">
+          <div id="growOverviewSummary" class="grow-overview-summary"></div>
+          <div id="growOverviewGrid" class="grow-overview-grid"></div>
+        </div>
+        
+        <!-- Environmental Zones -->
+        <div style="margin-top: 24px;">
+          <h2>Environmental Trends</h2>
+          <div id="envZones" class="env-zones"></div>
+        </div>
+      </section>
+      
+      </section> <!-- End dashboard-panel--overview -->
+
+      <!-- Settings: Integrations panel -->
+      <section id="integrationsPanel" class="card card--compact" data-panel="integrations">
+        <header class="panel-header">
+          <div>
+            <h2>Integrations</h2>
+            <span class="hint" tabindex="0" data-tip="Connect cloud and LAN ecosystems like SwitchBot and Kasa.">?</span>
+          </div>
+          <div class="row row--gap-xs">
+            <span id="integrationsStatus" class="tiny" aria-live="polite"></span>
+          </div>
+        </header>
+        <div class="panel-body">
+          <!-- Universal Device Scanner -->
+          <div style="margin-bottom: 24px; padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; color: white;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <div>
+                <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">Universal Device Scanner</div>
+                <div style="font-size: 12px; opacity: 0.9;">Multi-protocol discovery: BLE, mDNS, SSDP, Kasa UDP, SwitchBot Cloud</div>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button id="btnUniversalScan" type="button" style="padding: 10px 20px; background: white; color: #667eea; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Start Scan</button>
+                <button id="btnAddDeviceIntegrations" type="button" class="primary" style="background:white;color:#667eea;border:none;border-radius:6px;padding:10px 16px;font-weight:600;">Add Device</button>
+              </div>
+            </div>
+            <div id="universalScanProgress" style="display: none; margin-top: 12px;">
+              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                <div style="width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span id="universalScanStatus" style="font-size: 13px;">Scanning networks...</span>
+              </div>
+              <div style="background: rgba(255,255,255,0.2); border-radius: 4px; height: 6px; overflow: hidden;">
+                <div id="universalScanProgressBar" style="background: white; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Scan Results -->
+          <div id="universalScanResults" style="display: none; margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Discovered Devices</h3>
+              <span id="universalScanCount" style="font-size: 12px; color: #64748b;"></span>
+            </div>
+            <div id="universalScanResultsTable" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+              <!-- Results populated here -->
+            </div>
+          </div>
+
+          <div class="grid cols-2" style="gap:16px;align-items:flex-end">
+            <div>
+              <div class="tiny text-muted" style="margin-bottom:6px;font-weight:600">SwitchBot Cloud</div>
+              <label class="tiny" style="display:block;margin-bottom:8px;">
+                API Token
+                <input type="text" id="integSbToken" placeholder="SwitchBot API Token" style="width:100%">
+              </label>
+              <label class="tiny" style="display:block;margin-bottom:8px;">
+                API Secret
+                <input type="password" id="integSbSecret" placeholder="SwitchBot API Secret" style="width:100%">
+              </label>
+              <button id="btnTestSwitchBot" type="button" class="ghost">Test SwitchBot</button>
+            </div>
+            <div>
+              <div class="tiny text-muted" style="margin-bottom:6px;font-weight:600">TP-Link Kasa</div>
+              <label class="tiny" style="display:block;margin-bottom:8px;">
+                Email
+                <input type="email" id="integKasaEmail" placeholder="your@email.com" style="width:100%">
+              </label>
+              <label class="tiny" style="display:block;margin-bottom:8px;">
+                Password
+                <input type="password" id="integKasaPassword" placeholder="Password" style="width:100%">
+              </label>
+            </div>
+          </div>
+          <div class="row row--gap-sm" style="margin-top:12px;">
+            <button id="btnSaveIntegrations" type="button" class="primary">Save Integrations</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Equipment Overview panel -->
+      <section id="equipmentOverviewPanel" class="card card--compact" data-panel="equipment-overview">
+        <header class="panel-header">
+          <div>
+            <h2>Equipment Overview</h2>
+            <span class="hint" tabindex="0" data-tip="Roll-up of equipment captured across Grow Rooms.">?</span>
+          </div>
+          <button type="button" class="primary" style="margin-left:auto;" onclick="openGrowRoomWizardForEquipment()">
+            + Add New Equipment
+          </button>
+        </header>
+        <div class="panel-body" style="overflow-x:auto;">
+          <div id="equipmentSummary" class="panel-callout tiny" aria-live="polite" style="margin-bottom:8px;color:#475569"></div>
+          <table id="equipmentTable">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Vendor</th>
+                <th>Model</th>
+                <th>Room</th>
+                <th>Control</th>
+                <th>Actions</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      </section>
+      <section id="farmPanel" class="card card--compact" data-panel="farm-registration">
+              <header class="panel-header">
+                <div>
+                  <h2>Farm Registration</h2>
+                  <span class="hint" tabindex="0" data-tip="Guided setup to get the reTerminal online, capture the farm address, and map Rooms/Zones. We save as we go and collapse to a summary badge when complete.">?</span>
+                </div>
+                <div class="row row--gap-xs">
+                  <button id="btnLaunchFarm" type="button" class="primary">Register Farm</button>
+                  <button id="btnEditFarm" type="button" class="primary pulse-button cta-start is-hidden">Start here</button>
+                </div>
+              </header>
+              <div class="panel-summary">
+                <span class="tiny text-muted">Status</span>
+                <span id="farmSummaryChip" class="summary-chip"></span>
+              </div>
+      <div id="farmPanelBody" class="panel-body">
+                <div id="farmBadge" class="farm-summary is-hidden"></div>
+                <!-- <button id="btnStartDeviceSetup" type="button" class="ghost is-hidden">Continue device setup</button> -->
+              </div>
+            </section>
+      <section id="roomsPanel" class="card card--compact" data-panel="grow-rooms">
+              <header class="panel-header">
+                <div>
+                  <h2>Grow Rooms</h2>
+                  <span class="hint" tabindex="0" data-tip="Set up rooms with layout, fixtures, schedule, sensors, and energy monitoring. Saved rooms appear below.">?</span>
+                </div>
+                <button id="btnLaunchRoom" type="button" class="primary">New Grow Room</button>
+              </header>
+      <div id="roomsPanelBody" class="panel-body">
+                <div id="roomsList"></div>
+              </div>
+            </section>
+      <section id="lightsPanel" class="card card--compact" data-panel="light-setup">
+              <header class="panel-header">
+                <div>
+                  <h2>Light Setup</h2>
+                  <span class="hint" tabindex="0" data-tip="Set up grow lights across rooms. We carry forward devices discovered in deep scans.">?</span>
+                </div>
+                <button id="btnLaunchLightSetup" type="button" class="primary">New Light Setup</button>
+              </header>
+      <div id="lightsPanelBody" class="panel-body">
+                <div id="lightSetupSummary" class="panel-callout">
+                  <!-- Summary will be populated by JavaScript -->
+                </div>
+                <div id="lightSetupsList"></div>
+              </div>
+            </section>
+
+  <section id="pairDevicesPanel" class="card" data-panel="pair-devices">
+  <div class="row row--between row--center">
+    <div>
+      <h2 class="section-title" style="margin:0">Pair Devices</h2>
+      <p class="tiny text-muted">Link new controllers, sensors, and fixtures to the dashboard.</p>
+    </div>
+    <span id="pairDevicesStatus" class="tiny" aria-live="polite"></span>
+  </div>
+  <p class="tiny" style="margin:8px 0 12px;color:#475569">Walk through Wi‑Fi, Bluetooth, and wired pairing with contextual AI assistance. We detect network details, confirm hub requirements, and document installation notes.</p>
+  <div class="row row--gap-sm row--wrap">
+  <button id="btnLaunchPairWizard" type="button" class="primary">Start Pairing Wizard</button>
+    <button id="btnPairWizardDocs" type="button" class="ghost">Pairing checklist</button>
+  </div>
+</section>
+      <section id="iotPanel" class="card" data-panel="iot-devices">
+            <div class="row row--between row--center">
+              <h2 style="margin:0">
+                IoT Devices
+                <span class="hint" tabindex="0" data-tip="Manage all connected IoT devices including SwitchBot, Kasa, Shelly, and GreenReach devices. View status, set names and locations, and identify controlled equipment.">?</span>
+              </h2>
+              <div class="row row--gap-sm row--wrap" style="align-items:flex-start;">
+                <button id="btnScanIoTDevices" type="button" class="primary" title="Scan for all IoT devices">Scan for Devices</button>
+                <div class="iot-action-group" role="group" aria-label="Device managers" style="display:flex;flex-direction:column;gap:4px;min-width:160px;">
+                  <span class="tiny text-muted" style="letter-spacing:0.02em;text-transform:uppercase;font-weight:600;">Device managers</span>
+                  <div class="row row--gap-xs">
+                    <button id="btnOpenSwitchBotManager" type="button" class="ghost">SwitchBot Manager</button>
+                  </div>
+                </div>
+                <div class="iot-action-group" role="group" aria-label="Device setup" style="display:flex;flex-direction:column;gap:4px;min-width:160px;">
+                  <span class="tiny text-muted" style="letter-spacing:0.02em;text-transform:uppercase;font-weight:600;">Device setup</span>
+                  <div class="row row--gap-xs">
+                    <button id="btnShowIotSetup" type="button" class="ghost">View setup options</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="tiny" style="margin:8px 0 0;color:#475569">Configure and monitor your IoT devices including SwitchBot environmental sensors, Shelly relays, Kasa plugs, and GreenReach grow lights. Use "Scan for Devices" to discover new hardware. Unknown devices will appear in a table; assigning details will move them into the Device Manager section below.</p>
+
+            <!-- IoT scan progress bar -->
+            <div id="iotScanBarContainer" style="margin:12px 0 0 0;display:none;">
+              <div id="iotScanBar" style="position:relative;width:100%;height:22px;background:#e0e7ef;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px #0001;">
+                <div id="iotScanBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#60a5fa,#34d399);transition:width 0.2s cubic-bezier(.4,2,.6,1);display:flex;align-items:center;justify-content:center;">
+                  <span id="iotScanBarPercent" style="position:absolute;width:100%;text-align:center;font-weight:bold;color:#222;letter-spacing:0.5px;">0%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Unified IoT devices list (Unknown table + Device Manager cards) -->
+            <div id="iotDevicesList" style="margin-top:12px"></div>
+          </section>
+
+          <section id="controllerAssignmentsPanel" class="card card--panel" data-panel="control-assignments" style="margin-top:24px;">
+            <div class="row row--between row--center">
+              <h2 class="section-title">
+                Controller Assignments
+                <span class="hint" tabindex="0" data-tip="Assign controllers to equipment requiring smart control (lights, HVAC, sensors).">?</span>
+              </h2>
+              <div class="row row--gap-xs">
+                <button id="btnRefreshControllerAssignments" type="button" class="ghost">Refresh</button>
+                <button id="btnManageControllers" type="button" class="primary">Manage Controllers</button>
+              </div>
+            </div>
+
+            <!-- Controller Assignments Table (now directly in the card panel) -->
+            <div id="controllerAssignmentsTable" class="panel-body">
+              <!-- Table will be populated by JavaScript -->
+            </div>
+          </section>
+      <section id="plansPanel" class="card" data-panel="plans">
+            <div class="row row--between row--center">
+              <h2 class="section-title">
+                Plans (Grow Recipes)
+                <span class="hint" tabindex="0" data-tip="Search and browse daily lighting recipes for different crops. Each recipe provides spectrum and PPFD schedules optimized for each growth stage.">?</span>
+              </h2>
+              <span id="plansStatus" class="tiny" aria-live="polite"></span>
+            </div>
+            <div class="row row--gap-sm row--wrap mt-sm mb-sm">
+              <input id="recipesSearchInput" type="text" placeholder="Search crops (e.g., tomato, lettuce, basil...)" style="flex:1;max-width:400px;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
+              <button id="btnSearchRecipes" type="button" class="primary">Search</button>
+              <button id="btnClearRecipes" type="button" class="ghost">Clear</button>
+            </div>
+            <div id="recipesResults" style="margin-top:16px;"></div>
+            <div id="recipesList" class="grid cols-3 gap-md" aria-live="polite" style="margin-top:16px;"></div>
+          </section>
+      <section id="schedulesPanel" class="card" data-panel="schedules">
+            <div class="row row--between row--center">
+              <h2 style="margin:0">
+                Schedules
+                <span class="hint" tabindex="0" data-tip="Define single or split light cycles (ON/OFF). We track wall-clock times in America/Toronto and sync to sched.json.">?</span>
+              </h2>
+              <span id="schedStatus" class="tiny" aria-live="polite"></span>
+            </div>
+
+            <div class="schedule-editor">
+              <div class="schedule-editor__col">
+                <div class="row row--gap-sm row--wrap mt-sm mb-sm">
+                  <input id="schedName" type="text" placeholder="Schedule name (e.g., Flower A)">
+                  <label class="row row--gap-xs"><span>Timezone</span>
+                    <select id="schedTz">
+                      <option value="America/Toronto">America/Toronto</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="schedule-mode" role="radiogroup" aria-label="Schedule mode">
+                  <span class="tiny">Mode</span>
+                  <label class="chip-option"><input type="radio" name="schedMode" value="one" checked><span>One cycle</span></label>
+                  <label class="chip-option"><input type="radio" name="schedMode" value="two"><span>Two cycles</span></label>
+                </div>
+
+                <div class="schedule-cycle" data-cycle="1">
+                  <div class="tiny">Cycle 1</div>
+                  <label><span>Start</span><input id="schedCycle1On" type="time" value="08:00"></label>
+                  <label><span>Photoperiod (h)</span><input id="schedC1Hours" type="number" min="0" max="24" step="0.5" value="12"></label>
+                  <div class="tiny" id="schedC1End">End: 20:00</div>
+                  <div class="tiny" style="color:#475569">Repeated daily</div>
+                </div>
+                <div class="schedule-cycle" data-cycle="2">
+                  <div class="tiny">Cycle 2</div>
+                  <label><span>Start</span><input id="schedCycle2On" type="time" value="00:00"></label>
+                  <label><span>Photoperiod (h)</span><input id="schedC2Hours" type="number" min="0" max="24" step="0.5" value="12"></label>
+                  <div class="tiny" id="schedC2End">End: 12:00</div>
+                  <div class="tiny" style="color:#475569">Repeated daily</div>
+                </div>
+              </div>
+
+              <div class="schedule-editor__col schedule-editor__col--preview">
+                <div class="schedule-math" aria-live="polite">
+                  <div><strong>ON total</strong><span id="schedOnTotal">--</span></div>
+                  <div><strong>OFF total</strong><span id="schedOffTotal">--</span></div>
+                  <div><strong>Δ vs 24h</strong><span id="schedDelta">--</span></div>
+                </div>
+                <div id="schedMathWarning" class="schedule-warning" role="alert" aria-live="polite" style="display:none"></div>
+                <div class="schedule-preview schedule-preview--editor">
+                  <div class="schedule-preview__bar" id="schedEditorBar"></div>
+                  <div class="schedule-preview__legend">
+                    <span class="tiny">24h preview</span>
+                    <span class="schedule-preview__dst" id="schedEditorDst" style="display:none">DST</span>
+                  </div>
+                  <div class="schedule-preview__transitions" id="schedEditorTransitions"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group-only scope: removed Room/Zone selectors per redesign -->
+
+            <div class="row row--gap-sm row--wrap mt-sm mb-sm">
+              <button id="btnSaveSched" type="button" class="primary">Save Schedule</button>
+              <button id="btnDeleteSched" type="button" class="ghost">Delete Schedule</button>
+              <button id="btnReloadSched" type="button" class="ghost">Reload Schedules</button>
+            </div>
+          </section>
+      <section id="groupsPanel" class="card" data-panel="groups">
+
+            <div class="row row--between row--center">
+              <h2 style="margin:0">
+                Groups
+                <span class="hint" tabindex="0" data-tip="Make named collections of devices. Quick selectors use Farm Rooms/Zones. Save writes to groups.json. Apply sends spectrum (HEX12) to all checked devices.">?</span>
+              </h2>
+              <span id="groupsStatus" class="tiny" aria-live="polite"></span>
+            </div>
+
+            <!-- Room/Zone dropdowns for group assignment -->
+            <div class="row row--gap-sm row--wrap mb-sm">
+              <label for="groupRoomDropdown" class="tiny" style="margin-right:8px;">Room</label>
+              <select id="groupRoomDropdown" style="min-width:140px;margin-right:16px;"></select>
+              <label for="groupZoneDropdown" class="tiny" style="margin-right:8px;">Zone</label>
+              <select id="groupZoneDropdown" style="min-width:140px;"></select>
+            </div>
+
+            <!-- Group pick / save -->
+            <div class="row row--gap-sm row--wrap mt-sm mb-sm">
+              <label class="sr-only" for="groupSelect">Active group</label>
+              <select id="groupSelect" title="Active group" style="min-width:180px"></select>
+              <input id="groupName" type="text" placeholder="New or existing group name" style="min-width:220px">
+              <button id="btnSaveGroup" type="button" class="primary">Save Group</button>
+              <button id="btnDeleteGroup" type="button" class="ghost" title="Delete this group">Delete Group</button>
+              <button id="btnReloadGroups" type="button" class="ghost">Reload Groups</button>
+            </div>
+
+            <!-- Group plan / schedule -->
+            <div class="group-card-meta">
+              <div class="row group-card-meta__row">
+                <label class="row group-card-meta__field">
+                  <span class="tiny">Plan</span>
+                  <select id="groupPlan"></select>
+                </label>
+                <button id="btnGroupPlan" type="button" class="ghost">Edit Plan</button>
+                <label class="row group-card-meta__field">
+                  <span class="tiny">Schedule</span>
+                  <select id="groupSchedule"></select>
+                </label>
+                <button id="btnGroupSchedule" type="button" class="ghost">Edit Schedule</button>
+                <button id="btnGroupSave" type="button" class="primary" style="margin-left:8px;">Save</button>
+              </div>
+              <div class="group-card-meta__chips">
+                <span id="groupSpectraChip" class="group-spectra-chip" aria-live="polite">SpectraSync</span>
+              </div>
+              <span id="groupMetaStatus" class="tiny" aria-live="polite"></span>
+            </div>
+            <div id="groupSpectrumPreview" class="group-spectrum" aria-live="polite" style="margin:6px 0 8px"></div>
+            <div id="groupSchedulePreview" class="schedule-preview schedule-preview--group" aria-live="polite"></div>
+
+            <div class="group-info-grid">
+              <section id="groupPlanInfoCard" class="group-info-card" aria-live="polite">
+                <header class="group-info-card__header">
+                  <div>
+                    <h3 id="groupPlanInfoTitle">Plan information</h3>
+                    <p id="groupPlanInfoSubtitle" class="tiny text-muted">Select a plan to view spectrum targets.</p>
+                  </div>
+                </header>
+                <div class="group-info-card__body">
+                  <canvas id="groupPlanInfoCanvas" class="group-info-card__canvas" width="320" height="100" role="img" aria-label="Plan spectrum preview"></canvas>
+                  <dl id="groupPlanInfoMetrics" class="group-info-card__metrics"></dl>
+                  <p id="groupPlanSelectedLabel" class="tiny text-muted">Selected lights spectrum</p>
+                  <canvas id="groupPlanSelectedCanvas" class="group-info-card__canvas" width="320" height="80" role="img" aria-label="Selected lights spectrum preview"></canvas>
+                  <dl id="groupPlanSelectedMetrics" class="group-info-card__metrics"></dl>
+                </div>
+              </section>
+
+              <section id="groupLightInfoCard" class="group-info-card" aria-live="polite">
+                <header class="group-info-card__header">
+                  <div>
+                    <h3 id="groupLightInfoTitle">Current mix</h3>
+                    <p id="groupLightInfoSubtitle" class="tiny text-muted">Add lights to preview live control options.</p>
+                  </div>
+                </header>
+                <div class="group-info-card__body">
+                  <canvas id="groupLightInfoCanvas" class="group-info-card__canvas" width="320" height="100" role="img" aria-label="Current spectrum preview"></canvas>
+                  <dl id="groupLightInfoMetrics" class="group-info-card__metrics"></dl>
+                  <p id="groupLightInfoMode" class="tiny text-muted" aria-live="polite"></p>
+                </div>
+              </section>
+            </div>
+
+            <!-- Inline Group Schedule Editor (appears when editing a group's schedule) -->
+            <div id="groupScheduleEditor" class="group-schedule-editor" style="display:none;margin-top:8px">
+              <div class="row row--gap-sm row--center row--wrap">
+                <span class="tiny">Mode</span>
+                <label class="chip-option"><input type="radio" name="groupSchedMode" value="one" checked><span>One cycle</span></label>
+                <label class="chip-option"><input type="radio" name="groupSchedMode" value="two"><span>Two cycles</span></label>
+                <button id="groupSchedSplit" class="ghost" type="button">Split 24 h evenly</button>
+                <button id="groupSchedFix" class="ghost" type="button">Fix to 24 h</button>
+                <span id="groupSchedWarn" class="tiny" style="color:#b45309;display:none"></span>
+              </div>
+              <div class="grid cols-2" style="align-items:end;gap:12px">
+                <div>
+                  <div class="tiny">Cycle A</div>
+                  <label class="row row--gap-xs"><span>Start</span><input id="gSchedC1Start" type="time" value="08:00"></label>
+                  <label class="row row--gap-xs"><span>Photoperiod (h)</span><input id="gSchedC1Hours" type="number" min="0" max="24" step="0.5" value="12"></label>
+                  <div class="tiny" id="gSchedC1End">End: 20:00</div>
+                  <div class="tiny" style="color:#475569">Repeated daily</div>
+                </div>
+                <div id="gSchedC2" style="display:none">
+                  <div class="tiny">Cycle B</div>
+                  <label class="row row--gap-xs"><span>Start</span><input id="gSchedC2Start" type="time" value="00:00"></label>
+                  <label class="row row--gap-xs"><span>Photoperiod (h)</span><input id="gSchedC2Hours" type="number" min="0" max="24" step="0.5" value="12"></label>
+                  <div class="tiny" id="gSchedC2End">End: 12:00</div>
+                  <div class="tiny" style="color:#475569">Repeated daily</div>
+                </div>
+              </div>
+              <div class="row row--gap-sm row--center row--wrap mt-sm">
+                <div class="schedule-preview schedule-preview--editor" style="flex:1 1 280px">
+                  <div class="schedule-preview__bar" id="gSchedBar"></div>
+                  <div class="schedule-preview__legend"><span class="tiny">24h preview</span></div>
+                </div>
+                <div class="row row--gap-md">
+                  <button id="groupSchedSave" class="primary" type="button">Save</button>
+                  <button id="groupSchedDone" class="ghost" type="button">Done</button>
+                  <button id="groupSchedCancel" class="ghost" type="button">Cancel</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick selectors -->
+            <!-- groupQuick (mid-card room/zone dropdowns) removed per redesign -->
+
+            <!-- Light checklist -->
+            <div class="row row--between row--center" style="margin:8px 0 4px;gap:8px;">
+              <h3 style="margin:0;font-size:15px;color:#0f172a;">Assigned Lights</h3>
+              <button id="groupLightRemoveSelected" class="ghost danger tiny" type="button" disabled>Remove selected</button>
+            </div>
+            <div id="groupLightList" class="grid cols-3" style="margin-bottom:8px"></div>
+
+            <!-- Ungrouped lights (available to add) -->
+            <div class="group-roster-card" id="ungroupedLightsCard">
+              <div class="row row--between row--center mb-xs">
+                <h3 style="margin:0;font-size:15px;color:#0f172a">Ungrouped Lights</h3>
+                <div class="row row--gap-xs row--center">
+                  <span id="ungroupedStatus" class="tiny" aria-live="polite"></span>
+                  <button id="btnImportFixtures" type="button" class="ghost tiny">Import fixtures</button>
+                </div>
+              </div>
+              <div id="ungroupedList" class="grid cols-3" aria-live="polite"></div>
+              <p id="ungroupedEmpty" class="tiny" style="display:none">All lights are assigned to groups.</p>
+            </div>
+
+            <!-- Group roster -->
+            <div class="group-roster-card" id="groupRosterCard" style="display:block;">
+              <div class="row row--between row--center mb-xs">
+                <h3 style="margin:0;font-size:15px;color:#0f172a">Group Roster</h3>
+                <span id="groupRosterStatus" class="tiny" aria-live="polite"></span>
+              </div>
+              <div class="group-roster-table" role="region" aria-live="polite">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Light</th>
+                      <th scope="col">ID</th>
+                      <th scope="col">Location</th>
+                      <th scope="col">Rack</th>
+                      <th scope="col">Level</th>
+                      <th scope="col">Pos</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="groupRosterBody"></tbody>
+                </table>
+                <p id="groupRosterEmpty" class="tiny">Select lights to populate the roster.</p>
+              </div>
+            </div>
+
+            <!-- Spectrum HUD -->
+            <div class="grid cols-3" style="align-items:start; margin-top:8px">
+              <div>
+                <div class="kv"><span>Master</span><span class="row"><input id="gmaster"  type="range" min="0" max="100" value="60"><input id="gmasterv"  class="pct" type="number" min="0" max="100" value="60" style="width:70px">%</span></div>
+                <div class="kv"><label class="row tiny" style="gap:6px"><input id="gratios" type="checkbox"><span>Lock ratios (Master scales)</span></label></div>
+                <div class="kv"><span>CW</span><span class="row"><input id="gcw"  type="range" min="0" max="100" value="45"><input id="gcwv"  class="pct" type="number" min="0" max="100" value="45" style="width:70px">%</span></div>
+                <div class="kv"><span>WW</span><span class="row"><input id="gww"  type="range" min="0" max="100" value="45"><input id="gwwv"  class="pct" type="number" min="0" max="100" value="45" style="width:70px">%</span></div>
+                <div class="kv"><span>Blue</span><span class="row"><input id="gbl"  type="range" min="0" max="100" value="0"><input id="gblv"  class="pct" type="number" min="0" max="100" value="0" style="width:70px">%</span></div>
+                <div class="kv"><span>Red</span><span class="row"><input id="grd"  type="range" min="0" max="100" value="0"><input id="grdv"  class="pct" type="number" min="0" max="100" value="0" style="width:70px">%</span></div>
+              </div>
+
+              <div>
+                <h3 style="margin:0 0 6px">Group Actions</h3>
+                <div class="row row--gap-sm row--wrap">
+                  <button id="grpOn"  type="button" class="ghost">Power ON</button>
+                  <button id="grpOff" type="button" class="ghost">Power OFF</button>
+                  <button id="grpApply" type="button" class="primary">Apply Spectrum</button>
+                </div>
+                <p id="groupLastHex" class="tiny" style="margin-top:6px;color:#475569"></p>
+              </div>
+
+              <!-- Removed twin spectrum preview beside sliders: HUD mix and Plan mix -->
+            </div>
+          </section>
+      <section id="calibrationPanel" class="card" data-panel="calibration">
+            <div class="row row--between row--center">
+              <h2 style="margin:0">
+                Calibration
+                <span class="hint" tabindex="0" data-tip="Match lights to a target using controller or meter readings. Gains apply at send-time as a correction layer.">?</span>
+              </h2>
+              <span id="calStatus" class="tiny" aria-live="polite"></span>
+            </div>
+            <p class="tiny" style="margin:8px 0 12px;color:#475569">Pick a scope (Light, Group, or Location), choose a target light, and preview corrections before applying. Calibrations store per-light gains that wrap all future writes.</p>
+            <div class="row row--gap-sm row--wrap mb-md">
+              <button id="btnOpenCalWizard" type="button" class="primary">Open Calibration Wizard</button>
+              <button id="btnReloadCal" type="button" class="ghost">Reload Profiles</button>
+            </div>
+            <div id="calibrationRegistry" class="cal-registry"></div>
+          </section>
+
+<section id="profilePanel" class="card" data-panel="profile">
+  <div class="row row--between row--center">
+    <h2 style="margin:0">Profile</h2>
+    <span id="profileStatus" class="tiny" aria-live="polite"></span>
+  </div>
+  <p class="tiny" style="margin:8px 0 12px;color:#475569">Manage the farm operator details and contact preferences used across reports and support requests.</p>
+  <form id="profileForm" class="grid cols-2" style="gap:12px;align-items:end;max-width:640px">
+    <label class="tiny">Name
+      <input id="profileName" type="text" placeholder="Operator name" autocomplete="name">
+    </label>
+    <label class="tiny">Role
+      <input id="profileRole" type="text" placeholder="e.g., Head Grower">
+    </label>
+    <label class="tiny">Email
+      <input id="profileEmail" type="email" placeholder="name@example.com" autocomplete="email">
+    </label>
+    <label class="tiny">Phone
+      <input id="profilePhone" type="tel" placeholder="+1 (555) 123-4567" autocomplete="tel">
+    </label>
+    <div class="row row--gap-sm" style="grid-column:1 / -1">
+      <button id="profileSave" type="submit" class="primary">Save Profile</button>
+      <button id="profileReset" type="button" class="ghost">Reset</button>
+    </div>
+  </form>
+
+  <!-- Billing & Subscription Card -->
+  <div class="card" style="margin-top:24px;border:1px solid #cbd5e1;border-radius:8px;padding:20px;background:linear-gradient(135deg,#f8fafc 0%,#e0f2fe 100%);">
+    <div class="row row--between row--center" style="margin-bottom:16px;">
+      <h3 style="margin:0;font-size:18px;display:flex;align-items:center;gap:8px;">
+        💳 Billing & Subscription
+        <span id="sandboxBadge" style="background:#f59e0b;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:bold;">SANDBOX</span>
+      </h3>
+    </div>
+    
+    <div id="billingContent">
+      <!-- No subscription state -->
+      <div id="noSubscription" style="text-align:center;padding:20px 0;">
+        <div style="font-size:48px;margin-bottom:12px;">📭</div>
+        <p style="color:#64748b;margin-bottom:16px;">No active subscription</p>
+        <a href="/billing.html" class="button primary" style="display:inline-block;text-decoration:none;">
+          View Plans & Subscribe
+        </a>
+      </div>
+
+      <!-- Active subscription state (hidden by default) -->
+      <div id="activeSubscription" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:4px;">Current Plan</div>
+            <div id="currentPlanName" style="font-size:20px;font-weight:bold;color:#0f172a;">Starter</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:12px;color:#64748b;margin-bottom:4px;">Monthly Cost</div>
+            <div id="currentPlanPrice" style="font-size:20px;font-weight:bold;color:#10b981;">$49.00</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px;background:rgba(255,255,255,0.6);border-radius:6px;margin-bottom:16px;">
+          <div style="text-align:center;">
+            <div style="font-size:24px;font-weight:bold;color:#10b981;" id="usageDevices">0</div>
+            <div style="font-size:11px;color:#64748b;">Devices</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:24px;font-weight:bold;color:#10b981;" id="usageApiCalls">0</div>
+            <div style="font-size:11px;color:#64748b;">API Calls</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:24px;font-weight:bold;color:#10b981;" id="usageStorage">0 GB</div>
+            <div style="font-size:11px;color:#64748b;">Storage</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <a href="/billing.html" class="button ghost" style="flex:1;text-align:center;text-decoration:none;font-size:13px;">
+            View Details
+          </a>
+          <button type="button" class="button ghost" onclick="manageBilling()" style="flex:1;font-size:13px;">
+            Manage
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="fieldMatrixPanel" class="card" data-panel="field-matrix">
+  <div class="row row--between row--center">
+    <h2 style="margin:0">Field Matrix</h2>
+    <span id="fieldMatrixStatus" class="tiny" aria-live="polite"></span>
+  </div>
+  <p class="tiny" style="margin:8px 0 12px;color:#475569">View and manage the complete field mapping matrix showing zones, lights, and room assignments.</p>
+  
+  <div class="row row--gap-sm row--wrap mb-md">
+    <button id="btnRefreshFieldMatrix" type="button" class="primary">Refresh Matrix</button>
+    <button id="btnExportFieldMatrix" type="button" class="ghost">Export CSV</button>
+  </div>
+  
+  <div id="fieldMatrixContainer" style="overflow-x:auto;">
+    <table id="fieldMatrixTable" class="data-table" style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f1f5f9;border-bottom:2px solid #cbd5e1;">
+          <th style="padding:12px;text-align:left;font-weight:600;color:#0f172a;">Zone</th>
+          <th style="padding:12px;text-align:left;font-weight:600;color:#0f172a;">Room</th>
+          <th style="padding:12px;text-align:left;font-weight:600;color:#0f172a;">Light ID</th>
+          <th style="padding:12px;text-align:left;font-weight:600;color:#0f172a;">Light Name</th>
+          <th style="padding:12px;text-align:left;font-weight:600;color:#0f172a;">Status</th>
+          <th style="padding:12px;text-align:left;font-weight:600;color:#0f172a;">Group</th>
+        </tr>
+      </thead>
+      <tbody id="fieldMatrixTableBody">
+        <tr>
+          <td colspan="6" style="padding:24px;text-align:center;color:#64748b;">Loading field matrix data...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+      <section id="groupsV2Panel" class="card hud-shell gr-card" data-panel="groups-v2" data-card-prefix="GR" data-card-code="GV2" hidden>
+        <div class="row row--between row--center hud-shell__header">
+          <h2 class="hud-shell__title">Groups V2</h2>
+          <span id="groupsV2Status" class="tiny" aria-live="polite"></span>
+        </div>
+        <div class="panel-body" style="display:flex;flex-direction:column;gap:18px;">
+          <div class="gr-card" id="groupsV2PlanForm" style="padding:16px;border:1px solid #cbd5e1;border-radius:12px;background:linear-gradient(120deg,#f8fafc 0%,#e0f2fe 100%);display:flex;flex-direction:column;gap:16px;">
+            <div class="row row--wrap" style="gap:12px;align-items:flex-end;" id="groupsV2PlanControls">
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:180px;">
+                Room
+                <select id="groupsV2RoomSelect" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option value="GreenReach">GreenReach</option>
+                </select>
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">
+                Zone
+                <select id="groupsV2ZoneSelect" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option value="">(none)</option>
+                </select>
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
+                Zone name
+                <input id="groupsV2ZoneName" type="text" placeholder="Propagation North — Bench A" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end;">
+                <button id="groupsV2NewGroup" type="button" class="secondary" style="background:linear-gradient(135deg,#e0e7ff 0%,#c7d2fe 100%);color:#4338ca;border:1px solid #a5b4fc;">➕ New Group</button>
+                <button id="groupsV2SaveDraft" type="button" class="secondary" style="background:linear-gradient(135deg,#94a3b8 0%,#64748b 100%);color:white;">💾 Save Draft</button>
+                <button id="groupsV2SaveAndDeploy" type="button" class="primary" style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);">🚀 Save & Deploy</button>
+                <button id="groupsV2HarvestBtn" type="button" class="primary" style="display:none;background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);">🌾 Harvest</button>
+                <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
+                  Load group
+                  <select id="groupsV2LoadGroup" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                    <option value="">(none)</option>
+                  </select>
+                </label>
+                <div id="groupsV2StatusBadge" style="display:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;white-space:nowrap;"></div>
+              </div>
+            </div>
+
+            <div class="row row--wrap" style="gap:12px;align-items:flex-start;">
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
+                Plan
+                <select id="groupsV2PlanSelect" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option value="">(none)</option>
+                </select>
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
+                Schedule
+                <select id="groupsV2ScheduleSelect" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option value="">(none)</option>
+                </select>
+              </label>
+              <button id="applyPlanToGroupBtn" type="button" class="primary">Apply to Current Plan</button>
+            </div>
+
+            <div class="row row--wrap" style="gap:12px;align-items:center;">
+              <span class="tiny" style="font-weight:600;">Anchor</span>
+              <label class="chip-option"><input type="radio" name="groupsV2AnchorMode" value="seedDate" checked><span>Seed date</span></label>
+              <input id="groupsV2SeedDate" type="date" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              <label class="chip-option"><input type="radio" name="groupsV2AnchorMode" value="dps"><span>DPS</span></label>
+              <input id="groupsV2Dps" type="number" min="0" step="1" value="1" style="width:90px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              <label class="chip-option" title="Hold and repeat a single day recipe (for ever-fruiting crops like strawberries)"><input type="radio" name="groupsV2AnchorMode" value="hold"><span>🔄 Hold & Repeat</span></label>
+              <input id="groupsV2HoldDay" type="number" min="1" step="1" value="1" placeholder="Day" title="Day number to hold and repeat" style="width:90px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+            </div>
+
+            <div class="row row--wrap" style="gap:16px;align-items:flex-start;">
+              <div class="tiny" style="display:flex;flex-direction:column;gap:6px;min-width:180px;padding:12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;">
+                <strong>Cycle 1</strong>
+                <label style="display:flex;flex-direction:column;gap:4px;">
+                  <span>Start</span>
+                  <input id="groupsV2Cycle1On" type="time" value="08:00" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:4px;">
+                  <span>ON duration (h)</span>
+                  <input id="groupsV2Cycle1Hours" type="number" min="0" max="24" step="0.25" value="12" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                </label>
+                <div id="groupsV2Cycle1End" class="tiny text-muted">End: 20:00</div>
+              </div>
+              <div id="groupsV2Cycle2Container" class="tiny" style="display:none;flex-direction:column;gap:6px;min-width:180px;padding:12px;border-radius:8px;border:1px solid #cbd5e1;background:#eff6ff;">
+                <strong>Cycle 2</strong>
+                <label style="display:flex;flex-direction:column;gap:4px;">
+                  <span>Start</span>
+                  <input id="groupsV2Cycle2On" type="time" value="20:00" readonly aria-readonly="true" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;background:#e2e8f0;color:#475569;">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:4px;">
+                  <span>ON duration (h)</span>
+                  <input id="groupsV2Cycle2Hours" type="number" min="0" max="24" step="0.5" value="12" readonly aria-readonly="true" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;background:#e2e8f0;color:#475569;">
+                </label>
+                <div id="groupsV2Cycle2End" class="tiny text-muted">End: 08:00</div>
+              </div>
+              <div class="row row--wrap" style="gap:8px;align-items:center;">
+                <label class="chip-option"><input type="radio" name="groupsV2ScheduleMode" value="one" checked><span>One cycle</span></label>
+                <label class="chip-option"><input type="radio" name="groupsV2ScheduleMode" value="two"><span>Two cycles</span></label>
+                <button id="groupsV2SplitEvenBtn" type="button" class="ghost">Split evenly</button>
+                <button id="groupsV2MaxLightBtn" type="button" class="ghost">Maximize light</button>
+                <button id="groupsV2ResetRampsBtn" type="button" class="ghost">Reset ramps</button>
+              </div>
+            </div>
+
+            <div id="groupsV2ScheduleSummary" class="tiny text-muted"></div>
+
+            <div class="row row--wrap" style="gap:12px;">
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+                PPFD Δ (µmol)
+                <input id="groupsV2GradientPpfd" type="number" step="1" value="0" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+                Blue Δ (%)
+                <input id="groupsV2GradientBlue" type="number" step="0.5" value="0" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+                Temp Δ (°C)
+                <input id="groupsV2GradientTemp" type="number" step="0.5" value="0" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+                RH Δ (%)
+                <input id="groupsV2GradientRh" type="number" step="0.5" value="0" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+            </div>
+
+            <!-- Calibration Button - Inside Setup Card -->
+            <div style="margin-top:16px;padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:linear-gradient(120deg,#fef3c7 0%,#fde68a 100%);">
+              <button id="btnOpenCalWizardFromGroups" type="button" class="primary" style="width:100%;">🔬 Open Calibration Wizard</button>
+              <p class="tiny" style="margin:8px 0 0;color:#78350f;text-align:center;">Calibrate light output to match target spectrum</p>
+            </div>
+
+          </div>
+
+          <!-- Light Assignment Section -->
+          <div style="margin-top:24px;padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#f8fafc;">
+            <h3 style="margin:0 0 12px 0;font-size:14px;font-weight:600;color:#1e293b;">Light Assignment</h3>
+            
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <label class="tiny" style="display:flex;flex-direction:column;">
+                Available Lights (Not Yet Assigned)
+                <select id="groupsV2UnassignedLightsSelect" size="5" style="margin-top:4px;min-height:120px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option disabled>Loading...</option>
+                </select>
+                <span class="tiny text-muted" style="margin-top:4px;">Select a light from setup wizard - excludes plugs and controllers</span>
+              </label>
+              
+              <label class="tiny" style="display:flex;flex-direction:column;max-width:300px;">
+                Assign Controller (Optional)
+                <select id="groupsV2AssignController" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;">
+                  <option value="">No controller (manual control)</option>
+                </select>
+                <span class="tiny text-muted" style="margin-top:4px;">Select a controller for the selected light</span>
+              </label>
+              
+              <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;">
+                <button id="assignLightsToGroupBtn" type="button" class="primary">Assign Selected Light</button>
+                <span class="tiny text-muted">Assign the selected light to the current group</span>
+              </div>
+              
+              <!-- Light Info Card -->
+              <div id="lightInfoCard" class="gr-card" style="display:none;padding:12px;border:1px solid #cbd5e1;border-radius:8px;background:white;">
+                <div id="lightInfoCardBody"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assigned Lights - Populated by groups-v2.js -->
+          <div id="groupsV2LightList" class="grid cols-3" style="margin-bottom:8px;gap:8px;">
+            <!-- Light checklist items populated by groups-v2.js -->
+          </div>
+
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <!-- NEW FRESH Light Setup Modal -->
+  <div id="freshLightModal" class="fresh-light-modal" aria-hidden="true">
+    <div class="fresh-light-modal__backdrop"></div>
+    <div class="fresh-light-modal__dialog">
+      <div class="fresh-light-modal__header">
+        <h2>Light Setup Wizard</h2>
+        <button type="button" class="fresh-light-modal__close" id="freshLightClose">×</button>
+      </div>
+      
+      <div class="fresh-light-modal__content">
+        <div class="fresh-light-step" id="freshStep1" data-active>
+          <h3>Select Room</h3>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px;">Room:</label>
+            <select id="freshRoomSelect" style="width: 100%; padding: 8px; font-size: 14px;">
+              <option value="">Select a room</option>
+            </select>
+            <p class="tiny" style="margin: 8px 0 0 0; color: #64748b;">
+              Rooms are created in the <strong>Grow Rooms</strong> panel. Create a room there first.
+            </p>
+          </div>
+        </div>
+        
+        <div class="fresh-light-step" id="freshStep2">
+          <h3>Select Fixtures</h3>
+          
+          <div style="margin-bottom: 20px;">
+            <div style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 13px;">Search fixtures:</label>
+              <input id="freshFixtureSearch" type="text" placeholder="Search models (e.g., Gavita 1700e, GROW3, TopLight)" 
+                     style="width: 100%; padding: 8px; font-size: 14px;">
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Search Results:</div>
+              <div id="freshFixtureResults" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; min-height: 60px;">
+                <div style="padding: 20px; text-align: center; color: #64748b; font-size: 13px;">
+                  Type to search for fixture models...
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Selected Fixtures:</div>
+              <div id="freshSelectedFixtures" style="min-height: 60px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px;">
+                <div style="color: #64748b; font-size: 13px;">No fixtures selected yet</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="fresh-light-step" id="freshStep3">
+          <h3>Control Method</h3>
+          
+          <div style="margin-bottom: 20px;">
+            <div style="font-size: 13px; margin-bottom: 12px;">How will the fixtures be controlled?</div>
+            
+            <div id="freshControlMethod" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+              <button type="button" class="fresh-control-option" data-value="wifi">Wi‑Fi / App</button>
+              <button type="button" class="fresh-control-option" data-value="smart-plug">Smart Plug</button>
+              <button type="button" class="fresh-control-option" data-value="0-10v">0‑10V / Wired</button>
+              <button type="button" class="fresh-control-option" data-value="rs485">RS‑485 / Modbus</button>
+              <button type="button" class="fresh-control-option" data-value="other">Other</button>
+            </div>
+            
+            <div id="freshControlDetails" style="font-size: 13px; color: #64748b; padding: 12px; background: #f8fafc; border-radius: 4px; display: none;">
+              Control method details will appear here...
+            </div>
+          </div>
+        </div>
+        
+        <div class="fresh-light-step" id="freshStep4">
+          <h3>Review Setup</h3>
+          
+          <div style="margin-bottom: 20px;">
+            <div id="freshReviewSummary" style="background: #f8fafc; border-radius: 8px; padding: 16px;">
+              <div style="font-weight: 600; margin-bottom: 12px;">Light Setup Summary</div>
+              <div id="freshReviewDetails" style="font-size: 14px; line-height: 1.5;">
+                <!-- Review details will be populated here -->
+              </div>
+            </div>
+            
+            <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
+              <div style="font-size: 13px; color: #92400e;">
+                <strong>Ready to save:</strong> This will create your light setup configuration for the selected room and zone.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="fresh-light-modal__footer">
+        <button id="freshPrev" type="button" style="display: none;">Previous</button>
+        <button id="freshNext" type="button">Next</button>
+        <button id="freshSave" type="button" style="display: none;">Save</button>
+      </div>
+    </div>
+  </div>
+          <section class="light-step" data-step="fixtures">
+            <p class="light-question">Select fixtures and counts.</p>
+            <div class="farm-step__stack">
+              <input id="lightKbSearch" type="text" placeholder="Search models (e.g., Gavita 1700e)" autocomplete="off">
+              <div class="tiny" style="color:#64748b">Results</div>
+              <ul id="lightKbResults" class="farm-kb-results" aria-live="polite"></ul>
+              <div class="tiny" style="color:#64748b">Selected</div>
+              <ul id="lightKbSelected" class="farm-kb-selected" aria-live="polite"></ul>
+            </div>
+          </section>
+          <section class="light-step" data-step="control">
+            <p class="light-question">How will the fixtures be controlled?</p>
+            <div class="farm-step__stack">
+              <div class="tiny">Control method</div>
+              <div id="lightControlMethod" class="chip-row" role="group" aria-label="Control method">
+                <button type="button" class="chip-option" data-value="wifi">Wi‑Fi / App</button>
+                <button type="button" class="chip-option" data-value="smart-plug">Smart plug</button>
+                <button type="button" class="chip-option" data-value="0-10v">0‑10V / Wired</button>
+                <button type="button" class="chip-option" data-value="rs485">RS‑485 / Modbus</button>
+                <button type="button" class="chip-option" data-value="other">Other</button>
+              </div>
+              <div id="lightControlDetails" style="margin-top:8px" class="tiny" aria-live="polite"></div>
+            </div>
+          </section>
+          <section class="light-step" data-step="add-more">
+            <p class="light-question">Add more lights to this room/zone?</p>
+            <div class="farm-step__stack">
+              <div id="lightSetupsSummary" class="light-setups-summary"></div>
+              <div class="row row--gap-md mt-lg row--center justify-center">
+                <button id="lightAddMoreSetup" type="button" class="primary">Add More Lights</button>
+                <button id="lightFinishSetups" type="button" class="primary">Continue to Review</button>
+              </div>
+            </div>
+          </section>
+          <section class="light-step" data-step="review">
+            <p class="light-question">Review light setup</p>
+            <div id="lightReview" class="farm-review"></div>
+          </section>
+        </div>
+
+      </form>
+    </div>
+  </div>
+  <div id="envModal" class="env-modal" aria-hidden="true">
+    <div class="env-modal__backdrop" id="envModalBackdrop"></div>
+    <div class="env-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="envModalTitle">
+      <button type="button" class="env-modal__close" id="envModalClose" aria-label="Close">×</button>
+      <div class="env-modal__content">
+        <h2 id="envModalTitle" style="margin:0 0 12px">Trend</h2>
+        <p class="tiny" id="envModalSubtitle" style="margin:0 0 12px;color:#475569"></p>
+        <div id="envModalChart" class="env-modal__chart"></div>
+        <div id="envModalStats" class="env-modal__stats"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="calModal" class="cal-modal" aria-hidden="true">
+    <div class="cal-modal__backdrop" id="calModalBackdrop"></div>
+    <div class="cal-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="calModalTitle">
+      <button type="button" class="cal-modal__close" id="calModalClose" aria-label="Close">×</button>
+      <form id="calWizardForm" novalidate>
+        <p class="tiny" id="calModalProgress" aria-live="polite">Step 1 of 5</p>
+        <h2 id="calModalTitle" style="margin:0 0 12px">Calibration Wizard</h2>
+        <div id="calSteps">
+          <section class="cal-step" data-step="scope-type">
+            <p class="cal-question">What do you want to calibrate?</p>
+            <div class="cal-options" role="radiogroup" aria-label="Calibration scope">
+              <label class="chip-option"><input type="radio" name="calScopeType" value="lights" checked><span>Specific lights</span></label>
+              <label class="chip-option"><input type="radio" name="calScopeType" value="group"><span>Group</span></label>
+              <label class="chip-option"><input type="radio" name="calScopeType" value="location"><span>Location</span></label>
+            </div>
+            <p class="tiny" style="color:#64748b">Lights scope lets you hand-pick devices. Group uses the roster. Location uses Room / Zone assignments.</p>
+          </section>
+
+          <section class="cal-step" data-step="scope-detail">
+            <p class="cal-question">Select the fixtures to calibrate.</p>
+            <div id="calScopeLights" class="cal-scope-block" aria-live="polite"></div>
+            <div id="calScopeGroup" class="cal-scope-block" style="display:none">
+              <label class="row row--gap-xs"><span>Group</span><select id="calScopeGroupSelect"></select></label>
+              <p class="tiny" style="color:#475569">Lights inherit the current group roster. Offline lights are skipped automatically.</p>
+            </div>
+            <div id="calScopeLocation" class="cal-scope-block" style="display:none">
+              <div class="row row--gap-sm row--wrap">
+                <label class="row row--gap-xs"><span>Room</span><select id="calScopeRoom"></select></label>
+                <label class="row row--gap-xs"><span>Zone</span><select id="calScopeZone"></select></label>
+              </div>
+              <p class="tiny" style="color:#475569">Lights with matching Room/Zone assignments will be included.</p>
+            </div>
+            <p id="calScopeSummary" class="tiny" style="margin-top:8px;color:#0f172a"></p>
+          </section>
+
+          <section class="cal-step" data-step="target">
+            <p class="cal-question">Choose the target light baseline.</p>
+            <select id="calTargetSelect" style="min-width:240px"></select>
+            <label class="row row--gap-xs mt-sm"><input id="calTargetReconfirm" type="checkbox"><span>Include target in calibration (reconfirm baseline)</span></label>
+            <p id="calTargetNote" class="tiny" style="color:#b91c1c"></p>
+          </section>
+
+          <section class="cal-step" data-step="sequence">
+            <div class="cal-sequence" id="calSequenceStage">
+              <div class="cal-sequence__header">
+                <p class="cal-question" id="calSequenceTitle">Run the calibration patterns.</p>
+                <span class="tiny" id="calSequenceMeta"></span>
+              </div>
+              <p class="tiny" id="calSequenceDescription" style="color:#475569"></p>
+              <div class="cal-sequence__actions">
+                <button id="calSequenceSend" type="button" class="ghost">Send pattern</button>
+                <button id="calSequenceReset" type="button" class="ghost">Restore baseline</button>
+              </div>
+              <div class="cal-sequence__body">
+                <div class="cal-sequence__target">
+                  <h3 class="tiny" style="margin:0;color:#0f172a">Target reading</h3>
+                  <div id="calSequenceTarget"></div>
+                </div>
+                <div class="cal-sequence__lights" id="calSequenceLights" aria-live="polite"></div>
+              </div>
+              <div class="cal-sequence__footer">
+                <div id="calSequenceChecklist" class="cal-sequence__status" aria-live="polite"></div>
+                <div class="row row--gap-sm">
+                  <button id="calSequencePrevTest" type="button" class="ghost">Previous pattern</button>
+                  <button id="calSequenceNextTest" type="button" class="primary" disabled>Save & Next</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="cal-step" data-step="review">
+            <p class="cal-question">Review the calibration preview.</p>
+            <div id="calPreviewSummary" class="cal-preview-summary"></div>
+            <div id="calPreviewTable" class="cal-preview-table" role="region" aria-live="polite"></div>
+            <div id="calPreviewWarnings" class="cal-preview-warnings"></div>
+          </section>
+        </div>
+
+        <div class="row cal-modal__footer" style="justify-content:space-between;margin-top:18px">
+          <button id="calPrev" type="button" class="ghost">Back</button>
+          <div class="row row--gap-sm">
+            <button id="calDryRun" type="button" class="ghost" style="display:none">Recalculate</button>
+            <button id="calNext" type="button" class="primary">Next</button>
+            <button id="calApply" type="submit" class="primary" style="display:none">Apply Calibration</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <div id="roomModal" class="room-modal" aria-hidden="true">
+    <div class="room-modal__backdrop" id="roomModalBackdrop"></div>
+    <div class="room-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="roomModalTitle">
+      <form id="roomWizardForm" novalidate style="display:flex; flex-direction:column; height:100%; min-height:0;">
+        <!-- Close button at top -->
+        <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+          <button type="button" class="room-modal__close" id="roomModalClose" aria-label="Close">×</button>
+        </div>
+        
+        <!-- Header with progress, title, and navigation buttons -->
+        <div class="room-modal__header" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 0 12px 0; border-bottom:1px solid #e2e8f0;">
+          <div>
+            <p class="tiny" id="roomModalProgress" aria-live="polite" style="margin:0 0 4px 0;">Step 1 of 5</p>
+            <h2 id="roomModalTitle" style="margin:0;">Set up a Grow Room</h2>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="roomTopPrev" type="button" class="ghost" style="font-size:12px; padding:6px 12px; display:none;">Previous</button>
+            <button id="roomTopNext" type="button" class="primary" style="font-size:12px; padding:6px 12px;">Next</button>
+            <button id="roomTopSaveClose" type="button" class="primary" style="font-size:12px; padding:6px 12px; display:none;">Save & Close</button>
+          </div>
+        </div>
+        
+        <div id="roomSteps" style="flex:1; overflow-y:auto; min-height:0; position:relative; padding-top:16px;">
+
+          
+
+          <section class="room-step" data-step="room-info">
+            <p class="room-question">Name the grow room and define its zones.</p>
+            <div class="farm-step__stack">
+              <div id="roomInfoError" class="tiny" style="color:#e11d48;margin-bottom:8px;display:none"></div>
+              <label class="tiny" for="roomInfoName">Grow room name</label>
+              <input id="roomInfoName" type="text" placeholder="e.g., Flower A" required>
+              <label class="tiny" for="roomInfoZoneCount" style="margin-top:12px">Number of zones</label>
+              <input id="roomInfoZoneCount" type="number" min="1" max="12" value="1" style="width:80px">
+              <div id="roomInfoZoneInputs" style="margin-top:12px;display:flex;flex-direction:column;gap:8px"></div>
+            </div>
+          </section>
+          <section class="room-step" data-step="hardware">
+            <p class="room-question">Which equipment are you setting up in this room?</p>
+            <div class="farm-step__stack">
+              <div id="hardwareError" class="tiny" style="color:#e11d48;margin-bottom:8px;display:none"></div>
+              <div class="tiny">Select all that apply</div>
+              <div id="roomHardwareCats" class="chip-row" role="group" aria-label="Hardware categories">
+                <button type="button" class="chip-option" data-value="hvac">Central HVAC</button>
+                <button type="button" class="chip-option" data-value="mini-split">Mini Split</button>
+                <button type="button" class="chip-option" data-value="dehumidifier">Dehumidifier</button>
+                <button type="button" class="chip-option" data-value="fans">Fans</button>
+                <button type="button" class="chip-option" data-value="vents">Vents</button>
+                <button type="button" class="chip-option" data-value="controllers">Controllers / hubs</button>
+                <button type="button" class="chip-option" data-value="energy-monitor">Energy Monitor</button>
+                <button type="button" class="chip-option" data-value="other">Other</button>
+              </div>
+              <!-- Removed the hardware search UI here to reduce confusion; use Fixtures or Devices steps instead. -->
+            </div>
+          </section>
+
+          <!-- Dynamic per-category setup host (used for HVAC, mini-split, dehumidifier, fans, vents, controllers, other) -->
+          <section class="room-step" data-step="category-setup">
+            <p class="room-question" id="catSetupTitle">Category setup</p>
+            <p class="tiny" id="catSetupIntro" style="color:#475569">We’ll capture a quick count, control method, and energy metering for each device type.</p>
+            <p class="tiny" id="catSetupStatusLine" aria-live="polite" style="color:#0f172a"></p>
+            <div class="farm-step__stack" id="catSetupBody"></div>
+            <p class="tiny" id="catSetupStatus" aria-live="polite" style="color:#0f172a"></p>
+            <div class="row" id="catSetupNav" style="gap:8px;align-items:center;margin-top:8px;justify-content:center">
+              <button type="button" class="ghost" id="catPrevType">Previous Equipment</button>
+              <span class="tiny" id="catSetupProgress" style="color:#475569"></span>
+              <button type="button" class="ghost" id="catNextType">Next Equipment</button>
+            </div>
+            </div>
+          </section>
+
+
+
+          <section class="room-step" data-step="review">
+            <p class="room-question">Review this room before saving.</p>
+            <div id="roomReview" class="farm-review"></div>
+          </section>
+
+        </div>
+
+      </form>
+    </div>
+  </div>
+  <!-- Device Pairing Modal (guided Wi‑Fi / Bluetooth setup) -->
+  <div id="devicePairModal" class="device-pair-modal" aria-hidden="true">
+    <div class="device-pair-modal__backdrop" id="devicePairBackdrop"></div>
+    <div class="device-pair-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="devicePairTitle">
+      <button type="button" class="device-pair-modal__close" id="devicePairClose" aria-label="Close">×</button>
+      <form id="devicePairForm" novalidate>
+        <p class="tiny" id="devicePairProgress" aria-live="polite">Step 1 of 3</p>
+        <h2 id="devicePairTitle" style="margin:0 0 12px">Pair device</h2>
+        <div id="devicePairSteps">
+          <section class="pair-step" data-step="transport">
+            <p class="pair-question">Which transport should we use to pair?</p>
+            <div class="chip-row" id="pairTransport" role="radiogroup" aria-label="Transport">
+              <label class="chip-option"><input type="radio" name="pairTransport" value="wifi" checked><span>Wi‑Fi</span></label>
+              <label class="chip-option"><input type="radio" name="pairTransport" value="bluetooth"><span>Bluetooth</span></label>
+            </div>
+            <p class="tiny" style="color:#64748b">Select the transport that the device supports. The KB will suggest one.</p>
+            <div id="pairTransportAiSuggestion" class="ai-suggestion" style="display:none">
+              <div class="ai-suggestion__text tiny"></div>
+              <button type="button" class="ghost ai-suggestion__apply">Accept AI suggestion</button>
+            </div>
+          </section>
+
+          <!-- New: Scan step for live discovery within the wizard -->
+          <section class="pair-step" data-step="scan">
+            <p class="pair-question">Scan for nearby devices</p>
+            <div class="farm-step__stack">
+              <div class="row row--gap-sm" style="align-items:center;flex-wrap:wrap;">
+                <button id="pairScanBtn" type="button" class="primary" style="min-width:160px">Start Scan</button>
+                <span id="pairScanStatus" class="tiny" aria-live="polite" style="color:#475569"></span>
+              </div>
+              <div id="pairScanResults" style="margin-top:12px; max-height: 320px; overflow:auto; border:1px solid #e2e8f0; border-radius:6px; display:none;"></div>
+            </div>
+          </section>
+
+          <section class="pair-step" data-step="wifi">
+            <p class="pair-question">Wi‑Fi details</p>
+            <div class="farm-step__stack">
+              <input id="pairWifiSsid" type="text" placeholder="SSID" style="min-width:220px">
+              <input id="pairWifiPsk" type="password" placeholder="Wi‑Fi password (PSK)" style="min-width:220px">
+              <label class="tiny" style="align-items:center;display:flex;gap:6px"><input id="pairWifiStatic" type="checkbox"> Use static IP</label>
+              <input id="pairWifiStaticIp" type="text" placeholder="Static IP (optional)" style="min-width:160px;display:none">
+              <div class="tiny" style="color:#64748b;margin-top:8px">If the device uses AP-mode for initial setup, follow vendor instructions to connect to its temporary SSID and then return here to enter credentials.</div>
+              <div id="pairWifiAiSuggestion" class="ai-suggestion" style="display:none">
+                <div class="ai-suggestion__text tiny"></div>
+                <button type="button" class="ghost ai-suggestion__apply">Accept AI suggestion</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="pair-step" data-step="bluetooth">
+            <p class="pair-question">Bluetooth pairing</p>
+            <div class="farm-step__stack">
+              <input id="pairBtName" type="text" placeholder="Advertised device name (optional)" style="min-width:260px">
+              <input id="pairBtPin" type="text" placeholder="Pairing code (if any)" style="min-width:160px">
+              <div class="tiny" style="color:#64748b;margin-top:8px">Most BLE sensors don't require a PIN. Use the advertised name to help find the device in scans or enter a known MAC/address here.</div>
+              <div id="pairBtAiSuggestion" class="ai-suggestion" style="display:none">
+                <div class="ai-suggestion__text tiny"></div>
+                <button type="button" class="ghost ai-suggestion__apply">Accept AI suggestion</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="pair-step" data-step="review">
+            <p class="pair-question">Review pairing info</p>
+            <div id="pairReview" class="farm-review tiny" style="color:#0f172a"></div>
+            <div id="pairReviewAiSummary" class="ai-suggestion" style="display:none">
+              <div class="ai-suggestion__text tiny"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="row device-pair-modal__footer" style="justify-content:space-between;margin-top:18px">
+          <button id="pairPrev" type="button" class="ghost">Back</button>
+          <div class="row row--gap-sm">
+            <button id="pairNext" type="button" class="primary">Next</button>
+            <button id="pairSave" type="submit" class="primary" style="display:none">Save & Add</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div id="farmModal" class="farm-modal" aria-hidden="true">
+    <div class="farm-modal__backdrop" id="farmModalBackdrop"></div>
+    <div class="farm-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="farmModalTitle">
+      <button type="button" class="farm-modal__close" id="farmModalClose" aria-label="Close">×</button>
+      <form id="farmWizardForm" novalidate>
+        <p class="tiny" id="farmModalProgress" aria-live="polite">Step 1 of 6</p>
+        <h2 id="farmModalTitle" style="margin:0 0 12px">Let’s get you online</h2>
+        <div id="farmSteps">
+          <section class="farm-step" data-step="connection-choice">
+            <p class="farm-question">Let’s get you online—are you connecting this reTerminal to Wi‑Fi or Ethernet today?</p>
+            <div class="chip-row" id="farmConnectionChoice" role="radiogroup" aria-label="Connection type">
+              <button type="button" class="chip-option" data-value="wifi">Wi‑Fi</button>
+              <button type="button" class="chip-option" data-value="ethernet">Ethernet</button>
+            </div>
+            <p class="tiny" style="margin-top:8px;color:#475569">Switch anytime—Wi‑Fi walks you through SSID, password, and a connection test.</p>
+          </section>
+
+          <section class="farm-step" data-step="wifi-select">
+            <p class="farm-question">Great—let’s pick the Wi‑Fi network.</p>
+            <div class="farm-step__stack">
+              <!-- Wi-Fi Scanner (Step 2) -->
+              <div id="wifiStep2Scanner" class="scanning-container" style="display: none;">
+                <div class="scanning-radar"></div>
+                <div class="scanning-text">Scanning for Wi-Fi networks (Step 2)</div>
+                <div class="scanning-status">Please wait while we discover available networks for setup...</div>
+              </div>
+              <div class="row row--gap-xs row--center row--wrap">
+                <button id="btnScanWifi" type="button" class="ghost">Scan again</button>
+                <span id="wifiScanStatus" class="tiny" aria-live="polite"></span>
+                <button id="btnManualSsid" type="button" class="ghost">Add hidden network</button>
+              </div>
+              <div id="wifiNetworkList" class="chip-grid" role="listbox" aria-label="Available Wi‑Fi networks"></div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="wifi-password">
+            <p class="farm-question">Enter the password for <span id="wifiChosenSsid" class="inline-chip"></span>.</p>
+            <div class="farm-step__stack">
+              <input id="wifiPassword" type="password" autocomplete="new-password" placeholder="Wi‑Fi password" required>
+              <label class="tiny" style="display:flex;align-items:center;gap:6px"><input id="wifiShowPassword" type="checkbox">Show password</label>
+              <label class="tiny" style="display:flex;align-items:center;gap:6px">
+                <input id="wifiReuseDevices" type="checkbox" checked>
+                Use this network for device discovery
+              </label>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="wifi-test">
+            <p class="farm-question">Testing that connection…</p>
+            <div class="farm-step__stack">
+              <!-- Wi-Fi Test Scanner (Step 4) -->
+              <div id="wifiTestingIndicator" class="scanning-container" style="display: none;">
+                <div class="scanning-radar"></div>
+                <div class="scanning-text">Testing Wi-Fi Connection (Step 4)</div>
+                <div class="scanning-status">Verifying network connectivity and internet access...</div>
+              </div>
+              <button id="btnTestWifi" type="button" class="primary">Test connection</button>
+              <div id="wifiTestStatus" class="farm-review" aria-live="polite"></div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="location">
+            <p class="farm-question">Where is this farm?</p>
+            <div class="farm-step__stack">
+              <input id="farmName" name="farmName" type="text" autocomplete="organization" placeholder="Farm name" required>
+              
+              <!-- Use Current Location moved to top -->
+              <div style="display: flex; gap: 6px; align-items: center; margin: 8px 0; flex-wrap: wrap;">
+                <button type="button" id="btnUseMyLocation" class="btn-secondary" style="font-size: 14px;" title="Uses your device's current location to automatically fill address and get GPS coordinates">🧭 Use Current Location</button>
+                <span id="locationStatus" class="tiny" style="color: #666;"></span>
+              </div>
+              <div class="tiny" style="color:#666;margin-bottom:8px;line-height:1.3">
+                <strong>🧭 Use Current Location:</strong> Uses your device's GPS to automatically fill in your current address and coordinates for subscription services
+              </div>
+              
+              <p class="tiny" style="color:#64748b;margin:4px 0">Or enter your farm's address manually below (this information will be used for subscriptions):</p>
+              <input id="farmAddress" type="text" autocomplete="street-address" placeholder="Street address">
+              <div class="row row--gap-xs row--wrap">
+                <input id="farmCity" type="text" autocomplete="address-level2" placeholder="City">
+                <input id="farmState" type="text" autocomplete="address-level1" placeholder="State / Province" style="max-width:140px">
+                <input id="farmPostal" type="text" autocomplete="postal-code" placeholder="Postal code" style="max-width:140px">
+              </div>
+              <div id="locationResults" class="location-results" style="display: none; margin-top: 8px;">
+                <div class="tiny" style="margin-bottom: 4px; color: #666;">Select your farm location:</div>
+                <div id="locationOptions"></div>
+              </div>
+              <div id="weatherDisplay" class="weather-display" style="display: none; margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+                <div class="weather-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <span style="font-size: 18px;">🌤️</span>
+                  <strong style="color: #333;">Current Weather</strong>
+                </div>
+                <div id="weatherContent"></div>
+              </div>
+              <label class="tiny" style="display:flex;align-items:center;gap:6px">
+                Timezone
+                <select id="farmTimezone" style="min-width:200px"></select>
+              </label>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="contact">
+            <p class="farm-question">Who should we contact about this farm?</p>
+            <div class="farm-step__stack">
+              <input id="contactName" name="contactName" type="text" autocomplete="name" placeholder="Contact name" required>
+              <input id="contactEmail" name="contactEmail" type="email" autocomplete="email" placeholder="Email address" required>
+              <input id="contactPhone" name="contactPhone" type="tel" autocomplete="tel" placeholder="Phone number">
+              <div style="display:flex;align-items:center;gap:8px">
+                <input id="contactWebsite" name="contactWebsite" type="url" autocomplete="url" placeholder="Website (for branding)" style="border:2px solid var(--gr-accent);box-shadow:0 0 0 2px rgba(100, 199, 199, 0.1);flex:1">
+                <button id="websiteBrandingButton" type="button" style="background:var(--gr-primary);color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;white-space:nowrap;min-width:80px;opacity:0.5;transition:all 0.2s ease" disabled>
+                  🎨 Enter
+                </button>
+              </div>
+              <div id="brandingPreview" class="tiny branding-preview-card" style="margin-top:8px;padding:12px;background:var(--gr-bg);border:1px solid var(--gr-border);border-radius:6px;display:none;cursor:pointer;transition:all 0.2s ease" onclick="farmWizard.showBrandingModal()">
+                <div style="color:var(--gr-primary);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+                  🎨 Live Branding Preview 
+                  <span style="font-size:10px;opacity:0.7;background:var(--gr-primary);color:white;padding:2px 6px;border-radius:10px">CLICK TO EXPAND</span>
+                </div>
+                <div id="brandingPreviewContent" style="color:var(--medium)">Enter farm name and website to see your branding...</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="integrations">
+            <p class="farm-question">Connect accounts for smart device ecosystems</p>
+            <div class="farm-step__stack">
+              <div class="tiny" style="color:#64748b;margin:4px 0 8px">Provide credentials to enable discovery and control for compatible devices. You can skip now and add later in Settings.</div>
+              <div style="display:grid;grid-template-columns:1fr;gap:12px">
+                <fieldset style="border:1px solid var(--gr-border);border-radius:8px;padding:12px">
+                  <legend style="font-weight:600;color:var(--dark)">SwitchBot Cloud</legend>
+                  <input id="sbToken" type="text" autocomplete="off" placeholder="API Token">
+                  <input id="sbSecret" type="password" autocomplete="new-password" placeholder="API Secret">
+                  <label class="tiny" style="display:flex;align-items:center;gap:6px"><input id="sbShowSecret" type="checkbox">Show secret</label>
+                </fieldset>
+                <fieldset style="border:1px solid var(--gr-border);border-radius:8px;padding:12px">
+                  <legend style="font-weight:600;color:var(--dark)">TP-Link Kasa</legend>
+                  <input id="kasaEmail" type="email" autocomplete="email" placeholder="Account email">
+                  <input id="kasaPassword" type="password" autocomplete="new-password" placeholder="Account password">
+                  <label class="tiny" style="display:flex;align-items:center;gap:6px"><input id="kasaShowPassword" type="checkbox">Show password</label>
+                </fieldset>
+              </div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="spaces">
+            <p class="farm-question">Add your spaces—rooms first, then zones within each room.</p>
+            <div class="farm-step__stack">
+              <div class="row row--gap-xs row--wrap">
+                <input id="newRoomName" type="text" placeholder="Room name (e.g., Flower A)">
+                <button id="btnAddRoom" type="button" class="ghost">Add room</button>
+              </div>
+              <div id="roomsEditor" class="farm-spaces" aria-live="polite"></div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="review">
+            <p class="farm-question">Farm · Rooms · Zones — ready to save?</p>
+            <div class="farm-review" id="farmReview"></div>
+          </section>
+        </div>
+
+        <div class="row row--between mt-xl">
+          <button id="farmPrev" type="button" class="ghost">Back</button>
+          <div class="row row--gap-sm">
+            <button id="farmNext" type="button" class="primary">Next</button>
+            <button id="btnSaveFarm" type="submit" class="primary" style="display:none">Save Farm</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="deviceManager" class="device-manager" aria-hidden="true">
+    <div class="device-manager__backdrop" id="deviceManagerBackdrop"></div>
+    <div class="device-manager__window" role="dialog" aria-modal="true" aria-labelledby="deviceManagerTitle">
+      <header class="device-manager__header">
+        <div>
+          <h2 id="deviceManagerTitle">Device Manager</h2>
+          <p class="tiny" id="deviceManagerSubtitle">Scan Wi‑Fi, BLE, and MQTT sources to bring devices into the farm.</p>
+        </div>
+        <button type="button" id="deviceManagerClose" class="ghost" aria-label="Close">×</button>
+      </header>
+      <div class="device-manager__toolbar">
+        <button id="btnRunDiscovery" type="button" class="primary">Run discovery</button>
+        <span id="discoveryStatus" class="tiny" aria-live="polite"></span>
+        <div class="chip-row" role="tablist" aria-label="Discovery filters">
+          <button type="button" class="chip-option" data-filter="all" aria-selected="true">All</button>
+          <button type="button" class="chip-option" data-filter="added">Added</button>
+          <button type="button" class="chip-option" data-filter="ignored">Ignored</button>
+        </div>
+      </div>
+      <div id="deviceDiscoveryResults" class="device-manager__results" aria-live="polite"></div>
+      <footer class="device-manager__footer">
+        <div id="deviceManagerSummary" class="tiny"></div>
+        <button id="btnOpenAutomation" type="button" class="ghost">Open Automation Card</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="root"></div>
+  <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+  <script src="./js/switchbot-helpers.js?v=charlie-0.5"></script>
+  
+  <!-- Intro Card Component -->
+  <script src="/js/intro-card.js?v=6"></script>
+  <script>
+    // Show intro card when page loads (only in demo mode)
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        showIntroCard('index');
+      }, 500);
+    });
+  </script>
+</body>
+</html>
