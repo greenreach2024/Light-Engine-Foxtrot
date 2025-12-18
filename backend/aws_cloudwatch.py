@@ -36,7 +36,7 @@ class CloudWatchLogger:
             region: AWS region (or use AWS_REGION)
         """
         if not BOTO3_AVAILABLE:
-            logger.warning("⚠️  boto3 not installed. CloudWatch logging disabled.")
+            logger.warning("  boto3 not installed. CloudWatch logging disabled.")
             self.enabled = False
             return
         
@@ -51,21 +51,21 @@ class CloudWatchLogger:
             # Create log group if it doesn't exist
             self._ensure_log_group_exists()
             
-            logger.info(f"✅ CloudWatch logger initialized: {self.log_group_name}")
+            logger.info(f" CloudWatch logger initialized: {self.log_group_name}")
             
         except Exception as e:
-            logger.warning(f"⚠️  CloudWatch initialization failed: {e}. Logging disabled.")
+            logger.warning(f"  CloudWatch initialization failed: {e}. Logging disabled.")
             self.enabled = False
     
     def _ensure_log_group_exists(self):
         """Create log group if it doesn't exist"""
         try:
             self.logs_client.create_log_group(logGroupName=self.log_group_name)
-            logger.info(f"✅ Created log group: {self.log_group_name}")
+            logger.info(f" Created log group: {self.log_group_name}")
         except self.logs_client.exceptions.ResourceAlreadyExistsException:
             pass  # Log group already exists
         except ClientError as e:
-            logger.error(f"❌ Failed to create log group: {e}")
+            logger.error(f" Failed to create log group: {e}")
     
     def _get_stream_name(self, stream_suffix: str) -> str:
         """Generate log stream name with date prefix"""
@@ -82,7 +82,7 @@ class CloudWatchLogger:
         except self.logs_client.exceptions.ResourceAlreadyExistsException:
             pass  # Stream already exists
         except ClientError as e:
-            logger.error(f"❌ Failed to create log stream {stream_name}: {e}")
+            logger.error(f" Failed to create log stream {stream_name}: {e}")
     
     def log_event(
         self,
@@ -133,7 +133,7 @@ class CloudWatchLogger:
             return True
             
         except ClientError as e:
-            logger.error(f"❌ Failed to log event: {e}")
+            logger.error(f" Failed to log event: {e}")
             return False
     
     def log_api_request(
@@ -238,7 +238,7 @@ class CloudWatchLogger:
             metadata['details'] = details
         
         level = 'ERROR' if not success else 'INFO'
-        message = f"Rule {rule_id}: {action} ({'✅' if success else '❌'})"
+        message = f"Rule {rule_id}: {action} ({'' if success else ''})"
         
         return self.log_event('automation', message, level, metadata)
     
@@ -283,7 +283,7 @@ class CloudWatchLogger:
             return True
             
         except ClientError as e:
-            logger.error(f"❌ Failed to put metric {metric_name}: {e}")
+            logger.error(f" Failed to put metric {metric_name}: {e}")
             return False
     
     def put_api_metrics(
@@ -430,7 +430,7 @@ class CloudWatchLogger:
             return events
             
         except ClientError as e:
-            logger.error(f"❌ Failed to query logs: {e}")
+            logger.error(f" Failed to query logs: {e}")
             return []
 
 
@@ -470,4 +470,4 @@ if __name__ == "__main__":
         device_count=10
     )
     
-    print("✅ CloudWatch logging examples complete")
+    print(" CloudWatch logging examples complete")

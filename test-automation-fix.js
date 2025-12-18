@@ -31,8 +31,8 @@ async function testAutomation() {
   
   plugManager.registerDriver(vendorName, switchbotDriver);
 
-  console.log('✓ Plug manager initialized');
-  console.log('✓ SwitchBot driver registered\n');
+  console.log(' Plug manager initialized');
+  console.log(' SwitchBot driver registered\n');
 
   // Test device IDs from automation rules
   const testDevices = [
@@ -53,12 +53,12 @@ async function testAutomation() {
         console.error(`  ✗ Driver not found for ${deviceId}`);
         continue;
       }
-      console.log(`  ✓ Driver found: ${driver.vendor()}`);
+      console.log(`   Driver found: ${driver.vendor()}`);
 
       // Test 2: Get current state
       try {
         const state = await plugManager.getState(deviceId);
-        console.log(`  ✓ Current state: ${state.on ? 'ON' : 'OFF'}`);
+        console.log(`   Current state: ${state.on ? 'ON' : 'OFF'}`);
       } catch (error) {
         console.error(`  ✗ Failed to get state: ${error.message}`);
       }
@@ -75,9 +75,9 @@ async function testAutomation() {
   try {
     const driver = plugManager.getDriverForPlug(normalizedId);
     if (driver) {
-      console.log(`✓ Driver found for normalized ID: ${driver.vendor()}`);
+      console.log(` Driver found for normalized ID: ${driver.vendor()}`);
       const state = await plugManager.getState(normalizedId);
-      console.log(`✓ Current state: ${state.on ? 'ON' : 'OFF'}`);
+      console.log(` Current state: ${state.on ? 'ON' : 'OFF'}`);
     } else {
       console.error('✗ Driver not found for normalized ID');
     }

@@ -121,14 +121,14 @@ def get_welcome_template(
     </div>
     
     <div style="background: #ffffff; padding: 40px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-        <h2 style="color: #111827; margin-top: 0;">Welcome aboard! 🎉</h2>
+        <h2 style="color: #111827; margin-top: 0;">Welcome aboard! </h2>
         
         <p>Hello {user_name},</p>
         
         <p>Thank you for joining Light Engine! We're excited to help you automate and optimize your indoor farming operations.</p>
         
         <div style="background: #f3f4f6; padding: 20px; border-radius: 6px; margin: 25px 0;">
-            <h3 style="color: #111827; margin-top: 0; font-size: 18px;">🚀 Get Started</h3>
+            <h3 style="color: #111827; margin-top: 0; font-size: 18px;"> Get Started</h3>
             <ul style="margin: 10px 0; padding-left: 20px;">
                 <li style="margin: 8px 0;">Connect your grow lights and environmental sensors</li>
                 <li style="margin: 8px 0;">Set up automation rules for optimal plant growth</li>

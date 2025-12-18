@@ -83,22 +83,22 @@ async function waitForApiAccess() {
       }
       
       if (response.status === 200 && response.body.statusCode === 100) {
-        console.log('✅ API access restored!');
+        console.log(' API access restored!');
         return response.body;
       }
       
-      console.log(`⚠️  Unexpected response: ${response.status}`, response.body);
+      console.log(`  Unexpected response: ${response.status}`, response.body);
       await new Promise(resolve => setTimeout(resolve, 30000));
       
     } catch (error) {
-      console.error(`❌ Request failed:`, error.message);
+      console.error(` Request failed:`, error.message);
       await new Promise(resolve => setTimeout(resolve, 30000));
     }
   }
 }
 
 async function main() {
-  console.log('🚀 SwitchBot Real Device Capture');
+  console.log(' SwitchBot Real Device Capture');
   console.log('================================');
   console.log('Waiting for rate limit to clear and capturing real devices...\n');
   
@@ -107,11 +107,11 @@ async function main() {
     const deviceList = apiData.body?.deviceList || [];
     
     if (deviceList.length === 0) {
-      console.log('⚠️  No devices found in your SwitchBot account');
+      console.log('  No devices found in your SwitchBot account');
       return;
     }
     
-    console.log(`🎉 SUCCESS! Found ${deviceList.length} real SwitchBot devices:`);
+    console.log(` SUCCESS! Found ${deviceList.length} real SwitchBot devices:`);
     console.log('================================================');
     
     deviceList.forEach((device, index) => {
@@ -143,27 +143,27 @@ async function main() {
     console.log(`💾 Real device data saved to: ${realDeviceFile}`);
     
     // Now update the server cache by calling the local API
-    console.log('\\n🔄 Updating server cache with real devices...');
+    console.log('\\n Updating server cache with real devices...');
     try {
       const http = await import('http');
       const req = http.request('http://localhost:8091/api/switchbot/devices?refresh=1', (res) => {
-        console.log(`✅ Server cache updated (HTTP ${res.statusCode})`);
+        console.log(` Server cache updated (HTTP ${res.statusCode})`);
       });
       req.on('error', (e) => {
-        console.log(`⚠️  Could not update server cache: ${e.message}`);
+        console.log(`  Could not update server cache: ${e.message}`);
       });
       req.end();
     } catch (e) {
-      console.log('⚠️  Server may not be running - cache update skipped');
+      console.log('  Server may not be running - cache update skipped');
     }
     
-    console.log('\\n🎯 NEXT STEPS:');
+    console.log('\\n NEXT STEPS:');
     console.log('1. The real device data has been captured and saved');
     console.log('2. You can now use this data in your application');
     console.log('3. The mock devices should be replaced with these real ones');
     
   } catch (error) {
-    console.error('❌ FAILED:', error.message);
+    console.error(' FAILED:', error.message);
   }
 }
 

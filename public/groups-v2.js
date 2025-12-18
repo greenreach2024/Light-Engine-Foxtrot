@@ -581,7 +581,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const summary = preview && preview.stage
           ? `Today: ${preview.stage} • ${Number.isFinite(preview.ppfd) ? `${Math.round(preview.ppfd)} µmol` : 'PPFD —'}`
           : 'Plan applied to current group.';
-        showToast({ title: 'Plan Applied', msg: summary, kind: 'success', icon: '✅' });
+        showToast({ title: 'Plan Applied', msg: summary, kind: 'success', icon: '' });
       }
     });
   }
@@ -1185,23 +1185,23 @@ document.addEventListener('DOMContentLoaded', () => {
           if (errorCount === 0) {
             showToast({ 
               title: 'All Lights Online ✨', 
-              msg: `✅ All ${successCount} light(s) in ${groupLabel} blinked successfully!`, 
+              msg: ` All ${successCount} light(s) in ${groupLabel} blinked successfully!`, 
               kind: 'success',
               icon: '🔦'
             }, 3000);
           } else if (successCount === 0) {
             showToast({ 
               title: 'All Lights Offline', 
-              msg: `❌ None of the ${errorCount} light(s) in ${groupLabel} are responding. Check connections and power.`, 
+              msg: ` None of the ${errorCount} light(s) in ${groupLabel} are responding. Check connections and power.`, 
               kind: 'error',
-              icon: '⚠️'
+              icon: ''
             }, 4000);
           } else {
             showToast({ 
               title: 'Mixed Results', 
               msg: `${successCount} online, ${errorCount} offline. Check console for details.`, 
               kind: 'warning',
-              icon: '⚠️'
+              icon: ''
             }, 4000);
           }
         }
@@ -1251,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
               title: 'Save Failed', 
               msg: 'Could not save group settings. Please check the form and try again.', 
               kind: 'error',
-              icon: '⚠️'
+              icon: ''
             });
           }
           return;
@@ -1371,14 +1371,14 @@ document.addEventListener('DOMContentLoaded', () => {
               title: 'Group Saved & Running', 
               msg: `${groupLabel} settings saved and deployed with ${successCount} light(s).`, 
               kind: 'success',
-              icon: '✅'
+              icon: ''
             });
           } else {
             showToast({ 
               title: 'Group Saved, Partially Running', 
               msg: `Settings saved. ${successCount} light(s) activated, ${errorCount} failed.`, 
               kind: 'warning',
-              icon: '⚠️'
+              icon: ''
             });
           }
         }
@@ -1395,7 +1395,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally {
         // Re-enable button
         runGroupBtn.disabled = false;
-        runGroupBtn.textContent = '▶️ Run Group';
+        runGroupBtn.textContent = '▶ Run Group';
       }
     });
   }
@@ -1462,12 +1462,12 @@ function renderLightInfoCard(light) {
   
   if (isDynamic) {
     html += '<div style="padding: 8px; margin-bottom: 10px; background: #dbeafe; border: 2px solid #3b82f6; border-radius: 6px;">';
-    html += '<div style="font-weight: 700; color: #1e40af; margin-bottom: 4px;">✓ TUNABLE SPECTRUM</div>';
+    html += '<div style="font-weight: 700; color: #1e40af; margin-bottom: 4px;"> TUNABLE SPECTRUM</div>';
     html += '<div style="font-size: 0.75rem; color: #1e3a8a; line-height: 1.3;">This fixture can dynamically adjust its spectrum to match grow recipes.</div>';
     html += '</div>';
   } else if (isStatic) {
     html += '<div style="padding: 8px; margin-bottom: 10px; background: #fef3c7; border: 2px solid #f59e0b; border-radius: 6px;">';
-    html += '<div style="font-weight: 700; color: #92400e; margin-bottom: 4px;">⚠️ STATIC SPECTRUM</div>';
+    html += '<div style="font-weight: 700; color: #92400e; margin-bottom: 4px;"> STATIC SPECTRUM</div>';
     html += '<div style="font-size: 0.75rem; color: #78350f; line-height: 1.3;">This fixture has a factory-set spectrum and supports dimming only. Spectrum cannot be adjusted to match recipes.</div>';
     html += '</div>';
   } else if (tunableUnknown) {
@@ -1741,7 +1741,7 @@ function resetGroupsV2Form() {
       title: 'New Group', 
       msg: 'Form cleared - ready to create a new group', 
       kind: 'info', 
-      icon: '📝' 
+      icon: '' 
     }, 1500);
   }
 }
@@ -1770,11 +1770,11 @@ function updateGroupsV2StatusBadge(group) {
   badge.style.display = 'block';
   
   if (status === 'deployed') {
-    badge.textContent = '✅ DEPLOYED';
+    badge.textContent = ' DEPLOYED';
     badge.style.background = 'linear-gradient(135deg,#10b981 0%,#059669 100%)';
     badge.style.color = 'white';
   } else {
-    badge.textContent = '📝 DRAFT';
+    badge.textContent = ' DRAFT';
     badge.style.background = 'linear-gradient(135deg,#fbbf24 0%,#f59e0b 100%)';
     badge.style.color = 'white';
   }
@@ -1919,7 +1919,7 @@ async function saveGroupsV2Group(status = 'draft') {
   } catch (error) {
     console.error('[groups-v2] Failed to persist groups:', error);
     if (typeof showToast === 'function') {
-      showToast({ title: 'Save Failed', msg: `Could not save to server: ${error.message}`, kind: 'error', icon: '❌' });
+      showToast({ title: 'Save Failed', msg: `Could not save to server: ${error.message}`, kind: 'error', icon: '' });
     } else {
       alert(`Failed to save groups: ${error.message}`);
     }
@@ -1943,12 +1943,12 @@ async function saveGroupsV2Group(status = 'draft') {
   // Show success toast
   if (typeof showToast === 'function') {
     const statusLabel = status === 'deployed' ? 'Deployed' : 'Saved as Draft';
-    const statusIcon = status === 'deployed' ? '🚀' : '💾';
+    const statusIcon = status === 'deployed' ? '' : '💾';
     const details = [`${groupName} (${room}:${zone})`];
     if (planId) details.push(`Plan ${plan?.name || planId}`);
     
     const kind = scheduleMessage.includes('failed') ? 'warn' : 'success';
-    const icon = scheduleMessage.includes('failed') ? '⚠️' : statusIcon;
+    const icon = scheduleMessage.includes('failed') ? '' : statusIcon;
     
     showToast({ 
       title: statusLabel, 
@@ -2014,7 +2014,7 @@ async function saveGroupsV2GroupObject(groupObject) {
         title: 'Save Failed', 
         msg: `Could not save to server: ${error.message}`, 
         kind: 'error', 
-        icon: '❌' 
+        icon: '' 
       });
     }
     return null;
@@ -2042,7 +2042,7 @@ document.addEventListener('DOMContentLoaded', () => {
           title: 'Group Deployed', 
           msg: `${group.name} is now active in the automation system`, 
           kind: 'success', 
-          icon: '🚀' 
+          icon: '' 
         }, 2500);
       }
     });
@@ -2121,7 +2121,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'No Group Selected', 
             msg: 'Please select a group from the dropdown to delete', 
             kind: 'error', 
-            icon: '⚠️' 
+            icon: '' 
           });
         } else {
           alert('Please select a group from the dropdown to delete');
@@ -2136,7 +2136,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'Group Not Found', 
             msg: 'Could not find the selected group', 
             kind: 'error', 
-            icon: '❌' 
+            icon: '' 
           });
         } else {
           alert('Could not find the selected group');
@@ -2171,7 +2171,7 @@ document.addEventListener('DOMContentLoaded', () => {
               title: 'Delete Failed', 
               msg: 'Group was not found in state', 
               kind: 'error', 
-              icon: '❌' 
+              icon: '' 
             });
           }
           return;
@@ -2242,7 +2242,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'Group Deleted', 
             msg: `${group.name} has been permanently deleted`, 
             kind: 'success', 
-            icon: '🗑️' 
+            icon: '🗑' 
           }, 2000);
         }
 
@@ -2254,7 +2254,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'Delete Failed', 
             msg: error.message || 'An error occurred while deleting the group', 
             kind: 'error', 
-            icon: '❌' 
+            icon: '' 
           });
         } else {
           alert(`Error deleting group: ${error.message}`);
@@ -2314,7 +2314,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         console.warn('[groups-v2] Failed to upsert schedule', error);
         if (typeof showToast === 'function') {
-          showToast({ title: 'Schedule not saved', msg: error?.message || 'Failed to sync schedule.', kind: 'warn', icon: '⚠️' });
+          showToast({ title: 'Schedule not saved', msg: error?.message || 'Failed to sync schedule.', kind: 'warn', icon: '' });
         }
         scheduleMessage = ' • Schedule sync failed';
       }
@@ -2327,9 +2327,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const details = [`${groupName} (${room}:${zone})`];
         if (planId) details.push(`Plan ${plan?.name || planId}`);
         if (scheduleMessage.includes('failed')) {
-          showToast({ title: 'Group Saved', msg: `${details.join(' • ')}${scheduleMessage}`, kind: 'warn', icon: '⚠️' });
+          showToast({ title: 'Group Saved', msg: `${details.join(' • ')}${scheduleMessage}`, kind: 'warn', icon: '' });
         } else {
-          showToast({ title: 'Group Saved', msg: `${details.join(' • ')}${scheduleMessage}`, kind: 'success', icon: '✅' });
+          showToast({ title: 'Group Saved', msg: `${details.join(' • ')}${scheduleMessage}`, kind: 'success', icon: '' });
         }
       }
       if (statusEl) {
@@ -2448,7 +2448,7 @@ function populateGroupsV2ControllerDropdown() {
     opt.value = identifier;
     
     // Show type indicator
-    const typeIcon = controller.isPlug ? '🔌 ' : '🎛️ ';
+    const typeIcon = controller.isPlug ? '🔌 ' : '🎛 ';
     const deviceName = controller.name || controller.label || 'Unknown Device';
     const protocolLabel = controller.protocol ? ` (${controller.protocol})` : '';
     
@@ -2522,7 +2522,7 @@ function populateGroupsV2UnassignedLightsDropdown() {
     opt.value = identifier;
     
     // Show type indicator for plugs vs lights
-    const typeIcon = light.isPlug ? '🔌 ' : light.fromIoT ? '💡 ' : '';
+    const typeIcon = light.isPlug ? '🔌 ' : light.fromIoT ? ' ' : '';
     const typeLabel = light.isPlug ? '[Plug] ' : '';
     
     // Show name and S/N (ID) for clarity
@@ -3907,7 +3907,7 @@ function applyPlanSelectionToCurrentGroup(planOverride) {
   try { document.dispatchEvent(new Event('groups-updated')); } catch {}
   if (typeof window.showToast === 'function') {
     const label = plan.name || plan.id || 'plan';
-    window.showToast({ title: 'Plan Saved', msg: `Applied ${label} to group ${group.name || group.id}`, kind: 'success', icon: '✅' }, 1500);
+    window.showToast({ title: 'Plan Saved', msg: `Applied ${label} to group ${group.name || group.id}`, kind: 'success', icon: '' }, 1500);
   }
   renderGroupsV2LightCard(plan);
 }
@@ -4960,7 +4960,7 @@ function renderGroupsV2LightCard(plan, options) {
       const groupLabel = formatGroupsV2GroupLabel(group) || (group && group.name) || 'Active group';
       card.innerHTML = `
         <div class="groups-v2-lightcard-fallback">
-          <div class="text-warning" style="font-size:1rem;margin-bottom:0.5em;">⚠️ Spectrum/factory data missing for one or more assigned lights.</div>
+          <div class="text-warning" style="font-size:1rem;margin-bottom:0.5em;"> Spectrum/factory data missing for one or more assigned lights.</div>
           <div class="tiny text-muted" style="margin-bottom:0.5em;">Some static lights may not report spectrum or PPF. Info shown below is limited.</div>
           <div style="font-weight:600;">${escapeHtml(groupLabel)}</div>
           <div style="margin:0.5em 0 0.25em 0;">${escapeHtml(summaryText)}</div>
@@ -5245,7 +5245,7 @@ function renderGroupsV2LightCard(plan, options) {
   const staticLightNote = hasStaticLights ? `
     <div style="background: #fef9c3; border: 1px solid #fde047; border-radius: 6px; padding: 8px; margin-top: 8px;">
       <div style="font-size: 0.7rem; color: #854d0e; line-height: 1.4;">
-        <strong>ℹ️ Static Lights:</strong> This group contains ${staticFixtures} static fixture${staticFixtures > 1 ? 's' : ''}. 
+        <strong>ℹ Static Lights:</strong> This group contains ${staticFixtures} static fixture${staticFixtures > 1 ? 's' : ''}. 
         Static lights maintain their factory-set spectrum and can only be dimmed. 
         They do not adjust spectrum to match grow recipes.
       </div>
@@ -5621,7 +5621,7 @@ function populateGroupsV2LoadGroupDropdown() {
   sortedGroups.forEach(group => {
     const label = formatGroupsV2GroupLabel(group);
     const status = group.status || 'draft';
-    const statusIcon = status === 'deployed' ? '✅' : '📝';
+    const statusIcon = status === 'deployed' ? '' : '';
     
     const opt = document.createElement('option');
     opt.value = group.id || label;

@@ -90,14 +90,14 @@ function main() {
   console.log('📄 Reading CSV file:', csvPath);
   
   if (!fs.existsSync(csvPath)) {
-    console.error('❌ File not found:', csvPath);
+    console.error(' File not found:', csvPath);
     process.exit(1);
   }
   
   const csvContent = fs.readFileSync(csvPath, 'utf-8');
   const lights = parseCSV(csvContent);
   
-  console.log('✅ Parsed', lights.length, 'lights');
+  console.log(' Parsed', lights.length, 'lights');
   
   // Create output object
   const output = {
@@ -115,7 +115,7 @@ function main() {
   // Also save CSV copy
   const csvOutputPath = path.resolve(__dirname, '../public/data/lights-catalog.csv');
   fs.copyFileSync(csvPath, csvOutputPath);
-  console.log('📋 CSV copy saved to:', csvOutputPath);
+  console.log(' CSV copy saved to:', csvOutputPath);
   
   console.log('\n✨ Import complete!');
   console.log('Access via:');

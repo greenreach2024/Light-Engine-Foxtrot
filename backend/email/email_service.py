@@ -88,13 +88,13 @@ class EmailService:
             
             # Verify SES is accessible
             self.ses_client.get_send_quota()
-            logger.info(f"✅ AWS SES email service initialized (region: {region})")
+            logger.info(f" AWS SES email service initialized (region: {region})")
             
         except ImportError:
-            logger.error("❌ boto3 not installed. Install with: pip install boto3")
+            logger.error(" boto3 not installed. Install with: pip install boto3")
             self.enabled = False
         except Exception as e:
-            logger.error(f"❌ Failed to initialize AWS SES: {e}")
+            logger.error(f" Failed to initialize AWS SES: {e}")
             self.enabled = False
     
     def _init_sendgrid(self):
@@ -107,13 +107,13 @@ class EmailService:
                 raise ValueError("SENDGRID_API_KEY environment variable not set")
             
             self.sendgrid_client = SendGridAPIClient(api_key)
-            logger.info("✅ SendGrid email service initialized")
+            logger.info(" SendGrid email service initialized")
             
         except ImportError:
-            logger.error("❌ sendgrid not installed. Install with: pip install sendgrid")
+            logger.error(" sendgrid not installed. Install with: pip install sendgrid")
             self.enabled = False
         except Exception as e:
-            logger.error(f"❌ Failed to initialize SendGrid: {e}")
+            logger.error(f" Failed to initialize SendGrid: {e}")
             self.enabled = False
     
     def send_email(
@@ -163,7 +163,7 @@ Subject: {subject}
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Failed to send email to {to_email}: {e}")
+            logger.error(f" Failed to send email to {to_email}: {e}")
             return False
     
     def _send_via_ses(
@@ -199,17 +199,17 @@ Subject: {subject}
                 send_params["ReplyToAddresses"] = [reply_to]
             
             response = self.ses_client.send_email(**send_params)
-            logger.info(f"✅ Email sent via SES to {to_email} (MessageId: {response['MessageId']})")
+            logger.info(f" Email sent via SES to {to_email} (MessageId: {response['MessageId']})")
             return True
             
         except ClientError as e:
             error_code = e.response['Error']['Code']
             if error_code == 'MessageRejected':
-                logger.error(f"❌ SES rejected email to {to_email}: {e.response['Error']['Message']}")
+                logger.error(f" SES rejected email to {to_email}: {e.response['Error']['Message']}")
             elif error_code == 'MailFromDomainNotVerifiedException':
-                logger.error(f"❌ SES sender domain not verified: {self.from_email}")
+                logger.error(f" SES sender domain not verified: {self.from_email}")
             else:
-                logger.error(f"❌ SES error sending to {to_email}: {e}")
+                logger.error(f" SES error sending to {to_email}: {e}")
             return False
     
     def _send_via_sendgrid(
@@ -243,11 +243,11 @@ Subject: {subject}
                 mail.reply_to = Email(reply_to)
             
             response = self.sendgrid_client.send(mail)
-            logger.info(f"✅ Email sent via SendGrid to {to_email} (status: {response.status_code})")
+            logger.info(f" Email sent via SendGrid to {to_email} (status: {response.status_code})")
             return True
             
         except Exception as e:
-            logger.error(f"❌ SendGrid error sending to {to_email}: {e}")
+            logger.error(f" SendGrid error sending to {to_email}: {e}")
             return False
     
     def verify_sender_email(self, email: str) -> bool:
@@ -270,15 +270,15 @@ Subject: {subject}
         try:
             if self.provider == "ses":
                 self.ses_client.verify_email_identity(EmailAddress=email)
-                logger.info(f"✅ SES verification email sent to {email}")
+                logger.info(f" SES verification email sent to {email}")
                 return True
             elif self.provider == "sendgrid":
-                logger.info("⚠️  SendGrid verification must be done via dashboard")
+                logger.info("  SendGrid verification must be done via dashboard")
                 logger.info("   Visit: https://app.sendgrid.com/settings/sender_auth")
                 return False
             else:
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Failed to verify sender email {email}: {e}")
+            logger.error(f" Failed to verify sender email {email}: {e}")
             return False

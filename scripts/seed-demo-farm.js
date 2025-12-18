@@ -36,7 +36,7 @@ const CLEAN_FIRST = args.includes('--clean');
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
-  console.error('❌ DATABASE_URL environment variable is required');
+  console.error(' DATABASE_URL environment variable is required');
   console.error('   Set in .env file or export: DATABASE_URL=postgresql://user:pass@host:5432/dbname');
   process.exit(1);
 }
@@ -54,10 +54,10 @@ async function seedDemoFarm() {
 
   try {
     await client.connect();
-    console.log('✅ Connected to database');
+    console.log(' Connected to database');
 
     // Generate demo data
-    console.log('📦 Generating demo farm data...');
+    console.log(' Generating demo farm data...');
     const generator = new DemoDataGenerator(FARM_ID, {
       roomCount: 2,
       zonesPerRoom: 4
@@ -79,7 +79,7 @@ async function seedDemoFarm() {
       await client.query('DELETE FROM farm_rooms WHERE farm_id IN (SELECT id FROM farms WHERE farm_id = $1)', [FARM_ID]);
       await client.query('DELETE FROM farm_metrics WHERE farm_id IN (SELECT id FROM farms WHERE farm_id = $1)', [FARM_ID]);
       await client.query('DELETE FROM farms WHERE farm_id = $1', [FARM_ID]);
-      console.log('   ✅ Cleaned existing data');
+      console.log('    Cleaned existing data');
     }
 
     // Insert farm
@@ -107,7 +107,7 @@ async function seedDemoFarm() {
       farmData.coordinates.lng
     ]);
     const dbFarmId = farmResult.rows[0].id;
-    console.log(`   ✅ Farm inserted (DB ID: ${dbFarmId})`);
+    console.log(`    Farm inserted (DB ID: ${dbFarmId})`);
 
     // Insert rooms
     console.log('🏠 Inserting rooms...');
@@ -129,10 +129,10 @@ async function seedDemoFarm() {
       ]);
       roomMap.set(room.roomId, roomResult.rows[0].id);
     }
-    console.log(`   ✅ ${farmData.rooms.length} rooms inserted`);
+    console.log(`    ${farmData.rooms.length} rooms inserted`);
 
     // Insert zones
-    console.log('🌐 Inserting zones...');
+    console.log(' Inserting zones...');
     const zoneMap = new Map();
     let zoneCount = 0;
     for (const room of farmData.rooms) {
@@ -157,10 +157,10 @@ async function seedDemoFarm() {
         zoneCount++;
       }
     }
-    console.log(`   ✅ ${zoneCount} zones inserted`);
+    console.log(`    ${zoneCount} zones inserted`);
 
     // Insert devices (lights and sensors)
-    console.log('💡 Inserting devices...');
+    console.log(' Inserting devices...');
     let deviceCount = 0;
     
     // Insert lights
@@ -234,7 +234,7 @@ async function seedDemoFarm() {
         }
       }
     }
-    console.log(`   ✅ ${deviceCount} devices inserted`);
+    console.log(`    ${deviceCount} devices inserted`);
 
     // Insert inventory (trays)
     console.log('🌱 Inserting inventory...');
@@ -259,10 +259,10 @@ async function seedDemoFarm() {
         ]);
       }
     }
-    console.log(`   ✅ ${farmData.inventory.length} trays inserted`);
+    console.log(`    ${farmData.inventory.length} trays inserted`);
 
     // Insert farm metrics
-    console.log('📊 Inserting farm metrics...');
+    console.log(' Inserting farm metrics...');
     await client.query(`
       INSERT INTO farm_metrics (
         farm_id, room_count, zone_count, device_count, tray_count, plant_count, 
@@ -281,17 +281,17 @@ async function seedDemoFarm() {
       deviceCount, // All online
       0 // None offline
     ]);
-    console.log('   ✅ Metrics inserted');
+    console.log('    Metrics inserted');
 
     // Save farm data to JSON for reference
     const outputPath = path.join(__dirname, '../data/demo', `${FARM_ID}-seeded.json`);
     fs.writeFileSync(outputPath, JSON.stringify(farmData, null, 2));
-    console.log(`   ✅ Farm data saved to: ${outputPath}`);
+    console.log(`    Farm data saved to: ${outputPath}`);
 
     console.log('');
-    console.log('✅ Demo farm seeded successfully!');
+    console.log(' Demo farm seeded successfully!');
     console.log('');
-    console.log('📋 Summary:');
+    console.log(' Summary:');
     console.log(`   Farm ID: ${FARM_ID}`);
     console.log(`   Rooms: ${farmData.rooms.length}`);
     console.log(`   Zones: ${zoneCount}`);
@@ -299,10 +299,10 @@ async function seedDemoFarm() {
     console.log(`   Trays: ${farmData.inventory.length}`);
     console.log(`   Plants: ${farmData.inventory.reduce((sum, t) => sum + t.plantCount, 0)}`);
     console.log('');
-    console.log('🚀 You can now query this farm from your application!');
+    console.log(' You can now query this farm from your application!');
 
   } catch (error) {
-    console.error('❌ Seeding failed:', error.message);
+    console.error(' Seeding failed:', error.message);
     console.error(error.stack);
     process.exit(1);
   } finally {

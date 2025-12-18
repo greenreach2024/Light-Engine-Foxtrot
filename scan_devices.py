@@ -14,7 +14,7 @@ try:
     BLEAK_AVAILABLE = True
 except ImportError:
     BLEAK_AVAILABLE = False
-    print("⚠️  Warning: bleak not installed. Install with: pip install bleak")
+    print("  Warning: bleak not installed. Install with: pip install bleak")
 
 # Check for kasa
 try:
@@ -22,16 +22,16 @@ try:
     KASA_AVAILABLE = True
 except ImportError:
     KASA_AVAILABLE = False
-    print("⚠️  Warning: python-kasa not installed. Install with: pip install python-kasa")
+    print("  Warning: python-kasa not installed. Install with: pip install python-kasa")
 
 
 async def scan_ble_devices(duration=10.0):
     """Scan for BLE devices"""
     if not BLEAK_AVAILABLE:
-        print("❌ BLE scanning not available - bleak not installed")
+        print(" BLE scanning not available - bleak not installed")
         return []
     
-    print(f"🔍 Scanning for BLE devices ({duration} seconds)...")
+    print(f" Scanning for BLE devices ({duration} seconds)...")
     print("=" * 60)
     
     try:
@@ -72,7 +72,7 @@ async def scan_ble_devices(duration=10.0):
         # Sort by RSSI (signal strength) descending
         devices.sort(key=lambda d: d['rssi'], reverse=True)
         
-        print(f"\n✅ Found {len(devices)} BLE devices:\n")
+        print(f"\n Found {len(devices)} BLE devices:\n")
         
         for idx, dev in enumerate(devices, 1):
             print(f"{idx}. {dev['name']} ({dev['vendor']})")
@@ -87,17 +87,17 @@ async def scan_ble_devices(duration=10.0):
         return devices
         
     except Exception as e:
-        print(f"❌ BLE scan failed: {e}")
+        print(f" BLE scan failed: {e}")
         return []
 
 
 async def scan_kasa_devices(timeout=5):
     """Scan for Kasa devices"""
     if not KASA_AVAILABLE:
-        print("❌ Kasa scanning not available - python-kasa not installed")
+        print(" Kasa scanning not available - python-kasa not installed")
         return []
     
-    print(f"🔍 Scanning for Kasa devices ({timeout} seconds)...")
+    print(f" Scanning for Kasa devices ({timeout} seconds)...")
     print("=" * 60)
     
     try:
@@ -117,10 +117,10 @@ async def scan_kasa_devices(timeout=5):
                 }
                 found.append(device_info)
             except Exception as e:
-                print(f"⚠️  Could not get details for device at {address}: {e}")
+                print(f"  Could not get details for device at {address}: {e}")
                 continue
         
-        print(f"\n✅ Found {len(found)} Kasa devices:\n")
+        print(f"\n Found {len(found)} Kasa devices:\n")
         
         for idx, dev in enumerate(found, 1):
             print(f"{idx}. {dev['name']} ({dev['model']})")
@@ -132,14 +132,14 @@ async def scan_kasa_devices(timeout=5):
         return found
         
     except Exception as e:
-        print(f"❌ Kasa scan failed: {e}")
+        print(f" Kasa scan failed: {e}")
         return []
 
 
 async def main():
     """Main scanner function"""
     print("\n" + "=" * 60)
-    print("🌐 IoT & BLE Device Scanner")
+    print(" IoT & BLE Device Scanner")
     print(f"⏰ Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60 + "\n")
     
@@ -150,7 +150,7 @@ async def main():
     ble_devices, kasa_devices = await asyncio.gather(ble_task, kasa_task)
     
     print("=" * 60)
-    print(f"✅ Scan complete!")
+    print(f" Scan complete!")
     print(f"   BLE devices:  {len(ble_devices) if isinstance(ble_devices, list) else 0}")
     print(f"   Kasa devices: {len(kasa_devices) if isinstance(kasa_devices, list) else 0}")
     print("=" * 60 + "\n")
@@ -160,8 +160,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n\n⏹️  Scan interrupted by user")
+        print("\n\n⏹  Scan interrupted by user")
         sys.exit(0)
     except Exception as e:
-        print(f"\n\n❌ Fatal error: {e}")
+        print(f"\n\n Fatal error: {e}")
         sys.exit(1)

@@ -430,7 +430,7 @@ def main():
     result = forecast_energy(target, exog, forecast_hours=args.hours)
     
     if result['success']:
-        print(f"✓ Forecast complete: {result['total_daily_kwh']} kWh total (24h)", file=sys.stderr)
+        print(f" Forecast complete: {result['total_daily_kwh']} kWh total (24h)", file=sys.stderr)
     else:
         print(f"✗ Forecast failed: {result.get('error', 'Unknown error')}", file=sys.stderr)
     

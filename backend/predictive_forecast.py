@@ -701,7 +701,7 @@ if __name__ == '__main__':
             if args.json:
                 print(json_module.dumps({'success': False, 'error': 'No historical data available'}))
             else:
-                print("❌ No historical data available for testing")
+                print(" No historical data available for testing")
             sys.exit(1)
         
         zones = df['zone'].unique()
@@ -744,11 +744,11 @@ if __name__ == '__main__':
                     timestamp = datetime.fromisoformat(pred['timestamp'])
                     print(f"     {timestamp.strftime('%H:%M')}: {pred['value']:.1f}°C [{pred['lower_ci']:.1f}, {pred['upper_ci']:.1f}]")
             
-            print("\n✅ Predictive forecasting test complete")
+            print("\n Predictive forecasting test complete")
     
     except Exception as e:
         if args.json:
             print(json_module.dumps({'success': False, 'error': str(e)}))
         else:
-            print(f"❌ Error: {e}")
+            print(f" Error: {e}")
         sys.exit(1)

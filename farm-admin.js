@@ -657,7 +657,8 @@ async function loadCropsFromDatabase() {
                 retail: defaults.retail,
                 ws1Discount: defaults.ws1,
                 ws2Discount: defaults.ws2,
-                ws3Discount: defaults.ws3
+                ws3Discount: defaults.ws3,
+                isTaxable: false
             };
         });
         
@@ -672,7 +673,8 @@ async function loadCropsFromDatabase() {
             retail: defaultPricing[crop].retail,
             ws1Discount: defaultPricing[crop].ws1,
             ws2Discount: defaultPricing[crop].ws2,
-            ws3Discount: defaultPricing[crop].ws3
+            ws3Discount: defaultPricing[crop].ws3,
+            isTaxable: false
         }));
         
         renderPricingTable();
@@ -785,6 +787,16 @@ function renderPricingTable() {
                     >%
                 </td>
                 <td class="calculated-price">$${ws3Price.toFixed(2)}</td>
+                <td style="text-align: center;">
+                    <input 
+                        type="checkbox" 
+                        ${item.isTaxable ? 'checked' : ''}
+                        data-index="${index}"
+                        data-field="isTaxable"
+                        onchange="updatePricing(${index}, 'isTaxable', this.checked)"
+                        style="cursor: pointer; width: 18px; height: 18px;"
+                    >
+                </td>
             </tr>
         `;
     }).join('');
@@ -794,14 +806,19 @@ function renderPricingTable() {
  * Update pricing when input changes
  */
 function updatePricing(index, field, value) {
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return;
-    
-    if (field === 'retail') {
-        // If showing per 25g, convert back to oz for storage
-        pricingData[index].retail = isPerGram ? convertPrice(numValue, false) : numValue;
+    if (field === 'isTaxable') {
+        // Handle boolean checkbox value
+        pricingData[index][field] = value;
     } else {
-        pricingData[index][field] = numValue;
+        const numValue = parseFloat(value);
+        if (isNaN(numValue)) return;
+        
+        if (field === 'retail') {
+            // If showing per 25g, convert back to oz for storage
+            pricingData[index].retail = isPerGram ? convertPrice(numValue, false) : numValue;
+        } else {
+            pricingData[index][field] = numValue;
+        }
     }
     
     renderPricingTable();
@@ -826,7 +843,8 @@ async function savePricing() {
                 wholesalePrice: parseFloat(calculateWholesalePrice(item.retail, item.ws1Discount)),
                 ws1Discount: item.ws1Discount,
                 ws2Discount: item.ws2Discount,
-                ws3Discount: item.ws3Discount
+                ws3Discount: item.ws3Discount,
+                isTaxable: item.isTaxable || false
             }));
             
             const response = await fetch(`${API_BASE}/crop-pricing`, {

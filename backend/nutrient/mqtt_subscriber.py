@@ -23,12 +23,12 @@ LOG_FILE = "nutrient_mqtt_log.txt"
 def on_connect(client, userdata, flags, rc):
     """Callback when connected to MQTT broker"""
     if rc == 0:
-        print(f"✅ Connected to MQTT broker at {BROKER}:{PORT}")
+        print(f" Connected to MQTT broker at {BROKER}:{PORT}")
         for topic in TOPICS:
             client.subscribe(topic)
             print(f"📡 Subscribed to: {topic}")
     else:
-        print(f"❌ Connection failed with code {rc}")
+        print(f" Connection failed with code {rc}")
 
 def on_message(client, userdata, msg):
     """Callback when message received"""
@@ -50,7 +50,7 @@ def on_message(client, userdata, msg):
     print(f"\n{'='*60}")
     print(f"⏰ {timestamp}")
     print(f"📬 Topic: {topic}")
-    print(f"📦 Payload:\n{payload_str}")
+    print(f" Payload:\n{payload_str}")
     
     # Log to file
     with open(LOG_FILE, 'a') as f:
@@ -62,8 +62,8 @@ def on_message(client, userdata, msg):
 def on_disconnect(client, userdata, rc):
     """Callback when disconnected"""
     if rc != 0:
-        print(f"⚠️  Unexpected disconnect. Code: {rc}")
-        print("🔄 Attempting to reconnect...")
+        print(f"  Unexpected disconnect. Code: {rc}")
+        print(" Attempting to reconnect...")
 
 def main():
     print("🌱 ESP32 Nutrient MQTT Monitor")
@@ -94,12 +94,12 @@ def main():
         client.loop_forever()
         
     except KeyboardInterrupt:
-        print(f"\n\n✅ Monitoring stopped")
-        print(f"📝 Log saved to: {LOG_FILE}")
+        print(f"\n\n Monitoring stopped")
+        print(f" Log saved to: {LOG_FILE}")
         client.disconnect()
         
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n Error: {e}")
         client.disconnect()
 
 if __name__ == "__main__":

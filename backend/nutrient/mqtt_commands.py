@@ -44,13 +44,13 @@ class NutrientCommandPublisher:
         
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            print(f"✓ Connected to MQTT broker at {self.broker}:{self.port}")
+            print(f" Connected to MQTT broker at {self.broker}:{self.port}")
             self.connected = True
         else:
             print(f"✗ Connection failed with code {rc}")
             
     def _on_publish(self, client, userdata, mid):
-        print(f"✓ Message published (mid: {mid})")
+        print(f" Message published (mid: {mid})")
         
     def connect(self):
         """Connect to MQTT broker"""

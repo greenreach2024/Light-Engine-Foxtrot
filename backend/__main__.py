@@ -13,7 +13,7 @@ if __name__ == "__main__":
     print("=" * 70)
     print("🌱 Light Engine Charlie - Backend + MQTT Worker")
     print("=" * 70)
-    print(f"🚀 FastAPI Backend: http://{host}:{port}")
+    print(f" FastAPI Backend: http://{host}:{port}")
     print(f"📡 MQTT Configuration:")
     print(f"   Host: {os.getenv('MQTT_HOST', 'localhost')}")
     print(f"   Port: {os.getenv('MQTT_PORT', '1883')}")
@@ -26,12 +26,12 @@ if __name__ == "__main__":
         print("\n📡 Starting MQTT worker...")
         try:
             start_mqtt_worker_background()
-            print("✅ MQTT worker started\n")
+            print(" MQTT worker started\n")
         except Exception as e:
-            print(f"⚠️ MQTT worker failed to start: {e}")
+            print(f" MQTT worker failed to start: {e}")
             print("   Continuing without MQTT ingestion\n")
     else:
-        print("\n⏭️ MQTT worker disabled (set MQTT_ENABLED=true to enable)\n")
+        print("\n⏭ MQTT worker disabled (set MQTT_ENABLED=true to enable)\n")
     
     # Start FastAPI server
     uvicorn.run(

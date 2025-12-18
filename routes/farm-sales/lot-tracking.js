@@ -476,7 +476,7 @@ router.patch('/:lotCode', (req, res) => {
         reason: reason || 'Not specified'
       });
       
-      console.log(`[lot-tracking] ⚠️  RECALL INITIATED for lot ${lotCode}: ${reason}`);
+      console.log(`[lot-tracking]   RECALL INITIATED for lot ${lotCode}: ${reason}`);
     }
     
     farmStores.lotTracking.set(farmId, lotCode, lot);

@@ -43,7 +43,7 @@ export function initializeDemoMode() {
   console.log('[demo-mode-handler] DEMO_MODE evaluated to:', DEMO_MODE);
 
   if (!DEMO_MODE) {
-    console.log('📊 Demo mode: DISABLED');
+    console.log(' Demo mode: DISABLED');
     return null;
   }
 
@@ -69,7 +69,7 @@ export function initializeDemoMode() {
       fs.writeFileSync(demoDataPath, JSON.stringify(farmData, null, 2));
     }
   } catch (error) {
-    console.error('   ⚠️  Failed to load/generate demo data:', error.message);
+    console.error('     Failed to load/generate demo data:', error.message);
     console.log('   Generating fresh demo data...');
     const generator = new DemoDataGenerator(DEMO_FARM_ID);
     farmData = generator.generateFarm();
@@ -90,7 +90,7 @@ export function initializeDemoMode() {
     startRealtimeSimulation();
   }
 
-  console.log('   ✅ Demo mode initialized');
+  console.log('    Demo mode initialized');
   console.log(`   - ${farmData.rooms.length} rooms`);
   console.log(`   - ${farmData.devices.lights.length} lights`);
   console.log(`   - ${farmData.devices.sensors.length} sensors`);
@@ -342,7 +342,7 @@ function startRealtimeSimulation() {
     });
   }, UPDATE_INTERVAL);
 
-  console.log('   🔄 Real-time simulation started (updates every 60s)');
+  console.log('    Real-time simulation started (updates every 60s)');
 }
 
 /**

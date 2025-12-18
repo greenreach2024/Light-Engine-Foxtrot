@@ -53,7 +53,7 @@ async function controlSwitchBotDevice(deviceId, command) {
       title: 'Error', 
       msg: `Failed to send command ${command}`, 
       kind: 'error',
-      icon: '⚠️'
+      icon: ''
     });
   }
 }

@@ -162,7 +162,7 @@ export default function PlaceTrayScreen({ route, navigation }) {
 
             {locationInfo && (
               <View style={styles.locationInfo}>
-                <Text style={styles.successText}>✓ Location Found</Text>
+                <Text style={styles.successText}> Location Found</Text>
                 <Text style={styles.locationDetail}>
                   📍 {locationInfo.name || locationInfo.qrCodeValue}
                 </Text>

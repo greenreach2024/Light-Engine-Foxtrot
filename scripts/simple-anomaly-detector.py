@@ -183,11 +183,11 @@ def detect_correlated_anomalies(zone_data, time_window_minutes=30):
 def generate_correlation_reason(pattern, zone_count, temp_avg, rh_avg):
     """Generate human-readable reason for correlated anomaly"""
     reasons = {
-        'high_temperature': f"🔥 {zone_count} zones experiencing high temperatures (avg {temp_avg:.1f}°C) - possible HVAC cooling failure",
-        'low_temperature': f"❄️ {zone_count} zones experiencing low temperatures (avg {temp_avg:.1f}°C) - possible HVAC heating failure",
+        'high_temperature': f" {zone_count} zones experiencing high temperatures (avg {temp_avg:.1f}°C) - possible HVAC cooling failure",
+        'low_temperature': f"❄ {zone_count} zones experiencing low temperatures (avg {temp_avg:.1f}°C) - possible HVAC heating failure",
         'high_humidity': f"💧 {zone_count} zones with high humidity (avg {rh_avg:.1f}%) - possible dehumidifier failure or leak",
         'low_humidity': f"🌵 {zone_count} zones with low humidity (avg {rh_avg:.1f}%) - possible humidifier failure",
-        'correlated_deviation': f"⚠️ {zone_count} zones showing simultaneous anomalies - possible systemic issue"
+        'correlated_deviation': f" {zone_count} zones showing simultaneous anomalies - possible systemic issue"
     }
     return reasons.get(pattern, f"{zone_count} zones affected simultaneously")
 
@@ -450,20 +450,20 @@ def detect_anomalies(json_mode=False):
         if correlated:
             print(f"\n🔗 Found {len(correlated)} cross-zone correlation(s):")
             for c in correlated:
-                severity_icon = {'critical': '🔴', 'warning': '🟡', 'info': '🔵'}[c['severity']]
+                severity_icon = {'critical': '', 'warning': '🟡', 'info': '🔵'}[c['severity']]
                 print(f"  {severity_icon} {c['reason']}")
                 print(f"     Affected zones: {', '.join(c['zones'])}")
         
         if anomalies:
             print(f"\n🚨 Found {len(anomalies)} outdoor-aware anomalies in last 24h:")
             for a in sorted(anomalies, key=lambda x: {'critical': 0, 'warning': 1, 'info': 2}[x['severity']])[-10:]:
-                severity_icon = {'critical': '🔴', 'warning': '🟡', 'info': '🔵'}[a['severity']]
+                severity_icon = {'critical': '', 'warning': '🟡', 'info': '🔵'}[a['severity']]
                 outdoor_info = f" (Outdoor: {a['outdoor_temp']:.1f}°C, {a['outdoor_rh']:.0f}%)" if a['outdoor_temp'] is not None else ""
                 print(f"  {severity_icon} {a['zone']} at {a['timestamp']}: "
                       f"Indoor {a['indoor_temp']:.1f}°C, {a['indoor_rh']:.0f}%{outdoor_info}")
                 print(f"     → {a['reason']}")
         else:
-            print("✅ All sensor readings normal (considering outdoor influence)")
+            print(" All sensor readings normal (considering outdoor influence)")
     
     return {
         'anomalies': anomalies,

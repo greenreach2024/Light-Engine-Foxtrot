@@ -69,7 +69,7 @@
   // Add a way to temporarily enable logging
   window.enableConsole = function() {
     Object.assign(console, originalConsole);
-    console.log('✅ Console logging re-enabled');
+    console.log(' Console logging re-enabled');
   };
 
   window.disableConsole = function() {
@@ -85,5 +85,5 @@
 
   // Log that we've activated (using original console before suppressing)
   originalConsole.log('🤫 Demo mode detected - console output suppressed');
-  originalConsole.log('💡 Run window.enableConsole() to temporarily enable logging');
+  originalConsole.log(' Run window.enableConsole() to temporarily enable logging');
 })();

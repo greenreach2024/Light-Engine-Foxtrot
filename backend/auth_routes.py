@@ -143,7 +143,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)) -> A
             text_body=template.text_body
         )
     except Exception as e:
-        print(f"⚠️  Could not send welcome email to {user.email}: {e}")
+        print(f"  Could not send welcome email to {user.email}: {e}")
     
     # Generate JWT token
     token = create_access_token(
@@ -286,11 +286,11 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
         )
         
         if email_sent:
-            print(f"✅ Password reset email sent to {user.email}")
+            print(f" Password reset email sent to {user.email}")
         else:
-            print(f"⚠️  Failed to send email, but token created: {reset_token.token}")
+            print(f"  Failed to send email, but token created: {reset_token.token}")
     except Exception as e:
-        print(f"❌ Error sending email: {e}")
+        print(f" Error sending email: {e}")
         print(f"Reset URL: {reset_url}")
     
     return {

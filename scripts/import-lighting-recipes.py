@@ -337,7 +337,7 @@ def load_source_tables() -> Tuple[Dict[str, pd.DataFrame], str, List[str]]:
             try:
                 df = pd.read_csv(csv_path)
             except Exception as exc:  # pragma: no cover - defensive logging
-                print(f"⚠️  Failed to read {csv_path}: {exc}")
+                print(f"  Failed to read {csv_path}: {exc}")
                 continue
             crop_name = infer_crop_name_from_path(csv_path)
             tables[crop_name] = df
@@ -474,10 +474,10 @@ def main() -> None:
     with open(OUTPUT_PATH, 'w', encoding='utf-8') as handle:
         json.dump({'crops': recipes, 'meta': meta}, handle, indent=2)
 
-    print(f"✅ Imported {len(recipes)} crops. Output: {OUTPUT_PATH}")
+    print(f" Imported {len(recipes)} crops. Output: {OUTPUT_PATH}")
     if warnings:
         for stage_key, count in warnings.items():
-            print(f"⚠️  Missing stage envelope for '{stage_key}' ({count} rows skipped)")
+            print(f"  Missing stage envelope for '{stage_key}' ({count} rows skipped)")
 
 
 if __name__ == '__main__':

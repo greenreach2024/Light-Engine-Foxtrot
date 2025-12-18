@@ -116,7 +116,7 @@ export class VpdDashboard {
         </div>
 
         <div class="vpd-dashboard__error" id="vpdError" style="display: none;">
-          <span class="error-icon">⚠️</span>
+          <span class="error-icon"></span>
           <span class="error-message"></span>
         </div>
 
@@ -154,13 +154,13 @@ export class VpdDashboard {
           <section class="vpd-section vpd-section--feedback">
             <div class="feedback-columns">
               <div class="feedback-col">
-                <h4>⚠️ Warnings</h4>
+                <h4> Warnings</h4>
                 <ul id="warningsList" class="feedback-list">
                   <!-- Populated dynamically -->
                 </ul>
               </div>
               <div class="feedback-col">
-                <h4>💡 Recommendations</h4>
+                <h4> Recommendations</h4>
                 <ul id="recommendationsList" class="feedback-list">
                   <!-- Populated dynamically -->
                 </ul>
@@ -237,7 +237,7 @@ export class VpdDashboard {
           <h4>${controllerNames[id] || id}</h4>
           <p>${controllerDescriptions[id] || 'Active'}</p>
         </div>
-        <div class="controller-card__badge">✓</div>
+        <div class="controller-card__badge"></div>
       </div>
     `).join('');
   }
@@ -247,12 +247,12 @@ export class VpdDashboard {
    */
   _getControllerIcon(id) {
     const icons = {
-      vpd: '🌡️',
-      ventilation: '🌬️',
-      mixing: '🔄',
+      vpd: '🌡',
+      ventilation: '🌬',
+      mixing: '',
       irrigation: '💧'
     };
-    return icons[id] || '⚙️';
+    return icons[id] || '';
   }
 
   /**

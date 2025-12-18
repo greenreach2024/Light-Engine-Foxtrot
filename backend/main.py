@@ -84,9 +84,9 @@ def load_env_cache():
         try:
             with open(ENV_CACHE_FILE, 'r') as f:
                 _env_cache = json.load(f)
-            print(f"✅ Loaded env cache with {len(_env_cache.get('scopes', {}))} scopes")
+            print(f" Loaded env cache with {len(_env_cache.get('scopes', {}))} scopes")
         except Exception as e:
-            print(f"⚠️ Failed to load env cache: {e}")
+            print(f" Failed to load env cache: {e}")
 
 def save_env_cache():
     """Persist environmental cache to disk"""
@@ -95,7 +95,7 @@ def save_env_cache():
         with open(ENV_CACHE_FILE, 'w') as f:
             json.dump(_env_cache, f, indent=2)
     except Exception as e:
-        print(f"⚠️ Failed to save env cache: {e}")
+        print(f" Failed to save env cache: {e}")
 
 def update_sensor_reading(scope: str, sensor_key: str, reading: Dict[str, Any], timestamp: str):
     """Update sensor reading in cache"""
@@ -284,9 +284,9 @@ async def get_sensor_history(
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup"""
-    print("🚀 FastAPI backend starting...")
+    print(" FastAPI backend starting...")
     load_env_cache()
-    print(f"✅ Loaded {len(_env_cache.get('scopes', {}))} scopes")
+    print(f" Loaded {len(_env_cache.get('scopes', {}))} scopes")
 
 
 @app.on_event("shutdown")

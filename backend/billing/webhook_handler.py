@@ -30,9 +30,9 @@ class WebhookHandler:
         """
         self.signature_key = signature_key or os.getenv("SQUARE_WEBHOOK_SIGNATURE_KEY")
         if not self.signature_key:
-            logger.warning("⚠️ No Square webhook signature key configured")
+            logger.warning(" No Square webhook signature key configured")
         
-        logger.info("✅ WebhookHandler initialized")
+        logger.info(" WebhookHandler initialized")
     
     def verify_signature(self, payload: str, signature: str, 
                         notification_url: str) -> bool:
@@ -49,7 +49,7 @@ class WebhookHandler:
         """
         try:
             if not self.signature_key:
-                logger.warning("⚠️ Signature verification skipped (no key configured)")
+                logger.warning(" Signature verification skipped (no key configured)")
                 return True  # Skip verification in dev mode
             
             # Square concatenates: notification_url + request_body
@@ -69,12 +69,12 @@ class WebhookHandler:
             is_valid = hmac.compare_digest(expected_signature, signature)
             
             if not is_valid:
-                logger.error(f"❌ Invalid webhook signature")
+                logger.error(f" Invalid webhook signature")
             
             return is_valid
             
         except Exception as e:
-            logger.error(f"❌ Error verifying signature: {e}")
+            logger.error(f" Error verifying signature: {e}")
             return False
     
     def handle_webhook(self, event_type: str, event_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -103,11 +103,11 @@ class WebhookHandler:
             if handler:
                 return handler(event_data)
             else:
-                logger.warning(f"⚠️ Unhandled event type: {event_type}")
+                logger.warning(f" Unhandled event type: {event_type}")
                 return {"status": "ignored", "event_type": event_type}
                 
         except Exception as e:
-            logger.error(f"❌ Error handling webhook: {e}")
+            logger.error(f" Error handling webhook: {e}")
             return {"status": "error", "error": str(e)}
     
     def handle_subscription_created(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -127,7 +127,7 @@ class WebhookHandler:
             plan_id = subscription.get("plan_id")
             status = subscription.get("status")
             
-            logger.info(f"✅ Subscription created: {subscription_id} (customer: {customer_id})")
+            logger.info(f" Subscription created: {subscription_id} (customer: {customer_id})")
             
             # TODO: Update database with subscription details
             # - Create subscription record
@@ -141,7 +141,7 @@ class WebhookHandler:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error handling subscription.created: {e}")
+            logger.error(f" Error handling subscription.created: {e}")
             raise
     
     def handle_subscription_updated(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -159,7 +159,7 @@ class WebhookHandler:
             subscription_id = subscription.get("id")
             status = subscription.get("status")
             
-            logger.info(f"✅ Subscription updated: {subscription_id} (status: {status})")
+            logger.info(f" Subscription updated: {subscription_id} (status: {status})")
             
             # TODO: Update database with new subscription status
             # - Update subscription record
@@ -173,7 +173,7 @@ class WebhookHandler:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error handling subscription.updated: {e}")
+            logger.error(f" Error handling subscription.updated: {e}")
             raise
     
     def handle_subscription_canceled(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -191,7 +191,7 @@ class WebhookHandler:
             subscription_id = subscription.get("id")
             customer_id = subscription.get("customer_id")
             
-            logger.warning(f"⚠️ Subscription canceled: {subscription_id}")
+            logger.warning(f" Subscription canceled: {subscription_id}")
             
             # TODO: Handle subscription cancellation
             # - Update subscription status to "canceled"
@@ -206,7 +206,7 @@ class WebhookHandler:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error handling subscription.canceled: {e}")
+            logger.error(f" Error handling subscription.canceled: {e}")
             raise
     
     def handle_payment_created(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -226,7 +226,7 @@ class WebhookHandler:
             status = payment.get("status")
             customer_id = payment.get("customer_id")
             
-            logger.info(f"✅ Payment created: {payment_id} (${amount/100:.2f}, status: {status})")
+            logger.info(f" Payment created: {payment_id} (${amount/100:.2f}, status: {status})")
             
             # TODO: Record payment in database
             # - Create payment record
@@ -239,7 +239,7 @@ class WebhookHandler:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error handling payment.created: {e}")
+            logger.error(f" Error handling payment.created: {e}")
             raise
     
     def handle_payment_updated(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -259,7 +259,7 @@ class WebhookHandler:
             amount = payment.get("amount_money", {}).get("amount", 0)
             
             if status == "COMPLETED":
-                logger.info(f"✅ Payment succeeded: {payment_id} (${amount/100:.2f})")
+                logger.info(f" Payment succeeded: {payment_id} (${amount/100:.2f})")
                 
                 # TODO: Process successful payment
                 # - Mark invoice as paid
@@ -269,7 +269,7 @@ class WebhookHandler:
                 action = "payment_succeeded"
                 
             elif status == "FAILED":
-                logger.error(f"❌ Payment failed: {payment_id}")
+                logger.error(f" Payment failed: {payment_id}")
                 
                 # TODO: Handle failed payment
                 # - Retry payment (up to 3 times)
@@ -279,7 +279,7 @@ class WebhookHandler:
                 action = "payment_failed"
                 
             else:
-                logger.info(f"ℹ️ Payment status: {status}")
+                logger.info(f"ℹ Payment status: {status}")
                 action = f"payment_status_{status.lower()}"
             
             return {
@@ -290,5 +290,5 @@ class WebhookHandler:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error handling payment.updated: {e}")
+            logger.error(f" Error handling payment.updated: {e}")
             raise

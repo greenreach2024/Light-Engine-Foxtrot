@@ -63,9 +63,9 @@ class S3Manager:
         try:
             self.s3_client = boto3.client('s3', **session_kwargs)
             self.s3_resource = boto3.resource('s3', **session_kwargs)
-            logger.info(f"✅ S3 client initialized for bucket: {self.bucket_name}")
+            logger.info(f" S3 client initialized for bucket: {self.bucket_name}")
         except NoCredentialsError:
-            logger.error("❌ AWS credentials not found. Configure ~/.aws/credentials or set environment variables.")
+            logger.error(" AWS credentials not found. Configure ~/.aws/credentials or set environment variables.")
             raise
     
     def upload_file(
@@ -105,14 +105,14 @@ class S3Manager:
                     extra_args['ContentType'] = 'text/csv'
             
             self.s3_client.upload_file(file_path, self.bucket_name, s3_key, ExtraArgs=extra_args)
-            logger.info(f"✅ Uploaded: {file_path} → s3://{self.bucket_name}/{s3_key}")
+            logger.info(f" Uploaded: {file_path} → s3://{self.bucket_name}/{s3_key}")
             return True
             
         except FileNotFoundError:
-            logger.error(f"❌ File not found: {file_path}")
+            logger.error(f" File not found: {file_path}")
             return False
         except ClientError as e:
-            logger.error(f"❌ Failed to upload {file_path}: {e}")
+            logger.error(f" Failed to upload {file_path}: {e}")
             return False
     
     def upload_json(
@@ -149,11 +149,11 @@ class S3Manager:
                 **extra_args
             )
             
-            logger.info(f"✅ Uploaded JSON → s3://{self.bucket_name}/{s3_key}")
+            logger.info(f" Uploaded JSON → s3://{self.bucket_name}/{s3_key}")
             return True
             
         except ClientError as e:
-            logger.error(f"❌ Failed to upload JSON: {e}")
+            logger.error(f" Failed to upload JSON: {e}")
             return False
     
     def download_file(
@@ -176,14 +176,14 @@ class S3Manager:
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             
             self.s3_client.download_file(self.bucket_name, s3_key, local_path)
-            logger.info(f"✅ Downloaded: s3://{self.bucket_name}/{s3_key} → {local_path}")
+            logger.info(f" Downloaded: s3://{self.bucket_name}/{s3_key} → {local_path}")
             return True
             
         except ClientError as e:
             if e.response['Error']['Code'] == '404':
-                logger.error(f"❌ File not found: s3://{self.bucket_name}/{s3_key}")
+                logger.error(f" File not found: s3://{self.bucket_name}/{s3_key}")
             else:
-                logger.error(f"❌ Failed to download: {e}")
+                logger.error(f" Failed to download: {e}")
             return False
     
     def download_json(self, s3_key: str) -> Optional[Dict[str, Any]]:
@@ -200,14 +200,14 @@ class S3Manager:
             response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
             content = response['Body'].read().decode('utf-8')
             data = json.loads(content)
-            logger.info(f"✅ Downloaded JSON: s3://{self.bucket_name}/{s3_key}")
+            logger.info(f" Downloaded JSON: s3://{self.bucket_name}/{s3_key}")
             return data
             
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey':
-                logger.error(f"❌ JSON file not found: {s3_key}")
+                logger.error(f" JSON file not found: {s3_key}")
             else:
-                logger.error(f"❌ Failed to download JSON: {e}")
+                logger.error(f" Failed to download JSON: {e}")
             return None
     
     def list_objects(
@@ -244,11 +244,11 @@ class S3Manager:
                     'etag': obj['ETag'].strip('"')
                 })
             
-            logger.info(f"✅ Listed {len(objects)} objects with prefix: {prefix}")
+            logger.info(f" Listed {len(objects)} objects with prefix: {prefix}")
             return objects
             
         except ClientError as e:
-            logger.error(f"❌ Failed to list objects: {e}")
+            logger.error(f" Failed to list objects: {e}")
             return []
     
     def delete_object(self, s3_key: str) -> bool:
@@ -263,11 +263,11 @@ class S3Manager:
         """
         try:
             self.s3_client.delete_object(Bucket=self.bucket_name, Key=s3_key)
-            logger.info(f"✅ Deleted: s3://{self.bucket_name}/{s3_key}")
+            logger.info(f" Deleted: s3://{self.bucket_name}/{s3_key}")
             return True
             
         except ClientError as e:
-            logger.error(f"❌ Failed to delete {s3_key}: {e}")
+            logger.error(f" Failed to delete {s3_key}: {e}")
             return False
     
     def object_exists(self, s3_key: str) -> bool:
@@ -309,11 +309,11 @@ class S3Manager:
                 Params={'Bucket': self.bucket_name, 'Key': s3_key},
                 ExpiresIn=expiration
             )
-            logger.info(f"✅ Generated presigned URL for: {s3_key}")
+            logger.info(f" Generated presigned URL for: {s3_key}")
             return url
             
         except ClientError as e:
-            logger.error(f"❌ Failed to generate presigned URL: {e}")
+            logger.error(f" Failed to generate presigned URL: {e}")
             return None
     
     def backup_tenant_data(self, tenant_id: str, data: Dict[str, Any]) -> bool:

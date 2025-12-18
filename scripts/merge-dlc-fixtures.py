@@ -239,5 +239,5 @@ if __name__ == '__main__':
     shutil.copy(output_db, docs_db)
     print(f"Synced to {docs_db}")
     
-    print(f"\n✅ Success! Added {new_count} new fixtures (total: {total_count})")
+    print(f"\n Success! Added {new_count} new fixtures (total: {total_count})")
     print(f"Backup saved to: {backup_db}")

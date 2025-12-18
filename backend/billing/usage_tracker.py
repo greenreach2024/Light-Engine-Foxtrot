@@ -31,7 +31,7 @@ class UsageTracker:
             port=int(os.getenv("REDIS_PORT", 6379)),
             decode_responses=True
         )
-        logger.info("✅ UsageTracker initialized")
+        logger.info(" UsageTracker initialized")
     
     def track_api_call(self, tenant_id: str, endpoint: str) -> None:
         """
@@ -55,7 +55,7 @@ class UsageTracker:
             self.redis.expire(endpoint_key, 86400 * 7)
             
         except Exception as e:
-            logger.error(f"❌ Error tracking API call: {e}")
+            logger.error(f" Error tracking API call: {e}")
     
     def get_api_calls(self, tenant_id: str, date: Optional[str] = None) -> int:
         """
@@ -74,7 +74,7 @@ class UsageTracker:
             count = self.redis.get(key)
             return int(count) if count else 0
         except Exception as e:
-            logger.error(f"❌ Error getting API calls: {e}")
+            logger.error(f" Error getting API calls: {e}")
             return 0
     
     def get_device_count(self, tenant_id: str) -> int:
@@ -94,7 +94,7 @@ class UsageTracker:
             count = self.redis.get(key)
             return int(count) if count else 0
         except Exception as e:
-            logger.error(f"❌ Error getting device count: {e}")
+            logger.error(f" Error getting device count: {e}")
             return 0
     
     def set_device_count(self, tenant_id: str, count: int) -> None:
@@ -109,7 +109,7 @@ class UsageTracker:
             key = f"usage:devices:{tenant_id}"
             self.redis.set(key, count)
         except Exception as e:
-            logger.error(f"❌ Error setting device count: {e}")
+            logger.error(f" Error setting device count: {e}")
     
     def get_storage_usage(self, tenant_id: str) -> float:
         """
@@ -128,7 +128,7 @@ class UsageTracker:
             storage = self.redis.get(key)
             return float(storage) if storage else 0.0
         except Exception as e:
-            logger.error(f"❌ Error getting storage usage: {e}")
+            logger.error(f" Error getting storage usage: {e}")
             return 0.0
     
     def calculate_overage(self, tenant_id: str, plan_id: str, 
@@ -188,7 +188,7 @@ class UsageTracker:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error calculating overage: {e}")
+            logger.error(f" Error calculating overage: {e}")
             raise
     
     def get_usage_summary(self, tenant_id: str, days: int = 30) -> Dict:
@@ -227,7 +227,7 @@ class UsageTracker:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error getting usage summary: {e}")
+            logger.error(f" Error getting usage summary: {e}")
             return {}
 
 

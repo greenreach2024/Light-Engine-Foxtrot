@@ -49,7 +49,7 @@ async function testWizardSystem() {
 
   try {
     // Test 1: Get all available wizards
-    console.log('📋 Test 1: Getting all available wizards...');
+    console.log(' Test 1: Getting all available wizards...');
     const wizardsResponse = await makeRequest('GET', '/setup/wizards');
     console.log(`Status: ${wizardsResponse.status}`);
     console.log('Available wizards:');
@@ -61,7 +61,7 @@ async function testWizardSystem() {
     console.log('');
 
     // Test 2: Get specific wizard definition
-    console.log('🎯 Test 2: Getting MQTT wizard definition...');
+    console.log(' Test 2: Getting MQTT wizard definition...');
     const mqttWizardResponse = await makeRequest('GET', '/setup/wizards/mqtt-setup');
     console.log(`Status: ${mqttWizardResponse.status}`);
     if (mqttWizardResponse.data.wizard) {
@@ -96,7 +96,7 @@ async function testWizardSystem() {
     console.log('');
 
     // Test 4: Check wizard status
-    console.log('📊 Test 4: Checking wizard execution status...');
+    console.log(' Test 4: Checking wizard execution status...');
     const statusResponse = await makeRequest('GET', '/setup/wizards/mqtt-setup/status');
     console.log(`Status: ${statusResponse.status}`);
     if (statusResponse.data.status) {
@@ -108,7 +108,7 @@ async function testWizardSystem() {
     console.log('');
 
     // Test 5: Test wizard suggestions for discovered devices
-    console.log('💡 Test 5: Testing wizard suggestions...');
+    console.log(' Test 5: Testing wizard suggestions...');
     const testDevices = [
       {
         ip: '192.168.2.38',
@@ -139,10 +139,10 @@ async function testWizardSystem() {
     }
     console.log('');
 
-    console.log('✅ All wizard system tests completed successfully!');
+    console.log(' All wizard system tests completed successfully!');
 
   } catch (error) {
-    console.error('❌ Test failed:', error.message);
+    console.error(' Test failed:', error.message);
   }
 }
 
@@ -153,6 +153,6 @@ makeRequest('GET', '/health')
     return testWizardSystem();
   })
   .catch(() => {
-    console.log('🔴 Server not running. Please start server-foxtrot.js first.');
+    console.log(' Server not running. Please start server-foxtrot.js first.');
     console.log('Run: node server-foxtrot.js');
   });

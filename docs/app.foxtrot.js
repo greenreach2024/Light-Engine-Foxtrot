@@ -2457,9 +2457,9 @@ function createDeviceEntryElement(device) {
   
   // Category-specific colors
   const categoryColors = {
-    'sensor': { bg: '#f0fdf4', border: '#86efac', icon: '📊' },
+    'sensor': { bg: '#f0fdf4', border: '#86efac', icon: '' },
     'plug': { bg: '#fef3c7', border: '#fcd34d', icon: '🔌' },
-    'controller': { bg: '#e0e7ff', border: '#a5b4fc', icon: '🎛️' },
+    'controller': { bg: '#e0e7ff', border: '#a5b4fc', icon: '🎛' },
     'device': { bg: '#f8fafc', border: '#e2e8f0', icon: '📱' }
   };
   
@@ -2947,7 +2947,7 @@ window.refreshDeviceStatus = async function(deviceId, options = {}) {
           title: 'Please wait', 
           msg: `Device was recently refreshed. Please wait ${remainingSeconds} seconds to avoid rate limiting.`, 
           kind: 'warn', 
-          icon: '⏱️' 
+          icon: '⏱' 
         });
       }
       return;
@@ -3715,7 +3715,7 @@ async function addDeviceToIoT(device, deviceIndex, credentials = null) {
         if (remainingRows.length === 0) {
           const resultsTable = document.getElementById('universalScanResultsTable');
           if (resultsTable) {
-            resultsTable.innerHTML = '<div style="padding: 24px; text-align: center; color: #10b981;">✓ All devices processed. Run scan again to discover more.</div>';
+            resultsTable.innerHTML = '<div style="padding: 24px; text-align: center; color: #10b981;"> All devices processed. Run scan again to discover more.</div>';
           }
         }
       }, 300);
@@ -4075,7 +4075,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnDance = document.getElementById('btnGrow3DanceParty');
         if (btnDance) {
           btnDance.disabled = false;
-          btnDance.textContent = '🎉 Dance Party';
+          btnDance.textContent = ' Dance Party';
         }
         // Wait a moment for any pending dance party requests to complete
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -4151,9 +4151,9 @@ document.addEventListener('DOMContentLoaded', function() {
         clearInterval(activeDanceInterval);
         activeDanceInterval = null;
         btnGrow3DanceParty.disabled = false;
-        btnGrow3DanceParty.textContent = '🎉 Dance Party';
+        btnGrow3DanceParty.textContent = ' Dance Party';
         showToast({
-          title: '🎉 Dance Party Stopped',
+          title: ' Dance Party Stopped',
           msg: 'Light show cancelled',
           kind: 'info'
         });
@@ -4171,10 +4171,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Disable button during dance party
         btnGrow3DanceParty.disabled = false; // Keep enabled so user can click to stop
-        btnGrow3DanceParty.textContent = '⏹️ Stop Party';
+        btnGrow3DanceParty.textContent = '⏹ Stop Party';
         
         showToast({
-          title: '🎉 Dance Party Started!',
+          title: ' Dance Party Started!',
           msg: '30 seconds of random light phasing (click button to stop)',
           kind: 'success'
         });
@@ -4205,10 +4205,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Re-enable button
             btnGrow3DanceParty.disabled = false;
-            btnGrow3DanceParty.textContent = '🎉 Dance Party';
+            btnGrow3DanceParty.textContent = ' Dance Party';
             
             showToast({
-              title: '🎉 Dance Party Complete',
+              title: ' Dance Party Complete',
               msg: 'Lights returned to off state',
               kind: 'success'
             });
@@ -4249,7 +4249,7 @@ document.addEventListener('DOMContentLoaded', function() {
           activeDanceInterval = null;
         }
         btnGrow3DanceParty.disabled = false;
-        btnGrow3DanceParty.textContent = '🎉 Dance Party';
+        btnGrow3DanceParty.textContent = ' Dance Party';
         showToast({
           title: 'Dance Party Failed',
           msg: error.message || 'Failed to start dance party',
@@ -6695,7 +6695,7 @@ class FarmWizard {
     status.style.display = 'block';
     
     // Add "Edit Network" button to all status messages
-    const editButton = '<button onclick="farmWizard.editWifiNetwork()" class="btn-link tiny" style="margin-left:8px">✏️ Change Network</button>';
+    const editButton = '<button onclick="farmWizard.editWifiNetwork()" class="btn-link tiny" style="margin-left:8px">✏ Change Network</button>';
     
     if (!result) {
       status.innerHTML = `<div class="tiny" style="color:#475569">Run a quick connectivity test to confirm.${editButton}</div>`;
@@ -6728,7 +6728,7 @@ class FarmWizard {
       title: 'Edit WiFi Network',
       msg: 'Select a new network or enter SSID manually',
       kind: 'info',
-      icon: '🔄'
+      icon: ''
     });
   }
 
@@ -6760,7 +6760,7 @@ class FarmWizard {
         networkList.style.flexDirection = 'column';
         networkList.innerHTML = `
           <div style="width: 100%; padding: 20px; background: #dbeafe; border: 2px solid #3b82f6; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <p style="margin: 0 0 12px; font-weight: 700; font-size: 16px; color: #1e40af;">ℹ️ Manual WiFi Entry</p>
+            <p style="margin: 0 0 12px; font-weight: 700; font-size: 16px; color: #1e40af;">ℹ Manual WiFi Entry</p>
             <p style="margin: 0; font-size: 14px; color: #1e3a8a; line-height: 1.5;">
               Enter your WiFi network details below to connect your device.
             </p>
@@ -6864,7 +6864,7 @@ class FarmWizard {
         // Add manual entry option with highly visible styling
         networkList.innerHTML = `
           <div style="width: 100%; padding: 20px; background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <p style="margin: 0 0 12px; font-weight: 700; font-size: 16px; color: #92400e;">⚠️ WiFi Scan Unavailable</p>
+            <p style="margin: 0 0 12px; font-weight: 700; font-size: 16px; color: #92400e;"> WiFi Scan Unavailable</p>
             <p style="margin: 0 0 12px; font-size: 14px; color: #78350f; line-height: 1.5;">
               Automatic network detection failed. You can enter your WiFi details manually below.
             </p>
@@ -6919,7 +6919,7 @@ class FarmWizard {
         title: 'WiFi Scan Failed', 
         msg: 'Automatic scan unavailable. Use manual entry or check controller connection.', 
         kind: 'warning', 
-        icon: '⚠️' 
+        icon: '' 
       });
     }
 
@@ -6984,12 +6984,12 @@ class FarmWizard {
         title: 'Wi‑Fi Configuration Saved', 
         msg: `Network: ${this.data.connection.wifi.ssid} (test skipped)`, 
         kind: 'info', 
-        icon: 'ℹ️' 
+        icon: 'ℹ' 
       });
       
       if (status) {
         status.style.display = 'block';
-        status.innerHTML = `<div class="badge badge--info">Configured</div><div class="tiny">Network: ${this.data.connection.wifi.ssid} (test skipped)<button onclick="farmWizard.editWifiNetwork()" class="btn-link tiny" style="margin-left:8px">✏️ Change Network</button></div>`;
+        status.innerHTML = `<div class="badge badge--info">Configured</div><div class="tiny">Network: ${this.data.connection.wifi.ssid} (test skipped)<button onclick="farmWizard.editWifiNetwork()" class="btn-link tiny" style="margin-left:8px">✏ Change Network</button></div>`;
       }
       
       this.updateWifiPasswordUI();
@@ -7218,7 +7218,7 @@ class FarmWizard {
 
   validateCurrentStep() {
     const stepId = this.steps[this.currentStep];
-    console.debug('🔍 Validating step:', stepId, 'with data:', JSON.parse(JSON.stringify(this.data)));
+    console.debug(' Validating step:', stepId, 'with data:', JSON.parse(JSON.stringify(this.data)));
     if (!stepId) {
       console.warn('[FarmWizard] validateCurrentStep: No stepId for currentStep', this.currentStep);
       return false;
@@ -7258,7 +7258,7 @@ class FarmWizard {
       this.data.location.city = cityValue;
       this.data.location.state = stateValue;
       this.data.location.postal = postalValue;
-      console.debug('✅ Location data captured for subscriptions:', {
+      console.debug(' Location data captured for subscriptions:', {
         farmName: farmNameValue || '(blank)',
         address: addressValue || '(blank)',
         city: cityValue || '(blank)', 
@@ -7332,7 +7332,7 @@ class FarmWizard {
         <div style="font-size:18px;font-weight:600;margin-bottom:8px;display:flex;align-items:center">
           ${logoSection}<span>${escapeHtml(farmName)}</span>
         </div>
-        ${this.data.contact.website ? `<div class="tiny" style="color:var(--gr-primary)">🌐 <a href="${this.data.contact.website.startsWith('http') ? this.data.contact.website : 'https://' + this.data.contact.website}" target="_blank" style="color:var(--gr-primary);text-decoration:none">${this.extractDomain(this.data.contact.website)}</a></div>` : ''}
+        ${this.data.contact.website ? `<div class="tiny" style="color:var(--gr-primary)"> <a href="${this.data.contact.website.startsWith('http') ? this.data.contact.website : 'https://' + this.data.contact.website}" target="_blank" style="color:var(--gr-primary);text-decoration:none">${this.extractDomain(this.data.contact.website)}</a></div>` : ''}
       </div>`;
       
       // Fetch website branding for the logo
@@ -7343,7 +7343,7 @@ class FarmWizard {
     
     host.innerHTML = `
       ${brandingSection}
-      <div><strong>Connection:</strong> ${conn.type === 'wifi' ? `Wi‑Fi · ${escapeHtml(conn.wifi.ssid || '')}` : 'Ethernet'} ${conn.wifi.testResult?.status === 'connected' ? '✅' : ''}</div>
+      <div><strong>Connection:</strong> ${conn.type === 'wifi' ? `Wi‑Fi · ${escapeHtml(conn.wifi.ssid || '')}` : 'Ethernet'} ${conn.wifi.testResult?.status === 'connected' ? '' : ''}</div>
       <div><strong>Farm:</strong> ${escapeHtml(this.data.location.farmName || 'Untitled')}</div>
       <div><strong>Address:</strong> ${escapeHtml(addressParts.join(', ') || '—')}</div>
       <div><strong>Timezone:</strong> ${escapeHtml(timezone)}</div>
@@ -7611,7 +7611,7 @@ class FarmWizard {
     
     try {
       button.disabled = true;
-      button.textContent = '🔍 Searching...';
+      button.textContent = ' Searching...';
       status.textContent = 'Looking up location...';
       status.style.color = '#666';
       
@@ -7732,7 +7732,7 @@ class FarmWizard {
       console.error('Weather loading error:', error);
       weatherContent.innerHTML = `
         <div style="color: #EF4444; font-size: 14px;">
-          ⚠️ Unable to load weather data
+           Unable to load weather data
         </div>
       `;
     }
@@ -7813,7 +7813,7 @@ class FarmWizard {
         if (contactName) previewParts.push(`👤 ${contactName}`);
         if (website) {
           const domain = this.extractDomain(website);
-          previewParts.push(`🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" target="_blank" style="color:var(--gr-primary)">${domain}</a>`);
+          previewParts.push(` <a href="${website.startsWith('http') ? website : 'https://' + website}" target="_blank" style="color:var(--gr-primary)">${domain}</a>`);
         }
         brandingPreviewContent.innerHTML = previewParts.join('<br>') || 'Enter farm name and website to see your branding...';
       }
@@ -7912,7 +7912,7 @@ class FarmWizard {
       <div id="brandingModalBackdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center">
         <div style="background:white;border-radius:12px;padding:24px;max-width:500px;margin:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
           <div style="display:flex;align-items:center;margin-bottom:16px">
-            <h3 style="margin:0;flex:1">🎨 Live Branding Preview</h3>
+            <h3 style="margin:0;flex:1"> Live Branding Preview</h3>
             <button id="closeBrandingModal" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666">&times;</button>
           </div>
           
@@ -7921,12 +7921,12 @@ class FarmWizard {
               ${logoHtml}<span>${farmName || 'Your Farm Name'}</span>
             </div>
             ${contactName ? `<div style="color:var(--medium);margin-bottom:4px">👤 Contact: ${contactName}</div>` : ''}
-            ${website ? `<div style="color:var(--gr-primary)">🌐 <a href="${website.startsWith('http') ? website : 'https://' + website}" target="_blank" style="color:var(--gr-primary);text-decoration:none">${domain}</a></div>` : ''}
+            ${website ? `<div style="color:var(--gr-primary)"> <a href="${website.startsWith('http') ? website : 'https://' + website}" target="_blank" style="color:var(--gr-primary);text-decoration:none">${domain}</a></div>` : ''}
             ${(!farmName && !contactName && !website) ? '<div style="color:var(--medium);font-style:italic">Complete your farm details to see branding preview</div>' : ''}
           </div>
           
           <div style="text-align:center;margin-bottom:16px">
-            <button id="openBrandingWizard" style="background:var(--gr-accent);color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;margin-right:8px">🎨 Customize Branding</button>
+            <button id="openBrandingWizard" style="background:var(--gr-accent);color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;margin-right:8px"> Customize Branding</button>
             <button id="closeBrandingModalBtn" style="background:var(--gr-primary);color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer">Close Preview</button>
           </div>
         </div>
@@ -8004,8 +8004,8 @@ class FarmWizard {
       <div id="brandingWizardBackdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center">
         <div style="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;margin:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
           <div style="display:flex;align-items:center;margin-bottom:20px">
-            <h3 style="margin:0;flex:1">🎨 ${farmName} Branding Editor</h3>
-            ${website ? `<div id="autoExtractionStatus" style="padding:6px 12px;margin-right:8px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:4px;font-size:12px">🔄 Auto-extracting...</div>` : ''}
+            <h3 style="margin:0;flex:1"> ${farmName} Branding Editor</h3>
+            ${website ? `<div id="autoExtractionStatus" style="padding:6px 12px;margin-right:8px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:4px;font-size:12px"> Auto-extracting...</div>` : ''}
             <button id="closeBrandingWizard" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666">&times;</button>
           </div>
           
@@ -8061,7 +8061,7 @@ class FarmWizard {
           <div style="margin-bottom:20px">
             <h4 style="margin:0 0 12px;color:var(--gr-text)">Logo</h4>
             <input type="url" id="logoUrl" placeholder="Logo URL (or leave blank to use website favicon)" value="${currentBranding.logo}" style="width:100%;padding:8px;border:1px solid var(--gr-border);border-radius:4px;margin-bottom:8px">
-            <div style="font-size:12px;color:var(--medium)">💡 We'll automatically use your website's favicon if no logo is provided</div>
+            <div style="font-size:12px;color:var(--medium)"> We'll automatically use your website's favicon if no logo is provided</div>
             ${domain ? `<div style="font-size:12px;color:var(--gr-primary);margin-top:4px">🔗 Auto-detected from ${domain}</div>` : ''}
           </div>
           
@@ -8080,7 +8080,7 @@ class FarmWizard {
           
           <!-- Action Buttons -->
           <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button id="testTheme" style="background:#ff6b6b;color:white;border:none;padding:10px 16px;border-radius:6px;cursor:pointer">🧪 Test Theme</button>
+            <button id="testTheme" style="background:#ff6b6b;color:white;border:none;padding:10px 16px;border-radius:6px;cursor:pointer"> Test Theme</button>
             <button id="resetBranding" style="background:var(--medium);color:white;border:none;padding:10px 16px;border-radius:6px;cursor:pointer">Reset to Default</button>
             <button id="saveBranding" style="background:var(--gr-primary);color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer">Save Branding</button>
           </div>
@@ -8131,7 +8131,7 @@ class FarmWizard {
     // Auto-extract website branding if website exists
     const website = this.data.contact?.website;
     if (website) {
-      console.log('🎨 Auto-extracting website branding from:', website);
+      console.log(' Auto-extracting website branding from:', website);
       // Trigger automatic extraction after a short delay
       setTimeout(() => {
         this.fetchWebsiteBrandingData();
@@ -8397,7 +8397,7 @@ class FarmWizard {
       fontCss: document.getElementById('fontFamily').value ? [`https://fonts.googleapis.com/css2?family=${document.getElementById('fontFamily').value.replace(' ', '+')}&display=swap`] : []
     };
     
-    console.log('🎨 Saving branding with palette:', branding.palette);
+    console.log(' Saving branding with palette:', branding.palette);
     
     // Update farm name in wizard data
     if (farmName) {
@@ -8411,14 +8411,14 @@ class FarmWizard {
     STATE.farm.tagline = tagline;
     STATE.farm.logo = branding.logo;
     
-    console.log('🎨 Updated STATE.farm.branding:', STATE.farm.branding);
+    console.log(' Updated STATE.farm.branding:', STATE.farm.branding);
     
     // Apply the theme immediately - THIS IS CRITICAL
-    console.log('🎨 Calling applyBranding with:', branding);
+    console.log(' Calling applyBranding with:', branding);
     this.applyBranding(branding);
     
     // Also apply theme directly to make sure it works
-    console.log('🎨 Calling applyTheme directly with palette:', branding.palette);
+    console.log(' Calling applyTheme directly with palette:', branding.palette);
     applyTheme(branding.palette);
     
     // Update the header display immediately
@@ -8502,20 +8502,20 @@ class FarmWizard {
   }
 
   applyBranding(branding) {
-    console.log('🎨 applyBranding called with:', branding);
+    console.log(' applyBranding called with:', branding);
     
     // Apply theme using the global applyTheme function for comprehensive theming
     if (branding.palette) {
-      console.log('🎨 Applying theme with palette:', branding.palette);
+      console.log(' Applying theme with palette:', branding.palette);
     if (typeof applyTheme === 'function') {
       applyTheme(branding.palette, {
         fontFamily: branding.fontFamily || '',
         logoHeight: branding.logoHeight || ''
       });
-      console.log('🎨 Theme applied successfully');
+      console.log(' Theme applied successfully');
     }
     } else {
-      console.warn('🎨 No palette found in branding object!');
+      console.warn(' No palette found in branding object!');
     }
     
     // Update the farm logo in the header
@@ -8595,12 +8595,12 @@ class FarmWizard {
 
     try {
       const url = website.startsWith('http') ? website : `https://${website}`;
-      console.log('🎨 Auto-fetching branding from:', url);
+      console.log(' Auto-fetching branding from:', url);
       
       const response = await fetch(`/brand/extract?url=${encodeURIComponent(url)}`);
       const data = await response.json();
       
-      console.log('🎨 Website branding data received:', data);
+      console.log(' Website branding data received:', data);
       
       if (data.ok && data.palette) {
         const sanitizedPalette = sanitizeBrandPalette(data.palette);
@@ -8621,11 +8621,11 @@ class FarmWizard {
         // Update the live preview
         this.updateBrandingPreview();
         
-        console.log('🎨 Branding wizard auto-populated with website data');
+        console.log(' Branding wizard auto-populated with website data');
         
         // Update status to success
         if (statusEl) {
-          statusEl.textContent = '✅ Branding extracted!';
+          statusEl.textContent = ' Branding extracted!';
           statusEl.style.background = '#d1fae5';
           statusEl.style.color = '#065f46';
           setTimeout(() => {
@@ -8634,11 +8634,11 @@ class FarmWizard {
           }, 2000);
         }
       } else {
-        console.log('🎨 Failed to extract branding:', data.error);
+        console.log(' Failed to extract branding:', data.error);
         
         // Update status to partial success
         if (statusEl) {
-          statusEl.textContent = '⚠️ Partial extraction';
+          statusEl.textContent = ' Partial extraction';
           statusEl.style.background = '#fef3c7';
           statusEl.style.color = '#92400e';
         }
@@ -8650,11 +8650,11 @@ class FarmWizard {
         this.updateBrandingPreview();
       }
     } catch (error) {
-      console.error('🎨 Error fetching website branding:', error);
+      console.error(' Error fetching website branding:', error);
       
       // Update status to error
       if (statusEl) {
-        statusEl.textContent = '❌ Extraction failed';
+        statusEl.textContent = ' Extraction failed';
         statusEl.style.background = '#fee2e2';
         statusEl.style.color = '#991b1b';
       }
@@ -10799,7 +10799,7 @@ class RoomWizard {
         .then(data => {
           if (data && Array.isArray(data.equipment)) {
             STATE.equipmentKB = data;
-            console.log('✅ Successfully loaded equipment database on-demand:', data.equipment.length, 'items');
+            console.log(' Successfully loaded equipment database on-demand:', data.equipment.length, 'items');
             // Retry the search
             this.searchEquipment(category, query, resultsElementId);
           } else {
@@ -11575,10 +11575,10 @@ class RoomWizard {
 
   categoryStatusMessage(status, note = '') {
     const map = {
-      'complete': '✅ Ready',
-      'needs-hub': '⚠ Needs hub',
-      'needs-energy': '⚠ Needs energy meter',
-      'needs-setup': '⚠ Needs setup',
+      'complete': ' Ready',
+      'needs-hub': ' Needs hub',
+      'needs-energy': ' Needs energy meter',
+      'needs-setup': ' Needs setup',
       'needs-info': '• Needs info',
       'not-started': '• Needs info'
     };
@@ -11742,7 +11742,7 @@ class RoomWizard {
       // Check for rate limiting
       if (response.status === 429 || interpreted.statusCode === 429) {
         const retryAfter = payload?.retryAfter || 60;
-        console.warn(`⏱️ SwitchBot API rate limited. Retry after ${retryAfter} seconds.`);
+        console.warn(`⏱ SwitchBot API rate limited. Retry after ${retryAfter} seconds.`);
         showToast({
           title: 'API Rate Limited',
           msg: `SwitchBot API is rate limited. Please wait ${retryAfter} seconds and refresh.`,
@@ -11761,7 +11761,7 @@ class RoomWizard {
       const cacheFreshness = (headers.freshness || '').toLowerCase();
 
       if ((meta.cached && meta.stale) || (cacheStatus === 'hit' && cacheFreshness === 'stale')) {
-        console.warn('⚠️ Using stale cached SwitchBot data:', meta.error || 'Unknown error');
+        console.warn(' Using stale cached SwitchBot data:', meta.error || 'Unknown error');
         showToast({
           title: 'Using Cached Data',
           msg: 'SwitchBot API unavailable, using cached device data.',
@@ -11769,14 +11769,14 @@ class RoomWizard {
           icon: ''
         });
       } else if (meta.cached || cacheStatus === 'hit') {
-        console.info('📋 Using cached SwitchBot device list (within TTL).');
+        console.info(' Using cached SwitchBot device list (within TTL).');
       }
 
       const rawDevices = interpreted.rawDevices.length ? interpreted.rawDevices : interpreted.devices;
       const normalizedDevices = normalizeSwitchBotDevicesList(rawDevices);
 
       if (!normalizedDevices.length) {
-        console.warn('⚠️ No SwitchBot devices found in your account');
+        console.warn(' No SwitchBot devices found in your account');
         showToast({
           title: 'No Devices Found',
           msg: 'No SwitchBot devices found in your account. Add devices in the SwitchBot app first.',
@@ -11810,7 +11810,7 @@ class RoomWizard {
 
       this.renderDeviceList();
 
-      console.log(`✅ Loaded ${normalizedDevices.length} LIVE SwitchBot device(s) from greenreach network`, meta);
+      console.log(` Loaded ${normalizedDevices.length} LIVE SwitchBot device(s) from greenreach network`, meta);
       showToast({
         title: 'Live Devices Connected',
         msg: `Successfully connected to ${normalizedDevices.length} live SwitchBot devices on greenreach network.`,
@@ -11822,7 +11822,7 @@ class RoomWizard {
         this.statusEl.textContent = `${normalizedDevices.length} live devices connected on greenreach`;
       }
     } catch (error) {
-      console.error('❌ Failed to load live SwitchBot devices:', error);
+      console.error(' Failed to load live SwitchBot devices:', error);
       
       // NO FALLBACK TO MOCK DATA - Show error instead
       showToast({ 
@@ -11971,7 +11971,7 @@ class RoomWizard {
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         try { window.dispatchEvent(new CustomEvent('farmDataChanged')); } catch {}
       }
-      showToast({ title:'Room saved', msg:`${this.data.name} saved`, kind:'success', icon:'✅' });
+      showToast({ title:'Room saved', msg:`${this.data.name} saved`, kind:'success', icon:'' });
       try { localStorage.removeItem('gr.roomWizard.progress'); } catch {}
       // Only close if explicitly requested and not part of a multi-room workflow
       if (shouldAutoClose && (!this.multiRoomList || this.multiRoomList.length <= 1)) {
@@ -12010,7 +12010,7 @@ class RoomWizard {
     
       // Show enhanced scanning radar
       if (progressEl) progressEl.style.display = 'flex';
-      if (statusEl) statusEl.innerHTML = '<span style="color:#0ea5e9">🔍 Multi-protocol scan in progress...</span>';
+      if (statusEl) statusEl.innerHTML = '<span style="color:#0ea5e9"> Multi-protocol scan in progress...</span>';
       if (runBtn) {
         runBtn.style.display = 'none';
         runBtn.disabled = true;
@@ -12026,12 +12026,12 @@ class RoomWizard {
         await deviceManagerWindow.runDiscovery();
         this.discoveredDevices = deviceManagerWindow.devices || [];
         
-          if (statusEl) statusEl.innerHTML = `<span style="color:#059669">✅ Found ${this.discoveredDevices.length} devices across all protocols</span>`;
+          if (statusEl) statusEl.innerHTML = `<span style="color:#059669"> Found ${this.discoveredDevices.length} devices across all protocols</span>`;
         this.renderDiscoveredDevices();
         if (resultsEl) resultsEl.style.display = 'block';
       }
     } catch (error) {
-        if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">❌ Multi-protocol discovery failed</span>';
+        if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626"> Multi-protocol discovery failed</span>';
       console.error('Device discovery failed:', error);
     }
     
@@ -12051,7 +12051,7 @@ class RoomWizard {
     const runBtn = $('#roomDiscoveryRun');
     const stopBtn = $('#roomDiscoveryStop');
     
-    if (statusEl) statusEl.innerHTML = '<span style="color:#f59e0b">⏹️ Discovery stopped</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#f59e0b">⏹ Discovery stopped</span>';
     if (runBtn) runBtn.style.display = 'inline-block';
     if (stopBtn) stopBtn.style.display = 'none';
   }
@@ -12067,7 +12067,7 @@ class RoomWizard {
           <div class="tiny" style="font-weight:500">${device.deviceName || device.id || 'Unknown Device'}</div>
           <div class="tiny" style="color:#6b7280">${device.ip || device.host || ''} • ${device.type || 'Unknown type'}</div>
         </div>
-        <div class="tiny" style="color:#374151">${device.online ? '🟢 Online' : '🔴 Offline'}</div>
+        <div class="tiny" style="color:#374151">${device.online ? '🟢 Online' : ' Offline'}</div>
       </div>
     `).join('');
   }
@@ -12267,7 +12267,7 @@ async function loadAllData() {
     }
     STATE.iotDevices = uniqueDevices;
     window.LAST_IOT_SCAN = uniqueDevices.slice();
-    console.log('✅ [loadAllData] Loaded IoT devices:', STATE.iotDevices.length);
+    console.log(' [loadAllData] Loaded IoT devices:', STATE.iotDevices.length);
     setTimeout(() => {
       if (typeof window.renderIoTDeviceCards === 'function') {
         window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
@@ -12328,9 +12328,9 @@ async function loadAllData() {
     STATE.farm = normalizeFarmDoc(rawFarm);
     try { if (STATE.farm && Object.keys(STATE.farm).length) localStorage.setItem('gr.farm', JSON.stringify(STATE.farm)); } catch {}
     STATE.rooms = rooms?.rooms || [];
-    console.log('✅ [loadAllData] Loaded STATE.rooms:', STATE.rooms.length, 'rooms');
+    console.log(' [loadAllData] Loaded STATE.rooms:', STATE.rooms.length, 'rooms');
     STATE.equipmentMetadata = equipmentMetadata || {};
-    console.log('✅ [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
+    console.log(' [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
     if (STATE.rooms.length > 0) {
       console.log('   Room details:', STATE.rooms.map(r => `${r.name} (id: ${r.id})`).join(', '));
     }
@@ -12342,18 +12342,18 @@ async function loadAllData() {
       }
     });
     STATE.deviceKB = deviceKB;
-    console.log('✅ Loaded device fixtures database:', deviceKB.fixtures.length, 'fixtures');
+    console.log(' Loaded device fixtures database:', deviceKB.fixtures.length, 'fixtures');
     console.log('Sample fixtures:', deviceKB.fixtures.slice(0, 3).map(f => `${f.vendor} ${f.model} [${f.id}]`));
   }
   if (equipmentKB && Array.isArray(equipmentKB.equipment)) {
     STATE.equipmentKB = equipmentKB;
-    console.log('✅ Loaded equipment database:', equipmentKB.equipment.length, 'equipment items');
+    console.log(' Loaded equipment database:', equipmentKB.equipment.length, 'equipment items');
     console.log('Sample equipment:', equipmentKB.equipment.slice(0, 3).map(e => `${e.vendor} ${e.model} (${e.category})`));
   }
   // load manufacturers into a global for lookups and selects
   if (deviceManufacturers && Array.isArray(deviceManufacturers.manufacturers)) {
     window.DEVICE_MANUFACTURERS = deviceManufacturers.manufacturers;
-    console.log('✅ Loaded device manufacturers:', deviceManufacturers.manufacturers.length, 'manufacturers');
+    console.log(' Loaded device manufacturers:', deviceManufacturers.manufacturers.length, 'manufacturers');
   } else {
     window.DEVICE_MANUFACTURERS = window.DEVICE_MANUFACTURERS || [];
   }
@@ -13069,7 +13069,7 @@ function renderRooms() {
             const online = device.telemetry.online !== false;
             const powerState = device.telemetry.power === 'on' || device.telemetry.power === true;
             const name = eq.name || eq.category || 'Equipment';
-            const badge = online ? (powerState ? '🟢' : '⚪') : '🔴';
+            const badge = online ? (powerState ? '🟢' : '⚪') : '';
             return `${badge} ${escapeHtml(name)}`;
           }
           return null;
@@ -14341,7 +14341,7 @@ function renderControllerMetadata(control) {
       // Online status
       const online = telemetry.online !== false;
       const powerState = telemetry.power === 'on' || telemetry.power === true;
-      const statusBadge = online ? (powerState ? '🟢 ON' : '⚪ OFF') : '🔴 OFFLINE';
+      const statusBadge = online ? (powerState ? '🟢 ON' : '⚪ OFF') : ' OFFLINE';
       parts.push(statusBadge);
       
       // Voltage
@@ -14366,7 +14366,7 @@ function renderControllerMetadata(control) {
         const energy = telemetry.electricityOfDay >= 1000 
           ? `${(telemetry.electricityOfDay / 1000).toFixed(2)} kWh`
           : `${telemetry.electricityOfDay} Wh`;
-        parts.push(`📊 ${energy} today`);
+        parts.push(` ${energy} today`);
       }
       
       return parts.length > 0 ? parts.join(' • ') : '';
@@ -16235,7 +16235,7 @@ async function refreshSwitchBotDevices() {
   const usedCache = cacheStatus === 'hit';
   const stale = cacheFreshness === 'stale';
   const toastKind = usedCache && stale ? 'warn' : 'success';
-  const icon = toastKind === 'warn' ? '⚠️' : '🏠';
+  const icon = toastKind === 'warn' ? '' : '🏠';
   const msg = usedCache && stale
     ? `Loaded ${result.devices.length} cached device(s); live refresh failed`
     : `Found ${result.devices.length} device(s) from SwitchBot API`;
@@ -16655,7 +16655,7 @@ async function pollHealthz() {
       displayText = 'System Healthy';
       color = '#16a34a'; // green
       state = 'ok';
-      tooltip = `✅ System Healthy\n\nAll systems operational. The Light Engine Charlie server is running and can communicate with the Code3 controller.\n\nController: ${controllerTarget}\nResponse time: ${responseTime}\nStatus: All connections active`;
+      tooltip = ` System Healthy\n\nAll systems operational. The Light Engine Charlie server is running and can communicate with the Code3 controller.\n\nController: ${controllerTarget}\nResponse time: ${responseTime}\nStatus: All connections active`;
     } else if (status === 'degraded' || !controllerReachable) {
       const reason = body?.controller?.status || 'unknown';
       displayText = 'System Degraded';
@@ -16663,11 +16663,11 @@ async function pollHealthz() {
       state = 'degraded';
       
       if (reason === 'unconfigured') {
-        tooltip = `⚠️ System Degraded\n\nThe server is running but no controller is configured. Light control features may be unavailable.\n\nController: Not configured\nAction: Configure controller target in settings\nImpact: Limited functionality - some features unavailable`;
+        tooltip = ` System Degraded\n\nThe server is running but no controller is configured. Light control features may be unavailable.\n\nController: Not configured\nAction: Configure controller target in settings\nImpact: Limited functionality - some features unavailable`;
       } else if (reason === 'timeout' || reason.includes('timeout')) {
-        tooltip = `⚠️ System Degraded\n\nThe Code3 controller is not responding within the timeout period (1.5s). Network issues or controller may be offline.\n\nController: ${controllerTarget}\nStatus: Connection timeout\nAction: Check controller power and network connectivity\nImpact: Light control unavailable`;
+        tooltip = ` System Degraded\n\nThe Code3 controller is not responding within the timeout period (1.5s). Network issues or controller may be offline.\n\nController: ${controllerTarget}\nStatus: Connection timeout\nAction: Check controller power and network connectivity\nImpact: Light control unavailable`;
       } else {
-        tooltip = `⚠️ System Degraded\n\nThe Code3 controller is unreachable or returning errors. Some features may be limited.\n\nController: ${controllerTarget}\nStatus: ${reason}\nResponse time: ${responseTime}\nImpact: Light control may be unavailable`;
+        tooltip = ` System Degraded\n\nThe Code3 controller is unreachable or returning errors. Some features may be limited.\n\nController: ${controllerTarget}\nStatus: ${reason}\nResponse time: ${responseTime}\nImpact: Light control may be unavailable`;
       }
     } else {
       // Fallback for unknown statuses
@@ -16677,7 +16677,7 @@ async function pollHealthz() {
       displayText = message;
       color = '#6b7280'; // gray
       state = 'unknown';
-      tooltip = `ℹ️ ${message}\n\nController: ${controllerTarget}\nResponse time: ${responseTime}\nStatus details not available`;
+      tooltip = `ℹ ${message}\n\nController: ${controllerTarget}\nResponse time: ${responseTime}\nStatus details not available`;
     }
     
     statusEl.textContent = displayText;
@@ -16707,7 +16707,7 @@ async function pollHealthz() {
       statusEl.textContent = 'Server Offline';
       statusEl.style.color = '#b91c1c'; // red
       statusEl.dataset.state = 'error';
-      statusEl.title = `❌ Server Offline\n\nUnable to reach the Light Engine Charlie server. The application cannot check system health.\n\nError: ${error?.message || 'Connection failed'}\nAction: Verify server is running and check network connectivity\nImpact: All features unavailable`;
+      statusEl.title = ` Server Offline\n\nUnable to reach the Light Engine Charlie server. The application cannot check system health.\n\nError: ${error?.message || 'Connection failed'}\nAction: Verify server is running and check network connectivity\nImpact: All features unavailable`;
     }
     // Indicate unknown controller when server unreachable
     const ctrlChip = document.getElementById('controllerTargetChip');
@@ -16779,7 +16779,7 @@ function wireGlobalEvents() {
     });
     await Promise.all(promises);
     setStatus("All devices ON (Safe mode)");
-    showToast({title:'All ON', msg:'Sent safe ON to all devices', kind:'success', icon:'✅'});
+    showToast({title:'All ON', msg:'Sent safe ON to all devices', kind:'success', icon:''});
   });
   $('#allOff')?.addEventListener('click', async () => {
     const promises = STATE.devices.map(device => 
@@ -16787,7 +16787,7 @@ function wireGlobalEvents() {
     );
     await Promise.all(promises);
     setStatus("All devices OFF");
-    showToast({title:'All OFF', msg:'Turned off all devices', kind:'success', icon:'✅'});
+    showToast({title:'All OFF', msg:'Turned off all devices', kind:'success', icon:''});
   });
 
   // Environment actions
@@ -17684,7 +17684,7 @@ function wireGlobalEvents() {
                 title: 'Controller Updated', 
                 msg: `Controller assigned to ${title}`, 
                 kind: 'success', 
-                icon: '✓' 
+                icon: '' 
               }, 2000);
             }
             
@@ -17737,7 +17737,7 @@ function wireGlobalEvents() {
             document.dispatchEvent(new Event('groups-updated'));
             updateGroupUI(group);
             if (typeof showToast === 'function') {
-              showToast({ title: 'Light removed', msg: `${title} removed from group.`, kind: 'success', icon: '✓' }, 2000);
+              showToast({ title: 'Light removed', msg: `${title} removed from group.`, kind: 'success', icon: '' }, 2000);
             }
           });
 
@@ -17808,7 +17808,7 @@ function wireGlobalEvents() {
           document.dispatchEvent(new Event('groups-updated'));
           updateGroupUI(group);
           if (typeof showToast === 'function') {
-            showToast({ title: 'Lights removed', msg: `${ids.length} light${ids.length === 1 ? '' : 's'} removed from group.`, kind: 'success', icon: '✓' }, 2000);
+            showToast({ title: 'Lights removed', msg: `${ids.length} light${ids.length === 1 ? '' : 's'} removed from group.`, kind: 'success', icon: '' }, 2000);
           }
         });
         removeSelectedBtn._handlerAttached = true;
@@ -17944,7 +17944,7 @@ function wireGlobalEvents() {
       }
       const { errors, onTotal } = validateSchedule(mode, cycles);
       if (errors.length || onTotal > 24*60 + 1e-6) {
-        showToast({ title:'Fix schedule', msg: errors[0] || 'Total ON exceeds 24 h', kind:'warn', icon:'⚠️' });
+        showToast({ title:'Fix schedule', msg: errors[0] || 'Total ON exceeds 24 h', kind:'warn', icon:'' });
         return;
       }
       const edited = { id:`group:${groupId}`, name:`${group?.name||groupId} Schedule`, mode, timezone:'America/Toronto', cycles };
@@ -17984,7 +17984,7 @@ function wireGlobalEvents() {
         title: 'Schedule Saved', 
         msg: `${group?.name || groupId} schedule: ${cycleDesc}`, 
         kind: 'success', 
-        icon: '✓' 
+        icon: '' 
       });
     };
     const done = ()=>{ editor.style.display = 'none'; STATE.editingGroupId = null; };
@@ -18013,7 +18013,7 @@ function wireGlobalEvents() {
     nameAutoSaveTimeout = setTimeout(async () => {
       const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
       if (ok) {
-        showToast({ title: 'Auto-saved', msg: `Group name updated to "${STATE.currentGroup.name}"`, kind: 'success', icon: '✓' });
+        showToast({ title: 'Auto-saved', msg: `Group name updated to "${STATE.currentGroup.name}"`, kind: 'success', icon: '' });
         setStatus('Group name saved');
       }
     }, 1000);
@@ -18081,7 +18081,7 @@ function wireGlobalEvents() {
     STATE.currentGroup.plan = groupPlan.value || '';
     const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
     if (ok) {
-      showToast({ title: 'Auto-saved', msg: `Plan changed to "${planName}"`, kind: 'success', icon: '✓' });
+      showToast({ title: 'Auto-saved', msg: `Plan changed to "${planName}"`, kind: 'success', icon: '' });
       setStatus('Plan saved');
     }
     updateGroupUI(STATE.currentGroup);
@@ -18092,7 +18092,7 @@ function wireGlobalEvents() {
     STATE.currentGroup.schedule = groupSchedule.value || '';
     const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
     if (ok) {
-      showToast({ title: 'Auto-saved', msg: `Schedule changed to "${schedName}"`, kind: 'success', icon: '✓' });
+      showToast({ title: 'Auto-saved', msg: `Schedule changed to "${schedName}"`, kind: 'success', icon: '' });
       setStatus('Schedule saved');
     }
     updateGroupUI(STATE.currentGroup);
@@ -18131,7 +18131,7 @@ function wireGlobalEvents() {
     importBtn.addEventListener('click', async () => {
       if (!STATE.currentGroup) return alert('Select a group first');
       const pick = getDevicePickState();
-      if (pick.scope !== 'devices' || !Array.isArray(pick.ids) || !pick.ids.length) { showToast({title:'No selection', msg:'Choose Devices scope and select lights in the Devices panel first.', kind:'info', icon:'ℹ️'}); return; }
+      if (pick.scope !== 'devices' || !Array.isArray(pick.ids) || !pick.ids.length) { showToast({title:'No selection', msg:'Choose Devices scope and select lights in the Devices panel first.', kind:'info', icon:'ℹ'}); return; }
       const ids = Array.from(new Set(pick.ids));
       STATE.currentGroup.lights = ids.map(id => ({ id, name: STATE.devices.find(d=>d.id===id)?.deviceName || id }));
       await saveGroups();
@@ -18472,14 +18472,14 @@ function wireGlobalEvents() {
     const name = edited.name?.trim();
     if (!name) {
       if (trigger === 'manual') {
-        showToast({ title: 'Name required', msg: 'Enter a schedule name before saving.', kind: 'warn', icon: '⚠️' });
+        showToast({ title: 'Name required', msg: 'Enter a schedule name before saving.', kind: 'warn', icon: '' });
       }
       return false;
     }
     const { errors, onTotal } = validateSchedule(edited.mode, edited.cycles);
     if (errors.length || onTotal > 24 * 60 + 1e-6) {
       if (trigger === 'manual') {
-        showToast({ title: 'Fix schedule', msg: errors[0] || 'Total ON exceeds 24 h', kind: 'warn', icon: '⚠️' });
+        showToast({ title: 'Fix schedule', msg: errors[0] || 'Total ON exceeds 24 h', kind: 'warn', icon: '' });
       }
       return false;
     }
@@ -18525,7 +18525,7 @@ function wireGlobalEvents() {
     const failureMsg = trigger === 'auto'
       ? 'Auto-save failed. Check your connection and try again.'
       : 'Could not save schedule. Please try again.';
-    showToast({ title: 'Save failed', msg: failureMsg, kind: 'warn', icon: '⚠️' });
+    showToast({ title: 'Save failed', msg: failureMsg, kind: 'warn', icon: '' });
     return false;
   }
 
@@ -18559,7 +18559,7 @@ function wireGlobalEvents() {
     const ids = (STATE.currentGroup.lights||[]).map(l=>l.id);
     const targets = STATE.devices.filter(d=>ids.includes(d.id));
     const online = targets.filter(d=>d.online);
-    if (!online.length) { setStatus('No online devices to power ON'); showToast({title:'No devices online', msg:'Skipped group power ON. All devices offline.', kind:'warn', icon:'⚠️'}); return; }
+    if (!online.length) { setStatus('No online devices to power ON'); showToast({title:'No devices online', msg:'Skipped group power ON. All devices offline.', kind:'warn', icon:''}); return; }
     const payloadMix = normalizeMixInput(45);
     const commands = online.map((d) => ({ device: d, entry: buildDeviceHexForMix(payloadMix, d.id) }));
     await Promise.all(commands.map(({ device, entry }) => patch(device.id, { status: 'on', value: entry.hex })));
@@ -18571,17 +18571,17 @@ function wireGlobalEvents() {
     if (chip) chip.setAttribute('title', `Last payload: ${summaryHex}`);
     document.getElementById('groupLastHex')?.replaceChildren(document.createTextNode(`Last payload: ${summaryHex}`));
     setStatus(`Powered ON ${online.length} device(s)`);
-    showToast({title:'Powered ON', msg:`Sent safe ON to ${online.length} device(s)`, kind:'success', icon:'✅'});
+    showToast({title:'Powered ON', msg:`Sent safe ON to ${online.length} device(s)`, kind:'success', icon:''});
   });
   $('#grpOff')?.addEventListener('click', async () => {
     if (!STATE.currentGroup) return alert('Select a group first');
     const ids = (STATE.currentGroup.lights||[]).map(l=>l.id);
     const targets = STATE.devices.filter(d=>ids.includes(d.id));
     const online = targets.filter(d=>d.online);
-    if (!online.length) { setStatus('No online devices to power OFF'); showToast({title:'No devices online', msg:'Skipped group power OFF. All devices offline.', kind:'warn', icon:'⚠️'}); return; }
+    if (!online.length) { setStatus('No online devices to power OFF'); showToast({title:'No devices online', msg:'Skipped group power OFF. All devices offline.', kind:'warn', icon:''}); return; }
     await Promise.all(online.map(d => patch(d.id, { status: 'off', value: null })));
     setStatus(`Powered OFF ${online.length} device(s)`);
-    showToast({title:'Powered OFF', msg:`Turned off ${online.length} device(s)`, kind:'success', icon:'✅'});
+    showToast({title:'Powered OFF', msg:`Turned off ${online.length} device(s)`, kind:'success', icon:''});
   });
   // Inject Live/File-only toggle next to Apply button if not present
   try {
@@ -18607,13 +18607,13 @@ function wireGlobalEvents() {
     const targets = STATE.devices.filter(d=>ids.includes(d.id));
     const online = targets.filter(d=>d.online);
     const offline = targets.filter(d=>!d.online);
-    if (live && !online.length) { setStatus('No online devices to apply spectrum'); showToast({title:'No devices online', msg:'Skipped Apply Spectrum. All devices offline.', kind:'warn', icon:'⚠️'}); return; }
+    if (live && !online.length) { setStatus('No online devices to apply spectrum'); showToast({title:'No devices online', msg:'Skipped Apply Spectrum. All devices offline.', kind:'warn', icon:''}); return; }
     // Guardrail: basic power-cap autoscale (if any channel > 100, clamp and notify)
     const over = ['cw','ww','bl','rd'].filter(k => mix[k] > 100);
     let scaledMix = { ...mix };
     if (over.length) {
       over.forEach((k) => { scaledMix[k] = 100; });
-      showToast({title:'Autoscaled to cap', msg:`Channels ${over.join(', ')} capped at 100%.`, kind:'info', icon:'ℹ️'});
+      showToast({title:'Autoscaled to cap', msg:`Channels ${over.join(', ')} capped at 100%.`, kind:'info', icon:'ℹ'});
     }
     const payloadMix = { ...scaledMix, fr: 0, uv: 0 };
     const targetIds = (deviceIds && deviceIds.length ? deviceIds : online.map((d) => d.id)).filter(Boolean);
@@ -18629,9 +18629,9 @@ function wireGlobalEvents() {
       }));
       setStatus(`Applied spectrum to ${online.length} device(s)${offline.length?`, skipped ${offline.length} offline`:''}`);
       if (offline.length) {
-        showToast({title:'Skipped offline devices', msg:`${offline.length} device(s) were offline and skipped.`, kind:'warn', icon:'⚠️'});
+        showToast({title:'Skipped offline devices', msg:`${offline.length} device(s) were offline and skipped.`, kind:'warn', icon:''});
       }
-      showToast({title:'Spectrum applied', msg:`Sent to ${online.length} device(s)`, kind:'success', icon:'✅'});
+      showToast({title:'Spectrum applied', msg:`Sent to ${online.length} device(s)`, kind:'success', icon:''});
     } else {
       // File-only: persist to groups.json as a pending mix so a Room Wizard or future apply can use it
       try {
@@ -20583,7 +20583,7 @@ function initializeAIFeatures() {
           title: featureData.name,
           msg: `${featureData.name} is now ${featureData.status.toUpperCase()}`,
           kind: featureData.status === 'on' ? 'success' : 'info',
-          icon: featureData.status === 'on' ? '✅' : '⏸️'
+          icon: featureData.status === 'on' ? '' : ''
         });
 
         renderGrowRoomOverview();
@@ -21311,7 +21311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const lightName = light.name || light.deviceName || lightId;
           const zone = light.zone || light.location?.zone || '—';
           const room = zoneToRoom[zone] || light.room || light.location?.room || '—';
-          const status = light.online ? '🟢 Online' : '🔴 Offline';
+          const status = light.online ? '🟢 Online' : ' Offline';
           const group = lightToGroup[lightId] || '—';
           
           return `
@@ -21401,19 +21401,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         link.click();
         document.body.removeChild(link);
         
-        showToast({ title: 'Export successful', msg: 'Field matrix exported to CSV', kind: 'success', icon: '📊' });
+        showToast({ title: 'Export successful', msg: 'Field matrix exported to CSV', kind: 'success', icon: '' });
         console.log('[FieldMatrix] Exported', lights.length, 'lights to CSV');
         
       } catch (err) {
         console.error('[FieldMatrix] Export error:', err);
-        showToast({ title: 'Export failed', msg: err.message, kind: 'error', icon: '❌' });
+        showToast({ title: 'Export failed', msg: err.message, kind: 'error', icon: '' });
       }
     }
     
     // Wire Field Matrix buttons
     document.getElementById('btnRefreshFieldMatrix')?.addEventListener('click', () => {
       renderFieldMatrix();
-      showToast({ title: 'Matrix refreshed', msg: 'Field matrix data reloaded', kind: 'success', icon: '🔄' });
+      showToast({ title: 'Matrix refreshed', msg: 'Field matrix data reloaded', kind: 'success', icon: '' });
     });
     
     document.getElementById('btnExportFieldMatrix')?.addEventListener('click', () => {

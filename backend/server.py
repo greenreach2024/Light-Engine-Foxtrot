@@ -106,7 +106,7 @@ AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() in ("true", "1", "yes"
 if AUTH_ENABLED:
     LOGGER.info("🔐 JWT Authentication ENABLED - All endpoints require valid Bearer token")
 else:
-    LOGGER.warning("⚠️  JWT Authentication DISABLED - API is open (set AUTH_ENABLED=true for production)")
+    LOGGER.warning("  JWT Authentication DISABLED - API is open (set AUTH_ENABLED=true for production)")
 
 # Load environment from .env if present (safe for special chars; no shell expansion)
 try:  # Import lazily to avoid hard dependency if not installed
@@ -142,7 +142,7 @@ elif RATE_LIMITING_AVAILABLE:
     LOGGER.info("🚦 Rate limiting available but DISABLED (set RATE_LIMITING_ENABLED=true to enable)")
 else:
     limiter = None
-    LOGGER.warning("⚠️  slowapi not installed - Rate limiting DISABLED (pip install slowapi)")
+    LOGGER.warning("  slowapi not installed - Rate limiting DISABLED (pip install slowapi)")
 
 app = FastAPI(
     title="Light Engine Charlie API",
@@ -246,11 +246,11 @@ app.add_middleware(
 
 # Include authentication routes (user registration, login, password reset)
 app.include_router(auth_router)
-LOGGER.info("✅ Authentication routes loaded (register, login, password reset)")
+LOGGER.info(" Authentication routes loaded (register, login, password reset)")
 
 # Inventory + forecasting routes
 app.include_router(inventory_router)
-LOGGER.info("✅ Inventory routes loaded (trays, placements, rollups)")
+LOGGER.info(" Inventory routes loaded (trays, placements, rollups)")
 
 
 def _require_state(name: str) -> Any:
@@ -1585,9 +1585,9 @@ async def _startup() -> None:
             limiter.limit("50/hour")(send_device_command)
             limiter.limit("1000/hour")(list_devices)
             limiter.limit("10/hour")(trigger_discovery_scan)
-            LOGGER.info("✅ Rate limits applied to endpoints")
+            LOGGER.info(" Rate limits applied to endpoints")
         except Exception as e:
-            LOGGER.warning(f"⚠️  Failed to apply rate limits: {e}")
+            LOGGER.warning(f"  Failed to apply rate limits: {e}")
     
     if app.state.CONFIG is None:
         app.state.CONFIG = load_config(env="production")
@@ -2892,7 +2892,7 @@ async def list_billing_plans() -> JSONResponse:
         return JSONResponse({"plans": plans, "status": "success"})
         
     except Exception as e:
-        LOGGER.error(f"❌ Error listing plans: {e}")
+        LOGGER.error(f" Error listing plans: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2938,11 +2938,11 @@ async def create_billing_customer(
             tenant_id=tenant_id
         )
         
-        LOGGER.info(f"✅ Created customer: {customer['customer_id']} for tenant {tenant_id}")
+        LOGGER.info(f" Created customer: {customer['customer_id']} for tenant {tenant_id}")
         return JSONResponse({"customer": customer, "status": "success"})
         
     except Exception as e:
-        LOGGER.error(f"❌ Error creating customer: {e}")
+        LOGGER.error(f" Error creating customer: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2984,11 +2984,11 @@ async def create_subscription(
             card_id=card_id
         )
         
-        LOGGER.info(f"✅ Created subscription: {subscription['subscription_id']}")
+        LOGGER.info(f" Created subscription: {subscription['subscription_id']}")
         return JSONResponse({"subscription": subscription, "status": "success"})
         
     except Exception as e:
-        LOGGER.error(f"❌ Error creating subscription: {e}")
+        LOGGER.error(f" Error creating subscription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3026,7 +3026,7 @@ async def get_usage_metrics(
         return JSONResponse({"usage": usage, "status": "success"})
         
     except Exception as e:
-        LOGGER.error(f"❌ Error getting usage metrics: {e}")
+        LOGGER.error(f" Error getting usage metrics: {e}")
         # Return empty usage if Redis unavailable
         return JSONResponse({
             "usage": {
@@ -3079,7 +3079,7 @@ async def calculate_overage(
         return JSONResponse({"overage": overage, "status": "success"})
         
     except Exception as e:
-        LOGGER.error(f"❌ Error calculating overage: {e}")
+        LOGGER.error(f" Error calculating overage: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3130,7 +3130,7 @@ async def handle_square_webhook(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON")
     except Exception as e:
-        LOGGER.error(f"❌ Webhook processing error: {e}")
+        LOGGER.error(f" Webhook processing error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

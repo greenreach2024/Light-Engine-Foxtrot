@@ -7,7 +7,7 @@ import { setupConsoleWrapper } from './server/utils/console-wrapper.js';
 setupConsoleWrapper();
 
 // LOG ENVIRONMENT ON STARTUP (will be suppressed in demo mode)
-console.log('🔍 [STARTUP] Environment variables:');
+console.log(' [STARTUP] Environment variables:');
 console.log('  DEMO_MODE:', process.env.DEMO_MODE);
 console.log('  DEMO_FARM_ID:', process.env.DEMO_FARM_ID);
 console.log('  DEMO_REALTIME:', process.env.DEMO_REALTIME);
@@ -30,9 +30,9 @@ import {
 console.log('[foxtrot] 🎬 Module loading - initializing demo mode...');
 try {
   initializeDemoMode();
-  console.log('[foxtrot] ✅ Demo mode initialized at module scope');
+  console.log('[foxtrot]  Demo mode initialized at module scope');
 } catch (error) {
-  console.error('[foxtrot] ❌ Demo mode initialization failed:', error?.message || error);
+  console.error('[foxtrot]  Demo mode initialization failed:', error?.message || error);
 }
 
 import { createProxyMiddleware } from "http-proxy-middleware";
@@ -1684,13 +1684,13 @@ if (!RUNNING_UNDER_NODE_TEST && !hasPersistedController) {
 
 // Global error handlers to prevent server crashes
 process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
+  console.error(' Uncaught Exception:', error);
   console.error('Stack:', error.stack);
   // Don't exit the process for now - log and continue
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Promise Rejection at:', promise);
+  console.error(' Unhandled Promise Rejection at:', promise);
   console.error('Reason:', reason);
   // Don't exit the process for now - log and continue
 });
@@ -1740,7 +1740,7 @@ async function createKasaClient() {
 function asyncHandler(fn) {
   return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch((error) => {
-      console.error(`❌ Async route error: ${req.method} ${req.url}`, error);
+      console.error(` Async route error: ${req.method} ${req.url}`, error);
       next(error);
     });
   };
@@ -2072,9 +2072,9 @@ console.log('[automation] Rules engine initialized with default farm automation 
 const preAutomationContext = createPreAutomationLayer({
   dataDir: path.resolve('./data/automation'),
   publicDataDir: path.resolve('./public/data'),
-  autoStart: true, // ✅ ENABLED for testing
+  autoStart: true, //  ENABLED for testing
   fanRotation: {
-    enabled: true, // ✅ ENABLED for airflow distribution
+    enabled: true, //  ENABLED for airflow distribution
     intervalMs: 15 * 60 * 1000 // 15 minutes
   }
 });
@@ -4054,7 +4054,7 @@ async function patchControllerLight(deviceId, hexPayload, shouldPowerOn) {
     const base = controller.replace(/\/$/, '');
     const url = `${base}/api/devicedatas/device/${encodeURIComponent(deviceId)}`;
     
-    // ✅ CORRECT: Use channelsValue (not value)
+    //  CORRECT: Use channelsValue (not value)
     const payload = {
       status: shouldPowerOn ? 'on' : 'off',
       channelsValue: hexPayload
@@ -4251,7 +4251,7 @@ async function runDailyPlanResolver(trigger = 'manual') {
           if (!patchResult?.ok && !patchResult?.skipped) {
             console.warn(`[daily] failed to patch ${deviceId} for group ${group.id || group.name || 'unknown'}:`, patchResult?.error || patchResult?.status || 'unknown error');
           } else if (patchResult?.ok) {
-            console.log(`[daily] ✓ Light ID ${deviceId} → ${planName} Day ${effectiveDay} (${stage}): CW:${calibratedMix.cw.toFixed(1)}% WW:${calibratedMix.ww.toFixed(1)}% BL:${calibratedMix.bl.toFixed(1)}% RD:${calibratedMix.rd.toFixed(1)}% | Hex: ${hex}`);
+            console.log(`[daily]  Light ID ${deviceId} → ${planName} Day ${effectiveDay} (${stage}): CW:${calibratedMix.cw.toFixed(1)}% WW:${calibratedMix.ww.toFixed(1)}% BL:${calibratedMix.bl.toFixed(1)}% RD:${calibratedMix.rd.toFixed(1)}% | Hex: ${hex}`);
           }
           const mixSummary = {
             cw: Number(clampPercent(calibratedMix.cw).toFixed(2)),
@@ -6664,7 +6664,7 @@ app.get("/api/kasa/devices", asyncHandler(async (req, res) => {
     const client = await createKasaClient();
     const devices = [];
     
-    console.log('🔍 Discovering Kasa devices...');
+    console.log(' Discovering Kasa devices...');
     
     // Start discovery
     client.startDiscovery({
@@ -8115,7 +8115,7 @@ app.use('/api/audit', createAuditRoutes());
 // Apply audit middleware to all wholesale routes
 app.use('/api/wholesale', auditMiddleware);
 
-console.log('✓ Audit logging initialized - capturing all wholesale operations');
+console.log(' Audit logging initialized - capturing all wholesale operations');
 
 /**
  * ===========================================
@@ -8148,7 +8148,7 @@ app.use('/api/farm-auth', createAuthRoutes());
 // Apply security isolation middleware
 app.use(blockFarmManagementEndpoints);
 
-console.log('✓ Farm authentication system initialized - multi-tenant JWT with security isolation');
+console.log(' Farm authentication system initialized - multi-tenant JWT with security isolation');
 
 // Import farm-sales routes
 import farmSalesOrdersRouter from './routes/farm-sales/orders.js';
@@ -8323,7 +8323,7 @@ app.use('/api/farm-sales/lots', farmSalesLotTrackingRouter);
  */
 app.use('/api/farm-sales/donations', farmSalesDonationsRouter);
 
-console.log('✓ Farm sales terminal initialized - POS, D2C, B2B, food security programs, and lot traceability enabled');
+console.log(' Farm sales terminal initialized - POS, D2C, B2B, food security programs, and lot traceability enabled');
 
 /**
  * ML Predictive Forecasting Endpoint
@@ -11708,7 +11708,7 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
     renewsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   };
   
-  console.log(`[farm-auth] ✅ Login successful for ${email} at ${farmId}`);
+  console.log(`[farm-auth]  Login successful for ${email} at ${farmId}`);
   
   res.json({
     status: 'success',
@@ -12023,7 +12023,7 @@ app.post('/api/billing/customers', asyncHandler(async (req, res) => {
     created_at: new Date().toISOString()
   };
   
-  console.log(`[billing] ✅ Created customer: ${customerId}`);
+  console.log(`[billing]  Created customer: ${customerId}`);
   
   res.json({
     status: 'success',
@@ -12059,7 +12059,7 @@ app.post('/api/billing/subscriptions', asyncHandler(async (req, res) => {
     next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   };
   
-  console.log(`[billing] ✅ Created subscription: ${subscriptionId}`);
+  console.log(`[billing]  Created subscription: ${subscriptionId}`);
   
   res.json({
     status: 'success',
@@ -16107,7 +16107,7 @@ app.get('/discovery/devices', async (req, res) => {
       const body = await localResponse.json();
       console.log('[Discovery] Local backend returned:', body);
       if (Array.isArray(body?.devices)) {
-        console.log(`[Discovery] ✅ Found ${body.devices.length} devices from local Python backend`);
+        console.log(`[Discovery]  Found ${body.devices.length} devices from local Python backend`);
         return res.json({ 
           startedAt, 
           completedAt: new Date().toISOString(), 
@@ -16131,7 +16131,7 @@ app.get('/discovery/devices', async (req, res) => {
       if (response && response.ok) {
         const body = await response.json();
         if (Array.isArray(body?.devices)) {
-          console.log(`[Discovery] ✅ Found ${body.devices.length} devices from remote controller`);
+          console.log(`[Discovery]  Found ${body.devices.length} devices from remote controller`);
           return res.json({ 
             startedAt, 
             completedAt: new Date().toISOString(), 
@@ -16146,7 +16146,7 @@ app.get('/discovery/devices', async (req, res) => {
   }
   
   // LIVE DEVICE DISCOVERY - Scan greenreach network for real devices
-  console.log('🔍 Starting live device discovery on greenreach network...');
+  console.log(' Starting live device discovery on greenreach network...');
   
   try {
     const discoveredDevices = [];
@@ -16207,7 +16207,7 @@ app.get('/discovery/devices', async (req, res) => {
       console.warn('BLE device discovery failed:', e.message);
     }
     
-    console.log(`✅ Discovery complete: Found ${discoveredDevices.length} live devices`);
+    console.log(` Discovery complete: Found ${discoveredDevices.length} live devices`);
     
     // Analyze discovered devices and suggest setup wizards
     const deviceAnalysis = analyzeDiscoveredDevices(discoveredDevices);
@@ -16223,7 +16223,7 @@ app.get('/discovery/devices', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Live device discovery failed:', error);
+    console.error(' Live device discovery failed:', error);
     res.status(500).json({ 
       startedAt, 
       completedAt: new Date().toISOString(), 
@@ -16292,7 +16292,7 @@ async function discoverNetworkDevices() {
       const Client = kasaModule.default?.Client || kasaModule.Client;
       const client = new Client();
       
-      console.log('🔍 Scanning for Kasa devices on local network...');
+      console.log(' Scanning for Kasa devices on local network...');
       
       // Start device discovery
       client.startDiscovery({
@@ -16367,9 +16367,9 @@ async function discoverNetworkDevices() {
       kasaDevices.forEach(device => devices.push(device));
       
       if (kasaDevices.size > 0) {
-        console.log(`✅ Found ${kasaDevices.size} Kasa device(s)`);
+        console.log(` Found ${kasaDevices.size} Kasa device(s)`);
       } else {
-        console.log('⚠️  No Kasa devices found on local network');
+        console.log('  No Kasa devices found on local network');
       }
       
     } catch (kasaError) {
@@ -16406,7 +16406,7 @@ async function scanNetworkForDevices() {
     
     const currentIP = ipMatch[1];
     const networkBase = currentIP.split('.').slice(0, 3).join('.');
-    console.log(`🔍 Scanning network range ${networkBase}.0/24 for IoT devices...`);
+    console.log(` Scanning network range ${networkBase}.0/24 for IoT devices...`);
     
     // Scan for devices with common IoT ports
     const commonPorts = [80, 443, 8080, 8081, 1883, 8883, 9999, 10002, 502, 8000];
@@ -16618,7 +16618,7 @@ function analyzeDiscoveredDevices(devices) {
 // ===== UNIVERSAL DEVICE SCANNER =====
 // Simplified multi-protocol scan endpoint for Integrations panel
 app.post('/discovery/scan', async (req, res) => {
-  console.log('🔍 Universal device scan initiated');
+  console.log(' Universal device scan initiated');
   const startedAt = new Date().toISOString();
   
   try {
@@ -16697,7 +16697,7 @@ app.post('/discovery/scan', async (req, res) => {
       console.warn('Kasa direct discovery failed:', e.message);
     }
     
-    console.log(`✅ Universal scan complete: ${allDevices.length} devices found`);
+    console.log(` Universal scan complete: ${allDevices.length} devices found`);
     
     res.json({
       status: 'success',
@@ -16708,7 +16708,7 @@ app.post('/discovery/scan', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Universal scan failed:', error);
+    console.error(' Universal scan failed:', error);
     res.status(500).json({
       status: 'error',
       startedAt,
@@ -16873,9 +16873,9 @@ async function loadWizardStates() {
         wizardDiscoveryContext.set(state.wizardId, state.discoveryContext);
       }
     }
-    console.log(`✅ Loaded ${states.length} wizard state(s) from database`);
+    console.log(` Loaded ${states.length} wizard state(s) from database`);
   } catch (error) {
-    console.error('❌ Failed to load wizard states:', error.message);
+    console.error(' Failed to load wizard states:', error.message);
   }
 }
 
@@ -16899,7 +16899,7 @@ async function persistWizardState(wizardId) {
       { upsert: true }
     );
   } catch (error) {
-    console.error(`❌ Failed to persist wizard state for ${wizardId}:`, error.message);
+    console.error(` Failed to persist wizard state for ${wizardId}:`, error.message);
   }
 }
 
@@ -16915,7 +16915,7 @@ async function cleanupOldWizardStates() {
       console.log(`🧹 Cleaned up ${result} old wizard state(s)`);
     }
   } catch (error) {
-    console.error('❌ Failed to cleanup old wizard states:', error.message);
+    console.error(' Failed to cleanup old wizard states:', error.message);
   }
 }
 
@@ -17127,7 +17127,7 @@ async function executeWizardStepWithValidation(wizardId, stepId, data) {
 
 // Device-specific wizard step execution
 async function executeDeviceSpecificStep(wizardId, stepId, data) {
-  console.log(`🔧 Executing device-specific step: ${wizardId}/${stepId}`);
+  console.log(` Executing device-specific step: ${wizardId}/${stepId}`);
   
   switch (wizardId) {
     case 'mqtt-setup':
@@ -17174,7 +17174,7 @@ async function executeMQTTWizardStep(stepId, data) {
       }
       
     case 'topic-discovery':
-      console.log(`🔍 Discovering MQTT topics with pattern: ${data.baseTopic}`);
+      console.log(` Discovering MQTT topics with pattern: ${data.baseTopic}`);
       
       // Simulate topic discovery
       const discoveredTopics = [
@@ -17215,7 +17215,7 @@ async function executeModbusWizardStep(stepId, data) {
       };
       
     case 'register-mapping':
-      console.log(`📊 Mapping registers starting at address ${data.startAddress}`);
+      console.log(` Mapping registers starting at address ${data.startAddress}`);
       
       // Simulate register discovery
       const registerMap = Array.from({ length: data.registerCount }, (_, i) => ({
@@ -17239,7 +17239,7 @@ async function executeModbusWizardStep(stepId, data) {
 async function executeKasaWizardStep(stepId, data) {
   switch (stepId) {
     case 'device-discovery':
-      console.log(`🔍 Discovering Kasa devices (timeout: ${data.discoveryTimeout}s)`);
+      console.log(` Discovering Kasa devices (timeout: ${data.discoveryTimeout}s)`);
       
       // Test/CI guardrail: avoid real network waits during unit tests
       // Short-circuit when running our test harness (flag set by __resetWizardSystemForTests)
@@ -17339,7 +17339,7 @@ async function executeKasaWizardStep(stepId, data) {
       }
       
     case 'device-configuration':
-      console.log(`⚙️ Configuring Kasa device: ${data.alias}`);
+      console.log(` Configuring Kasa device: ${data.alias}`);
       
       try {
         // If we have device info from discovery, use it to configure
@@ -17419,7 +17419,7 @@ async function executeKasaWizardStep(stepId, data) {
 async function executeSensorHubWizardStep(stepId, data) {
   switch (stepId) {
     case 'hub-identification':
-      console.log(`🎯 Connecting to ${data.hubType} at ${data.endpoint}`);
+      console.log(` Connecting to ${data.hubType} at ${data.endpoint}`);
       
       return {
         success: true,
@@ -17435,7 +17435,7 @@ async function executeSensorHubWizardStep(stepId, data) {
       };
       
     case 'sensor-configuration':
-      console.log(`⚙️ Configuring ${data.sensorType} sensor on channel ${data.channel}`);
+      console.log(` Configuring ${data.sensorType} sensor on channel ${data.channel}`);
       
       return {
         success: true,
@@ -17551,7 +17551,7 @@ async function executeWizardStep(wizardId, stepId, data) {
     } else {
       state.completed = true;
       state.completedAt = new Date().toISOString();
-      console.log(`✅ Wizard ${wizardId} completed successfully`);
+      console.log(` Wizard ${wizardId} completed successfully`);
       
       // Execute post-completion actions
       await executeWizardCompletion(wizardId, state);
@@ -17568,7 +17568,7 @@ async function executeWizardStep(wizardId, stepId, data) {
     );
     
   } catch (error) {
-    console.error(`❌ Wizard step execution failed: ${wizardId}/${stepId}`, error);
+    console.error(` Wizard step execution failed: ${wizardId}/${stepId}`, error);
     result = {
       success: false,
       error: error.message,
@@ -17581,7 +17581,7 @@ async function executeWizardStep(wizardId, stepId, data) {
 
 // Execute wizard completion actions
 async function executeWizardCompletion(wizardId, state) {
-  console.log(`🎉 Executing completion actions for wizard: ${wizardId}`);
+  console.log(` Executing completion actions for wizard: ${wizardId}`);
   
   switch (wizardId) {
     case 'mqtt-setup':
@@ -17626,7 +17626,7 @@ async function completeModbusSetup(state) {
   const connectionData = state.data['connection-setup']?.input;
   const registerData = state.data['register-mapping']?.input;
   
-  console.log(`📊 Configuring Modbus integration for ${connectionData?.host}:${connectionData?.port}`);
+  console.log(` Configuring Modbus integration for ${connectionData?.host}:${connectionData?.port}`);
   
   return {
     modbusClientConfigured: true,
@@ -17651,7 +17651,7 @@ async function completeKasaSetup(state) {
 async function completeSensorHubSetup(state) {
   const hubData = state.data['hub-identification']?.input;
   
-  console.log(`🎛️ Configuring sensor hub integration: ${hubData?.hubType}`);
+  console.log(`🎛 Configuring sensor hub integration: ${hubData?.hubType}`);
   
   return {
     sensorHubConfigured: true,
@@ -17879,7 +17879,7 @@ app.post('/api/device/:deviceId/power', async (req, res) => {
   const { deviceId } = req.params;
   const { state } = req.body; // 'on' or 'off'
   
-  console.log(`💡 Farm Light Control: ${deviceId} → ${state}`);
+  console.log(` Farm Light Control: ${deviceId} → ${state}`);
   
   res.json({
     deviceId,
@@ -17922,7 +17922,7 @@ app.post('/api/device/:deviceId/dimming', async (req, res) => {
 
 // Express error handling middleware - must be last
 app.use((error, req, res, next) => {
-  console.error('❌ Express Error Handler:', error);
+  console.error(' Express Error Handler:', error);
   console.error('Stack:', error.stack);
   console.error('Request URL:', req.url);
   console.error('Request Method:', req.method);
@@ -18047,7 +18047,7 @@ app.delete('/setup/wizards/:wizardId', async (req, res) => {
   try {
     const { wizardId } = req.params;
     wizardStates.delete(wizardId);
-    console.log(`🗑️ Reset wizard state for ${wizardId}`);
+    console.log(`🗑 Reset wizard state for ${wizardId}`);
     res.json({
       success: true,
       message: `Wizard ${wizardId} state reset`
@@ -18126,7 +18126,7 @@ function calculateWizardConfidence(device, wizard) {
 
 // Bulk wizard operations
 async function executeBulkWizardOperation(operation, wizardIds, data) {
-  console.log(`🔄 Executing bulk operation: ${operation} on ${wizardIds.length} wizards`);
+  console.log(` Executing bulk operation: ${operation} on ${wizardIds.length} wizards`);
   
   const results = [];
   
@@ -18259,7 +18259,7 @@ async function applyWizardTemplate(templateId, devices, customPresets = {}) {
     throw new Error(`Unknown wizard template: ${templateId}`);
   }
   
-  console.log(`📋 Applying wizard template: ${template.name}`);
+  console.log(` Applying wizard template: ${template.name}`);
   
   const results = {
     templateId,
@@ -18579,7 +18579,7 @@ app.delete('/setup/wizards/:wizardId', async (req, res) => {
   try {
     const { wizardId } = req.params;
     wizardStates.delete(wizardId);
-    console.log(`🗑️ Reset wizard state for ${wizardId}`);
+    console.log(`🗑 Reset wizard state for ${wizardId}`);
     res.json({
       success: true,
       message: `Wizard ${wizardId} state reset`
@@ -18622,7 +18622,7 @@ app.post('/discovery/suggest-wizards', async (req, res) => {
 
 // 404 handler for undefined routes (must be registered after all routes)
 app.use((req, res) => {
-  console.warn(`⚠️  404 Not Found: ${req.method} ${req.url}`);
+  console.warn(`  404 Not Found: ${req.method} ${req.url}`);
   res.status(404).json({
     error: 'Not Found',
     message: `Route ${req.method} ${req.url} not found`,
@@ -19281,7 +19281,7 @@ function setupLiveSensorSync() {
         }
       }
 
-      // ✅ ML-ENHANCED ROOM-LEVEL ENVIRONMENTAL AUTOMATION
+      //  ML-ENHANCED ROOM-LEVEL ENVIRONMENTAL AUTOMATION
       try {
         // Read groups.json to find active zones
         let groups = [];
@@ -19464,11 +19464,11 @@ app.post('/api/bus-mapping', asyncHandler(async (req, res) => {
 
 
 async function startServer() {
-  console.log('[foxtrot] 🚀 startServer() called');
+  console.log('[foxtrot]  startServer() called');
   try {
     const resolvedPort = await resolveAvailablePort(PORT);
     PORT = resolvedPort;
-    console.log('[foxtrot] ✅ Port resolved:', PORT);
+    console.log('[foxtrot]  Port resolved:', PORT);
   } catch (error) {
     if (error && error.code === 'EADDRINUSE') {
       console.error(`[foxtrot] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
@@ -19479,17 +19479,17 @@ async function startServer() {
   }
 
   // Initialize demo mode if enabled
-  console.log('[foxtrot] 🔧 About to call initializeDemoMode()...');
+  console.log('[foxtrot]  About to call initializeDemoMode()...');
   try {
     initializeDemoMode();
-    console.log('[foxtrot] ✅ initializeDemoMode() completed');
+    console.log('[foxtrot]  initializeDemoMode() completed');
   } catch (error) {
-    console.error('[foxtrot] ❌ Demo mode initialization failed:', error?.message || error);
+    console.error('[foxtrot]  Demo mode initialization failed:', error?.message || error);
     console.error('[foxtrot] Stack trace:', error?.stack);
   }
 
   // Pre-startup diagnostics
-  console.log('[foxtrot] 🚀 Starting server...');
+  console.log('[foxtrot]  Starting server...');
   console.log('[foxtrot] PORT:', PORT);
   console.log('[foxtrot] NODE_ENV:', process.env.NODE_ENV);
   console.log('[foxtrot] DEMO_MODE:', process.env.DEMO_MODE);
@@ -19498,7 +19498,7 @@ async function startServer() {
 
   SERVER = app.listen(PORT, '0.0.0.0', () => {
     const address = SERVER.address();
-    console.log(`[foxtrot] ✅ Server successfully started on ${address.address}:${address.port}`);
+    console.log(`[foxtrot]  Server successfully started on ${address.address}:${address.port}`);
     console.log(`[foxtrot] running http://127.0.0.1:${PORT} → ${getController()}`);
     console.log(`[foxtrot] Demo mode check: isDemoMode() = ${isDemoMode()}`);
     if (isDemoMode()) {
@@ -19585,7 +19585,7 @@ async function startServer() {
 
   // Add error handler for server startup failures
   SERVER.on('error', (error) => {
-    console.error('[foxtrot] ❌ Server startup failed:', error);
+    console.error('[foxtrot]  Server startup failed:', error);
     console.error('[foxtrot] Error code:', error.code);
     console.error('[foxtrot] Error message:', error.message);
     console.error('[foxtrot] Stack trace:', error.stack);

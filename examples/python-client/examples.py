@@ -23,13 +23,13 @@ def synchronous_examples():
     
     with LightEngineClient("http://localhost:8000") as client:
         # Example 1: Health Check
-        print("1️⃣ Health Check")
+        print("1⃣ Health Check")
         health = client.health()
         print(f"   Status: {health.get('status')}")
         print(f"   Version: {health.get('version', 'N/A')}\n")
         
         # Example 2: Ingest Sensor Data
-        print("2️⃣ Ingest Sensor Data")
+        print("2⃣ Ingest Sensor Data")
         payload = SensorPayload(
             scope="VegRoom1",
             ts=datetime.utcnow().isoformat() + "Z",
@@ -43,36 +43,36 @@ def synchronous_examples():
         print(f"   Ingested: {result.get('success', True)}\n")
         
         # Example 3: Get Latest Readings
-        print("3️⃣ Get Latest Readings")
+        print("3⃣ Get Latest Readings")
         latest = client.get_latest_readings("VegRoom1")
         print(f"   Scope: {latest['scope']}")
         print(f"   Sensors: {', '.join(latest['sensors'].keys())}\n")
         
         # Example 4: Trigger Discovery
-        print("4️⃣ Trigger Device Discovery")
+        print("4⃣ Trigger Device Discovery")
         discovery = client.trigger_discovery()
         print(f"   Status: {discovery['status']}")
         print(f"   Message: {discovery['message']}\n")
         
         # Example 5: Network Test
-        print("5️⃣ Network Connectivity Test")
+        print("5⃣ Network Connectivity Test")
         net_test = NetworkTestRequest(host="google.com", port=80, protocol="http")
         net_result = client.test_network_connection(net_test)
         print(f"   Host: {net_result['host']}:{net_result['port']}")
-        print(f"   Reachable: {'✅' if net_result['reachable'] else '❌'}\n")
+        print(f"   Reachable: {'' if net_result['reachable'] else ''}\n")
         
         # Example 6: Device Command
-        print("6️⃣ Send Device Command")
+        print("6⃣ Send Device Command")
         command = DeviceCommandRequest(
             device_id="fixture_001",
             command={"action": "set_brightness", "value": 80}
         )
         cmd_result = client.send_device_command(command)
         print(f"   Device: {cmd_result['device_id']}")
-        print(f"   Success: {'✅' if cmd_result['success'] else '❌'}\n")
+        print(f"   Success: {'' if cmd_result['success'] else ''}\n")
         
         # Example 7: Create Automation Rule
-        print("7️⃣ Create Automation Rule")
+        print("7⃣ Create Automation Rule")
         rule = AutomationRule(
             name="High Temperature Alert",
             enabled=True,
@@ -89,10 +89,10 @@ def synchronous_examples():
         )
         rule_result = client.create_rule(rule)
         print(f"   Rule ID: {rule_result['rule_id']}")
-        print(f"   Success: {'✅' if rule_result['success'] else '❌'}\n")
+        print(f"   Success: {'' if rule_result['success'] else ''}\n")
         
         # Example 8: Emergency Failsafe
-        print("8️⃣ Emergency Failsafe")
+        print("8⃣ Emergency Failsafe")
         failsafe = FailsafePowerRequest(
             fixtures=["fixture_001", "fixture_002"],
             power="off",
@@ -102,7 +102,7 @@ def synchronous_examples():
         print(f"   Total: {failsafe_result['total']} fixtures")
         print(f"   Successful: {failsafe_result['successful']}/{failsafe_result['total']}\n")
         
-        print("✅ All synchronous examples completed!\n")
+        print(" All synchronous examples completed!\n")
 
 
 async def asynchronous_examples():
@@ -111,13 +111,13 @@ async def asynchronous_examples():
     
     async with AsyncLightEngineClient("http://localhost:8000") as client:
         # Example 1: Health Check
-        print("1️⃣ Health Check (Async)")
+        print("1⃣ Health Check (Async)")
         health = await client.health()
         print(f"   Status: {health.get('status')}")
         print(f"   Version: {health.get('version', 'N/A')}\n")
         
         # Example 2: Parallel Requests
-        print("2️⃣ Parallel Requests (Async)")
+        print("2⃣ Parallel Requests (Async)")
         results = await asyncio.gather(
             client.get_scopes(),
             client.get_devices(),
@@ -129,25 +129,25 @@ async def asynchronous_examples():
         print(f"   Rules: {results[2].get('count', 0)}\n")
         
         # Example 3: Sensor History
-        print("3️⃣ Get Sensor History (Async)")
+        print("3⃣ Get Sensor History (Async)")
         history = await client.get_sensor_history("VegRoom1", "temperature", limit=20)
         print(f"   Scope: {history['scope']}")
         print(f"   Sensor: {history['sensor']}")
         print(f"   Data points: {len(history.get('history', []))}\n")
         
         # Example 4: Device Discovery
-        print("4️⃣ Device Discovery (Async)")
+        print("4⃣ Device Discovery (Async)")
         await client.trigger_discovery()
         await asyncio.sleep(2)  # Wait for scan
         devices = await client.get_discovered_devices()
         print(f"   Discovered: {len(devices.get('devices', []))} devices\n")
         
-        print("✅ All asynchronous examples completed!\n")
+        print(" All asynchronous examples completed!\n")
 
 
 def error_handling_example():
     """Demonstrate error handling"""
-    print("🛡️ Error Handling Example\n")
+    print("🛡 Error Handling Example\n")
     
     from light_engine.exceptions import APIError, TimeoutError
     
@@ -156,25 +156,25 @@ def error_handling_example():
     try:
         # This will work
         health = client.health()
-        print(f"✅ Health check succeeded: {health['status']}\n")
+        print(f" Health check succeeded: {health['status']}\n")
         
         # This might fail if scope doesn't exist
         try:
             latest = client.get_latest_readings("NonExistentScope")
         except APIError as e:
-            print(f"⚠️ Expected API error: {e}\n")
+            print(f" Expected API error: {e}\n")
         
     except TimeoutError as e:
-        print(f"❌ Timeout: {e}\n")
+        print(f" Timeout: {e}\n")
     except APIError as e:
-        print(f"❌ API Error: {e} (Status: {e.status_code})\n")
+        print(f" API Error: {e} (Status: {e.status_code})\n")
     finally:
         client.session.close()
 
 
 def type_hints_example():
     """Demonstrate type hints and IDE support"""
-    print("📝 Type Hints Example\n")
+    print(" Type Hints Example\n")
     
     # Type hints help IDEs provide autocomplete
     client: LightEngineClient = LightEngineClient("http://localhost:8000")
@@ -194,7 +194,7 @@ def type_hints_example():
     # Type checkers (mypy) can validate this
     result: dict = client.ingest_sensor_data(payload)
     
-    print("✅ Type hints enable:")
+    print(" Type hints enable:")
     print("   - IDE autocomplete")
     print("   - Static type checking with mypy")
     print("   - Better documentation")
@@ -221,5 +221,5 @@ if __name__ == "__main__":
     type_hints_example()
     
     print("=" * 60)
-    print("🎉 All examples completed successfully!")
+    print(" All examples completed successfully!")
     print("=" * 60)

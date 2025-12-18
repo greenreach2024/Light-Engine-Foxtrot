@@ -31,7 +31,7 @@ class MQTTWorker:
         self.connected = False
         self.message_count = 0
         
-        print(f"🔧 MQTT Worker Configuration:")
+        print(f" MQTT Worker Configuration:")
         print(f"   Broker: {self.broker_host}:{self.broker_port}")
         print(f"   Topics: {self.topics}")
         print(f"   API: {self.api_base}")
@@ -40,7 +40,7 @@ class MQTTWorker:
         """Callback when connected to MQTT broker"""
         if rc == 0:
             self.connected = True
-            print(f"✅ Connected to MQTT broker at {self.broker_host}:{self.broker_port}")
+            print(f" Connected to MQTT broker at {self.broker_host}:{self.broker_port}")
             
             # Subscribe to topics
             for topic in self.topics:
@@ -48,7 +48,7 @@ class MQTTWorker:
                 client.subscribe(topic)
                 print(f"📡 Subscribed to: {topic}")
         else:
-            print(f"❌ Failed to connect to MQTT broker. Return code: {rc}")
+            print(f" Failed to connect to MQTT broker. Return code: {rc}")
             print(f"   Codes: 0=Success, 1=Protocol, 2=ClientID, 3=Unavailable, 4=Auth, 5=Not Authorized")
             self.connected = False
     
@@ -56,7 +56,7 @@ class MQTTWorker:
         """Callback when disconnected from MQTT broker"""
         self.connected = False
         if rc != 0:
-            print(f"⚠️ Unexpected disconnect from MQTT broker (code {rc}). Reconnecting...")
+            print(f" Unexpected disconnect from MQTT broker (code {rc}). Reconnecting...")
         else:
             print("👋 Disconnected from MQTT broker")
     
@@ -74,29 +74,29 @@ class MQTTWorker:
             try:
                 payload = json.loads(payload_str)
             except json.JSONDecodeError as e:
-                print(f"⚠️ Invalid JSON payload: {e}")
+                print(f" Invalid JSON payload: {e}")
                 return
             
             # Validate required fields
             if not self._validate_payload(payload):
-                print(f"⚠️ Invalid payload structure")
+                print(f" Invalid payload structure")
                 return
             
             # Forward to FastAPI
             self._forward_to_api(payload)
             
         except Exception as e:
-            print(f"❌ Error processing message: {e}")
+            print(f" Error processing message: {e}")
     
     def _validate_payload(self, payload: dict) -> bool:
         """Validate payload has required structure"""
         # Check for required fields
         if "scope" not in payload:
-            print("⚠️ Missing 'scope' field")
+            print(" Missing 'scope' field")
             return False
         
         if "sensors" not in payload or not isinstance(payload["sensors"], dict):
-            print("⚠️ Missing or invalid 'sensors' field")
+            print(" Missing or invalid 'sensors' field")
             return False
         
         # Add timestamp if missing
@@ -118,16 +118,16 @@ class MQTTWorker:
             
             if response.status_code == 200:
                 result = response.json()
-                print(f"✅ Ingested: scope={result.get('scope')}, sensors={result.get('ingested')}")
+                print(f" Ingested: scope={result.get('scope')}, sensors={result.get('ingested')}")
             else:
-                print(f"⚠️ API error: {response.status_code} - {response.text}")
+                print(f" API error: {response.status_code} - {response.text}")
                 
         except requests.exceptions.RequestException as e:
-            print(f"❌ Failed to forward to API: {e}")
+            print(f" Failed to forward to API: {e}")
     
     def start(self):
         """Start MQTT worker in background thread"""
-        print("\n🚀 Starting MQTT Worker...")
+        print("\n Starting MQTT Worker...")
         
         # Create MQTT client
         self.client = mqtt.Client(client_id="light-engine-mqtt-worker")
@@ -149,10 +149,10 @@ class MQTTWorker:
             
             # Start network loop in background thread
             self.client.loop_start()
-            print("✅ MQTT Worker running in background")
+            print(" MQTT Worker running in background")
             
         except Exception as e:
-            print(f"❌ Failed to start MQTT worker: {e}")
+            print(f" Failed to start MQTT worker: {e}")
             raise
     
     def stop(self):
@@ -161,7 +161,7 @@ class MQTTWorker:
             print("\n🛑 Stopping MQTT Worker...")
             self.client.loop_stop()
             self.client.disconnect()
-            print(f"📊 Total messages processed: {self.message_count}")
+            print(f" Total messages processed: {self.message_count}")
 
 def start_mqtt_worker_background():
     """Start MQTT worker in background (called by backend startup)"""
@@ -176,7 +176,7 @@ def start_mqtt_worker_background():
         except KeyboardInterrupt:
             worker.stop()
         except Exception as e:
-            print(f"❌ MQTT Worker error: {e}")
+            print(f" MQTT Worker error: {e}")
     
     # Start in daemon thread so it doesn't block shutdown
     thread = threading.Thread(target=run_worker, daemon=True)
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     
     try:
         worker.start()
-        print("\n✅ Worker running. Press Ctrl+C to stop...")
+        print("\n Worker running. Press Ctrl+C to stop...")
         
         # Keep main thread alive
         while True:

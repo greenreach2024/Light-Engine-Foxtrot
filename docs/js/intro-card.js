@@ -196,7 +196,7 @@
                           font-weight: 700;
                           flex-shrink: 0;
                           font-size: 1.25rem;
-                        ">✓</span>
+                        "></span>
                         <span>${feature}</span>
                       </div>
                     `).join('')}

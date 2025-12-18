@@ -144,7 +144,7 @@ async function fallbackControl(zones, iotDevices) {
     
     // Simple threshold control
     if (dehumidifier && rh > rhMax) {
-      console.log(`[env-control] 🌡️  Zone ${zoneNum}: RH ${rh}% > ${rhMax}% → Activating dehumidifier`);
+      console.log(`[env-control] 🌡  Zone ${zoneNum}: RH ${rh}% > ${rhMax}% → Activating dehumidifier`);
       // Note: prePlugManager would need to be passed in or accessed via import
       // This is a placeholder for the actual control logic
     }

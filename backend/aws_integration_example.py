@@ -19,7 +19,7 @@ try:
     AWS_ENABLED = True
 except ImportError:
     AWS_ENABLED = False
-    logging.warning("⚠️  AWS modules not available. S3 and CloudWatch features disabled.")
+    logging.warning("  AWS modules not available. S3 and CloudWatch features disabled.")
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def init_aws_services() -> Dict[str, Any]:
     }
     
     if not AWS_ENABLED:
-        logger.warning("⚠️  AWS features disabled (boto3 not installed)")
+        logger.warning("  AWS features disabled (boto3 not installed)")
         return services
     
     try:
@@ -49,7 +49,7 @@ def init_aws_services() -> Dict[str, Any]:
             bucket_name=s3_bucket,
             region=s3_region
         )
-        logger.info(f"✅ S3 Manager initialized: {s3_bucket}")
+        logger.info(f" S3 Manager initialized: {s3_bucket}")
         
         # Initialize CloudWatch Logger
         cw_log_group = os.getenv('AWS_CLOUDWATCH_LOG_GROUP', '/light-engine/production')
@@ -60,13 +60,13 @@ def init_aws_services() -> Dict[str, Any]:
                 log_group_name=cw_log_group,
                 region=s3_region
             )
-            logger.info(f"✅ CloudWatch Logger initialized: {cw_log_group}")
+            logger.info(f" CloudWatch Logger initialized: {cw_log_group}")
         
         services['enabled'] = True
         
     except Exception as e:
-        logger.error(f"❌ Failed to initialize AWS services: {e}")
-        logger.warning("⚠️  Continuing without AWS integration")
+        logger.error(f" Failed to initialize AWS services: {e}")
+        logger.warning("  Continuing without AWS integration")
     
     return services
 
@@ -85,13 +85,13 @@ async def lifespan(app: FastAPI):
     global aws_services
     
     # Startup
-    logger.info("🚀 Starting Light Engine Backend...")
+    logger.info(" Starting Light Engine Backend...")
     aws_services = init_aws_services()
     
     if aws_services['enabled']:
-        logger.info("✅ AWS integration active")
+        logger.info(" AWS integration active")
     else:
-        logger.warning("⚠️  AWS integration disabled")
+        logger.warning("  AWS integration disabled")
     
     yield
     
@@ -168,7 +168,7 @@ async def error_logging_middleware(request: Request, call_next):
     try:
         return await call_next(request)
     except Exception as e:
-        logger.error(f"❌ Unhandled exception: {e}", exc_info=True)
+        logger.error(f" Unhandled exception: {e}", exc_info=True)
         
         # Log to CloudWatch
         if aws_services.get('enabled') and aws_services.get('cloudwatch'):
@@ -286,7 +286,7 @@ async def backup_tenant_data(tenant_id: str, data: Dict[str, Any]):
         }
         
     except Exception as e:
-        logger.error(f"❌ Backup failed for {tenant_id}: {e}")
+        logger.error(f" Backup failed for {tenant_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -327,7 +327,7 @@ async def save_telemetry(tenant_id: str, scope: str, telemetry: Dict[str, Any]):
         }
         
     except Exception as e:
-        logger.error(f"❌ Telemetry save failed: {e}")
+        logger.error(f" Telemetry save failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -363,7 +363,7 @@ async def list_telemetry(tenant_id: str, date: Optional[str] = None):
         }
         
     except Exception as e:
-        logger.error(f"❌ Failed to list telemetry: {e}")
+        logger.error(f" Failed to list telemetry: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -413,7 +413,7 @@ async def log_device_event(
         }
         
     except Exception as e:
-        logger.error(f"❌ Failed to log device event: {e}")
+        logger.error(f" Failed to log device event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -465,7 +465,7 @@ async def log_automation_execution(
         }
         
     except Exception as e:
-        logger.error(f"❌ Failed to log automation: {e}")
+        logger.error(f" Failed to log automation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -512,7 +512,7 @@ async def update_tenant_metrics(
         }
         
     except Exception as e:
-        logger.error(f"❌ Failed to send metrics: {e}")
+        logger.error(f" Failed to send metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

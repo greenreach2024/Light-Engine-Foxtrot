@@ -93,7 +93,7 @@ class SquareClient:
             environment=environment  # 'sandbox' or 'production'
         )
         
-        logger.info(f"✅ Square client initialized (environment: {environment})")
+        logger.info(f" Square client initialized (environment: {environment})")
     
     def create_customer(self, email: str, first_name: str, last_name: str, 
                        tenant_id: str, metadata: Optional[Dict] = None) -> Dict[str, Any]:
@@ -121,7 +121,7 @@ class SquareClient:
             
             if result.customer:
                 customer = result.customer
-                logger.info(f"✅ Created Square customer: {customer.id} for {email}")
+                logger.info(f" Created Square customer: {customer.id} for {email}")
                 return {
                     "success": True,
                     "customer_id": customer.id,
@@ -131,14 +131,14 @@ class SquareClient:
                     "customer": customer.dict() if hasattr(customer, 'dict') else {}
                 }
             elif result.errors:
-                logger.error(f"❌ Square API error creating customer: {result.errors}")
+                logger.error(f" Square API error creating customer: {result.errors}")
                 return {
                     "success": False,
                     "error": str(result.errors)
                 }
                 
         except Exception as e:
-            logger.error(f"❌ Error creating Square customer: {e}")
+            logger.error(f" Error creating Square customer: {e}")
             return {
                 "success": False,
                 "error": str(e)
@@ -179,7 +179,7 @@ class SquareClient:
             
             # TODO: Implement actual Square subscription creation
             # This requires creating catalog items first via Square Dashboard or Catalog API
-            logger.warning("⚠️ Square subscription creation requires catalog setup")
+            logger.warning(" Square subscription creation requires catalog setup")
             
             return {
                 "subscription_id": f"sub_{customer_id}_{plan_id}",  # Placeholder
@@ -190,7 +190,7 @@ class SquareClient:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error creating subscription: {e}")
+            logger.error(f" Error creating subscription: {e}")
             raise
     
     def create_payment(self, amount: int, customer_id: str, 
@@ -223,7 +223,7 @@ class SquareClient:
             
             if result.is_success():
                 payment = result.body.get("payment", {})
-                logger.info(f"✅ Payment successful: {payment.get('id')} (${amount/100:.2f})")
+                logger.info(f" Payment successful: {payment.get('id')} (${amount/100:.2f})")
                 return {
                     "payment_id": payment.get("id"),
                     "status": payment.get("status"),
@@ -233,11 +233,11 @@ class SquareClient:
                 }
             elif result.is_error():
                 errors = result.errors
-                logger.error(f"❌ Payment failed: {errors}")
+                logger.error(f" Payment failed: {errors}")
                 raise Exception(f"Payment failed: {errors}")
                 
         except Exception as e:
-            logger.error(f"❌ Error processing payment: {e}")
+            logger.error(f" Error processing payment: {e}")
             raise
     
     def list_customers(self, limit: int = 100) -> List[Dict[str, Any]]:
@@ -255,15 +255,15 @@ class SquareClient:
             
             if result.is_success():
                 customers = result.body.get("customers", [])
-                logger.info(f"✅ Retrieved {len(customers)} customers")
+                logger.info(f" Retrieved {len(customers)} customers")
                 return customers
             elif result.is_error():
                 errors = result.errors
-                logger.error(f"❌ Error listing customers: {errors}")
+                logger.error(f" Error listing customers: {errors}")
                 return []
                 
         except Exception as e:
-            logger.error(f"❌ Error listing customers: {e}")
+            logger.error(f" Error listing customers: {e}")
             return []
     
     def get_customer(self, customer_id: str) -> Optional[Dict[str, Any]]:
@@ -283,11 +283,11 @@ class SquareClient:
                 customer = result.body.get("customer", {})
                 return customer
             elif result.is_error():
-                logger.error(f"❌ Customer not found: {customer_id}")
+                logger.error(f" Customer not found: {customer_id}")
                 return None
                 
         except Exception as e:
-            logger.error(f"❌ Error retrieving customer: {e}")
+            logger.error(f" Error retrieving customer: {e}")
             return None
     
     @staticmethod

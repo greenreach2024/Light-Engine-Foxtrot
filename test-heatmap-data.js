@@ -13,10 +13,10 @@ async function testHeatmapDataFlow() {
     const res = await fetch(`${baseUrl}/data/room-map.json`);
     const roomMap = await res.json();
     
-    console.log(`   ✓ Loaded room map: ${roomMap.name}`);
-    console.log(`   ✓ Grid: ${roomMap.gridSize}x${roomMap.gridSize}`);
-    console.log(`   ✓ Zones: ${roomMap.zones.length}`);
-    console.log(`   ✓ Devices: ${roomMap.devices.length}`);
+    console.log(`    Loaded room map: ${roomMap.name}`);
+    console.log(`    Grid: ${roomMap.gridSize}x${roomMap.gridSize}`);
+    console.log(`    Zones: ${roomMap.zones.length}`);
+    console.log(`    Devices: ${roomMap.devices.length}`);
     
     // Check device structure
     const device = roomMap.devices[0];
@@ -61,11 +61,11 @@ async function testHeatmapDataFlow() {
         return false;
       }
       
-      console.log(`   ✓ Device ${d.deviceId} accepted: ${d.snapshot?.name}`);
+      console.log(`    Device ${d.deviceId} accepted: ${d.snapshot?.name}`);
       return true;
     });
     
-    console.log(`\n   ✓ Filtered sensors: ${sensors.length}/${roomMap.devices.length}`);
+    console.log(`\n    Filtered sensors: ${sensors.length}/${roomMap.devices.length}`);
     
   } catch (err) {
     console.error(`   ✗ Failed to load room-map:`, err.message);
@@ -78,8 +78,8 @@ async function testHeatmapDataFlow() {
     const res = await fetch(`${baseUrl}/env?hours=24`);
     const envData = await res.json();
     
-    console.log(`   ✓ Loaded env data`);
-    console.log(`   ✓ Zones: ${envData.zones?.length || 0}`);
+    console.log(`    Loaded env data`);
+    console.log(`    Zones: ${envData.zones?.length || 0}`);
     
     if (envData.zones?.length > 0) {
       const zone = envData.zones[0];

@@ -66,13 +66,13 @@ async function testEndpoint(name, url, options = {}) {
 }
 
 async function runTests() {
-  console.log('🧪 COMPREHENSIVE SYSTEM TEST\n');
+  console.log(' COMPREHENSIVE SYSTEM TEST\n');
   console.log('='.repeat(80));
   
   // ============================================================================
   // CRITICAL: Node.js Server (server-foxtrot.js)
   // ============================================================================
-  console.log('\n📦 CORE ENDPOINTS (Node.js server-foxtrot.js on :8091)');
+  console.log('\n CORE ENDPOINTS (Node.js server-foxtrot.js on :8091)');
   console.log('-'.repeat(80));
   
   await testEndpoint('Central Admin Portal', '/central-admin.html', { critical: true });
@@ -89,9 +89,9 @@ async function runTests() {
   // ============================================================================
   // INVENTORY MANAGEMENT - Expected to fail (Python backend not running)
   // ============================================================================
-  console.log('\n📋 INVENTORY MANAGEMENT (Python FastAPI on :8000)');
+  console.log('\n INVENTORY MANAGEMENT (Python FastAPI on :8000)');
   console.log('-'.repeat(80));
-  console.log('⚠️  Note: These require Python backend running separately\n');
+  console.log('  Note: These require Python backend running separately\n');
   
   await testEndpoint('Tray Formats', '/api/tray-formats', { 
     base: PYTHON_BASE, 
@@ -124,7 +124,7 @@ async function runTests() {
   // ============================================================================
   console.log('\n💳 BILLING & PAYMENTS (Python FastAPI on :8000)');
   console.log('-'.repeat(80));
-  console.log('⚠️  Note: These require Python backend + Square SDK fix\n');
+  console.log('  Note: These require Python backend + Square SDK fix\n');
   
   await testEndpoint('Billing Plans', '/api/billing/plans', { 
     base: PYTHON_BASE, 
@@ -142,9 +142,9 @@ async function runTests() {
   // ============================================================================
   // AWS INTEGRATION - Expected to fail (not implemented in server)
   // ============================================================================
-  console.log('\n☁️  AWS INTEGRATION');
+  console.log('\n☁  AWS INTEGRATION');
   console.log('-'.repeat(80));
-  console.log('⚠️  Note: AWS modules exist but not integrated into running server\n');
+  console.log('  Note: AWS modules exist but not integrated into running server\n');
   
   // These endpoints don't exist - testing to confirm
   await testEndpoint('S3 Upload', '/api/aws/s3/upload', { 
@@ -175,7 +175,7 @@ async function runTests() {
   // ============================================================================
   // DEVICE INTEGRATION
   // ============================================================================
-  console.log('\n💡 DEVICE INTEGRATION');
+  console.log('\n DEVICE INTEGRATION');
   console.log('-'.repeat(80));
   
   await testEndpoint('Devices List', '/api/devices', { critical: true });
@@ -197,20 +197,20 @@ async function runTests() {
   // SUMMARY REPORT
   // ============================================================================
   console.log('\n' + '='.repeat(80));
-  console.log('📊 TEST SUMMARY');
+  console.log(' TEST SUMMARY');
   console.log('='.repeat(80));
   
   const total = tests.passed.length + tests.failed.length;
   const criticalFailed = tests.failed.filter(t => t.critical);
   
-  console.log(`\n✅ Passed: ${tests.passed.length}/${total}`);
-  console.log(`❌ Failed: ${tests.failed.length}/${total}`);
-  console.log(`🔴 Critical Failures: ${criticalFailed.length}`);
+  console.log(`\n Passed: ${tests.passed.length}/${total}`);
+  console.log(` Failed: ${tests.failed.length}/${total}`);
+  console.log(` Critical Failures: ${criticalFailed.length}`);
   
   if (tests.failed.length > 0) {
-    console.log('\n❌ FAILED TESTS:');
+    console.log('\n FAILED TESTS:');
     tests.failed.forEach(t => {
-      const icon = t.critical ? '🔴' : '⚠️';
+      const icon = t.critical ? '' : '';
       console.log(`  ${icon} ${t.name}: ${t.status} (expected ${t.expected}) - ${t.method} ${t.url}`);
     });
   }
@@ -219,47 +219,47 @@ async function runTests() {
     console.log('\n🚨 CRITICAL ISSUES DETECTED!');
     console.log('The following critical endpoints are not responding:');
     criticalFailed.forEach(t => {
-      console.log(`  🔴 ${t.name}`);
+      console.log(`   ${t.name}`);
     });
   } else {
-    console.log('\n✅ All critical endpoints passing!');
+    console.log('\n All critical endpoints passing!');
   }
   
   console.log('\n' + '='.repeat(80));
-  console.log('📝 FINDINGS:');
+  console.log(' FINDINGS:');
   console.log('='.repeat(80));
   
   console.log(`
-1. ✅ Node.js server (server-foxtrot.js) is PRODUCTION READY
+1.  Node.js server (server-foxtrot.js) is PRODUCTION READY
    - All core endpoints responding
    - Multi-farm monitoring working
    - Device integration functional
    - UI pages all accessible
 
-2. ⚠️  Python backend (backend/server.py) is NOT RUNNING
+2.   Python backend (backend/server.py) is NOT RUNNING
    - Inventory management endpoints unavailable
    - Billing/payment endpoints unavailable
    - Code exists but server not deployed
    
-3. ⚠️  AWS Integration is NOT ACTIVE
+3.   AWS Integration is NOT ACTIVE
    - S3/CloudWatch modules exist (aws_s3.py, aws_cloudwatch.py)
    - Dependencies installed (boto3)
    - NOT imported or used in running servers
    - Status: LIBRARY ONLY, not production-deployed
 
-4. ⚠️  Square Payment Integration HAS ISSUES
+4.   Square Payment Integration HAS ISSUES
    - Code exists (backend/billing/square_client.py)
    - Dependencies installed (squareup SDK)
    - Import error: "cannot import name 'Square' from 'square'"
    - Status: CODE EXISTS but BROKEN IMPORT
 
-5. ⚠️  Inventory Management is BACKEND ONLY
+5.   Inventory Management is BACKEND ONLY
    - Complete implementation in backend/inventory_routes.py
    - 18 API endpoints defined
    - SQLAlchemy models complete
    - Status: IMPLEMENTED but SERVER NOT RUNNING
 
-6. ✅ Multi-Farm Monitoring is WORKING
+6.  Multi-Farm Monitoring is WORKING
    - Farm registry responding
    - Platform analytics aggregating
    - Individual farm details available

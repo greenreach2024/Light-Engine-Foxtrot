@@ -112,7 +112,7 @@ def seed_formats():
             # Check if format already exists
             existing = db.query(TrayFormat).filter_by(name=format_data["name"]).first()
             if existing:
-                print(f"   ⏭️  Skipping '{format_data['name']}' (already exists)")
+                print(f"   ⏭  Skipping '{format_data['name']}' (already exists)")
                 continue
             
             # Create new format
@@ -121,17 +121,17 @@ def seed_formats():
                 **format_data
             )
             db.add(tray_format)
-            print(f"   ✅ Created '{format_data['name']}' ({format_data['plant_site_count']} sites)")
+            print(f"    Created '{format_data['name']}' ({format_data['plant_site_count']} sites)")
         
         db.commit()
-        print(f"\n✅ Seeded {len(STANDARD_FORMATS)} standard tray formats")
+        print(f"\n Seeded {len(STANDARD_FORMATS)} standard tray formats")
         
         # Show summary
         all_formats = db.query(TrayFormat).all()
-        print(f"\n📦 Total formats in database: {len(all_formats)}")
+        print(f"\n Total formats in database: {len(all_formats)}")
         
     except Exception as e:
-        print(f"❌ Error seeding formats: {e}")
+        print(f" Error seeding formats: {e}")
         db.rollback()
     finally:
         db.close()

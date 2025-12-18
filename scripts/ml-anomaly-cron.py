@@ -104,10 +104,10 @@ def send_webhook_alert(anomaly):
     try:
         # Format message for Slack/Discord
         severity_emoji = {
-            'critical': '🔴',
+            'critical': '',
             'warning': '🟡',
             'info': '🔵'
-        }.get(anomaly.get('severity', 'info'), '⚠️')
+        }.get(anomaly.get('severity', 'info'), '')
         
         outdoor_info = ""
         if anomaly.get('outdoor_temp') is not None:

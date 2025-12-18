@@ -153,13 +153,13 @@ async function seedRules() {
       });
       
       if (response.ok) {
-        console.log(`✅ ${rule.name}`);
+        console.log(` ${rule.name}`);
       } else {
         const error = await response.text();
-        console.log(`❌ ${rule.name}: ${error}`);
+        console.log(` ${rule.name}: ${error}`);
       }
     } catch (error) {
-      console.log(`❌ ${rule.name}: ${error.message}`);
+      console.log(` ${rule.name}: ${error.message}`);
     }
   }
   

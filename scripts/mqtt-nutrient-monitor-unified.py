@@ -35,7 +35,7 @@ def on_connect(client, userdata, flags, rc):
         print("╔═══════════════════════════════════════════════════════════╗")
         print("║    UNIFIED ESP32 NUTRIENT MONITOR - DUAL TOPIC SCHEME   ║")
         print("╚═══════════════════════════════════════════════════════════╝\n")
-        print(f"✅ Connected to MQTT broker: {BROKER}:{PORT}")
+        print(f" Connected to MQTT broker: {BROKER}:{PORT}")
         print(f"   Client ID: {CLIENT_ID}\n")
         print("📡 Subscribed to BOTH topic schemes:")
         print("\n   Original ESP-IDF Topics (TLS):")
@@ -50,7 +50,7 @@ def on_connect(client, userdata, flags, rc):
         
         for topic in TOPICS:
             result = client.subscribe(topic)
-            status = "✓" if result[0] == 0 else "✗"
+            status = "" if result[0] == 0 else "✗"
             # Don't print each subscription to avoid clutter
         
         print("\n⏳ Waiting for ESP32 telemetry...")
@@ -64,7 +64,7 @@ def on_connect(client, userdata, flags, rc):
             4: "Bad username/password",
             5: "Not authorized"
         }
-        print(f"❌ Connection failed: {errors.get(rc, f'Unknown ({rc})')}")
+        print(f" Connection failed: {errors.get(rc, f'Unknown ({rc})')}")
         sys.exit(1)
 
 def on_message(client, userdata, msg):
@@ -113,7 +113,7 @@ def on_message(client, userdata, msg):
             
             if 'temperature' in sensors:
                 temp_val = sensors['temperature'].get('value', 'N/A')
-                print(f"  🌡️  Temperature: {temp_val} °C")
+                print(f"  🌡  Temperature: {temp_val} °C")
             
             if targets:
                 print("\nTARGETS:")
@@ -134,7 +134,7 @@ def on_message(client, userdata, msg):
             reason = data.get('reason', '')
             ec = data.get('ec', 'N/A')
             
-            emoji_status = "✅" if status == "accepted" else "❌" if status == "rejected" else "ℹ️"
+            emoji_status = "" if status == "accepted" else "" if status == "rejected" else "ℹ"
             print(f"{emoji_status} Status: {status}")
             print(f"   Action: {action}")
             print(f"   EC:     {ec}")
@@ -150,7 +150,7 @@ def on_message(client, userdata, msg):
             
             print(f"Timestamp: {timestamp_esp}")
             print("\nSENSORS:")
-            print(f"  🌡️  Temperature: {temp} °C")
+            print(f"  🌡  Temperature: {temp} °C")
             print(f"  ⚡ EC:          {ec} uS/cm")
             print(f"  🔬 pH:          {ph}")
         
@@ -174,7 +174,7 @@ def on_message(client, userdata, msg):
             threshold = data.get('threshold', 'N/A')
             timestamp_esp = data.get('timestamp', 'N/A')
             
-            print(f"⚠️  ALERT: {alert}")
+            print(f"  ALERT: {alert}")
             print(f"   Sensor:    {sensor}")
             print(f"   Value:     {value}")
             print(f"   Threshold: {threshold}")
@@ -215,7 +215,7 @@ def on_message(client, userdata, msg):
 
 def on_disconnect(client, userdata, rc):
     if rc != 0:
-        print(f"\n⚠️  Disconnected (code {rc}). Reconnecting...")
+        print(f"\n  Disconnected (code {rc}). Reconnecting...")
 
 if __name__ == "__main__":
     client = mqtt.Client(client_id=CLIENT_ID)
@@ -232,12 +232,12 @@ if __name__ == "__main__":
         client.disconnect()
         sys.exit(0)
     except ConnectionRefusedError:
-        print(f"\n❌ Connection refused: {BROKER}:{PORT}")
+        print(f"\n Connection refused: {BROKER}:{PORT}")
         print("\nPossible issues:")
         print("  1. MQTT broker (mosquitto) not running")
         print("  2. Check with: sudo systemctl status mosquitto")
         print("  3. Or test: mosquitto_sub -h 192.168.2.42 -p 1883 -t '#' -v")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n Error: {e}")
         sys.exit(1)

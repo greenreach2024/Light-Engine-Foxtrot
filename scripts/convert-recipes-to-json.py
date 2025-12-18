@@ -51,7 +51,7 @@ for csv_file in recipe_dir.glob("*.csv"):
         
         if days_data:
             crops[crop_name] = days_data
-            print(f"  ✓ {len(days_data)} days")
+            print(f"   {len(days_data)} days")
     
     except Exception as e:
         print(f"  ✗ Error: {e}")
@@ -68,5 +68,5 @@ output_file.parent.mkdir(parents=True, exist_ok=True)
 with open(output_file, 'w', encoding='utf-8') as f:
     json.dump(output, f, indent=2)
 
-print(f"\n✅ Created {output_file}")
-print(f"📊 Total crops: {len(crops)}")
+print(f"\n Created {output_file}")
+print(f" Total crops: {len(crops)}")

@@ -23,7 +23,7 @@ import {
 
 const log = {
   info: (msg) => console.log(`[TEST] ${msg}`),
-  success: (msg) => console.log(`[TEST] ✓ ${msg}`),
+  success: (msg) => console.log(`[TEST]  ${msg}`),
   error: (msg) => console.error(`[TEST] ✗ ${msg}`),
 };
 

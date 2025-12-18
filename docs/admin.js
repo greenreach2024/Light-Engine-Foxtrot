@@ -7,7 +7,7 @@ const API_BASE = window.location.origin.replace(':8091', ':8000');
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Initializing admin dashboard...');
+    console.log(' Initializing admin dashboard...');
     await loadDashboardData();
 });
 
@@ -36,14 +36,14 @@ function switchTab(tabName) {
 async function loadDashboardData() {
     try {
         // In production, these would be real API calls
-        console.log('📊 Loading dashboard data...');
+        console.log(' Loading dashboard data...');
         
         // Simulate API calls
         updateMetrics();
         loadTenants();
         
     } catch (error) {
-        console.error('❌ Error loading dashboard data:', error);
+        console.error(' Error loading dashboard data:', error);
     }
 }
 
@@ -97,7 +97,7 @@ function filterTenants() {
  * View tenant details
  */
 function viewTenant(tenantId) {
-    console.log(`🔍 Viewing tenant: ${tenantId}`);
+    console.log(` Viewing tenant: ${tenantId}`);
     
     // In production, redirect to tenant detail page or open modal
     alert(`View details for tenant: ${tenantId}\n\nIn production, this would show:\n- Subscription history\n- Usage analytics\n- Device list\n- Payment history\n- Support tickets`);
@@ -116,9 +116,9 @@ function createTenant() {
     if (!email) return;
     
     // In production, POST to /api/admin/tenants
-    console.log('📝 Creating tenant:', { name, email });
+    console.log(' Creating tenant:', { name, email });
     
-    alert(`✅ Tenant created successfully!\n\nName: ${name}\nEmail: ${email}\n\nIn production, this would:\n1. Create tenant record\n2. Send welcome email\n3. Generate API keys\n4. Start trial period`);
+    alert(` Tenant created successfully!\n\nName: ${name}\nEmail: ${email}\n\nIn production, this would:\n1. Create tenant record\n2. Send welcome email\n3. Generate API keys\n4. Start trial period`);
 }
 
 /**
@@ -140,6 +140,6 @@ function manageBilling() {
 
 // Auto-refresh metrics every 30 seconds
 setInterval(() => {
-    console.log('🔄 Auto-refreshing metrics...');
+    console.log(' Auto-refreshing metrics...');
     updateMetrics();
 }, 30000);

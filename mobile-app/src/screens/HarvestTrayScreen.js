@@ -147,7 +147,7 @@ export default function HarvestTrayScreen({ route, navigation }) {
         {trayInfo?.activeRun && !trayInfo.activeRun.harvestedAt ? (
           <Card style={styles.readyCard}>
             <Card.Content>
-              <Text style={styles.readyText}>✓ Ready to Harvest</Text>
+              <Text style={styles.readyText}> Ready to Harvest</Text>
               <Text style={styles.readySubtext}>
                 This tray is {daysGrowing} days old
               </Text>
