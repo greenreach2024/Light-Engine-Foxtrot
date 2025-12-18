@@ -77,6 +77,12 @@ import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
 import anomalyHistory from './lib/anomaly-history.js';
 import mlAutomation from './lib/ml-automation-controller.js';
+import edgeConfig from './lib/edge-config.js';
+import SyncService from './lib/sync-service.js';
+import edgeRouter from './routes/edge.js';
+
+let syncService = null;
+
 
 const app = express();
 
@@ -8101,6 +8107,9 @@ app.use('/api/wholesale/sla', wholesaleSLAPoliciesRouter);
 app.use('/api/wholesale/substitution', wholesaleSLAPoliciesRouter);
 app.use('/api/wholesale/buyer/preferences', wholesaleSLAPoliciesRouter);
 
+
+// Edge Mode Configuration API
+app.use('/api/edge', edgeRouter);
 /**
  * GreenReach: Audit Logging
  * Comprehensive audit trail for compliance and debugging
@@ -19580,6 +19589,36 @@ async function startServer() {
         console.log('[zone-bindings] Background refresh enabled');
       } catch (error) {
         console.warn('[zone-bindings] Failed to start background refresh:', error?.message || error);
+      }
+
+      // Initialize Edge Mode Sync Service
+      if (edgeConfig.isEdgeMode()) {
+        try {
+          // Import sqlite3 for sync service (dynamic import)
+          import('sqlite3').then((sqlite3Module) => {
+            const sqlite3 = sqlite3Module.default;
+            const dbPath = path.join(__dirname, 'lightengine.db');
+            const db = new sqlite3.Database(dbPath);
+            
+            syncService = new SyncService(db);
+            syncService.start();
+            
+            // Make sync service globally available for API routes
+            global.syncService = syncService;
+            
+            console.log('[EdgeMode] ✓ Sync service started');
+            console.log(`[EdgeMode] Farm: ${edgeConfig.getFarmName()} (${edgeConfig.getFarmId()})`);
+            console.log(`[EdgeMode] Central API: ${edgeConfig.getCentralApiUrl()}`);
+            console.log(`[EdgeMode] Heartbeat: ${edgeConfig.getHeartbeatInterval() / 1000}s`);
+            console.log(`[EdgeMode] Sync: ${edgeConfig.getSyncInterval() / 1000 / 60}min`);
+          }).catch((error) => {
+            console.error('[EdgeMode] ✗ Failed to import sqlite3:', error?.message || error);
+          });
+        } catch (error) {
+          console.error('[EdgeMode] ✗ Failed to start sync service:', error?.message || error);
+        }
+      } else {
+        console.log('[EdgeMode] Running in cloud mode (set EDGE_MODE=true for edge mode)');
       }
   });
 
