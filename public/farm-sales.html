@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Farm Sales Terminal</title>
+  <script src="https://web.squarecdn.com/v1/square.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
@@ -788,9 +789,16 @@
           <label for="payment-method">Payment Method</label>
           <select id="payment-method" required>
             <option value="cash">Cash</option>
-            <option value="card">Card</option>
+            <option value="card">Credit/Debit Card</option>
             <option value="gift_card">Gift Card</option>
           </select>
+        </div>
+        
+        <!-- Square Payment Card Container -->
+        <div id="square-card-container" style="display: none; margin-bottom: 1.5rem;">
+          <label style="font-weight: 500; margin-bottom: 0.5rem; display: block;">Card Information</label>
+          <div id="card-container" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: white;"></div>
+          <div id="card-errors" style="color: var(--error); font-size: 0.875rem; margin-top: 0.5rem;"></div>
         </div>
         
         <div class="form-group" id="cash-tendered-group">
@@ -817,6 +825,10 @@
     let userRole = null;
     let cart = [];
     let inventory = [];
+    
+    // Square Payment State
+    let squarePayments = null;
+    let squareCard = null;
     
     // API helper
     async function api(endpoint, options = {}) {
@@ -1115,7 +1127,10 @@
       
       // Calculate totals
       const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
-      const tax = subtotal * 0.08;
+      const taxableSubtotal = cart.reduce((sum, item) => {
+        return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
+      }, 0);
+      const tax = taxableSubtotal * 0.08;
       const total = subtotal + tax;
       
       document.getElementById('cart-subtotal').textContent = `$${subtotal.toFixed(2)}`;
@@ -1131,7 +1146,10 @@
       }
       
       const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
-      const tax = subtotal * 0.08;
+      const taxableSubtotal = cart.reduce((sum, item) => {
+        return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
+      }, 0);
+      const tax = taxableSubtotal * 0.08;
       const total = subtotal + tax;
       
       document.getElementById('checkout-total').textContent = `$${total.toFixed(2)}`;
@@ -1169,12 +1187,21 @@
     }
     
     // Payment method change
-    document.getElementById('payment-method').addEventListener('change', (e) => {
+    document.getElementById('payment-method').addEventListener('change', async (e) => {
       const cashGroup = document.getElementById('cash-tendered-group');
+      const squareContainer = document.getElementById('square-card-container');
+      
       if (e.target.value === 'cash') {
         cashGroup.style.display = 'block';
+        squareContainer.style.display = 'none';
+      } else if (e.target.value === 'card') {
+        cashGroup.style.display = 'none';
+        squareContainer.style.display = 'block';
+        // Initialize Square card component if not already initialized
+        await initializeSquarePayments();
       } else if (e.target.value === 'gift_card') {
         cashGroup.style.display = 'none';
+        squareContainer.style.display = 'none';
         // Auto-expand customer profile if gift card selected
         const fields = document.getElementById('customer-profile-fields');
         const toggleText = document.getElementById('customer-toggle-text');
@@ -1184,15 +1211,56 @@
         }
       } else {
         cashGroup.style.display = 'none';
+        squareContainer.style.display = 'none';
       }
     });
     
     // Cash tendered change
     document.getElementById('cash-tendered').addEventListener('input', calculateChange);
     
+    /**
+     * Initialize Square Web Payments SDK
+     */
+    async function initializeSquarePayments() {
+      if (squareCard) {
+        return; // Already initialized
+      }
+      
+      try {
+        // Get Square credentials from farm configuration
+        const response = await api('/farm/square/status');
+        
+        if (!response.ok || !response.connected) {
+          document.getElementById('card-errors').textContent = 
+            'Square payment processing not configured. Please contact farm administrator.';
+          return;
+        }
+        
+        const { applicationId, locationId } = response.data;
+        
+        // Initialize Square Payments
+        if (!window.Square) {
+          throw new Error('Square SDK not loaded');
+        }
+        
+        squarePayments = window.Square.payments(applicationId, locationId);
+        squareCard = await squarePayments.card();
+        await squareCard.attach('#card-container');
+        
+        console.log('[square] Card component initialized');
+      } catch (error) {
+        console.error('[square] Initialization error:', error);
+        document.getElementById('card-errors').textContent = 
+          `Failed to initialize payment form: ${error.message}`;
+      }
+    }
+    
     function calculateChange() {
       const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
-      const tax = subtotal * 0.08;
+      const taxableSubtotal = cart.reduce((sum, item) => {
+        return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
+      }, 0);
+      const tax = taxableSubtotal * 0.08;
       const total = subtotal + tax;
       const tendered = parseFloat(document.getElementById('cash-tendered').value) || 0;
       const change = tendered - total;
@@ -1218,7 +1286,10 @@
       const cashTendered = parseFloat(document.getElementById('cash-tendered').value) || 0;
       
       const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
-      const tax = subtotal * 0.08;
+      const taxableSubtotal = cart.reduce((sum, item) => {
+        return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
+      }, 0);
+      const tax = taxableSubtotal * 0.08;
       const total = subtotal + tax;
       
       if (paymentMethod === 'cash' && cashTendered < total) {
@@ -1231,6 +1302,35 @@
         document.getElementById('checkout-error').textContent = 'Gift card number required';
         document.getElementById('checkout-error').classList.remove('hidden');
         return;
+      }
+      
+      // Handle card payment tokenization
+      let cardToken = null;
+      if (paymentMethod === 'card') {
+        if (!squareCard) {
+          document.getElementById('checkout-error').textContent = 'Payment form not initialized';
+          document.getElementById('checkout-error').classList.remove('hidden');
+          return;
+        }
+        
+        try {
+          const result = await squareCard.tokenize();
+          if (result.status === 'OK') {
+            cardToken = result.token;
+          } else {
+            let errorMessage = 'Card validation failed';
+            if (result.errors) {
+              errorMessage = result.errors.map(error => error.message).join(', ');
+            }
+            document.getElementById('checkout-error').textContent = errorMessage;
+            document.getElementById('checkout-error').classList.remove('hidden');
+            return;
+          }
+        } catch (error) {
+          document.getElementById('checkout-error').textContent = `Card tokenization error: ${error.message}`;
+          document.getElementById('checkout-error').classList.remove('hidden');
+          return;
+        }
       }
       
       try {
@@ -1248,7 +1348,8 @@
             })),
             payment: {
               method: paymentMethod,
-              tendered: paymentMethod === 'cash' ? cashTendered : null
+              tendered: paymentMethod === 'cash' ? cashTendered : null,
+              card_token: cardToken
             },
             cashier: { name: userRole }
           })

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Farm Online Store</title>
+  <script src="https://web.squarecdn.com/v1/square.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
@@ -602,6 +603,13 @@
           </select>
         </div>
         
+        <!-- Square Payment Card Container -->
+        <div id="square-card-container" style="display: block; margin-bottom: 1.5rem;">
+          <label style="font-weight: 500; margin-bottom: 0.5rem; display: block;">Card Information</label>
+          <div id="card-container" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: white;"></div>
+          <div id="card-errors" style="color: var(--error); font-size: 0.875rem; margin-top: 0.5rem;"></div>
+        </div>
+        
         <div id="gift-card-fields" style="display: none;">
           <div class="form-group">
             <label for="gift-card-number">Gift Card Number</label>
@@ -700,6 +708,10 @@
     let cart = [];
     let inventory = [];
     let subscriptions = [];
+    
+    // Square Payment State
+    let squarePayments = null;
+    let squareCard = null;
     
     // API helper
     async function api(endpoint, options = {}) {
@@ -958,14 +970,71 @@
     });
     
     // Payment method change
-    document.getElementById('payment-method').addEventListener('change', (e) => {
+    document.getElementById('payment-method').addEventListener('change', async (e) => {
       const giftCardFields = document.getElementById('gift-card-fields');
+      const squareContainer = document.getElementById('square-card-container');
+      
       if (e.target.value === 'gift_card') {
         giftCardFields.style.display = 'block';
+        squareContainer.style.display = 'none';
         document.getElementById('gift-card-number').required = true;
+      } else if (e.target.value === 'card') {
+        giftCardFields.style.display = 'none';
+        squareContainer.style.display = 'block';
+        document.getElementById('gift-card-number').required = false;
+        // Initialize Square card component if not already initialized
+        await initializeSquarePayments();
       } else {
         giftCardFields.style.display = 'none';
+        squareContainer.style.display = 'block';
         document.getElementById('gift-card-number').required = false;
+      }
+    });
+    
+    /**
+     * Initialize Square Web Payments SDK
+     */
+    async function initializeSquarePayments() {
+      if (squareCard) {
+        return; // Already initialized
+      }
+      
+      try {
+        // Get Square credentials from farm configuration
+        const response = await api('/farm/square/status');
+        
+        if (!response.ok || !response.connected) {
+          document.getElementById('card-errors').textContent = 
+            'Square payment processing not configured. Please contact farm administrator.';
+          return;
+        }
+        
+        const { applicationId, locationId } = response.data;
+        
+        // Initialize Square Payments
+        if (!window.Square) {
+          throw new Error('Square SDK not loaded');
+        }
+        
+        squarePayments = window.Square.payments(applicationId, locationId);
+        squareCard = await squarePayments.card();
+        await squareCard.attach('#card-container');
+        
+        console.log('[square] Card component initialized');
+      } catch (error) {
+        console.error('[square] Initialization error:', error);
+        document.getElementById('card-errors').textContent = 
+          `Failed to initialize payment form: ${error.message}`;
+      }
+    }
+    
+    // Initialize Square card component on page load (since card is default payment method)
+    window.addEventListener('DOMContentLoaded', () => {
+      // Delay initialization slightly to ensure API is ready
+      setTimeout(() => {
+        initializeSquarePayments();
+      }, 500);
+    });
       }
     });
     
@@ -993,6 +1062,35 @@
         return;
       }
       
+      // Handle card payment tokenization
+      let cardToken = null;
+      if (paymentMethod === 'card') {
+        if (!squareCard) {
+          document.getElementById('checkout-error').textContent = 'Payment form not initialized';
+          document.getElementById('checkout-error').classList.remove('hidden');
+          return;
+        }
+        
+        try {
+          const result = await squareCard.tokenize();
+          if (result.status === 'OK') {
+            cardToken = result.token;
+          } else {
+            let errorMessage = 'Card validation failed';
+            if (result.errors) {
+              errorMessage = result.errors.map(error => error.message).join(', ');
+            }
+            document.getElementById('checkout-error').textContent = errorMessage;
+            document.getElementById('checkout-error').classList.remove('hidden');
+            return;
+          }
+        } catch (error) {
+          document.getElementById('checkout-error').textContent = `Card tokenization error: ${error.message}`;
+          document.getElementById('checkout-error').classList.remove('hidden');
+          return;
+        }
+      }
+      
       try {
         const result = await api('/farm-sales/pos/checkout', {
           method: 'POST',
@@ -1007,7 +1105,8 @@
               quantity: item.quantity
             })),
             payment: {
-              method: paymentMethod
+              method: paymentMethod,
+              card_token: cardToken
             },
             delivery: {
               option: deliveryOption,
