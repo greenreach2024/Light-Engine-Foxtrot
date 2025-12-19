@@ -64,8 +64,8 @@ aws s3api put-public-access-block \
     --public-access-block-configuration \
     "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
 
-echo "5️⃣ Uploading demo files from docs/ folder..."
-aws s3 sync docs/ s3://$BUCKET_NAME/ \
+echo "5️⃣ Uploading demo files from public/ folder..."
+aws s3 sync public/ s3://$BUCKET_NAME/ \
     --delete \
     --cache-control "max-age=3600" \
     --metadata-directive REPLACE
