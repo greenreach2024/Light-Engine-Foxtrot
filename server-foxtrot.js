@@ -2,6 +2,19 @@ import 'dotenv/config';
 import express from "express";
 import { setCorsHeaders } from './server/middleware/cors.js';
 
+// Security middleware
+import { 
+  apiRateLimiter, 
+  authRateLimiter, 
+  writeRateLimiter, 
+  readRateLimiter 
+} from './server/middleware/rate-limiter.js';
+import { 
+  auditMiddleware,
+  logAuditEvent,
+  AuditEventType 
+} from './server/middleware/audit-logger.js';
+
 // Setup console wrapper for demo mode BEFORE any other logs
 import { setupConsoleWrapper } from './server/utils/console-wrapper.js';
 setupConsoleWrapper();
@@ -87,6 +100,25 @@ import SyncService from './lib/sync-service.js';
 import EdgeWholesaleService from './lib/edge-wholesale-service.js';
 
 const app = express();
+
+// Security Configuration
+const RATE_LIMITING_ENABLED = String(process.env.RATE_LIMITING_ENABLED || 'false').toLowerCase() === 'true';
+const AUDIT_LOG_ENABLED = String(process.env.AUDIT_LOG_ENABLED || 'true').toLowerCase() === 'true';
+
+console.log('[Security] Rate limiting enabled:', RATE_LIMITING_ENABLED);
+console.log('[Security] Audit logging enabled:', AUDIT_LOG_ENABLED);
+
+if (RATE_LIMITING_ENABLED) {
+  console.log('[Security] Rate limiting will be applied to:');
+  console.log('  - Auth endpoints: 5 requests per 15 min');
+  console.log('  - Write operations: 30 requests per 15 min');
+  console.log('  - Read operations: 300 requests per 15 min');
+  console.log('  - General API: 100 requests per 15 min');
+}
+
+if (AUDIT_LOG_ENABLED) {
+  console.log('[Security] Audit logging active for sensitive endpoints');
+}
 
 // Initialize sync services (will be started after DB is ready)
 let syncService = null;
@@ -1774,6 +1806,24 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: "1mb" }));
+
+// Apply rate limiting if enabled
+if (RATE_LIMITING_ENABLED) {
+  // Apply general API rate limiting to all /api routes
+  app.use('/api', apiRateLimiter);
+  console.log('[Security] ✅ Rate limiting applied to /api routes');
+}
+
+// Apply audit logging if enabled
+if (AUDIT_LOG_ENABLED) {
+  // Log access to sensitive endpoints
+  app.use(auditMiddleware({
+    sensitiveEndpoints: ['/api/auth', '/api/admin', '/api/farm-auth', '/api/wholesale'],
+    logAllRequests: false,
+  }));
+  console.log('[Security] ✅ Audit logging applied to sensitive endpoints');
+}
+
 app.use(buyerRouter);
 
 // --- ENV store helpers

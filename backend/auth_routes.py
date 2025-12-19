@@ -6,7 +6,7 @@ import os
 import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -16,6 +16,14 @@ from .models.base import get_db, engine, Base
 from .models.user import User, PasswordResetToken
 from .auth import create_access_token
 from .email import EmailService, get_password_reset_template, get_welcome_template
+from .audit_logger import (
+    log_login_success,
+    log_login_failure,
+    log_user_registered,
+    log_password_reset_requested,
+    log_password_reset_completed,
+    log_token_generated,
+)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -67,7 +75,7 @@ class AuthResponse(BaseModel):
 
 # Routes
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest, db: Session = Depends(get_db)) -> AuthResponse:
+async def register(request: RegisterRequest, req: Request, db: Session = Depends(get_db)) -> AuthResponse:
     """
     Register a new user account.
     
@@ -127,6 +135,9 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)) -> A
     db.commit()
     db.refresh(user)
     
+    # Log successful registration
+    log_user_registered(str(user.id), user.email, user.role, req)
+    
     # Send welcome email (optional, non-blocking)
     try:
         login_url = os.getenv("APP_URL", "http://localhost:3000") + "/login"
@@ -162,7 +173,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)) -> A
 
 
 @router.post("/login")
-async def login(request: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
+async def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)) -> AuthResponse:
     """
     Authenticate user and return JWT token.
     
@@ -187,6 +198,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)) -> AuthRes
     user = db.query(User).filter(User.email == request.email).first()
     
     if not user:
+        log_login_failure(request.email, "user_not_found", req)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
@@ -194,6 +206,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)) -> AuthRes
     
     # Verify password
     if not user.verify_password(request.password):
+        log_login_failure(request.email, "invalid_password", req)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
@@ -217,6 +230,9 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)) -> AuthRes
         role=user.role
     )
     
+    # Log successful login
+    log_login_success(str(user.id), user.email, req)
+    
     # Return token and user info
     return AuthResponse(
         access_token=token,
@@ -227,7 +243,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)) -> AuthRes
 
 
 @router.post("/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)) -> dict:
+async def forgot_password(request: ForgotPasswordRequest, req: Request, db: Session = Depends(get_db)) -> dict:
     """
     Initiate password reset flow.
     
@@ -251,10 +267,15 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     # Always return success (don't reveal if email exists)
     # This prevents email enumeration attacks
     if not user:
+        # Log attempt even for non-existent users (security monitoring)
+        log_password_reset_requested(request.email, req)
         return {
             "message": "If that email exists, a password reset link has been sent",
             "email": request.email
         }
+    
+    # Log password reset request for existing user
+    log_password_reset_requested(request.email, req)
     
     # Create password reset token
     reset_token = PasswordResetToken.create_for_user(
@@ -301,7 +322,7 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
 
 
 @router.post("/reset-password")
-async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)) -> dict:
+async def reset_password(request: ResetPasswordRequest, req: Request, db: Session = Depends(get_db)) -> dict:
     """
     Reset user password with valid token.
     
@@ -351,6 +372,9 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     reset_token.mark_as_used()
     
     db.commit()
+    
+    # Log password reset completion
+    log_password_reset_completed(str(user.id), user.email, req)
     
     return {
         "message": "Password successfully reset",
