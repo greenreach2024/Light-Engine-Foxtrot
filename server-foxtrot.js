@@ -84,13 +84,13 @@ import mlAutomation from './lib/ml-automation-controller.js';
 // Edge mode support
 import edgeConfig from './lib/edge-config.js';
 import SyncService from './lib/sync-service.js';
-// import EdgeWholesaleService from './lib/edge-wholesale-service.js'; // TODO: File missing
+import EdgeWholesaleService from './lib/edge-wholesale-service.js';
 
 const app = express();
 
 // Initialize sync services (will be started after DB is ready)
 let syncService = null;
-let wholesaleService = null; // Disabled until edge-wholesale-service.js is available
+let wholesaleService = null;
 
 // --- Kasa and Shelly Search Endpoints ---
 app.post('/plugs/search/kasa', asyncHandler(async (req, res) => {
@@ -19831,15 +19831,15 @@ async function startServer() {
             syncService.start();
             
             // Start wholesale inventory sync service
-            // wholesaleService = new EdgeWholesaleService(db); // Disabled until edge-wholesale-service.js is available
-            // wholesaleService.start();
+            wholesaleService = new EdgeWholesaleService(db);
+            wholesaleService.start();
             
             // Make services globally available for API routes
             global.syncService = syncService;
-            // global.wholesaleService = wholesaleService; // Disabled
+            global.wholesaleService = wholesaleService;
             
             console.log('[EdgeMode] ✓ Sync service started');
-            console.log('[EdgeMode] ⚠ Wholesale sync service disabled - file missing');
+            console.log('[EdgeMode] ✓ Wholesale sync service started');
             console.log(`[EdgeMode] Farm: ${edgeConfig.getFarmName()} (${edgeConfig.getFarmId()})`);
             console.log(`[EdgeMode] Central API: ${edgeConfig.getCentralApiUrl()}`);
             console.log(`[EdgeMode] Heartbeat: ${edgeConfig.getHeartbeatInterval() / 1000}s`);
