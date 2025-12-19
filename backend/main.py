@@ -24,10 +24,21 @@ app = FastAPI(
 # Mount inventory routes
 app.include_router(inventory_router)
 
-# CORS configuration - allow Node.js server to access
+# CORS configuration - restrict to known origins
+ALLOWED_ORIGINS = [
+    "http://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com",
+    "http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com",
+    "https://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com",
+    "https://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com",
+    "http://localhost:8091",  # Local development
+    "http://127.0.0.1:8091",  # Local development
+    "http://localhost:8000",  # Python backend direct access
+    "http://127.0.0.1:8000",  # Python backend direct access
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
