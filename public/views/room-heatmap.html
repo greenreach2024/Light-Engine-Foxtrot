@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Environmental Heat Map - Light Engine Charlie</title>
-  <link rel="stylesheet" href="../styles.foxtrot.css?v=1761427245">
+  <link rel="stylesheet" href="../styles.charlie.css?v=1761427245">
   <!-- Layout v2.0 - Flexbox side-by-side -->
   <style>
     * {
@@ -32,7 +32,8 @@
       align-items: center;
       border-bottom: 2px solid #3b82f6;
       backdrop-filter: blur(10px);
-      z-index: 100;
+      position: relative;
+      z-index: 1001;
     }
 
     .header-left {
@@ -103,6 +104,107 @@
     .btn-primary:hover {
       background: rgba(59, 130, 246, 0.3);
       transform: scale(1.05);
+    }
+
+    /* Dropdown Navigation Menu */
+    .nav-menu {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .nav-item {
+      position: relative;
+    }
+
+    .nav-button, .nav-link-button {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .nav-button:hover, .nav-link-button:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .nav-button.active {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .nav-arrow {
+      font-size: 0.7rem;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-item:hover .nav-arrow {
+      transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 0.5rem;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 2000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .dropdown-menu.dropdown-right {
+      left: auto;
+      right: 0;
+    }
+
+    .nav-item:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: block;
+      padding: 0.75rem 1rem;
+      color: #93c5fd;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .dropdown-item.active {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+      font-weight: 600;
     }
 
     .btn-secondary {
@@ -676,21 +778,52 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn btn-primary" onclick="window.location.href='room-mapper.html'">
-        Edit Layout
-      </button>
-      <button class="btn btn-primary" onclick="window.location.href='farm-summary.html'">
-        Farm Summary
-      </button>
-      <button class="btn btn-primary" onclick="window.location.href='farm-inventory.html'">
-        Farm Inventory
-      </button>
-      <button class="btn btn-primary" onclick="window.location.href='nutrient-management.html'">
-        Nutrient Management
-      </button>
-      <button class="btn btn-admin" onclick="window.location.href='../farm-admin.html'">
-        Admin
-      </button>
+      <nav class="nav-menu">
+        <div class="nav-item">
+          <button class="nav-button">
+            Inventory Management
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
+            <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
+            <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
+            <a href="tray-inventory.html" class="dropdown-item" target="_blank">Tray Assignments</a>
+            <a href="/farm-sales.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button active">
+            Farm Monitoring
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+            <a href="room-heatmap.html" class="dropdown-item active">Heat Map</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Admin
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/farm-admin.html" class="dropdown-item">Admin</a>
+            <a href="/" class="dropdown-item">Setup/Update</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Sales
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu dropdown-right">
+            <a href="/farm-sales.html" class="dropdown-item" target="_blank">Farm Sales Terminal</a>
+            <a href="/farm-sales.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+      </nav>
     </div>
   </div>
 

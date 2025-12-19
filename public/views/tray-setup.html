@@ -12,81 +12,95 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e7;
       min-height: 100vh;
-      padding: 1rem;
+      overflow-x: hidden;
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
     }
 
     .header {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      margin-bottom: 1.5rem;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+      margin-bottom: 2rem;
     }
 
     .header h1 {
-      color: #1f2937;
-      font-size: 1.75rem;
-      margin-bottom: 0.5rem;
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
     }
 
     .header-nav {
       display: flex;
-      gap: 0.75rem;
+      gap: 1rem;
       flex-wrap: wrap;
-      margin-top: 1rem;
     }
 
     .nav-link {
-      padding: 0.5rem 1rem;
-      background: #f3f4f6;
-      border-radius: 6px;
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
       text-decoration: none;
-      color: #374151;
-      font-size: 0.875rem;
-      transition: all 0.2s;
+      display: inline-block;
     }
 
     .nav-link:hover {
-      background: #e5e7eb;
+      background: rgba(59, 130, 246, 0.35);
+      transform: scale(1.05);
     }
 
     .nav-link.active {
-      background: #667eea;
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
       color: white;
     }
 
     .tabs {
       display: flex;
       gap: 1rem;
-      margin-bottom: 1.5rem;
+      margin: 0 2rem 2rem 2rem;
+      flex-wrap: wrap;
     }
 
     .tab-button {
       padding: 0.75rem 1.5rem;
-      background: white;
-      border: none;
+      background: rgba(26, 35, 50, 0.8);
+      border: 2px solid #2d3748;
       border-radius: 8px;
       font-size: 1rem;
+      color: #e4e4e7;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
     }
 
     .tab-button:hover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.2);
       transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
 
     .tab-button.active {
-      background: #667eea;
+      background: rgba(59, 130, 246, 0.3);
+      border-color: #60a5fa;
       color: white;
     }
 
@@ -99,19 +113,23 @@
     }
 
     .card {
-      background: white;
-      border-radius: 12px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      margin-bottom: 1.5rem;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 16px;
+      padding: 2rem;
+      margin: 0 2rem 1.5rem 2rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     }
 
     .card h2 {
-      color: #1f2937;
-      font-size: 1.25rem;
+      font-size: 1.5rem;
       margin-bottom: 1rem;
+      color: #60a5fa;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
       padding-bottom: 0.75rem;
-      border-bottom: 2px solid #e5e7eb;
+      line-height: 1.4;
     }
 
     .form-group {
@@ -120,29 +138,37 @@
 
     .form-group label {
       display: block;
-      color: #374151;
-      font-weight: 500;
-      margin-bottom: 0.5rem;
+      color: #94a3b8;
       font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
     }
 
     .form-group input,
     .form-group select,
     .form-group textarea {
       width: 100%;
-      padding: 0.625rem;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 2px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
       font-size: 1rem;
-      transition: border-color 0.2s;
+      color: #e4e4e7;
+      transition: all 0.2s ease;
     }
 
     .form-group input:focus,
     .form-group select:focus,
     .form-group textarea:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: #3b82f6;
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .form-group select {
+      cursor: pointer;
     }
 
     .form-group textarea {
@@ -171,39 +197,46 @@
       border: none;
       border-radius: 8px;
       font-size: 1rem;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .button-primary {
-      background: #667eea;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
       color: white;
+      border: none;
     }
 
     .button-primary:hover {
-      background: #5568d3;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
       transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
 
     .button-secondary {
-      background: #f3f4f6;
-      color: #374151;
+      background: rgba(45, 55, 72, 0.8);
+      color: #e4e4e7;
+      border: 1px solid #2d3748;
     }
 
     .button-secondary:hover {
-      background: #e5e7eb;
+      background: rgba(45, 55, 72, 1);
+      border-color: #3b82f6;
+      transform: translateY(-2px);
     }
 
     .button-danger {
-      background: #ef4444;
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
       color: white;
+      border: none;
     }
 
     .button-danger:hover {
-      background: #dc2626;
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
     }
 
     .formats-grid {
@@ -214,21 +247,24 @@
     }
 
     .format-card {
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 1rem;
-      transition: all 0.2s;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.3s ease;
     }
 
     .format-card:hover {
-      border-color: #667eea;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+      border-color: rgba(59, 130, 246, 0.5);
+      background: rgba(15, 23, 42, 0.8);
+      transform: translateY(-4px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
 
     .format-card h3 {
-      color: #1f2937;
+      color: #e4e4e7;
       font-size: 1.125rem;
+      font-weight: 600;
       margin-bottom: 0.5rem;
     }
 
@@ -237,11 +273,24 @@
       gap: 1rem;
       margin: 0.5rem 0;
       font-size: 0.875rem;
-      color: #6b7280;
+      color: #9ca3af;
     }
 
     .format-card .badge {
       display: inline-block;
+      padding: 0.25rem 0.5rem;
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .format-card .badge.custom {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border-color: rgba(245, 158, 11, 0.3)e-block;
       padding: 0.25rem 0.5rem;
       background: #dbeafe;
       color: #1e40af;
@@ -251,8 +300,9 @@
     }
 
     .format-card .badge.custom {
-      background: #fef3c7;
-      color: #92400e;
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border-color: rgba(245, 158, 11, 0.3);
     }
 
     .format-card .actions {
@@ -276,18 +326,24 @@
     .trays-table td {
       padding: 0.75rem;
       text-align: left;
-      border-bottom: 1px solid #e5e7eb;
+      border-bottom: 1px solid #2d3748;
     }
 
     .trays-table th {
-      background: #f9fafb;
+      background: rgba(0, 0, 0, 0.3);
       font-weight: 600;
-      color: #374151;
+      color: #9ca3af;
       font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .trays-table td {
+      color: #e4e4e7;
     }
 
     .trays-table tr:hover {
-      background: #f9fafb;
+      background: rgba(59, 130, 246, 0.1);
     }
 
     .status-badge {
@@ -299,35 +355,39 @@
     }
 
     .status-badge.active {
-      background: #d1fae5;
-      color: #065f46;
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.3);
     }
 
     .status-badge.idle {
-      background: #fef3c7;
-      color: #92400e;
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.3);
     }
 
     .status-badge.retired {
-      background: #fee2e2;
-      color: #991b1b;
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.3);
     }
 
     .info-box {
-      background: #eff6ff;
+      background: rgba(59, 130, 246, 0.1);
       border-left: 4px solid #3b82f6;
       padding: 1rem;
       border-radius: 4px;
       margin: 1rem 0;
+      color: #e4e4e7;
     }
 
     .info-box.success {
-      background: #f0fdf4;
+      background: rgba(16, 185, 129, 0.1);
       border-color: #10b981;
     }
 
     .info-box.warning {
-      background: #fffbeb;
+      background: rgba(245, 158, 11, 0.1);
       border-color: #f59e0b;
     }
 
@@ -335,8 +395,8 @@
       display: inline-block;
       width: 20px;
       height: 20px;
-      border: 3px solid #e5e7eb;
-      border-top-color: #667eea;
+      border: 3px solid #2d3748;
+      border-top-color: #3b82f6;
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
     }
@@ -366,15 +426,18 @@
     }
 
     .modal-content {
-      background: white;
+      background: rgba(26, 35, 50, 0.98);
+      border: 1px solid #2d3748;
       border-radius: 12px;
       padding: 2rem;
       max-width: 600px;
       width: 100%;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(10px);
     }
 
     .modal-content h2 {
+      color: #60a5fa;
       margin-bottom: 1.5rem;
     }
 
@@ -411,13 +474,13 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>⚙️ Tray Setup</h1>
-      <p style="color: #6b7280; margin-top: 0.5rem;">Manage tray formats and register physical trays for accurate inventory forecasting</p>
+      <h1>Tray Setup</h1>
       <div class="header-nav">
-        <a href="/" class="nav-link">🏠 Dashboard</a>
-        <a href="/views/tray-inventory.html" class="nav-link">📦 Tray Inventory</a>
-        <a href="/views/tray-setup.html" class="nav-link active">⚙️ Tray Setup</a>
-        <a href="/farm-sales.html" class="nav-link">🔬 Lot Traceability</a>
+        <a href="/farm-admin.html" class="nav-link">Admin</a>
+        <a href="/views/farm-summary.html" class="nav-link">Farm Summary</a>
+        <a href="/views/tray-inventory.html" class="nav-link" target="_blank">Tray Assignments</a>
+        <a href="/views/tray-setup.html" class="nav-link active">Tray Setup</a>
+        <a href="/farm-sales.html" class="nav-link">Lot Traceability</a>
       </div>
     </div>
 
@@ -520,7 +583,7 @@
       <div class="card">
         <h2>Register Physical Tray</h2>
         <div class="info-box warning">
-          <strong>⚠️ Note:</strong> Each physical tray must be registered and assigned a format before use in the scanning tool.
+          <strong>Note:</strong> Each physical tray must be registered and assigned a format before use in the scanning tool.
         </div>
         <form id="register-tray-form">
           <div class="form-group">
@@ -722,11 +785,46 @@
     // Load registered trays
     async function loadTrays() {
       try {
-        // TODO: Create endpoint to list all registered trays with their status
+        const response = await fetch(`${API_BASE}/api/trays`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const trays = await response.json();
         const tbody = document.getElementById('trays-table-body');
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #9ca3af;">No trays registered yet</td></tr>';
+        
+        if (trays.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #9ca3af;">No trays registered yet</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = trays.map(tray => `
+          <tr style="background: #1f2937; border-bottom: 1px solid #374151;">
+            <td style="padding: 1rem; color: #f9fafb;">${tray.qrCode || 'N/A'}</td>
+            <td style="padding: 1rem; color: #f9fafb;">${tray.formatName || 'Unknown'}</td>
+            <td style="padding: 1rem; color: #f9fafb;">${tray.plantSiteCount || 'N/A'}</td>
+            <td style="padding: 1rem; color: #f9fafb;">${tray.forecastedYield || 'N/A'}</td>
+            <td style="padding: 1rem;">
+              <span style="
+                padding: 0.25rem 0.75rem;
+                border-radius: 9999px;
+                font-size: 0.875rem;
+                font-weight: 600;
+                ${tray.status === 'active' ? 'background: #10b981; color: #fff;' : ''}
+                ${tray.status === 'harvested' ? 'background: #6b7280; color: #fff;' : ''}
+                ${tray.status === 'available' ? 'background: #3b82f6; color: #fff;' : ''}
+              ">
+                ${tray.status.charAt(0).toUpperCase() + tray.status.slice(1)}
+              </span>
+            </td>
+            <td style="padding: 1rem; color: #9ca3af;">
+              ${tray.status === 'active' && tray.daysSinceSeeding ? `Day ${tray.daysSinceSeeding}` : '—'}
+              ${tray.currentLocation ? `<br><small>${tray.currentLocation}</small>` : ''}
+            </td>
+          </tr>
+        `).join('');
       } catch (error) {
         console.error('Load trays error:', error);
+        const tbody = document.getElementById('trays-table-body');
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #ef4444;">Error loading trays: ${error.message}</td></tr>`;
       }
     }
 
@@ -761,7 +859,7 @@
         loadFormats();
       } catch (error) {
         console.error('Create format error:', error);
-        alert('❌ Error creating format: ' + error.message);
+        alert('Error creating format: ' + error.message);
       }
     });
 
@@ -787,7 +885,7 @@
         e.target.reset();
       } catch (error) {
         console.error('Register tray error:', error);
-        alert('❌ Error: ' + error.message);
+        alert('Error: ' + error.message);
       }
     });
 
@@ -843,7 +941,7 @@
         closeModal();
         loadFormats();
       } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert('Error: ' + error.message);
       }
     });
 
@@ -861,7 +959,7 @@
         alert('Format deleted');
         loadFormats();
       } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert('Error: ' + error.message);
       }
     }
 

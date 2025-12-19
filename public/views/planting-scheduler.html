@@ -33,6 +33,8 @@
       align-items: center;
       border-bottom: 2px solid #3b82f6;
       backdrop-filter: blur(10px);
+      position: relative;
+      z-index: 1001;
     }
 
     .header h1 {
@@ -65,6 +67,107 @@
     .nav-btn:hover {
       background: rgba(59, 130, 246, 0.35);
       transform: scale(1.05);
+    }
+
+    /* Dropdown Navigation Menu */
+    .nav-menu {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .nav-item {
+      position: relative;
+    }
+
+    .nav-button, .nav-link-button {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .nav-button:hover, .nav-link-button:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .nav-button.active {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .nav-arrow {
+      font-size: 0.7rem;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-item:hover .nav-arrow {
+      transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 0.5rem;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 2000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .dropdown-menu.dropdown-right {
+      left: auto;
+      right: 0;
+    }
+
+    .nav-item:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: block;
+      padding: 0.75rem 1rem;
+      color: #93c5fd;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .dropdown-item.active {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+      font-weight: 600;
     }
 
     .nav-btn.close {
@@ -170,7 +273,7 @@
 
     .summary-card .label {
       color: #94a3b8;
-      font-size: 0.85rem;
+      font-size: 1.1rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       font-weight: 600;
@@ -185,7 +288,7 @@
 
     .summary-card .subvalue {
       color: #cbd5e1;
-      font-size: 0.9rem;
+      font-size: 1.05rem;
       margin-top: 0.25rem;
     }
 
@@ -766,6 +869,225 @@
       background: #64748b;
     }
 
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-content {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-radius: 12px;
+      max-width: 900px;
+      width: 90%;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      animation: slideUp 0.3s ease;
+    }
+
+    .modal-header {
+      padding: 1.5rem 2rem;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #60a5fa;
+      margin: 0;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      line-height: 1;
+      transition: all 0.2s ease;
+    }
+
+    .modal-close:hover {
+      color: #ef4444;
+      transform: scale(1.1);
+    }
+
+    .modal-body {
+      padding: 2rem;
+      overflow-y: auto;
+    }
+
+    .tray-details-grid {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .tray-detail-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 8px;
+      padding: 1.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .tray-detail-card:hover {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: rgba(30, 41, 59, 0.8);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .tray-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .tray-detail-id {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #60a5fa;
+    }
+
+    .tray-detail-urgency {
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .tray-detail-urgency.overdue {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
+    }
+
+    .tray-detail-urgency.urgent {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border: 1px solid #f59e0b;
+    }
+
+    .tray-detail-urgency.soon {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+    }
+
+    .tray-detail-urgency.ready {
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+      border: 1px solid #22c55e;
+    }
+
+    .tray-detail-info {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .tray-detail-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .tray-detail-label {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .tray-detail-value {
+      color: #e4e4e7;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .tray-detail-value.highlight {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .tray-compatibility {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .tray-compatibility-header {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .tray-compatibility-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .compatibility-tag {
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .header {
@@ -794,21 +1116,87 @@
       .adjustment-timeline {
         flex-direction: column;
       }
+
+      .tray-detail-info {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-content {
+        width: 95%;
+        max-height: 90vh;
+      }
+
+      .modal-body {
+        padding: 1rem;
+      }
     }
   </style>
 </head>
 <body>
+  <!-- Tray Details Modal -->
+  <div id="trayDetailsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Tray Details</h2>
+        <button class="modal-close" onclick="closeTrayModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Tray details will be populated here -->
+      </div>
+    </div>
+  </div>
   <!-- Header -->
   <div class="header">
     <div>
       <h1>Planting Scheduler</h1>
     </div>
     <div class="header-actions">
-      <button class="nav-btn" onclick="window.location.href='farm-summary.html'">Farm Summary</button>
-      <button class="nav-btn" onclick="window.location.href='farm-inventory.html'">Farm Inventory</button>
-      <button class="nav-btn" onclick="window.location.href='tray-setup.html'">Tray Setup</button>
-      <button class="nav-btn refresh" onclick="loadSchedulerData()">Refresh</button>
-      <button class="nav-btn close" onclick="window.close()">Close</button>
+      <nav class="nav-menu">
+        <div class="nav-item">
+          <button class="nav-button active">
+            Inventory Management
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="planting-scheduler.html" class="dropdown-item active">Planting Scheduler</a>
+            <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
+            <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
+            <a href="tray-inventory.html" class="dropdown-item" target="_blank">Tray Assignments</a>
+            <a href="/farm-sales.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Farm Monitoring
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+            <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Admin
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/farm-admin.html" class="dropdown-item">Admin</a>
+            <a href="/" class="dropdown-item">Setup/Update</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Sales
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu dropdown-right">
+            <a href="/farm-sales.html" class="dropdown-item" target="_blank">Farm Sales Terminal</a>
+            <a href="/farm-sales.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+      </nav>
     </div>
   </div>
 
@@ -817,28 +1205,28 @@
     <!-- Summary Cards -->
     <div class="summary-grid">
       <div class="summary-card">
-        <div class="icon">CAL</div>
+        <div class="icon"></div>
         <div class="label">Upcoming Seeding Tasks</div>
         <div class="value" id="upcomingTasksCount">0</div>
         <div class="subvalue">Next 14 days</div>
       </div>
 
       <div class="summary-card">
-        <div class="icon">SEED</div>
+        <div class="icon"></div>
         <div class="label">Active Seedling Batches</div>
         <div class="value" id="activeSeedlingsCount">0</div>
         <div class="subvalue">In germination</div>
       </div>
 
       <div class="summary-card">
-        <div class="icon">TRAY</div>
+        <div class="icon"></div>
         <div class="label">Trays Ready for Planting</div>
         <div class="value" id="readyTraysCount">0</div>
         <div class="subvalue">Available slots</div>
       </div>
 
       <div class="summary-card">
-        <div class="icon">PPFD</div>
+        <div class="icon"></div>
         <div class="label">Light Adjustments Needed</div>
         <div class="value" id="lightAdjustmentsCount">0</div>
         <div class="subvalue">For new seedlings</div>
@@ -1685,11 +2073,122 @@
     }
 
     function showVarietyDetails(cropId, ...trayIds) {
-      // Show modal or expanded view with individual tray details
-      console.log('Show details for crop:', cropId, 'trays:', trayIds);
-      // TODO: Implement modal with tray-level details
-      alert(`Showing details for ${trayIds.length} trays. Modal implementation coming soon.`);
+      // Find all tasks for these trays
+      const trayTasks = state.seedingTasks.filter(task => 
+        trayIds.includes(task.trayId) || trayIds.includes(task.id)
+      );
+
+      if (trayTasks.length === 0) {
+        alert('No tray details found.');
+        return;
+      }
+
+      // Get crop name from first task
+      const cropName = trayTasks[0]?.cropName || 'Unknown Crop';
+
+      // Update modal title
+      document.getElementById('modalTitle').textContent = `${cropName} - ${trayTasks.length} Tray${trayTasks.length > 1 ? 's' : ''}`;
+
+      // Build modal content
+      const modalBody = document.getElementById('modalBody');
+      modalBody.innerHTML = `
+        <div class="tray-details-grid">
+          ${trayTasks.map(task => renderTrayDetailCard(task)).join('')}
+        </div>
+      `;
+
+      // Show modal
+      document.getElementById('trayDetailsModal').classList.add('show');
     }
+
+    function renderTrayDetailCard(task) {
+      const urgencyClass = task.urgency || 'ready';
+      const urgencyLabel = {
+        'overdue': 'Overdue',
+        'urgent': 'Urgent',
+        'soon': 'Due Soon',
+        'ready': 'Ready'
+      }[urgencyClass] || 'Ready';
+
+      const seedDate = task.targetSeedDate ? 
+        task.targetSeedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 
+        'Not scheduled';
+
+      const harvestWindow = task.harvestWindow ? 
+        `${task.harvestWindow.earliest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${task.harvestWindow.latest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 
+        'N/A';
+
+      // Compatibility details
+      const compat = task.compatibility || { rating: 'unknown', reasons: [] };
+      const compatDetails = compat.reasons && compat.reasons.length > 0 ? 
+        compat.reasons.join(', ') : 'No compatibility data';
+
+      return `
+        <div class="tray-detail-card">
+          <div class="tray-detail-header">
+            <div class="tray-detail-id">${task.trayId || task.id}</div>
+            <div class="tray-detail-urgency ${urgencyClass}">${urgencyLabel}</div>
+          </div>
+          
+          <div class="tray-detail-info">
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Location</div>
+              <div class="tray-detail-value">${task.location || 'Unknown'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Seedlings</div>
+              <div class="tray-detail-value highlight">${task.quantity?.toLocaleString() || '0'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Target Seed Date</div>
+              <div class="tray-detail-value highlight">${seedDate}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Harvest Window</div>
+              <div class="tray-detail-value">${harvestWindow}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Current Crop</div>
+              <div class="tray-detail-value">${task.currentCrop || 'Empty'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Current Harvest</div>
+              <div class="tray-detail-value">${task.expectedHarvest ? task.expectedHarvest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}</div>
+            </div>
+          </div>
+
+          <div class="tray-compatibility">
+            <div class="tray-compatibility-header">Compatibility</div>
+            <div class="tray-compatibility-details">
+              <span class="compatibility-tag">Rating: ${compat.rating.toUpperCase()}</span>
+              ${compat.reasons && compat.reasons.length > 0 ? 
+                compat.reasons.map(reason => `<span class="compatibility-tag">${reason}</span>`).join('') : 
+                '<span class="compatibility-tag">No details available</span>'
+              }
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function closeTrayModal() {
+      document.getElementById('trayDetailsModal').classList.remove('show');
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', (e) => {
+      const modal = document.getElementById('trayDetailsModal');
+      if (e.target === modal) {
+        closeTrayModal();
+      }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeTrayModal();
+      }
+    });
 
     function renderTrayForecast() {
       const tbody = document.getElementById('trayForecastBody');

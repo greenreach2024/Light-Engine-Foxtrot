@@ -492,7 +492,12 @@
   <!-- Main App -->
   <div id="app">
     <header class="header">
-      <h1>Farm Sales Terminal</h1>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <button class="btn btn-sm btn-secondary" onclick="window.location.href='/views/farm-summary.html'" title="Return to Farm Summary">
+          ← Back to Farm
+        </button>
+        <h1>Farm Sales Terminal</h1>
+      </div>
       <div class="user-info">
         <span class="farm-badge" id="farm-name">Loading...</span>
         <span id="user-role">Manager</span>
@@ -608,11 +613,13 @@
                 <th>Reserved</th>
                 <th>Unit</th>
                 <th>Price</th>
+                <th>Lot Code</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="inventory-table">
               <tr>
-                <td colspan="7" class="loading">Loading inventory...</td>
+                <td colspan="9" class="loading">Loading inventory...</td>
               </tr>
             </tbody>
           </table>
@@ -636,60 +643,33 @@
       <!-- Lot Traceability Tab -->
       <div id="tab-traceability" class="tab-content">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-          <!-- Left Column: Generate Lot -->
+          <!-- Left Column: Recent Harvests -->
           <div>
-            <h2 style="margin-bottom: 1rem;">🏷️ Generate Lot Code</h2>
+            <h2 style="margin-bottom: 1rem;">📦 Recent Harvests</h2>
             <div class="card">
-              <form id="generate-lot-form">
-                <div class="form-group">
-                  <label for="lot-zone">Zone/Room</label>
-                  <input type="text" id="lot-zone" placeholder="e.g., ROOM-A-Z1" required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="lot-crop">Crop Type</label>
-                  <input type="text" id="lot-crop" placeholder="e.g., Lettuce, Basil" required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="lot-variety">Variety (Optional)</label>
-                  <input type="text" id="lot-variety" placeholder="e.g., Butterhead, Sweet">
-                </div>
-                
-                <div class="form-group">
-                  <label for="lot-harvest-date">Harvest Date & Time</label>
-                  <input type="datetime-local" id="lot-harvest-date" required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="lot-quantity">Quantity</label>
-                  <input type="number" id="lot-quantity" min="1" required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="lot-unit">Unit</label>
-                  <select id="lot-unit">
-                    <option value="heads">heads</option>
-                    <option value="lb">lb</option>
-                    <option value="oz">oz</option>
-                    <option value="kg">kg</option>
-                    <option value="units">units</option>
-                  </select>
-                </div>
-                
-                <button type="submit" class="btn btn-primary">Generate Lot Code</button>
-              </form>
+              <p style="margin-bottom: 1rem; color: #6b7280; font-size: 0.9rem;">
+                Lot codes are automatically generated when you harvest trays in <a href="tray-inventory.html" target="_blank" style="color: var(--primary); text-decoration: underline;">Tray Assignments</a>.
+              </p>
               
-              <div id="lot-generated" class="hidden" style="margin-top: 1.5rem; padding: 1rem; background: #e8f5e9; border-radius: 4px; border: 2px solid var(--success);">
-                <h3 style="margin-bottom: 0.5rem; color: var(--success);">✓ Lot Code Generated</h3>
-                <div style="font-size: 1.5rem; font-weight: bold; margin: 1rem 0; font-family: monospace;" id="lot-code-display"></div>
-                <div style="text-align: center; margin: 1rem 0;">
-                  <img id="lot-barcode" alt="Barcode" style="max-width: 100%; height: auto;">
-                </div>
-                <div style="display: flex; gap: 0.5rem;">
-                  <button class="btn btn-secondary btn-sm" onclick="printBarcode()">🖨️ Print Label</button>
-                  <button class="btn btn-sm" onclick="copyLotCode()" style="background: #2196f3; color: white;">📋 Copy Code</button>
-                </div>
+              <button class="btn btn-sm" onclick="loadRecentHarvests()" style="background: #3b82f6; color: white; margin-bottom: 1rem;">
+                🔄 Refresh
+              </button>
+              
+              <div id="recent-harvests-list" style="max-height: 500px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <thead style="position: sticky; top: 0; background: white;">
+                    <tr style="border-bottom: 2px solid #e5e7eb;">
+                      <th style="padding: 0.5rem; text-align: left; font-size: 0.85rem;">Date</th>
+                      <th style="padding: 0.5rem; text-align: left; font-size: 0.85rem;">Crop</th>
+                      <th style="padding: 0.5rem; text-align: left; font-size: 0.85rem;">Lot Code</th>
+                      <th style="padding: 0.5rem; text-align: right; font-size: 0.85rem;">Qty</th>
+                      <th style="padding: 0.5rem; text-align: center; font-size: 0.85rem;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recent-harvests-tbody">
+                    <tr><td colspan="5" style="text-align: center; padding: 2rem; color: #9ca3af;">Loading...</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -719,9 +699,10 @@
                   <tr><td style="font-weight: 500;">Orders:</td><td id="detail-orders"></td></tr>
                 </table>
                 
-                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                  <button class="btn btn-secondary btn-sm" onclick="generateRecallReport()">⚠️ Generate Recall Report</button>
+                <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+                  <button class="btn btn-secondary btn-sm" onclick="generateRecallReport()">⚠️ Recall Report</button>
                   <button class="btn btn-sm" onclick="viewBarcode()" style="background: #2196f3; color: white;">🔬 View Barcode</button>
+                  <button class="btn btn-sm" onclick="printLabel()" style="background: #8b5cf6; color: white;">🏷️ Print Label</button>
                 </div>
               </div>
               
@@ -816,6 +797,36 @@
       </form>
     </div>
   </div>
+
+  <!-- Assign Lot Code Modal -->
+  <div id="assign-lot-modal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2>Assign Lot Code to Product</h2>
+        <button class="modal-close" onclick="closeAssignLotModal()">&times;</button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Product</label>
+          <div id="assign-product-name" style="font-weight: 500; padding: 0.5rem; background: var(--bg); border-radius: 4px;"></div>
+        </div>
+        
+        <div class="form-group">
+          <label>Select Active Lot Code</label>
+          <select id="assign-lot-select" class="form-control">
+            <option value="">-- Select a lot code --</option>
+          </select>
+          <small>Only active lots from recent harvests are shown</small>
+        </div>
+        
+        <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+          <button class="btn btn-secondary" onclick="closeAssignLotModal()" style="flex: 1;">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmAssignLot()" style="flex: 2;">Assign Lot Code</button>
+        </div>
+      </div>
+    </div>
+  </div>
   
   <script>
     // State
@@ -825,6 +836,7 @@
     let userRole = null;
     let cart = [];
     let inventory = [];
+    let currentAssignSku = null;
     
     // Square Payment State
     let squarePayments = null;
@@ -1033,6 +1045,7 @@
         
         // Load data for specific tabs
         if (tabName === 'traceability') {
+          loadRecentHarvests();
           loadRecentLots();
         }
       });
@@ -1065,6 +1078,14 @@
             <td>${product.reserved}</td>
             <td>${product.unit}</td>
             <td>$${product.retail_price.toFixed(2)}</td>
+            <td>
+              ${product.lot_code ? `
+                <span style="font-family: monospace; font-size: 0.85rem; background: var(--accent); padding: 2px 6px; border-radius: 4px;">${product.lot_code}</span>
+              ` : '<span style="color: var(--text-light); font-size: 0.85rem;">No lot</span>'}
+            </td>
+            <td>
+              <button class="btn btn-sm" onclick="assignLotCode('${product.sku_id}')" style="font-size: 0.8rem; padding: 4px 8px;">🏷️ Assign Lot</button>
+            </td>
           </tr>
         `).join('');
       } catch (error) {
@@ -1672,8 +1693,152 @@
         alert('Failed to copy: ' + err.message);
       });
     }
+
+    // Print professional label (2x4 inch for thermal printers)
+    function printLabel() {
+      if (!currentLotCode) {
+        alert('No lot code to print');
+        return;
+      }
+      
+      const url = `/api/farm-sales/lots/${encodeURIComponent(currentLotCode)}/label?format=png`;
+      const printWindow = window.open(url, '_blank', 'width=900,height=500');
+      if (printWindow) {
+        printWindow.addEventListener('load', () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+        });
+      }
+    }
+
+    // Assign lot code to product
+    async function assignLotCode(skuId) {
+      currentAssignSku = skuId;
+      const product = inventory.find(p => p.sku_id === skuId);
+      if (!product) return;
+      
+      document.getElementById('assign-product-name').textContent = `${product.name} (${product.sku_id})`;
+      
+      // Load active lot codes
+      try {
+        const data = await api('/farm-sales/lots?status=active');
+        const select = document.getElementById('assign-lot-select');
+        select.innerHTML = '<option value="">-- Select a lot code --</option>' + 
+          data.lots.map(lot => `
+            <option value="${lot.lot_code}">
+              ${lot.lot_code} - ${lot.crop_type}${lot.variety ? ' - ' + lot.variety : ''} (${lot.quantity} ${lot.unit})
+            </option>
+          `).join('');
+        
+        document.getElementById('assign-lot-modal').classList.add('active');
+      } catch (error) {
+        alert('Failed to load lot codes: ' + error.message);
+      }
+    }
+
+    function closeAssignLotModal() {
+      document.getElementById('assign-lot-modal').classList.remove('active');
+      currentAssignSku = null;
+    }
+
+    async function confirmAssignLot() {
+      const lotCode = document.getElementById('assign-lot-select').value;
+      if (!lotCode) {
+        alert('Please select a lot code');
+        return;
+      }
+      
+      try {
+        // Update inventory item with lot code
+        const product = inventory.find(p => p.sku_id === currentAssignSku);
+        if (product) {
+          product.lot_code = lotCode;
+          
+          // Update in farmStores (in-memory for now)
+          // In production, this should update the inventory database
+          await api(`/farm-sales/inventory/${currentAssignSku}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ lot_code: lotCode })
+          });
+          
+          // Reload inventory to show changes
+          await loadInventory();
+          
+          alert(`Lot code ${lotCode} assigned to ${product.name}`);
+          closeAssignLotModal();
+        }
+      } catch (error) {
+        alert('Failed to assign lot code: ' + error.message);
+      }
+    }
     
     // Load recent lots
+    async function loadRecentHarvests() {
+      try {
+        const response = await fetch(`${API_BASE}/api/tray-runs/recent-harvests`);
+        const data = await response.json();
+        
+        const tbody = document.getElementById('recent-harvests-tbody');
+        
+        if (!data.harvests || data.harvests.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #9ca3af;">No recent harvests found</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = data.harvests.map(harvest => {
+          const harvestDate = new Date(harvest.harvested_at);
+          const formattedDate = harvestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const cropName = harvest.recipe_id ? harvest.recipe_id.split('-')[0] : 'Unknown';
+          
+          return `
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+              <td style="padding: 0.75rem; font-size: 0.875rem;">${formattedDate}</td>
+              <td style="padding: 0.75rem; font-size: 0.875rem;">${cropName}</td>
+              <td style="padding: 0.75rem; font-family: monospace; font-size: 0.85rem; font-weight: 500; color: #10b981;">${harvest.lot_code}</td>
+              <td style="padding: 0.75rem; text-align: right; font-size: 0.875rem;">${harvest.harvested_count || '-'}</td>
+              <td style="padding: 0.75rem; text-align: center;">
+                <button class="btn btn-sm" onclick="viewHarvestBarcode('${harvest.lot_code}')" 
+                        style="background: #3b82f6; color: white; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                  🏷️ Label
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (error) {
+        console.error('Failed to load recent harvests:', error);
+        document.getElementById('recent-harvests-tbody').innerHTML = 
+          '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #ef4444;">Error loading harvests</td></tr>';
+      }
+    }
+    
+    function viewHarvestBarcode(lotCode) {
+      const barcodeUrl = `${API_BASE}/api/farm-sales/lots/${lotCode}/barcode?format=CODE128`;
+      const printWindow = window.open('', '_blank', 'width=600,height=400');
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print Barcode - ${lotCode}</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 2rem; }
+              h2 { margin-bottom: 1rem; }
+              img { max-width: 100%; margin: 1rem 0; }
+              button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+            </style>
+          </head>
+          <body>
+            <h2>Lot Code: ${lotCode}</h2>
+            <img src="${barcodeUrl}" alt="Barcode">
+            <br>
+            <button onclick="window.print()">🖨️ Print</button>
+            <button onclick="window.close()">Close</button>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+
     async function loadRecentLots() {
       try {
         const data = await api('/farm-sales/lots?status=active');

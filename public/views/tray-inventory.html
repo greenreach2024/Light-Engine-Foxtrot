@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tray Inventory | Light Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Tray Assignments | Light Engine</title>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -17,11 +18,24 @@
       color: #f8fafc;
       min-height: 100vh;
       padding: 1rem;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     .container {
-      max-width: 600px;
+      max-width: 800px;
       margin: 0 auto;
+    }
+
+    /* Tablet optimizations */
+    @media (min-width: 768px) {
+      body {
+        padding: 1.5rem;
+      }
+      
+      .container {
+        max-width: 900px;
+      }
     }
 
     .header {
@@ -87,34 +101,69 @@
 
     .action-card {
       background: rgba(30, 41, 59, 0.8);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 12px;
-      padding: 1.5rem;
+      border: 2px solid rgba(148, 163, 184, 0.2);
+      border-radius: 16px;
+      padding: 2rem;
       cursor: pointer;
       transition: all 0.3s ease;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
-    .action-card:hover {
+    .action-card:hover,
+    .action-card:active {
       background: rgba(30, 41, 59, 1);
       border-color: rgba(96, 165, 250, 0.5);
       transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(96, 165, 250, 0.2);
     }
 
     .action-card h2 {
-      font-size: 1.25rem;
-      margin-bottom: 0.5rem;
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 1rem;
     }
 
     .action-card .icon {
-      font-size: 2rem;
+      font-size: 2.5rem;
     }
 
     .action-card p {
       color: #94a3b8;
-      font-size: 0.9rem;
+      font-size: 1.05rem;
+      line-height: 1.5;
+    }
+
+    /* Tablet optimizations for action cards */
+    @media (min-width: 768px) {
+      .action-card {
+        padding: 2.5rem;
+        min-height: 140px;
+      }
+      
+      .action-card h2 {
+        font-size: 1.75rem;
+      }
+      
+      .action-car600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    /* Tablet optimizations for modal */
+    @media (min-width: 768px) {
+      .modal-content {
+        max-width: 750px;
+        border-radius: 20px;
+      }
+        font-size: 1.15rem;
+      }
     }
 
     .modal {
@@ -168,40 +217,83 @@
       padding: 1.5rem;
     }
 
-    .scan-step {
-      display: none;
-    }
-
-    .scan-step.active {
-      display: block;
-    }
-
-    #qrReader {
+    .scan-ste,
+    #qrReaderPlace,
+    #qrReaderLocation,
+    #qrReaderHarvest {
       width: 100%;
-      border-radius: 8px;
+      border-radius: 12px;
       overflow: hidden;
-      margin-bottom: 1rem;
+      margin-bottom: 1.5rem;
+      min-height: 300px;
+      background: rgba(15, 23, 42, 0.8);
     }
 
-    .button {
+    /* Tablet optimizations for QR scanner */
+    @media (min-width: 768px) {
+      #qrReader,
+      #qrReaderPlace,
+      #qrReaderLocation,
+      #qrReaderHarvest {
+        min-height: 400px;
+        border-radius: 16px;
+      }
+    }
+
+    .button {,
+    .button-primary:active {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    .button-secondary {
+      background: rgba(148, 163, 184, 0.2);
+      color: #f8fafc;
+      margin-top: 0.75rem;
+    }
+
+    .button-secondary:hover,
+    .button-secondary:active
+
+    /* Tablet optimizations for buttons */
+    @media (min-width: 768px) {
+      .button {
+        padding: 1.25rem 2rem;
+        font-size: 1.25rem;
+        border-radius: 14px;
+        min-height: 64px;
+      }
       width: 100%;
       padding: 0.75rem 1.5rem;
       border: none;
       border-radius: 8px;
       font-size: 1rem;
       font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
+      cursor: p1rem;
+      background: rgba(15, 23, 42, 0.8);
+      border: 2px solid rgba(148, 163, 184, 0.3);
+      border-radius: 10px;
+      color: #f8fafc;
+      font-size: 1.125rem;
+      min-height: 54px;
     }
 
-    .button-primary {
-      background: linear-gradient(90deg, #3b82f6, #2563eb);
-      color: white;
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
 
-    .button-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    /* Tablet optimizations for inputs */
+    @media (min-width: 768px) {
+      .form-group input,
+      .form-group select {
+        padding: 1.25rem;
+        font-size: 1.25rem;
+        border-radius: 12px;
+        min-height: 64px;
+      } rgba(59, 130, 246, 0.4);
     }
 
     .button-secondary {
@@ -347,40 +439,95 @@
     .back-link:hover {
       text-decoration: underline;
     }
+
+    /* Camera permission notice */
+    .camera-notice {
+      background: rgba(59, 130, 246, 0.1);
+      border: 2px solid rgba(59, 130, 246, 0.3);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+
+    .camera-notice.error {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .camera-notice.success {
+      background: rgba(34, 197, 94, 0.1);
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    .camera-notice h4 {
+      font-size: 1.125rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .camera-notice p {
+      font-size: 0.95rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+
+    .camera-notice.error p {
+      color: #fca5a5;
+    }
+
+    /* Tablet optimizations for camera notice */
+    @media (min-width: 768px) {
+      .camera-notice {
+        padding: 1.5rem;
+        border-radius: 14px;
+      }
+      
+      .camera-notice h4 {
+        font-size: 1.25rem;
+      }
+      
+      .camera-notice p {
+        font-size: 1.05rem;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="nav-bar">
-      <a href="/">Dashboard</a>
-      <a href="/views/tray-inventory.html" class="active">Tray Inventory</a>
+      <a href="/">Setup/Update</a>
+      <a href="/views/tray-inventory.html" class="active">Tray Assignments</a>
       <a href="/views/tray-setup.html">Tray Setup</a>
       <a href="/farm-sales.html">Lot Traceability</a>
     </div>
     
     <div class="header">
-      <h1>Tray Inventory</h1>
+      <h1>Tray Assignments</h1>
       <p>Scan QR codes to manage tray lifecycle</p>
     </div>
 
     <div class="action-cards">
       <div class="action-card" onclick="openSeedingFlow()">
-        <h2><span class="icon">+</span> Seed New Tray</h2>
+        <h2><span class="icon"></span> Seed New Tray</h2>
         <p>Scan tray QR, select crop recipe, record seed date</p>
       </div>
 
       <div class="action-card" onclick="openPlacementFlow()">
-        <h2><span class="icon">📍</span> Move Tray</h2>
+        <h2><span class="icon"></span> Move Tray</h2>
         <p>Scan tray and location QR to update placement</p>
       </div>
 
       <div class="action-card" onclick="openHarvestFlow()">
-        <h2><span class="icon">🌾</span> Record Harvest</h2>
+        <h2><span class="icon"></span> Record Harvest</h2>
         <p>Scan tray QR and record harvest details</p>
       </div>
 
       <div class="action-card" onclick="window.location.href='/views/farm-inventory.html'">
-        <h2><span class="icon">&#9776;</span> View Inventory</h2>
+        <h2><span class="icon"></span> View Inventory</h2>
         <p>See current inventory and harvest forecast</p>
       </div>
     </div>
@@ -523,6 +670,25 @@
             <label>Notes (optional)</label>
             <input type="text" id="harvestNote" placeholder="Quality, issues, observations">
           </div>
+          
+          <!-- Custom Lot Code Option -->
+          <div class="form-group" style="margin-top: 1.5rem; padding: 1rem; background: #f9fafb; border-radius: 4px;">
+            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 500;">
+              <input type="checkbox" id="useCustomLotCode" style="margin-right: 0.5rem;" onchange="toggleCustomLotCode()">
+              Use Custom Lot Code
+            </label>
+            <p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.5rem;">
+              For mixed batches or special orders. By default, lots are auto-generated and batched with similar harvests.
+            </p>
+            <div id="customLotCodeInput" style="display: none; margin-top: 0.75rem;">
+              <input type="text" id="customLotCode" placeholder="e.g., CUSTOM-MIXED-251219-001" 
+                     style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px; font-family: monospace;">
+              <p style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">
+                Format: ZONE-CROP-YYMMDD-BATCH (letters, numbers, hyphens only)
+              </p>
+            </div>
+          </div>
+          
           <button class="button button-primary" onclick="recordHarvest()">Record Harvest</button>
         </div>
 
@@ -567,6 +733,9 @@
         qrScanner.stop().catch(err => console.error('Error stopping scanner:', err));
         qrScanner = null;
       }
+      // Clean up camera notices
+      const notices = document.querySelectorAll('#cameraNotice');
+      notices.forEach(notice => notice.remove());
     }
 
     function showStep(modalId, stepNum) {
@@ -589,18 +758,83 @@
       const element = document.getElementById(elementId);
       element.innerHTML = '';
       
+      // Add camera permission notice
+      const notice = document.createElement('div');
+      notice.id = 'cameraNotice';
+      notice.className = 'camera-notice';
+      notice.innerHTML = `
+        <h4>📷 Camera Access Required</h4>
+        <p>Please allow camera access when prompted to scan QR codes.<br>
+        <small>On iOS: Settings → Safari → Camera → Allow</small></p>
+      `;
+      element.parentNode.insertBefore(notice, element);
+      
       qrScanner = new Html5Qrcode(elementId);
+      
+      // Request camera with better error handling
       qrScanner.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        onSuccess,
+        { 
+          fps: 10, 
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0
+        },
+        (decodedText) => {
+          // Update notice on successful scan
+          notice.className = 'camera-notice success';
+          notice.innerHTML = `
+            <h4>✅ Scan Successful</h4>
+            <p>Processing QR code...</p>
+          `;
+          onSuccess(decodedText);
+        },
         (errorMessage) => {
-          // Ignore scan failures, only show success
+          // Ignore scan failures (camera is still active)
         }
-      ).catch(err => {
+      ).then(() => {
+        // Camera started successfully
+        notice.className = 'camera-notice success';
+        notice.innerHTML = `
+          <h4>✅ Camera Active</h4>
+          <p>Position QR code within the frame to scan</p>
+        `;
+      }).catch(err => {
         console.error('Scanner error:', err);
-        document.getElementById('scanStatus').innerHTML = 
-          '<span style="color: #ef4444;">Camera not available. Use manual entry.</span>';
+        
+        // Detailed error messages
+        let errorMsg = 'Camera not available. ';
+        let errorDetail = '';
+        
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          errorMsg = '🚫 Camera Permission Denied';
+          errorDetail = `Please allow camera access in your browser settings.<br>
+            <strong>iOS/iPadOS:</strong> Settings → Safari → Camera → Allow<br>
+            <strong>Android:</strong> Settings → Apps → Browser → Permissions → Camera`;
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          errorMsg = '📷 No Camera Found';
+          errorDetail = 'No camera detected on this device. Use manual entry below.';
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          errorMsg = '⚠️ Camera In Use';
+          errorDetail = 'Camera is being used by another application. Close other apps and try again.';
+        } else if (err.name === 'OverconstrainedError') {
+          errorMsg = '⚠️ Camera Not Compatible';
+          errorDetail = 'Camera does not support required settings. Try manual entry below.';
+        } else {
+          errorMsg = '⚠️ Camera Error';
+          errorDetail = `${err.message || 'Unknown error occurred'}. Use manual entry below.`;
+        }
+        
+        notice.className = 'camera-notice error';
+        notice.innerHTML = `
+          <h4>${errorMsg}</h4>
+          <p>${errorDetail}</p>
+        `;
+        
+        // Show status message
+        const statusEl = document.getElementById('scanStatus');
+        if (statusEl) {
+          statusEl.innerHTML = `<span style="color: #ef4444;">${errorMsg}</span>`;
+        }
       });
     }
 
@@ -898,14 +1132,28 @@
           '<span style="color: #ef4444;">❌ Error loading tray data. Try again.</span>';
       }
     }
+    
+    // Toggle custom lot code input
+    function toggleCustomLotCode() {
+      const checkbox = document.getElementById('useCustomLotCode');
+      const inputDiv = document.getElementById('customLotCodeInput');
+      inputDiv.style.display = checkbox.checked ? 'block' : 'none';
+    }
 
     async function recordHarvest() {
       const harvestDate = document.getElementById('harvestDate').value;
       const harvestCount = document.getElementById('harvestCount').value;
       const harvestNote = document.getElementById('harvestNote').value;
+      const useCustomLot = document.getElementById('useCustomLotCode').checked;
+      const customLotCode = document.getElementById('customLotCode').value.trim();
       
       if (!harvestDate) {
         alert('Please select a harvest date');
+        return;
+      }
+      
+      if (useCustomLot && !customLotCode) {
+        alert('Please enter a custom lot code or uncheck the custom option');
         return;
       }
       
@@ -961,28 +1209,65 @@
           }
         }
         
-        // Step 1: Generate lot code
-        const lotPayload = {
-          zone_id: harvestTrayData.placement?.locationQr || 'ZONE-UNKNOWN',
-          crop_type: parseRecipeCrop(harvestTrayData.recipeId),
-          variety: parseRecipeVariety(harvestTrayData.recipeId),
-          harvest_date: new Date(harvestDate).toISOString(),
-          quantity: parseInt(harvestCount) || harvestTrayData.plantedSiteCount,
-          unit: actualWeight ? weightUnit : 'heads'
-        };
+        // Step 1: Generate or use custom lot code
+        let lotCode;
         
-        const lotResp = await fetch(`${API_BASE}/api/farm-sales/lots/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(lotPayload)
-        });
-        
-        if (!lotResp.ok) {
-          throw new Error('Failed to generate lot code');
+        if (useCustomLot) {
+          // Use custom lot code (skip batching)
+          lotCode = customLotCode;
+          
+          // Validate and store custom lot in tracking system
+          const lotPayload = {
+            zone_id: harvestTrayData.placement?.locationQr || 'CUSTOM',
+            crop_type: parseRecipeCrop(harvestTrayData.recipeId),
+            variety: parseRecipeVariety(harvestTrayData.recipeId),
+            harvest_date: new Date(harvestDate).toISOString(),
+            quantity: parseInt(harvestCount) || harvestTrayData.plantedSiteCount,
+            unit: actualWeight ? weightUnit : 'heads',
+            force_new: true,
+            custom_lot_code: customLotCode,
+            tray_run_id: harvestTrayRunId
+          };
+          
+          const lotResp = await fetch(`${API_BASE}/api/farm-sales/lots/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(lotPayload)
+          });
+          
+          if (!lotResp.ok) {
+            throw new Error('Failed to register custom lot code');
+          }
+        } else {
+          // Auto-generate with smart batching
+          const lotPayload = {
+            zone_id: harvestTrayData.placement?.locationQr || 'ZONE-UNKNOWN',
+            crop_type: parseRecipeCrop(harvestTrayData.recipeId),
+            variety: parseRecipeVariety(harvestTrayData.recipeId),
+            harvest_date: new Date(harvestDate).toISOString(),
+            quantity: parseInt(harvestCount) || harvestTrayData.plantedSiteCount,
+            unit: actualWeight ? weightUnit : 'heads',
+            tray_run_id: harvestTrayRunId
+          };
+          
+          const lotResp = await fetch(`${API_BASE}/api/farm-sales/lots/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(lotPayload)
+          });
+          
+          if (!lotResp.ok) {
+            throw new Error('Failed to generate lot code');
+          }
+          
+          const lotData = await lotResp.json();
+          lotCode = lotData.lot_code;
+          
+          // Show batching notification
+          if (lotData.batched) {
+            console.log(`✓ Harvest batched into existing lot: ${lotCode}`);
+          }
         }
-        
-        const lotData = await lotResp.json();
-        const lotCode = lotData.lot_code;
         
         // Step 2: Record harvest with lot code
         const harvestPayload = {
@@ -1035,11 +1320,14 @@
 
     function printBarcode() {
       const lotCode = document.getElementById('confirmLotCode').textContent;
-      const barcodeUrl = `${API_BASE}/api/farm-sales/lots/${lotCode}/barcode?format=CODE128&width=4&height=200`;
-      const printWindow = window.open(barcodeUrl, '_blank', 'width=400,height=300');
+      // Use professional label instead of simple barcode
+      const labelUrl = `${API_BASE}/api/farm-sales/lots/${lotCode}/label?format=png`;
+      const printWindow = window.open(labelUrl, '_blank', 'width=900,height=500');
       if (printWindow) {
         printWindow.onload = () => {
-          printWindow.print();
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
         };
       }
     }
