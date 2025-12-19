@@ -10,9 +10,9 @@ import {
   readRateLimiter 
 } from './server/middleware/rate-limiter.js';
 import { 
-  auditMiddleware,
-  logAuditEvent,
-  AuditEventType 
+  auditMiddleware as securityAuditMiddleware,
+  logAuditEvent as securityLogAuditEvent,
+  AuditEventType as SecurityAuditEventType
 } from './server/middleware/audit-logger.js';
 import { getJwtSecret } from './server/utils/secrets-manager.js';
 
@@ -1818,7 +1818,7 @@ if (RATE_LIMITING_ENABLED) {
 // Apply audit logging if enabled
 if (AUDIT_LOG_ENABLED) {
   // Log access to sensitive endpoints
-  app.use(auditMiddleware({
+  app.use(securityAuditMiddleware({
     sensitiveEndpoints: ['/api/auth', '/api/admin', '/api/farm-auth', '/api/wholesale'],
     logAllRequests: false,
   }));
