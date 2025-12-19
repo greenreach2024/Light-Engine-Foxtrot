@@ -68,9 +68,10 @@ services:
     working_dir: /app
     volumes:
       - ./:/app
-    command: sh -lc "npm ci || npm install && node server-charlie.js"
+    command: sh -lc "npm ci || npm install && node server-foxtrot.js"
     environment:
       - NODE_ENV=production
+      - PORT=8091
     ports:
       - "8091:8091"
     depends_on:
