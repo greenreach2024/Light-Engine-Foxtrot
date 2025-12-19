@@ -1,0 +1,12 @@
+{
+  "equipment": [],
+  "categories": [
+    "Lighting",
+    "HVAC",
+    "Irrigation",
+    "Sensors",
+    "Controllers"
+  ],
+  "lastUpdated": null,
+  "version": "1.0.0"
+}

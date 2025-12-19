@@ -27,12 +27,12 @@ import {
 } from './server/middleware/demo-mode-handler.js';
 
 // Initialize demo mode immediately at module load
-console.log('[foxtrot] 🎬 Module loading - initializing demo mode...');
+console.log('[charlie] 🎬 Module loading - initializing demo mode...');
 try {
   initializeDemoMode();
-  console.log('[foxtrot]  Demo mode initialized at module scope');
+  console.log('[charlie]  Demo mode initialized at module scope');
 } catch (error) {
-  console.error('[foxtrot]  Demo mode initialization failed:', error?.message || error);
+  console.error('[charlie]  Demo mode initialization failed:', error?.message || error);
 }
 
 import { createProxyMiddleware } from "http-proxy-middleware";
@@ -71,20 +71,26 @@ import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-w
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
 import wholesaleSquareOAuthRouter from './routes/wholesale/square-oauth.js';
 import wholesaleSLAPoliciesRouter from './routes/wholesale/sla-policies.js';
+import farmSquareSetupRouter from './routes/farm-square-setup.js';
+import farmStoreSetupRouter from './routes/farm-store-setup.js';
+import edgeRouter from './routes/edge.js';
 import auditLogger, { auditMiddleware, createAuditRoutes } from './lib/wholesale/audit-logger.js';
 import { checkAndControlEnvironment } from './controller/checkAndControlEnvironment.js';
 import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
 import anomalyHistory from './lib/anomaly-history.js';
 import mlAutomation from './lib/ml-automation-controller.js';
+
+// Edge mode support
 import edgeConfig from './lib/edge-config.js';
 import SyncService from './lib/sync-service.js';
-import edgeRouter from './routes/edge.js';
-
-let syncService = null;
-
+import EdgeWholesaleService from './lib/edge-wholesale-service.js';
 
 const app = express();
+
+// Initialize sync services (will be started after DB is ready)
+let syncService = null;
+let wholesaleService = null;
 
 // --- Kasa and Shelly Search Endpoints ---
 app.post('/plugs/search/kasa', asyncHandler(async (req, res) => {
@@ -170,9 +176,9 @@ const __dirname = path.dirname(__filename);
 const STRICT_DEVICE_VALIDATION = ['1', 'true', 'yes'].includes(String(process.env.STRICT_DEVICE_VALIDATION || '').toLowerCase());
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const BUILD_TIME = Date.now().toString();
-const INDEX_FOXTROT_PATH = path.join(PUBLIC_DIR, 'index.foxtrot.html');
-let INDEX_FOXTROT_HTML = null;
-let indexFoxtrotLoadErrorLogged = false;
+const INDEX_CHARLIE_PATH = path.join(PUBLIC_DIR, 'index.charlie.html');
+let INDEX_CHARLIE_HTML = null;
+let indexCharlieLoadErrorLogged = false;
 
 // Demo data helper so /data/*.json can fall back even if demo middleware is skipped
 function loadDemoFarmSnapshot() {
@@ -363,15 +369,21 @@ let __zoneBindingsSnapshot = { bindings: [], meta: { source: 'init', bindings: 0
 let __zoneBindingsTimer = null;
 
 function loadIndexCharlieHtml() {
-  if (INDEX_FOXTROT_HTML) return INDEX_FOXTROT_HTML;
+  // Always reload in production to ensure latest version is served after deployments
+  const shouldCache = process.env.NODE_ENV === 'development' && INDEX_CHARLIE_HTML;
+  if (shouldCache) return INDEX_CHARLIE_HTML;
+  
   try {
-    const template = fs.readFileSync(INDEX_FOXTROT_PATH, 'utf8');
-    INDEX_FOXTROT_HTML = template.replace(/\{\{BUILD_TIME\}\}/g, BUILD_TIME);
-    return INDEX_FOXTROT_HTML;
+    const template = fs.readFileSync(INDEX_CHARLIE_PATH, 'utf8');
+    const html = template.replace(/\{\{BUILD_TIME\}\}/g, BUILD_TIME);
+    if (process.env.NODE_ENV === 'development') {
+      INDEX_CHARLIE_HTML = html; // Only cache in development
+    }
+    return html;
   } catch (error) {
-    if (!indexFoxtrotLoadErrorLogged) {
-      indexFoxtrotLoadErrorLogged = true;
-      console.error('[foxtrot] Failed to load index.foxtrot.html:', error?.message || error);
+    if (!indexCharlieLoadErrorLogged) {
+      indexCharlieLoadErrorLogged = true;
+      console.error('[charlie] Failed to load index.charlie.html:', error?.message || error);
     }
     return null;
   }
@@ -1588,7 +1600,7 @@ function persistControllerToDisk(url){
   } catch {}
 }
 function getController(){ return CURRENT_CONTROLLER; }
-function setController(url){ CURRENT_CONTROLLER = url; persistControllerToDisk(url); console.log(`[foxtrot] controller set → ${url}`); }
+function setController(url){ CURRENT_CONTROLLER = url; persistControllerToDisk(url); console.log(`[charlie] controller set → ${url}`); }
 
 // Initialize controller from disk if available
 loadControllerFromDisk();
@@ -1623,7 +1635,7 @@ function setForwarder(url) {
   if (!url) {
     CURRENT_FORWARDER = null;
     persistForwarderToDisk(null);
-    console.log('[foxtrot] forwarder cleared');
+    console.log('[charlie] forwarder cleared');
     return;
   }
   if (typeof url !== 'string' || !isHttpUrl(url)) {
@@ -1632,7 +1644,7 @@ function setForwarder(url) {
   const normalized = url.trim().replace(/\/+$/, '');
   CURRENT_FORWARDER = normalized;
   persistForwarderToDisk(normalized);
-  console.log(`[foxtrot] forwarder set → ${normalized}`);
+  console.log(`[charlie] forwarder set → ${normalized}`);
 }
 
 function getNetworkBridgeUrl() {
@@ -1664,7 +1676,7 @@ async function maybeAutoDetectLocalController() {
         const res = await fetch(`${normalized}/healthz`, { method: 'GET', signal: ac.signal });
         if (res.ok) {
           setController(normalized);
-          console.log(`[foxtrot] auto-detected Python backend controller at ${normalized}`);
+          console.log(`[charlie] auto-detected Python backend controller at ${normalized}`);
           return;
         }
       } finally {
@@ -1673,7 +1685,7 @@ async function maybeAutoDetectLocalController() {
     } catch (error) {
       const message = error?.message || String(error);
       if (process.env.NODE_ENV === 'development') {
-        console.debug(`[foxtrot] Python backend candidate ${candidate} unavailable: ${message}`);
+        console.debug(`[charlie] Python backend candidate ${candidate} unavailable: ${message}`);
       }
     }
   }
@@ -1684,7 +1696,7 @@ async function maybeAutoDetectLocalController() {
 if (!RUNNING_UNDER_NODE_TEST && !hasPersistedController) {
   maybeAutoDetectLocalController().catch((error) => {
     const message = error?.message || String(error);
-    console.debug('[foxtrot] python backend auto-detect failed:', message);
+    console.debug('[charlie] python backend auto-detect failed:', message);
   });
 }
 
@@ -5363,9 +5375,9 @@ async function seedDevicesFromMetaNedb(store){
       };
     });
     await store.insert(rows);
-    console.log(`[foxtrot] seeded ${rows.length} device(s) from device-meta.json`);
+    console.log(`[charlie] seeded ${rows.length} device(s) from device-meta.json`);
   } catch (e) {
-    console.warn('[foxtrot] seedDevicesFromMeta (NeDB) failed:', e.message);
+    console.warn('[charlie] seedDevicesFromMeta (NeDB) failed:', e.message);
   }
 }
 
@@ -5375,7 +5387,7 @@ const devicesStore = createDeviceStore();
   try {
     await seedDevicesFromMetaNedb(devicesStore);
   } catch (error) {
-    console.warn('[foxtrot] Device seeding failed:', error.message);
+    console.warn('[charlie] Device seeding failed:', error.message);
   }
 })();
 
@@ -5749,7 +5761,7 @@ app.get('/devices', createDemoModeHandler(), async (req, res) => {
     if (isDemoMode()) {
       const demoData = getDemoData();
       const devices = demoData.getDevices();
-      console.log('[foxtrot] Demo mode: serving demo devices (' + devices.length + ' devices)');
+      console.log('[charlie] Demo mode: serving demo devices (' + devices.length + ' devices)');
       return res.json({ devices });
     }
     
@@ -6595,7 +6607,7 @@ app.get("/api/switchbot/status", asyncHandler(async (req, res) => {
 app.get("/api/switchbot/devices/:deviceId/status", asyncHandler(async (req, res) => {
   try {
     const { deviceId } = req.params;
-    console.log(`[foxtrot] Fetching status for device: ${deviceId}`);
+    console.log(`[charlie] Fetching status for device: ${deviceId}`);
 
     const force = ['1', 'true', 'yes'].includes(String(req.query.refresh || '').toLowerCase());
     const result = await fetchSwitchBotDeviceStatus(deviceId, { force });
@@ -6633,7 +6645,7 @@ app.post("/api/switchbot/devices/:deviceId/commands", async (req, res) => {
     const { deviceId } = req.params;
     const { command, parameter } = req.body;
     
-    console.log(`[foxtrot] Sending command to device ${deviceId}: ${command} ${parameter || ''}`);
+    console.log(`[charlie] Sending command to device ${deviceId}: ${command} ${parameter || ''}`);
     
     const commandData = {
       command: command,
@@ -8083,6 +8095,42 @@ app.use('/api/wholesale/refunds', wholesaleRefundsRouter);
 app.use('/api/wholesale/oauth/square', wholesaleSquareOAuthRouter);
 
 /**
+ * Farm: Square Payment Processing Setup
+ * - GET /api/farm/square/status: Check if farm has Square connected
+ * - POST /api/farm/square/authorize: Generate OAuth URL for farm's Square account
+ * - GET /api/farm/square/callback: Handle OAuth callback from Square
+ * - POST /api/farm/square/settings: Save payment processing settings
+ * - POST /api/farm/square/disconnect: Disconnect farm's Square account
+ * - POST /api/farm/square/test-payment: Test payment in sandbox mode
+ */
+app.use('/api/farm/square', farmSquareSetupRouter);
+
+/**
+ * Farm: Online Store Setup and Deployment
+ * - GET /api/farm/store/status: Check farm store configuration status
+ * - POST /api/farm/store/subdomain/check: Check if subdomain is available
+ * - POST /api/farm/store/domain/validate: Validate custom domain
+ * - POST /api/farm/store/setup: Configure farm store
+ * - POST /api/farm/store/deploy: Deploy farm store to production
+ * - POST /api/farm/store/update: Update store configuration
+ * - POST /api/farm/store/unpublish: Take store offline
+ */
+app.use('/api/farm/store', farmStoreSetupRouter);
+
+/**
+ * Edge: Configuration and Status
+ * - GET /api/edge/status: Get edge mode status and connection state
+ * - GET /api/edge/config: Get edge configuration
+ * - PUT /api/edge/config: Update edge configuration  
+ * - POST /api/edge/register: Register farm with GreenReach Central
+ * - POST /api/edge/mode: Switch between edge and cloud mode
+ * - GET /api/edge/queue: Get sync queue status
+ * - POST /api/edge/queue/clear: Clear sync queue
+ * - POST /api/edge/sync/manual: Trigger manual sync
+ */
+app.use('/api/edge', edgeRouter);
+
+/**
  * GreenReach: Fulfillment Webhooks (receives from Light Engine)
  * - POST /api/wholesale/webhooks/fulfillment: Receive farm fulfillment status updates
  * - GET /api/wholesale/webhooks/fulfillment/notifications: List buyer notifications
@@ -8107,9 +8155,6 @@ app.use('/api/wholesale/sla', wholesaleSLAPoliciesRouter);
 app.use('/api/wholesale/substitution', wholesaleSLAPoliciesRouter);
 app.use('/api/wholesale/buyer/preferences', wholesaleSLAPoliciesRouter);
 
-
-// Edge Mode Configuration API
-app.use('/api/edge', edgeRouter);
 /**
  * GreenReach: Audit Logging
  * Comprehensive audit trail for compliance and debugging
@@ -9681,7 +9726,7 @@ app.get('/api/geocode', async (req, res) => {
     if (!address) return res.status(400).json({ ok: false, error: 'Address parameter required' });
     const encodedAddress = encodeURIComponent(address);
     const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=5`;
-    const response = await fetch(geocodeUrl, { headers: { 'User-Agent': 'Light-Engine-Foxtrot/1.0 (Farm Management System)' } });
+    const response = await fetch(geocodeUrl, { headers: { 'User-Agent': 'Light-Engine-Charlie/1.0 (Farm Management System)' } });
     if (!response.ok) throw new Error(`Geocoding API error: ${response.status}`);
     const data = await response.json();
     const results = data.map(item => ({ display_name: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon), formatted_address: item.display_name }));
@@ -9730,7 +9775,7 @@ app.get('/api/reverse-geocode', async (req, res) => {
     const { lat, lng } = req.query;
     if (!lat || !lng) return res.status(400).json({ ok: false, error: 'Latitude and longitude required' });
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'Light-Engine-Foxtrot/1.0 (Farm Management System)' } });
+    const r = await fetch(url, { headers: { 'User-Agent': 'Light-Engine-Charlie/1.0 (Farm Management System)' } });
     if (!r.ok) throw new Error(`Reverse geocoding error: ${r.status}`);
     const data = await r.json();
     const addr = data.address || {};
@@ -10947,18 +10992,22 @@ function streamLiveFile(res, filePath, type) {
 app.get('/tmp/live.index.html', (req, res) => {
   const html = loadIndexCharlieHtml();
   if (html) {
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.type('html').send(html);
     return;
   }
   const fallbackPath = path.join(PUBLIC_DIR, 'index.html');
-  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.type('html');
   res.sendFile(fallbackPath);
 });
 
 app.get('/tmp/live.app.new.js', (req, res) => {
-  const filePath = path.join(PUBLIC_DIR, 'app.foxtrot.js');
+  const filePath = path.join(PUBLIC_DIR, 'app.charlie.js');
   streamLiveFile(res, filePath, 'application/javascript');
 });
 
@@ -11202,7 +11251,8 @@ grow3Router.all('*', async (req, res) => {
 });
 
 app.use('/grow3', grow3Router);
-console.log('[Grow3 Proxy] Router mounted at /grow3');
+app.use('/api/grow3', grow3Router); // Also handle /api/grow3/api/* requests
+console.log('[Grow3 Proxy] Router mounted at /grow3 and /api/grow3');
 
 // Test Grow3/controller connection endpoint - MUST be before /api proxy
 app.get('/api/test-controller', async (req, res) => {
@@ -11332,7 +11382,7 @@ async function fetchFarmData(url, timeout = 5000) {
       signal: controller.signal,
       headers: { 
         'Accept': 'application/json',
-        'User-Agent': 'Light-Engine-Foxtrot-Central/1.0'
+        'User-Agent': 'Light-Engine-Charlie-Central/1.0'
       }
     });
     clearTimeout(timeoutId);
@@ -12526,6 +12576,156 @@ app.get('/api/recipes', (req, res) => {
 });
 
 /**
+ * GET /api/trays
+ * List all registered trays with their status and details
+ */
+app.get('/api/trays', async (req, res) => {
+  try {
+    const db = await getDb();
+    
+    // Query all trays with their format details and latest run information
+    const trays = await db.all(`
+      SELECT 
+        t.tray_id,
+        t.qr_code_value,
+        t.tray_format_id,
+        t.created_at,
+        t.updated_at,
+        tf.format_name,
+        tf.plant_site_count,
+        tf.is_weight_based,
+        tf.weight_unit,
+        tf.target_weight_per_site,
+        CASE 
+          WHEN tr.tray_run_id IS NOT NULL AND tr.harvested_at IS NULL THEN 'active'
+          WHEN tr.tray_run_id IS NOT NULL AND tr.harvested_at IS NOT NULL THEN 'harvested'
+          ELSE 'available'
+        END as status,
+        tr.tray_run_id as current_run_id,
+        tr.recipe_id as current_recipe,
+        tr.seeded_at,
+        tr.planted_site_count,
+        CAST((julianday('now') - julianday(tr.seeded_at)) AS INTEGER) as days_since_seeding,
+        tp.location_qr as current_location
+      FROM trays t
+      LEFT JOIN tray_formats tf ON t.tray_format_id = tf.tray_format_id
+      LEFT JOIN (
+        SELECT * FROM tray_runs 
+        WHERE tray_run_id IN (
+          SELECT tray_run_id FROM tray_runs 
+          GROUP BY tray_id 
+          HAVING MAX(created_at)
+        )
+      ) tr ON t.tray_id = tr.tray_id
+      LEFT JOIN (
+        SELECT * FROM tray_placements
+        WHERE placement_id IN (
+          SELECT placement_id FROM tray_placements
+          GROUP BY tray_run_id
+          HAVING MAX(placed_at)
+        )
+      ) tp ON tr.tray_run_id = tp.tray_run_id
+      ORDER BY t.created_at DESC
+    `);
+
+    // Calculate forecasted yield for each tray
+    const traysWithYield = trays.map(tray => {
+      let forecastedYield = null;
+      if (tray.format_name && tray.plant_site_count) {
+        if (tray.is_weight_based && tray.target_weight_per_site) {
+          const totalWeight = tray.plant_site_count * tray.target_weight_per_site;
+          forecastedYield = `${totalWeight.toFixed(1)} ${tray.weight_unit || 'oz'}`;
+        } else {
+          const successRate = 0.9; // 90% success rate
+          forecastedYield = `${Math.floor(tray.plant_site_count * successRate)} heads`;
+        }
+      }
+
+      return {
+        trayId: tray.tray_id,
+        qrCode: tray.qr_code_value,
+        formatId: tray.tray_format_id,
+        formatName: tray.format_name,
+        plantSiteCount: tray.plant_site_count,
+        forecastedYield,
+        status: tray.status,
+        currentRunId: tray.current_run_id,
+        currentRecipe: tray.current_recipe,
+        currentLocation: tray.current_location,
+        seededAt: tray.seeded_at,
+        plantedSiteCount: tray.planted_site_count,
+        daysSinceSeeding: tray.days_since_seeding,
+        createdAt: tray.created_at,
+        updatedAt: tray.updated_at
+      };
+    });
+
+    res.json(traysWithYield);
+  } catch (error) {
+    console.error('[trays] Error listing trays:', error);
+    res.status(500).json({ error: 'Failed to list trays', details: error.message });
+  }
+});
+
+/**
+ * GET /api/tray-runs/recent-harvests
+ * Get recent harvests with lot codes from the last 7 days
+ */
+app.get('/api/tray-runs/recent-harvests', async (req, res) => {
+  try {
+    const db = await getDb();
+    
+    // Query tray runs that have been harvested with lot codes in the last 7 days
+    const harvests = await db.all(`
+      SELECT 
+        tr.tray_run_id,
+        tr.recipe_id,
+        tr.lot_code,
+        tr.harvested_at,
+        tr.harvested_count,
+        tr.actual_weight,
+        tr.weight_unit,
+        tp.location_qr as zone,
+        t.qr_code_value as tray_qr
+      FROM tray_runs tr
+      LEFT JOIN trays t ON tr.tray_id = t.tray_id
+      LEFT JOIN (
+        SELECT tray_run_id, location_qr, placed_at
+        FROM tray_placements
+        WHERE placement_id IN (
+          SELECT MAX(placement_id) 
+          FROM tray_placements 
+          GROUP BY tray_run_id
+        )
+      ) tp ON tr.tray_run_id = tp.tray_run_id
+      WHERE tr.lot_code IS NOT NULL 
+        AND tr.harvested_at IS NOT NULL
+        AND tr.harvested_at > datetime('now', '-7 days')
+      ORDER BY tr.harvested_at DESC
+      LIMIT 50
+    `);
+
+    res.json({ 
+      success: true, 
+      harvests: harvests.map(h => ({
+        trayRunId: h.tray_run_id,
+        recipeId: h.recipe_id,
+        lotCode: h.lot_code,
+        harvestedAt: h.harvested_at,
+        harvestedCount: h.harvested_count,
+        actualWeight: h.actual_weight,
+        weightUnit: h.weight_unit,
+        zone: h.zone,
+        trayQr: h.tray_qr
+      }))
+    });
+  } catch (error) {
+    console.error('[tray-runs] Error fetching recent harvests:', error);
+    res.status(500).json({ error: 'Failed to fetch recent harvests', details: error.message });
+  }
+});
+
+/**
  * POST /api/trays/register
  * Register a new tray in the system
  */
@@ -12998,23 +13198,29 @@ app.use('/controller', proxyCorsMiddleware, createProxyMiddleware({
 app.get('/tmp/live.index.html', (req, res) => {
   const html = loadIndexCharlieHtml();
   if (html) {
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.type('html').send(html);
     return;
   }
-  res.setHeader('Cache-Control', 'no-store, max-age=0');
-  res.type('html').sendFile(path.join(__dirname, 'public', 'index.foxtrot.html'));
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.type('html').sendFile(path.join(__dirname, 'public', 'index.charlie.html'));
 });
 
-app.get('/tmp/live.app.foxtrot.js', (req, res) => {
-  res.type('text').sendFile(path.join(__dirname, 'public', 'app.foxtrot.js'));
+app.get('/tmp/live.app.charlie.js', (req, res) => {
+  res.type('text').sendFile(path.join(__dirname, 'public', 'app.charlie.js'));
 });
 
 // Static files
-app.get(['/', '/index.foxtrot.html'], (req, res, next) => {
+app.get(['/', '/index.charlie.html'], (req, res, next) => {
   const html = loadIndexCharlieHtml();
   if (!html) return next();
-  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.type('html').send(html);
 });
 
@@ -13022,7 +13228,9 @@ app.get(['/', '/index.foxtrot.html'], (req, res, next) => {
 app.get('/index.html', (req, res, next) => {
   const html = loadIndexCharlieHtml();
   if (!html) return next();
-  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.type('html').send(html);
 });
 
@@ -13701,7 +13909,25 @@ app.use((req, res, next) => {
 });
 
 // Serve static files (AFTER demo middleware so demo data takes precedence)
-app.use(express.static(PUBLIC_DIR));
+// Add cache control headers to force fresh content
+app.use(express.static(PUBLIC_DIR, {
+  setHeaders: (res, path) => {
+    // Force no-cache for HTML files to ensure latest UI
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    // Cache JS/CSS for 1 hour but allow revalidation
+    else if (path.endsWith('.js') || path.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    }
+    // Cache images/fonts longer
+    else if (path.match(/\.(jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot)$/)) {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  }
+}));
 
 // Do NOT serve docs/ directory statically - it's only for AWS S3 deployment
 // The docs/ folder contains the AWS demo version with fetch interceptors that break local development
@@ -13824,7 +14050,7 @@ app.get('/api/geocode', async (req, res) => {
     
     const response = await fetch(geocodeUrl, {
       headers: {
-        'User-Agent': 'Light-Engine-Foxtrot/1.0 (Farm Management System)'
+        'User-Agent': 'Light-Engine-Charlie/1.0 (Farm Management System)'
       }
     });
     
@@ -13900,7 +14126,7 @@ app.get('/ifttt/v1/user/info', (req, res) => {
   res.json({
     data: {
       name: "Light Engine Charlie",
-      id: "light_engine_foxtrot_user"
+      id: "light_engine_charlie_user"
     }
   });
 });
@@ -18697,7 +18923,7 @@ async function resolveAvailablePort(initialPort) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (await isPortAvailable(candidate)) {
       if (candidate !== initialPort) {
-        console.warn(`[foxtrot] Port ${initialPort} in use, falling back to ${candidate}.`);
+        console.warn(`[charlie] Port ${initialPort} in use, falling back to ${candidate}.`);
       }
       return candidate;
     }
@@ -19473,45 +19699,45 @@ app.post('/api/bus-mapping', asyncHandler(async (req, res) => {
 
 
 async function startServer() {
-  console.log('[foxtrot]  startServer() called');
+  console.log('[charlie]  startServer() called');
   try {
     const resolvedPort = await resolveAvailablePort(PORT);
     PORT = resolvedPort;
-    console.log('[foxtrot]  Port resolved:', PORT);
+    console.log('[charlie]  Port resolved:', PORT);
   } catch (error) {
     if (error && error.code === 'EADDRINUSE') {
-      console.error(`[foxtrot] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
+      console.error(`[charlie] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
     } else {
-      console.error('[foxtrot] Failed to determine available port:', error?.message || error);
+      console.error('[charlie] Failed to determine available port:', error?.message || error);
     }
     process.exit(1);
   }
 
   // Initialize demo mode if enabled
-  console.log('[foxtrot]  About to call initializeDemoMode()...');
+  console.log('[charlie]  About to call initializeDemoMode()...');
   try {
     initializeDemoMode();
-    console.log('[foxtrot]  initializeDemoMode() completed');
+    console.log('[charlie]  initializeDemoMode() completed');
   } catch (error) {
-    console.error('[foxtrot]  Demo mode initialization failed:', error?.message || error);
-    console.error('[foxtrot] Stack trace:', error?.stack);
+    console.error('[charlie]  Demo mode initialization failed:', error?.message || error);
+    console.error('[charlie] Stack trace:', error?.stack);
   }
 
   // Pre-startup diagnostics
-  console.log('[foxtrot]  Starting server...');
-  console.log('[foxtrot] PORT:', PORT);
-  console.log('[foxtrot] NODE_ENV:', process.env.NODE_ENV);
-  console.log('[foxtrot] DEMO_MODE:', process.env.DEMO_MODE);
-  console.log('[foxtrot] Controller:', getController());
-  console.log('[foxtrot] Forwarder:', getForwarder());
+  console.log('[charlie]  Starting server...');
+  console.log('[charlie] PORT:', PORT);
+  console.log('[charlie] NODE_ENV:', process.env.NODE_ENV);
+  console.log('[charlie] DEMO_MODE:', process.env.DEMO_MODE);
+  console.log('[charlie] Controller:', getController());
+  console.log('[charlie] Forwarder:', getForwarder());
 
   SERVER = app.listen(PORT, '0.0.0.0', () => {
     const address = SERVER.address();
-    console.log(`[foxtrot]  Server successfully started on ${address.address}:${address.port}`);
-    console.log(`[foxtrot] running http://127.0.0.1:${PORT} → ${getController()}`);
-    console.log(`[foxtrot] Demo mode check: isDemoMode() = ${isDemoMode()}`);
+    console.log(`[charlie]  Server successfully started on ${address.address}:${address.port}`);
+    console.log(`[charlie] running http://127.0.0.1:${PORT} → ${getController()}`);
+    console.log(`[charlie] Demo mode check: isDemoMode() = ${isDemoMode()}`);
     if (isDemoMode()) {
-      console.log(`[foxtrot] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
+      console.log(`[charlie] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
     }
     try { setupWeatherPolling(); } catch {}
     
@@ -19600,17 +19826,25 @@ async function startServer() {
             const dbPath = path.join(__dirname, 'lightengine.db');
             const db = new sqlite3.Database(dbPath);
             
+            // Start data sync service
             syncService = new SyncService(db);
             syncService.start();
             
-            // Make sync service globally available for API routes
+            // Start wholesale inventory sync service
+            wholesaleService = new EdgeWholesaleService(db);
+            wholesaleService.start();
+            
+            // Make services globally available for API routes
             global.syncService = syncService;
+            global.wholesaleService = wholesaleService;
             
             console.log('[EdgeMode] ✓ Sync service started');
+            console.log('[EdgeMode] ✓ Wholesale sync service started');
             console.log(`[EdgeMode] Farm: ${edgeConfig.getFarmName()} (${edgeConfig.getFarmId()})`);
             console.log(`[EdgeMode] Central API: ${edgeConfig.getCentralApiUrl()}`);
             console.log(`[EdgeMode] Heartbeat: ${edgeConfig.getHeartbeatInterval() / 1000}s`);
-            console.log(`[EdgeMode] Sync: ${edgeConfig.getSyncInterval() / 1000 / 60}min`);
+            console.log(`[EdgeMode] Data Sync: ${edgeConfig.getSyncInterval() / 1000 / 60}min`);
+            console.log(`[EdgeMode] Wholesale Sync: every 15 minutes`);
           }).catch((error) => {
             console.error('[EdgeMode] ✗ Failed to import sqlite3:', error?.message || error);
           });
@@ -19624,16 +19858,16 @@ async function startServer() {
 
   // Add error handler for server startup failures
   SERVER.on('error', (error) => {
-    console.error('[foxtrot]  Server startup failed:', error);
-    console.error('[foxtrot] Error code:', error.code);
-    console.error('[foxtrot] Error message:', error.message);
-    console.error('[foxtrot] Stack trace:', error.stack);
+    console.error('[charlie]  Server startup failed:', error);
+    console.error('[charlie] Error code:', error.code);
+    console.error('[charlie] Error message:', error.message);
+    console.error('[charlie] Stack trace:', error.stack);
     
     // Specific error diagnostics
     if (error.code === 'EADDRINUSE') {
-      console.error(`[foxtrot] Port ${PORT} is already in use. Try a different port or kill the process using it.`);
+      console.error(`[charlie] Port ${PORT} is already in use. Try a different port or kill the process using it.`);
     } else if (error.code === 'EACCES') {
-      console.error(`[foxtrot] Permission denied to bind to port ${PORT}. Ports below 1024 require root/admin privileges.`);
+      console.error(`[charlie] Permission denied to bind to port ${PORT}. Ports below 1024 require root/admin privileges.`);
     }
     
     process.exit(1);
@@ -19641,9 +19875,9 @@ async function startServer() {
 
   SERVER.on('error', (error) => {
     if (error && error.code === 'EADDRINUSE') {
-      console.error(`[foxtrot] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
+      console.error(`[charlie] Port ${PORT} is already in use. Stop the other process or set PORT to a free value.`);
     } else {
-      console.error('[foxtrot] Server failed to start:', error?.message || error);
+      console.error('[charlie] Server failed to start:', error?.message || error);
     }
     process.exit(1);
   });
@@ -19652,7 +19886,7 @@ async function startServer() {
 // Start the server after all routes are defined when executed directly
 if (process.argv[1] === __filename) {
   startServer().catch((error) => {
-    console.error('[foxtrot] Unexpected startup failure:', error?.message || error);
+    console.error('[charlie] Unexpected startup failure:', error?.message || error);
     process.exit(1);
   });
 }

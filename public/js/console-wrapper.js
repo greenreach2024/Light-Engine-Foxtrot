@@ -14,11 +14,12 @@
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('demo') === 'true') return true;
     
-    // Check localStorage
-    if (localStorage.getItem('demoMode') === 'true') return true;
+    // Check localStorage (explicit opt-in only)
+    if (localStorage.getItem('suppressConsole') === 'true') return true;
     
-    // Check if deployed on demo domain
-    if (window.location.hostname.includes('demo')) return true;
+    // Check if deployed on PRODUCTION demo domain (not localhost)
+    if (window.location.hostname.includes('elasticbeanstalk.com') && 
+        window.location.hostname.includes('demo')) return true;
     
     return false;
   }
@@ -67,12 +68,17 @@
   window.__originalConsole = originalConsole;
   
   // Add a way to temporarily enable logging
-  window.enableConsole = function() {
+  window.enableConsole = function(permanent = false) {
     Object.assign(console, originalConsole);
-    console.log(' Console logging re-enabled');
+    if (permanent) {
+      localStorage.setItem('suppressConsole', 'false');
+      console.log('✅ Console logging re-enabled permanently');
+    } else {
+      console.log('✅ Console logging re-enabled for this session');
+    }
   };
 
-  window.disableConsole = function() {
+  window.disableConsole = function(permanent = false) {
     console.log = noop;
     console.info = noop;
     console.debug = noop;
@@ -80,10 +86,16 @@
     console.table = noop;
     console.group = noop;
     console.groupEnd = noop;
-    originalConsole.log('🤫 Console logging disabled');
+    if (permanent) {
+      localStorage.setItem('suppressConsole', 'true');
+      originalConsole.log('🤫 Console logging disabled permanently');
+    } else {
+      originalConsole.log('🤫 Console logging disabled for this session');
+    }
   };
 
   // Log that we've activated (using original console before suppressing)
   originalConsole.log('🤫 Demo mode detected - console output suppressed');
-  originalConsole.log(' Run window.enableConsole() to temporarily enable logging');
+  originalConsole.log('💡 Run window.enableConsole() to temporarily enable logging');
+  originalConsole.log('💡 Run window.enableConsole(true) to permanently enable logging');
 })();
