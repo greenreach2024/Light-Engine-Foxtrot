@@ -13029,7 +13029,11 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.use('/api', proxyCorsMiddleware, createProxyMiddleware({
+// Only set up proxy middleware if controller is not explicitly disabled
+const isControllerDisabled = process.env.CTRL === 'DISABLED' || process.env.CTRL === 'disabled' || process.env.CTRL === 'false';
+if (!isControllerDisabled) {
+  console.log('[Foxtrot] Controller proxy enabled, target:', getController());
+  app.use('/api', proxyCorsMiddleware, createProxyMiddleware({
   // Initial target is required; router() will be consulted per-request
   target: getController(),
   router: () => getController(),
@@ -13138,17 +13142,21 @@ app.use('/api', proxyCorsMiddleware, createProxyMiddleware({
     res.end(JSON.stringify({ error: 'proxy_error', detail: String(err) }));
   }
 }));
+} else {
+  console.log('[Foxtrot] Controller proxy disabled (standalone mode)');
+}
 
 // Namespaced pass-through for controller-bound helpers (e.g., /controller/sched)
-app.use('/controller', (req, res, next) => {
-  if (controllerCircuit.isOpen()) {
-    const retryAfter = Math.max(0, Math.floor((controllerCircuit.openUntil - Date.now()) / 1000));
-    return res.status(503).json({ error: 'controller_unavailable', retryAfter });
-  }
-  next();
-});
+if (!isControllerDisabled) {
+  app.use('/controller', (req, res, next) => {
+    if (controllerCircuit.isOpen()) {
+      const retryAfter = Math.max(0, Math.floor((controllerCircuit.openUntil - Date.now()) / 1000));
+      return res.status(503).json({ error: 'controller_unavailable', retryAfter });
+    }
+    next();
+  });
 
-app.use('/controller', proxyCorsMiddleware, createProxyMiddleware({
+  app.use('/controller', proxyCorsMiddleware, createProxyMiddleware({
   target: getController(),
   router: () => getController(),
   changeOrigin: true,
@@ -13193,6 +13201,7 @@ app.use('/controller', proxyCorsMiddleware, createProxyMiddleware({
     res.end(JSON.stringify({ error: 'proxy_error', target: 'controller', detail: String(err) }));
   }
 }));
+}
 
 // Dev-only live asset snapshots for cache validation
 app.get('/tmp/live.index.html', (req, res) => {
