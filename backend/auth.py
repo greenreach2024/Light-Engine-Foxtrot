@@ -12,8 +12,10 @@ import jwt
 from fastapi import Depends, HTTPException, Header, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from backend.secrets_manager import get_jwt_secret
+
 # JWT Configuration
-JWT_SECRET = os.getenv("JWT_SECRET", "CHANGE_ME_IN_PRODUCTION")
+JWT_SECRET = get_jwt_secret()
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 

@@ -14,6 +14,7 @@ import {
   logAuditEvent,
   AuditEventType 
 } from './server/middleware/audit-logger.js';
+import { getJwtSecret } from './server/utils/secrets-manager.js';
 
 // Setup console wrapper for demo mode BEFORE any other logs
 import { setupConsoleWrapper } from './server/utils/console-wrapper.js';
