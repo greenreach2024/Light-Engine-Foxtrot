@@ -849,4 +849,58 @@ router.get('/network/recommendations', (req, res) => {
   return res.json({ status: 'ok', data: generateNetworkRecommendations({ recentOrders }) });
 });
 
+// ============================================================================
+// ADMIN ENDPOINTS - Payment Management
+// ============================================================================
+
+router.get('/admin/orders', (req, res) => {
+  try {
+    const orders = listAllOrders();
+    return res.json({ status: 'ok', orders });
+  } catch (error) {
+    console.error('Admin list orders error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to load orders' });
+  }
+});
+
+router.post('/admin/orders/:orderId/payment', express.json(), (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status, payment_reference, payment_method, marked_at } = req.body;
+
+    if (!orderId || !status || !payment_reference) {
+      return res.status(400).json({ status: 'error', message: 'orderId, status, and payment_reference are required' });
+    }
+
+    // In limited mode, orders are in memory - update the order directly
+    const orders = listAllOrders();
+    const order = orders.find(o => o.master_order_id === orderId);
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    // Update payment status
+    order.payment_status = status;
+    order.payment_reference = payment_reference;
+    order.payment_method = payment_method;
+    order.payment_marked_at = marked_at;
+
+    console.log(`[Wholesale Admin] Order ${orderId} marked as ${status} - Reference: ${payment_reference}`);
+
+    return res.json({
+      status: 'ok',
+      message: 'Payment status updated',
+      order: {
+        master_order_id: order.master_order_id,
+        payment_status: order.payment_status,
+        payment_reference: order.payment_reference
+      }
+    });
+  } catch (error) {
+    console.error('Admin update payment error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to update payment status' });
+  }
+});
+
 export default router;

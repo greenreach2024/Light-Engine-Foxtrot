@@ -620,9 +620,63 @@
     },
 
     async loadOrders() {
-      // Preserve existing behavior (no backend admin orders view yet).
-      document.getElementById('orders-list').innerHTML =
-        '<div class="empty-state">Order history endpoint not yet implemented. Orders are currently stored in-memory in checkout module.</div>';
+      try {
+        const response = await fetch('/api/wholesale/admin/orders');
+        if (!response.ok) {
+          document.getElementById('orders-list').innerHTML =
+            '<div class="empty-state">Order history endpoint not yet implemented. Orders are currently stored in-memory.</div>';
+          return;
+        }
+        
+        const data = await response.json();
+        const orders = data.orders || [];
+        
+        if (orders.length === 0) {
+          document.getElementById('orders-list').innerHTML =
+            '<div class="empty-state">No orders yet</div>';
+          return;
+        }
+        
+        // Render orders table
+        const html = `
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Buyer</th>
+                <th>Created</th>
+                <th>Total</th>
+                <th>Broker Fee</th>
+                <th>Status</th>
+                <th>Payment</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${orders.map(order => `
+                <tr>
+                  <td>${order.master_order_id.substring(0, 12)}...</td>
+                  <td>${order.buyer_account?.businessName || order.buyer_id}</td>
+                  <td>${new Date(order.created_at).toLocaleString()}</td>
+                  <td>$${(order.grand_total || 0).toFixed(2)}</td>
+                  <td>$${(order.broker_fee_total || 0).toFixed(2)}</td>
+                  <td><span class="badge ${order.status}">${order.status}</span></td>
+                  <td><span class="badge ${order.payment_status || 'pending'}">${order.payment_status || 'pending'}</span></td>
+                  <td>
+                    <button class="btn btn-sm" onclick="admin.openPaymentModal('${order.master_order_id}')">Manage Payment</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+        
+        document.getElementById('orders-list').innerHTML = html;
+      } catch (error) {
+        console.error('Load orders error:', error);
+        document.getElementById('orders-list').innerHTML =
+          '<div class="empty-state">Failed to load orders</div>';
+      }
     },
 
     async loadRefunds() {
@@ -832,6 +886,131 @@
       this.showToast('Filtering not yet implemented', 'info');
     },
 
+    async openPaymentModal(orderId) {
+      try {
+        const response = await fetch('/api/wholesale/admin/orders');
+        const data = await response.json();
+        const order = (data.orders || []).find(o => o.master_order_id === orderId);
+        
+        if (!order) {
+          this.showToast('Order not found', 'error');
+          return;
+        }
+        
+        // Show payment management modal
+        const modal = document.getElementById('payment-modal');
+        if (!modal) {
+          this.showToast('Payment modal not found', 'error');
+          return;
+        }
+        
+        // Populate modal with order details
+        document.getElementById('payment-order-id').textContent = order.master_order_id;
+        document.getElementById('payment-order-total').textContent = `$${(order.grand_total || 0).toFixed(2)}`;
+        document.getElementById('payment-current-status').textContent = order.payment_status || 'pending';
+        document.getElementById('payment-buyer-name').textContent = order.buyer_account?.businessName || order.buyer_id;
+        
+        // Store order ID for later actions
+        modal.dataset.orderId = orderId;
+        
+        // Show modal
+        modal.classList.add('open');
+      } catch (error) {
+        console.error('Open payment modal error:', error);
+        this.showToast('Failed to load order details', 'error');
+      }
+    },
+    
+    closePaymentModal() {
+      const modal = document.getElementById('payment-modal');
+      if (modal) modal.classList.remove('open');
+    },
+    
+    async generateSquareInvoice() {
+      const modal = document.getElementById('payment-modal');
+      const orderId = modal?.dataset.orderId;
+      
+      if (!orderId) {
+        this.showToast('No order selected', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/wholesale/admin/orders');
+        const data = await response.json();
+        const order = (data.orders || []).find(o => o.master_order_id === orderId);
+        
+        if (!order) {
+          this.showToast('Order not found', 'error');
+          return;
+        }
+        
+        // Generate Square invoice URL (simplified - would need Square API integration)
+        const invoiceUrl = `https://squareup.com/dashboard/invoices/create?` +
+          `customer_email=${encodeURIComponent(order.buyer_account?.email || '')}` +
+          `&amount=${Math.round((order.grand_total || 0) * 100)}` +
+          `&reference=${encodeURIComponent(order.master_order_id)}`;
+        
+        // Copy to clipboard and open in new tab
+        navigator.clipboard.writeText(invoiceUrl).then(() => {
+          this.showToast('Invoice URL copied to clipboard', 'success');
+        }).catch(() => {
+          this.showToast('Invoice URL ready', 'info');
+        });
+        
+        window.open(invoiceUrl, '_blank');
+      } catch (error) {
+        console.error('Generate invoice error:', error);
+        this.showToast('Failed to generate invoice', 'error');
+      }
+    },
+    
+    async markOrderPaid() {
+      const modal = document.getElementById('payment-modal');
+      const orderId = modal?.dataset.orderId;
+      const paymentRef = document.getElementById('payment-reference')?.value?.trim();
+      
+      if (!orderId) {
+        this.showToast('No order selected', 'error');
+        return;
+      }
+      
+      if (!paymentRef) {
+        this.showToast('Payment reference is required', 'error');
+        return;
+      }
+      
+      if (!confirm('Mark this order as paid? This cannot be undone easily.')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/wholesale/admin/orders/${encodeURIComponent(orderId)}/payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'paid',
+            payment_reference: paymentRef,
+            payment_method: 'manual',
+            marked_at: new Date().toISOString()
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.status === 'ok') {
+          this.showToast('Order marked as paid', 'success');
+          this.closePaymentModal();
+          await this.loadOrders();
+        } else {
+          this.showToast(result.message || 'Failed to update payment status', 'error');
+        }
+      } catch (error) {
+        console.error('Mark paid error:', error);
+        this.showToast('Failed to update payment status', 'error');
+      }
+    },
+    
     viewPaymentDetails(_paymentId) {
       this.showToast('Payment details modal not yet implemented', 'info');
     },
