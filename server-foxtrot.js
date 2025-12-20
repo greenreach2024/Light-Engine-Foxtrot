@@ -98,6 +98,8 @@ import mlAutomation from './lib/ml-automation-controller.js';
 // Edge mode support
 import edgeConfig from './lib/edge-config.js';
 import SyncService from './lib/sync-service.js';
+import CertificateManager from './services/certificate-manager.js';
+import CredentialManager from './services/credential-manager.js';
 import EdgeWholesaleService from './lib/edge-wholesale-service.js';
 
 const app = express();
@@ -6396,6 +6398,319 @@ app.ws('/ws/sync-status', (ws, req) => {
     syncService.off('sync_error', onEvent);
   });
 });
+
+// Certificate management routes
+let certificateManager = null;
+let credentialManager = null;
+
+// Initialize certificate and credential managers
+async function initializeSecurity() {
+  if (!certificateManager) {
+    certificateManager = new CertificateManager({
+      farmId: process.env.FARM_ID || 'unknown',
+      certDir: process.env.CERT_DIR || '/etc/greenreach/certs',
+      centralUrl: process.env.GREENREACH_CENTRAL_URL || 'https://api.greenreach.com',
+      apiKey: process.env.GREENREACH_API_KEY,
+      renewBeforeDays: 30,
+      checkInterval: 24 * 60 * 60 * 1000 // 24 hours
+    });
+    
+    await certificateManager.initialize();
+    console.log('[security] Certificate manager initialized');
+  }
+  
+  if (!credentialManager) {
+    credentialManager = new CredentialManager({
+      storageDir: process.env.CRED_DIR || '/etc/greenreach/credentials'
+    });
+    
+    await credentialManager.initialize();
+    console.log('[security] Credential manager initialized');
+  }
+}
+
+// Get certificate manager (lazy init)
+async function getCertificateManager() {
+  await initializeSecurity();
+  return certificateManager;
+}
+
+// Get credential manager (lazy init)
+async function getCredentialManager() {
+  await initializeSecurity();
+  return credentialManager;
+}
+
+// Get certificate status
+app.get('/api/certs/status', asyncHandler(async (req, res) => {
+  try {
+    const certManager = await getCertificateManager();
+    const info = await certManager.getCertificateInfo();
+    
+    if (!info) {
+      res.json({
+        provisioned: false,
+        message: 'No certificate provisioned'
+      });
+      return;
+    }
+    
+    res.json({
+      provisioned: true,
+      valid: info.daysUntilExpiry > 0,
+      expiresAt: info.expiresAt,
+      daysUntilExpiry: info.daysUntilExpiry,
+      subject: info.subject,
+      issuer: info.issuer
+    });
+  } catch (error) {
+    console.error('[certs] Status error:', error);
+    res.status(500).json({ error: 'Failed to get certificate status' });
+  }
+}));
+
+// Provision new certificate
+app.post('/api/certs/provision', asyncHandler(async (req, res) => {
+  try {
+    const certManager = await getCertificateManager();
+    await certManager.provisionCertificate();
+    
+    const info = await certManager.getCertificateInfo();
+    
+    res.json({
+      success: true,
+      certificate: info
+    });
+  } catch (error) {
+    console.error('[certs] Provision error:', error);
+    res.status(500).json({ error: 'Failed to provision certificate' });
+  }
+}));
+
+// Renew certificate
+app.post('/api/certs/renew', asyncHandler(async (req, res) => {
+  try {
+    const certManager = await getCertificateManager();
+    await certManager.renewCertificate();
+    
+    const info = await certManager.getCertificateInfo();
+    
+    res.json({
+      success: true,
+      certificate: info
+    });
+  } catch (error) {
+    console.error('[certs] Renewal error:', error);
+    res.status(500).json({ error: 'Failed to renew certificate' });
+  }
+}));
+
+// Get TLS options for secure connections
+app.get('/api/certs/tls-options', asyncHandler(async (req, res) => {
+  try {
+    const certManager = await getCertificateManager();
+    const options = certManager.getTLSOptions();
+    
+    // Don't send the actual keys, just confirm they're available
+    res.json({
+      available: {
+        cert: !!options.cert,
+        key: !!options.key,
+        ca: !!options.ca
+      }
+    });
+  } catch (error) {
+    console.error('[certs] TLS options error:', error);
+    res.status(500).json({ error: 'Failed to get TLS options' });
+  }
+}));
+
+// Credential management routes
+
+// List stored credentials (keys only, not values)
+app.get('/api/credentials', asyncHandler(async (req, res) => {
+  try {
+    const credManager = await getCredentialManager();
+    const credDir = credManager.storageDir;
+    
+    const files = fs.existsSync(credDir) ? fs.readdirSync(credDir) : [];
+    const credentials = [];
+    
+    for (const file of files) {
+      if (file.endsWith('.json') && !file.startsWith('backup-')) {
+        try {
+          const filePath = path.join(credDir, file);
+          const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+          
+          credentials.push({
+            key: data.key,
+            metadata: data.metadata || {}
+          });
+        } catch (err) {
+          console.error(`[credentials] Error reading ${file}:`, err);
+        }
+      }
+    }
+    
+    res.json({ credentials });
+  } catch (error) {
+    console.error('[credentials] List error:', error);
+    res.status(500).json({ error: 'Failed to list credentials' });
+  }
+}));
+
+// Store credential
+app.post('/api/credentials', asyncHandler(async (req, res) => {
+  const { key, value, metadata } = req.body;
+  
+  if (!key || !value) {
+    res.status(400).json({ error: 'key and value are required' });
+    return;
+  }
+  
+  try {
+    const credManager = await getCredentialManager();
+    await credManager.setCredential(key, value, metadata);
+    
+    res.json({
+      success: true,
+      key,
+      stored: true
+    });
+  } catch (error) {
+    console.error('[credentials] Store error:', error);
+    res.status(500).json({ error: 'Failed to store credential' });
+  }
+}));
+
+// Get credential
+app.get('/api/credentials/:key', asyncHandler(async (req, res) => {
+  const { key } = req.params;
+  
+  try {
+    const credManager = await getCredentialManager();
+    const value = await credManager.getCredential(key);
+    
+    if (value === null) {
+      res.status(404).json({ error: 'Credential not found' });
+      return;
+    }
+    
+    res.json({
+      key,
+      value
+    });
+  } catch (error) {
+    console.error('[credentials] Get error:', error);
+    res.status(500).json({ error: 'Failed to get credential' });
+  }
+}));
+
+// Delete credential
+app.delete('/api/credentials/:key', asyncHandler(async (req, res) => {
+  const { key } = req.params;
+  
+  try {
+    const credManager = await getCredentialManager();
+    await credManager.deleteCredential(key);
+    
+    res.json({
+      success: true,
+      key,
+      deleted: true
+    });
+  } catch (error) {
+    console.error('[credentials] Delete error:', error);
+    res.status(500).json({ error: 'Failed to delete credential' });
+  }
+}));
+
+// Rotate credential
+app.post('/api/credentials/:key/rotate', asyncHandler(async (req, res) => {
+  const { key } = req.params;
+  const { newValue } = req.body;
+  
+  if (!newValue) {
+    res.status(400).json({ error: 'newValue is required' });
+    return;
+  }
+  
+  try {
+    const credManager = await getCredentialManager();
+    await credManager.rotateCredential(key, newValue);
+    
+    res.json({
+      success: true,
+      key,
+      rotated: true
+    });
+  } catch (error) {
+    console.error('[credentials] Rotate error:', error);
+    res.status(500).json({ error: 'Failed to rotate credential' });
+  }
+}));
+
+// Export credentials (password protected)
+app.post('/api/credentials/export', asyncHandler(async (req, res) => {
+  const { password } = req.body;
+  
+  if (!password) {
+    res.status(400).json({ error: 'password is required' });
+    return;
+  }
+  
+  try {
+    const credManager = await getCredentialManager();
+    const exportPackage = await credManager.exportCredentials(password);
+    
+    res.json({
+      success: true,
+      package: exportPackage
+    });
+  } catch (error) {
+    console.error('[credentials] Export error:', error);
+    res.status(500).json({ error: 'Failed to export credentials' });
+  }
+}));
+
+// Import credentials (password protected)
+app.post('/api/credentials/import', asyncHandler(async (req, res) => {
+  const { password, package: importPackage } = req.body;
+  
+  if (!password || !importPackage) {
+    res.status(400).json({ error: 'password and package are required' });
+    return;
+  }
+  
+  try {
+    const credManager = await getCredentialManager();
+    await credManager.importCredentials(importPackage, password);
+    
+    res.json({
+      success: true,
+      imported: true
+    });
+  } catch (error) {
+    console.error('[credentials] Import error:', error);
+    res.status(500).json({ error: 'Failed to import credentials' });
+  }
+}));
+
+// Backup credentials
+app.post('/api/credentials/backup', asyncHandler(async (req, res) => {
+  try {
+    const credManager = await getCredentialManager();
+    const backupPath = await credManager.backupCredentials();
+    
+    res.json({
+      success: true,
+      backupPath: path.basename(backupPath)
+    });
+  } catch (error) {
+    console.error('[credentials] Backup error:', error);
+    res.status(500).json({ error: 'Failed to backup credentials' });
+  }
+}));
 
 // Unified health endpoint with controller diagnostics that never 502s
 app.get('/healthz', async (req, res) => {
