@@ -10,7 +10,7 @@
     orders: [],
     currentView: 'catalog',
     deliveryDate: null,
-    demoMode: true,
+    demoMode: false, // Default to live mode - use ?demo=1 for demo data
     demoData: null,
     farmDirectory: {},
     networkFarms: [],
