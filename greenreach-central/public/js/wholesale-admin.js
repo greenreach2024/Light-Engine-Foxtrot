@@ -18,6 +18,12 @@
     async init() {
       this.setupEventListeners();
       await this.loadOverview();
+      
+      // Check for overselling issues
+      await this.checkOverselling();
+      
+      // Re-check every 5 minutes
+      setInterval(() => this.checkOverselling(), 5 * 60 * 1000);
     },
 
     setupEventListeners() {
@@ -1015,6 +1021,32 @@
       this.showToast('Payment details modal not yet implemented', 'info');
     },
 
+    async checkOverselling() {
+      try {
+        const response = await fetch('/api/wholesale/inventory/check-overselling');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const alertBanner = document.getElementById('overselling-alert');
+        const detailsSpan = document.getElementById('overselling-details');
+        
+        if (data.overselling && data.items && data.items.length > 0) {
+          const count = data.items.length;
+          const skus = data.items.map(item => item.sku_id).slice(0, 3).join(', ');
+          const more = count > 3 ? ` and ${count - 3} more` : '';
+          
+          detailsSpan.textContent = `${count} SKU(s) have insufficient inventory: ${skus}${more}`;
+          alertBanner.style.display = 'block';
+          
+          console.warn('⚠️ Overselling detected:', data.items);
+        } else {
+          alertBanner.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Failed to check overselling:', error);
+      }
+    },
+
     showToast(message, type = 'info') {
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
@@ -1030,4 +1062,15 @@
   document.addEventListener('DOMContentLoaded', () => {
     admin.init();
   });
+
+  // Global functions for alert banner
+  window.resolveOverselling = function() {
+    // Navigate to Network tab to see inventory details
+    admin.navigateTo('network');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  window.dismissAlert = function() {
+    document.getElementById('overselling-alert').style.display = 'none';
+  };
 })();

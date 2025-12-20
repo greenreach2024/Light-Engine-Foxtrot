@@ -104,6 +104,76 @@
       padding: 0 2rem;
     }
 
+    .alert-banner {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .alert-content {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .alert-icon {
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .alert-text {
+      flex: 1;
+      font-size: 0.95rem;
+    }
+
+    .alert-text strong {
+      color: #856404;
+      margin-right: 0.5rem;
+    }
+
+    .alert-action {
+      background: var(--warning);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .alert-action:hover {
+      background: #b8860b;
+    }
+
+    .alert-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: #856404;
+      cursor: pointer;
+      padding: 0 0.5rem;
+      line-height: 1;
+    }
+
+    .alert-close:hover {
+      color: #533c02;
+    }
+
     .view {
       display: none;
     }
@@ -556,6 +626,19 @@
   </nav>
 
   <main>
+    <!-- Overselling Alert Banner -->
+    <div id="overselling-alert" class="alert-banner" style="display: none;">
+      <div class="alert-content">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-text">
+          <strong>Overselling Detected:</strong>
+          <span id="overselling-details">Loading...</span>
+        </div>
+        <button class="alert-action" onclick="resolveOverselling()">Review & Resolve</button>
+        <button class="alert-close" onclick="dismissAlert()">×</button>
+      </div>
+    </div>
+
     <!-- Overview View -->
     <div id="overview-view" class="view active">
       <div class="stats-grid">

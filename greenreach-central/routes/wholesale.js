@@ -903,8 +903,53 @@ router.post('/admin/orders/:orderId/payment', express.json(), (req, res) => {
   }
 });
 
-/**
- * POST /api/wholesale/order-status
+/** * GET /api/wholesale/inventory/check-overselling
+ * Check all farms for overselling conditions (reserved > available)
+ */
+router.get('/inventory/check-overselling', async (req, res) => {
+  try {
+    const farms = listNetworkFarms();
+    const oversellingItems = [];
+    
+    for (const farm of farms) {
+      try {
+        const inventoryRes = await fetch(`${farm.endpoint}/api/wholesale/inventory`);
+        if (!inventoryRes.ok) continue;
+        
+        const inventory = await inventoryRes.json();
+        
+        // Check each SKU for overselling (available < reserved)
+        for (const item of inventory) {
+          if (item.reserved > 0 && item.available < item.reserved) {
+            oversellingItems.push({
+              farm_id: farm.id,
+              farm_name: farm.name,
+              sku_id: item.sku_id,
+              sku_name: item.name,
+              available: item.available,
+              reserved: item.reserved,
+              shortage: item.reserved - item.available
+            });
+          }
+        }
+      } catch (farmError) {
+        console.error(`Failed to check inventory for farm ${farm.id}:`, farmError.message);
+      }
+    }
+    
+    return res.json({
+      status: 'ok',
+      overselling: oversellingItems.length > 0,
+      items: oversellingItems,
+      checked_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Overselling check error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to check overselling' });
+  }
+});
+
+/** * POST /api/wholesale/order-status
  * Receive order status updates from farms (callback endpoint)
  */
 router.post('/order-status', async (req, res) => {

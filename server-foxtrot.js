@@ -76,7 +76,7 @@ import { mountMLRoutes } from './routes/ml.js';
 import healthRouter from './routes/health.js';
 import adminHealthRouter from './routes/admin-health.js';
 import wholesaleSyncRouter from './routes/wholesale-sync.js';
-import wholesaleReservationsRouter from './routes/wholesale-reservations.js';
+import wholesaleReservationsRouter, { cleanupExpiredReservations } from './routes/wholesale-reservations.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import cropPricingRouter from './routes/crop-pricing.js';
 import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
@@ -18060,6 +18060,58 @@ async function cleanupOldWizardStates() {
 // Run cleanup daily
 setInterval(cleanupOldWizardStates, 24 * 60 * 60 * 1000);
 
+/**
+ * Wholesale Reservation Cleanup Job
+ * Runs hourly to remove expired reservations (24hr TTL)
+ */
+async function cleanupExpiredWholesaleReservations() {
+  try {
+    const reservationsPath = path.join(DATA_DIR, 'reservations.json');
+    if (!fs.existsSync(reservationsPath)) return;
+    
+    const data = JSON.parse(fs.readFileSync(reservationsPath, 'utf8'));
+    const reservations = data.reservations || [];
+    const before = reservations.length;
+    
+    const now = Date.now();
+    const ttlMs = 24 * 60 * 60 * 1000; // 24 hours
+    const active = reservations.filter((r) => {
+      const reservedAt = new Date(r.reserved_at).getTime();
+      return (now - reservedAt) < ttlMs;
+    });
+    
+    const removed = before - active.length;
+    if (removed > 0) {
+      data.reservations = active;
+      fs.writeFileSync(reservationsPath, JSON.stringify(data, null, 2), 'utf8');
+      console.log(`🧹 [Wholesale] Cleaned up ${removed} expired reservation(s)`);
+      
+      // Log to wholesale sync activity log
+      const syncPath = path.join(DATA_DIR, 'wholesale-sync.json');
+      if (fs.existsSync(syncPath)) {
+        const syncData = JSON.parse(fs.readFileSync(syncPath, 'utf8'));
+        syncData.activity_log = syncData.activity_log || [];
+        syncData.activity_log.push({
+          timestamp: new Date().toISOString(),
+          event: 'reservation_cleanup',
+          details: `Removed ${removed} expired reservations`,
+          reservations_removed: removed
+        });
+        // Keep last 100 events
+        if (syncData.activity_log.length > 100) {
+          syncData.activity_log = syncData.activity_log.slice(-100);
+        }
+        fs.writeFileSync(syncPath, JSON.stringify(syncData, null, 2), 'utf8');
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ [Wholesale] Failed to cleanup expired reservations:', error.message);
+  }
+}
+
+// Run reservation cleanup hourly
+setInterval(cleanupExpiredWholesaleReservations, 60 * 60 * 1000);
+
 // Load states on startup
 loadWizardStates();
 
@@ -20699,6 +20751,24 @@ async function startServer() {
       }
     } else {
       console.log('[ScheduleExecutor] Disabled (set SCHEDULE_EXECUTOR_ENABLED=true to enable)');
+    }
+
+    // Start Wholesale Reservation Cleanup Job
+    // Runs every hour to clean up expired reservations
+    try {
+      const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
+      setInterval(() => {
+        const result = cleanupExpiredReservations();
+        if (result.cleaned > 0) {
+          console.log(`[Cleanup] Released ${result.cleaned} expired reservations, ${result.active} active`);
+        }
+      }, CLEANUP_INTERVAL);
+      
+      // Run once on startup
+      cleanupExpiredReservations();
+      console.log('[Cleanup] ✓ Reservation cleanup job started (runs hourly)');
+    } catch (error) {
+      console.warn('[Cleanup] Failed to start reservation cleanup job:', error?.message || error);
     }
 
       // Start background refresh for zone bindings (every 30s)

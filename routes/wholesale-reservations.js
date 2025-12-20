@@ -283,4 +283,28 @@ router.get('/reservations', async (req, res) => {
   }
 });
 
+/**
+ * Cleanup expired reservations
+ * Called by periodic job in server-foxtrot.js
+ */
+export function cleanupExpiredReservations() {
+  const now = new Date();
+  let cleaned = 0;
+  
+  for (const [id, reservation] of reservations.entries()) {
+    if (reservation.status === 'active' && new Date(reservation.expires_at) < now) {
+      console.log(`🧹 [Cleanup] Releasing expired reservation ${id}`);
+      reservation.status = 'expired';
+      reservations.delete(id);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    console.log(`✓ [Cleanup] Released ${cleaned} expired reservation(s)`);
+  }
+  
+  return { cleaned, active: Array.from(reservations.values()).filter(r => r.status === 'active').length };
+}
+
 export default router;
