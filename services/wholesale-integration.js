@@ -28,6 +28,11 @@ class WholesaleIntegrationService extends EventEmitter {
     this.apiKey = options.apiKey || process.env.GREENREACH_API_KEY;
     this.apiSecret = options.apiSecret || process.env.GREENREACH_API_SECRET;
     
+    // Farm certifications and attributes
+    this.farmCertifications = options.farmCertifications || [];
+    this.farmPractices = options.farmPractices || [];
+    this.farmAttributes = options.farmAttributes || [];
+    
     // Certificate manager for mTLS
     this.certificateManager = options.certificateManager;
     
@@ -242,6 +247,9 @@ class WholesaleIntegrationService extends EventEmitter {
       images: item.images || [],
       description: item.description || '',
       certifications: item.certifications || [],
+      farmCertifications: this.farmCertifications || [],
+      farmPractices: this.farmPractices || [],
+      farmAttributes: this.farmAttributes || [],
       available: available > 0,
       lastUpdated: new Date().toISOString()
     };

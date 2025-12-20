@@ -113,12 +113,14 @@
       display: flex;
       gap: 1rem;
       flex-wrap: wrap;
+      max-width: 100%;
     }
 
     .filter-group {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.5rem;
+      min-width: 200px;
     }
 
     .filter-group label {
@@ -128,12 +130,38 @@
     }
 
     .filter-group select,
-    .filter-group input {
+    .filter-group input[type="date"] {
       padding: 0.5rem;
       border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 0.95rem;
       background: var(--surface);
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: normal;
+      color: var(--text);
+      cursor: pointer;
+      padding: 0.25rem;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
     }
 
     .catalog-grid {
@@ -856,6 +884,35 @@
         <h2>Available Products</h2>
         <div class="catalog-filters">
           <div class="filter-group">
+            <label>Farm Certifications</label>
+            <div class="checkbox-group">
+              <label><input type="checkbox" name="cert" value="GAP" /> GAP Certified</label>
+              <label><input type="checkbox" name="cert" value="organic" /> USDA Organic</label>
+              <label><input type="checkbox" name="cert" value="food_safety" /> Food Safety</label>
+              <label><input type="checkbox" name="cert" value="greenhouse" /> Greenhouse</label>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>Growing Practices</label>
+            <div class="checkbox-group">
+              <label><input type="checkbox" name="practice" value="pesticide_free" /> Pesticide Free</label>
+              <label><input type="checkbox" name="practice" value="non_gmo" /> Non-GMO</label>
+              <label><input type="checkbox" name="practice" value="hydroponic" /> Hydroponic</label>
+              <label><input type="checkbox" name="practice" value="local" /> Local</label>
+              <label><input type="checkbox" name="practice" value="year_round" /> Year-Round</label>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>Farm Attributes</label>
+            <div class="checkbox-group">
+              <label><input type="checkbox" name="attribute" value="woman_owned" /> Woman-Owned</label>
+              <label><input type="checkbox" name="attribute" value="veteran_owned" /> Veteran-Owned</label>
+              <label><input type="checkbox" name="attribute" value="minority_owned" /> Minority-Owned</label>
+              <label><input type="checkbox" name="attribute" value="family_farm" /> Family Farm</label>
+              <label><input type="checkbox" name="attribute" value="sustainable" /> Sustainable</label>
+            </div>
+          </div>
+          <div class="filter-group">
             <label for="delivery-date">Delivery Date</label>
             <input type="date" id="delivery-date" />
           </div>
@@ -868,6 +925,8 @@
               <option value="availability">Availability</option>
             </select>
           </div>
+          <button type="button" class="btn btn-primary" onclick="app.applyFilters()">Apply Filters</button>
+          <button type="button" class="btn btn-secondary" onclick="app.clearFilters()">Clear All</button>
         </div>
       </div>
       <div id="catalog-grid" class="catalog-grid">
@@ -1047,6 +1106,24 @@
             params.append('delivery_date', this.deliveryDate);
           }
           
+          // Add certification filters
+          const certifications = Array.from(document.querySelectorAll('input[name="cert"]:checked'))
+            .map(cb => cb.value);
+          const practices = Array.from(document.querySelectorAll('input[name="practice"]:checked'))
+            .map(cb => cb.value);
+          const attributes = Array.from(document.querySelectorAll('input[name="attribute"]:checked'))
+            .map(cb => cb.value);
+          
+          if (certifications.length > 0) {
+            certifications.forEach(cert => params.append('certifications', cert));
+          }
+          if (practices.length > 0) {
+            practices.forEach(practice => params.append('practices', practice));
+          }
+          if (attributes.length > 0) {
+            attributes.forEach(attr => params.append('attributes', attr));
+          }
+          
           const response = await fetch(`/api/wholesale/catalog?${params}`);
           const data = await response.json();
           
@@ -1060,6 +1137,18 @@
           console.error('Catalog load error:', error);
           this.showToast('Network error loading catalog', 'error');
         }
+      },
+
+      applyFilters() {
+        this.loadCatalog();
+      },
+
+      clearFilters() {
+        // Uncheck all filter checkboxes
+        document.querySelectorAll('input[name="cert"]').forEach(cb => cb.checked = false);
+        document.querySelectorAll('input[name="practice"]').forEach(cb => cb.checked = false);
+        document.querySelectorAll('input[name="attribute"]').forEach(cb => cb.checked = false);
+        this.loadCatalog();
       },
 
       renderCatalog() {

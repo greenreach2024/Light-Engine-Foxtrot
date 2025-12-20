@@ -13,6 +13,7 @@ import inventoryRoutes from './routes/inventory.js';
 import ordersRoutes from './routes/orders.js';
 import alertsRoutes from './routes/alerts.js';
 import syncRoutes from './routes/sync.js';
+import wholesaleRoutes from './routes/wholesale.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -85,6 +86,7 @@ app.use('/api/inventory', authMiddleware, inventoryRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
+app.use('/api/wholesale', wholesaleRoutes); // Public catalog API
 
 // 404 handler
 app.use((req, res) => {

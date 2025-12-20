@@ -297,4 +297,85 @@ router.post('/:id/heartbeat', async (req, res, next) => {
   }
 });
 
+// PATCH /api/farms/:id - Update farm details (including certifications)
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { certifications, practices, attributes, ...otherFields } = req.body;
+    
+    // Verify authorization (API key from edge device or admin token)
+    const apiKey = req.headers['authorization']?.replace('Bearer ', '') || req.headers['x-api-key'];
+    if (!apiKey) {
+      throw new ValidationError('Authorization required');
+    }
+
+    // Build update query dynamically
+    const updates = [];
+    const params = [id];
+    let paramIndex = 2;
+
+    if (certifications !== undefined) {
+      updates.push(`certifications = $${paramIndex}::jsonb`);
+      params.push(JSON.stringify(certifications));
+      paramIndex++;
+    }
+
+    if (practices !== undefined) {
+      updates.push(`practices = $${paramIndex}::jsonb`);
+      params.push(JSON.stringify(practices));
+      paramIndex++;
+    }
+
+    if (attributes !== undefined) {
+      updates.push(`attributes = $${paramIndex}::jsonb`);
+      params.push(JSON.stringify(attributes));
+      paramIndex++;
+    }
+
+    // Add other allowed fields (name, phone, etc.)
+    const allowedFields = ['name', 'phone', 'email', 'address_line1', 'address_line2', 'city', 'state', 'postal_code'];
+    for (const field of allowedFields) {
+      if (otherFields[field] !== undefined) {
+        updates.push(`${field} = $${paramIndex}`);
+        params.push(otherFields[field]);
+        paramIndex++;
+      }
+    }
+
+    if (updates.length === 0) {
+      throw new ValidationError('No valid fields to update');
+    }
+
+    updates.push(`updated_at = NOW()`);
+
+    // Execute update with API key verification
+    const result = await query(`
+      UPDATE farms
+      SET ${updates.join(', ')}
+      WHERE farm_id = $1 AND (api_key = $${paramIndex} OR $${paramIndex} IN (SELECT api_key FROM farms WHERE role = 'admin'))
+      RETURNING farm_id, name, certifications, practices, attributes, updated_at
+    `, [...params, apiKey]);
+
+    if (result.rows.length === 0) {
+      throw new NotFoundError('Farm not found or unauthorized');
+    }
+
+    logger.info(`Farm ${id} updated certifications`, {
+      farmId: id,
+      certifications: result.rows[0].certifications,
+      practices: result.rows[0].practices,
+      attributes: result.rows[0].attributes
+    });
+
+    res.json({
+      success: true,
+      farm: result.rows[0]
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
+

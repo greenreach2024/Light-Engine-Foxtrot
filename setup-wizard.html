@@ -442,8 +442,84 @@
                 <div id="reg-status"></div>
             </div>
 
-            <!-- Step 3: Hardware Detection -->
+            <!-- Step 3: Certifications & Differentiators -->
             <div class="wizard-step" id="step-3">
+                <h1 class="step-title">Farm Certifications</h1>
+                <p class="step-description">
+                    Help buyers find your farm by sharing certifications and practices.
+                </p>
+                
+                <div class="form-group">
+                    <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">Certifications</h3>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="cert-gap" name="certifications" value="GAP" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">GAP Certified (Good Agricultural Practices)</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="cert-organic" name="certifications" value="USDA Organic" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">USDA Organic Certified</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="cert-food-safety" name="certifications" value="Food Safety" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Food Safety Certified (GFSI, SQF)</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="cert-greenhouse" name="certifications" value="Greenhouse" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Greenhouse Grown Certified</span>
+                    </label>
+                </div>
+                
+                <div class="form-group" style="margin-top: 2rem;">
+                    <h3 style="color: var(--accent-green); margin-bottom: 1rem;">Growing Practices</h3>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="practice-pesticide-free" name="practices" value="Pesticide Free" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">✅ Pesticide Free</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="practice-non-gmo" name="practices" value="Non-GMO" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Non-GMO</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="practice-hydroponic" name="practices" value="Hydroponic" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Hydroponic Growing</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="practice-local" name="practices" value="Local" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Local (within 100 miles)</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="practice-year-round" name="practices" value="Year-Round" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Year-Round Production</span>
+                    </label>
+                </div>
+                
+                <div class="form-group" style="margin-top: 2rem;">
+                    <h3 style="color: var(--accent-yellow); margin-bottom: 1rem;">Special Attributes</h3>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="attr-woman-owned" name="attributes" value="Woman Owned" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Woman-Owned Business</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="attr-veteran-owned" name="attributes" value="Veteran Owned" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Veteran-Owned Business</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="attr-minority-owned" name="attributes" value="Minority Owned" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">Minority-Owned Business</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="attr-family-farm" name="attributes" value="Family Farm" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">🏡 Family Farm</span>
+                    </label>
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="attr-sustainable" name="attributes" value="Sustainable" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.2rem;">♻️ Sustainable Practices</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Step 4: Hardware Detection -->
+            <div class="wizard-step" id="step-4">
                 <h1 class="step-title">Hardware Detection</h1>
                 <p class="step-description">
                     Scanning for connected devices...
@@ -473,8 +549,8 @@
                 </div>
             </div>
 
-            <!-- Step 4: Complete -->
-            <div class="wizard-step" id="step-4">
+            <!-- Step 5: Complete -->
+            <div class="wizard-step" id="step-5">
                 <h1 class="step-title">Setup Complete! 🎉</h1>
                 <p class="step-description">
                     Your GreenReach farm is ready to go!
@@ -556,7 +632,7 @@
 
     <script>
         let currentStep = 0;
-        const totalSteps = 5;
+        const totalSteps = 6;
         let activeInput = null;
         let farmData = {
             network: null,
@@ -740,6 +816,21 @@
         }
 
         async function completeSetup() {
+            // Collect certifications
+            const certifications = Array.from(document.querySelectorAll('input[name="certifications"]:checked'))
+                .map(cb => cb.value);
+            const practices = Array.from(document.querySelectorAll('input[name="practices"]:checked'))
+                .map(cb => cb.value);
+            const attributes = Array.from(document.querySelectorAll('input[name="attributes"]:checked'))
+                .map(cb => cb.value);
+            
+            // Add to farm data
+            farmData.certifications = {
+                certifications,
+                practices,
+                attributes
+            };
+            
             // Save configuration
             try {
                 // Call provisioning endpoint

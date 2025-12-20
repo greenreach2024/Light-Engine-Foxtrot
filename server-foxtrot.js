@@ -6247,7 +6247,7 @@ app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
 
 // Setup completion endpoint
 app.post('/api/setup/complete', asyncHandler(async (req, res) => {
-  const { network, registrationCode, farmId, hardware } = req.body;
+  const { network, registrationCode, farmId, hardware, certifications } = req.body;
   
   try {
     // Save setup configuration to database
@@ -6257,7 +6257,8 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
       network: network,
       farmId: farmId,
       registrationCode: registrationCode,
-      hardwareDetected: hardware
+      hardwareDetected: hardware,
+      certifications: certifications || { certifications: [], practices: [], attributes: [] }
     };
 
     // Store in database
@@ -6266,6 +6267,31 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
       { ...setupConfig, key: 'setup_config' },
       { upsert: true }
     );
+
+    // If connected to GreenReach Central, sync certifications
+    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY) {
+      try {
+        const axios = require('axios');
+        await axios.patch(
+          `${process.env.GREENREACH_CENTRAL_URL}/api/farms/${farmId}`,
+          {
+            certifications: certifications?.certifications || [],
+            practices: certifications?.practices || [],
+            attributes: certifications?.attributes || []
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.GREENREACH_API_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        console.log('[setup-wizard] Synced certifications to GreenReach Central');
+      } catch (syncError) {
+        console.error('[setup-wizard] Failed to sync certifications:', syncError.message);
+        // Continue anyway - certifications stored locally
+      }
+    }
 
     console.log('[setup-wizard] Setup completed for farm:', farmId);
     res.json({ success: true, config: setupConfig });

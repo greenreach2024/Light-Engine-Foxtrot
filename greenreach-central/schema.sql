@@ -37,6 +37,11 @@ CREATE TABLE farms (
     status VARCHAR(20) DEFAULT 'pending', -- pending, active, suspended, inactive
     tier VARCHAR(20) DEFAULT 'starter', -- starter, professional, enterprise
     
+    -- Farm Certifications and Differentiators
+    certifications JSONB DEFAULT '[]', -- Array of certification types: GAP, USDA Organic, Food Safety, Greenhouse
+    practices JSONB DEFAULT '[]', -- Array of practices: Pesticide Free, Non-GMO, Hydroponic, Local, Year-Round
+    attributes JSONB DEFAULT '[]', -- Array of attributes: Woman-Owned, Veteran-Owned, Family Farm, etc.
+    
     -- Configuration
     edge_device_id VARCHAR(100), -- Unique device identifier
     edge_device_type VARCHAR(50), -- raspberry-pi, symcod-w101m, etc.
