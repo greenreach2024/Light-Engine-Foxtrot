@@ -165,6 +165,40 @@ if (AUDIT_LOG_ENABLED) {
 let syncService = null;
 let wholesaleService = null;
 
+// Metrics tracking for monitoring
+const metrics = {
+  requests: {
+    total: 0,
+    errors: 0,
+    responseTimes: []
+  },
+  startTime: Date.now()
+};
+
+// Metrics middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  metrics.requests.total++;
+  
+  // Track response
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    metrics.requests.responseTimes.push(duration);
+    
+    // Keep only last 1000 response times
+    if (metrics.requests.responseTimes.length > 1000) {
+      metrics.requests.responseTimes.shift();
+    }
+    
+    // Track errors
+    if (res.statusCode >= 400) {
+      metrics.requests.errors++;
+    }
+  });
+  
+  next();
+});
+
 // --- Kasa and Shelly Search Endpoints ---
 app.post('/plugs/search/kasa', asyncHandler(async (req, res) => {
   setPreAutomationCors(req, res);
@@ -7058,11 +7092,28 @@ app.get('/healthz', async (req, res) => {
       reachable: true,
       status: 200
     },
+    database: {
+      connected: false,
+      latencyMs: 0
+    },
     envSource: ENV_SOURCE,
     cloudEndpointUrl: CLOUD_ENDPOINT_URL || null,
     ts: new Date().toISOString(),
     dtMs: 0
   };
+
+  // Check database connectivity
+  try {
+    const dbStart = Date.now();
+    const testQuery = await db.findOne({ key: 'health_check' });
+    diag.database.connected = true;
+    diag.database.latencyMs = Date.now() - dbStart;
+  } catch (error) {
+    diag.ok = false;
+    diag.status = 'degraded';
+    diag.database.connected = false;
+    diag.database.error = error.message;
+  }
 
   if (!controllerTarget) {
     diag.ok = false;
@@ -7092,6 +7143,145 @@ app.get('/healthz', async (req, res) => {
   diag.dtMs = Date.now() - started;
   res.json(diag);
 });
+
+// Comprehensive health endpoint with detailed metrics
+app.get('/health', asyncHandler(async (req, res) => {
+  const started = Date.now();
+  
+  const health = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: '1.0.0',
+    checks: {
+      database: { status: 'unknown' },
+      memory: { status: 'unknown' },
+      disk: { status: 'unknown' }
+    },
+    metrics: {
+      requests: {
+        total: metrics.requests.total,
+        errors: metrics.requests.errors,
+        errorRate: metrics.requests.total > 0 ? 
+          ((metrics.requests.errors / metrics.requests.total) * 100).toFixed(2) + '%' : '0%',
+        avgResponseTimeMs: metrics.requests.responseTimes.length > 0 ?
+          Math.round(metrics.requests.responseTimes.reduce((a, b) => a + b, 0) / metrics.requests.responseTimes.length) : 0,
+        p95ResponseTimeMs: metrics.requests.responseTimes.length > 0 ?
+          Math.round(metrics.requests.responseTimes.sort((a, b) => a - b)[Math.floor(metrics.requests.responseTimes.length * 0.95)]) : 0
+      },
+      uptime: {
+        seconds: Math.floor(process.uptime()),
+        formatted: formatUptime(process.uptime())
+      }
+    }
+  };
+
+  // Database connectivity check
+  try {
+    const dbStart = Date.now();
+    await db.findOne({ key: 'health_check' });
+    const latency = Date.now() - dbStart;
+    
+    health.checks.database = {
+      status: latency < 100 ? 'healthy' : 'degraded',
+      latencyMs: latency,
+      connected: true
+    };
+  } catch (error) {
+    health.status = 'unhealthy';
+    health.checks.database = {
+      status: 'unhealthy',
+      connected: false,
+      error: error.message
+    };
+  }
+
+  // Memory usage check
+  const memUsage = process.memoryUsage();
+  const memUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+  const memTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+  const memPercent = (memUsedMB / memTotalMB) * 100;
+  
+  health.checks.memory = {
+    status: memPercent < 80 ? 'healthy' : memPercent < 90 ? 'degraded' : 'unhealthy',
+    usedMB: memUsedMB,
+    totalMB: memTotalMB,
+    percentUsed: Math.round(memPercent)
+  };
+
+  if (health.checks.memory.status === 'unhealthy') {
+    health.status = 'unhealthy';
+  } else if (health.checks.memory.status === 'degraded' && health.status === 'healthy') {
+    health.status = 'degraded';
+  }
+
+  // Response time
+  health.responseTimeMs = Date.now() - started;
+  
+  // Return appropriate status code
+  const statusCode = health.status === 'healthy' ? 200 : 
+                     health.status === 'degraded' ? 200 : 503;
+  
+  res.status(statusCode).json(health);
+}));
+
+// Metrics endpoint for Prometheus/monitoring tools
+app.get('/metrics', (req, res) => {
+  const uptime = process.uptime();
+  const memUsage = process.memoryUsage();
+  const avgResponseTime = metrics.requests.responseTimes.length > 0 ?
+    metrics.requests.responseTimes.reduce((a, b) => a + b, 0) / metrics.requests.responseTimes.length : 0;
+  
+  // Prometheus-style metrics
+  const prometheusMetrics = `
+# HELP http_requests_total Total number of HTTP requests
+# TYPE http_requests_total counter
+http_requests_total ${metrics.requests.total}
+
+# HELP http_requests_errors Total number of HTTP errors (4xx, 5xx)
+# TYPE http_requests_errors counter
+http_requests_errors ${metrics.requests.errors}
+
+# HELP http_request_duration_ms Average HTTP request duration in milliseconds
+# TYPE http_request_duration_ms gauge
+http_request_duration_ms ${avgResponseTime.toFixed(2)}
+
+# HELP process_uptime_seconds Process uptime in seconds
+# TYPE process_uptime_seconds gauge
+process_uptime_seconds ${uptime.toFixed(2)}
+
+# HELP process_memory_heap_used_bytes Process heap memory used in bytes
+# TYPE process_memory_heap_used_bytes gauge
+process_memory_heap_used_bytes ${memUsage.heapUsed}
+
+# HELP process_memory_heap_total_bytes Process heap memory total in bytes
+# TYPE process_memory_heap_total_bytes gauge
+process_memory_heap_total_bytes ${memUsage.heapTotal}
+
+# HELP process_memory_rss_bytes Process resident set size in bytes
+# TYPE process_memory_rss_bytes gauge
+process_memory_rss_bytes ${memUsage.rss}
+`.trim();
+
+  res.set('Content-Type', 'text/plain; version=0.0.4');
+  res.send(prometheusMetrics);
+});
+
+// Helper function to format uptime
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+  
+  return parts.join(' ');
+}
 
 function getSwitchBotStatusEntry(deviceId) {
   if (!switchBotStatusCache.has(deviceId)) {
