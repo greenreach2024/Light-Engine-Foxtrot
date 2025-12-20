@@ -903,4 +903,58 @@ router.post('/admin/orders/:orderId/payment', express.json(), (req, res) => {
   }
 });
 
+/**
+ * POST /api/wholesale/order-status
+ * Receive order status updates from farms (callback endpoint)
+ */
+router.post('/order-status', async (req, res) => {
+  try {
+    const { order_id, status, farm_id, timestamp } = req.body;
+    
+    if (!order_id || !status) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing required fields: order_id, status'
+      });
+    }
+    
+    console.log(`📞 [Status Callback] Received from farm ${farm_id}: Order ${order_id} → ${status}`);
+    
+    // Update order status in memory store
+    const orders = listAllOrders();
+    const order = orders.find(o => o.master_order_id === order_id);
+    
+    if (order) {
+      order.fulfillment_status = status;
+      order.status_updated_at = timestamp || new Date().toISOString();
+      
+      console.log(`✅ Updated order ${order_id} status to ${status}`);
+      
+      // TODO: Future enhancements:
+      // - Send email notification to buyer when status changes to 'shipped'
+      // - Log to audit trail
+      // - Trigger analytics events
+      
+      return res.json({
+        status: 'ok',
+        message: 'Order status updated',
+        order_id: order.master_order_id,
+        new_status: order.fulfillment_status
+      });
+    } else {
+      console.warn(`⚠️ Order ${order_id} not found in Central registry`);
+      return res.status(404).json({
+        status: 'error',
+        message: 'Order not found'
+      });
+    }
+  } catch (error) {
+    console.error('[Status Callback] Error:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to process status update'
+    });
+  }
+});
+
 export default router;

@@ -2112,8 +2112,8 @@ async function updateOrderStatus(orderId, newStatus) {
         // Save updated statuses
         await saveOrderStatuses(statusData);
         
-        // TODO: Notify Central via callback endpoint
-        // await notifyCentralOfStatusChange(orderId, newStatus);
+        // Notify Central via callback endpoint
+        await notifyCentralOfStatusChange(orderId, newStatus);
         
         // Refresh display
         await refreshWholesaleOrders();
@@ -2216,6 +2216,50 @@ async function saveOrderStatuses(statusData) {
     
     if (!response.ok) {
         throw new Error('Failed to save order statuses');
+    }
+}
+
+/**
+ * Notify Central of order status change
+ */
+async function notifyCentralOfStatusChange(orderId, newStatus) {
+    try {
+        // Get farm info to determine Central URL
+        const farmPath = `${API_BASE}/api/data/farm.json`;
+        let centralUrl = 'http://localhost:3000'; // Default for dev
+        
+        try {
+            const farmRes = await fetch(farmPath);
+            if (farmRes.ok) {
+                const farmData = await farmRes.json();
+                if (farmData.centralUrl) centralUrl = farmData.centralUrl;
+            }
+        } catch (e) {
+            console.log('[Status Callback] Using default Central URL');
+        }
+        
+        // Call Central's order-status webhook
+        const response = await fetch(`${centralUrl}/api/wholesale/order-status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                order_id: orderId,
+                status: newStatus,
+                farm_id: farmData?.farmId || 'unknown',
+                timestamp: new Date().toISOString()
+            })
+        });
+        
+        if (response.ok) {
+            console.log(`✓ Notified Central of status change: ${orderId} → ${newStatus}`);
+        } else {
+            console.warn(`⚠ Central notification failed (${response.status}), status saved locally`);
+        }
+    } catch (error) {
+        console.warn('[Status Callback] Failed to notify Central:', error.message);
+        // Non-blocking: status was already saved locally
     }
 }
 
