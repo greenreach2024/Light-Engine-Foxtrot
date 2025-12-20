@@ -27,6 +27,7 @@ import {
   listNetworkSnapshots
 } from '../services/wholesaleNetworkAggregator.js';
 import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
+import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
 
 const router = express.Router();
 
@@ -620,11 +621,56 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
 
       const payment = createPayment({
         orderId: order.master_order_id,
-        provider: payment_provider || 'demo',
+        provider: payment_provider || 'square',
         split: result.payment_split,
         totals: result.allocation
       });
-      payment.status = 'completed';
+
+      // Attempt Square payment if farms have Square connected
+      let paymentSuccess = false;
+      const farmIds = result.allocation.farm_sub_orders.map(sub => sub.farm_id);
+      
+      try {
+        const squareCredentials = await getBatchFarmSquareCredentials(farmIds);
+        const allFarmsConnected = farmIds.every(farmId => 
+          squareCredentials.get(farmId)?.success === true
+        );
+        
+        if (allFarmsConnected) {
+          console.log('[Checkout] All farms have Square connected - processing payments');
+          
+          // TODO: Implement actual Square payment processing
+          // For now, log credentials availability and mark as manual payment
+          for (const sub of result.allocation.farm_sub_orders) {
+            const creds = squareCredentials.get(sub.farm_id);
+            if (creds?.success) {
+              console.log(`[Checkout] Farm ${sub.farm_id}: Square merchant ${creds.credentials.merchant_id}, location ${creds.credentials.location_id}`);
+            }
+          }
+          
+          // Set payment as pending until Square integration complete
+          payment.status = 'pending';
+          payment.provider = 'square';
+          payment.notes = 'Square payment processing - requires completion';
+        } else {
+          console.log('[Checkout] Not all farms have Square connected - using manual payment');
+          payment.status = 'pending';
+          payment.provider = 'manual';
+          
+          // Log which farms are missing Square
+          for (const farmId of farmIds) {
+            const creds = squareCredentials.get(farmId);
+            if (!creds?.success) {
+              console.log(`[Checkout] Farm ${farmId} Square not connected: ${creds?.error || 'unknown'}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Checkout] Square credential check failed:', error);
+        payment.status = 'pending';
+        payment.provider = 'manual';
+        payment.notes = 'Manual payment required - Square unavailable';
+      }
 
       // Best-effort: notify each farm (Light Engine) about its sub-order.
       // Additive only; failure does not block checkout.

@@ -658,6 +658,103 @@ export function getFarmSquareIds(farm_id) {
   };
 }
 
+/**
+ * GET /api/wholesale/oauth/square/ids/:farmId
+ * 
+ * Get Square merchant and location IDs for a farm
+ * Used by Central to fetch payment credentials
+ */
+router.get('/ids/:farmId', (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const ids = getFarmSquareIds(farmId);
+    
+    return res.json({
+      status: 'ok',
+      data: ids
+    });
+  } catch (error) {
+    console.error('Get Square IDs error:', error);
+    return res.status(404).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/wholesale/oauth/square/token/:farmId
+ * 
+ * Get decrypted access token for a farm
+ * IMPORTANT: Only expose this to trusted Central server
+ * In production, use mutual TLS or other secure authentication
+ */
+router.get('/token/:farmId', (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    // TODO: Add authentication check to ensure this is Central server calling
+    // For now, relying on internal network security
+    
+    const accessToken = getFarmAccessToken(farmId);
+    
+    return res.json({
+      status: 'ok',
+      data: {
+        access_token: accessToken
+      }
+    });
+  } catch (error) {
+    console.error('Get Square token error:', error);
+    return res.status(404).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/wholesale/oauth/square/status
+ * 
+ * Check if this farm has Square connected
+ */
+router.get('/status', (req, res) => {
+  try {
+    // For now, check if any farm has tokens
+    // In multi-tenant setup, would check specific farm
+    const hasFarms = farmTokens.size > 0;
+    
+    if (!hasFarms) {
+      return res.json({
+        status: 'ok',
+        connected: false,
+        message: 'No Square account connected'
+      });
+    }
+    
+    // Get first farm's data (single-tenant mode)
+    const [farmId, tokenData] = Array.from(farmTokens.entries())[0];
+    
+    return res.json({
+      status: 'ok',
+      connected: true,
+      data: {
+        farm_id: farmId,
+        merchant_id: tokenData.merchant_id,
+        location_id: tokenData.location_id,
+        location_name: tokenData.location_name,
+        expires_at: tokenData.expires_at
+      }
+    });
+  } catch (error) {
+    console.error('Square status error:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to check Square status'
+    });
+  }
+});
+
 // Auto-refresh tokens on startup
 setInterval(() => {
   const now = new Date();

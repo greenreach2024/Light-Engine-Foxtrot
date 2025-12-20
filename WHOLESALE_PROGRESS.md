@@ -72,14 +72,24 @@
 
 ## 🔲 Pending Features (4/10)
 
-### 7. Square OAuth for Payments 🔄 NEXT
+### 7. Square OAuth for Payments 🔄 IN PROGRESS
 - **Priority**: HIGH - Required for scaling beyond pilot
-- **Scope**:
-  - Complete OAuth flow in auth-routes.js
-  - Store Square merchant ID in farm profile
-  - Auto-generate payment links at checkout
-  - Automated commission splits
-- **Impact**: Moves payment score from 4/10 → 8/10 in readiness report
+- **Status**: 85% Complete
+- **Completed**:
+  - Square OAuth proxy in Central (square-oauth-proxy.js)
+  - Payment Setup UI tab in wholesale-admin.html
+  - Farm connection status display
+  - Connect/disconnect buttons with OAuth popup flow
+  - Square credential helper (squareCredentials.js)
+  - Farm endpoints: /oauth/square/ids/:farmId, /oauth/square/token/:farmId, /oauth/square/status
+  - Checkout flow checks farm Square connection status
+  - Payment record marked as 'pending' or 'square' based on availability
+- **Remaining**:
+  - Implement actual Square payment API calls in checkout
+  - Create Square payments with commission splits (app_fee_money)
+  - Handle payment webhooks and status updates
+  - End-to-end payment testing with real Square sandbox
+- **Impact**: Once complete, moves payment score from 4/10 → 8/10 in readiness report
 
 ### 8. Buyer Order History UI
 - **Priority**: MEDIUM - Buyer experience improvement
