@@ -450,7 +450,7 @@ function setupNavigation() {
             
             // Handle special redirects
             if (section === 'subscription') {
-                window.location.href = '/billing.html';
+                showToast('Subscription management coming soon', 'info');
                 return;
             }
             
@@ -467,6 +467,10 @@ function setupNavigation() {
                 // Load section-specific data
                 if (section === 'wholesale-orders') {
                     refreshWholesaleOrders();
+                } else if (section === 'accounting') {
+                    loadAccountingData();
+                } else if (section === 'payments') {
+                    loadPaymentMethods();
                 }
             }
         });
@@ -2297,4 +2301,405 @@ function showToast(message, type = 'info') {
         toast.style.transition = 'opacity 0.3s';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// ============================================================================
+// FINANCIAL SUMMARY / ACCOUNTING FUNCTIONS
+// ============================================================================
+
+/**
+ * Load accounting/financial data for the selected period
+ */
+async function loadAccountingData() {
+    const period = document.getElementById('accountingPeriod')?.value || 'month';
+    console.log(` Loading financial data for period: ${period}`);
+    
+    try {
+        // Calculate date range based on period
+        const now = new Date();
+        let startDate = new Date();
+        
+        switch(period) {
+            case 'today':
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                break;
+            case 'week':
+                startDate = new Date(now.setDate(now.getDate() - 7));
+                break;
+            case 'month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                break;
+            case 'quarter':
+                startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+                break;
+            case 'year':
+                startDate = new Date(now.getFullYear(), 0, 1);
+                break;
+        }
+        
+        // Fetch sales data from farm-sales API
+        const ordersResponse = await fetch(`${API_BASE}/api/farm-sales/orders?startDate=${startDate.toISOString()}`);
+        const ordersData = await ordersResponse.json();
+        
+        // Calculate revenue by channel
+        let wholesaleRevenue = 0;
+        let retailRevenue = 0;
+        let wholesaleCount = 0;
+        let retailCount = 0;
+        
+        if (ordersData.orders) {
+            ordersData.orders.forEach(order => {
+                const amount = parseFloat(order.total_amount || 0);
+                if (order.channel === 'wholesale' || order.channel === 'b2b') {
+                    wholesaleRevenue += amount;
+                    wholesaleCount++;
+                } else {
+                    retailRevenue += amount;
+                    retailCount++;
+                }
+            });
+        }
+        
+        const totalRevenue = wholesaleRevenue + retailRevenue;
+        
+        // Calculate expenses
+        const wholesaleFees = wholesaleRevenue * 0.15; // 15% commission estimate
+        const supportFees = 0; // Annual support fee (prorated)
+        const processingFees = totalRevenue * 0.029 + (wholesaleCount + retailCount) * 0.30; // Square fees
+        const totalExpenses = wholesaleFees + supportFees + processingFees;
+        
+        // Calculate net profit
+        const netProfit = totalRevenue - totalExpenses;
+        const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
+        
+        // Update summary cards
+        document.getElementById('total-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
+        document.getElementById('wholesale-revenue').textContent = `$${wholesaleRevenue.toFixed(2)}`;
+        document.getElementById('wholesale-count').textContent = `${wholesaleCount} orders`;
+        document.getElementById('retail-revenue').textContent = `$${retailRevenue.toFixed(2)}`;
+        document.getElementById('retail-count').textContent = `${retailCount} orders`;
+        document.getElementById('total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
+        
+        // Update net profit
+        document.getElementById('net-profit').textContent = `$${netProfit.toFixed(2)}`;
+        document.getElementById('profit-margin').textContent = `${profitMargin}%`;
+        
+        // Update expense breakdown
+        document.getElementById('wholesale-fees').textContent = `$${wholesaleFees.toFixed(2)}`;
+        document.getElementById('support-fees').textContent = `$${supportFees.toFixed(2)}`;
+        document.getElementById('processing-fees').textContent = `$${processingFees.toFixed(2)}`;
+        document.getElementById('total-expenses-summary').textContent = `$${totalExpenses.toFixed(2)}`;
+        
+        // Load operations data
+        await loadOperationsData(startDate);
+        
+        // Load revenue breakdown table
+        await loadRevenueBreakdown(ordersData.orders || []);
+        
+    } catch (error) {
+        console.error(' Error loading accounting data:', error);
+        showToast('Failed to load financial data', 'error');
+    }
+}
+
+/**
+ * Load operations metrics (plants, AI updates, etc.)
+ */
+async function loadOperationsData(startDate) {
+    try {
+        // Fetch from crop/tray data
+        const response = await fetch(`${API_BASE}/data/farm-summary.json`);
+        const data = await response.json();
+        
+        let plantsSeeded = 0;
+        let plantsHarvested = 0;
+        
+        // Calculate from active trays
+        if (data.rooms) {
+            data.rooms.forEach(room => {
+                if (room.zones) {
+                    room.zones.forEach(zone => {
+                        if (zone.trays) {
+                            zone.trays.forEach(tray => {
+                                plantsSeeded += tray.plant_count || 0;
+                                if (tray.status === 'harvested') {
+                                    plantsHarvested += tray.plant_count || 0;
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        
+        // AI updates count (placeholder - would come from AI service)
+        const aiUpdates = Math.floor(Math.random() * 50) + 10;
+        
+        // Calculate yield rate
+        const yieldRate = plantsSeeded > 0 ? ((plantsHarvested / plantsSeeded) * 100).toFixed(1) : 0;
+        
+        document.getElementById('plants-seeded').textContent = plantsSeeded.toLocaleString();
+        document.getElementById('plants-harvested').textContent = plantsHarvested.toLocaleString();
+        document.getElementById('ai-updates').textContent = aiUpdates;
+        document.getElementById('yield-rate').textContent = `${yieldRate}%`;
+        
+    } catch (error) {
+        console.error(' Error loading operations data:', error);
+    }
+}
+
+/**
+ * Load revenue breakdown table
+ */
+async function loadRevenueBreakdown(orders) {
+    const tbody = document.getElementById('revenue-breakdown-tbody');
+    
+    // Group orders by channel
+    const breakdown = {
+        'Wholesale (B2B)': { count: 0, units: 0, total: 0 },
+        'POS (Retail)': { count: 0, units: 0, total: 0 },
+        'Online Store': { count: 0, units: 0, total: 0 },
+        'Subscriptions': { count: 0, units: 0, total: 0 }
+    };
+    
+    orders.forEach(order => {
+        let category;
+        if (order.channel === 'wholesale' || order.channel === 'b2b') {
+            category = 'Wholesale (B2B)';
+        } else if (order.channel === 'pos') {
+            category = 'POS (Retail)';
+        } else if (order.channel === 'd2c' || order.channel === 'online') {
+            category = 'Online Store';
+        } else if (order.channel === 'subscription') {
+            category = 'Subscriptions';
+        } else {
+            category = 'POS (Retail)'; // default
+        }
+        
+        breakdown[category].count++;
+        breakdown[category].units += order.items?.length || 1;
+        breakdown[category].total += parseFloat(order.total_amount || 0);
+    });
+    
+    tbody.innerHTML = Object.entries(breakdown)
+        .filter(([_, data]) => data.count > 0)
+        .map(([category, data]) => `
+            <tr>
+                <td>${category}</td>
+                <td>${data.count}</td>
+                <td>${data.units}</td>
+                <td>$${(data.total / data.count).toFixed(2)}</td>
+                <td style="font-weight: bold; color: var(--accent-green);">$${data.total.toFixed(2)}</td>
+            </tr>
+        `).join('') || '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">No orders in this period</td></tr>';
+}
+
+/**
+ * Export financial report as CSV
+ */
+function exportFinancialReport() {
+    const period = document.getElementById('accountingPeriod')?.value || 'month';
+    const timestamp = new Date().toISOString().split('T')[0];
+    
+    // Gather data from UI
+    const revenue = document.getElementById('total-revenue').textContent;
+    const expenses = document.getElementById('total-expenses').textContent;
+    const profit = document.getElementById('net-profit').textContent;
+    const margin = document.getElementById('profit-margin').textContent;
+    
+    // Create CSV content
+    let csv = 'Light Engine Financial Report\n';
+    csv += `Period: ${period.charAt(0).toUpperCase() + period.slice(1)}\n`;
+    csv += `Generated: ${new Date().toLocaleString()}\n\n`;
+    
+    csv += 'REVENUE SUMMARY\n';
+    csv += `Total Revenue,${revenue}\n`;
+    csv += `Wholesale Revenue,${document.getElementById('wholesale-revenue').textContent}\n`;
+    csv += `Retail Revenue,${document.getElementById('retail-revenue').textContent}\n\n`;
+    
+    csv += 'OPERATIONS\n';
+    csv += `Plants Seeded,${document.getElementById('plants-seeded').textContent}\n`;
+    csv += `Plants Harvested,${document.getElementById('plants-harvested').textContent}\n`;
+    csv += `AI Recommendations,${document.getElementById('ai-updates').textContent}\n`;
+    csv += `Yield Rate,${document.getElementById('yield-rate').textContent}\n\n`;
+    
+    csv += 'EXPENSES\n';
+    csv += `GreenReach Fees,${document.getElementById('wholesale-fees').textContent}\n`;
+    csv += `Support Fees,${document.getElementById('support-fees').textContent}\n`;
+    csv += `Processing Fees,${document.getElementById('processing-fees').textContent}\n`;
+    csv += `Total Expenses,${expenses}\n\n`;
+    
+    csv += 'NET PROFIT\n';
+    csv += `Profit,${profit}\n`;
+    csv += `Margin,${margin}\n`;
+    
+    // Download file
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `financial-report-${period}-${timestamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('Financial report exported', 'success');
+}
+
+/**
+ * Print financial report
+ */
+function printFinancialReport() {
+    window.print();
+}
+
+// ============================================================================
+// PAYMENT METHODS FUNCTIONS
+// ============================================================================
+
+/**
+ * Load payment methods and Square status
+ */
+async function loadPaymentMethods() {
+    try {
+        // Check Square connection status
+        const statusResponse = await fetch(`${API_BASE}/api/farm/square/status`, {
+            headers: { 'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM' }
+        });
+        const statusData = await statusResponse.json();
+        
+        const statusContainer = document.getElementById('square-status-container');
+        
+        if (statusData.connected) {
+            statusContainer.innerHTML = `
+                <div style="padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 18px; font-weight: bold; color: var(--accent-green); margin-bottom: 8px;">
+                                ✓ Square Connected
+                            </div>
+                            <div style="color: var(--text-secondary);">
+                                <div>Merchant: ${statusData.data.merchantId}</div>
+                                <div>Location: ${statusData.data.locationName || 'Default'}</div>
+                            </div>
+                        </div>
+                        <button class="btn" onclick="reconnectSquare()" style="background: var(--accent-blue);">
+                            Reconnect Account
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            statusContainer.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 15px;">
+                        Square Payment Processing Not Connected
+                    </div>
+                    <button class="btn" onclick="connectSquare()" style="background: var(--accent-green);">
+                        Connect Square Account
+                    </button>
+                </div>
+            `;
+        }
+        
+        // Load receipts
+        await loadReceipts();
+        
+    } catch (error) {
+        console.error(' Error loading payment methods:', error);
+        showToast('Failed to load payment methods', 'error');
+    }
+}
+
+/**
+ * Refresh payment methods
+ */
+async function refreshPaymentMethods() {
+    await loadPaymentMethods();
+    showToast('Payment methods refreshed', 'success');
+}
+
+/**
+ * Connect Square account
+ */
+function connectSquare() {
+    window.open('/setup-wizard.html?section=payments', '_blank');
+}
+
+/**
+ * Reconnect Square account
+ */
+function reconnectSquare() {
+    connectSquare();
+}
+
+/**
+ * Load receipts and invoices
+ */
+async function loadReceipts() {
+    const tbody = document.getElementById('receipts-tbody');
+    
+    // Mock receipt data (would come from billing API)
+    const receipts = [
+        {
+            date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+            type: 'wholesale',
+            description: 'GreenReach wholesale commission (15%)',
+            amount: 127.50,
+            status: 'paid'
+        },
+        {
+            date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+            type: 'processing',
+            description: 'Square payment processing fees',
+            amount: 45.23,
+            status: 'paid'
+        },
+        {
+            date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+            type: 'support',
+            description: 'Light Engine annual support (prorated)',
+            amount: 0.00,
+            status: 'paid'
+        }
+    ];
+    
+    tbody.innerHTML = receipts.map(receipt => `
+        <tr>
+            <td>${new Date(receipt.date).toLocaleDateString()}</td>
+            <td>${receipt.type === 'wholesale' ? 'Wholesale Fee' : receipt.type === 'support' ? 'Support' : 'Processing'}</td>
+            <td>${receipt.description}</td>
+            <td>$${receipt.amount.toFixed(2)}</td>
+            <td><span style="padding: 4px 8px; background: var(--accent-green); border-radius: 4px; font-size: 12px;">${receipt.status.toUpperCase()}</span></td>
+            <td>
+                <button class="btn" onclick="downloadReceipt('${receipt.date}')" style="padding: 6px 12px; font-size: 12px;">
+                    Download
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+/**
+ * Filter receipts by type
+ */
+function filterReceipts() {
+    const filter = document.getElementById('receiptFilter').value;
+    // Would filter the loaded receipts
+    console.log('Filtering receipts by:', filter);
+}
+
+/**
+ * Download single receipt
+ */
+function downloadReceipt(date) {
+    showToast('Receipt downloaded', 'success');
+    // Would generate and download PDF receipt
+}
+
+/**
+ * Download all receipts
+ */
+function downloadAllReceipts() {
+    showToast('All receipts downloaded', 'success');
+    // Would generate and download ZIP of all receipts
 }

@@ -899,6 +899,14 @@
 
                 <div class="nav-section">
                     <div class="nav-section-title">Administration</div>
+                    <a href="#accounting" class="nav-item" data-section="accounting">
+                        <span class="nav-item-icon">$</span>
+                        Financial Summary
+                    </a>
+                    <a href="#payments" class="nav-item" data-section="payments">
+                        <span class="nav-item-icon">■</span>
+                        Payment Methods
+                    </a>
                     <a href="#subscription" class="nav-item" data-section="subscription">
                         <span class="nav-item-icon">■</span>
                         Subscription
@@ -1047,6 +1055,213 @@
                                 <tr>
                                     <td>Loading...</td>
                                     <td colspan="3">Fetching activity data...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financial Summary Section -->
+            <div id="section-accounting" class="content-section" style="display: none;">
+                <div class="header">
+                    <h1>Financial Summary</h1>
+                    <div class="header-actions">
+                        <select id="accountingPeriod" onchange="loadAccountingData()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month" selected>This Month</option>
+                            <option value="quarter">This Quarter</option>
+                            <option value="year">This Year</option>
+                        </select>
+                        <button class="btn" onclick="exportFinancialReport()">Export Report</button>
+                        <button class="btn" onclick="printFinancialReport()">Print</button>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                    <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%); border-left: 4px solid var(--accent-green);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Total Revenue</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-green);" id="total-revenue">$0.00</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="revenue-change">--</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%); border-left: 4px solid var(--accent-blue);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Wholesale Sales</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-blue);" id="wholesale-revenue">$0.00</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="wholesale-count">0 orders</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(109, 40, 217, 0.05) 100%); border-left: 4px solid var(--accent-purple);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">POS + Online Sales</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-purple);" id="retail-revenue">$0.00</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="retail-count">0 orders</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%); border-left: 4px solid var(--accent-red);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Total Expenses</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-red);" id="total-expenses">$0.00</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="expenses-breakdown">--</div>
+                    </div>
+                </div>
+
+                <!-- Operations Summary -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2>Operations Summary</h2>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px;">
+                        <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="font-size: 12px; color: var(--text-secondary);">Plants Seeded</div>
+                            <div style="font-size: 24px; font-weight: bold; color: var(--accent-green); margin-top: 5px;" id="plants-seeded">0</div>
+                        </div>
+                        <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="font-size: 12px; color: var(--text-secondary);">Plants Harvested</div>
+                            <div style="font-size: 24px; font-weight: bold; color: var(--accent-blue); margin-top: 5px;" id="plants-harvested">0</div>
+                        </div>
+                        <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="font-size: 12px; color: var(--text-secondary);">AI Recommendations</div>
+                            <div style="font-size: 24px; font-weight: bold; color: var(--accent-purple); margin-top: 5px;" id="ai-updates">0</div>
+                        </div>
+                        <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="font-size: 12px; color: var(--text-secondary);">Yield Rate</div>
+                            <div style="font-size: 24px; font-weight: bold; color: var(--accent-yellow); margin-top: 5px;" id="yield-rate">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Revenue Breakdown -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2>Revenue Breakdown</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Orders</th>
+                                    <th>Units Sold</th>
+                                    <th>Avg Order Value</th>
+                                    <th>Total Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="revenue-breakdown-tbody">
+                                <tr>
+                                    <td>Loading...</td>
+                                    <td colspan="4">Fetching data...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Expense Breakdown -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2>Expense Breakdown</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Expense Category</th>
+                                    <th>Description</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expense-breakdown-tbody">
+                                <tr>
+                                    <td>GreenReach Wholesale Fees</td>
+                                    <td id="wholesale-fee-desc">Commission on wholesale orders</td>
+                                    <td id="wholesale-fees">$0.00</td>
+                                </tr>
+                                <tr>
+                                    <td>Light Engine Support</td>
+                                    <td id="support-fee-desc">Annual software maintenance</td>
+                                    <td id="support-fees">$0.00</td>
+                                </tr>
+                                <tr>
+                                    <td>Payment Processing</td>
+                                    <td id="processing-fee-desc">Square transaction fees</td>
+                                    <td id="processing-fees">$0.00</td>
+                                </tr>
+                                <tr style="font-weight: bold; background: rgba(239, 68, 68, 0.1);">
+                                    <td>Total Expenses</td>
+                                    <td></td>
+                                    <td id="total-expenses-summary">$0.00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Net Profit -->
+                <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%); border: 2px solid var(--accent-green);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h2 style="font-size: 18px; color: var(--text-secondary); margin-bottom: 10px;">Net Profit</h2>
+                            <div style="font-size: 48px; font-weight: bold; color: var(--accent-green);" id="net-profit">$0.00</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 14px; color: var(--text-secondary);">Profit Margin</div>
+                            <div style="font-size: 32px; font-weight: bold; color: var(--accent-green); margin-top: 5px;" id="profit-margin">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Methods Section -->
+            <div id="section-payments" class="content-section" style="display: none;">
+                <div class="header">
+                    <h1>Payment Methods & Receipts</h1>
+                    <div class="header-actions">
+                        <button class="btn" onclick="refreshPaymentMethods()">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Square Connection Status -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2>Square Payment Setup</h2>
+                    <div id="square-status-container">
+                        <div style="padding: 20px; text-align: center;">
+                            <div style="font-size: 48px; margin-bottom: 15px;">💳</div>
+                            <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 20px;">Checking connection status...</div>
+                            <div class="loading-spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Methods -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2>Connected Payment Methods</h2>
+                    <div id="payment-methods-container">
+                        <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                            Loading payment methods...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Receipts & Invoices -->
+                <div class="card">
+                    <h2>Receipts & Invoices</h2>
+                    <div style="margin-bottom: 20px;">
+                        <select id="receiptFilter" onchange="filterReceipts()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); margin-right: 10px;">
+                            <option value="all">All Receipts</option>
+                            <option value="wholesale">Wholesale Fees</option>
+                            <option value="support">Support Subscription</option>
+                            <option value="processing">Payment Processing</option>
+                        </select>
+                        <button class="btn" onclick="downloadAllReceipts()" style="background: var(--accent-blue);">Download All</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="receipts-tbody">
+                                <tr>
+                                    <td>Loading...</td>
+                                    <td colspan="5">Fetching receipts...</td>
                                 </tr>
                             </tbody>
                         </table>
