@@ -29,6 +29,7 @@
     "mqtt": "^5.3.4",
     "nedb-promises": "^6.2.3",
     "node-quickbooks": "^2.0.47",
+    "pg": "^8.16.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "square": "^37.1.1",

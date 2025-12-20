@@ -106,6 +106,7 @@ import CredentialManager from './services/credential-manager.js';
 import EdgeWholesaleService from './lib/edge-wholesale-service.js';
 import WholesaleIntegrationService from './services/wholesale-integration.js';
 import { sanitizeRequestBody } from './lib/input-validation.js';
+import { initDatabase, checkHealth as checkDatabaseHealth, getDatabaseMode } from './lib/database.js';
 
 const app = express();
 // Enable app.ws(...) WebSocket routes (used by sync status endpoint)
@@ -7182,23 +7183,20 @@ app.get('/health', asyncHandler(async (req, res) => {
   };
 
   // Database connectivity check
-  try {
-    const dbStart = Date.now();
-    await db.findOne({ key: 'health_check' });
-    const latency = Date.now() - dbStart;
-    
-    health.checks.database = {
-      status: latency < 100 ? 'healthy' : 'degraded',
-      latencyMs: latency,
-      connected: true
-    };
-  } catch (error) {
+  const dbHealth = await checkDatabaseHealth();
+  health.checks.database = {
+    status: dbHealth.connected ? (dbHealth.latencyMs > 100 ? 'degraded' : 'healthy') : (dbHealth.enabled ? 'unhealthy' : 'disabled'),
+    mode: dbHealth.mode,
+    enabled: dbHealth.enabled,
+    connected: dbHealth.connected,
+    latencyMs: dbHealth.latencyMs || 0
+  };
+  
+  if (dbHealth.enabled && !dbHealth.connected) {
     health.status = 'unhealthy';
-    health.checks.database = {
-      status: 'unhealthy',
-      connected: false,
-      error: error.message
-    };
+    health.checks.database.error = dbHealth.error;
+  } else if (dbHealth.enabled && dbHealth.latencyMs > 100) {
+    health.status = 'degraded';
   }
 
   // Memory usage check
@@ -20962,6 +20960,20 @@ async function startServer() {
     if (isDemoMode()) {
       console.log(`[charlie] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
     }
+    
+    // Initialize database (Task #3 - Database Persistence)
+    (async () => {
+      try {
+        const dbResult = await initDatabase();
+        console.log(`[Database] Mode: ${dbResult.mode}`);
+        if (dbResult.enabled) {
+          console.log('[Database] ✅ PostgreSQL ready for production');
+        }
+      } catch (error) {
+        console.error('[Database] ❌ Initialization error:', error.message);
+      }
+    })();
+    
     try { setupWeatherPolling(); } catch {}
     
     // Initialize zone setpoints from room-map.json
