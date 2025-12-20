@@ -1,0 +1,14 @@
+{
+  "mode": "edge",
+  "farmId": "GR-00001",
+  "farmName": "Demo Farm - Light Engine Showcase",
+  "apiKey": "demo-api-key-12345678901234567890123456789012",
+  "centralApiUrl": "http://localhost:3000",
+  "syncInterval": 300000,
+  "heartbeatInterval": 30000,
+  "hardwareModel": "Symcod W101M N97",
+  "version": "1.0.0",
+  "offlineMode": false,
+  "syncEnabled": true,
+  "registrationComplete": true
+}

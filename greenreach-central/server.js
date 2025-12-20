@@ -17,6 +17,7 @@ import alertsRoutes from './routes/alerts.js';
 import syncRoutes from './routes/sync.js';
 import wholesaleRoutes from './routes/wholesale.js';
 import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
+import adminRoutes from './routes/admin.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -28,6 +29,7 @@ import { initDatabase } from './config/database.js';
 import { startHealthCheckService } from './services/healthCheck.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
+import { seedDemoFarm } from './services/seedDemoFarm.js';
 import logger from './utils/logger.js';
 
 // Load environment variables
@@ -105,6 +107,7 @@ app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
 app.use('/api/wholesale', wholesaleRoutes); // Public catalog API
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
+app.use('/api/admin', adminRoutes); // Admin dashboard API
 
 // 404 handler
 app.use((req, res) => {
@@ -127,6 +130,11 @@ async function startServer() {
       await initDatabase();
       app.locals.databaseReady = true;
       logger.info('Database connected successfully');
+      
+      // Seed demo farm data in development
+      if (process.env.NODE_ENV !== 'production') {
+        await seedDemoFarm();
+      }
     } catch (error) {
       app.locals.databaseReady = false;
       logger.warn('Database unavailable; starting in limited mode', {
