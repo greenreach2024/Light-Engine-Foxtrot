@@ -1343,8 +1343,26 @@
                 <input type="text" id="delivery-city" required />
               </div>
               <div class="form-group">
-                <label for="delivery-zip">ZIP Code</label>
-                <input type="text" id="delivery-zip" required />
+                <label for="delivery-province">Province</label>
+                <select id="delivery-province" required>
+                  <option value="BC">British Columbia</option>
+                  <option value="AB">Alberta</option>
+                  <option value="SK">Saskatchewan</option>
+                  <option value="MB">Manitoba</option>
+                  <option value="ON">Ontario</option>
+                  <option value="QC">Quebec</option>
+                  <option value="NB">New Brunswick</option>
+                  <option value="NS">Nova Scotia</option>
+                  <option value="PE">Prince Edward Island</option>
+                  <option value="NL">Newfoundland and Labrador</option>
+                  <option value="YT">Yukon</option>
+                  <option value="NT">Northwest Territories</option>
+                  <option value="NU">Nunavut</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="delivery-postal">Postal Code</label>
+                <input type="text" id="delivery-postal" placeholder="A1A 1A1" pattern="[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]" required />
               </div>
             </div>
             
@@ -1460,12 +1478,27 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label for="register-zip">Business ZIP Code</label>
-            <input type="text" id="register-zip" placeholder="ZIP" required />
+            <label for="register-postal">Business Postal Code</label>
+            <input type="text" id="register-postal" placeholder="A1A 1A1" pattern="[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]" required />
           </div>
           <div class="form-group">
-            <label for="register-state">State</label>
-            <input type="text" id="register-state" placeholder="State" required />
+            <label for="register-province">Province</label>
+            <select id="register-province" required>
+              <option value="">Select Province</option>
+              <option value="BC">British Columbia</option>
+              <option value="AB">Alberta</option>
+              <option value="SK">Saskatchewan</option>
+              <option value="MB">Manitoba</option>
+              <option value="ON">Ontario</option>
+              <option value="QC">Quebec</option>
+              <option value="NB">New Brunswick</option>
+              <option value="NS">Nova Scotia</option>
+              <option value="PE">Prince Edward Island</option>
+              <option value="NL">Newfoundland and Labrador</option>
+              <option value="YT">Yukon</option>
+              <option value="NT">Northwest Territories</option>
+              <option value="NU">Nunavut</option>
+            </select>
           </div>
         </div>
 

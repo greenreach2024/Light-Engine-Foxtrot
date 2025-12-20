@@ -34,6 +34,12 @@
       else this.demoMode = false;
 
       this.loadAuthState();
+      
+      // Auto-login with demo profile if not already logged in
+      if (!this.currentBuyer) {
+        this.createDemoProfile();
+      }
+      
       this.setupEventListeners();
       this.setDefaultDeliveryDate();
 
@@ -44,6 +50,32 @@
       await this.loadOrders();
       this.renderCart();
       this.updateDemoBanner();
+    },
+
+    createDemoProfile() {
+      const demoBuyer = {
+        id: 'demo-buyer-001',
+        businessName: 'GreenLeaf Restaurant Group',
+        contactName: 'Demo User',
+        email: 'demo@greenleaf.ca',
+        phone: '(604) 555-0100',
+        buyerType: 'restaurant',
+        location: {
+          street: '1234 Robson Street',
+          city: 'Vancouver',
+          province: 'BC',
+          postalCode: 'V6E 1A7',
+          country: 'Canada',
+          latitude: 49.2827,
+          longitude: -123.1207
+        }
+      };
+      
+      // Generate a demo token
+      const demoToken = 'demo-token-' + Date.now();
+      
+      this.setActiveBuyer({ buyer: demoBuyer, token: demoToken });
+      console.log('✅ Demo profile auto-logged in:', demoBuyer.businessName);
     },
 
     setupEventListeners() {
@@ -229,8 +261,8 @@
       const email = document.getElementById('register-email').value.trim().toLowerCase();
       const password = document.getElementById('register-password').value;
       const buyerType = document.getElementById('register-buyer-type').value;
-      const postalCode = document.getElementById('register-zip')?.value?.trim() || '';
-      const state = document.getElementById('register-state')?.value?.trim() || '';
+      const postalCode = document.getElementById('register-postal')?.value?.trim() || '';
+      const province = document.getElementById('register-province')?.value?.trim() || '';
       const latitudeRaw = document.getElementById('register-lat')?.value;
       const longitudeRaw = document.getElementById('register-lng')?.value;
       const latitude = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
@@ -238,9 +270,10 @@
 
       const location = {
         postalCode,
-        state,
+        province,
         latitude: Number.isFinite(latitude) ? latitude : null,
-        longitude: Number.isFinite(longitude) ? longitude : null
+        longitude: Number.isFinite(longitude) ? longitude : null,
+        country: 'Canada'
       };
 
       try {
@@ -636,7 +669,9 @@
             delivery_address: {
               street: document.getElementById('delivery-address')?.value || 'TBD',
               city: document.getElementById('delivery-city')?.value || 'TBD',
-              zip: document.getElementById('delivery-zip')?.value || 'TBD',
+              province: document.getElementById('delivery-province')?.value || 'BC',
+              postalCode: document.getElementById('delivery-postal')?.value || 'TBD',
+              country: 'Canada',
               instructions: document.getElementById('delivery-instructions')?.value || ''
             },
             recurrence: this.getRecurrence(),
@@ -734,7 +769,9 @@
             delivery_address: {
               street: document.getElementById('delivery-address').value,
               city: document.getElementById('delivery-city').value,
-              zip: document.getElementById('delivery-zip').value,
+              province: document.getElementById('delivery-province')?.value || 'BC',
+              postalCode: document.getElementById('delivery-postal').value,
+              country: 'Canada',
               instructions: document.getElementById('delivery-instructions').value
             },
             recurrence: this.getRecurrence(),
@@ -841,7 +878,7 @@
               ${order.delivery_address ? `
               <div class="order-meta-item">
                 <div class="order-meta-label">Delivery Address</div>
-                <div class="order-meta-value">${order.delivery_address.street}, ${order.delivery_address.city} ${order.delivery_address.zip}</div>
+                <div class="order-meta-value">${order.delivery_address.street}, ${order.delivery_address.city} ${order.delivery_address.province || ''} ${order.delivery_address.postalCode || order.delivery_address.zip || ''}</div>
               </div>
               ` : ''}
             </div>
