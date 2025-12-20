@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from "express";
 import expressWs from 'express-ws';
+import helmet from 'helmet';
 import { setCorsHeaders } from './server/middleware/cors.js';
 
 // Security middleware
@@ -108,8 +109,41 @@ const app = express();
 // Enable app.ws(...) WebSocket routes (used by sync status endpoint)
 expressWs(app);
 
+// Security Headers - Helmet.js
+// Configure helmet for production-ready security headers
+const isProduction = process.env.NODE_ENV === 'production';
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Note: unsafe-inline/eval needed for dynamic UI
+      styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"], // Allow WebSocket connections
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000, // 1 year in seconds
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  referrerPolicy: { policy: 'same-origin' },
+  xssFilter: true,
+  frameguard: { action: 'deny' }
+}));
+
+console.log('[Security] Helmet.js security headers enabled');
+if (isProduction) {
+  console.log('[Security] HSTS enabled (maxAge: 1 year)');
+}
+
 // Security Configuration
-const RATE_LIMITING_ENABLED = String(process.env.RATE_LIMITING_ENABLED || 'false').toLowerCase() === 'true';
+const RATE_LIMITING_ENABLED = String(process.env.RATE_LIMITING_ENABLED || 'true').toLowerCase() === 'true';
 const AUDIT_LOG_ENABLED = String(process.env.AUDIT_LOG_ENABLED || 'true').toLowerCase() === 'true';
 
 console.log('[Security] Rate limiting enabled:', RATE_LIMITING_ENABLED);
