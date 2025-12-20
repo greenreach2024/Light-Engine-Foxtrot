@@ -33,7 +33,7 @@ router.get('/farms', async (req, res, next) => {
         f.last_heartbeat,
         COUNT(DISTINCT i.product_id) as product_count
       FROM farms f
-      LEFT JOIN inventory i ON f.farm_id = i.farm_id
+      LEFT JOIN farm_inventory i ON f.id = i.farm_id
     `;
 
     const params = [];
@@ -120,7 +120,7 @@ router.get('/farms/:id', async (req, res, next) => {
         COUNT(DISTINCT r.room_id) as room_count,
         SUM(i.quantity_available) as total_inventory_items
       FROM farms f
-      LEFT JOIN inventory i ON f.farm_id = i.farm_id
+      LEFT JOIN farm_inventory i ON f.id = i.farm_id
       LEFT JOIN rooms r ON f.farm_id = r.farm_id
       WHERE f.farm_id = $1
       GROUP BY f.farm_id
@@ -196,7 +196,7 @@ router.get('/analytics/aggregate', async (req, res, next) => {
         SUM(quantity_available) as total_items,
         COUNT(DISTINCT product_id) as total_products,
         COUNT(DISTINCT farm_id) as farms_with_inventory
-      FROM inventory
+      FROM farm_inventory
     `);
 
     res.json({
