@@ -13,6 +13,11 @@ import {
   reactivateFarm,
   listApiKeys
 } from '../lib/wholesale-auth.js';
+import {
+  validateApiKeyGeneration,
+  validateFarmIdParam,
+  handleValidationErrors
+} from '../lib/input-validation.js';
 
 const router = express.Router();
 
@@ -65,7 +70,7 @@ router.get('/keys', (req, res) => {
  *   api_key: string (ONLY RETURNED ONCE)
  * }
  */
-router.post('/keys', express.json(), (req, res) => {
+router.post('/keys', express.json(), validateApiKeyGeneration, handleValidationErrors, (req, res) => {
   try {
     const { farm_id, farm_name } = req.body;
     
@@ -104,7 +109,7 @@ router.post('/keys', express.json(), (req, res) => {
  *   api_key: string (new key)
  * }
  */
-router.post('/keys/:farm_id/rotate', (req, res) => {
+router.post('/keys/:farm_id/rotate', validateFarmIdParam, handleValidationErrors, (req, res) => {
   try {
     const { farm_id } = req.params;
     
@@ -131,7 +136,7 @@ router.post('/keys/:farm_id/rotate', (req, res) => {
  * POST /api/wholesale/admin/keys/:farm_id/suspend
  * Suspend farm API access
  */
-router.post('/keys/:farm_id/suspend', (req, res) => {
+router.post('/keys/:farm_id/suspend', validateFarmIdParam, handleValidationErrors, (req, res) => {
   try {
     const { farm_id } = req.params;
     
@@ -157,7 +162,7 @@ router.post('/keys/:farm_id/suspend', (req, res) => {
  * POST /api/wholesale/admin/keys/:farm_id/reactivate
  * Reactivate suspended farm
  */
-router.post('/keys/:farm_id/reactivate', (req, res) => {
+router.post('/keys/:farm_id/reactivate', validateFarmIdParam, handleValidationErrors, (req, res) => {
   try {
     const { farm_id } = req.params;
     

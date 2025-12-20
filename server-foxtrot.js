@@ -105,6 +105,7 @@ import CertificateManager from './services/certificate-manager.js';
 import CredentialManager from './services/credential-manager.js';
 import EdgeWholesaleService from './lib/edge-wholesale-service.js';
 import WholesaleIntegrationService from './services/wholesale-integration.js';
+import { sanitizeRequestBody } from './lib/input-validation.js';
 
 const app = express();
 // Enable app.ws(...) WebSocket routes (used by sync status endpoint)
@@ -1881,7 +1882,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Global input sanitization middleware
 app.use(express.json({ limit: "1mb" }));
+app.use(sanitizeRequestBody);
+console.log('[Security] Global input sanitization enabled');
 
 // Apply rate limiting if enabled
 if (RATE_LIMITING_ENABLED) {

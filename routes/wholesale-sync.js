@@ -9,6 +9,14 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { wholesaleAuthMiddleware } from '../lib/wholesale-auth.js';
+import {
+  validateReservation,
+  validateConfirmation,
+  validateRelease,
+  validateRollback,
+  validateOrderEvent,
+  handleValidationErrors
+} from '../lib/input-validation.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -172,7 +180,7 @@ router.get('/inventory', async (req, res) => {
  * Receive order notifications from GreenReach Central.
  * This is additive and does not impact grow automation.
  */
-router.post('/order-events', wholesaleAuthMiddleware, express.json({ limit: '256kb' }), async (req, res) => {
+router.post('/order-events', wholesaleAuthMiddleware, express.json({ limit: '256kb' }), validateOrderEvent, handleValidationErrors, async (req, res) => {
   try {
     const payload = req.body || {};
     const event = {
@@ -312,7 +320,7 @@ function getTotalDeductedBySku() {
  *   items: [{sku_id: string, quantity: number}]
  * }
  */
-router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), validateReservation, handleValidationErrors, async (req, res) => {
   try {
     const { order_id, items } = req.body || {};
     if (!order_id) {
@@ -415,7 +423,7 @@ router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit:
  *   payment_id: string (optional, for audit trail)
  * }
  */
-router.post('/inventory/confirm', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/confirm', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), validateConfirmation, handleValidationErrors, async (req, res) => {
   try {
     const { order_id, payment_id } = req.body || {};
     if (!order_id) {
@@ -481,7 +489,7 @@ router.post('/inventory/confirm', wholesaleAuthMiddleware, express.json({ limit:
  *   reason: string (optional, for audit trail)
  * }
  */
-router.post('/inventory/release', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/release', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), validateRelease, handleValidationErrors, async (req, res) => {
   try {
     const { order_id, reason } = req.body || {};
     if (!order_id) {
@@ -519,7 +527,7 @@ router.post('/inventory/release', wholesaleAuthMiddleware, express.json({ limit:
  *   reason: string (required for audit)
  * }
  */
-router.post('/inventory/rollback', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/rollback', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), validateRollback, handleValidationErrors, async (req, res) => {
   try {
     const { order_id, reason } = req.body || {};
     if (!order_id) {
