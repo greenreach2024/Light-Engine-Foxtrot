@@ -624,6 +624,7 @@
     <button class="nav-tab" data-view="payments">Payments & Fees</button>
     <button class="nav-tab" data-view="orders">Orders</button>
     <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
+    <button class="nav-tab" data-view="compliance">Compliance Export</button>
   </nav>
 
   <main>
@@ -1180,6 +1181,68 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="admin.closePaymentModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compliance Export View -->
+  <div id="compliance-view" class="view">
+    <h1>Compliance & Traceability Export</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+      Generate comprehensive audit trails for regulatory compliance (USDA, FDA, FSMA)
+    </p>
+
+    <div class="card" style="margin-bottom: 2rem;">
+      <h2 style="margin-bottom: 1.5rem;">Export Options</h2>
+      
+      <div class="form-group">
+        <label>Date Range</label>
+        <div style="display: flex; gap: 1rem;">
+          <input type="date" id="export-start-date" />
+          <span style="align-self: center;">to</span>
+          <input type="date" id="export-end-date" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Export Format</label>
+        <select id="export-format">
+          <option value="csv">CSV (Excel compatible)</option>
+          <option value="json">JSON (API/Integration)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Data Scope</label>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="include-orders" checked />
+            <span>Order Transactions</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="include-farms" checked />
+            <span>Farm Source Information</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="include-products" checked />
+            <span>Product Details & Certifications</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="include-traceability" checked />
+            <span>Traceability Events (QR scan data)</span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="admin.exportComplianceData()">
+        📄 Generate Export
+      </button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom: 1.5rem;">Export History</h2>
+      <div id="export-history">
+        <p style="color: var(--text-secondary);">No exports generated yet</p>
       </div>
     </div>
   </div>

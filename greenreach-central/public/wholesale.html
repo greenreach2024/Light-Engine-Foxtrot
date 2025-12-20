@@ -848,6 +848,255 @@
       height: 24px;
       border-radius: 50%;
       font-size: 0.75rem;
+    }
+
+    /* Order History Enhancements */
+    .orders-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .order-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .order-id {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .order-status {
+      padding: 0.375rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .order-status.pending { background: #fef3c7; color: #92400e; }
+    .order-status.confirmed { background: #dbeafe; color: #1e40af; }
+    .order-status.processing { background: #e0e7ff; color: #4338ca; }
+    .order-status.shipped { background: #d1fae5; color: #065f46; }
+    .order-status.delivered { background: #d1fae5; color: #065f46; }
+    .order-status.completed { background: #d1fae5; color: #065f46; }
+    .order-status.cancelled { background: #fee2e2; color: #991b1b; }
+
+    .order-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .order-meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .order-meta-label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .order-meta-value {
+      font-size: 1rem;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .order-items {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+
+    .order-items-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .order-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      background: var(--surface);
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+    }
+
+    .order-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .order-item-name {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .order-item-details {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    .order-item-price {
+      font-weight: 600;
+      color: var(--primary);
+      text-align: right;
+    }
+
+    .order-farms {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+
+    .order-farms-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .order-farm-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      padding: 0.75rem;
+      background: var(--surface);
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    .order-farm-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .order-farm-name {
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .order-farm-status {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    .order-farm-tracking {
+      margin-top: 0.5rem;
+      padding: 0.5rem;
+      background: #ecfdf5;
+      border-left: 3px solid var(--success);
+      border-radius: 4px;
+    }
+
+    .order-farm-tracking-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .order-farm-tracking-number {
+      font-family: 'Courier New', monospace;
+      font-size: 0.875rem;
+      color: var(--text);
+      margin-top: 0.25rem;
+    }
+
+    .order-farm-tracking-link {
+      font-size: 0.875rem;
+      color: var(--info);
+      text-decoration: none;
+      margin-left: 0.5rem;
+    }
+
+    .order-farm-tracking-link:hover {
+      text-decoration: underline;
+    }
+
+    .order-farm-total {
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 1.125rem;
+    }
+
+    .order-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .order-action-btn {
+      padding: 0.625rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--primary);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .order-action-btn:hover {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .order-action-btn.primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .order-action-btn.primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .order-empty {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .order-empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
       font-weight: 600;
       display: flex;
       align-items: center;
@@ -1123,6 +1372,7 @@
     <!-- Orders View -->
     <div id="orders-view" class="view">
       <h1>My Orders</h1>
+      <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Track your wholesale orders and shipments</p>
       <div id="orders-list" class="orders-list">
         <!-- Order cards populated by JS -->
       </div>

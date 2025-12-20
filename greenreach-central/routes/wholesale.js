@@ -12,7 +12,8 @@ import {
   listAllOrders,
   listOrdersForBuyer,
   listPayments,
-  listRefunds
+  listRefunds,
+  updateFarmSubOrder
 } from '../services/wholesaleMemoryStore.js';
 
 import { allocateCartFromDemo, loadWholesaleDemoCatalog } from '../services/wholesaleDemoCatalog.js';
@@ -538,6 +539,73 @@ router.get('/orders', requireBuyerAuth, async (req, res) => {
   });
 });
 
+// Get invoice for a specific order
+router.get('/orders/:orderId/invoice', requireBuyerAuth, async (req, res) => {
+  const orderId = req.params.orderId;
+  const orders = listOrdersForBuyer(req.wholesaleBuyer.id);
+  const order = orders.find((o) => o.master_order_id === orderId);
+
+  if (!order) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  // Build invoice data structure
+  const invoice = {
+    invoice_number: `INV-${orderId.substring(0, 8)}`,
+    order_id: orderId,
+    invoice_date: new Date().toISOString(),
+    order_date: order.created_at,
+    delivery_date: order.delivery_date,
+    buyer: {
+      id: order.buyer_id,
+      business_name: order.buyer_account?.business_name || 'N/A',
+      contact_name: order.buyer_account?.contact_name || 'N/A',
+      email: order.buyer_account?.email || 'N/A',
+      phone: order.buyer_account?.phone || 'N/A'
+    },
+    delivery_address: order.delivery_address || {},
+    items: (order.farm_sub_orders || []).flatMap((sub) => 
+      (sub.items || []).map((item) => ({
+        product_name: item.product_name,
+        sku_id: item.sku_id,
+        quantity: item.quantity,
+        unit: item.unit,
+        size: item.size,
+        price_per_unit: item.price_per_unit,
+        line_total: Number(item.quantity) * Number(item.price_per_unit),
+        farm_name: sub.farm_name,
+        farm_id: sub.farm_id
+      }))
+    ),
+    farms: (order.farm_sub_orders || []).map((sub) => ({
+      farm_id: sub.farm_id,
+      farm_name: sub.farm_name,
+      subtotal: sub.subtotal,
+      status: sub.status,
+      tracking_number: sub.tracking_number || null,
+      tracking_carrier: sub.tracking_carrier || null
+    })),
+    summary: {
+      subtotal: order.subtotal,
+      delivery_fee: order.delivery_fee || 0,
+      broker_fee: order.broker_fee || 0,
+      grand_total: order.grand_total
+    },
+    recurrence: order.recurrence || { cadence: 'one_time' },
+    payment: {
+      status: order.payment?.status || 'pending',
+      method: order.payment?.method || 'manual'
+    },
+    status: order.status,
+    notes: order.delivery_address?.instructions || ''
+  };
+
+  return res.json({
+    status: 'ok',
+    data: invoice
+  });
+});
+
 router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
   try {
     const { cart, recurrence, sourcing } = req.body || {};
@@ -954,29 +1022,52 @@ router.post('/admin/orders/:orderId/payment', express.json(), (req, res) => {
     }
 
     // Update payment status
-    order.payment_status = status;
-    order.payment_reference = payment_reference;
-    order.payment_method = payment_method;
-    order.payment_marked_at = marked_at;
+    order.payment = order.payment || {};
+    order.payment.status = status;
+    order.payment.reference = payment_reference;
+    order.payment.method = payment_method || 'manual';
+    order.payment.marked_at = marked_at || new Date().toISOString();
 
-    console.log(`[Wholesale Admin] Order ${orderId} marked as ${status} - Reference: ${payment_reference}`);
-
-    return res.json({
-      status: 'ok',
-      message: 'Payment status updated',
-      order: {
-        master_order_id: order.master_order_id,
-        payment_status: order.payment_status,
-        payment_reference: order.payment_reference
-      }
-    });
+    return res.json({ status: 'ok', data: { order } });
   } catch (error) {
     console.error('Admin update payment error:', error);
-    return res.status(500).json({ status: 'error', message: 'Failed to update payment status' });
+    return res.status(500).json({ status: 'error', message: 'Failed to update payment' });
   }
 });
 
-/** * GET /api/wholesale/inventory/check-overselling
+// Update farm sub-order tracking (for farm fulfillment UI)
+router.patch('/admin/orders/:orderId/farms/:farmId/tracking', express.json(), (req, res) => {
+  try {
+    const { orderId, farmId } = req.params;
+    const { tracking_number, tracking_carrier, status } = req.body;
+
+    if (!tracking_number) {
+      return res.status(400).json({ status: 'error', message: 'tracking_number is required' });
+    }
+
+    const updates = {
+      tracking_number,
+      tracking_carrier: tracking_carrier || 'unknown',
+      tracking_updated_at: new Date().toISOString()
+    };
+
+    if (status) updates.status = status;
+
+    const subOrder = updateFarmSubOrder({ orderId, farmId, updates });
+
+    if (!subOrder) {
+      return res.status(404).json({ status: 'error', message: 'Order or farm sub-order not found' });
+    }
+
+    return res.json({ status: 'ok', data: { subOrder } });
+  } catch (error) {
+    console.error('Update tracking error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to update tracking' });
+  }
+});
+
+/**
+ * GET /api/wholesale/inventory/check-overselling
  * Check all farms for overselling conditions (reserved > available)
  */
 router.get('/inventory/check-overselling', async (req, res) => {

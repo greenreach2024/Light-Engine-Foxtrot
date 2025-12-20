@@ -103,6 +103,25 @@ export function listAllOrders() {
   return Array.from(ordersById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
+export function updateFarmSubOrder({ orderId, farmId, updates }) {
+  const order = ordersById.get(orderId);
+  if (!order) return null;
+
+  const subOrder = (order.farm_sub_orders || []).find((sub) => sub.farm_id === farmId);
+  if (!subOrder) return null;
+
+  Object.assign(subOrder, updates);
+  
+  // Update in buyer's list too
+  const buyerOrders = ordersByBuyerId.get(order.buyer_id);
+  if (buyerOrders) {
+    const idx = buyerOrders.findIndex((o) => o.master_order_id === orderId);
+    if (idx >= 0) buyerOrders[idx] = order;
+  }
+
+  return subOrder;
+}
+
 export function createPayment({ orderId, provider, split, totals }) {
   const paymentId = `pay-${randomUUID()}`;
   const payment = {

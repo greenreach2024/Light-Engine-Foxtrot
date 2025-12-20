@@ -119,6 +119,16 @@
           const delta = Number(qtyBtn.dataset.delta || 0);
           return this.updateCartQty(qtyBtn.dataset.skuid, delta);
         }
+
+        // Order history actions
+        const viewInvoiceBtn = target.closest('[data-action="view-invoice"]');
+        if (viewInvoiceBtn) return this.downloadInvoice(viewInvoiceBtn.dataset.orderid);
+
+        const reorderBtn = target.closest('[data-action="reorder"]');
+        if (reorderBtn) return this.reorder(reorderBtn.dataset.orderid);
+
+        const contactBtn = target.closest('[data-action="contact-farm"]');
+        if (contactBtn) return this.showToast('Contact feature coming soon', 'info');
       });
     },
 
@@ -780,63 +790,210 @@
       if (!container) return;
 
       if (!this.currentBuyer) {
-        container.innerHTML = '<p>Please sign in to view your order history.</p>';
+        container.innerHTML = `
+          <div class="order-empty">
+            <div class="order-empty-icon">🔒</div>
+            <p>Please sign in to view your order history.</p>
+          </div>
+        `;
         return;
       }
 
       if (!this.orders.length) {
-        container.innerHTML = '<p>No orders yet</p>';
+        container.innerHTML = `
+          <div class="order-empty">
+            <div class="order-empty-icon">📦</div>
+            <p>No orders yet. Start shopping to place your first wholesale order!</p>
+          </div>
+        `;
         return;
       }
 
       container.innerHTML = this.orders
-        .map(
-          (order) => `
+        .map((order) => {
+          const allItems = (order.farm_sub_orders || []).flatMap((sub) => sub.items || []);
+          const trackingAvailable = (order.farm_sub_orders || []).some((sub) => sub.tracking_number);
+          
+          return `
           <div class="order-card">
             <div class="order-header">
               <div class="order-id">Order #${order.master_order_id.substring(0, 8)}</div>
               <div class="order-status ${order.status}">${order.status}</div>
             </div>
+            
             <div class="order-meta">
               <div class="order-meta-item">
-                <span class="order-meta-label">Order Date:</span>
-                <span>${new Date(order.created_at).toLocaleDateString()}</span>
+                <div class="order-meta-label">Order Date</div>
+                <div class="order-meta-value">${new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
               </div>
               <div class="order-meta-item">
-                <span class="order-meta-label">Delivery Date:</span>
-                <span>${new Date(order.delivery_date).toLocaleDateString()}</span>
+                <div class="order-meta-label">Delivery Date</div>
+                <div class="order-meta-value">${new Date(order.delivery_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
               </div>
               <div class="order-meta-item">
-                <span class="order-meta-label">Total:</span>
-                <span>$${Number(order.grand_total).toFixed(2)}</span>
+                <div class="order-meta-label">Order Total</div>
+                <div class="order-meta-value">$${Number(order.grand_total).toFixed(2)}</div>
               </div>
               <div class="order-meta-item">
-                <span class="order-meta-label">Cadence:</span>
-                <span>${(order.recurrence?.cadence || 'one_time').replace('_', ' ')}</span>
+                <div class="order-meta-label">Fulfillment</div>
+                <div class="order-meta-value">${(order.recurrence?.cadence || 'one_time').replace('_', ' ')}</div>
               </div>
+              ${order.delivery_address ? `
+              <div class="order-meta-item">
+                <div class="order-meta-label">Delivery Address</div>
+                <div class="order-meta-value">${order.delivery_address.street}, ${order.delivery_address.city} ${order.delivery_address.zip}</div>
+              </div>
+              ` : ''}
             </div>
-            <div class="order-farms">
-              <div class="order-farms-title">Fulfillment by Farm</div>
-              ${(order.farm_sub_orders || [])
-                .map(
-                  (subOrder) => `
-                <div class="order-farm-item">
+
+            ${allItems.length > 0 ? `
+            <div class="order-items">
+              <div class="order-items-title">Order Items (${allItems.length})</div>
+              ${allItems.map((item) => `
+                <div class="order-item">
                   <div>
-                    <div class="order-farm-name">${subOrder.farm_name}</div>
-                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                      ${(subOrder.items || []).length} item(s)
+                    <div class="order-item-name">${item.product_name}</div>
+                    <div class="order-item-details">
+                      ${item.quantity} ${item.unit} × $${Number(item.price_per_unit).toFixed(2)}
+                      ${item.size ? ` • ${item.size}` : ''}
                     </div>
+                  </div>
+                  <div class="order-item-price">$${(Number(item.quantity) * Number(item.price_per_unit)).toFixed(2)}</div>
+                </div>
+              `).join('')}
+            </div>
+            ` : ''}
+
+            <div class="order-farms">
+              <div class="order-farms-title">Fulfillment by Farm ${trackingAvailable ? '• Tracking Available' : ''}</div>
+              ${(order.farm_sub_orders || [])
+                .map((subOrder) => `
+                <div class="order-farm-item">
+                  <div style="flex: 1;">
+                    <div class="order-farm-name">${subOrder.farm_name || 'Farm'}</div>
+                    <div class="order-farm-status">
+                      ${(subOrder.items || []).length} item(s) • Status: ${subOrder.status || 'pending'}
+                    </div>
+                    ${subOrder.tracking_number ? `
+                    <div class="order-farm-tracking">
+                      <div class="order-farm-tracking-label">📦 Tracking Number</div>
+                      <div class="order-farm-tracking-number">
+                        ${subOrder.tracking_number}
+                        ${subOrder.tracking_carrier ? `
+                        <a href="${this.getTrackingUrl(subOrder.tracking_carrier, subOrder.tracking_number)}" 
+                           target="_blank" 
+                           class="order-farm-tracking-link">
+                          Track Package →
+                        </a>
+                        ` : ''}
+                      </div>
+                    </div>
+                    ` : ''}
                   </div>
                   <div class="order-farm-total">$${Number(subOrder.subtotal).toFixed(2)}</div>
                 </div>
-              `
-                )
-                .join('')}
+              `).join('')}
+            </div>
+
+            <div class="order-actions">
+              <button class="order-action-btn" data-action="view-invoice" data-orderid="${order.master_order_id}">
+                📄 Download Invoice
+              </button>
+              <button class="order-action-btn" data-action="reorder" data-orderid="${order.master_order_id}">
+                🔄 Reorder
+              </button>
+              ${order.status === 'pending' || order.status === 'confirmed' ? `
+              <button class="order-action-btn" data-action="contact-farm" data-orderid="${order.master_order_id}">
+                💬 Contact Farms
+              </button>
+              ` : ''}
             </div>
           </div>
-        `
-        )
+        `;
+        })
         .join('');
+    },
+
+    getTrackingUrl(carrier, trackingNumber) {
+      const carriers = {
+        usps: `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumber}`,
+        ups: `https://www.ups.com/track?tracknum=${trackingNumber}`,
+        fedex: `https://www.fedex.com/fedextrack/?tracknumbers=${trackingNumber}`,
+        dhl: `https://www.dhl.com/en/express/tracking.html?AWB=${trackingNumber}`
+      };
+      return carriers[carrier.toLowerCase()] || '#';
+    },
+
+    async downloadInvoice(orderId) {
+      try {
+        this.showLoading('Generating invoice...');
+        
+        const { response, json } = await this.apiFetch(`/api/wholesale/orders/${orderId}/invoice`);
+        
+        if (response.ok && json?.status === 'ok') {
+          // Create downloadable file from invoice data
+          const invoiceData = json.data;
+          const blob = new Blob([JSON.stringify(invoiceData, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `invoice-${orderId.substring(0, 8)}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          this.hideLoading();
+          this.showToast('Invoice downloaded', 'success');
+        } else {
+          this.hideLoading();
+          this.showToast('Invoice not available', 'error');
+        }
+      } catch (error) {
+        this.hideLoading();
+        console.error('Download invoice error:', error);
+        this.showToast('Failed to download invoice', 'error');
+      }
+    },
+
+    async reorder(orderId) {
+      try {
+        const order = this.orders.find((o) => o.master_order_id === orderId);
+        if (!order) {
+          this.showToast('Order not found', 'error');
+          return;
+        }
+
+        // Extract all items from farm sub-orders
+        const allItems = (order.farm_sub_orders || []).flatMap((sub) => sub.items || []);
+        
+        if (allItems.length === 0) {
+          this.showToast('No items to reorder', 'error');
+          return;
+        }
+
+        // Add items to cart
+        let addedCount = 0;
+        for (const item of allItems) {
+          // Check if item is still available in catalog
+          const catalogItem = this.catalog.find((c) => c.sku_id === item.sku_id);
+          if (catalogItem) {
+            this.addToCart(item.sku_id, item.quantity);
+            addedCount++;
+          }
+        }
+
+        if (addedCount > 0) {
+          this.showToast(`${addedCount} item(s) added to cart`, 'success');
+          this.navigateTo('catalog');
+          this.toggleCart();
+        } else {
+          this.showToast('Items no longer available', 'info');
+        }
+      } catch (error) {
+        console.error('Reorder error:', error);
+        this.showToast('Failed to reorder', 'error');
+      }
     },
 
     getDefaultDeliveryDate() {

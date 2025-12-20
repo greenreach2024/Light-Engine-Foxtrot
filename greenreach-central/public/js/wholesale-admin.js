@@ -96,6 +96,9 @@
         case 'reconciliation':
           this.loadRefunds();
           break;
+        case 'compliance':
+          this.loadComplianceView();
+          break;
       }
     },
 
@@ -1220,6 +1223,218 @@
       setTimeout(() => {
         toast.remove();
       }, 3000);
+    },
+
+    // ========================================================================
+    // COMPLIANCE EXPORT FUNCTIONS
+    // ========================================================================
+
+    loadComplianceView() {
+      // Set default date range (last 30 days)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+
+      document.getElementById('export-start-date').value = startDate.toISOString().split('T')[0];
+      document.getElementById('export-end-date').value = endDate.toISOString().split('T')[0];
+    },
+
+    async exportComplianceData() {
+      const startDate = document.getElementById('export-start-date').value;
+      const endDate = document.getElementById('export-end-date').value;
+      const format = document.getElementById('export-format').value;
+      
+      const includeOrders = document.getElementById('include-orders').checked;
+      const includeFarms = document.getElementById('include-farms').checked;
+      const includeProducts = document.getElementById('include-products').checked;
+      const includeTraceability = document.getElementById('include-traceability').checked;
+
+      if (!startDate || !endDate) {
+        this.showToast('Please select date range', 'error');
+        return;
+      }
+
+      try {
+        this.showToast('Generating compliance export...', 'info');
+
+        // Fetch orders
+        const ordersRes = await fetch('/api/wholesale/admin/orders');
+        const ordersData = await ordersRes.json();
+        let orders = ordersData.orders || [];
+
+        // Filter by date range
+        orders = orders.filter((o) => {
+          const orderDate = new Date(o.created_at);
+          return orderDate >= new Date(startDate) && orderDate <= new Date(endDate);
+        });
+
+        // Fetch network farms
+        const farmsRes = await fetch('/api/wholesale/network/farms');
+        const farmsData = await farmsRes.json();
+        const farms = farmsData.data?.farms || [];
+
+        // Build compliance dataset
+        const complianceData = [];
+
+        orders.forEach((order) => {
+          (order.farm_sub_orders || []).forEach((subOrder) => {
+            const farm = farms.find((f) => f.farm_id === subOrder.farm_id);
+            
+            (subOrder.items || []).forEach((item) => {
+              const record = {
+                // Order Information
+                ...(includeOrders && {
+                  order_id: order.master_order_id,
+                  order_date: order.created_at,
+                  delivery_date: order.delivery_date,
+                  order_status: order.status,
+                  buyer_id: order.buyer_id,
+                  buyer_business: order.buyer_account?.business_name || 'N/A',
+                  buyer_email: order.buyer_account?.email || 'N/A'
+                }),
+
+                // Farm Information
+                ...(includeFarms && {
+                  farm_id: subOrder.farm_id,
+                  farm_name: subOrder.farm_name || farm?.farm_name || 'Unknown',
+                  farm_location: farm?.location_name || 'N/A',
+                  farm_latitude: farm?.latitude || null,
+                  farm_longitude: farm?.longitude || null,
+                  farm_certifications: farm?.certifications?.join(', ') || 'N/A',
+                  farm_practices: farm?.practices?.join(', ') || 'N/A'
+                }),
+
+                // Product Information
+                ...(includeProducts && {
+                  product_id: item.sku_id,
+                  product_name: item.product_name,
+                  product_variety: item.variety || 'N/A',
+                  product_category: item.category || 'N/A',
+                  quantity: item.quantity,
+                  unit: item.unit,
+                  price_per_unit: item.price_per_unit,
+                  line_total: Number(item.quantity) * Number(item.price_per_unit)
+                }),
+
+                // Traceability
+                ...(includeTraceability && {
+                  sub_order_status: subOrder.status || 'pending',
+                  tracking_number: subOrder.tracking_number || 'N/A',
+                  tracking_carrier: subOrder.tracking_carrier || 'N/A',
+                  fulfillment_timestamp: subOrder.tracking_updated_at || 'N/A',
+                  traceability_id: `${order.master_order_id}-${subOrder.farm_id}-${item.sku_id}`
+                })
+              };
+
+              complianceData.push(record);
+            });
+          });
+        });
+
+        if (complianceData.length === 0) {
+          this.showToast('No data found for selected criteria', 'info');
+          return;
+        }
+
+        // Generate file
+        let fileContent, filename, mimeType;
+
+        if (format === 'csv') {
+          fileContent = this.generateCSV(complianceData);
+          filename = `compliance-export-${startDate}-to-${endDate}.csv`;
+          mimeType = 'text/csv';
+        } else {
+          fileContent = JSON.stringify(complianceData, null, 2);
+          filename = `compliance-export-${startDate}-to-${endDate}.json`;
+          mimeType = 'application/json';
+        }
+
+        // Download file
+        const blob = new Blob([fileContent], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        this.showToast(`Export complete: ${complianceData.length} records`, 'success');
+
+        // Add to export history
+        this.addExportHistory({
+          timestamp: new Date().toISOString(),
+          filename,
+          recordCount: complianceData.length,
+          format,
+          dateRange: `${startDate} to ${endDate}`
+        });
+
+      } catch (error) {
+        console.error('Export compliance data error:', error);
+        this.showToast('Export failed', 'error');
+      }
+    },
+
+    generateCSV(data) {
+      if (data.length === 0) return '';
+
+      // Get all unique keys
+      const keys = [...new Set(data.flatMap((obj) => Object.keys(obj)))];
+
+      // Create CSV header
+      const header = keys.map((k) => `"${k}"`).join(',');
+
+      // Create CSV rows
+      const rows = data.map((obj) => {
+        return keys
+          .map((key) => {
+            let value = obj[key];
+            if (value === null || value === undefined) value = '';
+            if (typeof value === 'string' && value.includes(',')) {
+              value = `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+          })
+          .join(',');
+      });
+
+      return [header, ...rows].join('\n');
+    },
+
+    addExportHistory(exportRecord) {
+      const container = document.getElementById('export-history');
+      if (!container) return;
+
+      // Clear "no exports" message
+      if (container.querySelector('p')) {
+        container.innerHTML = '';
+      }
+
+      const historyItem = document.createElement('div');
+      historyItem.className = 'card';
+      historyItem.style.marginBottom = '1rem';
+      historyItem.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-weight: 600; color: var(--primary);">${exportRecord.filename}</div>
+            <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">
+              ${exportRecord.recordCount} records • ${exportRecord.format.toUpperCase()} • ${exportRecord.dateRange}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+              Generated: ${new Date(exportRecord.timestamp).toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <span style="padding: 0.375rem 0.75rem; background: var(--success); color: white; border-radius: 4px; font-size: 0.875rem; font-weight: 600;">
+              ✓ Complete
+            </span>
+          </div>
+        </div>
+      `;
+
+      container.insertBefore(historyItem, container.firstChild);
     }
   };
 
