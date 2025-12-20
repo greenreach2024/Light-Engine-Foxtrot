@@ -1,0 +1,537 @@
+{
+  "catalog_timestamp": "2025-12-19T12:00:00Z",
+  "total_skus": 24,
+  "total_farms": 5,
+  "farms": [
+    {
+      "farm_id": "GR-00001",
+      "name": "Green Valley Organic Farm",
+      "location": "Portland, OR",
+      "certifications": ["GAP", "organic"],
+      "practices": ["pesticide_free", "sustainable"],
+      "attributes": ["woman_owned", "family_farm"]
+    },
+    {
+      "farm_id": "GR-00002",
+      "name": "Sunrise Hydroponic Gardens",
+      "location": "Seattle, WA",
+      "certifications": ["food_safety", "greenhouse"],
+      "practices": ["hydroponic", "year_round"],
+      "attributes": ["veteran_owned"]
+    },
+    {
+      "farm_id": "GR-00003",
+      "name": "Mountain View Family Farms",
+      "location": "Bend, OR",
+      "certifications": ["GAP"],
+      "practices": ["local", "non_gmo"],
+      "attributes": ["family_farm", "sustainable"]
+    },
+    {
+      "farm_id": "GR-00004",
+      "name": "Pacific Greens Co-op",
+      "location": "Tacoma, WA",
+      "certifications": ["organic", "food_safety"],
+      "practices": ["pesticide_free", "local"],
+      "attributes": ["minority_owned"]
+    },
+    {
+      "farm_id": "GR-00005",
+      "name": "Heritage Herb Gardens",
+      "location": "Eugene, OR",
+      "certifications": ["organic", "GAP"],
+      "practices": ["pesticide_free", "year_round"],
+      "attributes": ["woman_owned", "sustainable"]
+    }
+  ],
+  "items": [
+    {
+      "sku_id": "lettuce-romaine-organic",
+      "product_name": "Organic Romaine Lettuce",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00001",
+          "farm_name": "Green Valley Organic Farm",
+          "quantity_available": 500,
+          "price_per_unit": 2.85,
+          "harvest_date": "2025-12-18",
+          "organic": true
+        },
+        {
+          "farm_id": "GR-00004",
+          "farm_name": "Pacific Greens Co-op",
+          "quantity_available": 350,
+          "price_per_unit": 2.75,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "lettuce-butterhead",
+      "product_name": "Butterhead Lettuce",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 800,
+          "price_per_unit": 3.25,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        },
+        {
+          "farm_id": "GR-00003",
+          "farm_name": "Mountain View Family Farms",
+          "quantity_available": 200,
+          "price_per_unit": 2.95,
+          "harvest_date": "2025-12-18",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "kale-lacinato",
+      "product_name": "Lacinato Kale",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00001",
+          "farm_name": "Green Valley Organic Farm",
+          "quantity_available": 300,
+          "price_per_unit": 3.50,
+          "harvest_date": "2025-12-18",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "spinach-baby",
+      "product_name": "Baby Spinach",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 600,
+          "price_per_unit": 4.25,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        },
+        {
+          "farm_id": "GR-00004",
+          "farm_name": "Pacific Greens Co-op",
+          "quantity_available": 400,
+          "price_per_unit": 4.50,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "arugula",
+      "product_name": "Wild Arugula",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00001",
+          "farm_name": "Green Valley Organic Farm",
+          "quantity_available": 250,
+          "price_per_unit": 5.75,
+          "harvest_date": "2025-12-18",
+          "organic": true
+        },
+        {
+          "farm_id": "GR-00003",
+          "farm_name": "Mountain View Family Farms",
+          "quantity_available": 150,
+          "price_per_unit": 5.25,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "basil-sweet",
+      "product_name": "Sweet Basil",
+      "category": "herbs",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00005",
+          "farm_name": "Heritage Herb Gardens",
+          "quantity_available": 150,
+          "price_per_unit": 12.50,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        },
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 200,
+          "price_per_unit": 11.75,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "cilantro",
+      "product_name": "Fresh Cilantro",
+      "category": "herbs",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00005",
+          "farm_name": "Heritage Herb Gardens",
+          "quantity_available": 120,
+          "price_per_unit": 8.50,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "parsley-curly",
+      "product_name": "Curly Parsley",
+      "category": "herbs",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00005",
+          "farm_name": "Heritage Herb Gardens",
+          "quantity_available": 100,
+          "price_per_unit": 7.25,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        },
+        {
+          "farm_id": "GR-00003",
+          "farm_name": "Mountain View Family Farms",
+          "quantity_available": 80,
+          "price_per_unit": 6.95,
+          "harvest_date": "2025-12-18",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "mint-spearmint",
+      "product_name": "Spearmint",
+      "category": "herbs",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00005",
+          "farm_name": "Heritage Herb Gardens",
+          "quantity_available": 90,
+          "price_per_unit": 9.75,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "dill",
+      "product_name": "Fresh Dill",
+      "category": "herbs",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00005",
+          "farm_name": "Heritage Herb Gardens",
+          "quantity_available": 75,
+          "price_per_unit": 10.50,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "microgreens-sunflower",
+      "product_name": "Sunflower Microgreens",
+      "category": "microgreens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 40,
+          "price_per_unit": 24.00,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "microgreens-pea",
+      "product_name": "Pea Shoots",
+      "category": "microgreens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 35,
+          "price_per_unit": 22.00,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        },
+        {
+          "farm_id": "GR-00004",
+          "farm_name": "Pacific Greens Co-op",
+          "quantity_available": 25,
+          "price_per_unit": 23.50,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "microgreens-radish",
+      "product_name": "Radish Microgreens",
+      "category": "microgreens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 30,
+          "price_per_unit": 26.00,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "tomatoes-cherry",
+      "product_name": "Cherry Tomatoes",
+      "category": "produce",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 450,
+          "price_per_unit": 4.75,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        },
+        {
+          "farm_id": "GR-00003",
+          "farm_name": "Mountain View Family Farms",
+          "quantity_available": 300,
+          "price_per_unit": 4.95,
+          "harvest_date": "2025-12-18",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "cucumbers-english",
+      "product_name": "English Cucumbers",
+      "category": "produce",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 600,
+          "price_per_unit": 2.95,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "peppers-bell-red",
+      "product_name": "Red Bell Peppers",
+      "category": "produce",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 400,
+          "price_per_unit": 5.50,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        },
+        {
+          "farm_id": "GR-00003",
+          "farm_name": "Mountain View Family Farms",
+          "quantity_available": 250,
+          "price_per_unit": 5.75,
+          "harvest_date": "2025-12-18",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "peppers-bell-yellow",
+      "product_name": "Yellow Bell Peppers",
+      "category": "produce",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 350,
+          "price_per_unit": 5.50,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "swiss-chard",
+      "product_name": "Rainbow Swiss Chard",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00001",
+          "farm_name": "Green Valley Organic Farm",
+          "quantity_available": 200,
+          "price_per_unit": 3.95,
+          "harvest_date": "2025-12-18",
+          "organic": true
+        },
+        {
+          "farm_id": "GR-00004",
+          "farm_name": "Pacific Greens Co-op",
+          "quantity_available": 150,
+          "price_per_unit": 4.25,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "bok-choy",
+      "product_name": "Baby Bok Choy",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 300,
+          "price_per_unit": 3.75,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        },
+        {
+          "farm_id": "GR-00004",
+          "farm_name": "Pacific Greens Co-op",
+          "quantity_available": 200,
+          "price_per_unit": 3.95,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "lettuce-red-leaf",
+      "product_name": "Red Leaf Lettuce",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00001",
+          "farm_name": "Green Valley Organic Farm",
+          "quantity_available": 400,
+          "price_per_unit": 2.75,
+          "harvest_date": "2025-12-18",
+          "organic": true
+        },
+        {
+          "farm_id": "GR-00003",
+          "farm_name": "Mountain View Family Farms",
+          "quantity_available": 250,
+          "price_per_unit": 2.65,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "lettuce-green-leaf",
+      "product_name": "Green Leaf Lettuce",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00001",
+          "farm_name": "Green Valley Organic Farm",
+          "quantity_available": 450,
+          "price_per_unit": 2.65,
+          "harvest_date": "2025-12-18",
+          "organic": true
+        },
+        {
+          "farm_id": "GR-00003",
+          "farm_name": "Mountain View Family Farms",
+          "quantity_available": 300,
+          "price_per_unit": 2.55,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    },
+    {
+      "sku_id": "collard-greens",
+      "product_name": "Collard Greens",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00004",
+          "farm_name": "Pacific Greens Co-op",
+          "quantity_available": 180,
+          "price_per_unit": 3.25,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "mustard-greens",
+      "product_name": "Mustard Greens",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00004",
+          "farm_name": "Pacific Greens Co-op",
+          "quantity_available": 160,
+          "price_per_unit": 3.50,
+          "harvest_date": "2025-12-19",
+          "organic": true
+        }
+      ]
+    },
+    {
+      "sku_id": "watercress",
+      "product_name": "Watercress",
+      "category": "leafy-greens",
+      "unit": "lb",
+      "farms": [
+        {
+          "farm_id": "GR-00002",
+          "farm_name": "Sunrise Hydroponic Gardens",
+          "quantity_available": 120,
+          "price_per_unit": 8.50,
+          "harvest_date": "2025-12-19",
+          "organic": false
+        }
+      ]
+    }
+  ]
+}

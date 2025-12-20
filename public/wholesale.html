@@ -40,6 +40,25 @@
       color: white;
       padding: 1rem 2rem;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    #header-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    #buyer-profile {
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      color: white;
+      font-weight: 500;
     }
 
     header h1 {
@@ -836,6 +855,79 @@
       border: 2px solid var(--surface);
     }
 
+    /* Auth Modal */
+    .auth-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .auth-modal.open {
+      display: flex;
+    }
+
+    .auth-modal-content {
+      background: var(--surface);
+      padding: 2rem;
+      border-radius: 8px;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+
+    .auth-tabs {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .auth-tab {
+      background: none;
+      border: none;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+
+    .auth-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .auth-form {
+      display: none;
+    }
+
+    .auth-form.active {
+      display: block;
+    }
+
+    .auth-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    .demo-mode-banner {
+      background: var(--info);
+      color: white;
+      padding: 0.5rem 2rem;
+      text-align: center;
+      font-size: 0.875rem;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       main {
@@ -867,8 +959,17 @@
 </head>
 <body>
   <header>
-    <h1>GreenReach Wholesale</h1>
-    <p>Fresh produce from trusted farm partners</p>
+    <div>
+      <h1>GreenReach Wholesale</h1>
+      <p>Fresh produce from trusted farm partners</p>
+    </div>
+    <div id="header-actions">
+      <button class="btn btn-secondary" id="sign-in-btn" onclick="app.showAuthModal()">Sign In / Register</button>
+      <div id="buyer-profile">
+        <span id="buyer-name-display"></span>
+        <button class="btn btn-secondary" onclick="app.signOut()">Sign Out</button>
+      </div>
+    </div>
   </header>
 
   <nav>
@@ -876,6 +977,10 @@
     <button class="nav-tab" data-view="checkout">Checkout</button>
     <button class="nav-tab" data-view="orders">My Orders</button>
   </nav>
+
+  <div id="demo-banner" class="demo-mode-banner" style="display: none;">
+    <strong>Demo mode:</strong> Showing five partner farms with live-style availability, pricing, and fulfillment logic. Append <code>?demo=0</code> to the URL to request the live catalog API.
+  </div>
 
   <main>
     <!-- Catalog View -->
@@ -1025,6 +1130,67 @@
     <span class="cart-badge-count" id="cart-count">0</span>
   </button>
 
+  <!-- Buyer Auth Modal -->
+  <div id="auth-modal" class="auth-modal">
+    <div class="auth-modal-content">
+      <h2>Business Access</h2>
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="sign-in" onclick="app.switchAuthTab('sign-in')">Sign In</button>
+        <button class="auth-tab" data-tab="register" onclick="app.switchAuthTab('register')">Register</button>
+      </div>
+
+      <form id="sign-in-form" class="auth-form active">
+        <div class="form-group">
+          <label for="sign-in-email">Work Email</label>
+          <input type="email" id="sign-in-email" required />
+        </div>
+        <div class="form-group">
+          <label for="sign-in-password">Password</label>
+          <input type="password" id="sign-in-password" required />
+        </div>
+        <div class="auth-actions">
+          <button type="submit" class="btn btn-primary">Access Portal</button>
+          <button type="button" class="btn btn-secondary" onclick="app.hideAuthModal()">Cancel</button>
+        </div>
+        <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">GreenReach Wholesale is limited to verified business buyers. Demo accounts are stored locally in your browser.</p>
+      </form>
+
+      <form id="register-form" class="auth-form">
+        <div class="form-group">
+          <label for="register-business-name">Business Name</label>
+          <input type="text" id="register-business-name" required />
+        </div>
+        <div class="form-group">
+          <label for="register-contact-name">Contact Name</label>
+          <input type="text" id="register-contact-name" required />
+        </div>
+        <div class="form-group">
+          <label for="register-email">Work Email</label>
+          <input type="email" id="register-email" required />
+        </div>
+        <div class="form-group">
+          <label for="register-password">Create Password</label>
+          <input type="password" id="register-password" required minlength="6" />
+        </div>
+        <div class="form-group">
+          <label for="register-buyer-type">Buyer Type</label>
+          <select id="register-buyer-type" required>
+            <option value="">Select an option</option>
+            <option value="restaurant">Restaurant / Hospitality</option>
+            <option value="grocery">Grocery / Retail</option>
+            <option value="institutional">Institutional Food Service</option>
+            <option value="distributor">Regional Distributor</option>
+          </select>
+        </div>
+        <div class="auth-actions">
+          <button type="submit" class="btn btn-primary">Create Account</button>
+          <button type="button" class="btn btn-secondary" onclick="app.hideAuthModal()">Cancel</button>
+        </div>
+        <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">Registration happens instantly in demo mode; production deployments will route to the onboarding workflow.</p>
+      </form>
+    </div>
+  </div>
+
   <script>
     const app = {
       catalog: [],
@@ -1032,33 +1198,61 @@
       orders: [],
       currentView: 'catalog',
       deliveryDate: null,
+      demoMode: true,
+      demoData: null,
+      farmDirectory: {},
+      buyers: [],
+      currentBuyer: null,
+      authTab: 'sign-in',
 
       async init() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('demo') === '0') {
+          this.demoMode = false;
+        }
+
         this.setupEventListeners();
         this.setDefaultDeliveryDate();
+        this.loadAuthState();
         await this.loadCatalog();
         this.loadOrders();
         this.renderCart();
+        this.updateDemoBanner();
       },
 
       setupEventListeners() {
-        // Navigation tabs
         document.querySelectorAll('.nav-tab').forEach(tab => {
-          tab.addEventListener('click', (e) => {
-            const view = e.target.dataset.view;
-            this.navigateTo(view);
+          tab.addEventListener('click', (event) => {
+            this.navigateTo(event.target.dataset.view);
           });
         });
 
-        // Delivery date filter
-        document.getElementById('delivery-date').addEventListener('change', (e) => {
-          this.deliveryDate = e.target.value;
+        document.getElementById('delivery-date').addEventListener('change', (event) => {
+          this.deliveryDate = event.target.value;
           this.loadCatalog();
         });
 
-        // Sort filter
         document.getElementById('sort-by').addEventListener('change', () => {
           this.renderCatalog();
+        });
+
+        const authModal = document.getElementById('auth-modal');
+        if (authModal) {
+          authModal.addEventListener('click', (event) => {
+            if (event.target.id === 'auth-modal') {
+              this.hideAuthModal();
+            }
+          });
+        }
+
+        document.getElementById('sign-in-form')?.addEventListener('submit', (event) => {
+          event.preventDefault();
+          this.handleSignIn();
+        });
+
+        document.getElementById('register-form')?.addEventListener('submit', (event) => {
+          event.preventDefault();
+          this.handleRegister();
         });
       },
 
@@ -1070,20 +1264,168 @@
         this.deliveryDate = dateStr;
       },
 
+      loadAuthState() {
+        try {
+          this.buyers = JSON.parse(localStorage.getItem('greenreach_buyers')) || [];
+        } catch (error) {
+          this.buyers = [];
+        }
+
+        try {
+          const active = localStorage.getItem('greenreach_active_buyer');
+          if (active) {
+            this.currentBuyer = JSON.parse(active);
+          }
+        } catch (error) {
+          this.currentBuyer = null;
+        }
+
+        this.updateBuyerProfile();
+        this.populateCheckoutForm();
+      },
+
+      saveBuyers() {
+        localStorage.setItem('greenreach_buyers', JSON.stringify(this.buyers));
+      },
+
+      setActiveBuyer(buyer) {
+        this.currentBuyer = buyer;
+        localStorage.setItem('greenreach_active_buyer', JSON.stringify(buyer));
+        this.updateBuyerProfile();
+        this.populateCheckoutForm();
+        this.loadOrders();
+      },
+
+      updateBuyerProfile() {
+        const profile = document.getElementById('buyer-profile');
+        const signInBtn = document.getElementById('sign-in-btn');
+        const buyerLabel = document.getElementById('buyer-name-display');
+
+        if (!profile || !signInBtn || !buyerLabel) return;
+
+        if (this.currentBuyer) {
+          buyerLabel.textContent = this.currentBuyer.businessName;
+          profile.style.display = 'flex';
+          signInBtn.style.display = 'none';
+        } else {
+          profile.style.display = 'none';
+          signInBtn.style.display = 'inline-flex';
+        }
+      },
+
+      populateCheckoutForm() {
+        const nameField = document.getElementById('buyer-name');
+        const emailField = document.getElementById('buyer-email');
+        if (!nameField || !emailField) return;
+
+        if (!this.currentBuyer) {
+          nameField.value = '';
+          emailField.value = '';
+          return;
+        }
+
+        nameField.value = this.currentBuyer.businessName || '';
+        emailField.value = this.currentBuyer.email || '';
+      },
+
+      showAuthModal(tab = 'sign-in') {
+        this.switchAuthTab(tab);
+        document.getElementById('auth-modal').classList.add('open');
+      },
+
+      hideAuthModal() {
+        document.getElementById('auth-modal').classList.remove('open');
+      },
+
+      switchAuthTab(tab) {
+        this.authTab = tab;
+        document.querySelectorAll('.auth-tab').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+        document.querySelectorAll('.auth-form').forEach(form => {
+          form.classList.toggle('active', form.id.includes(tab));
+        });
+      },
+
+      handleRegister() {
+        const businessName = document.getElementById('register-business-name').value.trim();
+        const contactName = document.getElementById('register-contact-name').value.trim();
+        const email = document.getElementById('register-email').value.trim().toLowerCase();
+        const password = document.getElementById('register-password').value;
+        const buyerType = document.getElementById('register-buyer-type').value;
+
+        if (this.buyers.some(buyer => buyer.email === email)) {
+          this.showToast('That email is already registered', 'error');
+          return;
+        }
+
+        const buyer = {
+          id: `buyer-${Date.now()}`,
+          businessName,
+          contactName,
+          email,
+          password,
+          buyerType
+        };
+
+        this.buyers.push(buyer);
+        this.saveBuyers();
+        this.setActiveBuyer(buyer);
+        this.hideAuthModal();
+        this.showToast('Account created. Welcome to GreenReach!', 'success');
+      },
+
+      handleSignIn() {
+        const email = document.getElementById('sign-in-email').value.trim().toLowerCase();
+        const password = document.getElementById('sign-in-password').value;
+        const buyer = this.buyers.find(b => b.email === email && b.password === password);
+
+        if (!buyer) {
+          this.showToast('Invalid email or password', 'error');
+          return;
+        }
+
+        this.setActiveBuyer(buyer);
+        this.hideAuthModal();
+        this.showToast('Signed in successfully', 'success');
+      },
+
+      signOut() {
+        this.currentBuyer = null;
+        localStorage.removeItem('greenreach_active_buyer');
+        this.updateBuyerProfile();
+        this.populateCheckoutForm();
+        this.orders = [];
+        this.loadOrders();
+        this.showToast('Signed out', 'info');
+        this.navigateTo('catalog');
+      },
+
+      getFilterState() {
+        return {
+          certifications: Array.from(document.querySelectorAll('input[name="cert"]:checked')).map(cb => cb.value),
+          practices: Array.from(document.querySelectorAll('input[name="practice"]:checked')).map(cb => cb.value),
+          attributes: Array.from(document.querySelectorAll('input[name="attribute"]:checked')).map(cb => cb.value)
+        };
+      },
+
       navigateTo(view) {
+        if ((view === 'checkout' || view === 'orders') && !this.currentBuyer) {
+          this.showToast('Please sign in to access buyer-only tools', 'info');
+          this.showAuthModal('sign-in');
+          return;
+        }
+
         this.currentView = view;
-        
-        // Update tabs
+
         document.querySelectorAll('.nav-tab').forEach(tab => {
           tab.classList.toggle('active', tab.dataset.view === view);
         });
 
-        // Update views
-        document.querySelectorAll('.view').forEach(v => {
-          v.classList.toggle('active', v.id === `${view}-view`);
+        document.querySelectorAll('.view').forEach(section => {
+          section.classList.toggle('active', section.id === `${view}-view`);
         });
 
-        // Load view-specific data
         if (view === 'checkout') {
           this.previewAllocation();
         } else if (view === 'orders') {
@@ -1092,42 +1434,133 @@
       },
 
       async loadCatalog() {
-        try {
-          const params = new URLSearchParams();
-          if (this.deliveryDate) {
-            params.append('delivery_date', this.deliveryDate);
+        const filters = this.getFilterState();
+
+        if (!this.demoMode) {
+          try {
+            const params = new URLSearchParams();
+            if (this.deliveryDate) params.append('delivery_date', this.deliveryDate);
+            filters.certifications.forEach(cert => params.append('certifications', cert));
+            filters.practices.forEach(practice => params.append('practices', practice));
+            filters.attributes.forEach(attr => params.append('attributes', attr));
+
+            const response = await fetch(`/api/wholesale/catalog?${params.toString()}`);
+            const data = await response.json();
+
+            if (data.status === 'ok') {
+              this.catalog = data.data.skus;
+              this.renderCatalog();
+              this.updateDemoBanner();
+              return;
+            }
+
+            await this.enableDemoMode('Live catalog unavailable. Showing demo farms.');
+            return;
+          } catch (error) {
+            console.error('Live catalog error:', error);
+            await this.enableDemoMode('Network issue detected. Showing demo farms.');
+            return;
           }
-          
-          // Add certification filters
-          const certifications = Array.from(document.querySelectorAll('input[name="cert"]:checked'))
-            .map(cb => cb.value);
-          const practices = Array.from(document.querySelectorAll('input[name="practice"]:checked'))
-            .map(cb => cb.value);
-          const attributes = Array.from(document.querySelectorAll('input[name="attribute"]:checked'))
-            .map(cb => cb.value);
-          
-          if (certifications.length > 0) {
-            certifications.forEach(cert => params.append('certifications', cert));
+        }
+
+        await this.loadDemoCatalog(filters);
+      },
+
+      async loadDemoCatalog(filters) {
+        if (!this.demoData) {
+          try {
+            const response = await fetch('/data/wholesale-demo-catalog.json');
+            this.demoData = await response.json();
+            this.farmDirectory = this.demoData.farms.reduce((acc, farm) => {
+              acc[farm.farm_id] = farm;
+              return acc;
+            }, {});
+          } catch (error) {
+            console.error('Demo catalog load error:', error);
+            this.showToast('Unable to load demo catalog assets', 'error');
+            return;
           }
-          if (practices.length > 0) {
-            practices.forEach(practice => params.append('practices', practice));
+        }
+
+        const items = this.applyDemoFilters(filters);
+        this.catalog = items.map(item => this.mapDemoSku(item));
+        this.renderCatalog();
+        this.updateDemoBanner();
+      },
+
+      applyDemoFilters(filters) {
+        if (!this.demoData) return [];
+
+        const hasFilters = filters.certifications.length || filters.practices.length || filters.attributes.length;
+        if (!hasFilters) {
+          return this.demoData.items;
+        }
+
+        const farmMatches = (farmId) => {
+          const meta = this.farmDirectory[farmId] || {};
+
+          if (filters.certifications.length && !filters.certifications.some(cert => meta.certifications?.includes(cert))) {
+            return false;
           }
-          if (attributes.length > 0) {
-            attributes.forEach(attr => params.append('attributes', attr));
+
+          if (filters.practices.length && !filters.practices.some(practice => meta.practices?.includes(practice))) {
+            return false;
           }
-          
-          const response = await fetch(`/api/wholesale/catalog?${params}`);
-          const data = await response.json();
-          
-          if (data.status === 'ok') {
-            this.catalog = data.data.skus;
-            this.renderCatalog();
-          } else {
-            this.showToast('Failed to load catalog', 'error');
+
+          if (filters.attributes.length && !filters.attributes.some(attr => meta.attributes?.includes(attr))) {
+            return false;
           }
-        } catch (error) {
-          console.error('Catalog load error:', error);
-          this.showToast('Network error loading catalog', 'error');
+
+          return true;
+        };
+
+        return this.demoData.items.filter(item => item.farms.some(farm => farmMatches(farm.farm_id)));
+      },
+
+      mapDemoSku(item) {
+        const farms = item.farms.map(farm => {
+          const meta = this.farmDirectory[farm.farm_id] || {};
+          return {
+            farm_id: farm.farm_id,
+            farm_name: farm.farm_name,
+            qty_available: farm.quantity_available,
+            unit: item.unit,
+            price_per_unit: farm.price_per_unit,
+            organic: farm.organic,
+            certifications: meta.certifications || [],
+            practices: meta.practices || [],
+            attributes: meta.attributes || [],
+            location: meta.location || ''
+          };
+        });
+
+        const totalQty = farms.reduce((sum, farm) => sum + farm.qty_available, 0);
+        const bestPrice = Math.min(...farms.map(f => f.price_per_unit));
+
+        return {
+          sku_id: item.sku_id,
+          product_name: item.product_name,
+          size: item.size || 'Bulk Case',
+          unit: item.unit,
+          price_per_unit: bestPrice,
+          total_qty_available: totalQty,
+          farms,
+          organic: farms.some(f => f.organic)
+        };
+      },
+
+      async enableDemoMode(message) {
+        this.demoMode = true;
+        if (message) {
+          this.showToast(message, 'info');
+        }
+        await this.loadDemoCatalog(this.getFilterState());
+      },
+
+      updateDemoBanner() {
+        const banner = document.getElementById('demo-banner');
+        if (banner) {
+          banner.style.display = this.demoMode ? 'block' : 'none';
         }
       },
 
@@ -1136,7 +1569,6 @@
       },
 
       clearFilters() {
-        // Uncheck all filter checkboxes
         document.querySelectorAll('input[name="cert"]').forEach(cb => cb.checked = false);
         document.querySelectorAll('input[name="practice"]').forEach(cb => cb.checked = false);
         document.querySelectorAll('input[name="attribute"]').forEach(cb => cb.checked = false);
@@ -1199,13 +1631,20 @@
         if (!sku) return;
 
         const qtyInput = document.getElementById(`qty-${skuId}`);
-        const qty = parseInt(qtyInput.value) || 1;
+        const qty = parseInt(qtyInput.value, 10) || 1;
 
         const existingItem = this.cart.find(item => item.sku_id === skuId);
         if (existingItem) {
-          existingItem.quantity += qty;
+          existingItem.quantity = Math.min(existingItem.quantity + qty, sku.total_qty_available);
+          if (existingItem.quantity === sku.total_qty_available) {
+            this.showToast('Reached available inventory for this SKU', 'info');
+          }
         } else {
-          this.cart.push({ ...sku, quantity: qty });
+          const safeQty = Math.min(qty, sku.total_qty_available);
+          this.cart.push({ ...sku, quantity: safeQty });
+          if (qty > safeQty) {
+            this.showToast('Reduced quantity to match availability', 'info');
+          }
         }
 
         this.renderCart();
@@ -1236,7 +1675,7 @@
 
       renderCart() {
         const itemsContainer = document.getElementById('cart-items');
-        
+
         if (this.cart.length === 0) {
           itemsContainer.innerHTML = '<div class="cart-empty">Your cart is empty</div>';
           document.getElementById('cart-total').textContent = '$0.00';
@@ -1264,7 +1703,6 @@
         `).join('');
 
         const total = this.cart.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
-
         document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
         document.getElementById('cart-count').textContent = this.cart.length.toString();
       },
@@ -1282,12 +1720,18 @@
         const previewContainer = document.getElementById('allocation-preview');
         previewContainer.innerHTML = '<p>Calculating optimal allocation...</p>';
 
+        if (this.demoMode) {
+          const allocation = this.buildDemoAllocation();
+          this.renderAllocationPreview(allocation);
+          return;
+        }
+
         try {
           const response = await fetch('/api/wholesale/checkout/preview', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              buyer_id: 'demo-buyer',
+              buyer_id: this.currentBuyer?.id || 'demo-buyer',
               delivery_date: this.deliveryDate || this.getDefaultDeliveryDate(),
               delivery_address: {
                 street: document.getElementById('delivery-address')?.value || 'TBD',
@@ -1303,7 +1747,6 @@
           });
 
           const data = await response.json();
-          
           if (data.status === 'ok') {
             this.renderAllocationPreview(data.data);
           } else {
@@ -1317,7 +1760,6 @@
 
       renderAllocationPreview(allocation) {
         const container = document.getElementById('allocation-preview');
-        
         container.innerHTML = `
           ${allocation.farm_sub_orders.map(subOrder => `
             <div class="allocation-farm">
@@ -1349,9 +1791,41 @@
           return;
         }
 
+        if (!this.currentBuyer) {
+          this.showAuthModal('register');
+          this.showToast('Sign in before placing an order', 'info');
+          return;
+        }
+
         const form = document.getElementById('checkout-form');
         if (!form.checkValidity()) {
           form.reportValidity();
+          return;
+        }
+
+        if (this.demoMode) {
+          const allocation = this.buildDemoAllocation();
+          if (!allocation.farm_sub_orders.length) {
+            this.showToast('Unable to allocate items with current inventory', 'error');
+            return;
+          }
+
+          const order = {
+            master_order_id: `demo-${Date.now()}`,
+            status: 'confirmed',
+            created_at: new Date().toISOString(),
+            delivery_date: this.deliveryDate || this.getDefaultDeliveryDate(),
+            grand_total: allocation.grand_total,
+            farm_sub_orders: allocation.farm_sub_orders
+          };
+
+          this.orders = [order, ...this.orders];
+          this.persistOrders();
+          this.cart = [];
+          this.renderCart();
+          this.renderAllocationPreview(allocation);
+          this.navigateTo('orders');
+          this.showToast('Demo order confirmed', 'success');
           return;
         }
 
@@ -1362,7 +1836,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              buyer_id: 'demo-buyer',
+              buyer_id: this.currentBuyer?.id || 'demo-buyer',
               buyer_account: {
                 name: document.getElementById('buyer-name').value,
                 email: document.getElementById('buyer-email').value
@@ -1408,7 +1882,18 @@
 
       loadOrders() {
         const container = document.getElementById('orders-list');
-        
+        if (!container) return;
+
+        if (!this.currentBuyer) {
+          container.innerHTML = '<p>Please sign in to view your order history.</p>';
+          return;
+        }
+
+        if (this.demoMode) {
+          const store = this.getStoredOrders();
+          this.orders = store[this.currentBuyer.email] || [];
+        }
+
         if (this.orders.length === 0) {
           container.innerHTML = '<p>No orders yet</p>';
           return;
@@ -1452,6 +1937,63 @@
         `).join('');
       },
 
+      getStoredOrders() {
+        try {
+          return JSON.parse(localStorage.getItem('greenreach_orders')) || {};
+        } catch (error) {
+          return {};
+        }
+      },
+
+      persistOrders() {
+        if (!this.currentBuyer) return;
+        const store = this.getStoredOrders();
+        store[this.currentBuyer.email] = this.orders;
+        localStorage.setItem('greenreach_orders', JSON.stringify(store));
+      },
+
+      buildDemoAllocation() {
+        const farmMap = {};
+        let grandTotal = 0;
+
+        this.cart.forEach(item => {
+          let qtyRemaining = item.quantity;
+          const farms = [...item.farms].sort((a, b) => a.price_per_unit - b.price_per_unit);
+
+          farms.forEach(farm => {
+            if (qtyRemaining <= 0) return;
+            const available = Math.min(qtyRemaining, farm.qty_available || farm.quantity_available || 0);
+            if (available <= 0) return;
+
+            qtyRemaining -= available;
+            const lineTotal = available * farm.price_per_unit;
+            grandTotal += lineTotal;
+
+            if (!farmMap[farm.farm_id]) {
+              farmMap[farm.farm_id] = {
+                farm_name: farm.farm_name,
+                farm_id: farm.farm_id,
+                subtotal: 0,
+                items: []
+              };
+            }
+
+            farmMap[farm.farm_id].subtotal += lineTotal;
+            farmMap[farm.farm_id].items.push({
+              product_name: item.product_name,
+              quantity: available,
+              unit: item.unit,
+              price_per_unit: farm.price_per_unit
+            });
+          });
+        });
+
+        return {
+          grand_total: grandTotal,
+          farm_sub_orders: Object.values(farmMap)
+        };
+      },
+
       getDefaultDeliveryDate() {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1472,8 +2014,7 @@
       },
 
       hideLoading() {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.remove();
+        document.getElementById('loading-overlay')?.remove();
       },
 
       showToast(message, type = 'info') {
@@ -1481,14 +2022,13 @@
         toast.className = `toast ${type}`;
         toast.textContent = message;
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
           toast.remove();
         }, 3000);
       }
     };
 
-    // Initialize app
     document.addEventListener('DOMContentLoaded', () => {
       app.init();
     });
