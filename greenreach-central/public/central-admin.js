@@ -187,8 +187,8 @@ function renderContextualSidebar() {
                 {
                     title: 'Wholesale',
                     items: [
-                        { label: 'Admin Dashboard', view: 'wholesale-admin' },
-                        { label: 'Buyer Portal', view: 'wholesale-buyer' }
+                        { label: 'Admin Dashboard', view: 'wholesale-admin', external: '/wholesale-admin.html' },
+                        { label: 'Buyer Portal', view: 'wholesale-buyer', external: '/wholesale.html' }
                     ]
                 },
                 {
@@ -302,11 +302,21 @@ function renderContextualSidebar() {
     nav.innerHTML = sections.map(section => `
         <div class="nav-section">
             <div class="nav-section-title">${section.title}</div>
-            ${section.items.map(item => `
-                <div class="nav-item ${item.active ? 'active' : ''}" onclick="navigate('${item.view}', this)">
-                    <span>${item.label}</span>
-                </div>
-            `).join('')}
+            ${section.items.map(item => {
+                if (item.external) {
+                    return `
+                        <a href="${item.external}" class="nav-item" style="text-decoration: none; color: inherit; display: block;">
+                            <span>${item.label}</span>
+                        </a>
+                    `;
+                } else {
+                    return `
+                        <div class="nav-item ${item.active ? 'active' : ''}" onclick="navigate('${item.view}', this)">
+                            <span>${item.label}</span>
+                        </div>
+                    `;
+                }
+            }).join('')}
         </div>
     `).join('');
 }
