@@ -620,6 +620,7 @@
     <button class="nav-tab active" data-view="overview">Overview</button>
     <button class="nav-tab" data-view="farms">Farm Management</button>
     <button class="nav-tab" data-view="network">Hyperlocal Network</button>
+    <button class="nav-tab" data-view="payment-setup">Payment Setup</button>
     <button class="nav-tab" data-view="payments">Payments & Fees</button>
     <button class="nav-tab" data-view="orders">Orders</button>
     <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
@@ -843,6 +844,88 @@
           <h2 class="card-title">Network Recommendations</h2>
         </div>
         <div id="network-recommendations" class="empty-state">Loading recommendations...</div>
+      </div>
+    </div>
+
+    <!-- Payment Setup View -->
+    <div id="payment-setup-view" class="view">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Square Payment Integration</h2>
+        </div>
+        <div style="padding: 1.5rem;">
+          <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
+            Connect farms' Square accounts to enable automated payment processing with commission splits.
+            Each farm must authorize GreenReach to process payments on their behalf.
+          </p>
+
+          <div class="stats-grid" style="margin-bottom: 2rem;">
+            <div class="stat-card">
+              <div class="stat-label">Farms Connected</div>
+              <div class="stat-value" id="square-connected-count">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Pending Onboarding</div>
+              <div class="stat-value" id="square-pending-count">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Commission Rate</div>
+              <div class="stat-value" id="square-commission-rate">10%</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Farm ID</th>
+                <th>Farm Name</th>
+                <th>Square Status</th>
+                <th>Merchant ID</th>
+                <th>Location</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="square-status-table">
+              <tr>
+                <td colspan="6" class="loading">Loading farm payment status...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Onboarding Instructions</h2>
+        </div>
+        <div style="padding: 1.5rem;">
+          <ol style="padding-left: 1.5rem;">
+            <li style="margin-bottom: 0.75rem;">
+              <strong>Add Farm to Network:</strong> Use the "Farm Management" tab to add the farm to the network registry if not already added.
+            </li>
+            <li style="margin-bottom: 0.75rem;">
+              <strong>Initiate OAuth:</strong> Click "Connect Square" button for the farm.
+            </li>
+            <li style="margin-bottom: 0.75rem;">
+              <strong>Farm Authorization:</strong> Farm admin must click the generated OAuth link and authorize GreenReach in their Square account.
+            </li>
+            <li style="margin-bottom: 0.75rem;">
+              <strong>Verify Connection:</strong> After authorization, the farm's status will update to "Connected".
+            </li>
+            <li>
+              <strong>Test Payment:</strong> Create a test order to verify commission splits work correctly.
+            </li>
+          </ol>
+
+          <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg); border-radius: 6px;">
+            <strong style="display: block; margin-bottom: 0.5rem;">Required Square OAuth Scopes:</strong>
+            <ul style="padding-left: 1.5rem;">
+              <li><code>PAYMENTS_WRITE</code> - Process payments</li>
+              <li><code>PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS</code> - Enable commission splits</li>
+              <li><code>MERCHANT_PROFILE_READ</code> - Access merchant details</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
 

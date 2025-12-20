@@ -84,6 +84,9 @@
         case 'network':
           this.loadNetwork();
           break;
+        case 'payment-setup':
+          this.loadPaymentSetup();
+          break;
         case 'payments':
           this.loadPayments();
           break;
@@ -1021,6 +1024,167 @@
       this.showToast('Payment details modal not yet implemented', 'info');
     },
 
+    // ========================================================================
+    // PAYMENT SETUP - Square OAuth Integration
+    // ========================================================================
+
+    async loadPaymentSetup() {
+      try {
+        // Get network farms
+        const farmsResponse = await fetch('/api/wholesale/network/farms');
+        const farmsData = await farmsResponse.json();
+        const farms = farmsData.data?.farms || [];
+        
+        // Check Square status for each farm
+        const statusPromises = farms.map(async (farm) => {
+          try {
+            const statusResponse = await fetch(`/api/square-proxy/status/${farm.farm_id}`);
+            const statusData = await statusResponse.json();
+            return {
+              farm_id: farm.farm_id,
+              farm_name: farm.farm_name,
+              connected: statusData.status === 'ok',
+              merchant_id: statusData.data?.merchant_id || null,
+              location_name: statusData.data?.location_name || null,
+              status: statusData.status
+            };
+          } catch (error) {
+            return {
+              farm_id: farm.farm_id,
+              farm_name: farm.farm_name,
+              connected: false,
+              merchant_id: null,
+              location_name: null,
+              status: 'error'
+            };
+          }
+        });
+        
+        const statuses = await Promise.all(statusPromises);
+        
+        // Update summary stats
+        const connectedCount = statuses.filter(s => s.connected).length;
+        const pendingCount = statuses.filter(s => !s.connected).length;
+        const commissionRate = process.env.WHOLESALE_COMMISSION_RATE || '10%';
+        
+        document.getElementById('square-connected-count').textContent = connectedCount;
+        document.getElementById('square-pending-count').textContent = pendingCount;
+        document.getElementById('square-commission-rate').textContent = commissionRate;
+        
+        // Render table
+        const table = document.getElementById('square-status-table');
+        if (statuses.length === 0) {
+          table.innerHTML = '<tr><td colspan="6" class="empty-state">No farms in network. Add farms in Farm Management tab.</td></tr>';
+          return;
+        }
+        
+        table.innerHTML = statuses.map(farm => {
+          const statusBadge = farm.connected
+            ? '<span class="badge badge-success">Connected</span>'
+            : '<span class="badge badge-warning">Not Connected</span>';
+          
+          const actionButton = farm.connected
+            ? `<button class="btn btn-sm btn-secondary" onclick="admin.disconnectSquare('${farm.farm_id}')">Disconnect</button>`
+            : `<button class="btn btn-sm btn-primary" onclick="admin.connectSquare('${farm.farm_id}', '${farm.farm_name}')">Connect Square</button>`;
+          
+          return `
+            <tr>
+              <td>${farm.farm_id}</td>
+              <td>${farm.farm_name}</td>
+              <td>${statusBadge}</td>
+              <td>${farm.merchant_id || '—'}</td>
+              <td>${farm.location_name || '—'}</td>
+              <td>${actionButton}</td>
+            </tr>
+          `;
+        }).join('');
+        
+      } catch (error) {
+        console.error('Load payment setup error:', error);
+        document.getElementById('square-status-table').innerHTML = 
+          '<tr><td colspan="6" class="error">Failed to load payment setup. Check console for details.</td></tr>';
+      }
+    },
+
+    async connectSquare(farmId, farmName) {
+      try {
+        const response = await fetch('/api/square-proxy/authorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ farm_id: farmId, farm_name: farmName })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok || result.status !== 'ok') {
+          this.showToast(result.message || 'Failed to generate OAuth URL', 'error');
+          return;
+        }
+        
+        const authUrl = result.data?.authorization_url;
+        if (!authUrl) {
+          this.showToast('No authorization URL returned', 'error');
+          return;
+        }
+        
+        // Open Square OAuth in new window
+        const width = 600;
+        const height = 700;
+        const left = (screen.width / 2) - (width / 2);
+        const top = (screen.height / 2) - (height / 2);
+        
+        const popup = window.open(
+          authUrl,
+          'SquareOAuth',
+          `width=${width},height=${height},left=${left},top=${top}`
+        );
+        
+        if (!popup) {
+          this.showToast('Please allow popups to complete Square authorization', 'warning');
+          return;
+        }
+        
+        // Poll for completion
+        const pollInterval = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(pollInterval);
+            this.showToast('Square authorization window closed. Refreshing status...', 'info');
+            setTimeout(() => this.loadPaymentSetup(), 1000);
+          }
+        }, 500);
+        
+      } catch (error) {
+        console.error('Connect Square error:', error);
+        this.showToast('Failed to initiate Square OAuth', 'error');
+      }
+    },
+
+    async disconnectSquare(farmId) {
+      if (!confirm(`Disconnect Square for farm ${farmId}? This will disable automated payments.`)) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/square-proxy/disconnect/${farmId}`, {
+          method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok || result.status !== 'ok') {
+          this.showToast(result.message || 'Failed to disconnect Square', 'error');
+          return;
+        }
+        
+        this.showToast('Square disconnected successfully', 'success');
+        await this.loadPaymentSetup();
+        
+      } catch (error) {
+        console.error('Disconnect Square error:', error);
+        this.showToast('Failed to disconnect Square', 'error');
+      }
+    },
+
     async checkOverselling() {
       try {
         const response = await fetch('/api/wholesale/inventory/check-overselling');
@@ -1062,6 +1226,9 @@
   document.addEventListener('DOMContentLoaded', () => {
     admin.init();
   });
+
+  // Expose admin globally for onclick handlers
+  window.admin = admin;
 
   // Global functions for alert banner
   window.resolveOverselling = function() {
