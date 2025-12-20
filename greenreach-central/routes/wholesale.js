@@ -28,6 +28,7 @@ import {
 } from '../services/wholesaleNetworkAggregator.js';
 import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
+import { processSquarePayments, createDemoPaymentRecord } from '../services/squarePaymentService.js';
 
 const router = express.Router();
 
@@ -636,22 +637,48 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
           squareCredentials.get(farmId)?.success === true
         );
         
-        if (allFarmsConnected) {
+        if (allFarmsConnected && payment_provider === 'square') {
           console.log('[Checkout] All farms have Square connected - processing payments');
           
-          // TODO: Implement actual Square payment processing
-          // For now, log credentials availability and mark as manual payment
-          for (const sub of result.allocation.farm_sub_orders) {
-            const creds = squareCredentials.get(sub.farm_id);
-            if (creds?.success) {
-              console.log(`[Checkout] Farm ${sub.farm_id}: Square merchant ${creds.credentials.merchant_id}, location ${creds.credentials.location_id}`);
-            }
-          }
+          // Process Square payments with commission splits
+          const paymentResult = await processSquarePayments({
+            masterOrderId: order.master_order_id,
+            farmSubOrders: result.allocation.farm_sub_orders.map(sub => ({
+              ...sub,
+              buyer_email: buyer_account.email
+            })),
+            paymentSource: req.body.payment_source || { source_id: 'CARD_ON_FILE' },
+            commissionRate
+          });
           
-          // Set payment as pending until Square integration complete
-          payment.status = 'pending';
-          payment.provider = 'square';
-          payment.notes = 'Square payment processing - requires completion';
+          if (paymentResult.success) {
+            payment.status = 'completed';
+            payment.provider = 'square';
+            payment.square_details = {
+              total_amount: paymentResult.totalAmount,
+              total_broker_fee: paymentResult.totalBrokerFee,
+              payments: paymentResult.paymentResults
+            };
+            paymentSuccess = true;
+            console.log('[Checkout] Square payments successful:', paymentResult);
+          } else {
+            payment.status = 'failed';
+            payment.provider = 'square';
+            payment.notes = `Square payment failed: ${paymentResult.paymentResults.filter(r => !r.success).map(r => `Farm ${r.farmId}: ${r.error}`).join('; ')}`;
+            console.error('[Checkout] Square payments failed:', paymentResult);
+          }
+        } else if (allFarmsConnected) {
+          // Demo mode - create demo payment record
+          console.log('[Checkout] Demo mode - creating demo payment record');
+          const demoResult = createDemoPaymentRecord({
+            masterOrderId: order.master_order_id,
+            farmSubOrders: result.allocation.farm_sub_orders,
+            commissionRate
+          });
+          payment.status = 'completed';
+          payment.provider = 'demo';
+          payment.square_details = demoResult;
+          paymentSuccess = true;
         } else {
           console.log('[Checkout] Not all farms have Square connected - using manual payment');
           payment.status = 'pending';
@@ -666,10 +693,10 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
           }
         }
       } catch (error) {
-        console.error('[Checkout] Square credential check failed:', error);
-        payment.status = 'pending';
-        payment.provider = 'manual';
-        payment.notes = 'Manual payment required - Square unavailable';
+        console.error('[Checkout] Square payment processing failed:', error);
+        payment.status = 'failed';
+        payment.provider = payment_provider || 'manual';
+        payment.notes = `Payment error: ${error.message}`;
       }
 
       // Best-effort: notify each farm (Light Engine) about its sub-order.
