@@ -49,6 +49,8 @@ app.use(helmet(isProduction ? undefined : { contentSecurityPolicy: false }));
 
 // Static UI (Wholesale portal + Central Admin UI)
 app.use(express.static(path.join(__dirname, 'public')));
+// Fallback to root public directory for shared assets
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // CORS configuration
 const corsOptions = {
