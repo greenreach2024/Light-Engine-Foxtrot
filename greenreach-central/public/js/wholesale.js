@@ -68,6 +68,11 @@
           country: 'Canada',
           latitude: 49.2827,
           longitude: -123.1207
+        },
+        preferences: {
+          sustainabilityPriority: 'high',
+          localPreference: true,
+          maxDeliveryDistance: 500
         }
       };
       
@@ -76,6 +81,9 @@
       
       this.setActiveBuyer({ buyer: demoBuyer, token: demoToken });
       console.log('✅ Demo profile auto-logged in:', demoBuyer.businessName);
+      
+      // Load insights after profile is set
+      this.loadBuyerInsights();
     },
 
     setupEventListeners() {
@@ -1115,6 +1123,270 @@
         console.warn('Failed to load network farms:', error);
         select.innerHTML = '<option value="">Farms unavailable</option>';
       }
+    },
+
+    /**
+     * Load buyer insights dashboard
+     */
+    async loadBuyerInsights() {
+      if (!this.currentBuyer) return;
+      
+      await Promise.all([
+        this.loadDemandTrends(),
+        this.loadPriceAlerts(),
+        this.loadEnvironmentalImpact()
+      ]);
+    },
+
+    /**
+     * Load demand trends (4-week rolling)
+     */
+    async loadDemandTrends() {
+      const demandContent = document.getElementById('demand-content');
+      
+      // Generate demo trend data based on current catalog
+      const trends = [
+        {
+          rank: 1,
+          productName: 'Butterhead Lettuce',
+          orders: 47,
+          trend: 'up',
+          trendPercent: 23,
+          avgWeekly: 12
+        },
+        {
+          rank: 2,
+          productName: 'Sweet Basil',
+          orders: 38,
+          trend: 'up',
+          trendPercent: 15,
+          avgWeekly: 9
+        },
+        {
+          rank: 3,
+          productName: 'Curly Kale',
+          orders: 35,
+          trend: 'stable',
+          trendPercent: 2,
+          avgWeekly: 9
+        },
+        {
+          rank: 4,
+          productName: 'Cherry Tomatoes',
+          orders: 29,
+          trend: 'down',
+          trendPercent: -8,
+          avgWeekly: 7
+        },
+        {
+          rank: 5,
+          productName: 'Arugula',
+          orders: 24,
+          trend: 'up',
+          trendPercent: 12,
+          avgWeekly: 6
+        }
+      ];
+
+      const html = trends.map(item => {
+        const trendIcon = item.trend === 'up' ? '📈' : item.trend === 'down' ? '📉' : '➡️';
+        const trendClass = `trending-${item.trend}`;
+        const trendText = item.trend === 'up' 
+          ? `+${item.trendPercent}%` 
+          : item.trend === 'down'
+          ? `${item.trendPercent}%`
+          : 'Stable';
+
+        return `
+          <div class="demand-item">
+            <div class="demand-rank">${item.rank}</div>
+            <div class="demand-info">
+              <div class="demand-name">${item.productName}</div>
+              <div class="demand-stats">${item.orders} orders • ${item.avgWeekly} per week avg</div>
+            </div>
+            <div class="demand-trend ${trendClass}">
+              ${trendIcon} ${trendText}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      demandContent.innerHTML = html || '<div class="loading-state">No trend data available</div>';
+    },
+
+    /**
+     * Load price anomaly alerts with news summaries
+     */
+    async loadPriceAlerts() {
+      const priceContent = document.getElementById('price-content');
+      
+      // Generate demo price alerts with AI-style news summaries
+      const alerts = [
+        {
+          product: 'Tomatoes',
+          change: '+18%',
+          type: 'increase',
+          currentPrice: 3.95,
+          previousPrice: 3.35,
+          summary: 'Unseasonable frost in California\'s Central Valley has reduced tomato yields by 30%. Supply chain disruptions from recent storms continue to impact distribution. Prices expected to normalize in 2-3 weeks as alternative sources come online.'
+        },
+        {
+          product: 'Lettuce (Iceberg)',
+          change: '-12%',
+          type: 'decrease',
+          currentPrice: 2.20,
+          previousPrice: 2.50,
+          summary: 'Increased local greenhouse production from BC farms has improved availability. Mild weather conditions have extended growing season. Competitive pricing as multiple farms increase capacity.'
+        }
+      ];
+
+      const html = alerts.map(alert => {
+        const alertClass = `anomaly-${alert.type}`;
+        const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+        
+        return `
+          <div class="price-alert ${alertClass}">
+            <div class="price-alert-header">
+              <span class="price-alert-product">${alert.product}</span>
+              <span class="price-change" style="${changeColor}">${alert.change}</span>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+              $${alert.previousPrice.toFixed(2)} → $${alert.currentPrice.toFixed(2)} per unit
+            </div>
+            <div class="price-alert-summary">
+              ${alert.summary}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      priceContent.innerHTML = html || '<div class="loading-state">All prices stable</div>';
+    },
+
+    /**
+     * Calculate environmental impact based on buyer and farm locations
+     */
+    async loadEnvironmentalImpact() {
+      const impactContent = document.getElementById('impact-content');
+      const impactScore = document.getElementById('impact-score');
+      
+      if (!this.currentBuyer?.location) {
+        impactContent.innerHTML = '<div class="loading-state">Buyer location required</div>';
+        return;
+      }
+
+      // Get farms from current catalog
+      const farmsInCatalog = this.networkFarms.length > 0 
+        ? this.networkFarms 
+        : [
+            { farm_id: 'GR-00001', farm_name: 'Demo Farm - Light Engine Showcase', city: 'Demo City', state: 'CA', latitude: 34.0522, longitude: -118.2437 }
+          ];
+
+      // Calculate distances from buyer to each farm
+      const buyerLat = this.currentBuyer.location.latitude;
+      const buyerLng = this.currentBuyer.location.longitude;
+
+      const farmDistances = farmsInCatalog.map(farm => {
+        const distance = this.calculateDistance(
+          buyerLat,
+          buyerLng,
+          farm.latitude || 34.0522,
+          farm.longitude || -118.2437
+        );
+        
+        return {
+          ...farm,
+          distance: distance
+        };
+      });
+
+      // Calculate weighted average distance for multi-farm orders
+      const avgDistance = farmDistances.reduce((sum, f) => sum + f.distance, 0) / farmDistances.length;
+      
+      // California baseline (from California Central Valley to buyer)
+      const californiaDistance = this.calculateDistance(
+        buyerLat,
+        buyerLng,
+        36.7783, // California Central Valley
+        -119.4179
+      );
+
+      // Calculate carbon savings
+      // Assume 0.161 kg CO2 per km per delivery (light truck)
+      const carbonPerKm = 0.161;
+      const yourCarbon = avgDistance * carbonPerKm;
+      const californiaCarbon = californiaDistance * carbonPerKm;
+      const carbonSavings = californiaCarbon - yourCarbon;
+      const savingsPercent = ((carbonSavings / californiaCarbon) * 100).toFixed(0);
+
+      // Calculate grade
+      let grade = 'C';
+      let gradeClass = 'grade-c';
+      if (avgDistance < 100) {
+        grade = 'A+';
+        gradeClass = 'grade-a';
+      } else if (avgDistance < 250) {
+        grade = 'B';
+        gradeClass = 'grade-b';
+      } else if (avgDistance < 500) {
+        grade = 'C';
+        gradeClass = 'grade-c';
+      } else {
+        grade = 'D';
+        gradeClass = 'grade-d';
+      }
+
+      // Update score badge
+      impactScore.textContent = grade;
+      impactScore.className = `impact-score ${gradeClass}`;
+
+      const html = `
+        <div class="impact-metric">
+          <span class="impact-label">Average Farm Distance</span>
+          <span class="impact-value">${avgDistance.toFixed(0)} km</span>
+        </div>
+        <div class="impact-metric">
+          <span class="impact-label">Est. Carbon per Delivery</span>
+          <span class="impact-value">${yourCarbon.toFixed(1)} kg CO₂</span>
+        </div>
+        <div class="impact-metric">
+          <span class="impact-label">Farms Supplying Your Orders</span>
+          <span class="impact-value">${farmDistances.length} ${farmDistances.length === 1 ? 'farm' : 'farms'}</span>
+        </div>
+        <div class="impact-comparison">
+          <div class="comparison-text">
+            ${carbonSavings > 0 
+              ? `✅ You're saving <span class="comparison-highlight">${carbonSavings.toFixed(1)} kg CO₂ (${savingsPercent}%)</span> per delivery vs. California produce!` 
+              : `⚠️ California produce would save ${Math.abs(carbonSavings).toFixed(1)} kg CO₂ per delivery.`
+            }
+          </div>
+          <div class="comparison-text" style="margin-top: 0.5rem; font-size: 0.8rem;">
+            California baseline: ${californiaDistance.toFixed(0)} km • ${californiaCarbon.toFixed(1)} kg CO₂
+          </div>
+          ${farmDistances.length > 1 ? `
+            <div class="comparison-text" style="margin-top: 0.75rem; font-size: 0.8rem; padding-top: 0.75rem; border-top: 1px solid var(--border);">
+              <strong>Multi-farm fulfillment:</strong> Your orders may be split across multiple farms to optimize freshness and availability. Combined carbon footprint is calculated from weighted average distances.
+            </div>
+          ` : ''}
+        </div>
+      `;
+
+      impactContent.innerHTML = html;
+    },
+
+    /**
+     * Calculate distance between two coordinates (Haversine formula)
+     */
+    calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth's radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
     }
   };
 
