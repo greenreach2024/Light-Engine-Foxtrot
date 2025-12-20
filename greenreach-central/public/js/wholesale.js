@@ -50,6 +50,9 @@
       await this.loadOrders();
       this.renderCart();
       this.updateDemoBanner();
+      
+      // Load insights after all data is ready
+      await this.loadBuyerInsights();
     },
 
     createDemoProfile() {
@@ -82,8 +85,7 @@
       this.setActiveBuyer({ buyer: demoBuyer, token: demoToken });
       console.log('Demo profile auto-logged in:', demoBuyer.businessName);
       
-      // Load insights after profile is set
-      this.loadBuyerInsights();
+      // Don't load insights here - will be loaded after init completes
     },
 
     setupEventListeners() {
@@ -1275,12 +1277,42 @@
         return;
       }
 
-      // Get farms from current catalog
-      const farmsInCatalog = this.networkFarms.length > 0 
-        ? this.networkFarms 
-        : [
-            { farm_id: 'GR-00001', farm_name: 'Demo Farm - Light Engine Showcase', city: 'Demo City', state: 'CA', latitude: 34.0522, longitude: -118.2437 }
-          ];
+      // Get farms with coordinates from admin API
+      let farmsInCatalog = [];
+      
+      try {
+        const response = await fetch('/api/admin/farms?status=active');
+        const data = await response.json();
+        
+        if (data.farms && data.farms.length > 0) {
+          farmsInCatalog = data.farms
+            .filter(f => f.location && f.location.lat && f.location.lng)
+            .map(f => ({
+              farm_id: f.farmId,
+              farm_name: f.name,
+              city: f.address?.city || '',
+              state: f.address?.state || '',
+              latitude: f.location.lat,
+              longitude: f.location.lng
+            }));
+        }
+      } catch (error) {
+        console.warn('Failed to load farms from admin API:', error);
+      }
+      
+      // Fallback to demo farm if no farms found
+      if (farmsInCatalog.length === 0) {
+        farmsInCatalog = [
+          { 
+            farm_id: 'GR-00001', 
+            farm_name: 'Demo Farm - Light Engine Showcase', 
+            city: 'Demo City', 
+            state: 'CA', 
+            latitude: 34.0522, 
+            longitude: -118.2437 
+          }
+        ];
+      }
 
       // Calculate distances from buyer to each farm
       const buyerLat = this.currentBuyer.location.latitude;
