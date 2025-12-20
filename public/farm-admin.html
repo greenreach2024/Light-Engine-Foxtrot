@@ -1380,84 +1380,77 @@
                     <p class="header-subtitle">Configure your farm profile, integrations, and system preferences</p>
                 </div>
 
-                <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
                     <!-- Farm Profile -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px; color: var(--primary);">Farm Profile</h2>
+                        <h2 style="margin-bottom: 20px;">Farm Profile</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Farm Name</label>
-                                <input type="text" id="settings-farm-name" placeholder="Your Farm Name" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Farm ID</label>
+                                <input type="text" id="settings-farm-id" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-family: monospace;">
+                                <small style="color: var(--text-muted);">Read-only identifier from setup wizard</small>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Location</label>
-                                <input type="text" id="settings-location" placeholder="City, State" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Registration Code</label>
+                                <input type="text" id="settings-registration-code" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-family: monospace;">
+                                <small style="color: var(--text-muted);">From initial farm registration</small>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Contact Email</label>
-                                <input type="email" id="settings-email" placeholder="farm@example.com" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Phone Number</label>
-                                <input type="tel" id="settings-phone" placeholder="(555) 123-4567" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Website</label>
-                                <input type="url" id="settings-website" placeholder="https://yourfarm.com" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Business Information -->
-                    <div class="card">
-                        <h2 style="margin-bottom: 20px; color: var(--primary);">Business Information</h2>
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tax ID / EIN</label>
-                                <input type="text" id="settings-tax-id" placeholder="XX-XXXXXXX" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Business License</label>
-                                <input type="text" id="settings-license" placeholder="License Number" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Certifications</label>
-                                <div style="display: flex; flex-direction: column; gap: 8px;">
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="cert-organic">
-                                        <span>USDA Organic Certified</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="cert-gmp">
-                                        <span>Good Manufacturing Practice (GMP)</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="cert-gap">
-                                        <span>Good Agricultural Practices (GAP)</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="cert-haccp">
-                                        <span>HACCP Certified</span>
-                                    </label>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Network Configuration</label>
+                                <div style="padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary);">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                        <span style="color: var(--text-muted);">Connection:</span>
+                                        <span id="network-type" style="color: var(--text-primary);">-</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-muted);">Status:</span>
+                                        <span id="network-status" style="color: var(--accent-green);">Connected</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Certifications & Practices -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">Certifications & Practices</h2>
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
+                                <div id="certifications-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <!-- Loaded from setup wizard -->
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Growing Practices</h3>
+                                <div id="practices-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <!-- Loaded from setup wizard -->
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Farm Attributes</h3>
+                                <div id="attributes-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <!-- Loaded from setup wizard -->
+                                </div>
+                            </div>
+                            <button class="btn-secondary" onclick="openSetupWizard()" style="margin-top: 10px;">Update Certifications</button>
+                        </div>
+                    </div>
+
                     <!-- Display Preferences -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px; color: var(--primary);">Display Preferences</h2>
+                        <h2 style="margin-bottom: 20px;">Display Preferences</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Temperature Units</label>
-                                <select id="settings-temp-unit" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Temperature Units</label>
+                                <select id="settings-temp-unit" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                     <option value="F">Fahrenheit (°F)</option>
                                     <option value="C">Celsius (°C)</option>
                                 </select>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Weight Units</label>
-                                <select id="settings-weight-unit" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Weight Units</label>
+                                <select id="settings-weight-unit" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                     <option value="lbs">Pounds (lbs)</option>
                                     <option value="kg">Kilograms (kg)</option>
                                     <option value="oz">Ounces (oz)</option>
@@ -1465,8 +1458,8 @@
                                 </select>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Currency</label>
-                                <select id="settings-currency" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Currency</label>
+                                <select id="settings-currency" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                     <option value="USD">US Dollar ($)</option>
                                     <option value="CAD">Canadian Dollar (CA$)</option>
                                     <option value="EUR">Euro (€)</option>
@@ -1474,8 +1467,8 @@
                                 </select>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Timezone</label>
-                                <select id="settings-timezone" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Timezone</label>
+                                <select id="settings-timezone" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                     <option value="America/New_York">Eastern Time (ET)</option>
                                     <option value="America/Chicago">Central Time (CT)</option>
                                     <option value="America/Denver">Mountain Time (MT)</option>
@@ -1489,7 +1482,7 @@
 
                     <!-- Notification Preferences -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px; color: var(--primary);">Notification Preferences</h2>
+                        <h2 style="margin-bottom: 20px;">Notification Preferences</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Order Notifications</h3>
@@ -1526,20 +1519,20 @@
                                 </div>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Notification Email</label>
-                                <input type="email" id="settings-notif-email" placeholder="notifications@yourfarm.com" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Notification Email</label>
+                                <input type="email" id="settings-notif-email" placeholder="notifications@yourfarm.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                             </div>
                         </div>
                     </div>
 
                     <!-- Integration Settings -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px; color: var(--primary);">Integration Settings</h2>
+                        <h2 style="margin-bottom: 20px;">Integration Settings</h2>
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Square Payment Processing</h3>
-                                <div id="square-connection-status" style="padding: 10px; background: #f0f0f0; border-radius: 4px; margin-bottom: 10px;">
-                                    <p style="margin: 0;">Status: <span id="square-status-text">Checking...</span></p>
+                                <div id="square-connection-status" style="padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border);">
+                                    <p style="margin: 0; color: var(--text-secondary);">Status: <span id="square-status-text" style="color: var(--text-primary);">Checking...</span></p>
                                 </div>
                                 <button class="btn-secondary" onclick="connectSquare()" style="width: 100%;">Configure Square</button>
                             </div>
@@ -1551,21 +1544,51 @@
                                 </label>
                                 <div style="display: flex; flex-direction: column; gap: 10px;">
                                     <div>
-                                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Farm ID</label>
-                                        <input type="text" id="settings-farm-id" placeholder="GR-00001" readonly style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: #f9f9f9;">
+                                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Sync Endpoint</label>
+                                        <input type="text" id="greenreach-endpoint" placeholder="https://central.greenreach.app" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-family: monospace;">
                                     </div>
                                     <div>
-                                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">API Key</label>
-                                        <input type="password" id="settings-api-key" placeholder="Enter API key" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">API Key</label>
+                                        <input type="password" id="settings-api-key" placeholder="Enter API key" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <small style="color: var(--text-muted);">From GreenReach Central dashboard</small>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Hardware Configuration -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">Hardware Configuration</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Detected Hardware</h3>
+                                <div style="padding: 12px; background: var(--bg-secondary); border-radius: 6px; border: 1px solid var(--border);">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="color: var(--text-muted);">Lights:</span>
+                                        <span id="hardware-lights" style="color: var(--text-primary);">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="color: var(--text-muted);">Fans:</span>
+                                        <span id="hardware-fans" style="color: var(--text-primary);">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="color: var(--text-muted);">Sensors:</span>
+                                        <span id="hardware-sensors" style="color: var(--text-primary);">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-muted);">Other Devices:</span>
+                                        <span id="hardware-other" style="color: var(--text-primary);">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn-secondary" onclick="scanHardware()" style="width: 100%;">Rescan Hardware</button>
+                        </div>
+                    </div>
+
                     <!-- System Configuration -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px; color: var(--primary);">System Configuration</h2>
+                        <h2 style="margin-bottom: 20px;">System Configuration</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Data & Backups</h3>
@@ -1575,8 +1598,8 @@
                                         <span>Enable automatic backups</span>
                                     </label>
                                     <div style="margin-left: 24px;">
-                                        <label style="display: block; margin-bottom: 5px; font-size: 12px;">Backup Frequency</label>
-                                        <select id="backup-frequency" style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;">
+                                        <label style="display: block; margin-bottom: 5px; font-size: 12px; color: var(--text-secondary);">Backup Frequency</label>
+                                        <select id="backup-frequency" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 12px;">
                                             <option value="daily">Daily</option>
                                             <option value="weekly">Weekly</option>
                                             <option value="monthly">Monthly</option>
@@ -1596,8 +1619,8 @@
                                         <span>Password expiration (90 days)</span>
                                     </label>
                                     <div>
-                                        <label style="display: block; margin-bottom: 5px; font-size: 12px;">Session Timeout (minutes)</label>
-                                        <input type="number" id="session-timeout" value="30" min="5" max="1440" style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;">
+                                        <label style="display: block; margin-bottom: 5px; font-size: 12px; color: var(--text-secondary);">Session Timeout (minutes)</label>
+                                        <input type="number" id="session-timeout" value="30" min="5" max="1440" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 12px;">
                                     </div>
                                 </div>
                             </div>
@@ -1606,22 +1629,22 @@
 
                     <!-- Farm Operations Defaults -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px; color: var(--primary);">Farm Operations Defaults</h2>
+                        <h2 style="margin-bottom: 20px;">Farm Operations Defaults</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Default Wholesale Markup (%)</label>
-                                <input type="number" id="default-wholesale-markup" value="40" min="0" max="100" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                                <small style="color: var(--text-secondary);">Applied to new products</small>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default Wholesale Markup (%)</label>
+                                <input type="number" id="default-wholesale-markup" value="40" min="0" max="100" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                <small style="color: var(--text-muted);">Applied to new products</small>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Default Retail Markup (%)</label>
-                                <input type="number" id="default-retail-markup" value="100" min="0" max="300" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                                <small style="color: var(--text-secondary);">Applied to new products</small>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default Retail Markup (%)</label>
+                                <input type="number" id="default-retail-markup" value="100" min="0" max="300" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                <small style="color: var(--text-muted);">Applied to new products</small>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Low Stock Threshold</label>
-                                <input type="number" id="low-stock-threshold" value="10" min="0" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                                <small style="color: var(--text-secondary);">Trigger low inventory alerts</small>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Low Stock Threshold</label>
+                                <input type="number" id="low-stock-threshold" value="10" min="0" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                <small style="color: var(--text-muted);">Trigger low inventory alerts</small>
                             </div>
                             <div>
                                 <label style="display: flex; align-items: center; gap: 8px;">
@@ -1634,12 +1657,12 @@
 
                     <!-- API & Webhooks -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px; color: var(--primary);">API & Webhooks</h2>
+                        <h2 style="margin-bottom: 20px;">API & Webhooks</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Webhook URL</label>
-                                <input type="url" id="webhook-url" placeholder="https://yourapp.com/webhook" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-                                <small style="color: var(--text-secondary);">Receive real-time event notifications</small>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Webhook URL</label>
+                                <input type="url" id="webhook-url" placeholder="https://yourapp.com/webhook" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                <small style="color: var(--text-muted);">Receive real-time event notifications</small>
                             </div>
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Webhook Events</h3>

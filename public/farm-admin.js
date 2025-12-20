@@ -2715,23 +2715,71 @@ function downloadAllReceipts() {
  */
 async function loadSettings() {
     try {
-        // Load settings from localStorage (or API in production)
+        // Load setup configuration from API
+        const setupResponse = await fetch('/api/setup/status');
+        const setupData = await setupResponse.json();
+        
+        if (setupData.completed) {
+            // Farm Profile from setup wizard
+            document.getElementById('settings-farm-id').value = setupData.farmId || 'Not configured';
+            document.getElementById('settings-registration-code').value = setupData.registrationCode || 'N/A';
+            document.getElementById('network-type').textContent = setupData.network?.type || 'Unknown';
+            
+            // Load hardware info
+            if (setupData.hardwareDetected) {
+                document.getElementById('hardware-lights').textContent = setupData.hardwareDetected.lights || 0;
+                document.getElementById('hardware-fans').textContent = setupData.hardwareDetected.fans || 0;
+                document.getElementById('hardware-sensors').textContent = setupData.hardwareDetected.sensors || 0;
+                document.getElementById('hardware-other').textContent = setupData.hardwareDetected.other || 0;
+            }
+            
+            // Load certifications
+            if (setupData.certifications) {
+                const certList = document.getElementById('certifications-list');
+                certList.innerHTML = '';
+                (setupData.certifications.certifications || []).forEach(cert => {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.style.cssText = 'background: rgba(16, 185, 129, 0.1); color: var(--accent-green); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-green);';
+                    badge.textContent = cert;
+                    certList.appendChild(badge);
+                });
+                
+                const practicesList = document.getElementById('practices-list');
+                practicesList.innerHTML = '';
+                (setupData.certifications.practices || []).forEach(practice => {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.style.cssText = 'background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-blue);';
+                    badge.textContent = practice;
+                    practicesList.appendChild(badge);
+                });
+                
+                const attrList = document.getElementById('attributes-list');
+                attrList.innerHTML = '';
+                (setupData.certifications.attributes || []).forEach(attr => {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.style.cssText = 'background: rgba(139, 92, 246, 0.1); color: var(--accent-purple); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-purple);';
+                    badge.textContent = attr;
+                    attrList.appendChild(badge);
+                });
+                
+                // Show placeholder if no data
+                if (!setupData.certifications.certifications?.length) {
+                    certList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No certifications added</span>';
+                }
+                if (!setupData.certifications.practices?.length) {
+                    practicesList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No practices selected</span>';
+                }
+                if (!setupData.certifications.attributes?.length) {
+                    attrList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No attributes selected</span>';
+                }
+            }
+        }
+        
+        // Load user preferences from localStorage
         const settings = JSON.parse(localStorage.getItem('farmSettings') || '{}');
-        
-        // Farm Profile
-        document.getElementById('settings-farm-name').value = settings.farmName || '';
-        document.getElementById('settings-location').value = settings.location || '';
-        document.getElementById('settings-email').value = settings.email || '';
-        document.getElementById('settings-phone').value = settings.phone || '';
-        document.getElementById('settings-website').value = settings.website || '';
-        
-        // Business Information
-        document.getElementById('settings-tax-id').value = settings.taxId || '';
-        document.getElementById('settings-license').value = settings.license || '';
-        document.getElementById('cert-organic').checked = settings.certOrganic || false;
-        document.getElementById('cert-gmp').checked = settings.certGmp || false;
-        document.getElementById('cert-gap').checked = settings.certGap || false;
-        document.getElementById('cert-haccp').checked = settings.certHaccp || false;
         
         // Display Preferences
         document.getElementById('settings-temp-unit').value = settings.tempUnit || 'F';
@@ -2746,11 +2794,11 @@ async function loadSettings() {
         document.getElementById('notif-harvest-ready').checked = settings.notifHarvestReady !== false;
         document.getElementById('notif-equipment-issue').checked = settings.notifEquipmentIssue !== false;
         document.getElementById('notif-ai-recommend').checked = settings.notifAiRecommend !== false;
-        document.getElementById('settings-notif-email').value = settings.notifEmail || settings.email || '';
+        document.getElementById('settings-notif-email').value = settings.notifEmail || '';
         
         // Integration Settings
         document.getElementById('greenreach-sync-enabled').checked = settings.greenreachSync !== false;
-        document.getElementById('settings-farm-id').value = settings.farmId || 'GR-00001';
+        document.getElementById('greenreach-endpoint').value = settings.greenreachEndpoint || 'https://central.greenreach.app';
         document.getElementById('settings-api-key').value = settings.apiKey || '';
         
         // Check Square status
@@ -2798,40 +2846,63 @@ async function checkSquareStatus() {
         
         if (data.connected) {
             statusEl.textContent = `Connected (${data.merchantName || 'Unknown Merchant'})`;
-            statusContainer.style.background = '#d1fae5';
-            statusContainer.style.color = '#065f46';
+            statusEl.style.color = 'var(--accent-green)';
+            statusContainer.style.background = 'rgba(16, 185, 129, 0.1)';
+            statusContainer.style.borderColor = 'var(--accent-green)';
         } else {
             statusEl.textContent = 'Not Connected';
-            statusContainer.style.background = '#fee2e2';
-            statusContainer.style.color = '#991b1b';
+            statusEl.style.color = 'var(--accent-red)';
+            statusContainer.style.background = 'rgba(239, 68, 68, 0.1)';
+            statusContainer.style.borderColor = 'var(--accent-red)';
         }
     } catch (error) {
         console.error('Error checking Square status:', error);
         document.getElementById('square-status-text').textContent = 'Unable to check status';
+        document.getElementById('square-status-text').style.color = 'var(--text-muted)';
+    }
+}
+
+/**
+ * Open setup wizard for reconfiguration
+ */
+function openSetupWizard() {
+    if (confirm('This will open the setup wizard to update your certifications. Continue?')) {
+        window.location.href = '/setup-wizard.html';
+    }
+}
+
+/**
+ * Rescan hardware devices
+ */
+async function scanHardware() {
+    showToast('Scanning for hardware devices...', 'info');
+    
+    try {
+        // In production, this would call the hardware scan API
+        const response = await fetch('/api/hardware/scan', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('hardware-lights').textContent = data.lights || 0;
+            document.getElementById('hardware-fans').textContent = data.fans || 0;
+            document.getElementById('hardware-sensors').textContent = data.sensors || 0;
+            document.getElementById('hardware-other').textContent = data.other || 0;
+            showToast('Hardware scan complete', 'success');
+        }
+    } catch (error) {
+        console.error('Error scanning hardware:', error);
+        showToast('Hardware scan unavailable', 'error');
     }
 }
 
 /**
  * Save farm settings
  */
-function saveSettings() {
+async function saveSettings() {
     try {
         const settings = {
-            // Farm Profile
-            farmName: document.getElementById('settings-farm-name').value,
-            location: document.getElementById('settings-location').value,
-            email: document.getElementById('settings-email').value,
-            phone: document.getElementById('settings-phone').value,
-            website: document.getElementById('settings-website').value,
-            
-            // Business Information
-            taxId: document.getElementById('settings-tax-id').value,
-            license: document.getElementById('settings-license').value,
-            certOrganic: document.getElementById('cert-organic').checked,
-            certGmp: document.getElementById('cert-gmp').checked,
-            certGap: document.getElementById('cert-gap').checked,
-            certHaccp: document.getElementById('cert-haccp').checked,
-            
             // Display Preferences
             tempUnit: document.getElementById('settings-temp-unit').value,
             weightUnit: document.getElementById('settings-weight-unit').value,
@@ -2849,7 +2920,7 @@ function saveSettings() {
             
             // Integration Settings
             greenreachSync: document.getElementById('greenreach-sync-enabled').checked,
-            farmId: document.getElementById('settings-farm-id').value,
+            greenreachEndpoint: document.getElementById('greenreach-endpoint').value,
             apiKey: document.getElementById('settings-api-key').value,
             
             // System Configuration
@@ -2874,15 +2945,22 @@ function saveSettings() {
             lastUpdated: new Date().toISOString()
         };
         
-        // Save to localStorage (in production, would save to API)
+        // Save to localStorage
         localStorage.setItem('farmSettings', JSON.stringify(settings));
         
-        // In production, would send to API:
-        // await fetch('/api/farm/settings', {
+        // In production, would also save to API:
+        // const response = await fetch('/api/farm/settings', {
         //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
+        //     headers: { 
+        //         'Content-Type': 'application/json',
+        //         'X-Farm-ID': localStorage.getItem('farmId') || 'demo-farm'
+        //     },
         //     body: JSON.stringify(settings)
         // });
+        // 
+        // if (!response.ok) {
+        //     throw new Error('Failed to save settings to server');
+        // }
         
         showToast('Settings saved successfully', 'success');
     } catch (error) {

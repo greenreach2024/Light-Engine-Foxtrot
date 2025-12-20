@@ -6304,6 +6304,34 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
   }
 }));
 
+// Get setup status endpoint
+app.get('/api/setup/status', asyncHandler(async (req, res) => {
+  try {
+    // Retrieve setup configuration from database
+    const setupConfig = await db.findOne({ key: 'setup_config' });
+    
+    if (setupConfig && setupConfig.completed) {
+      res.json({
+        completed: true,
+        completedAt: setupConfig.completedAt,
+        farmId: setupConfig.farmId,
+        registrationCode: setupConfig.registrationCode,
+        network: setupConfig.network,
+        hardwareDetected: setupConfig.hardwareDetected,
+        certifications: setupConfig.certifications || { certifications: [], practices: [], attributes: [] }
+      });
+    } else {
+      res.json({
+        completed: false,
+        message: 'Setup not completed'
+      });
+    }
+  } catch (error) {
+    console.error('[setup-wizard] Error getting setup status:', error);
+    res.status(500).json({ error: 'Failed to retrieve setup status' });
+  }
+}));
+
 // Sync service routes
 let syncServiceInstance = null;
 
