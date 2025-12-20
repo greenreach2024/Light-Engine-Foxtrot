@@ -101,6 +101,7 @@ import SyncService from './lib/sync-service.js';
 import CertificateManager from './services/certificate-manager.js';
 import CredentialManager from './services/credential-manager.js';
 import EdgeWholesaleService from './lib/edge-wholesale-service.js';
+import WholesaleIntegrationService from './services/wholesale-integration.js';
 
 const app = express();
 
@@ -6709,6 +6710,248 @@ app.post('/api/credentials/backup', asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('[credentials] Backup error:', error);
     res.status(500).json({ error: 'Failed to backup credentials' });
+  }
+}));
+
+// Wholesale integration routes
+let wholesaleIntegrationService = null;
+
+// Initialize wholesale integration
+async function initializeWholesaleIntegration() {
+  if (!wholesaleIntegrationService) {
+    const certManager = await getCertificateManager();
+    
+    wholesaleIntegrationService = new WholesaleIntegrationService({
+      centralUrl: process.env.GREENREACH_CENTRAL_URL,
+      farmId: process.env.FARM_ID,
+      apiKey: process.env.GREENREACH_API_KEY,
+      apiSecret: process.env.GREENREACH_API_SECRET,
+      certificateManager: certManager,
+      inventoryDB: db, // Use main database
+      ordersDB: db,
+      catalogSyncInterval: 5 * 60 * 1000, // 5 minutes
+      priceSyncInterval: 15 * 60 * 1000 // 15 minutes
+    });
+    
+    await wholesaleIntegrationService.initialize();
+    console.log('[wholesale] Integration service initialized');
+  }
+}
+
+// Get wholesale integration service
+async function getWholesaleIntegration() {
+  await initializeWholesaleIntegration();
+  return wholesaleIntegrationService;
+}
+
+// Get wholesale integration status
+app.get('/api/wholesale/status', asyncHandler(async (req, res) => {
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const status = wholesale.getStatus();
+    
+    res.json({
+      ...status,
+      farmId: process.env.FARM_ID
+    });
+  } catch (error) {
+    console.error('[wholesale] Status error:', error);
+    res.status(500).json({ error: 'Failed to get wholesale status' });
+  }
+}));
+
+// Trigger catalog sync
+app.post('/api/wholesale/sync/catalog', asyncHandler(async (req, res) => {
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const result = await wholesale.syncCatalog();
+    
+    res.json({
+      success: true,
+      result
+    });
+  } catch (error) {
+    console.error('[wholesale] Catalog sync error:', error);
+    res.status(500).json({ error: 'Failed to sync catalog' });
+  }
+}));
+
+// Trigger price sync
+app.post('/api/wholesale/sync/pricing', asyncHandler(async (req, res) => {
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const result = await wholesale.syncPrices();
+    
+    res.json({
+      success: true,
+      result
+    });
+  } catch (error) {
+    console.error('[wholesale] Price sync error:', error);
+    res.status(500).json({ error: 'Failed to sync pricing' });
+  }
+}));
+
+// Receive order webhook
+app.post('/api/wholesale/webhook/order', asyncHandler(async (req, res) => {
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const order = await wholesale.handleOrderWebhook(req.body);
+    
+    res.json({
+      success: true,
+      order
+    });
+  } catch (error) {
+    console.error('[wholesale] Order webhook error:', error);
+    res.status(500).json({ error: 'Failed to process order webhook' });
+  }
+}));
+
+// Get pending orders
+app.get('/api/wholesale/orders/pending', asyncHandler(async (req, res) => {
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const status = wholesale.getStatus();
+    
+    // Get order details for pending orders
+    const orders = [];
+    for (const orderId of wholesale.state.pendingOrders) {
+      const order = await wholesale.getOrder(orderId);
+      if (order) {
+        orders.push(order);
+      }
+    }
+    
+    res.json({
+      count: orders.length,
+      orders
+    });
+  } catch (error) {
+    console.error('[wholesale] Pending orders error:', error);
+    res.status(500).json({ error: 'Failed to get pending orders' });
+  }
+}));
+
+// Fulfill order
+app.post('/api/wholesale/orders/:orderId/fulfill', asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  const { trackingNumber, carrier, shippingLabel } = req.body;
+  
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const order = await wholesale.fulfillOrder(orderId, {
+      trackingNumber,
+      carrier,
+      shippingLabel
+    });
+    
+    res.json({
+      success: true,
+      order
+    });
+  } catch (error) {
+    console.error('[wholesale] Fulfill order error:', error);
+    res.status(500).json({ error: 'Failed to fulfill order' });
+  }
+}));
+
+// Cancel order
+app.post('/api/wholesale/orders/:orderId/cancel', asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  const { reason } = req.body;
+  
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const order = await wholesale.cancelOrder(orderId, reason);
+    
+    res.json({
+      success: true,
+      order
+    });
+  } catch (error) {
+    console.error('[wholesale] Cancel order error:', error);
+    res.status(500).json({ error: 'Failed to cancel order' });
+  }
+}));
+
+// Get order details
+app.get('/api/wholesale/orders/:orderId', asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const order = await wholesale.getOrder(orderId);
+    
+    if (!order) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+    
+    res.json({ order });
+  } catch (error) {
+    console.error('[wholesale] Get order error:', error);
+    res.status(500).json({ error: 'Failed to get order' });
+  }
+}));
+
+// Get reserved inventory
+app.get('/api/wholesale/inventory/reserved', asyncHandler(async (req, res) => {
+  try {
+    const wholesale = await getWholesaleIntegration();
+    
+    const reserved = [];
+    for (const [productId, quantity] of wholesale.state.reservedInventory.entries()) {
+      const item = await wholesale.getInventoryItem(productId);
+      if (item) {
+        reserved.push({
+          productId,
+          name: item.name,
+          reserved: quantity,
+          available: item.quantity - quantity
+        });
+      }
+    }
+    
+    res.json({
+      count: reserved.length,
+      reserved
+    });
+  } catch (error) {
+    console.error('[wholesale] Reserved inventory error:', error);
+    res.status(500).json({ error: 'Failed to get reserved inventory' });
+  }
+}));
+
+// Enable wholesale integration
+app.post('/api/wholesale/enable', asyncHandler(async (req, res) => {
+  try {
+    const wholesale = await getWholesaleIntegration();
+    wholesale.enable();
+    
+    res.json({
+      success: true,
+      enabled: true
+    });
+  } catch (error) {
+    console.error('[wholesale] Enable error:', error);
+    res.status(500).json({ error: 'Failed to enable wholesale integration' });
+  }
+}));
+
+// Disable wholesale integration
+app.post('/api/wholesale/disable', asyncHandler(async (req, res) => {
+  try {
+    const wholesale = await getWholesaleIntegration();
+    wholesale.disable();
+    
+    res.json({
+      success: true,
+      enabled: false
+    });
+  } catch (error) {
+    console.error('[wholesale] Disable error:', error);
+    res.status(500).json({ error: 'Failed to disable wholesale integration' });
   }
 }));
 
