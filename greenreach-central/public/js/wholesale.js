@@ -80,7 +80,7 @@
       const demoToken = 'demo-token-' + Date.now();
       
       this.setActiveBuyer({ buyer: demoBuyer, token: demoToken });
-      console.log('✅ Demo profile auto-logged in:', demoBuyer.businessName);
+      console.log('Demo profile auto-logged in:', demoBuyer.businessName);
       
       // Load insights after profile is set
       this.loadBuyerInsights();
@@ -1189,7 +1189,7 @@
       ];
 
       const html = trends.map(item => {
-        const trendIcon = item.trend === 'up' ? '📈' : item.trend === 'down' ? '📉' : '➡️';
+        const trendIcon = item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→';
         const trendClass = `trending-${item.trend}`;
         const trendText = item.trend === 'up' 
           ? `+${item.trendPercent}%` 
@@ -1356,8 +1356,8 @@
         <div class="impact-comparison">
           <div class="comparison-text">
             ${carbonSavings > 0 
-              ? `✅ You're saving <span class="comparison-highlight">${carbonSavings.toFixed(1)} kg CO₂ (${savingsPercent}%)</span> per delivery vs. California produce!` 
-              : `⚠️ California produce would save ${Math.abs(carbonSavings).toFixed(1)} kg CO₂ per delivery.`
+              ? `You're saving <span class="comparison-highlight">${carbonSavings.toFixed(1)} kg CO₂ (${savingsPercent}%)</span> per delivery vs. California produce!` 
+              : `California produce would save ${Math.abs(carbonSavings).toFixed(1)} kg CO₂ per delivery.`
             }
           </div>
           <div class="comparison-text" style="margin-top: 0.5rem; font-size: 0.8rem;">
