@@ -1971,6 +1971,7 @@ async function refreshWholesaleOrders() {
         
         // Load order statuses from storage
         const statusData = await loadOrderStatuses();
+        const trackingData = await loadTrackingNumbers();
         
         // Group orders by order_id
         const orderMap = new Map();
@@ -1979,7 +1980,8 @@ async function refreshWholesaleOrders() {
             if (!orderMap.has(orderId)) {
                 orderMap.set(orderId, {
                     ...event,
-                    status: statusData[orderId] || 'pending'
+                    status: statusData[orderId] || 'pending',
+                    tracking_number: trackingData[orderId] || null
                 });
             }
         });
@@ -2088,6 +2090,28 @@ function renderOrderCard(order) {
                     ">
                         🚚 Mark as Shipped
                     </button>
+                    <button class="btn-secondary" onclick="addTrackingNumber('${order.order_id}')" style="
+                        background: rgba(107, 114, 128, 0.2);
+                        border: 1px solid #6b7280;
+                        color: #9ca3af;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        cursor: pointer;
+                    ">
+                        🔗 Add Tracking #
+                    </button>
+                ` : ''}
+                ${order.tracking_number ? `
+                    <div style="
+                        background: rgba(16, 185, 129, 0.1);
+                        border: 1px solid var(--accent-green);
+                        color: var(--accent-green);
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-weight: 600;
+                    ">
+                        📍 Tracking: ${order.tracking_number}
+                    </div>
                 ` : ''}
                 <button class="btn-secondary" onclick="printPackingSlip('${order.order_id}')" style="
                     background: rgba(107, 114, 128, 0.2);
@@ -2128,6 +2152,45 @@ async function updateOrderStatus(orderId, newStatus) {
     } catch (error) {
         console.error('Failed to update order status:', error);
         showToast('Failed to update order status', 'error');
+    }
+}
+
+/**
+ * Add tracking number to order
+ */
+async function addTrackingNumber(orderId) {
+    const trackingNumber = prompt('Enter tracking number:');
+    if (!trackingNumber || !trackingNumber.trim()) {
+        return;
+    }
+    
+    try {
+        // Load current statuses
+        const statusData = await loadOrderStatuses();
+        
+        // Add tracking number to order
+        if (!statusData[orderId]) {
+            statusData[orderId] = 'packed';
+        }
+        
+        // Store tracking number separately
+        const trackingData = await loadTrackingNumbers();
+        trackingData[orderId] = trackingNumber.trim();
+        await saveTrackingNumbers(trackingData);
+        
+        // Save updated statuses
+        await saveOrderStatuses(statusData);
+        
+        // Notify Central via callback endpoint
+        await notifyCentralOfTrackingNumber(orderId, trackingNumber.trim());
+        
+        // Refresh display
+        await refreshWholesaleOrders();
+        
+        showToast('Tracking number added', 'success');
+    } catch (error) {
+        console.error('Failed to add tracking number:', error);
+        showToast('Failed to add tracking number', 'error');
     }
 }
 
@@ -2268,6 +2331,92 @@ async function saveOrderStatuses(statusData) {
     
     if (!response.ok) {
         throw new Error('Failed to save order statuses');
+    }
+}
+
+/**
+ * Load tracking numbers from storage
+ */
+async function loadTrackingNumbers() {
+    try {
+        const response = await fetch(`${API_BASE}/api/wholesale/tracking-numbers`, {
+            headers: {
+                'Authorization': `Bearer ${getSession()?.token || ''}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.tracking || {};
+        }
+    } catch (error) {
+        console.log('No existing tracking numbers found');
+    }
+    
+    return {};
+}
+
+/**
+ * Save tracking numbers to storage
+ */
+async function saveTrackingNumbers(trackingData) {
+    const response = await fetch(`${API_BASE}/api/wholesale/tracking-numbers`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getSession()?.token || ''}`
+        },
+        body: JSON.stringify(trackingData)
+    });
+    
+    if (!response.ok) {
+        throw new Error('Failed to save tracking numbers');
+    }
+}
+
+/**
+ * Notify Central of tracking number via callback
+ */
+async function notifyCentralOfTrackingNumber(orderId, trackingNumber) {
+    try {
+        // Get farm info to determine Central URL
+        const farmPath = `${API_BASE}/api/data/farm.json`;
+        let centralUrl = 'http://localhost:3000'; // Default for dev
+        let farmId = 'light-engine-demo';
+        
+        try {
+            const farmRes = await fetch(farmPath);
+            if (farmRes.ok) {
+                const farmData = await farmRes.json();
+                if (farmData.centralUrl) centralUrl = farmData.centralUrl;
+                if (farmData.farmId) farmId = farmData.farmId;
+            }
+        } catch (e) {
+            console.log('[Tracking Callback] Using default Central URL');
+        }
+        
+        // Call Central's tracking webhook
+        const response = await fetch(`${centralUrl}/api/wholesale/order-tracking`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                order_id: orderId,
+                tracking_number: trackingNumber,
+                farm_id: farmId,
+                timestamp: new Date().toISOString()
+            })
+        });
+        
+        if (response.ok) {
+            console.log(`✓ Notified Central of tracking number: ${orderId} → ${trackingNumber}`);
+        } else {
+            console.warn(`⚠ Central tracking notification failed (${response.status}), saved locally`);
+        }
+    } catch (error) {
+        console.warn('[Tracking Callback] Failed to notify Central:', error.message);
+        // Non-blocking: tracking was already saved locally
     }
 }
 

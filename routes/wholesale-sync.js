@@ -74,6 +74,7 @@ router.get('/inventory', async (req, res) => {
 
     // Load active reservations to subtract from available quantities
     const reservedBySku = getTotalReservedBySku();
+    const deductedBySku = getTotalDeductedBySku();
 
     groups.forEach((group) => {
       const cropName = group.crop || group.recipe;
@@ -115,9 +116,10 @@ router.get('/inventory', async (req, res) => {
         harvest_date_end: harvestEnd.toISOString()
       };
 
-      // Apply reservations to available quantity
+      // Apply reservations AND deductions to available quantity
       const reservedQty = reservedBySku.get(skuId) || 0;
-      const actualAvailable = Math.max(0, qtyAvailable - reservedQty);
+      const deductedQty = deductedBySku.get(skuId) || 0;
+      const actualAvailable = Math.max(0, qtyAvailable - reservedQty - deductedQty);
 
       const lot = {
         lot_id: `LOT-${group.id}`,
@@ -127,6 +129,7 @@ router.get('/inventory', async (req, res) => {
         sku_name: `${cropName}, 5lb case`,
         qty_available: actualAvailable,
         qty_reserved: reservedQty,
+        qty_deducted: deductedQty,
         unit: 'case',
         pack_size: 5, // 5 lbs per case
         price_per_unit: 12.50, // Default wholesale price
@@ -221,6 +224,7 @@ router.get('/order-events', async (_req, res) => {
  * Reservation Management Helpers
  */
 const RESERVATIONS_FILE = path.join(PUBLIC_DIR, 'data', 'wholesale-reservations.json');
+const DEDUCTIONS_FILE = path.join(PUBLIC_DIR, 'data', 'wholesale-deductions.json');
 
 function loadReservations() {
   try {
@@ -261,8 +265,44 @@ function getTotalReservedBySku() {
 }
 
 /**
+ * Inventory Deduction Management
+ * Tracks actual inventory deductions when orders are confirmed/paid
+ */
+function loadDeductions() {
+  try {
+    const raw = fs.readFileSync(DEDUCTIONS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed.deductions) ? parsed.deductions : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDeductions(deductions) {
+  const payload = {
+    deductions: deductions || [],
+    updated_at: new Date().toISOString()
+  };
+  fs.writeFileSync(DEDUCTIONS_FILE, JSON.stringify(payload, null, 2), 'utf8');
+}
+
+function getTotalDeductedBySku() {
+  const deductions = loadDeductions();
+  const bySku = new Map();
+  for (const d of deductions) {
+    // Only count confirmed deductions, skip rolled back ones
+    if (d.status === 'rolled_back') continue;
+    
+    const current = bySku.get(d.sku_id) || 0;
+    bySku.set(d.sku_id, current + Number(d.quantity || 0));
+  }
+  return bySku;
+}
+
+/**
  * POST /api/wholesale/inventory/reserve
  * Reserve inventory for a wholesale order (called by GreenReach Central after checkout)
+ * This creates a temporary hold but does NOT deduct inventory yet.
  * 
  * Body: {
  *   order_id: string,
@@ -288,6 +328,58 @@ router.post('/inventory/reserve', express.json({ limit: '128kb' }), async (req, 
       return res.json({ ok: true, message: 'Order already reserved', order_id });
     }
 
+    // CRITICAL: Validate inventory availability before reserving
+    const reservedBySku = getTotalReservedBySku();
+    const deductedBySku = getTotalDeductedBySku();
+    
+    // Load current inventory to check availability
+    const groupsData = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8'));
+    const groups = groupsData.groups || [];
+    
+    const inventoryBySku = new Map();
+    groups.forEach((group) => {
+      const cropName = group.crop || group.recipe;
+      const trayCount = group.trays || 4;
+      const plantsPerTray = (group.plants || 48) / trayCount;
+      const lbsPerPlant = 0.125;
+      const totalLbs = Math.round(trayCount * plantsPerTray * lbsPerPlant);
+      const qtyAvailable = Math.ceil(totalLbs / 5);
+      const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-5LB`;
+      inventoryBySku.set(skuId, qtyAvailable);
+    });
+
+    // Validate each item
+    const insufficientItems = [];
+    for (const item of items) {
+      if (!item.sku_id || !item.quantity) continue;
+      
+      const totalInventory = inventoryBySku.get(item.sku_id) || 0;
+      const alreadyReserved = reservedBySku.get(item.sku_id) || 0;
+      const alreadyDeducted = deductedBySku.get(item.sku_id) || 0;
+      const availableNow = totalInventory - alreadyReserved - alreadyDeducted;
+      
+      if (item.quantity > availableNow) {
+        insufficientItems.push({
+          sku_id: item.sku_id,
+          requested: item.quantity,
+          available: availableNow,
+          total_inventory: totalInventory,
+          already_reserved: alreadyReserved,
+          already_deducted: alreadyDeducted
+        });
+      }
+    }
+
+    // Reject if insufficient inventory
+    if (insufficientItems.length > 0) {
+      console.error(`[Wholesale Sync] Insufficient inventory for order ${order_id}:`, insufficientItems);
+      return res.status(409).json({
+        ok: false,
+        error: 'Insufficient inventory',
+        insufficient_items: insufficientItems
+      });
+    }
+
     // Add new reservations
     const reserved_at = new Date().toISOString();
     for (const item of items) {
@@ -296,7 +388,8 @@ router.post('/inventory/reserve', express.json({ limit: '128kb' }), async (req, 
         order_id,
         sku_id: String(item.sku_id),
         quantity: Number(item.quantity),
-        reserved_at
+        reserved_at,
+        status: 'pending' // pending, confirmed, released
       });
     }
 
@@ -310,29 +403,161 @@ router.post('/inventory/reserve', express.json({ limit: '128kb' }), async (req, 
 });
 
 /**
- * POST /api/wholesale/inventory/release
- * Release reserved inventory (e.g., order cancelled)
+ * POST /api/wholesale/inventory/confirm
+ * Confirm order and PERMANENTLY DEDUCT inventory after successful payment
+ * Moves reservation to deduction (actual inventory reduction)
  * 
- * Body: {order_id: string}
+ * Body: {
+ *   order_id: string,
+ *   payment_id: string (optional, for audit trail)
+ * }
  */
-router.post('/inventory/release', express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/confirm', express.json({ limit: '128kb' }), async (req, res) => {
   try {
-    const { order_id } = req.body || {};
+    const { order_id, payment_id } = req.body || {};
     if (!order_id) {
       return res.status(400).json({ ok: false, error: 'order_id is required' });
     }
 
     const reservations = loadReservations();
     const active = cleanupExpiredReservations(reservations);
+    
+    // Find reservations for this order
+    const orderReservations = active.filter((r) => r.order_id === order_id);
+    if (orderReservations.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'No reservations found for this order',
+        order_id
+      });
+    }
+
+    // Load existing deductions
+    const deductions = loadDeductions();
+    const confirmed_at = new Date().toISOString();
+
+    // Move reservations to deductions (permanent inventory reduction)
+    for (const reservation of orderReservations) {
+      deductions.push({
+        order_id: reservation.order_id,
+        sku_id: reservation.sku_id,
+        quantity: reservation.quantity,
+        reserved_at: reservation.reserved_at,
+        confirmed_at,
+        payment_id: payment_id || null,
+        status: 'confirmed'
+      });
+    }
+
+    // Remove confirmed reservations
+    const remaining = active.filter((r) => r.order_id !== order_id);
+    
+    saveDeductions(deductions);
+    saveReservations(remaining);
+    
+    console.log(`[Wholesale Sync] Confirmed and deducted inventory for order ${order_id}:`, orderReservations.length, 'items');
+    return res.json({
+      ok: true,
+      order_id,
+      deducted: orderReservations.length,
+      items: orderReservations.map(r => ({ sku_id: r.sku_id, quantity: r.quantity }))
+    });
+  } catch (error) {
+    console.error('[Wholesale Sync] Failed to confirm inventory:', error);
+    return res.status(500).json({ ok: false, error: 'Failed to confirm inventory' });
+  }
+});
+
+/**
+ * POST /api/wholesale/inventory/release
+ * Release reserved inventory (e.g., payment failed, order cancelled before payment)
+ * Only releases reservations, does NOT rollback confirmed deductions
+ * 
+ * Body: {
+ *   order_id: string,
+ *   reason: string (optional, for audit trail)
+ * }
+ */
+router.post('/inventory/release', express.json({ limit: '128kb' }), async (req, res) => {
+  try {
+    const { order_id, reason } = req.body || {};
+    if (!order_id) {
+      return res.status(400).json({ ok: false, error: 'order_id is required' });
+    }
+
+    const reservations = loadReservations();
+    const active = cleanupExpiredReservations(reservations);
+    const orderReservations = active.filter((r) => r.order_id === order_id);
     const filtered = active.filter((r) => r.order_id !== order_id);
-    const releasedCount = active.length - filtered.length;
+    const releasedCount = orderReservations.length;
 
     saveReservations(filtered);
-    console.log(`[Wholesale Sync] Released ${releasedCount} reservations for order ${order_id}`);
-    return res.json({ ok: true, order_id, released: releasedCount });
+    console.log(`[Wholesale Sync] Released ${releasedCount} reservations for order ${order_id}`, reason ? `(${reason})` : '');
+    return res.json({
+      ok: true,
+      order_id,
+      released: releasedCount,
+      reason: reason || null
+    });
   } catch (error) {
     console.error('[Wholesale Sync] Failed to release inventory:', error);
     return res.status(500).json({ ok: false, error: 'Failed to release inventory' });
+  }
+});
+
+/**
+ * POST /api/wholesale/inventory/rollback
+ * ROLLBACK a confirmed order (refund scenario)
+ * Removes deduction and restores inventory availability
+ * WARNING: Only use for refunds/cancellations after payment
+ * 
+ * Body: {
+ *   order_id: string,
+ *   reason: string (required for audit)
+ * }
+ */
+router.post('/inventory/rollback', express.json({ limit: '128kb' }), async (req, res) => {
+  try {
+    const { order_id, reason } = req.body || {};
+    if (!order_id) {
+      return res.status(400).json({ ok: false, error: 'order_id is required' });
+    }
+    if (!reason) {
+      return res.status(400).json({ ok: false, error: 'reason is required for rollback audit trail' });
+    }
+
+    const deductions = loadDeductions();
+    const orderDeductions = deductions.filter((d) => d.order_id === order_id);
+    
+    if (orderDeductions.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'No confirmed deductions found for this order',
+        order_id
+      });
+    }
+
+    // Mark deductions as rolled back (keep for audit trail)
+    const rolledBackAt = new Date().toISOString();
+    for (const deduction of orderDeductions) {
+      deduction.status = 'rolled_back';
+      deduction.rolled_back_at = rolledBackAt;
+      deduction.rollback_reason = reason;
+    }
+
+    saveDeductions(deductions);
+    
+    console.log(`[Wholesale Sync] ROLLBACK: Restored inventory for order ${order_id}:`, orderDeductions.length, 'items -', reason);
+    return res.json({
+      ok: true,
+      order_id,
+      rolled_back: orderDeductions.length,
+      reason,
+      items: orderDeductions.map(d => ({ sku_id: d.sku_id, quantity: d.quantity }))
+    });
+  } catch (error) {
+    console.error('[Wholesale Sync] Failed to rollback inventory:', error);
+    return res.status(500).json({ ok: false, error: 'Failed to rollback inventory' });
   }
 });
 

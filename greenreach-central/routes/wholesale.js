@@ -812,6 +812,29 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
             }
           };
 
+          const confirm = async (farmBaseUrl, body) => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3000);
+            try {
+              const res = await fetch(new URL('/api/wholesale/inventory/confirm', farmBaseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: controller.signal
+              });
+              const json = await res.json().catch(() => null);
+              if (!res.ok || !json?.ok) {
+                console.warn(`[Wholesale] Inventory confirmation failed for order ${body.order_id}:`, json?.error || res.status);
+              } else {
+                console.log(`[Wholesale] Inventory confirmed and deducted for order ${body.order_id}`);
+              }
+            } catch (err) {
+              console.warn(`[Wholesale] Failed to confirm inventory at farm:`, err.message);
+            } finally {
+              clearTimeout(timer);
+            }
+          };
+
           for (const sub of order.farm_sub_orders || []) {
             const farm = byId.get(String(sub.farm_id));
             if (!farm?.base_url) continue;
@@ -831,7 +854,7 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
               }))
             });
 
-            // Reserve inventory
+            // Reserve inventory (temporary hold)
             await reserve(farm.base_url, {
               order_id: order.master_order_id,
               items: (sub.items || []).map((it) => ({
@@ -839,6 +862,14 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
                 quantity: it.quantity
               }))
             });
+
+            // CRITICAL: Confirm inventory deduction if payment succeeded
+            if (paymentSuccess) {
+              await confirm(farm.base_url, {
+                order_id: order.master_order_id,
+                payment_id: payment.payment_id
+              });
+            }
           }
         } catch {
           // ignore
