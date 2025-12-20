@@ -471,6 +471,8 @@ function setupNavigation() {
                     loadAccountingData();
                 } else if (section === 'payments') {
                     loadPaymentMethods();
+                } else if (section === 'settings') {
+                    loadSettings();
                 }
             }
         });
@@ -2701,5 +2703,202 @@ function downloadReceipt(date) {
  */
 function downloadAllReceipts() {
     showToast('All receipts downloaded', 'success');
+    // Would generate and download all receipts as ZIP
+}
+
+// ============================================================================
+// SETTINGS FUNCTIONS
+// ============================================================================
+
+/**
+ * Load farm settings
+ */
+async function loadSettings() {
+    try {
+        // Load settings from localStorage (or API in production)
+        const settings = JSON.parse(localStorage.getItem('farmSettings') || '{}');
+        
+        // Farm Profile
+        document.getElementById('settings-farm-name').value = settings.farmName || '';
+        document.getElementById('settings-location').value = settings.location || '';
+        document.getElementById('settings-email').value = settings.email || '';
+        document.getElementById('settings-phone').value = settings.phone || '';
+        document.getElementById('settings-website').value = settings.website || '';
+        
+        // Business Information
+        document.getElementById('settings-tax-id').value = settings.taxId || '';
+        document.getElementById('settings-license').value = settings.license || '';
+        document.getElementById('cert-organic').checked = settings.certOrganic || false;
+        document.getElementById('cert-gmp').checked = settings.certGmp || false;
+        document.getElementById('cert-gap').checked = settings.certGap || false;
+        document.getElementById('cert-haccp').checked = settings.certHaccp || false;
+        
+        // Display Preferences
+        document.getElementById('settings-temp-unit').value = settings.tempUnit || 'F';
+        document.getElementById('settings-weight-unit').value = settings.weightUnit || 'lbs';
+        document.getElementById('settings-currency').value = settings.currency || 'USD';
+        document.getElementById('settings-timezone').value = settings.timezone || 'America/New_York';
+        
+        // Notifications
+        document.getElementById('notif-new-order').checked = settings.notifNewOrder !== false;
+        document.getElementById('notif-order-shipped').checked = settings.notifOrderShipped !== false;
+        document.getElementById('notif-low-inventory').checked = settings.notifLowInventory !== false;
+        document.getElementById('notif-harvest-ready').checked = settings.notifHarvestReady !== false;
+        document.getElementById('notif-equipment-issue').checked = settings.notifEquipmentIssue !== false;
+        document.getElementById('notif-ai-recommend').checked = settings.notifAiRecommend !== false;
+        document.getElementById('settings-notif-email').value = settings.notifEmail || settings.email || '';
+        
+        // Integration Settings
+        document.getElementById('greenreach-sync-enabled').checked = settings.greenreachSync !== false;
+        document.getElementById('settings-farm-id').value = settings.farmId || 'GR-00001';
+        document.getElementById('settings-api-key').value = settings.apiKey || '';
+        
+        // Check Square status
+        checkSquareStatus();
+        
+        // System Configuration
+        document.getElementById('auto-backup').checked = settings.autoBackup !== false;
+        document.getElementById('backup-frequency').value = settings.backupFrequency || 'daily';
+        document.getElementById('require-2fa').checked = settings.require2fa || false;
+        document.getElementById('password-expiry').checked = settings.passwordExpiry || false;
+        document.getElementById('session-timeout').value = settings.sessionTimeout || 30;
+        
+        // Farm Operations Defaults
+        document.getElementById('default-wholesale-markup').value = settings.wholesaleMarkup || 40;
+        document.getElementById('default-retail-markup').value = settings.retailMarkup || 100;
+        document.getElementById('low-stock-threshold').value = settings.lowStockThreshold || 10;
+        document.getElementById('auto-harvest-alerts').checked = settings.autoHarvestAlerts !== false;
+        
+        // API & Webhooks
+        document.getElementById('webhook-url').value = settings.webhookUrl || '';
+        document.getElementById('webhook-orders').checked = settings.webhookOrders || false;
+        document.getElementById('webhook-inventory').checked = settings.webhookInventory || false;
+        document.getElementById('webhook-harvest').checked = settings.webhookHarvest || false;
+        
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        showToast('Error loading settings', 'error');
+    }
+}
+
+/**
+ * Check Square connection status
+ */
+async function checkSquareStatus() {
+    try {
+        const response = await fetch('/api/farm/square/status', {
+            headers: {
+                'X-Farm-ID': localStorage.getItem('farmId') || 'demo-farm'
+            }
+        });
+        
+        const data = await response.json();
+        const statusEl = document.getElementById('square-status-text');
+        const statusContainer = document.getElementById('square-connection-status');
+        
+        if (data.connected) {
+            statusEl.textContent = `Connected (${data.merchantName || 'Unknown Merchant'})`;
+            statusContainer.style.background = '#d1fae5';
+            statusContainer.style.color = '#065f46';
+        } else {
+            statusEl.textContent = 'Not Connected';
+            statusContainer.style.background = '#fee2e2';
+            statusContainer.style.color = '#991b1b';
+        }
+    } catch (error) {
+        console.error('Error checking Square status:', error);
+        document.getElementById('square-status-text').textContent = 'Unable to check status';
+    }
+}
+
+/**
+ * Save farm settings
+ */
+function saveSettings() {
+    try {
+        const settings = {
+            // Farm Profile
+            farmName: document.getElementById('settings-farm-name').value,
+            location: document.getElementById('settings-location').value,
+            email: document.getElementById('settings-email').value,
+            phone: document.getElementById('settings-phone').value,
+            website: document.getElementById('settings-website').value,
+            
+            // Business Information
+            taxId: document.getElementById('settings-tax-id').value,
+            license: document.getElementById('settings-license').value,
+            certOrganic: document.getElementById('cert-organic').checked,
+            certGmp: document.getElementById('cert-gmp').checked,
+            certGap: document.getElementById('cert-gap').checked,
+            certHaccp: document.getElementById('cert-haccp').checked,
+            
+            // Display Preferences
+            tempUnit: document.getElementById('settings-temp-unit').value,
+            weightUnit: document.getElementById('settings-weight-unit').value,
+            currency: document.getElementById('settings-currency').value,
+            timezone: document.getElementById('settings-timezone').value,
+            
+            // Notifications
+            notifNewOrder: document.getElementById('notif-new-order').checked,
+            notifOrderShipped: document.getElementById('notif-order-shipped').checked,
+            notifLowInventory: document.getElementById('notif-low-inventory').checked,
+            notifHarvestReady: document.getElementById('notif-harvest-ready').checked,
+            notifEquipmentIssue: document.getElementById('notif-equipment-issue').checked,
+            notifAiRecommend: document.getElementById('notif-ai-recommend').checked,
+            notifEmail: document.getElementById('settings-notif-email').value,
+            
+            // Integration Settings
+            greenreachSync: document.getElementById('greenreach-sync-enabled').checked,
+            farmId: document.getElementById('settings-farm-id').value,
+            apiKey: document.getElementById('settings-api-key').value,
+            
+            // System Configuration
+            autoBackup: document.getElementById('auto-backup').checked,
+            backupFrequency: document.getElementById('backup-frequency').value,
+            require2fa: document.getElementById('require-2fa').checked,
+            passwordExpiry: document.getElementById('password-expiry').checked,
+            sessionTimeout: document.getElementById('session-timeout').value,
+            
+            // Farm Operations Defaults
+            wholesaleMarkup: document.getElementById('default-wholesale-markup').value,
+            retailMarkup: document.getElementById('default-retail-markup').value,
+            lowStockThreshold: document.getElementById('low-stock-threshold').value,
+            autoHarvestAlerts: document.getElementById('auto-harvest-alerts').checked,
+            
+            // API & Webhooks
+            webhookUrl: document.getElementById('webhook-url').value,
+            webhookOrders: document.getElementById('webhook-orders').checked,
+            webhookInventory: document.getElementById('webhook-inventory').checked,
+            webhookHarvest: document.getElementById('webhook-harvest').checked,
+            
+            lastUpdated: new Date().toISOString()
+        };
+        
+        // Save to localStorage (in production, would save to API)
+        localStorage.setItem('farmSettings', JSON.stringify(settings));
+        
+        // In production, would send to API:
+        // await fetch('/api/farm/settings', {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify(settings)
+        // });
+        
+        showToast('Settings saved successfully', 'success');
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        showToast('Error saving settings', 'error');
+    }
+}
+
+/**
+ * Reset settings to defaults
+ */
+function resetSettings() {
+    if (confirm('Are you sure you want to reset all settings to default values?')) {
+        localStorage.removeItem('farmSettings');
+        loadSettings();
+        showToast('Settings reset to defaults', 'info');
+    }
     // Would generate and download ZIP of all receipts
 }

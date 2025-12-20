@@ -1377,8 +1377,296 @@
             <div id="section-settings" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Farm Settings</h1>
+                    <p class="header-subtitle">Configure your farm profile, integrations, and system preferences</p>
                 </div>
-                <p>Settings panel coming soon...</p>
+
+                <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                    <!-- Farm Profile -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px; color: var(--primary);">Farm Profile</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Farm Name</label>
+                                <input type="text" id="settings-farm-name" placeholder="Your Farm Name" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Location</label>
+                                <input type="text" id="settings-location" placeholder="City, State" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Contact Email</label>
+                                <input type="email" id="settings-email" placeholder="farm@example.com" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Phone Number</label>
+                                <input type="tel" id="settings-phone" placeholder="(555) 123-4567" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Website</label>
+                                <input type="url" id="settings-website" placeholder="https://yourfarm.com" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Business Information -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px; color: var(--primary);">Business Information</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tax ID / EIN</label>
+                                <input type="text" id="settings-tax-id" placeholder="XX-XXXXXXX" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Business License</label>
+                                <input type="text" id="settings-license" placeholder="License Number" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Certifications</label>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="cert-organic">
+                                        <span>USDA Organic Certified</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="cert-gmp">
+                                        <span>Good Manufacturing Practice (GMP)</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="cert-gap">
+                                        <span>Good Agricultural Practices (GAP)</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="cert-haccp">
+                                        <span>HACCP Certified</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Display Preferences -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px; color: var(--primary);">Display Preferences</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Temperature Units</label>
+                                <select id="settings-temp-unit" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                    <option value="F">Fahrenheit (°F)</option>
+                                    <option value="C">Celsius (°C)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Weight Units</label>
+                                <select id="settings-weight-unit" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                    <option value="lbs">Pounds (lbs)</option>
+                                    <option value="kg">Kilograms (kg)</option>
+                                    <option value="oz">Ounces (oz)</option>
+                                    <option value="g">Grams (g)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Currency</label>
+                                <select id="settings-currency" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                    <option value="USD">US Dollar ($)</option>
+                                    <option value="CAD">Canadian Dollar (CA$)</option>
+                                    <option value="EUR">Euro (€)</option>
+                                    <option value="GBP">British Pound (£)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Timezone</label>
+                                <select id="settings-timezone" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                    <option value="America/New_York">Eastern Time (ET)</option>
+                                    <option value="America/Chicago">Central Time (CT)</option>
+                                    <option value="America/Denver">Mountain Time (MT)</option>
+                                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                                    <option value="America/Anchorage">Alaska Time (AKT)</option>
+                                    <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notification Preferences -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px; color: var(--primary);">Notification Preferences</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Order Notifications</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="notif-new-order">
+                                        <span>New wholesale orders</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="notif-order-shipped">
+                                        <span>Order shipped confirmations</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="notif-low-inventory">
+                                        <span>Low inventory alerts</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">System Notifications</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="notif-harvest-ready">
+                                        <span>Harvest ready alerts</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="notif-equipment-issue">
+                                        <span>Equipment issues</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="notif-ai-recommend">
+                                        <span>AI recommendations</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Notification Email</label>
+                                <input type="email" id="settings-notif-email" placeholder="notifications@yourfarm.com" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Integration Settings -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px; color: var(--primary);">Integration Settings</h2>
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Square Payment Processing</h3>
+                                <div id="square-connection-status" style="padding: 10px; background: #f0f0f0; border-radius: 4px; margin-bottom: 10px;">
+                                    <p style="margin: 0;">Status: <span id="square-status-text">Checking...</span></p>
+                                </div>
+                                <button class="btn-secondary" onclick="connectSquare()" style="width: 100%;">Configure Square</button>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">GreenReach Central Sync</h3>
+                                <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                    <input type="checkbox" id="greenreach-sync-enabled">
+                                    <span>Enable wholesale marketplace sync</span>
+                                </label>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Farm ID</label>
+                                        <input type="text" id="settings-farm-id" placeholder="GR-00001" readonly style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: #f9f9f9;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">API Key</label>
+                                        <input type="password" id="settings-api-key" placeholder="Enter API key" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Configuration -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px; color: var(--primary);">System Configuration</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Data & Backups</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="auto-backup">
+                                        <span>Enable automatic backups</span>
+                                    </label>
+                                    <div style="margin-left: 24px;">
+                                        <label style="display: block; margin-bottom: 5px; font-size: 12px;">Backup Frequency</label>
+                                        <select id="backup-frequency" style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;">
+                                            <option value="daily">Daily</option>
+                                            <option value="weekly">Weekly</option>
+                                            <option value="monthly">Monthly</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Security</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="require-2fa">
+                                        <span>Require two-factor authentication</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="password-expiry">
+                                        <span>Password expiration (90 days)</span>
+                                    </label>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 5px; font-size: 12px;">Session Timeout (minutes)</label>
+                                        <input type="number" id="session-timeout" value="30" min="5" max="1440" style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Farm Operations Defaults -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px; color: var(--primary);">Farm Operations Defaults</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Default Wholesale Markup (%)</label>
+                                <input type="number" id="default-wholesale-markup" value="40" min="0" max="100" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <small style="color: var(--text-secondary);">Applied to new products</small>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Default Retail Markup (%)</label>
+                                <input type="number" id="default-retail-markup" value="100" min="0" max="300" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <small style="color: var(--text-secondary);">Applied to new products</small>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Low Stock Threshold</label>
+                                <input type="number" id="low-stock-threshold" value="10" min="0" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <small style="color: var(--text-secondary);">Trigger low inventory alerts</small>
+                            </div>
+                            <div>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="auto-harvest-alerts">
+                                    <span>Automatic harvest readiness alerts</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API & Webhooks -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px; color: var(--primary);">API & Webhooks</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Webhook URL</label>
+                                <input type="url" id="webhook-url" placeholder="https://yourapp.com/webhook" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                                <small style="color: var(--text-secondary);">Receive real-time event notifications</small>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Webhook Events</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="webhook-orders">
+                                        <span>Order events</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="webhook-inventory">
+                                        <span>Inventory updates</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="webhook-harvest">
+                                        <span>Harvest events</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
+                    <button class="btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
+                    <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+                </div>
             </div>
 
             <div id="section-crop-value" class="content-section" style="display: none;">
