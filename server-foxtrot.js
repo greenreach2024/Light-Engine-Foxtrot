@@ -6272,6 +6272,131 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
   }
 }));
 
+// Sync service routes
+let syncServiceInstance = null;
+
+// Get sync service instance
+function getSyncService() {
+  if (!syncServiceInstance) {
+    const SyncServiceClass = require('./services/sync-service.js').default;
+    syncServiceInstance = new SyncServiceClass({
+      centralUrl: process.env.GREENREACH_CENTRAL_URL,
+      wsUrl: process.env.GREENREACH_WS_URL,
+      farmId: process.env.FARM_ID,
+      apiKey: process.env.GREENREACH_API_KEY,
+      apiSecret: process.env.GREENREACH_API_SECRET
+    });
+  }
+  return syncServiceInstance;
+}
+
+// Sync monitor UI
+app.get('/sync-monitor', (req, res) => {
+  res.sendFile(path.join(__dirname, 'sync-monitor.html'));
+});
+
+// Get sync status
+app.get('/api/sync/status', asyncHandler(async (req, res) => {
+  try {
+    const syncService = getSyncService();
+    const status = syncService.getStatus();
+    
+    res.json({
+      ...status,
+      farmId: process.env.FARM_ID,
+      recentErrors: [], // TODO: Implement error tracking
+      queue: status.queueSize > 0 ? syncService.state.queue : []
+    });
+  } catch (error) {
+    console.error('[sync] Status error:', error);
+    res.status(500).json({ error: 'Failed to get sync status' });
+  }
+}));
+
+// Trigger manual sync
+app.post('/api/sync/trigger', asyncHandler(async (req, res) => {
+  const { type = 'all' } = req.body;
+  
+  try {
+    const syncService = getSyncService();
+    await syncService.manualSync(type);
+    
+    res.json({ success: true, type });
+  } catch (error) {
+    console.error('[sync] Trigger error:', error);
+    res.status(500).json({ error: 'Failed to trigger sync' });
+  }
+}));
+
+// Process sync queue manually
+app.post('/api/sync/process-queue', asyncHandler(async (req, res) => {
+  try {
+    const syncService = getSyncService();
+    syncService.processQueue();
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[sync] Process queue error:', error);
+    res.status(500).json({ error: 'Failed to process queue' });
+  }
+}));
+
+// WebSocket endpoint for real-time sync status
+app.ws('/ws/sync-status', (ws, req) => {
+  console.log('[sync] Client connected to sync status WebSocket');
+  
+  const syncService = getSyncService();
+  
+  // Send initial status
+  ws.send(JSON.stringify(syncService.getStatus()));
+  
+  // Listen for sync events
+  const onEvent = () => {
+    if (ws.readyState === 1) { // OPEN
+      ws.send(JSON.stringify({
+        ...syncService.getStatus(),
+        farmId: process.env.FARM_ID,
+        queue: syncService.state.queue
+      }));
+    }
+  };
+  
+  syncService.on('connected', onEvent);
+  syncService.on('disconnected', onEvent);
+  syncService.on('inventory_synced', onEvent);
+  syncService.on('health_synced', onEvent);
+  syncService.on('config_synced', onEvent);
+  syncService.on('queued', onEvent);
+  syncService.on('queue_processed', onEvent);
+  syncService.on('sync_error', onEvent);
+  
+  // Send status updates every 5 seconds
+  const interval = setInterval(() => {
+    if (ws.readyState === 1) {
+      ws.send(JSON.stringify({
+        ...syncService.getStatus(),
+        farmId: process.env.FARM_ID,
+        queue: syncService.state.queue
+      }));
+    }
+  }, 5000);
+  
+  ws.on('close', () => {
+    console.log('[sync] Client disconnected from sync status WebSocket');
+    clearInterval(interval);
+    
+    // Remove event listeners
+    syncService.off('connected', onEvent);
+    syncService.off('disconnected', onEvent);
+    syncService.off('inventory_synced', onEvent);
+    syncService.off('health_synced', onEvent);
+    syncService.off('config_synced', onEvent);
+    syncService.off('queued', onEvent);
+    syncService.off('queue_processed', onEvent);
+    syncService.off('sync_error', onEvent);
+  });
+});
+
 // Unified health endpoint with controller diagnostics that never 502s
 app.get('/healthz', async (req, res) => {
   const started = Date.now();
