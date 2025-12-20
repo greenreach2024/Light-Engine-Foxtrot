@@ -1,8 +1,84 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { query } from '../config/database.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
+import {
+  authenticateBuyer,
+  createBuyer,
+  createOrder,
+  createPayment,
+  getBuyerById,
+  listAllOrders,
+  listOrdersForBuyer,
+  listPayments,
+  listRefunds
+} from '../services/wholesaleMemoryStore.js';
+
+import { allocateCartFromDemo, loadWholesaleDemoCatalog } from '../services/wholesaleDemoCatalog.js';
+import {
+  addMarketEvent,
+  allocateCartFromNetwork,
+  buildAggregateCatalog,
+  generateNetworkRecommendations,
+  getBuyerLocationFromBuyer,
+  getNetworkTrends,
+  listMarketEvents,
+  listNetworkSnapshots
+} from '../services/wholesaleNetworkAggregator.js';
+import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
+
 const router = express.Router();
+
+function getWholesaleJwtSecret() {
+  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET;
+  if (secret) return secret;
+
+  // Dev-only fallback; production should set a real secret.
+  if (process.env.NODE_ENV !== 'production') return 'dev-greenreach-wholesale-secret';
+  return null;
+}
+
+function issueBuyerToken(buyerId) {
+  const secret = getWholesaleJwtSecret();
+  if (!secret) {
+    const err = new Error('Wholesale auth is not configured (missing WHOLESALE_JWT_SECRET)');
+    err.code = 'AUTH_NOT_CONFIGURED';
+    throw err;
+  }
+
+  return jwt.sign({ sub: buyerId, scope: 'wholesale_buyer' }, secret, { expiresIn: '7d' });
+}
+
+function requireBuyerAuth(req, res, next) {
+  const authHeader = req.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+  if (!token) {
+    return res.status(401).json({ status: 'error', message: 'Missing bearer token' });
+  }
+
+  const secret = getWholesaleJwtSecret();
+  if (!secret) {
+    return res.status(500).json({ status: 'error', message: 'Wholesale auth not configured' });
+  }
+
+  try {
+    const payload = jwt.verify(token, secret);
+    if (!payload?.sub) {
+      return res.status(401).json({ status: 'error', message: 'Invalid token' });
+    }
+
+    const buyer = getBuyerById(String(payload.sub));
+    if (!buyer) {
+      return res.status(401).json({ status: 'error', message: 'Buyer not found (server restart?)' });
+    }
+
+    req.wholesaleBuyer = buyer;
+    return next();
+  } catch (error) {
+    return res.status(401).json({ status: 'error', message: 'Invalid or expired token' });
+  }
+}
 
 /**
  * GET /api/wholesale/catalog
@@ -20,6 +96,52 @@ const router = express.Router();
  */
 router.get('/catalog', async (req, res, next) => {
   try {
+    // Limited mode: serve a live in-memory network catalog (pulled from farms)
+    if (req.app?.locals?.databaseReady === false) {
+      const nearLat = req.query.nearLat ?? req.query.lat;
+      const nearLng = req.query.nearLng ?? req.query.lng;
+      const buyerLocation = (nearLat && nearLng)
+        ? { latitude: Number(nearLat), longitude: Number(nearLng) }
+        : null;
+
+      const catalog = buildAggregateCatalog({ buyerLocation });
+      const farmId = req.query.farmId ? String(req.query.farmId) : null;
+
+      let items = catalog.items;
+      if (farmId) {
+        items = items
+          .map((it) => ({ ...it, farms: (it.farms || []).filter((f) => f.farm_id === farmId) }))
+          .filter((it) => (it.farms || []).length > 0);
+      }
+
+      // Basic sorting compatible with UI
+      const sortBy = String(req.query.sortBy || '').trim();
+      if (sortBy === 'availability') {
+        items = [...items].sort((a, b) => {
+          const ta = (a.farms || []).reduce((s, f) => s + Number(f.quantity_available || 0), 0);
+          const tb = (b.farms || []).reduce((s, f) => s + Number(f.quantity_available || 0), 0);
+          return tb - ta;
+        });
+      }
+
+      return res.json({
+        status: 'ok',
+        data: {
+          skus: items
+        },
+        // Keep legacy fields for any existing callers
+        items,
+        pagination: { page: 1, limit: items.length, totalItems: items.length, totalPages: 1 },
+        filters: {
+          farmId
+        },
+        meta: {
+          mode: 'limited',
+          lastSync: req.app?.locals?.wholesaleNetworkLastSync || null
+        }
+      });
+    }
+
     const {
       certifications,
       practices,
@@ -30,6 +152,8 @@ router.get('/catalog', async (req, res, next) => {
       page = 1,
       limit = 50
     } = req.query;
+
+    const farmId = req.query.farmId ? String(req.query.farmId) : null;
 
     // Parse array parameters
     const certFilter = certifications ? (Array.isArray(certifications) ? certifications : [certifications]) : [];
@@ -51,6 +175,11 @@ router.get('/catalog', async (req, res, next) => {
     
     conditions.push('i.quantity_available > $' + paramIndex++);
     params.push(minQuantity);
+
+    if (farmId) {
+      conditions.push('f.farm_id = $' + paramIndex++);
+      params.push(farmId);
+    }
 
     // Certification filters
     if (certFilter.length > 0) {
@@ -159,7 +288,54 @@ router.get('/catalog', async (req, res, next) => {
       lastUpdated: row.synced_at
     }));
 
+    // Buyer-portal SKU shape (aggregate by product_id)
+    const skusById = new Map();
+    for (const row of catalogResult.rows) {
+      const skuId = String(row.product_id || row.product_name || row.id);
+      const existing = skusById.get(skuId);
+
+      const farmEntry = {
+        farm_id: row.farm_id,
+        farm_name: row.farm_name,
+        qty_available: Number(row.quantity_available || 0),
+        quantity_available: Number(row.quantity_available || 0),
+        unit: row.quantity_unit,
+        price_per_unit: Number(row.wholesale_price || 0),
+        organic: Boolean(row.source_data?.organic),
+        certifications: row.farm_certifications || [],
+        practices: row.farm_practices || [],
+        attributes: row.farm_attributes || [],
+        location: [row.city, row.state].filter(Boolean).join(', ')
+      };
+
+      if (!existing) {
+        skusById.set(skuId, {
+          sku_id: skuId,
+          product_name: row.product_name,
+          size: row.variety || 'Bulk',
+          unit: row.quantity_unit,
+          price_per_unit: Number(row.wholesale_price || 0),
+          total_qty_available: Number(row.quantity_available || 0),
+          farms: [farmEntry],
+          organic: Boolean(row.source_data?.organic)
+        });
+        continue;
+      }
+
+      existing.farms.push(farmEntry);
+      existing.total_qty_available += Number(row.quantity_available || 0);
+      existing.price_per_unit = Math.min(Number(existing.price_per_unit || 0), Number(row.wholesale_price || 0));
+      existing.organic = existing.organic || Boolean(row.source_data?.organic);
+    }
+
+    const skus = Array.from(skusById.values());
+
     res.json({
+      status: 'ok',
+      data: {
+        skus
+      },
+      // Keep legacy fields for any existing callers
       items,
       pagination: {
         page: pageNum,
@@ -173,7 +349,8 @@ router.get('/catalog', async (req, res, next) => {
         attributes: attributesFilter,
         category,
         organic,
-        minQuantity
+        minQuantity,
+        farmId
       }
     });
 
@@ -188,6 +365,13 @@ router.get('/catalog', async (req, res, next) => {
  */
 router.get('/catalog/filters', async (req, res, next) => {
   try {
+    if (req.app?.locals?.databaseReady === false) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Catalog database unavailable'
+      });
+    }
+
     // Get all unique certifications, practices, and attributes from active farms
     const result = await query(`
       SELECT 
@@ -223,6 +407,13 @@ router.get('/catalog/filters', async (req, res, next) => {
  */
 router.get('/farms', async (req, res, next) => {
   try {
+    if (req.app?.locals?.databaseReady === false) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Farms database unavailable'
+      });
+    }
+
     const { certifications, practices, attributes } = req.query;
 
     // Parse filters
@@ -290,6 +481,372 @@ router.get('/farms', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+// --- Buyer portal (DB-less dev mode) ---
+
+router.post('/buyers/register', async (req, res, next) => {
+  try {
+    const { businessName, contactName, email, password, buyerType, location } = req.body || {};
+
+    if (!email || !password) {
+      throw new ValidationError('Email and password are required');
+    }
+
+    const buyer = await createBuyer({ businessName, contactName, email, password, buyerType, location });
+    const token = issueBuyerToken(buyer.id);
+
+    return res.json({
+      status: 'ok',
+      data: { buyer, token }
+    });
+  } catch (error) {
+    if (error?.code === 'EMAIL_EXISTS') {
+      return res.status(409).json({ status: 'error', message: 'Email already registered' });
+    }
+    return next(error);
+  }
+});
+
+router.post('/buyers/login', async (req, res, next) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      throw new ValidationError('Email and password are required');
+    }
+
+    const buyer = await authenticateBuyer({ email, password });
+    if (!buyer) {
+      return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
+    }
+
+    const token = issueBuyerToken(buyer.id);
+    return res.json({ status: 'ok', data: { buyer, token } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/orders', requireBuyerAuth, async (req, res) => {
+  return res.json({
+    status: 'ok',
+    data: {
+      orders: listOrdersForBuyer(req.wholesaleBuyer.id)
+    }
+  });
+});
+
+router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
+  try {
+    const { cart, recurrence, sourcing } = req.body || {};
+    if (!Array.isArray(cart) || cart.length === 0) {
+      throw new ValidationError('Cart is required');
+    }
+
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+
+    const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
+
+    // Limited mode: allocate from network snapshots (proximity-aware)
+    if (req.app?.locals?.databaseReady === false) {
+      const catalog = buildAggregateCatalog({ buyerLocation });
+      const result = allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
+      if (!result.allocation.farm_sub_orders?.length) {
+        return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
+      }
+      return res.json({
+        status: 'ok',
+        data: {
+          ...result.allocation,
+          payment_split: result.payment_split,
+          recurrence: recurrence || { cadence: 'one_time' },
+          sourcing: sourcing || { mode: 'auto_network' }
+        }
+      });
+    }
+
+    const demoCatalog = await loadWholesaleDemoCatalog();
+    const result = allocateCartFromDemo({ cart, demoCatalog, commissionRate });
+
+    if (!result.allocation.farm_sub_orders?.length) {
+      return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
+    }
+
+    return res.json({
+      status: 'ok',
+      data: {
+        ...result.allocation,
+        payment_split: result.payment_split,
+        recurrence: recurrence || { cadence: 'one_time' }
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
+  try {
+    const { buyer_account, delivery_date, delivery_address, recurrence, cart, payment_provider, sourcing } = req.body || {};
+
+    if (!buyer_account?.email) throw new ValidationError('buyer_account.email is required');
+    if (!delivery_date) throw new ValidationError('delivery_date is required');
+    if (!delivery_address?.street || !delivery_address?.city || !delivery_address?.zip) {
+      throw new ValidationError('delivery_address street/city/zip are required');
+    }
+    if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
+
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+
+    const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
+
+    // Limited mode: allocate from network snapshots (proximity-aware)
+    if (req.app?.locals?.databaseReady === false) {
+      const catalog = buildAggregateCatalog({ buyerLocation });
+      const result = allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
+      if (!result.allocation.farm_sub_orders?.length) {
+        return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
+      }
+
+      const order = createOrder({
+        buyerId: req.wholesaleBuyer.id,
+        buyerAccount: buyer_account,
+        deliveryDate: delivery_date,
+        deliveryAddress: delivery_address,
+        recurrence: recurrence || { cadence: 'one_time' },
+        farmSubOrders: result.allocation.farm_sub_orders,
+        totals: result.allocation
+      });
+
+      const payment = createPayment({
+        orderId: order.master_order_id,
+        provider: payment_provider || 'demo',
+        split: result.payment_split,
+        totals: result.allocation
+      });
+      payment.status = 'completed';
+
+      // Best-effort: notify each farm (Light Engine) about its sub-order.
+      // Additive only; failure does not block checkout.
+      (async () => {
+        try {
+          const farms = await listNetworkFarms();
+          const byId = new Map(farms.map((f) => [String(f.farm_id), f]));
+
+          const notify = async (farmBaseUrl, body) => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3000);
+            try {
+              await fetch(new URL('/api/wholesale/order-events', farmBaseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: controller.signal
+              });
+            } catch {
+              // ignore
+            } finally {
+              clearTimeout(timer);
+            }
+          };
+
+          const reserve = async (farmBaseUrl, body) => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3000);
+            try {
+              const res = await fetch(new URL('/api/wholesale/inventory/reserve', farmBaseUrl).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: controller.signal
+              });
+              const json = await res.json().catch(() => null);
+              if (!res.ok || !json?.ok) {
+                console.warn(`[Wholesale] Reservation failed for farm ${body.order_id}:`, json?.error || res.status);
+              }
+            } catch (err) {
+              console.warn(`[Wholesale] Failed to reserve inventory at farm:`, err.message);
+            } finally {
+              clearTimeout(timer);
+            }
+          };
+
+          for (const sub of order.farm_sub_orders || []) {
+            const farm = byId.get(String(sub.farm_id));
+            if (!farm?.base_url) continue;
+
+            // Send order notification
+            await notify(farm.base_url, {
+              type: 'wholesale_order_created',
+              order_id: order.master_order_id,
+              farm_id: sub.farm_id,
+              delivery_date: order.delivery_date,
+              created_at: order.created_at,
+              items: (sub.items || []).map((it) => ({
+                sku_id: it.sku_id,
+                product_name: it.product_name,
+                quantity: it.quantity,
+                unit: it.unit
+              }))
+            });
+
+            // Reserve inventory
+            await reserve(farm.base_url, {
+              order_id: order.master_order_id,
+              items: (sub.items || []).map((it) => ({
+                sku_id: it.sku_id,
+                quantity: it.quantity
+              }))
+            });
+          }
+        } catch {
+          // ignore
+        }
+      })();
+
+      return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id } });
+    }
+
+    const demoCatalog = await loadWholesaleDemoCatalog();
+    const result = allocateCartFromDemo({ cart, demoCatalog, commissionRate });
+
+    if (!result.allocation.farm_sub_orders?.length) {
+      return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
+    }
+
+    const order = createOrder({
+      buyerId: req.wholesaleBuyer.id,
+      buyerAccount: buyer_account,
+      deliveryDate: delivery_date,
+      deliveryAddress: delivery_address,
+      recurrence: recurrence || { cadence: 'one_time' },
+      farmSubOrders: result.allocation.farm_sub_orders,
+      totals: result.allocation
+    });
+
+    const payment = createPayment({
+      orderId: order.master_order_id,
+      provider: payment_provider || 'demo',
+      split: result.payment_split,
+      totals: result.allocation
+    });
+    payment.status = 'completed';
+
+    // Notify farms (dev stub): broadcast over WS if available.
+    const wss = req.app?.locals?.wss;
+    if (wss?.clients?.size) {
+      const payload = JSON.stringify({
+        type: 'wholesale_order_created',
+        order_id: order.master_order_id,
+        created_at: order.created_at
+      });
+
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) client.send(payload);
+      });
+    }
+
+    return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// --- Wholesale admin stubs (avoid 404s for the dashboard in dev) ---
+
+router.get('/oauth/square/farms', (req, res) => {
+  return res.json({ status: 'ok', data: { farms: [] } });
+});
+
+router.get('/webhooks/payments', (req, res) => {
+  return res.json({ status: 'ok', data: { payments: listPayments() } });
+});
+
+router.get('/refunds', (req, res) => {
+  return res.json({ status: 'ok', data: { refunds: listRefunds() } });
+});
+
+router.post('/webhooks/reconcile', (req, res) => {
+  return res.json({ status: 'ok', data: { reconciled: true } });
+});
+
+router.get('/oauth/square/authorize', (req, res) => {
+  return res.json({ status: 'ok', data: { authorized: false, message: 'Square OAuth not configured in this environment' } });
+});
+
+router.post('/oauth/square/refresh', (req, res) => {
+  return res.json({ status: 'ok', data: { refreshed: false, message: 'Square OAuth not configured in this environment' } });
+});
+
+router.delete('/oauth/square/disconnect/:farmId', (req, res) => {
+  return res.json({ status: 'ok', data: { disconnected: true, farm_id: req.params.farmId } });
+});
+
+router.get('/admin/orders', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ status: 'error', message: 'Not Found' });
+  }
+  return res.json({ status: 'ok', data: { orders: listAllOrders() } });
+});
+
+// --- Network admin (DB optional) ---
+
+router.get('/network/farms', async (req, res, next) => {
+  try {
+    const farms = await listNetworkFarms();
+    return res.json({ status: 'ok', data: { farms, lastSync: req.app?.locals?.wholesaleNetworkLastSync || null } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/network/farms', async (req, res, next) => {
+  try {
+    const farm = await upsertNetworkFarm(req.body || {});
+    return res.json({ status: 'ok', data: { farm } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/network/farms/:farmId', async (req, res, next) => {
+  try {
+    const result = await removeNetworkFarm(req.params.farmId);
+    return res.json({ status: 'ok', data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/network/snapshots', (req, res) => {
+  return res.json({ status: 'ok', data: { snapshots: listNetworkSnapshots() } });
+});
+
+router.get('/network/aggregate', (req, res) => {
+  const agg = buildAggregateCatalog();
+  return res.json({ status: 'ok', data: { catalog: agg } });
+});
+
+router.get('/network/trends', (req, res) => {
+  return res.json({ status: 'ok', data: getNetworkTrends() });
+});
+
+router.get('/network/market-events', (req, res) => {
+  return res.json({ status: 'ok', data: { events: listMarketEvents() } });
+});
+
+router.post('/network/market-events', (req, res) => {
+  const { date, title, notes, impact } = req.body || {};
+  if (!title) {
+    return res.status(400).json({ status: 'error', message: 'title is required' });
+  }
+  const evt = addMarketEvent({ date, title, notes, impact });
+  return res.json({ status: 'ok', data: { event: evt } });
+});
+
+router.get('/network/recommendations', (req, res) => {
+  const recentOrders = listAllOrders().slice(0, 200);
+  return res.json({ status: 'ok', data: generateNetworkRecommendations({ recentOrders }) });
 });
 
 export default router;

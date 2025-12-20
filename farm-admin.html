@@ -890,6 +890,14 @@
                 </div>
 
                 <div class="nav-section">
+                    <div class="nav-section-title">Wholesale</div>
+                    <a href="#wholesale-orders" class="nav-item" data-section="wholesale-orders">
+                        <span class="nav-item-icon">📦</span>
+                        Wholesale Orders
+                    </a>
+                </div>
+
+                <div class="nav-section">
                     <div class="nav-section-title">Administration</div>
                     <a href="#subscription" class="nav-item" data-section="subscription">
                         <span class="nav-item-icon">■</span>
@@ -1279,6 +1287,31 @@
                                 <!-- Populated by JavaScript -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="section-wholesale-orders" class="content-section" style="display: none;">
+                <div class="header">
+                    <h1>Wholesale Orders</h1>
+                    <p class="header-subtitle">Manage wholesale orders from GreenReach Central network</p>
+                </div>
+
+                <div class="cards-grid">
+                    <div class="card" style="grid-column: span 4;">
+                        <div class="card-header">
+                            <h2>Order Queue</h2>
+                            <button class="btn-primary" onclick="refreshWholesaleOrders()">
+                                <span class="nav-item-icon">🔄</span> Refresh Orders
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="wholesale-orders-container">
+                                <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                    <p>Loading wholesale orders...</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

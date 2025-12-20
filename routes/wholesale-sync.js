@@ -29,6 +29,8 @@ const RECIPES_FILE = path.join(PUBLIC_DIR, 'data', 'lighting-recipes.json');
  *   inventory_timestamp: ISO timestamp,
  *   lots: [{
  *     lot_id: string,
+ *     qr_payload: string,
+ *     label_text: string,
  *     sku_id: string,
  *     sku_name: string,
  *     qty_available: number,
@@ -55,9 +57,23 @@ router.get('/inventory', async (req, res) => {
     const recipesData = JSON.parse(fs.readFileSync(RECIPES_FILE, 'utf8'));
     const recipes = recipesData.recipes || {};
 
+    // Load farm identity from farm.json for consistent naming (and traceability labels)
+    const farmPath = path.join(PUBLIC_DIR, 'data', 'farm.json');
+    let farmInfo = { farmId: 'light-engine-demo', name: 'GreenReach Demo Farm' };
+    try {
+      const farmData = JSON.parse(fs.readFileSync(farmPath, 'utf8'));
+      if (farmData.farmId) farmInfo.farmId = farmData.farmId;
+      if (farmData.name) farmInfo.name = farmData.name;
+    } catch (err) {
+      console.log('[Wholesale Sync] Using default farm identity');
+    }
+
     // Build lots from real groups
     const lots = [];
     const today = new Date();
+
+    // Load active reservations to subtract from available quantities
+    const reservedBySku = getTotalReservedBySku();
 
     groups.forEach((group) => {
       const cropName = group.crop || group.recipe;
@@ -89,12 +105,28 @@ router.get('/inventory', async (req, res) => {
       const qtyAvailable = Math.ceil(totalLbs / 5); // Convert to 5lb cases
 
       // Create wholesale lot
+      const farmIdForQr = farmInfo.farmId || 'light-engine-demo';
+      const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-5LB`;
+      const trace = {
+        farm_id: farmIdForQr,
+        lot_id: `LOT-${group.id}`,
+        sku_id: skuId,
+        harvest_date_start: harvestStart.toISOString(),
+        harvest_date_end: harvestEnd.toISOString()
+      };
+
+      // Apply reservations to available quantity
+      const reservedQty = reservedBySku.get(skuId) || 0;
+      const actualAvailable = Math.max(0, qtyAvailable - reservedQty);
+
       const lot = {
         lot_id: `LOT-${group.id}`,
-        sku_id: `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-5LB`,
+        qr_payload: `GRTRACE|${trace.farm_id}|${trace.lot_id}|${trace.sku_id}|${trace.harvest_date_start}`,
+        label_text: `${cropName} ${trace.lot_id}`,
+        sku_id: skuId,
         sku_name: `${cropName}, 5lb case`,
-        qty_available: qtyAvailable,
-        qty_reserved: 0,
+        qty_available: actualAvailable,
+        qty_reserved: reservedQty,
         unit: 'case',
         pack_size: 5, // 5 lbs per case
         price_per_unit: 12.50, // Default wholesale price
@@ -108,18 +140,7 @@ router.get('/inventory', async (req, res) => {
 
       lots.push(lot);
     });
-    
-    // Load farm identity from farm.json for consistent naming
-    const farmPath = path.join(PUBLIC_DIR, 'data', 'farm.json');
-    let farmInfo = { farmId: 'light-engine-demo', name: 'GreenReach Demo Farm' };
-    try {
-      const farmData = JSON.parse(fs.readFileSync(farmPath, 'utf8'));
-      if (farmData.farmId) farmInfo.farmId = farmData.farmId;
-      if (farmData.name) farmInfo.name = farmData.name;
-    } catch (err) {
-      console.log('[Wholesale Sync] Using default farm identity');
-    }
-    
+
     const farmInventory = {
       farm_id: farmInfo.farmId,
       farm_name: farmInfo.name,
@@ -139,6 +160,194 @@ router.get('/inventory', async (req, res) => {
       error: 'Failed to retrieve farm inventory',
       message: error.message
     });
+  }
+});
+
+/**
+ * POST /api/wholesale/order-events
+ * Receive order notifications from GreenReach Central.
+ * This is additive and does not impact grow automation.
+ */
+router.post('/order-events', express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const event = {
+      received_at: new Date().toISOString(),
+      type: String(payload.type || 'unknown'),
+      order_id: payload.order_id || null,
+      farm_id: payload.farm_id || null,
+      delivery_date: payload.delivery_date || null,
+      items: Array.isArray(payload.items) ? payload.items : null
+    };
+
+    const eventsFile = path.join(PUBLIC_DIR, 'data', 'wholesale-order-events.json');
+    let existing = { events: [] };
+    try {
+      existing = JSON.parse(fs.readFileSync(eventsFile, 'utf8'));
+    } catch {
+      // ignore
+    }
+
+    const events = Array.isArray(existing.events) ? existing.events : [];
+    events.unshift(event);
+    while (events.length > 200) events.pop();
+
+    fs.writeFileSync(eventsFile, JSON.stringify({ events, updated_at: new Date().toISOString() }, null, 2), 'utf8');
+
+    console.log('[Wholesale Sync] Received order event:', event.type, event.order_id);
+    return res.json({ ok: true, stored: true });
+  } catch (error) {
+    console.error('[Wholesale Sync] Failed to store order event:', error);
+    return res.status(500).json({ ok: false, error: 'Failed to store order event' });
+  }
+});
+
+/**
+ * GET /api/wholesale/order-events
+ * Read the rolling order event log (for troubleshooting/visibility).
+ */
+router.get('/order-events', async (_req, res) => {
+  try {
+    const eventsFile = path.join(PUBLIC_DIR, 'data', 'wholesale-order-events.json');
+    const raw = fs.readFileSync(eventsFile, 'utf8');
+    const parsed = JSON.parse(raw);
+    return res.json({ ok: true, ...parsed });
+  } catch {
+    return res.json({ ok: true, events: [] });
+  }
+});
+
+/**
+ * Reservation Management Helpers
+ */
+const RESERVATIONS_FILE = path.join(PUBLIC_DIR, 'data', 'wholesale-reservations.json');
+
+function loadReservations() {
+  try {
+    const raw = fs.readFileSync(RESERVATIONS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed.reservations) ? parsed.reservations : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveReservations(reservations) {
+  const payload = {
+    reservations: reservations || [],
+    updated_at: new Date().toISOString()
+  };
+  fs.writeFileSync(RESERVATIONS_FILE, JSON.stringify(payload, null, 2), 'utf8');
+}
+
+function cleanupExpiredReservations(reservations) {
+  const now = Date.now();
+  const ttlMs = 24 * 60 * 60 * 1000; // 24 hours
+  return reservations.filter((r) => {
+    const reservedAt = new Date(r.reserved_at).getTime();
+    return (now - reservedAt) < ttlMs;
+  });
+}
+
+function getTotalReservedBySku() {
+  const reservations = loadReservations();
+  const active = cleanupExpiredReservations(reservations);
+  const bySku = new Map();
+  for (const r of active) {
+    const current = bySku.get(r.sku_id) || 0;
+    bySku.set(r.sku_id, current + Number(r.quantity || 0));
+  }
+  return bySku;
+}
+
+/**
+ * POST /api/wholesale/inventory/reserve
+ * Reserve inventory for a wholesale order (called by GreenReach Central after checkout)
+ * 
+ * Body: {
+ *   order_id: string,
+ *   items: [{sku_id: string, quantity: number}]
+ * }
+ */
+router.post('/inventory/reserve', express.json({ limit: '128kb' }), async (req, res) => {
+  try {
+    const { order_id, items } = req.body || {};
+    if (!order_id) {
+      return res.status(400).json({ ok: false, error: 'order_id is required' });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ ok: false, error: 'items array is required' });
+    }
+
+    const reservations = loadReservations();
+    const active = cleanupExpiredReservations(reservations);
+
+    // Check if order already reserved
+    const existing = active.find((r) => r.order_id === order_id);
+    if (existing) {
+      return res.json({ ok: true, message: 'Order already reserved', order_id });
+    }
+
+    // Add new reservations
+    const reserved_at = new Date().toISOString();
+    for (const item of items) {
+      if (!item.sku_id || !item.quantity) continue;
+      active.push({
+        order_id,
+        sku_id: String(item.sku_id),
+        quantity: Number(item.quantity),
+        reserved_at
+      });
+    }
+
+    saveReservations(active);
+    console.log(`[Wholesale Sync] Reserved inventory for order ${order_id}:`, items);
+    return res.json({ ok: true, order_id, reserved: items.length });
+  } catch (error) {
+    console.error('[Wholesale Sync] Failed to reserve inventory:', error);
+    return res.status(500).json({ ok: false, error: 'Failed to reserve inventory' });
+  }
+});
+
+/**
+ * POST /api/wholesale/inventory/release
+ * Release reserved inventory (e.g., order cancelled)
+ * 
+ * Body: {order_id: string}
+ */
+router.post('/inventory/release', express.json({ limit: '128kb' }), async (req, res) => {
+  try {
+    const { order_id } = req.body || {};
+    if (!order_id) {
+      return res.status(400).json({ ok: false, error: 'order_id is required' });
+    }
+
+    const reservations = loadReservations();
+    const active = cleanupExpiredReservations(reservations);
+    const filtered = active.filter((r) => r.order_id !== order_id);
+    const releasedCount = active.length - filtered.length;
+
+    saveReservations(filtered);
+    console.log(`[Wholesale Sync] Released ${releasedCount} reservations for order ${order_id}`);
+    return res.json({ ok: true, order_id, released: releasedCount });
+  } catch (error) {
+    console.error('[Wholesale Sync] Failed to release inventory:', error);
+    return res.status(500).json({ ok: false, error: 'Failed to release inventory' });
+  }
+});
+
+/**
+ * GET /api/wholesale/inventory/reservations
+ * View current reservations (for debugging/admin)
+ */
+router.get('/inventory/reservations', async (_req, res) => {
+  try {
+    const reservations = loadReservations();
+    const active = cleanupExpiredReservations(reservations);
+    saveReservations(active); // Cleanup on read
+    return res.json({ ok: true, reservations: active });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message });
   }
 });
 
@@ -282,5 +491,53 @@ router.get('/pricing', async (req, res) => {
     });
   }
 });
+
+/**
+ * GET /api/wholesale/order-statuses
+ * Return order statuses from storage
+ */
+router.get('/order-statuses', async (req, res) => {
+  try {
+    const statusFile = path.join(PUBLIC_DIR, 'data', 'wholesale-orders-status.json');
+    
+    if (fs.existsSync(statusFile)) {
+      const data = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+      res.json({ ok: true, statuses: data });
+    } else {
+      res.json({ ok: true, statuses: {} });
+    }
+  } catch (error) {
+    console.error('[Wholesale Sync] Failed to load order statuses:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/wholesale/order-statuses
+ * Save order statuses to storage
+ */
+router.post('/order-statuses', async (req, res) => {
+  try {
+    const statusFile = path.join(PUBLIC_DIR, 'data', 'wholesale-orders-status.json');
+    const statusDir = path.dirname(statusFile);
+    
+    // Ensure directory exists
+    if (!fs.existsSync(statusDir)) {
+      fs.mkdirSync(statusDir, { recursive: true });
+    }
+    
+    // Write status data
+    fs.writeFileSync(statusFile, JSON.stringify(req.body, null, 2), 'utf8');
+    
+    console.log('[Wholesale Sync] Order statuses saved');
+    res.json({ ok: true, message: 'Order statuses saved' });
+    
+  } catch (error) {
+    console.error('[Wholesale Sync] Failed to save order statuses:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+
 
 export default router;

@@ -38,6 +38,9 @@ public/data/env-cache.json
 public/data/devices.cache.json
 public/data/anomaly-history.json
 public/data/harvest-log.json
+public/data/wholesale-order-events.json
+public/data/wholesale-reservations.json
+public/data/wholesale-orders-status.json
 
 # Database files (runtime only)
 *.db

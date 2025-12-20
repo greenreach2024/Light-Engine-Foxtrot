@@ -5,6 +5,8 @@ import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { WebSocketServer } from 'ws';
 import http from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Import routes
 import farmRoutes from './routes/farms.js';
@@ -24,17 +26,28 @@ import { authMiddleware } from './middleware/auth.js';
 import { initDatabase } from './config/database.js';
 import { startHealthCheckService } from './services/healthCheck.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
+import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import logger from './utils/logger.js';
 
 // Load environment variables
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const WS_PORT = process.env.WS_PORT || 3001;
+app.locals.databaseReady = false;
 
 // Security middleware
-app.use(helmet());
+// Note: the current standalone UI pages include inline <script> and inline event handlers.
+// Helmet's default CSP blocks those, so we disable CSP in local/dev to allow the UI to run.
+const isProduction = process.env.NODE_ENV === 'production';
+app.use(helmet(isProduction ? undefined : { contentSecurityPolicy: false }));
+
+// Static UI (Wholesale portal + Central Admin UI)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // CORS configuration
 const corsOptions = {
@@ -73,6 +86,7 @@ app.use('/api/', limiter);
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
+    databaseReady: Boolean(req.app.locals.databaseReady),
     timestamp: new Date().toISOString(),
     version: process.env.API_VERSION || 'v1',
     uptime: process.uptime()
@@ -103,10 +117,18 @@ app.use(errorHandler);
 // Initialize database and start server
 async function startServer() {
   try {
-    // Initialize database connection
+    // Initialize database connection (optional in local/dev)
     logger.info('Initializing database connection...');
-    await initDatabase();
-    logger.info('Database connected successfully');
+    try {
+      await initDatabase();
+      app.locals.databaseReady = true;
+      logger.info('Database connected successfully');
+    } catch (error) {
+      app.locals.databaseReady = false;
+      logger.warn('Database unavailable; starting in limited mode', {
+        error: error.message
+      });
+    }
 
     // Create HTTP server
     const server = http.createServer(app);
@@ -164,10 +186,17 @@ async function startServer() {
     // Store WebSocket server for use in other modules
     app.locals.wss = wss;
 
-    // Start background services
-    logger.info('Starting background services...');
-    startHealthCheckService(app);
-    startSyncMonitor(app);
+    // Start background services (require DB)
+    if (app.locals.databaseReady) {
+      logger.info('Starting background services...');
+      startHealthCheckService(app);
+      startSyncMonitor(app);
+    } else {
+      logger.warn('Skipping background services (database not ready)');
+    }
+
+    // Wholesale network sync (DB optional)
+    startWholesaleNetworkSync(app);
 
     // Graceful shutdown
     const shutdown = async (signal) => {
@@ -180,6 +209,10 @@ async function startServer() {
       wss.close(() => {
         logger.info('WebSocket server closed');
       });
+
+      if (typeof app.locals.stopWholesaleNetworkSync === 'function') {
+        app.locals.stopWholesaleNetworkSync();
+      }
 
       // Close database connections
       // await closeDatabase();

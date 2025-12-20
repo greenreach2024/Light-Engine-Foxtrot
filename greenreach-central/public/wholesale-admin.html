@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GreenReach Wholesale Admin</title>
+  <style>
+    :root {
+      --primary: #2d5016;
+      --primary-light: #3d6821;
+      --primary-dark: #1d3810;
+      --accent: #82c341;
+      --bg: #f5f7f3;
+      --surface: #ffffff;
+      --border: #d8e3cf;
+      --text: #1a1a1a;
+      --text-secondary: #5a5a5a;
+      --error: #c53030;
+      --success: #38a169;
+      --warning: #d69e2e;
+      --info: #3182ce;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .header-nav a {
+      color: white;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+
+    .header-nav a:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+    }
+
+    nav button {
+      background: none;
+      border: none;
+      padding: 1rem 1.5rem;
+      font-size: 1rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    nav button:hover {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    nav button.active {
+      color: var(--primary);
+      border-bottom-color: var(--accent);
+      font-weight: 500;
+    }
+
+    main {
+      max-width: 1600px;
+      margin: 2rem auto;
+      padding: 0 2rem;
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .stat-change {
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .stat-change.positive {
+      color: var(--success);
+    }
+
+    .stat-change.negative {
+      color: var(--error);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: var(--bg);
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem;
+      font-weight: 600;
+      color: var(--text);
+      border-bottom: 2px solid var(--border);
+    }
+
+    td {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:hover {
+      background: var(--bg);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge.active {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge.inactive {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .badge.onboarding {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .badge.completed {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge.pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .badge.failed {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-light);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #9b2c2c;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #2f855a;
+    }
+
+    .btn-sm {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-secondary);
+    }
+
+    .chart-container {
+      height: 300px;
+      margin: 1rem 0;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+
+    .chart-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 1;
+      max-width: 80px;
+    }
+
+    .chart-bar-fill {
+      width: 100%;
+      background: var(--accent);
+      border-radius: 4px 4px 0 0;
+      transition: height 0.3s;
+    }
+
+    .chart-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .chart-value {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      border-radius: 8px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-secondary);
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+    }
+
+    .modal-close:hover {
+      background: var(--bg);
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+    }
+
+    .modal-footer {
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: var(--text);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.625rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: var(--surface);
+    }
+
+    .filters {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .filter-group label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .filter-group select,
+    .filter-group input {
+      padding: 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      background: var(--surface);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      max-width: 400px;
+      z-index: 3000;
+      animation: slideIn 0.3s;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .toast.success {
+      border-left: 4px solid var(--success);
+    }
+
+    .toast.error {
+      border-left: 4px solid var(--error);
+    }
+
+    .toast.info {
+      border-left: 4px solid var(--info);
+    }
+
+    @media (max-width: 768px) {
+      main {
+        padding: 0 1rem;
+      }
+
+      header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      nav {
+        padding: 0 1rem;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        font-size: 0.875rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>GreenReach Wholesale Admin</h1>
+      <p style="margin-top: 0.25rem; opacity: 0.9; font-size: 0.95rem;">Operational dashboard for wholesale platform</p>
+    </div>
+    <div class="header-nav">
+      <a href="/wholesale.html">Buyer Portal</a>
+    </div>
+  </header>
+
+  <nav>
+    <button class="nav-tab active" data-view="overview">Overview</button>
+    <button class="nav-tab" data-view="farms">Farm Management</button>
+    <button class="nav-tab" data-view="network">Hyperlocal Network</button>
+    <button class="nav-tab" data-view="payments">Payments & Fees</button>
+    <button class="nav-tab" data-view="orders">Orders</button>
+    <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
+  </nav>
+
+  <main>
+    <!-- Overview View -->
+    <div id="overview-view" class="view active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total GMV (30d)</div>
+          <div class="stat-value" id="stat-gmv">$0</div>
+          <div class="stat-change positive" id="stat-gmv-change">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Broker Fees Collected</div>
+          <div class="stat-value" id="stat-fees">$0</div>
+          <div class="stat-change positive" id="stat-fees-change">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Farms</div>
+          <div class="stat-value" id="stat-farms">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Orders</div>
+          <div class="stat-value" id="stat-orders">0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">GMV by Farm (Last 30 Days)</h2>
+        </div>
+        <div id="gmv-chart" class="chart-container">
+          <div class="loading">Loading chart data...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Recent Activity</h2>
+        </div>
+        <div id="recent-activity">
+          <div class="loading">Loading activity...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Farm Management View -->
+    <div id="farms-view" class="view">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Farm Onboarding Status</h2>
+          <div class="card-actions">
+            <button class="btn btn-primary" id="onboard-open-btn">Onboard New Farm</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Farm ID</th>
+              <th>Merchant ID</th>
+              <th>Location</th>
+              <th>Status</th>
+              <th>Token Expires</th>
+              <th>Onboarded</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="farms-table">
+            <tr>
+              <td colspan="7" class="loading">Loading farms...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Hyperlocal Network View -->
+    <div id="network-view" class="view">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Last Network Sync</div>
+          <div class="stat-value" id="network-last-sync">—</div>
+          <div class="stat-change" style="color: var(--text-secondary);" id="network-sync-note">Inventory snapshots pulled from local farms</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Registered Farms</div>
+          <div class="stat-value" id="network-farms-count">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Healthy Snapshots</div>
+          <div class="stat-value" id="network-healthy-count">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Network SKUs</div>
+          <div class="stat-value" id="network-sku-count">0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Network Farms</h2>
+          <div class="card-actions">
+            <button class="btn btn-secondary" id="network-refresh-btn">Refresh</button>
+          </div>
+        </div>
+
+        <div class="filters" style="margin-bottom: 1rem;">
+          <div class="filter-group">
+            <label for="network-farm-id">Farm ID</label>
+            <input type="text" id="network-farm-id" placeholder="farm_123" />
+          </div>
+          <div class="filter-group">
+            <label for="network-farm-name">Farm Name</label>
+            <input type="text" id="network-farm-name" placeholder="Green Acres" />
+          </div>
+          <div class="filter-group" style="min-width: 420px;">
+            <label for="network-farm-base-url">Light Engine Base URL</label>
+            <input type="text" id="network-farm-base-url" placeholder="http://127.0.0.1:8091" />
+          </div>
+          <div class="filter-group">
+            <label>&nbsp;</label>
+            <button class="btn btn-primary" data-action="network-add-farm">Add / Update Farm</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Farm ID</th>
+              <th>Name</th>
+              <th>Base URL</th>
+              <th>Status</th>
+              <th>Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="network-farms-table">
+            <tr>
+              <td colspan="6" class="loading">Loading farms...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Latest Inventory Snapshots</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Farm</th>
+              <th>OK</th>
+              <th>HTTP</th>
+              <th>Total Available</th>
+              <th>Fetched At</th>
+            </tr>
+          </thead>
+          <tbody id="network-snapshots-table">
+            <tr>
+              <td colspan="5" class="loading">Loading snapshots...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Market Events</h2>
+        </div>
+
+        <div class="filters" style="margin-bottom: 1rem;">
+          <div class="filter-group">
+            <label for="network-event-date">Date</label>
+            <input type="date" id="network-event-date" />
+          </div>
+          <div class="filter-group" style="min-width: 260px;">
+            <label for="network-event-title">Title</label>
+            <input type="text" id="network-event-title" placeholder="Farmers market weekend" />
+          </div>
+          <div class="filter-group">
+            <label for="network-event-impact">Impact</label>
+            <select id="network-event-impact">
+              <option value="neutral" selected>Neutral</option>
+              <option value="demand_up">Demand Up</option>
+              <option value="demand_down">Demand Down</option>
+              <option value="supply_up">Supply Up</option>
+              <option value="supply_down">Supply Down</option>
+            </select>
+          </div>
+          <div class="filter-group" style="min-width: 420px;">
+            <label for="network-event-notes">Notes</label>
+            <input type="text" id="network-event-notes" placeholder="Add any context for planning" />
+          </div>
+          <div class="filter-group">
+            <label>&nbsp;</label>
+            <button class="btn btn-primary" data-action="network-add-event">Add Event</button>
+          </div>
+        </div>
+
+        <div id="network-events-list" class="empty-state">Loading events...</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Network Recommendations</h2>
+        </div>
+        <div id="network-recommendations" class="empty-state">Loading recommendations...</div>
+      </div>
+    </div>
+
+    <!-- Payments & Fees View -->
+    <div id="payments-view" class="view">
+      <div class="filters">
+        <div class="filter-group">
+          <label for="payment-status-filter">Status</label>
+          <select id="payment-status-filter">
+            <option value="all">All Statuses</option>
+            <option value="created">Created</option>
+            <option value="authorized">Authorized</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="refunded">Refunded</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="payment-date-from">From Date</label>
+          <input type="date" id="payment-date-from" />
+        </div>
+        <div class="filter-group">
+          <label for="payment-date-to">To Date</label>
+          <input type="date" id="payment-date-to" />
+        </div>
+        <div class="filter-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" id="payment-apply-filters-btn">Apply Filters</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Payment Records</h2>
+          <div class="card-actions">
+            <button class="btn btn-secondary" id="reconcile-all-btn">Reconcile All</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Payment ID</th>
+              <th>Farm</th>
+              <th>Amount</th>
+              <th>Broker Fee</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="payments-table">
+            <tr>
+              <td colspan="7" class="loading">Loading payments...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Farm Payout Summary</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Farm</th>
+              <th>Gross Revenue</th>
+              <th>Broker Fees</th>
+              <th>Net Payout</th>
+              <th>Orders</th>
+            </tr>
+          </thead>
+          <tbody id="payout-summary-table">
+            <tr>
+              <td colspan="5" class="loading">Loading summary...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Orders View -->
+    <div id="orders-view" class="view">
+      <div class="filters">
+        <div class="filter-group">
+          <label for="order-status-filter">Status</label>
+          <select id="order-status-filter">
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="order-date-from">From Date</label>
+          <input type="date" id="order-date-from" />
+        </div>
+        <div class="filter-group">
+          <label for="order-date-to">To Date</label>
+          <input type="date" id="order-date-to" />
+        </div>
+        <div class="filter-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" id="orders-apply-filters-btn">Apply Filters</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Master Orders</h2>
+        </div>
+        <div id="orders-list">
+          <div class="loading">Loading orders...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reconciliation View -->
+    <div id="reconciliation-view" class="view">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Payment Reconciliation</h2>
+          <div class="card-actions">
+            <button class="btn btn-success" id="run-reconciliation-btn">Run Reconciliation</button>
+          </div>
+        </div>
+        <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+          Reconciliation queries Square API for payment status updates and synchronizes with local records. 
+          Run this if webhook events were missed or payment statuses seem outdated.
+        </p>
+        <div id="reconciliation-log">
+          <div class="empty-state">Click "Run Reconciliation" to start</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Refund History</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Refund ID</th>
+              <th>Payment ID</th>
+              <th>Amount</th>
+              <th>Broker Fee Refunded</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="refunds-table">
+            <tr>
+              <td colspan="7" class="loading">Loading refunds...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Onboard Farm Modal -->
+  <div id="onboard-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Onboard New Farm</h3>
+        <button class="modal-close" data-action="close-onboard">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="onboard-form">
+          <div class="form-group">
+            <label for="farm-id">Farm ID</label>
+            <input type="text" id="farm-id" required placeholder="farm_123" />
+          </div>
+          <div class="form-group">
+            <label for="farm-name">Farm Name</label>
+            <input type="text" id="farm-name" required placeholder="Green Acres Farm" />
+          </div>
+          <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem;">
+            This will generate a Square OAuth URL. Send this URL to the farm owner to complete onboarding.
+          </p>
+        </form>
+        <div id="oauth-url-display" style="display: none; margin-top: 1rem;">
+          <div class="form-group">
+            <label>OAuth URL (expires in 10 minutes)</label>
+            <textarea id="oauth-url" readonly rows="4" style="font-size: 0.8rem;"></textarea>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="copy-oauth-url-btn">Copy URL</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-action="close-onboard">Cancel</button>
+        <button type="button" class="btn btn-primary" id="generate-oauth-url-btn">Generate OAuth URL</button>
+      </div>
+    </div>
+  </div>
+  <script src="/js/wholesale-admin.js" defer></script>
+</body>
+</html>

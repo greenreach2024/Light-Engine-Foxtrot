@@ -1,0 +1,170 @@
+/* Light Engine Dashboard Theme (Farm Admin baseline)
+   Scoped: only applies when <body class="le-theme"> is present.
+   Uses existing palette already present across Light Engine pages.
+*/
+
+body.le-theme {
+  color-scheme: dark;
+
+  /* Canonical dashboard tokens */
+  --le-bg-primary: #0a0f1e;
+  --le-bg-secondary: #111827;
+  --le-bg-card: #1a2332;
+  --le-border: #2d3748;
+
+  --le-text-primary: #e5e7eb;
+  --le-text-secondary: #9ca3af;
+  --le-text-muted: #6b7280;
+
+  --le-accent-blue: #3b82f6;
+  --le-accent-green: #10b981;
+  --le-accent-yellow: #f59e0b;
+  --le-accent-red: #ef4444;
+  --le-accent-purple: #8b5cf6;
+
+  --le-glow-blue: 0 0 24px rgba(59, 130, 246, 0.18);
+  --le-glow-purple: 0 0 26px rgba(139, 92, 246, 0.16);
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: linear-gradient(135deg, var(--le-bg-primary) 0%, var(--le-bg-card) 100%);
+  color: var(--le-text-primary);
+}
+
+/* Generic text */
+body.le-theme h1,
+body.le-theme h2,
+body.le-theme h3 {
+  color: #60a5fa;
+  letter-spacing: -0.4px;
+}
+
+body.le-theme p,
+body.le-theme .muted,
+body.le-theme .text-muted {
+  color: var(--le-text-secondary);
+}
+
+body.le-theme label {
+  color: var(--le-text-secondary);
+}
+
+body.le-theme a {
+  color: #93c5fd;
+}
+
+body.le-theme a:hover {
+  color: #bfdbfe;
+}
+
+/* Common light-surface containers in some views */
+body.le-theme .container,
+body.le-theme .page-container,
+body.le-theme .field-mapping-container {
+  color: var(--le-text-primary);
+}
+
+/* Cards / panels */
+body.le-theme .card,
+body.le-theme .stat-card,
+body.le-theme .login-card,
+body.le-theme .panel,
+body.le-theme .tile,
+body.le-theme .widget {
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  box-shadow: var(--le-glow-blue);
+}
+
+body.le-theme .card-header,
+body.le-theme .header,
+body.le-theme .page-header {
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 2px solid var(--le-accent-blue);
+  backdrop-filter: blur(10px);
+}
+
+/* Tables */
+body.le-theme table {
+  color: var(--le-text-primary);
+}
+
+body.le-theme th {
+  color: var(--le-text-secondary);
+}
+
+body.le-theme td,
+body.le-theme th {
+  border-bottom-color: rgba(59, 130, 246, 0.18);
+}
+
+body.le-theme tr:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+/* Buttons */
+body.le-theme button,
+body.le-theme .btn,
+body.le-theme .nav-btn,
+body.le-theme .nav-button,
+body.le-theme .nav-link-button,
+body.le-theme .close-btn {
+  background: rgba(59, 130, 246, 0.2);
+  border: 2px solid var(--le-accent-blue);
+  color: #93c5fd;
+}
+
+body.le-theme button:hover,
+body.le-theme .btn:hover,
+body.le-theme .nav-btn:hover,
+body.le-theme .nav-button:hover,
+body.le-theme .nav-link-button:hover,
+body.le-theme .close-btn:hover {
+  background: rgba(59, 130, 246, 0.35);
+}
+
+body.le-theme .btn-primary,
+body.le-theme .primary {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: var(--le-accent-purple);
+  color: #c4b5fd;
+  box-shadow: var(--le-glow-purple);
+}
+
+body.le-theme .btn-primary:hover,
+body.le-theme .primary:hover {
+  background: rgba(139, 92, 246, 0.35);
+}
+
+body.le-theme .btn-danger,
+body.le-theme .danger {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--le-accent-red);
+  color: #fca5a5;
+}
+
+body.le-theme .btn-danger:hover,
+body.le-theme .danger:hover {
+  background: rgba(239, 68, 68, 0.4);
+}
+
+/* Inputs */
+body.le-theme input,
+body.le-theme select,
+body.le-theme textarea {
+  background: var(--le-bg-secondary);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  color: var(--le-text-primary);
+}
+
+body.le-theme input::placeholder,
+body.le-theme textarea::placeholder {
+  color: var(--le-text-muted);
+}
+
+body.le-theme input:focus,
+body.le-theme select:focus,
+body.le-theme textarea:focus {
+  outline: none;
+  border-color: var(--le-accent-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}

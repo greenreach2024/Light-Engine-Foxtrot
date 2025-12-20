@@ -463,6 +463,11 @@ function setupNavigation() {
             const sectionEl = document.getElementById(`section-${section}`);
             if (sectionEl) {
                 sectionEl.style.display = 'block';
+                
+                // Load section-specific data
+                if (section === 'wholesale-orders') {
+                    refreshWholesaleOrders();
+                }
             }
         });
     });
@@ -657,7 +662,8 @@ async function loadCropsFromDatabase() {
                 retail: defaults.retail,
                 ws1Discount: defaults.ws1,
                 ws2Discount: defaults.ws2,
-                ws3Discount: defaults.ws3
+                ws3Discount: defaults.ws3,
+                isTaxable: false
             };
         });
         
@@ -672,7 +678,8 @@ async function loadCropsFromDatabase() {
             retail: defaultPricing[crop].retail,
             ws1Discount: defaultPricing[crop].ws1,
             ws2Discount: defaultPricing[crop].ws2,
-            ws3Discount: defaultPricing[crop].ws3
+            ws3Discount: defaultPricing[crop].ws3,
+            isTaxable: false
         }));
         
         renderPricingTable();
@@ -785,6 +792,16 @@ function renderPricingTable() {
                     >%
                 </td>
                 <td class="calculated-price">$${ws3Price.toFixed(2)}</td>
+                <td style="text-align: center;">
+                    <input 
+                        type="checkbox" 
+                        ${item.isTaxable ? 'checked' : ''}
+                        data-index="${index}"
+                        data-field="isTaxable"
+                        onchange="updatePricing(${index}, 'isTaxable', this.checked)"
+                        style="cursor: pointer; width: 18px; height: 18px;"
+                    >
+                </td>
             </tr>
         `;
     }).join('');
@@ -794,14 +811,19 @@ function renderPricingTable() {
  * Update pricing when input changes
  */
 function updatePricing(index, field, value) {
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return;
-    
-    if (field === 'retail') {
-        // If showing per 25g, convert back to oz for storage
-        pricingData[index].retail = isPerGram ? convertPrice(numValue, false) : numValue;
+    if (field === 'isTaxable') {
+        // Handle boolean checkbox value
+        pricingData[index][field] = value;
     } else {
-        pricingData[index][field] = numValue;
+        const numValue = parseFloat(value);
+        if (isNaN(numValue)) return;
+        
+        if (field === 'retail') {
+            // If showing per 25g, convert back to oz for storage
+            pricingData[index].retail = isPerGram ? convertPrice(numValue, false) : numValue;
+        } else {
+            pricingData[index][field] = numValue;
+        }
     }
     
     renderPricingTable();
@@ -826,7 +848,8 @@ async function savePricing() {
                 wholesalePrice: parseFloat(calculateWholesalePrice(item.retail, item.ws1Discount)),
                 ws1Discount: item.ws1Discount,
                 ws2Discount: item.ws2Discount,
-                ws3Discount: item.ws3Discount
+                ws3Discount: item.ws3Discount,
+                isTaxable: item.isTaxable || false
             }));
             
             const response = await fetch(`${API_BASE}/crop-pricing`, {
@@ -1899,4 +1922,333 @@ function initializeAdminTooltipTracking() {
             tooltip.style.top = (e.clientY + offsetY) + 'px';
         });
     });
+}
+// ============================================================================
+// WHOLESALE ORDERS MANAGEMENT
+// ============================================================================
+
+/**
+ * Refresh wholesale orders from the API
+ */
+async function refreshWholesaleOrders() {
+    console.log('🔄 Refreshing wholesale orders...');
+    const container = document.getElementById('wholesale-orders-container');
+    
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);"><p>Loading wholesale orders...</p></div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/wholesale/order-events`, {
+            headers: {
+                'Authorization': `Bearer ${getSession()?.token || ''}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load orders: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const orders = data.events || [];
+        
+        if (orders.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
+                    <h3 style="margin-bottom: 0.5rem;">No Wholesale Orders Yet</h3>
+                    <p>Orders from GreenReach Central will appear here</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Load order statuses from storage
+        const statusData = await loadOrderStatuses();
+        
+        // Group orders by order_id
+        const orderMap = new Map();
+        orders.forEach(event => {
+            const orderId = event.order_id;
+            if (!orderMap.has(orderId)) {
+                orderMap.set(orderId, {
+                    ...event,
+                    status: statusData[orderId] || 'pending'
+                });
+            }
+        });
+        
+        // Render orders
+        container.innerHTML = Array.from(orderMap.values())
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            .map(order => renderOrderCard(order))
+            .join('');
+            
+    } catch (error) {
+        console.error('Failed to load wholesale orders:', error);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--accent-red);">
+                <p>❌ Failed to load orders: ${error.message}</p>
+                <button class="btn-primary" onclick="refreshWholesaleOrders()" style="margin-top: 1rem;">Retry</button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Render individual order card
+ */
+function renderOrderCard(order) {
+    const statusConfig = {
+        'pending': { label: 'Pending', color: '#f59e0b', icon: '⏳' },
+        'packed': { label: 'Packed', color: '#8b5cf6', icon: '📦' },
+        'shipped': { label: 'Shipped', color: '#3b82f6', icon: '🚚' },
+        'delivered': { label: 'Delivered', color: '#10b981', icon: '✅' }
+    };
+    
+    const config = statusConfig[order.status] || statusConfig['pending'];
+    const orderDate = new Date(order.timestamp).toLocaleString();
+    const items = order.items || [];
+    const total = order.total_amount || 0;
+    
+    return `
+        <div class="wholesale-order-card" data-order-id="${order.order_id}" style="
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                <div>
+                    <h3 style="color: var(--text-primary); margin-bottom: 0.25rem;">
+                        ${config.icon} Order #${order.order_id.slice(-8)}
+                    </h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">${orderDate}</p>
+                </div>
+                <div style="
+                    background: ${config.color}33;
+                    border: 1px solid ${config.color};
+                    color: ${config.color};
+                    padding: 0.5rem 1rem;
+                    border-radius: 6px;
+                    font-weight: 600;
+                ">
+                    ${config.label}
+                </div>
+            </div>
+            
+            <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                <h4 style="color: var(--text-secondary); margin-bottom: 0.75rem; font-size: 0.9rem;">Order Items</h4>
+                ${items.map(item => `
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                        <span style="color: var(--text-primary);">
+                            ${item.product_name || item.sku_id}
+                        </span>
+                        <span style="color: var(--text-secondary);">
+                            ${item.quantity} × $${item.price_per_unit?.toFixed(2) || '0.00'}
+                        </span>
+                    </div>
+                `).join('')}
+                <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; margin-top: 0.5rem; font-weight: 600;">
+                    <span style="color: var(--text-primary);">Total</span>
+                    <span style="color: var(--accent-green);">$${total.toFixed(2)}</span>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                ${order.status === 'pending' ? `
+                    <button class="btn-primary" onclick="updateOrderStatus('${order.order_id}', 'packed')" style="
+                        background: rgba(139, 92, 246, 0.2);
+                        border: 1px solid #8b5cf6;
+                        color: #c4b5fd;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">
+                        📦 Mark as Packed
+                    </button>
+                ` : ''}
+                ${order.status === 'packed' ? `
+                    <button class="btn-primary" onclick="updateOrderStatus('${order.order_id}', 'shipped')" style="
+                        background: rgba(59, 130, 246, 0.2);
+                        border: 1px solid #3b82f6;
+                        color: #93c5fd;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">
+                        🚚 Mark as Shipped
+                    </button>
+                ` : ''}
+                <button class="btn-secondary" onclick="printPackingSlip('${order.order_id}')" style="
+                    background: rgba(107, 114, 128, 0.2);
+                    border: 1px solid #6b7280;
+                    color: #9ca3af;
+                    padding: 0.5rem 1rem;
+                    border-radius: 6px;
+                    cursor: pointer;
+                ">
+                    🖨️ Print Packing Slip
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Update order status
+ */
+async function updateOrderStatus(orderId, newStatus) {
+    console.log(`📝 Updating order ${orderId} to status: ${newStatus}`);
+    
+    try {
+        // Load current statuses
+        const statusData = await loadOrderStatuses();
+        statusData[orderId] = newStatus;
+        
+        // Save updated statuses
+        await saveOrderStatuses(statusData);
+        
+        // TODO: Notify Central via callback endpoint
+        // await notifyCentralOfStatusChange(orderId, newStatus);
+        
+        // Refresh display
+        await refreshWholesaleOrders();
+        
+        showToast(`Order marked as ${newStatus}`, 'success');
+    } catch (error) {
+        console.error('Failed to update order status:', error);
+        showToast('Failed to update order status', 'error');
+    }
+}
+
+/**
+ * Print packing slip for order
+ */
+function printPackingSlip(orderId) {
+    console.log(`🖨️ Printing packing slip for order ${orderId}`);
+    
+    // Find order data
+    const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
+    if (!orderCard) {
+        showToast('Order not found', 'error');
+        return;
+    }
+    
+    // Open print view in new window
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Packing Slip - ${orderId}</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 2rem; }
+                h1 { border-bottom: 2px solid #000; padding-bottom: 0.5rem; }
+                .header { margin-bottom: 2rem; }
+                .items { margin: 2rem 0; }
+                .item { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #ccc; }
+                .footer { margin-top: 3rem; font-size: 0.9rem; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Packing Slip</h1>
+                <p>Order ID: ${orderId}</p>
+                <p>Date: ${new Date().toLocaleDateString()}</p>
+            </div>
+            <div class="items">
+                ${orderCard.innerHTML}
+            </div>
+            <div class="footer">
+                <p>Packed by: _____________________</p>
+                <p>Date: _____________________</p>
+            </div>
+            <script>
+                window.onload = () => {
+                    window.print();
+                    setTimeout(() => window.close(), 1000);
+                };
+            </script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
+/**
+ * Load order statuses from storage
+ */
+async function loadOrderStatuses() {
+    try {
+        const response = await fetch(`${API_BASE}/api/wholesale/order-statuses`, {
+            headers: {
+                'Authorization': `Bearer ${getSession()?.token || ''}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.statuses || {};
+        }
+    } catch (error) {
+        console.log('No existing order statuses found');
+    }
+    
+    return {};
+}
+
+/**
+ * Save order statuses to storage
+ */
+async function saveOrderStatuses(statusData) {
+    const response = await fetch(`${API_BASE}/api/wholesale/order-statuses`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getSession()?.token || ''}`
+        },
+        body: JSON.stringify(statusData)
+    });
+    
+    if (!response.ok) {
+        throw new Error('Failed to save order statuses');
+    }
+}
+
+/**
+ * Show toast notification
+ */
+function showToast(message, type = 'info') {
+    const colors = {
+        success: '#10b981',
+        error: '#ef4444',
+        info: '#3b82f6'
+    };
+    
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        top: 2rem;
+        right: 2rem;
+        background: ${colors[type]};
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
