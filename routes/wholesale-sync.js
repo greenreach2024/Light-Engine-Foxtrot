@@ -8,6 +8,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { wholesaleAuthMiddleware } from '../lib/wholesale-auth.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -171,7 +172,7 @@ router.get('/inventory', async (req, res) => {
  * Receive order notifications from GreenReach Central.
  * This is additive and does not impact grow automation.
  */
-router.post('/order-events', express.json({ limit: '256kb' }), async (req, res) => {
+router.post('/order-events', wholesaleAuthMiddleware, express.json({ limit: '256kb' }), async (req, res) => {
   try {
     const payload = req.body || {};
     const event = {
@@ -304,12 +305,14 @@ function getTotalDeductedBySku() {
  * Reserve inventory for a wholesale order (called by GreenReach Central after checkout)
  * This creates a temporary hold but does NOT deduct inventory yet.
  * 
+ * REQUIRES AUTHENTICATION: X-Farm-ID and X-API-Key headers
+ * 
  * Body: {
  *   order_id: string,
  *   items: [{sku_id: string, quantity: number}]
  * }
  */
-router.post('/inventory/reserve', express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), async (req, res) => {
   try {
     const { order_id, items } = req.body || {};
     if (!order_id) {
@@ -412,7 +415,7 @@ router.post('/inventory/reserve', express.json({ limit: '128kb' }), async (req, 
  *   payment_id: string (optional, for audit trail)
  * }
  */
-router.post('/inventory/confirm', express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/confirm', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), async (req, res) => {
   try {
     const { order_id, payment_id } = req.body || {};
     if (!order_id) {
@@ -478,7 +481,7 @@ router.post('/inventory/confirm', express.json({ limit: '128kb' }), async (req, 
  *   reason: string (optional, for audit trail)
  * }
  */
-router.post('/inventory/release', express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/release', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), async (req, res) => {
   try {
     const { order_id, reason } = req.body || {};
     if (!order_id) {
@@ -516,7 +519,7 @@ router.post('/inventory/release', express.json({ limit: '128kb' }), async (req, 
  *   reason: string (required for audit)
  * }
  */
-router.post('/inventory/rollback', express.json({ limit: '128kb' }), async (req, res) => {
+router.post('/inventory/rollback', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), async (req, res) => {
   try {
     const { order_id, reason } = req.body || {};
     if (!order_id) {
@@ -741,7 +744,7 @@ router.get('/order-statuses', async (req, res) => {
  * POST /api/wholesale/order-statuses
  * Save order statuses to storage
  */
-router.post('/order-statuses', async (req, res) => {
+router.post('/order-statuses', wholesaleAuthMiddleware, async (req, res) => {
   try {
     const statusFile = path.join(PUBLIC_DIR, 'data', 'wholesale-orders-status.json');
     const statusDir = path.dirname(statusFile);

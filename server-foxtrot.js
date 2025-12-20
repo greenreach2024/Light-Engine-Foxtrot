@@ -79,6 +79,7 @@ import adminHealthRouter from './routes/admin-health.js';
 import wholesaleSyncRouter from './routes/wholesale-sync.js';
 import wholesaleReservationsRouter, { cleanupExpiredReservations } from './routes/wholesale-reservations.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
+import wholesaleAdminRouter from './routes/wholesale-admin.js';
 import cropPricingRouter from './routes/crop-pricing.js';
 import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
 import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
@@ -9157,6 +9158,17 @@ app.use('/api/crop-pricing', cropPricingRouter);
  * - GET /api/wholesale/pricing: Wholesale pricing matrix by SKU
  */
 app.use('/api/wholesale', wholesaleSyncRouter);
+
+/**
+ * Light Engine: Wholesale Admin Routes
+ * Farm API key management and monitoring (REQUIRES ADMIN AUTH - Task #14)
+ * - GET /api/wholesale/admin/keys: List farm API keys
+ * - POST /api/wholesale/admin/keys: Generate new farm API key
+ * - POST /api/wholesale/admin/keys/:farm_id/rotate: Rotate farm API key
+ * - POST /api/wholesale/admin/keys/:farm_id/suspend: Suspend farm
+ * - POST /api/wholesale/admin/keys/:farm_id/reactivate: Reactivate farm
+ */
+app.use('/api/wholesale/admin', wholesaleAdminRouter);
 
 /**
  * Light Engine: Wholesale Reservation Management
