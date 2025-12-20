@@ -117,13 +117,16 @@ router.get('/farms/:id', async (req, res, next) => {
       SELECT 
         f.*,
         COUNT(DISTINCT i.product_id) as product_count,
-        COUNT(DISTINCT r.room_id) as room_count,
         SUM(i.quantity_available) as total_inventory_items
       FROM farms f
       LEFT JOIN farm_inventory i ON f.id = i.farm_id
-      LEFT JOIN rooms r ON f.farm_id = r.farm_id
       WHERE f.farm_id = $1
-      GROUP BY f.farm_id
+      GROUP BY f.id, f.farm_id, f.name, f.legal_name, f.email, f.phone, 
+               f.address_line1, f.address_line2, f.city, f.state, f.postal_code, f.country,
+               f.latitude, f.longitude, f.registration_code, f.registration_date,
+               f.activation_date, f.status, f.tier, f.certifications, f.practices,
+               f.attributes, f.edge_device_id, f.edge_device_type, f.software_version,
+               f.last_sync, f.last_heartbeat
     `, [id]);
 
     if (result.rows.length === 0) {
@@ -154,18 +157,15 @@ router.get('/farms/:id', async (req, res, next) => {
         lat: parseFloat(farm.latitude),
         lng: parseFloat(farm.longitude)
       } : null,
-      contactName: farm.contact_name,
       tier: farm.tier,
       registrationCode: farm.registration_code,
-      apiKey: farm.api_key,
       stats: {
         productCount: parseInt(farm.product_count) || 0,
-        roomCount: parseInt(farm.room_count) || 0,
         totalInventoryItems: parseInt(farm.total_inventory_items) || 0
       },
       lastHeartbeat: farm.last_heartbeat,
-      createdAt: farm.created_at,
-      updatedAt: farm.updated_at
+      registrationDate: farm.registration_date,
+      activationDate: farm.activation_date
     });
 
   } catch (error) {

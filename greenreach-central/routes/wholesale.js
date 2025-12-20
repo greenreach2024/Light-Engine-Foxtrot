@@ -223,7 +223,7 @@ router.get('/catalog', async (req, res, next) => {
     const countResult = await query(`
       SELECT COUNT(DISTINCT i.id) as total
       FROM farm_inventory i
-      JOIN farms f ON i.farm_id = f.farm_id
+      JOIN farms f ON i.farm_id = f.id
       ${whereClause}
     `, params);
 
@@ -256,7 +256,7 @@ router.get('/catalog', async (req, res, next) => {
         f.practices as farm_practices,
         f.attributes as farm_attributes
       FROM farm_inventory i
-      JOIN farms f ON i.farm_id = f.farm_id
+      JOIN farms f ON i.farm_id = f.id
       ${whereClause}
       ORDER BY i.synced_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
