@@ -6162,6 +6162,116 @@ function getFarmIntegrations() {
   };
 }
 
+// Setup wizard routes for first-run configuration
+app.get('/setup/wizard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'setup-wizard.html'));
+});
+
+// Hardware detection endpoint for setup wizard
+app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
+  const devices = {
+    lights: [],
+    fans: [],
+    sensors: [],
+    other: []
+  };
+
+  try {
+    // Scan USB devices
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    
+    try {
+      const { stdout } = await execAsync('lsusb');
+      const usbDevices = stdout.split('\n').filter(line => line.trim());
+      
+      // Parse USB devices and categorize
+      for (const line of usbDevices) {
+        if (line.includes('Camera') || line.includes('Webcam')) {
+          devices.other.push({ type: 'camera', id: line, interface: 'USB' });
+        } else if (line.includes('Serial') || line.includes('FTDI')) {
+          devices.sensors.push({ type: 'serial', id: line, interface: 'USB' });
+        }
+      }
+    } catch (usbError) {
+      console.log('[setup-wizard] USB scan unavailable:', usbError.message);
+    }
+
+    // Scan for MQTT devices
+    if (mqttClient && mqttClient.connected) {
+      // Get devices from device database
+      const allDevices = await deviceDB.find({});
+      for (const device of allDevices) {
+        if (device.name?.toLowerCase().includes('light')) {
+          devices.lights.push({ 
+            type: 'light', 
+            id: device.id, 
+            name: device.name,
+            interface: 'MQTT' 
+          });
+        } else if (device.name?.toLowerCase().includes('fan')) {
+          devices.fans.push({ 
+            type: 'fan', 
+            id: device.id, 
+            name: device.name,
+            interface: 'MQTT' 
+          });
+        } else if (device.type === 'sensor') {
+          devices.sensors.push({ 
+            type: 'sensor', 
+            id: device.id, 
+            name: device.name,
+            interface: 'MQTT' 
+          });
+        } else {
+          devices.other.push({ 
+            type: device.type, 
+            id: device.id, 
+            name: device.name,
+            interface: 'MQTT' 
+          });
+        }
+      }
+    }
+
+    res.json(devices);
+  } catch (error) {
+    console.error('[setup-wizard] Hardware scan error:', error);
+    res.status(500).json({ error: 'Hardware scan failed' });
+  }
+}));
+
+// Setup completion endpoint
+app.post('/api/setup/complete', asyncHandler(async (req, res) => {
+  const { network, registrationCode, farmId, hardware } = req.body;
+  
+  try {
+    // Save setup configuration to database
+    const setupConfig = {
+      completed: true,
+      completedAt: new Date().toISOString(),
+      network: network,
+      farmId: farmId,
+      registrationCode: registrationCode,
+      hardwareDetected: hardware
+    };
+
+    // Store in database
+    await db.update(
+      { key: 'setup_config' },
+      { ...setupConfig, key: 'setup_config' },
+      { upsert: true }
+    );
+
+    console.log('[setup-wizard] Setup completed for farm:', farmId);
+    res.json({ success: true, config: setupConfig });
+  } catch (error) {
+    console.error('[setup-wizard] Setup completion error:', error);
+    res.status(500).json({ error: 'Setup completion failed' });
+  }
+}));
+
 // Unified health endpoint with controller diagnostics that never 502s
 app.get('/healthz', async (req, res) => {
   const started = Date.now();
