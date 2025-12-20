@@ -16,6 +16,7 @@
     "mock:heatmap": "node scripts/generate-mock-heatmap-data.cjs"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.956.0",
     "@aws-sdk/client-secrets-manager": "^3.956.0",
     "canvas": "^3.2.0",
     "dotenv": "^17.2.3",

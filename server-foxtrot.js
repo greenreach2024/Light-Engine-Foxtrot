@@ -107,6 +107,15 @@ import EdgeWholesaleService from './lib/edge-wholesale-service.js';
 import WholesaleIntegrationService from './services/wholesale-integration.js';
 import { sanitizeRequestBody } from './lib/input-validation.js';
 import { initDatabase, checkHealth as checkDatabaseHealth, getDatabaseMode } from './lib/database.js';
+import { 
+  publishApiMetrics, 
+  publishDatabaseMetrics, 
+  publishMemoryMetrics,
+  publishOrderMetrics,
+  publishInventoryMetrics,
+  isCloudWatchEnabled,
+  getCloudWatchConfig
+} from './lib/cloudwatch-metrics.js';
 
 const app = express();
 // Enable app.ws(...) WebSocket routes (used by sync status endpoint)
@@ -178,7 +187,7 @@ const metrics = {
   startTime: Date.now()
 };
 
-// Metrics middleware
+// Metrics middleware with CloudWatch integration
 app.use((req, res, next) => {
   const start = Date.now();
   metrics.requests.total++;
@@ -196,6 +205,17 @@ app.use((req, res, next) => {
     // Track errors
     if (res.statusCode >= 400) {
       metrics.requests.errors++;
+    }
+    
+    // Publish to CloudWatch (async, non-blocking)
+    if (isCloudWatchEnabled()) {
+      // Sample 10% of requests to reduce CloudWatch costs
+      const shouldSample = Math.random() < 0.1;
+      if (shouldSample || res.statusCode >= 400) {
+        publishApiMetrics(req.path, req.method, res.statusCode, duration).catch(err => {
+          console.error('[CloudWatch] Failed to publish API metrics:', err.message);
+        });
+      }
     }
   });
   
@@ -7198,6 +7218,13 @@ app.get('/health', asyncHandler(async (req, res) => {
   } else if (dbHealth.enabled && dbHealth.latencyMs > 100) {
     health.status = 'degraded';
   }
+  
+  // Publish database metrics to CloudWatch (async, non-blocking)
+  if (isCloudWatchEnabled()) {
+    publishDatabaseMetrics(dbHealth.mode, dbHealth.connected, dbHealth.latencyMs || 0).catch(err => {
+      console.error('[CloudWatch] Failed to publish database metrics:', err.message);
+    });
+  }
 
   // Memory usage check
   const memUsage = process.memoryUsage();
@@ -7216,6 +7243,13 @@ app.get('/health', asyncHandler(async (req, res) => {
     health.status = 'unhealthy';
   } else if (health.checks.memory.status === 'degraded' && health.status === 'healthy') {
     health.status = 'degraded';
+  }
+  
+  // Publish memory metrics to CloudWatch (async, non-blocking)
+  if (isCloudWatchEnabled()) {
+    publishMemoryMetrics(memUsedMB, memTotalMB).catch(err => {
+      console.error('[CloudWatch] Failed to publish memory metrics:', err.message);
+    });
   }
 
   // Response time
@@ -20949,6 +20983,17 @@ async function startServer() {
   console.log('[charlie] PORT:', PORT);
   console.log('[charlie] NODE_ENV:', process.env.NODE_ENV);
   console.log('[charlie] DEMO_MODE:', process.env.DEMO_MODE);
+  
+  // CloudWatch monitoring status
+  if (isCloudWatchEnabled()) {
+    const cwConfig = getCloudWatchConfig();
+    console.log('[CloudWatch] ✅ Metrics publishing enabled');
+    console.log(`[CloudWatch] Namespace: ${cwConfig.namespace}`);
+    console.log(`[CloudWatch] Region: ${cwConfig.region}`);
+    console.log('[CloudWatch] Publishing: API metrics, database health, memory usage');
+  } else {
+    console.log('[CloudWatch] ⚠️  Metrics publishing disabled (set CLOUDWATCH_ENABLED=true for production)');
+  }
   console.log('[charlie] Controller:', getController());
   console.log('[charlie] Forwarder:', getForwarder());
 
