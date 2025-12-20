@@ -1010,16 +1010,8 @@
     </div>
     <div class="cart-footer">
       <div class="cart-summary">
-        <div class="cart-summary-row">
-          <span>Subtotal:</span>
-          <span id="cart-subtotal">$0.00</span>
-        </div>
-        <div class="cart-summary-row">
-          <span>Est. Broker Fee (10%):</span>
-          <span id="cart-broker-fee">$0.00</span>
-        </div>
         <div class="cart-summary-row total">
-          <span>Estimated Total:</span>
+          <span>Total:</span>
           <span id="cart-total">$0.00</span>
         </div>
       </div>
@@ -1247,8 +1239,6 @@
         
         if (this.cart.length === 0) {
           itemsContainer.innerHTML = '<div class="cart-empty">Your cart is empty</div>';
-          document.getElementById('cart-subtotal').textContent = '$0.00';
-          document.getElementById('cart-broker-fee').textContent = '$0.00';
           document.getElementById('cart-total').textContent = '$0.00';
           document.getElementById('cart-count').textContent = '0';
           return;
@@ -1273,12 +1263,8 @@
           </div>
         `).join('');
 
-        const subtotal = this.cart.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
-        const brokerFee = subtotal * 0.10;
-        const total = subtotal + brokerFee;
+        const total = this.cart.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
 
-        document.getElementById('cart-subtotal').textContent = `$${subtotal.toFixed(2)}`;
-        document.getElementById('cart-broker-fee').textContent = `$${brokerFee.toFixed(2)}`;
         document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
         document.getElementById('cart-count').textContent = this.cart.length.toString();
       },
@@ -1349,14 +1335,6 @@
             </div>
           `).join('')}
           <div class="cart-summary">
-            <div class="cart-summary-row">
-              <span>Subtotal:</span>
-              <span>$${allocation.subtotal.toFixed(2)}</span>
-            </div>
-            <div class="cart-summary-row">
-              <span>Broker Fee (10%):</span>
-              <span>$${allocation.broker_fee_total.toFixed(2)}</span>
-            </div>
             <div class="cart-summary-row total">
               <span>Total:</span>
               <span>$${allocation.grand_total.toFixed(2)}</span>
@@ -1454,10 +1432,6 @@
               <div class="order-meta-item">
                 <span class="order-meta-label">Total:</span>
                 <span>$${order.grand_total.toFixed(2)}</span>
-              </div>
-              <div class="order-meta-item">
-                <span class="order-meta-label">Broker Fee:</span>
-                <span>$${order.broker_fee_total.toFixed(2)}</span>
               </div>
             </div>
             <div class="order-farms">
