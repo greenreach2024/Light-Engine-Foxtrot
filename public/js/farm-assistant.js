@@ -191,19 +191,21 @@ class FarmAssistant {
   }
 
   matchNavigation(query) {
+    // Simplified navigation - just check if query contains ANY keyword
     const navPatterns = [
-      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['planting', 'schedule', 'calendar'], url: '/views/planting-scheduler.html', name: 'Planting Schedule', emoji: '📅' },
-      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['tray', 'trays', 'seeding'], url: '/views/tray-inventory.html', name: 'Tray Inventory', emoji: '🌱' },
-      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['farm', 'summary', 'dashboard', 'home'], url: '/views/farm-summary.html', name: 'Farm Dashboard', emoji: '🏠' },
-      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['wholesale', 'buyers'], url: '/wholesale.html', name: 'Wholesale Portal', emoji: '📦' },
-      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['sales', 'pos', 'terminal', 'sell'], url: '/farm-sales.html', name: 'POS Terminal', emoji: '💰' },
-      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['heatmap', 'temperature', 'map', 'temps'], url: '/views/room-heatmap.html', name: 'Temperature Heatmap', emoji: '🗺️' },
-      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['inventory', 'crops', 'plants'], url: '/views/farm-inventory.html', name: 'Crop Inventory', emoji: '🥬' },
-      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['central', 'admin', 'platform', 'settings'], url: '/central-admin.html', name: 'Central Admin', emoji: '⚙️' }
+      { keywords: ['planting', 'schedule', 'calendar', 'plan'], url: '/views/planting-scheduler.html', name: 'Planting Schedule', emoji: '📅' },
+      { keywords: ['tray', 'seed', 'seeding'], url: '/views/tray-inventory.html', name: 'Tray Inventory', emoji: '🌱' },
+      { keywords: ['dashboard', 'home', 'main', 'summary'], url: '/views/farm-summary.html', name: 'Farm Dashboard', emoji: '🏠' },
+      { keywords: ['wholesale', 'buyer'], url: '/wholesale.html', name: 'Wholesale Portal', emoji: '📦' },
+      { keywords: ['sales', 'pos', 'sell', 'store'], url: '/farm-sales.html', name: 'POS Terminal', emoji: '💰' },
+      { keywords: ['heatmap', 'map', 'temps'], url: '/views/room-heatmap.html', name: 'Temperature Heatmap', emoji: '🗺️' },
+      { keywords: ['inventory', 'crops', 'plants'], url: '/views/farm-inventory.html', name: 'Crop Inventory', emoji: '🥬' },
+      { keywords: ['admin', 'settings'], url: '/central-admin.html', name: 'Central Admin', emoji: '⚙️' }
     ];
 
     for (const nav of navPatterns) {
-      if (nav.pattern.test(query) && nav.keywords.some(kw => query.includes(kw))) {
+      // Match if contains page keyword (much simpler!)
+      if (nav.keywords.some(kw => query.includes(kw))) {
         const actions = `<button onclick="window.location.href='${nav.url}'" class="action-btn primary">Open ${nav.name} ${nav.emoji}</button>`;
         this.addMessage(`Opening <strong>${nav.name}</strong>... ${nav.emoji}`, 'assistant', actions);
         setTimeout(() => window.location.href = nav.url, 1500);
@@ -215,15 +217,16 @@ class FarmAssistant {
   }
 
   async matchHarvestQuery(query) {
-    const harvestPatterns = [
-      /what('s| is) ready (to harvest|for harvest|today)/i,
-      /ready (to harvest|for harvest|crops|today)/i,
-      /harvest (ready|today|now)/i,
-      /can (i|we) harvest/i,
-      /show (me )?(ready|harvest)/i
-    ];
-
-    if (harvestPatterns.some(pattern => pattern.test(query))) {
+    // Simple keyword matching - if query contains harvest-related words
+    const harvestKeywords = ['harvest', 'ready', 'pick', 'collect', 'ripe'];
+    const todayKeywords = ['today', 'now', 'currently'];
+    
+    // Check if query has ANY harvest keyword
+    const hasHarvestWord = harvestKeywords.some(word => query.includes(word));
+    const hasTodayWord = todayKeywords.some(word => query.includes(word));
+    
+    // Match if: has harvest word (with or without today)
+    if (hasHarvestWord) {
       await this.checkHarvestReady();
       return true;
     }
@@ -311,15 +314,17 @@ class FarmAssistant {
   }
 
   async matchEnvironmentQuery(query) {
-    const envPatterns = [
-      /what('s| is) the (temp|temperature|humidity)/i,
-      /show (me )?(temp|temperature|humidity|conditions|environment)/i,
-      /(temp|temperature|humidity) (in|of) (the )?farm/i,
-      /how (hot|cold|humid|warm)/i,
-      /(current|farm) (conditions|climate|environment)/i
-    ];
-
-    if (envPatterns.some(pattern => pattern.test(query))) {
+    // Simple keyword matching for environment
+    const tempWords = ['temp', 'temperature', 'hot', 'cold', 'warm', 'cool', 'degree'];
+    const humidityWords = ['humidity', 'humid', 'moisture', 'wet', 'dry'];
+    const envWords = ['condition', 'environment', 'climate', 'weather'];
+    
+    const hasTempWord = tempWords.some(word => query.includes(word));
+    const hasHumidityWord = humidityWords.some(word => query.includes(word));
+    const hasEnvWord = envWords.some(word => query.includes(word));
+    
+    // Match if has ANY environment-related word
+    if (hasTempWord || hasHumidityWord || hasEnvWord) {
       await this.checkEnvironment(query);
       return true;
     }
@@ -397,6 +402,13 @@ class FarmAssistant {
   }
 
   async matchInventoryQuery(query) {
+    // Common crop names to detect
+    const commonCrops = ['lettuce', 'basil', 'tomato', 'kale', 'spinach', 'arugula', 'chard', 
+                         'herb', 'romaine', 'microgreen', 'green', 'salad'];
+    
+    // Check if query mentions a crop
+    const mentionedCrop = commonCrops.find(crop => query.includes(crop));
+    
     const cropPatterns = [
       /do (we|you) have (.+)/i,
       /where is (.+)/i,
@@ -418,6 +430,12 @@ class FarmAssistant {
         await this.searchCrop(cropName, query);
         return true;
       }
+    }
+    
+    // Fallback: if mentions a crop name, search for it
+    if (mentionedCrop) {
+      await this.searchCrop(mentionedCrop, query);
+      return true;
     }
     
     return false;
@@ -509,13 +527,16 @@ class FarmAssistant {
   }
 
   async matchHealthQuery(query) {
-    const healthPatterns = [
-      /farm health|how is the farm|farm status/i,
-      /any (problems|issues|alerts)/i,
-      /check (health|status)/i
-    ];
-
-    if (healthPatterns.some(pattern => pattern.test(query))) {
+    // Simple keyword matching for farm health
+    const healthWords = ['health', 'status', 'ok', 'good', 'problem', 'issue', 'working'];
+    const farmWords = ['farm', 'everything', 'system'];
+    
+    const hasHealthWord = healthWords.some(word => query.includes(word));
+    const hasFarmWord = farmWords.some(word => query.includes(word));
+    const hasHow = query.includes('how');
+    
+    // Match if: health word + farm word, OR "how" + farm word
+    if ((hasHealthWord && hasFarmWord) || (hasHow && hasFarmWord)) {
       await this.checkFarmHealth();
       return true;
     }
@@ -559,10 +580,16 @@ class FarmAssistant {
   }
 
   async matchHardwareControl(query) {
+    // Simple keyword check first - if no action word, skip
+    const actionWords = ['blink', 'flash', 'light', 'identify'];
+    const hasActionWord = actionWords.some(word => query.includes(word));
+    if (!hasActionWord) return false;
+    
     const hardwarePatterns = [
       { pattern: /blink (lights?|leds?) (for |in |zone )?(.+)/i, action: 'blink' },
       { pattern: /identify (zone |group )?(.+)/i, action: 'identify' },
-      { pattern: /show (me )?where (.+) is/i, action: 'locate' }
+      { pattern: /show (me )?where (.+) is/i, action: 'locate' },
+      { pattern: /(blink|flash|light).+/i, action: 'blink' }
     ];
 
     for (const hw of hardwarePatterns) {
