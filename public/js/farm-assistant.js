@@ -171,33 +171,8 @@ class FarmAssistant {
   }
 
   createInfoPopup(title, content) {
-    // Remove existing popup if any
-    const existing = document.getElementById('assistant-info-popup');
-    if (existing) existing.remove();
-
-    const popup = document.createElement('div');
-    popup.id = 'assistant-info-popup';
-    popup.innerHTML = `
-      <div class="popup-content">
-        <button class="popup-close" onclick="document.getElementById('assistant-info-popup').remove()">×</button>
-        <div class="popup-header">
-          <h2>${title}</h2>
-        </div>
-        <div class="popup-body">
-          ${content}
-        </div>
-      </div>
-    `;
-    
-    document.body.appendChild(popup);
-    
-    // Auto-close after 15 seconds
-    setTimeout(() => {
-      if (document.getElementById('assistant-info-popup')) {
-        popup.classList.add('popup-fadeout');
-        setTimeout(() => popup.remove(), 300);
-      }
-    }, 15000);
+    // Removed - user doesn't want popups
+    return;
   }
 
   attachEventListeners() {
