@@ -60,18 +60,18 @@ class FarmAssistant {
         
         <div class="assistant-body">
           <div class="chat-messages" id="chatMessages">
-            <div class="message assistant-message">
-              <div class="message-avatar">🤖</div>
-              <div class="message-content">
-                Hi! 👋 I'm your Farm Assistant. Ask me anything!
-                <ul style="margin-top:0.5rem;">
-                  <li>🌱 "What's ready to harvest?"</li>
-                  <li>🌡️ "Show me the temperature"</li>
-                  <li>🥬 "Where is the lettuce?"</li>
-                  <li>💡 "Blink lights for basil"</li>
-                  <li>📅 "Show planting schedule"</li>
+            <div class="mascot-welcome">
+              <img src="/images/cheo-mascot.webp" alt="Cheo the Farm Assistant" class="mascot-image" />
+              <div class="welcome-text">
+                <strong>Hi! I'm your Farm Assistant. Ask me anything!</strong>
+                <ul>
+                  <li>"What's ready to harvest?"</li>
+                  <li>"Show me the temperature"</li>
+                  <li>"Where is the lettuce?"</li>
+                  <li>"Blink lights for basil"</li>
+                  <li>"Show planting schedule"</li>
                 </ul>
-                <strong>Type or click 🎤 to speak!</strong> 😊
+                <strong>Type or click the microphone to speak!</strong>
               </div>
             </div>
           </div>
@@ -224,7 +224,7 @@ class FarmAssistant {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}-message`;
     
-    const avatar = type === 'user' ? '👤' : '🤖';
+    const avatar = type === 'user' ? 'You' : 'AI';
     
     messageDiv.innerHTML = `
       <div class="message-avatar">${avatar}</div>

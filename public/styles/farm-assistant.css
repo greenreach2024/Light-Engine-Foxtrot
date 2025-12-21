@@ -126,6 +126,59 @@
   background: rgba(96, 165, 250, 0.5);
 }
 
+/* Mascot welcome section */
+.mascot-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.mascot-image {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  margin-bottom: 1rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.5rem;
+}
+
+.welcome-text {
+  color: #f8fafc;
+}
+
+.welcome-text strong {
+  display: block;
+  font-size: 1.125rem;
+  margin-bottom: 0.75rem;
+  color: #60a5fa;
+}
+
+.welcome-text ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  text-align: left;
+  display: inline-block;
+}
+
+.welcome-text li {
+  padding: 0.25rem 0;
+  color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.welcome-text li::before {
+  content: "→ ";
+  color: #60a5fa;
+  font-weight: bold;
+}
+
 .message {
   display: flex;
   gap: 0.75rem;
@@ -144,13 +197,22 @@
 }
 
 .message-avatar {
-  font-size: 1.5rem;
   flex-shrink: 0;
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border-radius: 50%;
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.user-message .message-avatar {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
 
 .message-content {
