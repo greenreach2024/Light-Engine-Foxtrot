@@ -1331,6 +1331,7 @@
         if (params.get('demo') === '0') {
           this.demoMode = false;
         }
+        console.log('[Wholesale] Initializing with demoMode:', this.demoMode);
 
         this.setupEventListeners();
         this.setDefaultDeliveryDate();
@@ -1571,6 +1572,7 @@
       },
 
       async loadCatalog() {
+        console.log('[Wholesale] loadCatalog called, demoMode:', this.demoMode);
         const filters = this.getFilterState();
 
         if (!this.demoMode) {
@@ -1629,8 +1631,9 @@
         }
 
         const items = this.applyDemoFilters(filters);
+        console.log(`[Demo] applyDemoFilters returned ${items.length} items`);
         this.catalog = items.map(item => this.mapDemoSku(item));
-        console.log(`[Demo] Rendering ${this.catalog.length} products`);
+        console.log(`[Demo] Mapped to ${this.catalog.length} products, about to render`);
         this.renderCatalog();
         this.updateDemoBanner();
       },
@@ -1723,6 +1726,7 @@
       },
 
       renderCatalog() {
+        console.log(`[Wholesale] renderCatalog called with ${this.catalog.length} items`);
         const sortBy = document.getElementById('sort-by').value;
         const sorted = [...this.catalog].sort((a, b) => {
           switch (sortBy) {
