@@ -124,29 +124,25 @@ expressWs(app);
 // Security Headers - Helmet.js
 // Configure helmet for production-ready security headers
 const isProduction = process.env.NODE_ENV === 'production';
-const useHTTPS = process.env.USE_HTTPS === 'true'; // Only enable HTTPS features if explicitly configured
-
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Note: unsafe-inline/eval needed for dynamic UI
-      scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
-      imgSrc: ["'self'", "data:", "https:", "http:"], // Allow both HTTP and HTTPS images
+      imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"], // Allow WebSocket connections
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'self'"], // Allow iframes from same origin
-      upgradeInsecureRequests: useHTTPS ? [] : null, // Explicitly disable for HTTP-only
+      frameSrc: ["'none'"],
     },
   },
-  hsts: useHTTPS ? {
+  hsts: {
     maxAge: 31536000, // 1 year in seconds
     includeSubDomains: true,
     preload: true
-  } : false, // Disable HSTS for HTTP-only deployments
+  },
   noSniff: true,
   referrerPolicy: { policy: 'same-origin' },
   xssFilter: true,
@@ -154,9 +150,8 @@ app.use(helmet({
 }));
 
 console.log('[Security] Helmet.js security headers enabled');
-console.log('[Security] HTTPS Mode:', useHTTPS ? 'enabled (HSTS active)' : 'disabled (HTTP-only)');
-if (isProduction && !useHTTPS) {
-  console.warn('[Security] ⚠️  Running in production without HTTPS - consider adding SSL certificate');
+if (isProduction) {
+  console.log('[Security] HSTS enabled (maxAge: 1 year)');
 }
 
 // Security Configuration
@@ -15095,28 +15090,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// Wholesale portals - serve directly from root directory
-// Files copied from /public/ for AWS deployment
+// Wholesale portals are standalone and served by GreenReach Central, not Foxtrot.
+// Prevent access from Foxtrot so users can't navigate "back" to the main site via these pages.
 app.get(['/wholesale.html', '/wholesale-admin.html'], (req, res) => {
-  res.sendFile(path.join(__dirname, req.path));
-});
+  const base = String(
+    process.env.GREENREACH_CENTRAL_URL
+      || process.env.CENTRAL_API_URL
+      || ''
+  ).trim().replace(/\/+$/, '');
 
-// Serve root-level static files (JS, CSS, HTML) for AWS deployment
-app.use(express.static(__dirname, {
-  index: false, // Don't serve directory indexes
-  setHeaders: (res, path) => {
-    // Force no-cache for HTML files to ensure latest UI
-    if (path.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-    }
-    // Cache JS/CSS for 1 hour but allow revalidation
-    else if (path.endsWith('.js') || path.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
-    }
+  if (base) {
+    return res.redirect(302, `${base}${req.path}`);
   }
-}));
+
+  // Local/dev convenience: if Central URL isn't configured, assume localhost.
+  if (process.env.NODE_ENV !== 'production') {
+    return res.redirect(302, `http://localhost:3000${req.path}`);
+  }
+
+  return res.status(404).send('Wholesale portal is hosted on GreenReach Central.');
+});
 
 // Serve static files (AFTER demo middleware so demo data takes precedence)
 // Add cache control headers to force fresh content
