@@ -517,43 +517,6 @@ class FarmAssistant {
         
         this.createInfoPopup('Farm Weather', popupContent);
         this.addMessage('Here\'s the current weather! 🌞', 'assistant');
-        
-        // Create child-friendly popup content
-        let popupContent = '<div class="big-info">';
-        
-        if (wantsTemp || (!wantsTemp && !wantsHumidity)) {
-          popupContent += `
-            <div class="info-item">
-              <div class="info-icon">🌡️</div>
-              <div class="info-label">Temperature</div>
-              <div class="info-value">${avgTemp}°F</div>
-            </div>
-          `;
-        }
-        
-        if (wantsHumidity || (!wantsTemp && !wantsHumidity)) {
-          popupContent += `
-            <div class="info-item">
-              <div class="info-icon">💧</div>
-              <div class="info-label">Humidity</div>
-              <div class="info-value">${avgHumidity}%</div>
-            </div>
-          `;
-        }
-        
-        popupContent += '</div>';
-        
-        // Add status message
-        if (avgTemp >= 68 && avgTemp <= 78 && avgHumidity >= 50 && avgHumidity <= 70) {
-          popupContent += '<div class="status-message success">✅ Perfect conditions! Everything looks great!</div>';
-        } else if (avgTemp < 65 || avgTemp > 85) {
-          popupContent += '<div class="status-message warning">⚠️ Temperature needs attention</div>';
-        } else {
-          popupContent += '<div class="status-message ok">Conditions look good!</div>';
-        }
-        
-        this.createInfoPopup('Farm Weather', popupContent);
-        this.addMessage('Here\'s the current weather! 🌞', 'assistant');
       } else {
         this.addMessage('No environmental data available right now.', 'assistant');
       }
