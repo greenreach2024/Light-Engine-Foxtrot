@@ -150,19 +150,7 @@
         font-size: 1.75rem;
       }
       
-      .action-car600px;
-      width: 100%;
-      max-height: 90vh;
-      overflow-y: auto;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-    }
-
-    /* Tablet optimizations for modal */
-    @media (min-width: 768px) {
-      .modal-content {
-        max-width: 750px;
-        border-radius: 20px;
-      }
+      .action-card p {
         font-size: 1.15rem;
       }
     }
@@ -192,6 +180,14 @@
       border: 1px solid rgba(148, 163, 184, 0.2);
     }
 
+    /* Tablet optimizations for modal */
+    @media (min-width: 768px) {
+      .modal-content {
+        max-width: 750px;
+        border-radius: 20px;
+      }
+    }
+
     .modal-header {
       padding: 1.5rem;
       border-bottom: 1px solid rgba(148, 163, 184, 0.2);
@@ -210,7 +206,7 @@
       color: #94a3b8;
       font-size: 1.5rem;
       cursor: pointer;
-      padding: 0.25rem;
+    #qrReader: 0.25rem;
       line-height: 1;
     }
 
@@ -241,7 +237,24 @@
       }
     }
 
-    .button {,
+    .button {
+      width: 100%;
+      padding: 1rem 1.5rem;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-height: 54px;
+    }
+
+    .button-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+    }
+
+    .button-primary:hover,
     .button-primary:active {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
@@ -250,11 +263,13 @@
     .button-secondary {
       background: rgba(148, 163, 184, 0.2);
       color: #f8fafc;
-      margin-top: 0.75rem;
+      margin-top: 0.5rem;
     }
 
     .button-secondary:hover,
-    .button-secondary:active
+    .button-secondary:active {
+      background: rgba(148, 163, 184, 0.3);
+    }
 
     /* Tablet optimizations for buttons */
     @media (min-width: 768px) {
@@ -264,13 +279,23 @@
         border-radius: 14px;
         min-height: 64px;
       }
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    .form-group input,
+    .form-group select {
       width: 100%;
-      padding: 0.75rem 1.5rem;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: p1rem;
+      padding: 1rem;
       background: rgba(15, 23, 42, 0.8);
       border: 2px solid rgba(148, 163, 184, 0.3);
       border-radius: 10px;
@@ -294,45 +319,7 @@
         font-size: 1.25rem;
         border-radius: 12px;
         min-height: 64px;
-      } rgba(59, 130, 246, 0.4);
-    }
-
-    .button-secondary {
-      background: rgba(148, 163, 184, 0.2);
-      color: #f8fafc;
-      margin-top: 0.5rem;
-    }
-
-    .button-secondary:hover {
-      background: rgba(148, 163, 184, 0.3);
-    }
-
-    .form-group {
-      margin-bottom: 1.25rem;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 0.5rem;
-      color: #cbd5e1;
-      font-weight: 500;
-    }
-
-    .form-group input,
-    .form-group select {
-      width: 100%;
-      padding: 0.75rem;
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      border-radius: 8px;
-      color: #f8fafc;
-      font-size: 1rem;
-    }
-
-    .form-group input:focus,
-    .form-group select:focus {
-      outline: none;
-      border-color: #3b82f6;
+      }
     }
 
     .recipe-list {
