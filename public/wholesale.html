@@ -1752,6 +1752,19 @@
 
       renderCatalog() {
         console.log(`[Wholesale] renderCatalog called with ${this.catalog.length} items`);
+        
+        const grid = document.getElementById('catalog-grid');
+        if (!grid) {
+          console.error('[Wholesale] catalog-grid element not found!');
+          return;
+        }
+        
+        if (this.catalog.length === 0) {
+          console.log('[Wholesale] No items in catalog, showing empty message');
+          grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem;">No products available</div>';
+          return;
+        }
+        
         const sortBy = document.getElementById('sort-by').value;
         const sorted = [...this.catalog].sort((a, b) => {
           switch (sortBy) {
@@ -1766,7 +1779,7 @@
           }
         });
 
-        const grid = document.getElementById('catalog-grid');
+        console.log(`[Wholesale] Rendering ${sorted.length} sorted products to grid`);
         grid.innerHTML = sorted.map(sku => `
           <div class="sku-card">
             <div class="sku-header">
