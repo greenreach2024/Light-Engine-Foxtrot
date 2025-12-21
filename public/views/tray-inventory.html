@@ -100,14 +100,14 @@
       background: rgba(30, 41, 59, 0.9);
       border-radius: 20px;
       padding: 1.5rem;
-      border: 2px solid rgba(239, 68, 68, 0.5);
+      border: 2px solid rgba(59, 130, 246, 0.4);
     }
 
     .section-title {
       font-size: 1.75rem;
       font-weight: 700;
       margin-bottom: 1rem;
-      color: #f87171;
+      color: #60a5fa;
       display: flex;
       align-items: center;
       gap: 0.75rem;
@@ -120,17 +120,25 @@
     }
 
     .priority-card {
-      background: rgba(239, 68, 68, 0.15);
-      border: 2px solid rgba(239, 68, 68, 0.4);
+      background: rgba(59, 130, 246, 0.15);
+      border: 2px solid rgba(59, 130, 246, 0.4);
       border-radius: 16px;
       padding: 1.25rem;
       text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .priority-card:active {
+      background: rgba(59, 130, 246, 0.25);
+      transform: scale(0.98);
+      border-color: #60a5fa;
     }
 
     .priority-number {
       font-size: 2.5rem;
       font-weight: 800;
-      color: #f87171;
+      color: #60a5fa;
       line-height: 1;
       margin-bottom: 0.5rem;
     }
@@ -596,15 +604,15 @@
       <section class="priorities-section">
         <h2 class="section-title">Today's Priorities</h2>
         <div class="priority-items">
-          <div class="priority-card">
+          <div class="priority-card" onclick="scrollToHarvest()">
             <div class="priority-number" id="harvestCount">0</div>
             <div class="priority-label">Ready to Harvest</div>
           </div>
-          <div class="priority-card">
+          <div class="priority-card" onclick="openInventoryView()">
             <div class="priority-number" id="seedlingCount">0</div>
             <div class="priority-label">Seedlings Active</div>
           </div>
-          <div class="priority-card">
+          <div class="priority-card" onclick="scrollToChecklist()">
             <div class="priority-number" id="checklistCount">0</div>
             <div class="priority-label">Tasks Pending</div>
           </div>
@@ -749,6 +757,22 @@
         { id: 'q4', text: 'Strategic planning and goal review', time: 'Quarter End' }
       ]
     };
+
+    // Scroll to Harvest Section
+    function scrollToHarvest() {
+      const harvestSection = document.querySelector('.harvest-section');
+      if (harvestSection) {
+        harvestSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    // Scroll to Checklist Section
+    function scrollToChecklist() {
+      const checklistSection = document.querySelector('.checklist-section');
+      if (checklistSection) {
+        checklistSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
