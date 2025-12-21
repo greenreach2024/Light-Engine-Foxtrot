@@ -15096,6 +15096,23 @@ app.get(['/wholesale.html', '/wholesale-admin.html'], (req, res) => {
   res.sendFile(path.join(__dirname, req.path));
 });
 
+// Serve root-level static files (JS, CSS, HTML) for AWS deployment
+app.use(express.static(__dirname, {
+  index: false, // Don't serve directory indexes
+  setHeaders: (res, path) => {
+    // Force no-cache for HTML files to ensure latest UI
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    // Cache JS/CSS for 1 hour but allow revalidation
+    else if (path.endsWith('.js') || path.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    }
+  }
+}));
+
 // Serve static files (AFTER demo middleware so demo data takes precedence)
 // Add cache control headers to force fresh content
 app.use(express.static(PUBLIC_DIR, {
