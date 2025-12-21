@@ -12592,6 +12592,59 @@ app.get('/api/admin/farms', asyncHandler(async (req, res) => {
   
   // Fetch live data from each farm in parallel
   const farmDataPromises = farms.map(async (farmConfig) => {
+    // For demo farm (GR-00001), use local demo data instead of fetching
+    if (farmConfig.farmId === 'GR-00001') {
+      try {
+        const demoDataPath = path.join(__dirname, 'public/data/demo-farm-data.json');
+        const demoData = JSON.parse(fs.readFileSync(demoDataPath, 'utf8'));
+        
+        // Calculate metrics from demo data
+        const rooms = demoData.rooms?.length || 0;
+        let zones = 0;
+        let devices = 0;
+        let trays = 0;
+        
+        if (demoData.rooms) {
+          demoData.rooms.forEach(room => {
+            if (room.zones) {
+              zones += room.zones.length;
+              room.zones.forEach(zone => {
+                if (zone.groups) {
+                  zone.groups.forEach(group => {
+                    trays += group.trays || 0;
+                    if (group.devices) {
+                      devices += group.devices.length;
+                    }
+                  });
+                }
+              });
+            }
+          });
+        }
+        
+        console.log(`[admin] Using demo data for ${farmConfig.farmId}: ${rooms} rooms, ${zones} zones, ${devices} devices, ${trays} trays`);
+        
+        return {
+          farmId: farmConfig.farmId,
+          name: farmConfig.name,
+          status: 'online',
+          region: farmConfig.region,
+          rooms,
+          zones,
+          devices,
+          trays,
+          energy: demoData.energy || 145,
+          alerts: demoData.alerts || 0,
+          lastUpdate: 'Just now',
+          url: farmConfig.url
+        };
+      } catch (error) {
+        console.error(`[admin] Failed to load demo data for ${farmConfig.farmId}:`, error.message);
+        // Fall through to normal fetch logic if demo data fails
+      }
+    }
+    
+    // For all other farms, fetch live data
     try {
       // Fetch environmental data
       const envData = await fetchFarmData(`${farmConfig.url}/env`, 3000);
