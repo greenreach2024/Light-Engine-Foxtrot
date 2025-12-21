@@ -1590,21 +1590,31 @@
       async loadDemoCatalog(filters) {
         if (!this.demoData) {
           try {
+            console.log('[Demo] Loading demo catalog from /data/wholesale-demo-catalog.json');
             const response = await fetch('/data/wholesale-demo-catalog.json');
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             this.demoData = await response.json();
+            console.log(`[Demo] Loaded ${this.demoData.items?.length || 0} SKUs from ${this.demoData.farms?.length || 0} farms`);
+            
             this.farmDirectory = this.demoData.farms.reduce((acc, farm) => {
               acc[farm.farm_id] = farm;
               return acc;
             }, {});
           } catch (error) {
-            console.error('Demo catalog load error:', error);
-            this.showToast('Unable to load demo catalog assets', 'error');
+            console.error('[Demo] Failed to load demo catalog:', error);
+            this.showToast(`Unable to load demo data: ${error.message}`, 'error');
+            this.demoData = { farms: [], items: [] }; // Fallback to empty
             return;
           }
         }
 
         const items = this.applyDemoFilters(filters);
         this.catalog = items.map(item => this.mapDemoSku(item));
+        console.log(`[Demo] Rendering ${this.catalog.length} products`);
         this.renderCatalog();
         this.updateDemoBanner();
       },
