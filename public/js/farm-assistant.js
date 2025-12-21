@@ -41,6 +41,7 @@ class FarmAssistant {
   }
 
   createWidget() {
+    console.log('[Farm Assistant] Initializing widget...');
     const widget = document.createElement('div');
     widget.id = 'farm-assistant';
     widget.innerHTML = `
@@ -96,6 +97,7 @@ class FarmAssistant {
     `;
     
     document.body.appendChild(widget);
+    console.log('[Farm Assistant] Widget appended to body. Element:', widget);
   }
 
   createInfoPopup(title, content) {
@@ -922,10 +924,13 @@ class FarmAssistant {
 }
 
 // Auto-initialize when DOM is ready
+console.log('[Farm Assistant] Script loaded. DOM state:', document.readyState);
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
+    console.log('[Farm Assistant] DOM loaded, creating instance...');
     window.farmAssistant = new FarmAssistant();
   });
 } else {
+  console.log('[Farm Assistant] DOM already loaded, creating instance immediately...');
   window.farmAssistant = new FarmAssistant();
 }
