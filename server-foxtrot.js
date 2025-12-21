@@ -138,7 +138,7 @@ app.use(helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
-      // DO NOT include upgrade-insecure-requests for HTTP-only deployments
+      upgradeInsecureRequests: useHTTPS ? [] : null, // Explicitly disable for HTTP-only
     },
   },
   hsts: useHTTPS ? {
