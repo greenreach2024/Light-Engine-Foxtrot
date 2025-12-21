@@ -1062,18 +1062,27 @@ class FarmAssistant {
       // Pick a random joke or riddle
       const item = this.jokes[Math.floor(Math.random() * this.jokes.length)];
       
-      // Create child-friendly popup
+      // Create child-friendly popup with answer hidden initially
       const popupContent = `
         <div class="joke-display">
           <div class="joke-icon">${item.type === 'riddle' ? '🤔' : '😄'}</div>
           <div class="joke-text">
             <p class="joke-question">${item.question}</p>
-            <p class="joke-answer">${item.answer}</p>
+            <p class="joke-answer" style="opacity: 0; transition: opacity 0.5s ease-in;">${item.answer}</p>
           </div>
         </div>
       `;
       
       this.createInfoPopup(item.type === 'riddle' ? 'Riddle Time! 🧩' : 'Joke Time! 😄', popupContent);
+      
+      // Show answer after 3 seconds
+      setTimeout(() => {
+        const answerElement = document.querySelector('.joke-answer');
+        if (answerElement) {
+          answerElement.style.opacity = '1';
+        }
+      }, 3000);
+      
       this.addMessage(`Here's a ${item.type === 'riddle' ? 'riddle' : 'joke'} for you! 😊`, 'assistant');
       return true;
     }
