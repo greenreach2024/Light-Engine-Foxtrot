@@ -15090,25 +15090,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Wholesale portals are standalone and served by GreenReach Central, not Foxtrot.
-// Prevent access from Foxtrot so users can't navigate "back" to the main site via these pages.
+// Wholesale portals - serve directly from root directory
+// Files copied from /public/ for AWS deployment
 app.get(['/wholesale.html', '/wholesale-admin.html'], (req, res) => {
-  const base = String(
-    process.env.GREENREACH_CENTRAL_URL
-      || process.env.CENTRAL_API_URL
-      || ''
-  ).trim().replace(/\/+$/, '');
-
-  if (base) {
-    return res.redirect(302, `${base}${req.path}`);
-  }
-
-  // Local/dev convenience: if Central URL isn't configured, assume localhost.
-  if (process.env.NODE_ENV !== 'production') {
-    return res.redirect(302, `http://localhost:3000${req.path}`);
-  }
-
-  return res.status(404).send('Wholesale portal is hosted on GreenReach Central.');
+  res.sendFile(path.join(__dirname, req.path));
 });
 
 // Serve static files (AFTER demo middleware so demo data takes precedence)
