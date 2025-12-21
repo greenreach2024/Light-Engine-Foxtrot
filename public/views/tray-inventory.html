@@ -830,12 +830,12 @@
         <h4>Voice Commands:</h4>
         <ul>
           <li>"What's ready to harvest?"</li>
-          <li>"Show inventory"</li>
+          <li>"Show planting schedule"</li>
+          <li>"Show harvest list"</li>
           <li>"Check temperature"</li>
           <li>"Today's tasks"</li>
           <li>"How many trays active?"</li>
           <li>"Seedling status"</li>
-          <li>"What's the humidity?"</li>
           <li>"Close assistant"</li>
         </ul>
       </div>
@@ -1066,8 +1066,26 @@
     function processVoiceCommand(command) {
       let response = '';
 
+      // Planting schedule command
+      if (command.includes('plant') && (command.includes('schedule') || command.includes('plan'))) {
+        response = 'Loading planting schedule.';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => showPlantingSchedule(), 500);
+        return;
+      }
+      // Harvest list command  
+      else if (command.includes('harvest') && (command.includes('list') || command.includes('show'))) {
+        response = 'Loading harvest list.';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => showHarvestListModal(), 500);
+        return;
+      }
       // Harvest commands
-      if (command.includes('harvest') || command.includes('ready')) {
+      else if (command.includes('harvest') || command.includes('ready')) {
         const count = document.getElementById('harvestCount').textContent;
         response = `You have ${count} trays ready to harvest today.`;
       }
@@ -1588,6 +1606,191 @@
         case 'move':
           window.location.href = `/views/tray-inventory.html?move=${scannedData}`;
           break;
+      }
+    }
+
+    // Show Simple Planting Schedule
+    async function showPlantingSchedule() {
+      const modal = document.getElementById('inventoryModal');
+      const title = modal.querySelector('h2');
+      const content = document.getElementById('inventoryContent');
+      
+      title.textContent = 'Planting Schedule';
+      content.innerHTML = '<div class="spinner"></div>';
+      modal.classList.add('active');
+      
+      try {
+        const response = await fetch('/api/inventory/forecast');
+        const data = await response.json();
+        
+        // Group by crop and calculate seeds needed
+        const plantingNeeds = {};
+        const now = Date.now();
+        const nextWeek = now + (7 * 24 * 60 * 60 * 1000);
+        
+        data.forecast?.forEach(item => {
+          const harvestDate = new Date(item.estimatedHarvestDate).getTime();
+          // Calculate when to plant (subtract grow time)
+          const plantDate = harvestDate - (item.currentDay * 24 * 60 * 60 * 1000);
+          
+          if (plantDate >= now && plantDate <= nextWeek) {
+            const cropName = item.recipe || 'Unknown';
+            if (!plantingNeeds[cropName]) {
+              plantingNeeds[cropName] = { count: 0, trays: [] };
+            }
+            plantingNeeds[cropName].count++;
+            plantingNeeds[cropName].trays.push(item.trayId);
+          }
+        });
+        
+        let html = '<div style="display: grid; gap: 1rem;">';
+        
+        if (Object.keys(plantingNeeds).length === 0) {
+          html += `
+            <div style="text-align: center; padding: 3rem; color: #94a3b8;">
+              <div style="font-size: 1.5rem; margin-bottom: 1rem;">No planting scheduled</div>
+              <div>Check back later for upcoming planting needs</div>
+            </div>
+          `;
+        } else {
+          html += '<div style="font-size: 1.3rem; color: #10b981; font-weight: 600; margin-bottom: 1rem;">Next 7 Days:</div>';
+          
+          Object.entries(plantingNeeds).forEach(([crop, data]) => {
+            html += `
+              <div style="
+                background: rgba(16, 185, 129, 0.1);
+                border: 2px solid rgba(16, 185, 129, 0.3);
+                border-radius: 16px;
+                padding: 1.5rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              ">
+                <div>
+                  <div style="font-size: 1.8rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
+                    ${crop}
+                  </div>
+                  <div style="font-size: 1.2rem; color: #cbd5e1;">
+                    ${data.trays.length} tray${data.trays.length !== 1 ? 's' : ''} to seed
+                  </div>
+                </div>
+                <button 
+                  onclick="openScanModal('seed')"
+                  style="
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    border: none;
+                    border-radius: 12px;
+                    padding: 1rem 2rem;
+                    font-size: 1.3rem;
+                    font-weight: 700;
+                    color: white;
+                    cursor: pointer;
+                  "
+                >
+                  Seed Now
+                </button>
+              </div>
+            `;
+          });
+        }
+        
+        html += '</div>';
+        content.innerHTML = html;
+      } catch (error) {
+        console.error('Error loading planting schedule:', error);
+        content.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 2rem;">Error loading schedule</div>';
+      }
+    }
+
+    // Show Simple Harvest List
+    async function showHarvestListModal() {
+      const modal = document.getElementById('inventoryModal');
+      const title = modal.querySelector('h2');
+      const content = document.getElementById('inventoryContent');
+      
+      title.textContent = 'Harvest Today';
+      content.innerHTML = '<div class="spinner"></div>';
+      modal.classList.add('active');
+      
+      try {
+        const response = await fetch('/api/inventory/forecast');
+        const data = await response.json();
+        
+        const now = Date.now();
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+        
+        const harvestToday = data.forecast?.filter(item => {
+          const harvestDate = new Date(item.estimatedHarvestDate).getTime();
+          return harvestDate >= now && harvestDate <= endOfToday.getTime();
+        }) || [];
+        
+        let html = '<div style="display: grid; gap: 1rem;">';
+        
+        if (harvestToday.length === 0) {
+          html += `
+            <div style="text-align: center; padding: 3rem; color: #94a3b8;">
+              <div style="font-size: 1.5rem; margin-bottom: 1rem;">No harvests scheduled today</div>
+              <div>Check tomorrow schedule</div>
+            </div>
+          `;
+        } else {
+          harvestToday.forEach(item => {
+            // Parse location to friendly name
+            let locationDisplay = item.location || 'Not assigned';
+            if (locationDisplay.startsWith('LOC-Z')) {
+              const match = locationDisplay.match(/LOC-Z(\d+)-S(\d+)/);
+              if (match) {
+                const zone = String.fromCharCode(64 + parseInt(match[1]));
+                locationDisplay = `Zone ${zone} - Shelf ${match[2]}`;
+              }
+            }
+            
+            html += `
+              <div style="
+                background: rgba(251, 191, 36, 0.1);
+                border: 2px solid rgba(251, 191, 36, 0.3);
+                border-radius: 16px;
+                padding: 1.5rem;
+              ">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                  <div>
+                    <div style="font-size: 1.8rem; font-weight: 700; color: #fbbf24; margin-bottom: 0.5rem;">
+                      ${item.recipe || 'Unknown Crop'}
+                    </div>
+                    <div style="font-size: 1.3rem; color: #60a5fa; font-weight: 600; margin-bottom: 0.3rem;">
+                      ${locationDisplay}
+                    </div>
+                    <div style="font-size: 1.1rem; color: #cbd5e1;">
+                      Tray ${item.trayId} - Day ${item.currentDay}
+                    </div>
+                  </div>
+                  <button 
+                    onclick="openScanModal('harvest')"
+                    style="
+                      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+                      border: none;
+                      border-radius: 12px;
+                      padding: 1rem 2rem;
+                      font-size: 1.3rem;
+                      font-weight: 700;
+                      color: #0f172a;
+                      cursor: pointer;
+                    "
+                  >
+                    Harvest
+                  </button>
+                </div>
+              </div>
+            `;
+          });
+        }
+        
+        html += '</div>';
+        content.innerHTML = html;
+      } catch (error) {
+        console.error('Error loading harvest list:', error);
+        content.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 2rem;">Error loading harvest list</div>';
       }
     }
   </script>
