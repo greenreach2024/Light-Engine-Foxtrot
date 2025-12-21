@@ -135,7 +135,7 @@ app.use(helmet({
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+      frameSrc: ["'self'"], // Allow same-origin iframes for views
     },
   },
   hsts: {
@@ -146,7 +146,7 @@ app.use(helmet({
   noSniff: true,
   referrerPolicy: { policy: 'same-origin' },
   xssFilter: true,
-  frameguard: { action: 'deny' }
+  frameguard: { action: 'sameorigin' } // Allow same-origin iframes
 }));
 
 console.log('[Security] Helmet.js security headers enabled');

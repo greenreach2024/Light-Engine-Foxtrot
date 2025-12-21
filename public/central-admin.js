@@ -1872,6 +1872,14 @@ async function refreshData() {
 }
 
 /**
+ * View room detail
+ */
+function viewRoomDetail(roomName) {
+    console.log(`View room: ${roomName}`);
+    alert(`Room Detail: ${roomName}\n\nIn production, this would drill down to:\n- Zone-level environmental data\n- Device status per zone\n- Active trays in this room\n- Energy consumption\n- Historical trends`);
+}
+
+/**
  * View device detail
  */
 function viewDeviceDetail(deviceId) {
