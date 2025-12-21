@@ -98,6 +98,36 @@ class FarmAssistant {
     document.body.appendChild(widget);
   }
 
+  createInfoPopup(title, content) {
+    // Remove existing popup if any
+    const existing = document.getElementById('assistant-info-popup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'assistant-info-popup';
+    popup.innerHTML = `
+      <div class="popup-content">
+        <button class="popup-close" onclick="document.getElementById('assistant-info-popup').remove()">×</button>
+        <div class="popup-header">
+          <h2>${title}</h2>
+        </div>
+        <div class="popup-body">
+          ${content}
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Auto-close after 15 seconds
+    setTimeout(() => {
+      if (document.getElementById('assistant-info-popup')) {
+        popup.classList.add('popup-fadeout');
+        setTimeout(() => popup.remove(), 300);
+      }
+    }, 15000);
+  }
+
   attachEventListeners() {
     const input = document.getElementById('assistantInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -363,40 +393,40 @@ class FarmAssistant {
       }
 
       if (readyToHarvest.length > 0) {
-        let message = `<strong>🎉 Ready to Harvest Today!</strong><ul>`;
-        readyToHarvest.forEach(item => {
-          message += `<li><strong>${item.crop}</strong> in ${item.zone} - ${item.trays} trays ready! 🌱</li>`;
-        });
-        message += `</ul>`;
+        // Create simple list for children
+        const cropNames = [...new Set(readyToHarvest.map(item => item.crop))];
+        const cropList = cropNames.join(', ');
         
-        if (soonToHarvest.length > 0) {
-          message += `<br><strong>Coming Soon:</strong><ul>`;
-          soonToHarvest.forEach(item => {
-            message += `<li>${item.crop} in ${item.zone} - ${item.harvestIn} days</li>`;
-          });
-          message += `</ul>`;
-        }
-        
-        const actions = `
-          <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn primary">View All Crops</button>
-          <button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn">View Schedule</button>
+        let popupContent = `
+          <div class="harvest-list">
+            <div class="harvest-icon">🌾</div>
+            <div class="harvest-text">
+              <p class="harvest-message">Today we have:</p>
+              <p class="harvest-crops">${cropList}</p>
+              <p class="harvest-count">${readyToHarvest.length} trays ready to pick!</p>
+            </div>
+          </div>
         `;
         
-        this.addMessage(message, 'assistant', actions);
+        this.createInfoPopup('Ready to Harvest!', popupContent);
+        this.addMessage(`We have ${cropNames.length} types of crops ready today! 🌾`, 'assistant');
       } else if (soonToHarvest.length > 0) {
-        let message = `<strong>Nothing ready today, but soon! 🌱</strong><ul>`;
-        soonToHarvest.forEach(item => {
-          message += `<li><strong>${item.crop}</strong> in ${item.zone} - ${item.harvestIn} days to go</li>`;
-        });
-        message += `</ul>`;
+        const cropNames = [...new Set(soonToHarvest.map(item => item.crop))];
+        let popupContent = `
+          <div class="harvest-list">
+            <div class="harvest-icon">🌱</div>
+            <div class="harvest-text">
+              <p class="harvest-message">Coming soon:</p>
+              <p class="harvest-crops">${cropNames.join(', ')}</p>
+              <p class="harvest-count">Will be ready in 1-2 days!</p>
+            </div>
+          </div>
+        `;
         
-        this.addMessage(message, 'assistant',
-          `<button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn">View Full Schedule</button>`
-        );
+        this.createInfoPopup('Almost Ready!', popupContent);
+        this.addMessage('These crops will be ready very soon! 🌱', 'assistant');
       } else {
-        this.addMessage(`No crops are currently ready to harvest. Check the planting schedule to see what's coming! 📅`, 'assistant',
-          `<button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn primary">View Schedule</button>`
-        );
+        this.addMessage('No crops are ready for harvest right now. Check back tomorrow! 🌱', 'assistant');
       }
     } catch (error) {
       console.error('Harvest check error:', error);
@@ -449,40 +479,79 @@ class FarmAssistant {
         const wantsTemp = /temp|temperature|hot|cold|warm/i.test(query);
         const wantsHumidity = /humidity|humid/i.test(query);
         
-        let message = '<strong>🌡️ Farm Environment:</strong><ul>';
+        // Create child-friendly popup content
+        let popupContent = '<div class="big-info">';
         
         if (wantsTemp || (!wantsTemp && !wantsHumidity)) {
-          message += `<li><strong>Temperature:</strong> ${avgTemp}°F average`;
-          if (maxTemp - minTemp > 3) {
-            message += ` (${minTemp}°F - ${maxTemp}°F across zones)`;
-          }
-          message += `</li>`;
+          popupContent += `
+            <div class="info-item">
+              <div class="info-icon">🌡️</div>
+              <div class="info-label">Temperature</div>
+              <div class="info-value">${avgTemp}°F</div>
+            </div>
+          `;
         }
         
         if (wantsHumidity || (!wantsTemp && !wantsHumidity)) {
-          message += `<li><strong>Humidity:</strong> ${avgHumidity}% average`;
-          if (maxHumidity - minHumidity > 10) {
-            message += ` (${minHumidity}% - ${maxHumidity}% across zones)`;
-          }
-          message += `</li>`;
+          popupContent += `
+            <div class="info-item">
+              <div class="info-icon">💧</div>
+              <div class="info-label">Humidity</div>
+              <div class="info-value">${avgHumidity}%</div>
+            </div>
+          `;
         }
         
-        message += `<li><strong>Active Zones:</strong> ${data.zones.length} zones monitored</li>`;
-        message += `</ul>`;
+        popupContent += '</div>';
         
-        // Add comfort assessment
+        // Add status message
         if (avgTemp >= 68 && avgTemp <= 78 && avgHumidity >= 50 && avgHumidity <= 70) {
-          message += `<br>✅ <strong>Perfect conditions!</strong> Everything looks great!`;
+          popupContent += '<div class="status-message success">✅ Perfect conditions! Everything looks great!</div>';
         } else if (avgTemp < 65 || avgTemp > 85) {
-          message += `<br>⚠️ <strong>Temperature alert:</strong> Check climate control`;
+          popupContent += '<div class="status-message warning">⚠️ Temperature needs attention</div>';
+        } else {
+          popupContent += '<div class="status-message ok">Conditions look good!</div>';
         }
         
-        const actions = `
-          <button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn primary">View Heatmap</button>
-          <button onclick="window.location.href='/views/farm-summary.html'" class="action-btn">Dashboard</button>
-        `;
+        this.createInfoPopup('Farm Weather', popupContent);
+        this.addMessage('Here\'s the current weather! 🌞', 'assistant');
         
-        this.addMessage(message, 'assistant', actions);
+        // Create child-friendly popup content
+        let popupContent = '<div class="big-info">';
+        
+        if (wantsTemp || (!wantsTemp && !wantsHumidity)) {
+          popupContent += `
+            <div class="info-item">
+              <div class="info-icon">🌡️</div>
+              <div class="info-label">Temperature</div>
+              <div class="info-value">${avgTemp}°F</div>
+            </div>
+          `;
+        }
+        
+        if (wantsHumidity || (!wantsTemp && !wantsHumidity)) {
+          popupContent += `
+            <div class="info-item">
+              <div class="info-icon">💧</div>
+              <div class="info-label">Humidity</div>
+              <div class="info-value">${avgHumidity}%</div>
+            </div>
+          `;
+        }
+        
+        popupContent += '</div>';
+        
+        // Add status message
+        if (avgTemp >= 68 && avgTemp <= 78 && avgHumidity >= 50 && avgHumidity <= 70) {
+          popupContent += '<div class="status-message success">✅ Perfect conditions! Everything looks great!</div>';
+        } else if (avgTemp < 65 || avgTemp > 85) {
+          popupContent += '<div class="status-message warning">⚠️ Temperature needs attention</div>';
+        } else {
+          popupContent += '<div class="status-message ok">Conditions look good!</div>';
+        }
+        
+        this.createInfoPopup('Farm Weather', popupContent);
+        this.addMessage('Here\'s the current weather! 🌞', 'assistant');
       } else {
         this.addMessage('No environmental data available right now.', 'assistant');
       }
@@ -570,46 +639,53 @@ class FarmAssistant {
       if (found.length > 0) {
         const isLocateQuery = /locate|where|show me where/i.test(originalQuery);
         
-        let message = `<strong>🌱 Found ${found.length} ${cropName} location${found.length > 1 ? 's' : ''}!</strong><ul>`;
-        found.forEach(item => {
-          message += `<li><strong>${item.zone}</strong> - ${item.group}: ${item.trays} tray${item.trays !== 1 ? 's' : ''}`;
-          if (item.harvestIn !== undefined) {
-            if (item.harvestIn <= 0) {
-              message += ` 🎉 <strong>Ready to harvest!</strong>`;
-            } else if (item.harvestIn <= 3) {
-              message += ` (${item.harvestIn} days until harvest 🌱)`;
-            } else {
-              message += ` (${item.harvestIn} days to go)`;
-            }
-          } else if (item.daysOld !== undefined) {
-            message += ` (${item.daysOld} days old)`;
-          }
-          message += `</li>`;
-        });
-        message += `</ul>`;
-        
-        // Create action buttons based on query type
-        let actions = '';
-        if (isLocateQuery && found.length === 1) {
-          const item = found[0];
-          actions = `
-            <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn">View Inventory</button>
-            <button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn primary">Show on Map</button>
+        if (isLocateQuery) {
+          // Child-friendly response: blink lights
+          this.addMessage(`Certainly! Let me blink the lights where the ${cropName} is! 💡`, 'assistant');
+          
+          // Blink lights for each location
+          found.forEach(item => {
+            this.blinkZoneLights(item.zoneId, item.groupId);
+          });
+          
+          // Show simple popup with locations
+          let popupContent = `
+            <div class="location-list">
+              <div class="location-icon">📍</div>
+              <div class="location-text">
+                <p class="location-message">${cropName} is in:</p>
           `;
-          message += `<br>💡 <em>Tip: Ask me to "blink lights for ${item.zone}" to see it light up!</em>`;
+          
+          found.forEach(item => {
+            popupContent += `<p class="location-item"><strong>${item.zone}</strong> - ${item.trays} trays</p>`;
+          });
+          
+          popupContent += `
+                <p class="location-hint">Watch for the blinking lights! 💡</p>
+              </div>
+            </div>
+          `;
+          
+          this.createInfoPopup(`Found ${cropName}!`, popupContent);
         } else {
-          actions = `
-            <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn primary">View All</button>
-            <button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn">Show Heatmap</button>
+          // Simple info query
+          const totalTrays = found.reduce((sum, item) => sum + item.trays, 0);
+          let popupContent = `
+            <div class="crop-info">
+              <div class="crop-icon">🌱</div>
+              <div class="crop-text">
+                <p class="crop-message">We have ${cropName}!</p>
+                <p class="crop-details">${totalTrays} trays growing</p>
+                <p class="crop-locations">In ${found.length} location${found.length > 1 ? 's' : ''}</p>
+              </div>
+            </div>
           `;
+          
+          this.createInfoPopup(`${cropName}`, popupContent);
+          this.addMessage(`Yes! We're growing ${cropName}! 🌱`, 'assistant');
         }
-        
-        this.addMessage(message, 'assistant', actions);
       } else {
-        this.addMessage(`🤔 I don't see any <strong>${cropName}</strong> growing right now. Would you like to check the planting schedule?`, 'assistant',
-          `<button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn primary">View Schedule</button>
-          <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn">Browse All Crops</button>`
-        );
+        this.addMessage(`I don't see any ${cropName} growing right now. 🤔`, 'assistant');
       }
     } catch (error) {
       console.error('Crop search error:', error);
