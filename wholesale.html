@@ -1401,6 +1401,22 @@
           this.currentBuyer = null;
         }
 
+        // Auto-login demo user in demo mode
+        if (this.demoMode && !this.currentBuyer) {
+          console.log('[Demo] Auto-creating demo buyer account');
+          const demoBuyer = {
+            id: 'demo-buyer-001',
+            businessName: 'Demo Restaurant Group',
+            email: 'buyer@demo-restaurant.com',
+            licenseNumber: 'LIC-DEMO-001',
+            createdAt: new Date().toISOString()
+          };
+          this.buyers.push(demoBuyer);
+          this.saveBuyers();
+          this.setActiveBuyer(demoBuyer);
+          console.log('[Demo] Auto-logged in as:', demoBuyer.businessName);
+        }
+
         this.updateBuyerProfile();
         this.populateCheckoutForm();
       },
