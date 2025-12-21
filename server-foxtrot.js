@@ -124,25 +124,28 @@ expressWs(app);
 // Security Headers - Helmet.js
 // Configure helmet for production-ready security headers
 const isProduction = process.env.NODE_ENV === 'production';
+const useHTTPS = process.env.USE_HTTPS === 'true'; // Only enable HTTPS features if explicitly configured
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Note: unsafe-inline/eval needed for dynamic UI
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "http:"], // Allow both HTTP and HTTPS images
       connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"], // Allow WebSocket connections
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
+      // DO NOT include upgrade-insecure-requests for HTTP-only deployments
     },
   },
-  hsts: {
+  hsts: useHTTPS ? {
     maxAge: 31536000, // 1 year in seconds
     includeSubDomains: true,
     preload: true
-  },
+  } : false, // Disable HSTS for HTTP-only deployments
   noSniff: true,
   referrerPolicy: { policy: 'same-origin' },
   xssFilter: true,
@@ -150,8 +153,9 @@ app.use(helmet({
 }));
 
 console.log('[Security] Helmet.js security headers enabled');
-if (isProduction) {
-  console.log('[Security] HSTS enabled (maxAge: 1 year)');
+console.log('[Security] HTTPS Mode:', useHTTPS ? 'enabled (HSTS active)' : 'disabled (HTTP-only)');
+if (isProduction && !useHTTPS) {
+  console.warn('[Security] ⚠️  Running in production without HTTPS - consider adding SSL certificate');
 }
 
 // Security Configuration
