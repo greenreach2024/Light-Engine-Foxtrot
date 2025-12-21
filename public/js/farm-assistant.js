@@ -8,7 +8,10 @@ class FarmAssistant {
     this.isMinimized = false;
     this.conversationHistory = [];
     this.currentContext = this.detectContext();
+    this.isListening = false;
+    this.recognition = null;
     this.init();
+    this.initVoiceRecognition();
   }
 
   init() {
@@ -68,16 +71,19 @@ class FarmAssistant {
                   <li>💡 "Blink lights for basil"</li>
                   <li>📅 "Show planting schedule"</li>
                 </ul>
-                Try typing a question below! 😊
+                <strong>Type or click 🎤 to speak!</strong> 😊
               </div>
             </div>
           </div>
           
           <div class="chat-input-container">
+            <button id="voiceBtn" class="voice-btn" title="Voice command">
+              <span class="voice-icon">🎤</span>
+            </button>
             <input 
               type="text" 
               id="assistantInput" 
-              placeholder="Ask me anything..."
+              placeholder="Ask me anything or click 🎤..."
               autocomplete="off"
             />
             <button id="sendBtn" class="send-btn">
@@ -94,14 +100,100 @@ class FarmAssistant {
   attachEventListeners() {
     const input = document.getElementById('assistantInput');
     const sendBtn = document.getElementById('sendBtn');
+    const voiceBtn = document.getElementById('voiceBtn');
     const minimizeBtn = document.getElementById('minimizeBtn');
 
     sendBtn.addEventListener('click', () => this.handleUserInput());
+    voiceBtn.addEventListener('click', () => this.toggleVoiceRecognition());
     input.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.handleUserInput();
     });
     
     minimizeBtn.addEventListener('click', () => this.toggleMinimize());
+  }
+
+  initVoiceRecognition() {
+    // Check if browser supports Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      console.warn('Voice recognition not supported in this browser');
+      return;
+    }
+
+    this.recognition = new SpeechRecognition();
+    this.recognition.continuous = false;
+    this.recognition.interimResults = false;
+    this.recognition.lang = 'en-US';
+
+    this.recognition.onstart = () => {
+      this.isListening = true;
+      this.updateVoiceButton();
+      console.log('🎤 Voice recognition started');
+    };
+
+    this.recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('🎤 Heard:', transcript);
+      
+      const input = document.getElementById('assistantInput');
+      input.value = transcript;
+      
+      // Auto-process the voice command
+      this.handleUserInput();
+    };
+
+    this.recognition.onerror = (event) => {
+      console.error('🎤 Voice recognition error:', event.error);
+      this.isListening = false;
+      this.updateVoiceButton();
+      
+      if (event.error === 'not-allowed') {
+        this.addMessage('🎤 Microphone access denied. Please allow microphone access in your browser settings.', 'assistant');
+      } else if (event.error === 'no-speech') {
+        this.addMessage('🎤 No speech detected. Try again!', 'assistant');
+      }
+    };
+
+    this.recognition.onend = () => {
+      this.isListening = false;
+      this.updateVoiceButton();
+      console.log('🎤 Voice recognition ended');
+    };
+  }
+
+  toggleVoiceRecognition() {
+    if (!this.recognition) {
+      this.addMessage('🎤 Voice commands are not supported in your browser. Try Chrome, Edge, or Safari!', 'assistant');
+      return;
+    }
+
+    if (this.isListening) {
+      this.recognition.stop();
+    } else {
+      try {
+        this.recognition.start();
+        this.addMessage('🎤 Listening... Speak now!', 'assistant');
+      } catch (error) {
+        console.error('Failed to start voice recognition:', error);
+        this.addMessage('🎤 Could not start microphone. Please try again.', 'assistant');
+      }
+    }
+  }
+
+  updateVoiceButton() {
+    const voiceBtn = document.getElementById('voiceBtn');
+    const voiceIcon = voiceBtn.querySelector('.voice-icon');
+    
+    if (this.isListening) {
+      voiceBtn.classList.add('listening');
+      voiceIcon.textContent = '🔴';
+      voiceBtn.title = 'Stop listening';
+    } else {
+      voiceBtn.classList.remove('listening');
+      voiceIcon.textContent = '🎤';
+      voiceBtn.title = 'Voice command';
+    }
   }
 
   toggleMinimize() {
