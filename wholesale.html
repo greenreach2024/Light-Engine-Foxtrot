@@ -1607,24 +1607,49 @@
 
       async loadDemoCatalog(filters) {
         if (!this.demoData) {
-          try {
-            console.log('[Demo] Loading demo catalog from /data/wholesale-demo-catalog.json');
-            const response = await fetch('/data/wholesale-demo-catalog.json');
-            
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          // Try multiple URLs with retry logic
+          const urls = [
+            '/data/wholesale-demo-catalog.json?v=' + Date.now(),
+            window.location.origin + '/data/wholesale-demo-catalog.json?v=' + Date.now()
+          ];
+          
+          let lastError = null;
+          
+          for (const url of urls) {
+            try {
+              console.log(`[Demo] Attempting to load demo catalog from ${url}`);
+              const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                  'Accept': 'application/json',
+                  'Cache-Control': 'no-cache'
+                }
+              });
+              
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              }
+              
+              this.demoData = await response.json();
+              console.log(`[Demo] Successfully loaded ${this.demoData.items?.length || 0} SKUs from ${this.demoData.farms?.length || 0} farms`);
+              
+              this.farmDirectory = this.demoData.farms.reduce((acc, farm) => {
+                acc[farm.farm_id] = farm;
+                return acc;
+              }, {});
+              
+              break; // Success, exit the loop
+            } catch (error) {
+              console.warn(`[Demo] Failed to load from ${url}:`, error.message);
+              lastError = error;
+              continue; // Try next URL
             }
-            
-            this.demoData = await response.json();
-            console.log(`[Demo] Loaded ${this.demoData.items?.length || 0} SKUs from ${this.demoData.farms?.length || 0} farms`);
-            
-            this.farmDirectory = this.demoData.farms.reduce((acc, farm) => {
-              acc[farm.farm_id] = farm;
-              return acc;
-            }, {});
-          } catch (error) {
-            console.error('[Demo] Failed to load demo catalog:', error);
-            this.showToast(`Unable to load demo data: ${error.message}`, 'error');
+          }
+          
+          // If all URLs failed
+          if (!this.demoData) {
+            console.error('[Demo] All attempts to load demo catalog failed:', lastError);
+            this.showToast(`Unable to load demo data. Please refresh the page.`, 'error');
             this.demoData = { farms: [], items: [] }; // Fallback to empty
             return;
           }
