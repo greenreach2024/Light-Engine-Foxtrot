@@ -60,14 +60,15 @@ class FarmAssistant {
             <div class="message assistant-message">
               <div class="message-avatar">🤖</div>
               <div class="message-content">
-                Hi! I'm your Farm Assistant. I can help you:
-                <ul>
-                  <li>Navigate pages ("show planting schedule")</li>
-                  <li>Find crops ("do we have basil?")</li>
-                  <li>Check farm health ("any alerts?")</li>
-                  <li>Control hardware ("blink lights zone A")</li>
+                Hi! 👋 I'm your Farm Assistant. Ask me anything!
+                <ul style="margin-top:0.5rem;">
+                  <li>🌱 "What's ready to harvest?"</li>
+                  <li>🌡️ "Show me the temperature"</li>
+                  <li>🥬 "Where is the lettuce?"</li>
+                  <li>💡 "Blink lights for basil"</li>
+                  <li>📅 "Show planting schedule"</li>
                 </ul>
-                What can I help you with?
+                Try typing a question below! 😊
               </div>
             </div>
           </div>
@@ -152,6 +153,12 @@ class FarmAssistant {
   async processQuery(query) {
     const lowerQuery = query.toLowerCase();
     
+    // Harvest queries (priority for education)
+    if (await this.matchHarvestQuery(lowerQuery)) return;
+    
+    // Environmental quick checks
+    if (await this.matchEnvironmentQuery(lowerQuery)) return;
+    
     // Navigation intents
     if (this.matchNavigation(lowerQuery)) return;
     
@@ -170,34 +177,35 @@ class FarmAssistant {
     // Contextual help
     if (this.matchContextualHelp(lowerQuery)) return;
     
-    // Fallback
+    // Fallback with encouragement
     this.addMessage(
-      `I'm not sure how to help with that. Try asking:
+      `🤔 I'm not sure about that one! Here are some fun things to try:
       <ul>
-        <li>"Show planting schedule"</li>
-        <li>"Do we have basil?"</li>
-        <li>"Any alerts today?"</li>
-        <li>"Navigate to wholesale"</li>
+        <li>🌱 "What's ready to harvest?"</li>
+        <li>🌡️ "Show me the temperature"</li>
+        <li>🥬 "Do we have lettuce?"</li>
+        <li>💡 "Blink lights for basil"</li>
+        <li>📅 "Show planting schedule"</li>
       </ul>`
     );
   }
 
   matchNavigation(query) {
     const navPatterns = [
-      { pattern: /show|open|go to|navigate to|view/i, keywords: ['planting', 'schedule'], url: '/views/planting-scheduler.html', name: 'Planting Schedule' },
-      { pattern: /show|open|go to|navigate to|view/i, keywords: ['tray', 'inventory'], url: '/views/tray-inventory.html', name: 'Tray Inventory' },
-      { pattern: /show|open|go to|navigate to|view/i, keywords: ['farm', 'summary', 'dashboard'], url: '/views/farm-summary.html', name: 'Farm Dashboard' },
-      { pattern: /show|open|go to|navigate to|view/i, keywords: ['wholesale'], url: '/wholesale.html', name: 'Wholesale Portal' },
-      { pattern: /show|open|go to|navigate to|view/i, keywords: ['sales', 'pos', 'terminal'], url: '/farm-sales.html', name: 'POS Terminal' },
-      { pattern: /show|open|go to|navigate to|view/i, keywords: ['heatmap', 'temperature', 'map'], url: '/views/room-heatmap.html', name: 'Heatmap' },
-      { pattern: /show|open|go to|navigate to|view/i, keywords: ['inventory', 'crops'], url: '/views/farm-inventory.html', name: 'Inventory' },
-      { pattern: /show|open|go to|navigate to|view/i, keywords: ['central', 'admin', 'platform'], url: '/central-admin.html', name: 'Central Admin' }
+      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['planting', 'schedule', 'calendar'], url: '/views/planting-scheduler.html', name: 'Planting Schedule', emoji: '📅' },
+      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['tray', 'trays', 'seeding'], url: '/views/tray-inventory.html', name: 'Tray Inventory', emoji: '🌱' },
+      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['farm', 'summary', 'dashboard', 'home'], url: '/views/farm-summary.html', name: 'Farm Dashboard', emoji: '🏠' },
+      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['wholesale', 'buyers'], url: '/wholesale.html', name: 'Wholesale Portal', emoji: '📦' },
+      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['sales', 'pos', 'terminal', 'sell'], url: '/farm-sales.html', name: 'POS Terminal', emoji: '💰' },
+      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['heatmap', 'temperature', 'map', 'temps'], url: '/views/room-heatmap.html', name: 'Temperature Heatmap', emoji: '🗺️' },
+      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['inventory', 'crops', 'plants'], url: '/views/farm-inventory.html', name: 'Crop Inventory', emoji: '🥬' },
+      { pattern: /show|open|go to|navigate to|view|take me to/i, keywords: ['central', 'admin', 'platform', 'settings'], url: '/central-admin.html', name: 'Central Admin', emoji: '⚙️' }
     ];
 
     for (const nav of navPatterns) {
       if (nav.pattern.test(query) && nav.keywords.some(kw => query.includes(kw))) {
-        const actions = `<button onclick="window.location.href='${nav.url}'" class="action-btn primary">Open ${nav.name}</button>`;
-        this.addMessage(`Opening <strong>${nav.name}</strong>...`, 'assistant', actions);
+        const actions = `<button onclick="window.location.href='${nav.url}'" class="action-btn primary">Open ${nav.name} ${nav.emoji}</button>`;
+        this.addMessage(`Opening <strong>${nav.name}</strong>... ${nav.emoji}`, 'assistant', actions);
         setTimeout(() => window.location.href = nav.url, 1500);
         return true;
       }
@@ -206,20 +214,208 @@ class FarmAssistant {
     return false;
   }
 
+  async matchHarvestQuery(query) {
+    const harvestPatterns = [
+      /what('s| is) ready (to harvest|for harvest|today)/i,
+      /ready (to harvest|for harvest|crops|today)/i,
+      /harvest (ready|today|now)/i,
+      /can (i|we) harvest/i,
+      /show (me )?(ready|harvest)/i
+    ];
+
+    if (harvestPatterns.some(pattern => pattern.test(query))) {
+      await this.checkHarvestReady();
+      return true;
+    }
+    
+    return false;
+  }
+
+  async checkHarvestReady() {
+    try {
+      const API_BASE = window.API_BASE || '';
+      const response = await fetch(`${API_BASE}/env`);
+      if (!response.ok) throw new Error('Failed to fetch crop data');
+      
+      const data = await response.json();
+      let readyToHarvest = [];
+      let soonToHarvest = [];
+      
+      if (data.zones) {
+        data.zones.forEach(zone => {
+          if (zone.groups) {
+            zone.groups.forEach(group => {
+              if (group.harvestIn !== undefined) {
+                const item = {
+                  zone: zone.name || zone.id,
+                  group: group.name || group.id,
+                  crop: group.crop,
+                  trays: group.trays || 0,
+                  harvestIn: group.harvestIn,
+                  daysOld: group.daysOld
+                };
+                
+                if (group.harvestIn <= 0) {
+                  readyToHarvest.push(item);
+                } else if (group.harvestIn <= 3) {
+                  soonToHarvest.push(item);
+                }
+              }
+            });
+          }
+        });
+      }
+
+      if (readyToHarvest.length > 0) {
+        let message = `<strong>🎉 Ready to Harvest Today!</strong><ul>`;
+        readyToHarvest.forEach(item => {
+          message += `<li><strong>${item.crop}</strong> in ${item.zone} - ${item.trays} trays ready! 🌱</li>`;
+        });
+        message += `</ul>`;
+        
+        if (soonToHarvest.length > 0) {
+          message += `<br><strong>Coming Soon:</strong><ul>`;
+          soonToHarvest.forEach(item => {
+            message += `<li>${item.crop} in ${item.zone} - ${item.harvestIn} days</li>`;
+          });
+          message += `</ul>`;
+        }
+        
+        const actions = `
+          <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn primary">View All Crops</button>
+          <button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn">View Schedule</button>
+        `;
+        
+        this.addMessage(message, 'assistant', actions);
+      } else if (soonToHarvest.length > 0) {
+        let message = `<strong>Nothing ready today, but soon! 🌱</strong><ul>`;
+        soonToHarvest.forEach(item => {
+          message += `<li><strong>${item.crop}</strong> in ${item.zone} - ${item.harvestIn} days to go</li>`;
+        });
+        message += `</ul>`;
+        
+        this.addMessage(message, 'assistant',
+          `<button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn">View Full Schedule</button>`
+        );
+      } else {
+        this.addMessage(`No crops are currently ready to harvest. Check the planting schedule to see what's coming! 📅`, 'assistant',
+          `<button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn primary">View Schedule</button>`
+        );
+      }
+    } catch (error) {
+      console.error('Harvest check error:', error);
+      this.addMessage('I had trouble checking harvest status. Let me take you to the inventory page.', 'assistant',
+        `<button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn primary">View Inventory</button>`
+      );
+    }
+  }
+
+  async matchEnvironmentQuery(query) {
+    const envPatterns = [
+      /what('s| is) the (temp|temperature|humidity)/i,
+      /show (me )?(temp|temperature|humidity|conditions|environment)/i,
+      /(temp|temperature|humidity) (in|of) (the )?farm/i,
+      /how (hot|cold|humid|warm)/i,
+      /(current|farm) (conditions|climate|environment)/i
+    ];
+
+    if (envPatterns.some(pattern => pattern.test(query))) {
+      await this.checkEnvironment(query);
+      return true;
+    }
+    
+    return false;
+  }
+
+  async checkEnvironment(query) {
+    try {
+      const API_BASE = window.API_BASE || '';
+      const response = await fetch(`${API_BASE}/env`);
+      if (!response.ok) throw new Error('Failed to fetch environmental data');
+      
+      const data = await response.json();
+      
+      if (data.zones && data.zones.length > 0) {
+        const temps = data.zones.map(z => parseFloat(z.temperature || 0));
+        const humidities = data.zones.map(z => parseFloat(z.humidity || 0));
+        
+        const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+        const minTemp = Math.min(...temps).toFixed(1);
+        const maxTemp = Math.max(...temps).toFixed(1);
+        
+        const avgHumidity = (humidities.reduce((a, b) => a + b, 0) / humidities.length).toFixed(0);
+        const minHumidity = Math.min(...humidities).toFixed(0);
+        const maxHumidity = Math.max(...humidities).toFixed(0);
+        
+        // Determine what user asked for
+        const wantsTemp = /temp|temperature|hot|cold|warm/i.test(query);
+        const wantsHumidity = /humidity|humid/i.test(query);
+        
+        let message = '<strong>🌡️ Farm Environment:</strong><ul>';
+        
+        if (wantsTemp || (!wantsTemp && !wantsHumidity)) {
+          message += `<li><strong>Temperature:</strong> ${avgTemp}°F average`;
+          if (maxTemp - minTemp > 3) {
+            message += ` (${minTemp}°F - ${maxTemp}°F across zones)`;
+          }
+          message += `</li>`;
+        }
+        
+        if (wantsHumidity || (!wantsTemp && !wantsHumidity)) {
+          message += `<li><strong>Humidity:</strong> ${avgHumidity}% average`;
+          if (maxHumidity - minHumidity > 10) {
+            message += ` (${minHumidity}% - ${maxHumidity}% across zones)`;
+          }
+          message += `</li>`;
+        }
+        
+        message += `<li><strong>Active Zones:</strong> ${data.zones.length} zones monitored</li>`;
+        message += `</ul>`;
+        
+        // Add comfort assessment
+        if (avgTemp >= 68 && avgTemp <= 78 && avgHumidity >= 50 && avgHumidity <= 70) {
+          message += `<br>✅ <strong>Perfect conditions!</strong> Everything looks great!`;
+        } else if (avgTemp < 65 || avgTemp > 85) {
+          message += `<br>⚠️ <strong>Temperature alert:</strong> Check climate control`;
+        }
+        
+        const actions = `
+          <button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn primary">View Heatmap</button>
+          <button onclick="window.location.href='/views/farm-summary.html'" class="action-btn">Dashboard</button>
+        `;
+        
+        this.addMessage(message, 'assistant', actions);
+      } else {
+        this.addMessage('No environmental data available right now.', 'assistant');
+      }
+    } catch (error) {
+      console.error('Environment check error:', error);
+      this.addMessage('I had trouble checking the environment. Let me show you the heatmap.', 'assistant',
+        `<button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn primary">View Heatmap</button>`
+      );
+    }
+  }
+
   async matchInventoryQuery(query) {
     const cropPatterns = [
       /do (we|you) have (.+)/i,
       /where is (.+)/i,
+      /where('s| is) (.+)/i,
       /find (.+)/i,
+      /locate (.+)/i,
       /show me (.+)/i,
-      /how much (.+)/i
+      /how much (.+)/i,
+      /any (.+)/i
     ];
 
     for (const pattern of cropPatterns) {
       const match = query.match(pattern);
       if (match) {
-        const cropName = match[match.length - 1].replace(/\?/g, '').trim();
-        await this.searchCrop(cropName);
+        const cropName = match[match.length - 1]
+          .replace(/\?/g, '')
+          .replace(/\bthe\b/gi, '')
+          .trim();
+        await this.searchCrop(cropName, query);
         return true;
       }
     }
@@ -227,7 +423,7 @@ class FarmAssistant {
     return false;
   }
 
-  async searchCrop(cropName) {
+  async searchCrop(cropName, originalQuery = '') {
     try {
       const API_BASE = window.API_BASE || '';
       
@@ -246,7 +442,9 @@ class FarmAssistant {
               if (group.crop && group.crop.toLowerCase().includes(cropName.toLowerCase())) {
                 found.push({
                   zone: zone.name || zone.id,
+                  zoneId: zone.id,
                   group: group.name || group.id,
+                  groupId: group.id,
                   crop: group.crop,
                   trays: group.trays || 0,
                   daysOld: group.daysOld,
@@ -259,31 +457,53 @@ class FarmAssistant {
       }
 
       if (found.length > 0) {
-        let message = `<strong>Found ${cropName}:</strong><ul>`;
+        const isLocateQuery = /locate|where|show me where/i.test(originalQuery);
+        
+        let message = `<strong>🌱 Found ${found.length} ${cropName} location${found.length > 1 ? 's' : ''}!</strong><ul>`;
         found.forEach(item => {
-          message += `<li><strong>${item.zone}</strong> - ${item.group}: ${item.trays} trays`;
+          message += `<li><strong>${item.zone}</strong> - ${item.group}: ${item.trays} tray${item.trays !== 1 ? 's' : ''}`;
           if (item.harvestIn !== undefined) {
-            message += ` (harvest in ${item.harvestIn} days)`;
+            if (item.harvestIn <= 0) {
+              message += ` 🎉 <strong>Ready to harvest!</strong>`;
+            } else if (item.harvestIn <= 3) {
+              message += ` (${item.harvestIn} days until harvest 🌱)`;
+            } else {
+              message += ` (${item.harvestIn} days to go)`;
+            }
+          } else if (item.daysOld !== undefined) {
+            message += ` (${item.daysOld} days old)`;
           }
           message += `</li>`;
         });
         message += `</ul>`;
         
-        const actions = `
-          <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn">View Inventory</button>
-          <button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn">Show Heatmap</button>
-        `;
+        // Create action buttons based on query type
+        let actions = '';
+        if (isLocateQuery && found.length === 1) {
+          const item = found[0];
+          actions = `
+            <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn">View Inventory</button>
+            <button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn primary">Show on Map</button>
+          `;
+          message += `<br>💡 <em>Tip: Ask me to "blink lights for ${item.zone}" to see it light up!</em>`;
+        } else {
+          actions = `
+            <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn primary">View All</button>
+            <button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn">Show Heatmap</button>
+          `;
+        }
         
         this.addMessage(message, 'assistant', actions);
       } else {
-        this.addMessage(`No <strong>${cropName}</strong> found in current inventory. Would you like to check the planting schedule?`, 'assistant',
-          `<button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn">Open Schedule</button>`
+        this.addMessage(`🤔 I don't see any <strong>${cropName}</strong> growing right now. Would you like to check the planting schedule?`, 'assistant',
+          `<button onclick="window.location.href='/views/planting-scheduler.html'" class="action-btn primary">View Schedule</button>
+          <button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn">Browse All Crops</button>`
         );
       }
     } catch (error) {
       console.error('Crop search error:', error);
-      this.addMessage(`I had trouble searching for ${cropName}. Try viewing the inventory page directly.`, 'assistant',
-        `<button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn">View Inventory</button>`
+      this.addMessage(`😕 I had trouble searching for ${cropName}. Let me show you the inventory page.`, 'assistant',
+        `<button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn primary">View Inventory</button>`
       );
     }
   }
@@ -466,14 +686,16 @@ class FarmAssistant {
     
     if (helpPatterns.test(query)) {
       this.addMessage(`
-        <strong>I can help you with:</strong>
+        <strong>🎯 Here's what I can do for you:</strong>
         <ul>
-          <li><strong>Navigation:</strong> "show planting schedule", "open wholesale"</li>
-          <li><strong>Inventory:</strong> "do we have basil?", "where is romaine?"</li>
-          <li><strong>Farm Status:</strong> "how is the farm?", "any alerts?"</li>
-          <li><strong>Hardware:</strong> "blink lights zone A", "identify group 3"</li>
-          <li><strong>Current Page:</strong> ${this.currentContext.page}-specific actions</li>
+          <li><strong>🌱 Harvest Info:</strong><br>"What's ready to harvest?", "Ready crops today"</li>
+          <li><strong>🌡️ Environment:</strong><br>"Show temperature", "What's the humidity?"</li>
+          <li><strong>🥬 Find Crops:</strong><br>"Where is the basil?", "Do we have lettuce?"</li>
+          <li><strong>💡 Hardware Control:</strong><br>"Blink lights for romaine", "Identify zone A"</li>
+          <li><strong>📊 Farm Status:</strong><br>"How is the farm?", "Any alerts?"</li>
+          <li><strong>🗺️ Navigation:</strong><br>"Show planting schedule", "Open wholesale"</li>
         </ul>
+        <br><em>💡 Tip: Just ask naturally - I understand many ways of asking the same thing!</em>
       `);
       return true;
     }
