@@ -922,8 +922,17 @@
       payments: [],
       orders: [],
       refunds: [],
+      demoMode: true, // Enable demo mode by default
 
       async init() {
+        // Check URL params for demo mode
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('demo') === '0') {
+          this.demoMode = false;
+        }
+
+        console.log('[Wholesale Admin] Initializing in demo mode:', this.demoMode);
+        
         this.setupEventListeners();
         await this.loadOverview();
       },
