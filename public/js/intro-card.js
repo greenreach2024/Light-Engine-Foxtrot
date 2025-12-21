@@ -12,6 +12,9 @@
    * @param {string} containerId - Optional container ID where the card should be inserted
    */
   window.showIntroCard = async function(pageId, containerId = null) {
+    // Disabled - user doesn't want intro card popups
+    return;
+    
     try {
       console.log('[IntroCard] showIntroCard called for page:', pageId, 'container:', containerId);
       
