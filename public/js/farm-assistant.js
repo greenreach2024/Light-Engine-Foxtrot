@@ -544,8 +544,12 @@ class FarmAssistant {
       const data = await response.json();
       
       if (data.zones && data.zones.length > 0) {
-        const temps = data.zones.map(z => parseFloat(z.temperature || 0));
-        const humidities = data.zones.map(z => parseFloat(z.humidity || 0));
+        // Temperature is in sensors.tempC.current (Celsius), convert to Fahrenheit
+        const temps = data.zones.map(z => {
+          const tempC = parseFloat(z.sensors?.tempC?.current || 0);
+          return (tempC * 9/5) + 32; // Convert C to F
+        });
+        const humidities = data.zones.map(z => parseFloat(z.sensors?.rh?.current || 0));
         
         const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
         const minTemp = Math.min(...temps).toFixed(1);
