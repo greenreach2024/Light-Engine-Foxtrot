@@ -515,6 +515,7 @@
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   padding: 24px 32px;
   border-radius: 21px 21px 0 0;
+  color: white;
 }
 
 .popup-header h2 {
