@@ -10,6 +10,73 @@ class FarmAssistant {
     this.currentContext = this.detectContext();
     this.isListening = false;
     this.recognition = null;
+    this.jokes = [
+      {
+        type: 'joke',
+        question: 'Why did the tomato turn red?',
+        answer: 'Because it saw the salad dressing!'
+      },
+      {
+        type: 'joke',
+        question: 'What do you get when you cross a snowman and a dog?',
+        answer: 'Frostbite!'
+      },
+      {
+        type: 'joke',
+        question: "Why don't eggs tell jokes?",
+        answer: "They'd crack each other up."
+      },
+      {
+        type: 'joke',
+        question: "What do you call cheese that isn't yours?",
+        answer: 'Nacho cheese!'
+      },
+      {
+        type: 'joke',
+        question: 'Why did the banana go to the doctor?',
+        answer: "Because it wasn't peeling well."
+      },
+      {
+        type: 'joke',
+        question: 'What do you call a bear with no teeth?',
+        answer: 'A gummy bear.'
+      },
+      {
+        type: 'joke',
+        question: 'Why did the bicycle fall over?',
+        answer: 'Because it was two-tired.'
+      },
+      {
+        type: 'joke',
+        question: "What do you call a dinosaur that's sleeping?",
+        answer: 'A dino-snore.'
+      },
+      {
+        type: 'riddle',
+        question: "I'm full of holes but I can still hold water. What am I?",
+        answer: 'A sponge.'
+      },
+      {
+        type: 'riddle',
+        question: 'The more you take, the more you leave behind. What are they?',
+        answer: 'Footsteps.'
+      },
+      {
+        type: 'riddle',
+        question: 'I can fly without wings. I can cry without eyes. Wherever I go, darkness follows me. What am I?',
+        answer: 'A cloud.'
+      },
+      {
+        type: 'riddle',
+        question: 'I have a face and two hands, but no arms or legs. What am I?',
+        answer: 'A clock.'
+      },
+      {
+        type: 'riddle',
+        question: 'What has to be broken before you can use it?',
+        answer: 'An egg.'
+      }
+    ];
     this.init();
     this.initVoiceRecognition();
   }
@@ -277,6 +344,9 @@ class FarmAssistant {
 
   async processQuery(query) {
     const lowerQuery = query.toLowerCase();
+    
+    // Joke/Riddle requests (fun for kids!)
+    if (this.matchJokeRequest(lowerQuery)) return;
     
     // Harvest queries (priority for education)
     if (await this.matchHarvestQuery(lowerQuery)) return;
@@ -858,6 +928,32 @@ class FarmAssistant {
         </ul>
         <br><em>💡 Tip: Just ask naturally - I understand many ways of asking the same thing!</em>
       `);
+      return true;
+    }
+    
+    return false;
+  }
+
+  matchJokeRequest(query) {
+    const jokePatterns = /tell me a joke|joke|riddle|make me laugh|funny|something funny/i;
+    
+    if (jokePatterns.test(query)) {
+      // Pick a random joke or riddle
+      const item = this.jokes[Math.floor(Math.random() * this.jokes.length)];
+      
+      // Create child-friendly popup
+      const popupContent = `
+        <div class="joke-display">
+          <div class="joke-icon">${item.type === 'riddle' ? '🤔' : '😄'}</div>
+          <div class="joke-text">
+            <p class="joke-question">${item.question}</p>
+            <p class="joke-answer">${item.answer}</p>
+          </div>
+        </div>
+      `;
+      
+      this.createInfoPopup(item.type === 'riddle' ? 'Riddle Time! 🧩' : 'Joke Time! 😄', popupContent);
+      this.addMessage(`Here's a ${item.type === 'riddle' ? 'riddle' : 'joke'} for you! 😊`, 'assistant');
       return true;
     }
     

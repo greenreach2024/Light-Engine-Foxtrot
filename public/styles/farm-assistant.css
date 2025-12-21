@@ -656,3 +656,34 @@
     opacity: 0;
   }
 }
+
+/* Joke/Riddle Display */
+.joke-display {
+  text-align: center;
+  padding: 2rem;
+}
+
+.joke-icon {
+  font-size: 80px;
+  margin-bottom: 1.5rem;
+}
+
+.joke-text {
+  color: #f8fafc;
+}
+
+.joke-question {
+  font-size: 28px;
+  font-weight: bold;
+  color: #fbbf24;
+  margin-bottom: 1.5rem;
+  line-height: 1.4;
+}
+
+.joke-answer {
+  font-size: 32px;
+  font-weight: bold;
+  color: #10b981;
+  margin-top: 1rem;
+  line-height: 1.3;
+}
