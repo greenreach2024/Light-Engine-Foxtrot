@@ -131,19 +131,16 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "http:", "https:"],
       connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"], // Allow WebSocket connections
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'self'"], // Allow same-origin iframes for views
+      upgradeInsecureRequests: null, // Disable upgrade-insecure-requests for HTTP-only deployments
     },
   },
-  hsts: {
-    maxAge: 31536000, // 1 year in seconds
-    includeSubDomains: true,
-    preload: true
-  },
+  hsts: false, // Disable HSTS for HTTP-only deployments
   noSniff: true,
   referrerPolicy: { policy: 'same-origin' },
   xssFilter: true,
