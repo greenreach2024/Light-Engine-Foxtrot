@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Tray Assignments | Light Engine</title>
+  <title>Farm Activity Hub | Light Engine</title>
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
   <link rel="stylesheet" href="/styles/farm-assistant.css">
   <style>
@@ -19,152 +19,399 @@
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
       color: #f8fafc;
       min-height: 100vh;
-      padding: 1rem;
+      padding: 0;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
     }
 
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
+    /* iPad Full Screen Layout */
+    .main-container {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+      overflow: hidden;
     }
 
-    /* Tablet optimizations */
-    @media (min-width: 768px) {
-      body {
-        padding: 1.5rem;
-      }
-      
-      .container {
-        max-width: 900px;
-      }
-    }
-
-    .header {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-
-    .nav-bar {
+    /* Top Header Bar */
+    .top-header {
+      background: rgba(15, 23, 42, 0.95);
+      padding: 1rem 1.5rem;
+      border-bottom: 2px solid rgba(52, 211, 153, 0.3);
       display: flex;
-      justify-content: center;
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-      padding: 0.75rem;
-      background: rgba(30, 41, 59, 0.6);
-      border-radius: 8px;
-      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     }
 
-    .nav-bar a {
-      color: #94a3b8;
-      text-decoration: none;
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      transition: all 0.2s ease;
-      font-size: 0.9rem;
-    }
-
-    .nav-bar a:hover {
-      background: rgba(96, 165, 250, 0.1);
-      color: #60a5fa;
-    }
-
-    .nav-bar a.active {
-      background: rgba(96, 165, 250, 0.2);
-      color: #60a5fa;
-    }
-
-    .header {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-
-    .header h1 {
-      font-size: 2rem;
+    .farm-title {
+      font-size: 1.75rem;
       font-weight: 700;
-      margin-bottom: 0.5rem;
-      background: linear-gradient(90deg, #60a5fa, #34d399);
+      background: linear-gradient(90deg, #34d399, #60a5fa);
       background-clip: text;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
-    .header p {
-      color: #94a3b8;
-      font-size: 0.95rem;
+    .status-indicators {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
     }
 
-    .action-cards {
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: rgba(30, 41, 59, 0.8);
+      border-radius: 12px;
+      font-size: 1rem;
+      border: 1px solid rgba(52, 211, 153, 0.3);
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #34d399;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Main Content Area - 2 Column Layout */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto 1fr;
+      gap: 1rem;
+      padding: 1rem;
+      height: 100%;
+      overflow-y: auto;
+    }
+
+    /* Today's Priorities - Full Width */
+    .priorities-section {
+      grid-column: 1 / -1;
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 20px;
+      padding: 1.5rem;
+      border: 2px solid rgba(239, 68, 68, 0.5);
+    }
+
+    .section-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: #f87171;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .priority-items {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .priority-card {
+      background: rgba(239, 68, 68, 0.15);
+      border: 2px solid rgba(239, 68, 68, 0.4);
+      border-radius: 16px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+
+    .priority-number {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: #f87171;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+
+    .priority-label {
+      font-size: 1.1rem;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Quick Actions - Left Column */
+    .quick-actions {
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 20px;
+      padding: 1.5rem;
+      border: 2px solid rgba(52, 211, 153, 0.3);
+    }
+
+    .section-title.green {
+      color: #34d399;
+    }
+
+    .action-buttons {
       display: grid;
       gap: 1rem;
-      margin-bottom: 2rem;
     }
 
-    .action-card {
-      background: rgba(30, 41, 59, 0.8);
-      border: 2px solid rgba(148, 163, 184, 0.2);
+    .action-btn {
+      background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      border: none;
       border-radius: 16px;
-      padding: 2rem;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      min-height: 120px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-
-    .action-card:hover,
-    .action-card:active {
-      background: rgba(30, 41, 59, 1);
-      border-color: rgba(96, 165, 250, 0.5);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(96, 165, 250, 0.2);
-    }
-
-    .action-card h2 {
+      padding: 1.75rem;
       font-size: 1.5rem;
-      margin-bottom: 0.75rem;
+      font-weight: 700;
+      color: #0f172a;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
       display: flex;
       align-items: center;
       gap: 1rem;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      min-height: 90px;
     }
 
-    .action-card .icon {
-      font-size: 2.5rem;
+    .action-btn:active {
+      transform: scale(0.98);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5);
     }
 
-    .action-card p {
+    .action-btn.blue {
+      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .action-btn.blue:active {
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.5);
+    }
+
+    .action-btn.yellow {
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    }
+
+    .action-btn.yellow:active {
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);
+    }
+
+    .action-btn.purple {
+      background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    .action-btn.purple:active {
+      box-shadow: 0 2px 8px rgba(139, 92, 246, 0.5);
+    }
+
+    .action-icon {
+      font-size: 3rem;
+      line-height: 1;
+    }
+
+    .action-text {
+      flex: 1;
+    }
+
+    .action-subtitle {
+      font-size: 0.95rem;
+      font-weight: 400;
+      opacity: 0.9;
+      margin-top: 0.25rem;
+    }
+
+    /* Harvest Today - Right Column */
+    .harvest-section {
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 20px;
+      padding: 1.5rem;
+      border: 2px solid rgba(251, 191, 36, 0.4);
+      max-height: 100%;
+      overflow-y: auto;
+    }
+
+    .section-title.orange {
+      color: #fbbf24;
+    }
+
+    .harvest-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .harvest-item {
+      background: rgba(251, 191, 36, 0.15);
+      border: 2px solid rgba(251, 191, 36, 0.3);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .harvest-item:active {
+      background: rgba(251, 191, 36, 0.25);
+      transform: scale(0.98);
+    }
+
+    .harvest-info {
+      flex: 1;
+    }
+
+    .crop-name {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #fbbf24;
+      margin-bottom: 0.25rem;
+    }
+
+    .crop-details {
+      font-size: 1rem;
+      color: #cbd5e1;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .tray-badge {
+      background: rgba(96, 165, 250, 0.2);
+      color: #60a5fa;
+      padding: 0.25rem 0.75rem;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      border: 1px solid rgba(96, 165, 250, 0.4);
+    }
+
+    /* Checklists - Full Width Bottom */
+    .checklist-section {
+      grid-column: 1 / -1;
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 20px;
+      padding: 1.5rem;
+      border: 2px solid rgba(167, 139, 250, 0.3);
+      overflow-y: auto;
+    }
+
+    .section-title.purple {
+      color: #a78bfa;
+    }
+
+    .checklist-tabs {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      background: rgba(167, 139, 250, 0.15);
+      border: 2px solid rgba(167, 139, 250, 0.3);
+      border-radius: 12px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn.active {
+      background: rgba(167, 139, 250, 0.3);
+      border-color: #a78bfa;
+      color: #a78bfa;
+    }
+
+    .tab-btn:active {
+      transform: scale(0.96);
+    }
+
+    .checklist-items {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .checklist-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 2px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .checklist-item:active {
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .checklist-item.completed {
+      border-color: rgba(52, 211, 153, 0.5);
+      background: rgba(52, 211, 153, 0.1);
+    }
+
+    .checkbox {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 3px solid #64748b;
+      background: transparent;
+      flex-shrink: 0;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .checklist-item.completed .checkbox {
+      background: #34d399;
+      border-color: #34d399;
+    }
+
+    .checklist-item.completed .checkbox::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #0f172a;
+      font-size: 1.5rem;
+      font-weight: 800;
+    }
+
+    .checklist-text {
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: #f8fafc;
+      flex: 1;
+    }
+
+    .checklist-item.completed .checklist-text {
+      opacity: 0.6;
+      text-decoration: line-through;
+    }
+
+    .checklist-time {
+      font-size: 0.95rem;
       color: #94a3b8;
-      font-size: 1.05rem;
-      line-height: 1.5;
     }
 
-    /* Tablet optimizations for action cards */
-    @media (min-width: 768px) {
-      .action-card {
-        padding: 2.5rem;
-        min-height: 140px;
-      }
-      
-      .action-card h2 {
-        font-size: 1.75rem;
-      }
-      
-      .action-card p {
-        font-size: 1.15rem;
-      }
-    }
-
+    /* Modal Styles */
     .modal {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.85);
       align-items: center;
       justify-content: center;
       z-index: 1000;
-      padding: 1rem;
+      padding: 1.5rem;
     }
 
     .modal.active {
@@ -173,1172 +420,584 @@
 
     .modal-content {
       background: #1e293b;
-      border-radius: 16px;
-      max-width: 500px;
+      border-radius: 24px;
+      max-width: 600px;
       width: 100%;
-      max-height: 90vh;
+      max-height: 85vh;
       overflow-y: auto;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-    }
-
-    /* Tablet optimizations for modal */
-    @media (min-width: 768px) {
-      .modal-content {
-        max-width: 750px;
-        border-radius: 20px;
-      }
+      border: 2px solid rgba(148, 163, 184, 0.2);
     }
 
     .modal-header {
-      padding: 1.5rem;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 2rem;
+      border-bottom: 2px solid rgba(148, 163, 184, 0.2);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
     .modal-header h2 {
-      font-size: 1.5rem;
+      font-size: 2rem;
+      color: #f8fafc;
     }
 
     .close-btn {
-      background: none;
-      border: none;
-      color: #94a3b8;
-      font-size: 1.5rem;
+      background: rgba(239, 68, 68, 0.2);
+      border: 2px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      font-size: 2rem;
       cursor: pointer;
-    #qrReader: 0.25rem;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       line-height: 1;
+      font-weight: 700;
+    }
+
+    .close-btn:active {
+      background: rgba(239, 68, 68, 0.3);
     }
 
     .modal-body {
-      padding: 1.5rem;
+      padding: 2rem;
     }
 
-    .scan-ste,
-    #qrReaderPlace,
-    #qrReaderLocation,
-    #qrReaderHarvest {
+    #qrReader {
       width: 100%;
-      border-radius: 12px;
+      border-radius: 16px;
       overflow: hidden;
       margin-bottom: 1.5rem;
-      min-height: 300px;
+      min-height: 350px;
       background: rgba(15, 23, 42, 0.8);
     }
 
-    /* Tablet optimizations for QR scanner */
-    @media (min-width: 768px) {
-      #qrReader,
-      #qrReaderPlace,
-      #qrReaderLocation,
-      #qrReaderHarvest {
-        min-height: 400px;
-        border-radius: 16px;
-      }
+    .scan-result {
+      background: rgba(52, 211, 153, 0.15);
+      border: 2px solid rgba(52, 211, 153, 0.4);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-top: 1.5rem;
+      font-size: 1.2rem;
+      text-align: center;
     }
 
     .button {
       width: 100%;
-      padding: 1rem 1.5rem;
+      padding: 1.5rem;
       border: none;
-      border-radius: 10px;
-      font-size: 1.125rem;
-      font-weight: 600;
+      border-radius: 16px;
+      font-size: 1.4rem;
+      font-weight: 700;
       cursor: pointer;
       transition: all 0.2s ease;
-      min-height: 54px;
+      min-height: 70px;
+      margin-top: 1rem;
     }
 
     .button-primary {
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-      color: white;
+      background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      color: #0f172a;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
     }
 
-    .button-primary:hover,
     .button-primary:active {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+      transform: scale(0.98);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5);
     }
 
     .button-secondary {
       background: rgba(148, 163, 184, 0.2);
       color: #f8fafc;
-      margin-top: 0.5rem;
+      border: 2px solid rgba(148, 163, 184, 0.3);
     }
 
-    .button-secondary:hover,
     .button-secondary:active {
       background: rgba(148, 163, 184, 0.3);
     }
 
-    /* Tablet optimizations for buttons */
-    @media (min-width: 768px) {
-      .button {
-        padding: 1.25rem 2rem;
-        font-size: 1.25rem;
-        border-radius: 14px;
-        min-height: 64px;
-      }
-    }
-
-    .form-group {
-      margin-bottom: 1.25rem;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 0.5rem;
-      color: #cbd5e1;
-      font-weight: 500;
-    }
-
-    .form-group input,
-    .form-group select {
-      width: 100%;
-      padding: 1rem;
-      background: rgba(15, 23, 42, 0.8);
-      border: 2px solid rgba(148, 163, 184, 0.3);
-      border-radius: 10px;
-      color: #f8fafc;
-      font-size: 1.125rem;
-      min-height: 54px;
-    }
-
-    .form-group input:focus,
-    .form-group select:focus {
-      outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-
-    /* Tablet optimizations for inputs */
-    @media (min-width: 768px) {
-      .form-group input,
-      .form-group select {
-        padding: 1.25rem;
-        font-size: 1.25rem;
-        border-radius: 12px;
-        min-height: 64px;
-      }
-    }
-
-    .recipe-list {
-      display: grid;
-      gap: 0.75rem;
-      max-height: 300px;
-      overflow-y: auto;
-      margin-bottom: 1rem;
-    }
-
-    .recipe-card {
-      background: rgba(15, 23, 42, 0.8);
-      border: 2px solid transparent;
-      border-radius: 8px;
-      padding: 1rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .recipe-card:hover {
-      border-color: rgba(96, 165, 250, 0.5);
-    }
-
-    .recipe-card.selected {
-      border-color: #3b82f6;
-      background: rgba(59, 130, 246, 0.1);
-    }
-
-    .recipe-card h3 {
-      font-size: 1rem;
-      margin-bottom: 0.25rem;
-    }
-
-    .recipe-card p {
-      font-size: 0.85rem;
-      color: #94a3b8;
-    }
-
-    .info-box {
-      background: rgba(52, 211, 153, 0.1);
-      border: 1px solid rgba(52, 211, 153, 0.3);
-      border-radius: 8px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    .info-box.success {
-      background: rgba(34, 197, 94, 0.1);
-      border-color: rgba(34, 197, 94, 0.3);
-    }
-
-    .info-box h3 {
-      font-size: 1.25rem;
-      margin-bottom: 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .info-box dl {
-      display: grid;
-      gap: 0.5rem;
-    }
-
-    .info-box dt {
-      color: #94a3b8;
-      font-size: 0.85rem;
-    }
-
-    .info-box dd {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-left: 0;
-    }
-
-    .status-message {
+    /* Empty States */
+    .empty-state {
       text-align: center;
-      padding: 1rem;
-      color: #94a3b8;
-      font-size: 0.9rem;
+      padding: 2rem;
+      color: #64748b;
     }
 
-    .loading {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(148, 163, 184, 0.3);
-      border-top-color: #3b82f6;
+    .empty-state-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .empty-state-text {
+      font-size: 1.2rem;
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(148, 163, 184, 0.2);
+      border-top-color: #34d399;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
+      margin: 2rem auto;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
 
-    .back-link {
-      display: inline-block;
-      color: #60a5fa;
-      text-decoration: none;
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
+    /* Scrollbar Styles */
+    ::-webkit-scrollbar {
+      width: 12px;
     }
 
-    .back-link:hover {
-      text-decoration: underline;
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 10px;
     }
 
-    /* Camera permission notice */
-    .camera-notice {
-      background: rgba(59, 130, 246, 0.1);
-      border: 2px solid rgba(59, 130, 246, 0.3);
-      border-radius: 12px;
-      padding: 1.25rem;
-      margin-bottom: 1.5rem;
-      text-align: center;
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.3);
+      border-radius: 10px;
     }
 
-    .camera-notice.error {
-      background: rgba(239, 68, 68, 0.1);
-      border-color: rgba(239, 68, 68, 0.3);
-    }
-
-    .camera-notice.success {
-      background: rgba(34, 197, 94, 0.1);
-      border-color: rgba(34, 197, 94, 0.3);
-    }
-
-    .camera-notice h4 {
-      font-size: 1.125rem;
-      margin-bottom: 0.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-    }
-
-    .camera-notice p {
-      font-size: 0.95rem;
-      color: #cbd5e1;
-      line-height: 1.5;
-    }
-
-    .camera-notice.error p {
-      color: #fca5a5;
-    }
-
-    /* Tablet optimizations for camera notice */
-    @media (min-width: 768px) {
-      .camera-notice {
-        padding: 1.5rem;
-        border-radius: 14px;
-      }
-      
-      .camera-notice h4 {
-        font-size: 1.25rem;
-      }
-      
-      .camera-notice p {
-        font-size: 1.05rem;
-      }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.5);
     }
   </style>
 </head>
-<body class="le-theme">
-  <div class="container">
-    <div class="nav-bar">
-      <a href="/">Setup/Update</a>
-      <a href="/views/tray-inventory.html" class="active">Tray Assignments</a>
-      <a href="/views/tray-setup.html">Tray Setup</a>
-      <a href="/farm-sales.html">Lot Traceability</a>
-    </div>
-    
-    <div class="header">
-      <h1>Tray Assignments</h1>
-      <p>Scan QR codes to manage tray lifecycle</p>
-    </div>
+<body>
+  <!-- Farm Assistant Widget -->
+  <script src="/js/farm-assistant.js"></script>
 
-    <div class="action-cards">
-      <div class="action-card" onclick="openSeedingFlow()">
-        <h2><span class="icon"></span> Seed New Tray</h2>
-        <p>Scan tray QR, select crop recipe, record seed date</p>
-      </div>
-
-      <div class="action-card" onclick="openPlacementFlow()">
-        <h2><span class="icon"></span> Move Tray</h2>
-        <p>Scan tray and location QR to update placement</p>
-      </div>
-
-      <div class="action-card" onclick="openHarvestFlow()">
-        <h2><span class="icon"></span> Record Harvest</h2>
-        <p>Scan tray QR and record harvest details</p>
-      </div>
-
-      <div class="action-card" onclick="window.location.href='/views/farm-inventory.html'">
-        <h2><span class="icon"></span> View Inventory</h2>
-        <p>See current inventory and harvest forecast</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Seeding Flow Modal -->
-  <div id="seedingModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Seed New Tray</h2>
-        <button class="close-btn" onclick="closeModal('seedingModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <!-- Step 1: Scan Tray -->
-        <div class="scan-step active" data-step="1">
-          <h3 style="margin-bottom: 1rem;">Step 1: Scan Tray QR Code</h3>
-          <div id="qrReader"></div>
-          <button class="button button-secondary" onclick="manualTrayEntry()">Enter QR Manually</button>
-          <div id="scanStatus" class="status-message"></div>
+  <div class="main-container">
+    <!-- Top Header -->
+    <div class="top-header">
+      <div class="farm-title">🌱 Farm Activity Hub</div>
+      <div class="status-indicators">
+        <div class="status-badge">
+          <div class="status-dot"></div>
+          <span id="currentTemp">--°C</span>
         </div>
-
-        <!-- Step 2: Select Recipe -->
-        <div class="scan-step" data-step="2">
-          <h3 style="margin-bottom: 1rem;">Step 2: Select Crop Recipe</h3>
-          <input type="search" id="recipeSearch" class="form-group" placeholder="Search recipes..." 
-                 style="margin-bottom: 1rem;" oninput="filterRecipes()">
-          <div id="recipeList" class="recipe-list"></div>
-        </div>
-
-        <!-- Step 3: Seed Date -->
-        <div class="scan-step" data-step="3">
-          <h3 style="margin-bottom: 1rem;">Step 3: Seed Details</h3>
-          <div id="yieldForecast" class="info-box" style="margin-bottom: 1rem; display: none;">
-            <strong>Expected Yield:</strong> <span id="forecastValue">-</span>
-          </div>
-          <div class="form-group">
-            <label>Seed Date</label>
-            <input type="date" id="seedDate">
-          </div>
-          <div class="form-group">
-            <label>Plant Count (optional)</label>
-            <input type="number" id="plantCount" min="1" placeholder="Defaults to tray capacity">
-          </div>
-          <button class="button button-primary" onclick="createTrayRun()">Start Tray Run</button>
-        </div>
-
-        <!-- Step 4: Confirmation -->
-        <div class="scan-step" data-step="4">
-          <div class="info-box success">
-            <h3>Tray Run Created</h3>
-            <dl>
-              <dt>Tray ID</dt>
-              <dd id="confirmTrayId">-</dd>
-              <dt>Recipe</dt>
-              <dd id="confirmRecipe">-</dd>
-              <dt>Seed Date</dt>
-              <dd id="confirmSeedDate">-</dd>
-              <dt>Expected Harvest</dt>
-              <dd id="confirmHarvestDate">-</dd>
-            </dl>
-          </div>
-          <button class="button button-primary" onclick="resetSeedingFlow()">Seed Another Tray</button>
-          <button class="button button-secondary" onclick="closeModal('seedingModal')">Done</button>
+        <div class="status-badge">
+          <div class="status-dot"></div>
+          <span id="currentTime">--:--</span>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Placement Flow Modal -->
-  <div id="placementModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Move Tray</h2>
-        <button class="close-btn" onclick="closeModal('placementModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="scan-step active" data-step="1">
-          <h3 style="margin-bottom: 1rem;">Step 1: Scan Tray QR</h3>
-          <div id="qrReaderPlace"></div>
-          <div id="placementStatus" class="status-message"></div>
+    <!-- Main Content Grid -->
+    <div class="content-grid">
+      <!-- Today's Priorities - Full Width -->
+      <section class="priorities-section">
+        <h2 class="section-title">🎯 Today's Priorities</h2>
+        <div class="priority-items">
+          <div class="priority-card">
+            <div class="priority-number" id="harvestCount">0</div>
+            <div class="priority-label">Ready to Harvest</div>
+          </div>
+          <div class="priority-card">
+            <div class="priority-number" id="seedlingCount">0</div>
+            <div class="priority-label">Seedlings Active</div>
+          </div>
+          <div class="priority-card">
+            <div class="priority-number" id="checklistCount">0</div>
+            <div class="priority-label">Tasks Pending</div>
+          </div>
+          <div class="priority-card">
+            <div class="priority-number" id="activeTrays">0</div>
+            <div class="priority-label">Active Trays</div>
+          </div>
         </div>
+      </section>
 
-        <div class="scan-step" data-step="2">
-          <h3 style="margin-bottom: 1rem;">Step 2: Scan Location QR</h3>
-          <div class="info-box">
-            <p><strong>Tray:</strong> <span id="placeTrayName">-</span></p>
-            <p><strong>Recipe:</strong> <span id="placeRecipeName">-</span></p>
-          </div>
-          <div id="qrReaderLocation"></div>
-          <div id="locationStatus" class="status-message"></div>
-        </div>
-
-        <div class="scan-step" data-step="3">
-          <div class="info-box success">
-            <h3>Tray Placed</h3>
-            <dl>
-              <dt>Location</dt>
-              <dd id="confirmLocation">-</dd>
-              <dt>Group</dt>
-              <dd id="confirmGroup">-</dd>
-            </dl>
-          </div>
-          <button class="button button-primary" onclick="resetPlacementFlow()">Place Another Tray</button>
-          <button class="button button-secondary" onclick="closeModal('placementModal')">Done</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Harvest Flow Modal -->
-  <div id="harvestModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Record Harvest</h2>
-        <button class="close-btn" onclick="closeModal('harvestModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="scan-step active" data-step="1">
-          <h3 style="margin-bottom: 1rem;">Step 1: Scan Tray QR</h3>
-          <div id="qrReaderHarvest"></div>
-          <div id="harvestStatus" class="status-message"></div>
-        </div>
-
-        <div class="scan-step" data-step="2">
-          <h3 style="margin-bottom: 1rem;">Step 2: Harvest Details</h3>
-          <div class="info-box">
-            <p><strong>Tray:</strong> <span id="harvestTrayName">-</span></p>
-            <p><strong>Recipe:</strong> <span id="harvestRecipeName">-</span></p>
-            <p><strong>Expected Harvest:</strong> <span id="harvestExpectedDate">-</span></p>
-          </div>
-          <div class="form-group">
-            <label>Harvest Date</label>
-            <input type="date" id="harvestDate">
-          </div>
-          <div class="form-group">
-            <label>Actual Harvest Count (optional)</label>
-            <input type="number" id="harvestCount" min="0" placeholder="Number of plants harvested">
-          </div>
-          <div class="form-group">
-            <label>Notes (optional)</label>
-            <input type="text" id="harvestNote" placeholder="Quality, issues, observations">
-          </div>
-          
-          <!-- Custom Lot Code Option -->
-          <div class="form-group" style="margin-top: 1.5rem; padding: 1rem; background: #f9fafb; border-radius: 4px;">
-            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 500;">
-              <input type="checkbox" id="useCustomLotCode" style="margin-right: 0.5rem;" onchange="toggleCustomLotCode()">
-              Use Custom Lot Code
-            </label>
-            <p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.5rem;">
-              For mixed batches or special orders. By default, lots are auto-generated and batched with similar harvests.
-            </p>
-            <div id="customLotCodeInput" style="display: none; margin-top: 0.75rem;">
-              <input type="text" id="customLotCode" placeholder="e.g., CUSTOM-MIXED-251219-001" 
-                     style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px; font-family: monospace;">
-              <p style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">
-                Format: ZONE-CROP-YYMMDD-BATCH (letters, numbers, hyphens only)
-              </p>
+      <!-- Quick Actions - Left Column -->
+      <section class="quick-actions">
+        <h2 class="section-title green">⚡ Quick Actions</h2>
+        <div class="action-buttons">
+          <button class="action-btn" onclick="openScanModal('seed')">
+            <span class="action-icon">🌱</span>
+            <div class="action-text">
+              <div>Seed Tray</div>
+              <div class="action-subtitle">Scan QR & Start New Tray</div>
             </div>
-          </div>
+          </button>
           
-          <button class="button button-primary" onclick="recordHarvest()">Record Harvest</button>
+          <button class="action-btn blue" onclick="openScanModal('harvest')">
+            <span class="action-icon">✂️</span>
+            <div class="action-text">
+              <div>Harvest</div>
+              <div class="action-subtitle">Record Crop Harvest</div>
+            </div>
+          </button>
+          
+          <button class="action-btn yellow" onclick="openScanModal('move')">
+            <span class="action-icon">📦</span>
+            <div class="action-text">
+              <div>Move Tray</div>
+              <div class="action-subtitle">Update Location</div>
+            </div>
+          </button>
+          
+          <button class="action-btn purple" onclick="window.location.href='/views/farm-inventory.html'">
+            <span class="action-icon">📊</span>
+            <div class="action-text">
+              <div>View Inventory</div>
+              <div class="action-subtitle">Full Details</div>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      <!-- Harvest Today - Right Column -->
+      <section class="harvest-section">
+        <h2 class="section-title orange">✂️ Harvest Today</h2>
+        <div id="harvestList" class="harvest-list">
+          <div class="spinner"></div>
+        </div>
+      </section>
+
+      <!-- Checklists - Full Width Bottom -->
+      <section class="checklist-section">
+        <h2 class="section-title purple">✅ Farm Checklists</h2>
+        
+        <div class="checklist-tabs">
+          <button class="tab-btn active" onclick="switchChecklist('daily')">Daily</button>
+          <button class="tab-btn" onclick="switchChecklist('weekly')">Weekly</button>
+          <button class="tab-btn" onclick="switchChecklist('monthly')">Monthly</button>
+          <button class="tab-btn" onclick="switchChecklist('quarterly')">Quarterly</button>
         </div>
 
-        <div class="scan-step" data-step="3">
-          <div class="info-box success">
-            <h3>Harvest Recorded</h3>
-            <dl>
-              <dt>Harvest Date</dt>
-              <dd id="confirmHarvestDateFinal">-</dd>
-              <dt>Count</dt>
-              <dd id="confirmHarvestCount">-</dd>
-              <dt>Lot Code</dt>
-              <dd id="confirmLotCode" style="font-family: monospace; font-size: 1.2rem; font-weight: bold; color: #10b981;">-</dd>
-            </dl>
-            <div style="text-align: center; margin-top: 1rem;">
-              <img id="harvestBarcodeImg" style="display: none; max-width: 100%; height: auto; border: 1px solid #e5e7eb; padding: 8px; border-radius: 4px;" alt="Barcode">
-            </div>
-          </div>
-          <button class="button button-primary" onclick="printBarcode()">Print Label</button>
-          <button class="button button-secondary" onclick="resetHarvestFlow()">Record Another Harvest</button>
-          <button class="button button-secondary" onclick="closeModal('harvestModal')">Done</button>
+        <div id="checklistContainer" class="checklist-items">
+          <div class="spinner"></div>
         </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- QR Scanner Modal -->
+  <div id="scanModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="scanTitle">Scan QR Code</h2>
+        <button class="close-btn" onclick="closeScanModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="qrReader"></div>
+        <div id="scanResult" class="scan-result" style="display: none;"></div>
+        <button class="button button-secondary" onclick="manualEntry()">Enter Manually</button>
+        <button class="button button-primary" id="confirmScan" style="display: none;" onclick="confirmScan()">Continue</button>
       </div>
     </div>
   </div>
 
+  <!-- Load QR Code Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
   <script>
-    // Use current server origin for API calls (works on localhost and AWS)
-    const API_BASE = window.location.origin;
-    let qrScanner = null;
-    let currentFlow = {};
-
-    // Modal management
-    function openModal(modalId) {
-      document.getElementById(modalId).classList.add('active');
-    }
-
-    function closeModal(modalId) {
-      document.getElementById(modalId).classList.remove('active');
-      if (qrScanner) {
-        qrScanner.stop().catch(err => console.error('Error stopping scanner:', err));
-        qrScanner = null;
-      }
-      // Clean up camera notices
-      const notices = document.querySelectorAll('#cameraNotice');
-      notices.forEach(notice => notice.remove());
-    }
-
-    function showStep(modalId, stepNum) {
-      const modal = document.getElementById(modalId);
-      modal.querySelectorAll('.scan-step').forEach(step => {
-        step.classList.remove('active');
-      });
-      modal.querySelector(`[data-step="${stepNum}"]`).classList.add('active');
-    }
-
-    // Seeding Flow
-    async function openSeedingFlow() {
-      currentFlow = { trayId: null, trayFormatId: null, recipeId: null };
-      openModal('seedingModal');
-      showStep('seedingModal', 1);
-      startQRScanner('qrReader', handleTrayScan);
-    }
-
-    function startQRScanner(elementId, onSuccess) {
-      const element = document.getElementById(elementId);
-      element.innerHTML = '';
-      
-      // Add camera permission notice
-      const notice = document.createElement('div');
-      notice.id = 'cameraNotice';
-      notice.className = 'camera-notice';
-      notice.innerHTML = `
-        <h4>📷 Camera Access Required</h4>
-        <p>Please allow camera access when prompted to scan QR codes.<br>
-        <small>On iOS: Settings → Safari → Camera → Allow</small></p>
-      `;
-      element.parentNode.insertBefore(notice, element);
-      
-      qrScanner = new Html5Qrcode(elementId);
-      
-      // Request camera with better error handling
-      qrScanner.start(
-        { facingMode: "environment" },
-        { 
-          fps: 10, 
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0
-        },
-        (decodedText) => {
-          // Update notice on successful scan
-          notice.className = 'camera-notice success';
-          notice.innerHTML = `
-            <h4>✅ Scan Successful</h4>
-            <p>Processing QR code...</p>
-          `;
-          onSuccess(decodedText);
-        },
-        (errorMessage) => {
-          // Ignore scan failures (camera is still active)
-        }
-      ).then(() => {
-        // Camera started successfully
-        notice.className = 'camera-notice success';
-        notice.innerHTML = `
-          <h4>✅ Camera Active</h4>
-          <p>Position QR code within the frame to scan</p>
-        `;
-      }).catch(err => {
-        console.error('Scanner error:', err);
-        
-        // Detailed error messages
-        let errorMsg = 'Camera not available. ';
-        let errorDetail = '';
-        
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          errorMsg = '🚫 Camera Permission Denied';
-          errorDetail = `Please allow camera access in your browser settings.<br>
-            <strong>iOS/iPadOS:</strong> Settings → Safari → Camera → Allow<br>
-            <strong>Android:</strong> Settings → Apps → Browser → Permissions → Camera`;
-        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          errorMsg = '📷 No Camera Found';
-          errorDetail = 'No camera detected on this device. Use manual entry below.';
-        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-          errorMsg = '⚠️ Camera In Use';
-          errorDetail = 'Camera is being used by another application. Close other apps and try again.';
-        } else if (err.name === 'OverconstrainedError') {
-          errorMsg = '⚠️ Camera Not Compatible';
-          errorDetail = 'Camera does not support required settings. Try manual entry below.';
-        } else {
-          errorMsg = '⚠️ Camera Error';
-          errorDetail = `${err.message || 'Unknown error occurred'}. Use manual entry below.`;
-        }
-        
-        notice.className = 'camera-notice error';
-        notice.innerHTML = `
-          <h4>${errorMsg}</h4>
-          <p>${errorDetail}</p>
-        `;
-        
-        // Show status message
-        const statusEl = document.getElementById('scanStatus');
-        if (statusEl) {
-          statusEl.innerHTML = `<span style="color: #ef4444;">${errorMsg}</span>`;
-        }
-      });
-    }
-
-    async function handleTrayScan(decodedText) {
-      if (qrScanner) {
-        qrScanner.stop();
-        qrScanner = null;
-      }
-
-      document.getElementById('scanStatus').innerHTML = '<div class="loading"></div> Processing...';
-
-      try {
-        // Check if tray already exists
-        const trayCheckResp = await fetch(`${API_BASE}/api/trays?qr_code=${encodeURIComponent(decodedText)}`);
-        const existingTrays = await trayCheckResp.json();
-
-        if (existingTrays && existingTrays.length > 0) {
-          // Tray exists - check if it has a format
-          const tray = existingTrays[0];
-          
-          if (!tray.trayFormatId) {
-            // Prompt user to assign a format
-            const formats = await loadFormatsForSelection();
-            const selectedFormatId = await promptFormatSelection(formats);
-            
-            if (!selectedFormatId) {
-              document.getElementById('scanStatus').innerHTML = 
-                '<span style="color: #ef4444;">Format selection required to continue</span>';
-              return;
-            }
-
-            // Update tray with selected format
-            const updateResp = await fetch(`${API_BASE}/api/trays/${tray.trayId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ trayFormatId: selectedFormatId })
-            });
-
-            if (!updateResp.ok) throw new Error('Failed to update tray format');
-            
-            tray.trayFormatId = selectedFormatId;
-          }
-
-          currentFlow.trayId = tray.trayId;
-          currentFlow.trayFormatId = tray.trayFormatId;
-          currentFlow.qrCode = decodedText;
-        } else {
-          // New tray - get format and register
-          const formats = await loadFormatsForSelection();
-          const selectedFormatId = await promptFormatSelection(formats);
-          
-          if (!selectedFormatId) {
-            document.getElementById('scanStatus').innerHTML = 
-              '<span style="color: #ef4444;">Format selection required to continue</span>';
-            return;
-          }
-
-          const resp = await fetch(`${API_BASE}/api/trays/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              qrCodeValue: decodedText,
-              trayFormatId: selectedFormatId
-            })
-          });
-
-          if (!resp.ok) throw new Error('Failed to register tray');
-
-          const data = await resp.json();
-          currentFlow.trayId = data.trayId;
-          currentFlow.trayFormatId = data.trayFormatId;
-          currentFlow.qrCode = decodedText;
-        }
-
-        // Calculate forecasted yield
-        const format = await fetch(`${API_BASE}/api/tray-formats`).then(r => r.json())
-          .then(formats => formats.find(f => f.trayFormatId === currentFlow.trayFormatId));
-        
-        if (format) {
-          currentFlow.forecastedYield = format.isWeightBased
-            ? `${(format.plantSiteCount * (format.targetWeightPerSite || 0)).toFixed(1)} ${format.weightUnit || 'oz'}`
-            : `${Math.floor(format.plantSiteCount * 0.9)} heads (90% success)`;
-        }
-
-        // Load recipes
-        await loadRecipes();
-        showStep('seedingModal', 2);
-      } catch (error) {
-        alert('Error: ' + error.message);
-        document.getElementById('scanStatus').innerHTML = 
-          `<span style="color: #ef4444;">Error: ${error.message}</span>`;
-      }
-    }
-
-    async function loadFormatsForSelection() {
-      const resp = await fetch(`${API_BASE}/api/tray-formats`);
-      return await resp.json();
-    }
-
-    function promptFormatSelection(formats) {
-      return new Promise((resolve) => {
-        const formatOptions = formats.map(f => 
-          `${f.name} (${f.plantSiteCount} sites${f.isWeightBased ? ', ' + f.targetWeightPerSite + ' ' + f.weightUnit + '/site' : ''})`
-        ).join('\n');
-        
-        const choice = prompt(
-          `Select a tray format:\n\n${formats.map((f, i) => `${i + 1}. ${f.name} (${f.plantSiteCount} sites)`).join('\n')}\n\nEnter number:`,
-          '1'
-        );
-        
-        if (!choice) {
-          resolve(null);
-          return;
-        }
-        
-        const index = parseInt(choice) - 1;
-        if (index >= 0 && index < formats.length) {
-          resolve(formats[index].trayFormatId);
-        } else {
-          resolve(null);
-        }
-      });
-    }
-
-    async function loadRecipes() {
-      try {
-        const resp = await fetch(`${API_BASE}/api/recipes`);
-        const recipes = await resp.json();
-
-        const recipeList = document.getElementById('recipeList');
-        recipeList.innerHTML = recipes
-          .filter(r => r.id && r.name)
-          .map(r => `
-            <div class="recipe-card" onclick="selectRecipe('${r.id}', '${r.name}', ${r.daysToHarvest || 21})">
-              <h3>${r.name}</h3>
-              <p>${r.crop || ''} ${r.variety || ''} • ${r.daysToHarvest || 21} days to harvest</p>
-            </div>
-          `).join('');
-      } catch (error) {
-        console.error('Error loading recipes:', error);
-        alert('Failed to load recipes: ' + error.message);
-      }
-    }
-
-    function selectRecipe(id, name, daysToHarvest) {
-      currentFlow.recipeId = id;
-      currentFlow.recipeName = name;
-      currentFlow.daysToHarvest = daysToHarvest;
-
-      // Highlight selected
-      document.querySelectorAll('.recipe-card').forEach(card => {
-        card.classList.remove('selected');
-      });
-      event.target.closest('.recipe-card').classList.add('selected');
-
-      // Set default seed date to today
-      document.getElementById('seedDate').valueAsDate = new Date();
-      
-      // Show forecasted yield if available
-      if (currentFlow.forecastedYield) {
-        document.getElementById('yieldForecast').style.display = 'block';
-        document.getElementById('forecastValue').textContent = currentFlow.forecastedYield;
-      }
-      
-      // Auto-advance after 500ms
-      setTimeout(() => showStep('seedingModal', 3), 500);
-    }
-
-    function filterRecipes() {
-      const search = document.getElementById('recipeSearch').value.toLowerCase();
-      document.querySelectorAll('.recipe-card').forEach(card => {
-        const text = card.textContent.toLowerCase();
-        card.style.display = text.includes(search) ? 'block' : 'none';
-      });
-    }
-
-    async function createTrayRun() {
-      const seedDate = document.getElementById('seedDate').value;
-      const plantCount = document.getElementById('plantCount').value;
-
-      if (!seedDate) {
-        alert('Please select a seed date');
-        return;
-      }
-
-      try {
-        const resp = await fetch(`${API_BASE}/api/trays/${currentFlow.trayId}/seed`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            recipeId: currentFlow.recipeId,
-            seedDate,
-            ...(plantCount && { plantedSiteCount: parseInt(plantCount) })
-          })
-        });
-
-        if (!resp.ok) throw new Error('Failed to create tray run');
-
-        const data = await resp.json();
-
-        document.getElementById('confirmTrayId').textContent = currentFlow.qrCode;
-        document.getElementById('confirmRecipe').textContent = currentFlow.recipeName;
-        document.getElementById('confirmSeedDate').textContent = seedDate;
-        document.getElementById('confirmHarvestDate').textContent = data.expectedHarvestDate;
-
-        showStep('seedingModal', 4);
-      } catch (error) {
-        alert('Error: ' + error.message);
-      }
-    }
-
-    function resetSeedingFlow() {
-      currentFlow = {};
-      showStep('seedingModal', 1);
-      document.getElementById('recipeSearch').value = '';
-      document.getElementById('plantCount').value = '';
-      startQRScanner('qrReader', handleTrayScan);
-    }
-
-    function manualTrayEntry() {
-      const qrCode = prompt('Enter Tray QR Code:');
-      if (qrCode) {
-        handleTrayScan(qrCode);
-      }
-    }
-
-    // Placement Flow
-    function openPlacementFlow() {
-      alert('Placement flow not yet implemented. This requires location QR codes to be set up.');
-      // TODO: Implement placement flow
-    }
-
-    function resetPlacementFlow() {
-      // TODO: Implement
-    }
-
-    // Harvest Flow
-    let harvestTrayRunId = null;
-    let harvestTrayData = null;
-
-    async function openHarvestFlow() {
-      currentFlow = { trayId: null, trayRunId: null };
-      openModal('harvestModal');
-      showStep('harvestModal', 1);
-      startQRScanner('qrReaderHarvest', handleHarvestTrayScan);
-    }
-
-    async function handleHarvestTrayScan(decodedText) {
-      if (qrScanner) {
-        qrScanner.stop();
-        qrScanner = null;
-      }
-      
-      document.getElementById('harvestStatus').innerHTML = '<div class="loading"></div> Loading tray data...';
-      
-      try {
-        // Fetch tray data (includes recipe, placement, location)
-        const trayResp = await fetch(`${API_BASE}/api/trays?qr_code=${decodedText}`);
-        const trayData = await trayResp.json();
-        
-        if (!trayData || trayData.length === 0) {
-          document.getElementById('harvestStatus').innerHTML = 
-            '<span style="color: #ef4444;">❌ Tray not found. Scan again or enter manually.</span>';
-          setTimeout(() => startQRScanner('qrReaderHarvest', handleHarvestTrayScan), 2000);
-          return;
-        }
-        
-        const tray = trayData[0];
-        
-        // Check for active tray run
-        if (!tray.trayRunId) {
-          document.getElementById('harvestStatus').innerHTML = 
-            '<span style="color: #ef4444;">❌ No active crop cycle on this tray.</span>';
-          setTimeout(() => startQRScanner('qrReaderHarvest', handleHarvestTrayScan), 2000);
-          return;
-        }
-        
-        harvestTrayRunId = tray.trayRunId;
-        harvestTrayData = tray;
-        
-        // Display tray info
-        document.getElementById('harvestTrayName').textContent = tray.qrCodeValue;
-        document.getElementById('harvestRecipeName').textContent = tray.recipeId;
-        document.getElementById('harvestExpectedDate').textContent = tray.expectedHarvestDate;
-        
-        // Set default harvest date to today
-        document.getElementById('harvestDate').valueAsDate = new Date();
-        
-        // Move to step 2
-        showStep('harvestModal', 2);
-        
-      } catch (error) {
-        console.error('Harvest scan error:', error);
-        document.getElementById('harvestStatus').innerHTML = 
-          '<span style="color: #ef4444;">❌ Error loading tray data. Try again.</span>';
-      }
-    }
+    // Global State
+    let currentScanMode = null;
+    let scannedData = null;
+    let html5QrCode = null;
+    let currentChecklistType = 'daily';
     
-    // Toggle custom lot code input
-    function toggleCustomLotCode() {
-      const checkbox = document.getElementById('useCustomLotCode');
-      const inputDiv = document.getElementById('customLotCodeInput');
-      inputDiv.style.display = checkbox.checked ? 'block' : 'none';
+    // Checklists Data
+    const checklists = {
+      daily: [
+        { id: 'd1', text: 'Check temperature and humidity levels', time: 'Morning' },
+        { id: 'd2', text: 'Inspect all trays for pests or disease', time: 'Morning' },
+        { id: 'd3', text: 'Water/feed trays as scheduled', time: 'Morning/Evening' },
+        { id: 'd4', text: 'Record any issues or observations', time: 'Evening' },
+        { id: 'd5', text: 'Clean work areas and tools', time: 'Evening' }
+      ],
+      weekly: [
+        { id: 'w1', text: 'Deep clean all growing areas', time: 'Monday' },
+        { id: 'w2', text: 'Check and calibrate sensors', time: 'Tuesday' },
+        { id: 'w3', text: 'Inspect irrigation system', time: 'Wednesday' },
+        { id: 'w4', text: 'Review inventory and place orders', time: 'Thursday' },
+        { id: 'w5', text: 'Plan next week\'s seeding schedule', time: 'Friday' }
+      ],
+      monthly: [
+        { id: 'm1', text: 'Complete system performance review', time: 'Week 1' },
+        { id: 'm2', text: 'Deep clean HVAC and ventilation', time: 'Week 2' },
+        { id: 'm3', text: 'Inventory supplies and equipment', time: 'Week 3' },
+        { id: 'm4', text: 'Review financial metrics and yields', time: 'Week 4' }
+      ],
+      quarterly: [
+        { id: 'q1', text: 'Complete equipment maintenance cycle', time: 'Quarter Start' },
+        { id: 'q2', text: 'Review and update SOPs', time: 'Quarter Start' },
+        { id: 'q3', text: 'Conduct staff training sessions', time: 'Mid-Quarter' },
+        { id: 'q4', text: 'Strategic planning and goal review', time: 'Quarter End' }
+      ]
+    };
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      updateTime();
+      setInterval(updateTime, 60000); // Update every minute
+      
+      loadDashboardData();
+      loadChecklists();
+      
+      // Refresh data every 5 minutes
+      setInterval(loadDashboardData, 300000);
+    });
+
+    // Update Clock and Temperature
+    function updateTime() {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      document.getElementById('currentTime').textContent = timeStr;
     }
 
-    async function recordHarvest() {
-      const harvestDate = document.getElementById('harvestDate').value;
-      const harvestCount = document.getElementById('harvestCount').value;
-      const harvestNote = document.getElementById('harvestNote').value;
-      const useCustomLot = document.getElementById('useCustomLotCode').checked;
-      const customLotCode = document.getElementById('customLotCode').value.trim();
-      
-      if (!harvestDate) {
-        alert('Please select a harvest date');
-        return;
-      }
-      
-      if (useCustomLot && !customLotCode) {
-        alert('Please enter a custom lot code or uncheck the custom option');
-        return;
-      }
-      
+    // Load Dashboard Data
+    async function loadDashboardData() {
       try {
-        // Get tray format for weight verification
-        let actualWeight = null;
-        let weightUnit = null;
-        let trayFormat = null;
-        
-        if (harvestTrayData.trayFormatId) {
-          const formatResp = await fetch(`${API_BASE}/api/tray-formats`);
-          const formats = await formatResp.json();
-          trayFormat = formats.find(f => f.trayFormatId === harvestTrayData.trayFormatId);
-          
-          // Prompt for weight if format is weight-based
-          if (trayFormat && trayFormat.isWeightBased) {
-            const targetWeight = (trayFormat.plantSiteCount * (trayFormat.targetWeightPerSite || 0)).toFixed(2);
-            const enteredWeight = prompt(
-              `Weight Verification\n\n` +
-              `Target: ${targetWeight} ${trayFormat.weightUnit}\n` +
-              `Enter actual harvest weight (or leave blank to skip):`
-            );
-            
-            if (enteredWeight) {
-              actualWeight = parseFloat(enteredWeight);
-              weightUnit = trayFormat.weightUnit;
-              
-              // Calculate variance
-              const variance = ((actualWeight - parseFloat(targetWeight)) / parseFloat(targetWeight) * 100).toFixed(1);
-              
-              // If variance > 10%, offer to update target
-              if (Math.abs(variance) > 10) {
-                const shouldUpdate = confirm(
-                  `Variance: ${variance}%\n\n` +
-                  `Target: ${targetWeight} ${weightUnit}\n` +
-                  `Actual: ${actualWeight} ${weightUnit}\n\n` +
-                  `Update target weight for this format?`
-                );
-                
-                if (shouldUpdate) {
-                  const newTargetPerSite = (actualWeight / trayFormat.plantSiteCount).toFixed(2);
-                  await fetch(`${API_BASE}/api/tray-formats/${trayFormat.trayFormatId}/update-target`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      targetWeightPerSite: parseFloat(newTargetPerSite)
-                    })
-                  });
-                  alert(`Target updated to ${newTargetPerSite} ${weightUnit}/site`);
-                }
-              }
-            }
-          }
+        // Load temperature
+        const envRes = await fetch('/env');
+        const envData = await envRes.json();
+        if (envData.zones && envData.zones[0]) {
+          const temp = envData.zones[0].sensors?.tempC?.current || '--';
+          document.getElementById('currentTemp').textContent = `${temp}°C`;
         }
+
+        // Load inventory forecast
+        const forecastRes = await fetch('/api/inventory/forecast');
+        const forecastData = await forecastRes.json();
         
-        // Step 1: Generate or use custom lot code
-        let lotCode;
+        // Count ready to harvest (next 2 days)
+        const twoDaysFromNow = Date.now() + (2 * 24 * 60 * 60 * 1000);
+        const readyToHarvest = forecastData.forecast?.filter(item => 
+          new Date(item.harvest_date).getTime() <= twoDaysFromNow
+        ) || [];
         
-        if (useCustomLot) {
-          // Use custom lot code (skip batching)
-          lotCode = customLotCode;
-          
-          // Validate and store custom lot in tracking system
-          const lotPayload = {
-            zone_id: harvestTrayData.placement?.locationQr || 'CUSTOM',
-            crop_type: parseRecipeCrop(harvestTrayData.recipeId),
-            variety: parseRecipeVariety(harvestTrayData.recipeId),
-            harvest_date: new Date(harvestDate).toISOString(),
-            quantity: parseInt(harvestCount) || harvestTrayData.plantedSiteCount,
-            unit: actualWeight ? weightUnit : 'heads',
-            force_new: true,
-            custom_lot_code: customLotCode,
-            tray_run_id: harvestTrayRunId
-          };
-          
-          const lotResp = await fetch(`${API_BASE}/api/farm-sales/lots/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(lotPayload)
-          });
-          
-          if (!lotResp.ok) {
-            throw new Error('Failed to register custom lot code');
-          }
-        } else {
-          // Auto-generate with smart batching
-          const lotPayload = {
-            zone_id: harvestTrayData.placement?.locationQr || 'ZONE-UNKNOWN',
-            crop_type: parseRecipeCrop(harvestTrayData.recipeId),
-            variety: parseRecipeVariety(harvestTrayData.recipeId),
-            harvest_date: new Date(harvestDate).toISOString(),
-            quantity: parseInt(harvestCount) || harvestTrayData.plantedSiteCount,
-            unit: actualWeight ? weightUnit : 'heads',
-            tray_run_id: harvestTrayRunId
-          };
-          
-          const lotResp = await fetch(`${API_BASE}/api/farm-sales/lots/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(lotPayload)
-          });
-          
-          if (!lotResp.ok) {
-            throw new Error('Failed to generate lot code');
-          }
-          
-          const lotData = await lotResp.json();
-          lotCode = lotData.lot_code;
-          
-          // Show batching notification
-          if (lotData.batched) {
-            console.log(`✓ Harvest batched into existing lot: ${lotCode}`);
-          }
-        }
+        document.getElementById('harvestCount').textContent = readyToHarvest.length;
         
-        // Step 2: Record harvest with lot code
-        const harvestPayload = {
-          harvestedAt: new Date(harvestDate).toISOString(),
-          actualHarvestCount: parseInt(harvestCount) || null,
-          note: harvestNote || null,
-          lot_code: lotCode,
-          actualWeight: actualWeight,
-          weightUnit: weightUnit
-        };
+        // Populate harvest list
+        populateHarvestList(readyToHarvest);
+
+        // Load current inventory for seedling count
+        const inventoryRes = await fetch('/api/inventory/current');
+        const inventoryData = await inventoryRes.json();
         
-        const harvestResp = await fetch(`${API_BASE}/api/tray-runs/${harvestTrayRunId}/harvest`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(harvestPayload)
-        });
+        const seedlingCount = inventoryData.inventory?.filter(item => 
+          item.days_since_seed < 14 // Seedlings are < 2 weeks old
+        ).length || 0;
         
-        if (!harvestResp.ok) {
-          throw new Error('Failed to record harvest');
-        }
+        document.getElementById('seedlingCount').textContent = seedlingCount;
         
-        // Step 3: Display confirmation with barcode
-        document.getElementById('confirmHarvestDateFinal').textContent = harvestDate;
-        document.getElementById('confirmHarvestCount').textContent = 
-          parseInt(harvestCount) || harvestTrayData.plantedSiteCount;
-        document.getElementById('confirmLotCode').textContent = lotCode;
+        // Active trays
+        const activeTrays = inventoryData.inventory?.length || 0;
+        document.getElementById('activeTrays').textContent = activeTrays;
         
-        // Load barcode image
-        const barcodeImg = document.getElementById('harvestBarcodeImg');
-        barcodeImg.src = `${API_BASE}/api/farm-sales/lots/${lotCode}/barcode?format=CODE128`;
-        barcodeImg.style.display = 'block';
-        
-        showStep('harvestModal', 3);
+        // Update checklist count
+        updateChecklistCount();
         
       } catch (error) {
-        console.error('Record harvest error:', error);
-        alert('Error recording harvest: ' + error.message);
+        console.error('Error loading dashboard data:', error);
       }
     }
 
-    function resetHarvestFlow() {
-      harvestTrayRunId = null;
-      harvestTrayData = null;
-      document.getElementById('harvestCount').value = '';
-      document.getElementById('harvestNote').value = '';
-      document.getElementById('harvestDate').value = '';
-      closeModal('harvestModal');
-      openHarvestFlow();
+    // Populate Harvest List
+    function populateHarvestList(items) {
+      const container = document.getElementById('harvestList');
+      
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">✅</div>
+            <div class="empty-state-text">No harvests due today</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = items.slice(0, 8).map(item => `
+        <div class="harvest-item" onclick="showHarvestDetails('${item.tray_id}')">
+          <div class="harvest-info">
+            <div class="crop-name">${item.crop_name || 'Unknown Crop'}</div>
+            <div class="crop-details">
+              <span>🌱 ${item.recipe_name || 'Recipe'}</span>
+              <span>📅 ${new Date(item.harvest_date).toLocaleDateString()}</span>
+            </div>
+          </div>
+          <div class="tray-badge">${item.tray_id}</div>
+        </div>
+      `).join('');
     }
 
-    function printBarcode() {
-      const lotCode = document.getElementById('confirmLotCode').textContent;
-      // Use professional label instead of simple barcode
-      const labelUrl = `${API_BASE}/api/farm-sales/lots/${lotCode}/label?format=png`;
-      const printWindow = window.open(labelUrl, '_blank', 'width=900,height=500');
-      if (printWindow) {
-        printWindow.onload = () => {
-          setTimeout(() => {
-            printWindow.print();
-          }, 500);
-        };
+    // Show Harvest Details
+    function showHarvestDetails(trayId) {
+      openScanModal('harvest');
+      // Could pre-fill with tray ID
+    }
+
+    // Switch Checklist Tab
+    function switchChecklist(type) {
+      currentChecklistType = type;
+      
+      // Update active tab
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      loadChecklists();
+    }
+
+    // Load Checklists
+    function loadChecklists() {
+      const container = document.getElementById('checklistContainer');
+      const items = checklists[currentChecklistType];
+      
+      // Load completion state from localStorage
+      const completedKey = `checklist_${currentChecklistType}_${new Date().toDateString()}`;
+      const completed = JSON.parse(localStorage.getItem(completedKey) || '[]');
+      
+      container.innerHTML = items.map(item => `
+        <div class="checklist-item ${completed.includes(item.id) ? 'completed' : ''}" 
+             onclick="toggleChecklistItem('${item.id}', '${currentChecklistType}')">
+          <div class="checkbox"></div>
+          <div class="checklist-text">${item.text}</div>
+          <div class="checklist-time">${item.time}</div>
+        </div>
+      `).join('');
+      
+      updateChecklistCount();
+    }
+
+    // Toggle Checklist Item
+    function toggleChecklistItem(itemId, type) {
+      const completedKey = `checklist_${type}_${new Date().toDateString()}`;
+      let completed = JSON.parse(localStorage.getItem(completedKey) || '[]');
+      
+      if (completed.includes(itemId)) {
+        completed = completed.filter(id => id !== itemId);
+      } else {
+        completed.push(itemId);
+      }
+      
+      localStorage.setItem(completedKey, JSON.stringify(completed));
+      loadChecklists();
+    }
+
+    // Update Checklist Count
+    function updateChecklistCount() {
+      let totalPending = 0;
+      
+      ['daily', 'weekly', 'monthly', 'quarterly'].forEach(type => {
+        const completedKey = `checklist_${type}_${new Date().toDateString()}`;
+        const completed = JSON.parse(localStorage.getItem(completedKey) || '[]');
+        const totalItems = checklists[type].length;
+        totalPending += (totalItems - completed.length);
+      });
+      
+      document.getElementById('checklistCount').textContent = totalPending;
+    }
+
+    // Open Scan Modal
+    function openScanModal(mode) {
+      currentScanMode = mode;
+      scannedData = null;
+      
+      const titles = {
+        seed: '🌱 Seed New Tray',
+        harvest: '✂️ Record Harvest',
+        move: '📦 Move Tray'
+      };
+      
+      document.getElementById('scanTitle').textContent = titles[mode];
+      document.getElementById('scanModal').classList.add('active');
+      document.getElementById('scanResult').style.display = 'none';
+      document.getElementById('confirmScan').style.display = 'none';
+      
+      startQRScanner();
+    }
+
+    // Close Scan Modal
+    function closeScanModal() {
+      document.getElementById('scanModal').classList.remove('active');
+      stopQRScanner();
+    }
+
+    // Start QR Scanner
+    function startQRScanner() {
+      if (html5QrCode) {
+        stopQRScanner();
+      }
+      
+      html5QrCode = new Html5Qrcode("qrReader");
+      
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onScanSuccess,
+        onScanError
+      ).catch(err => {
+        console.error("Error starting scanner:", err);
+        document.getElementById('qrReader').innerHTML = `
+          <div style="padding: 2rem; text-align: center; color: #f87171;">
+            <p>Camera access required</p>
+            <button class="button button-secondary" onclick="manualEntry()">Enter Manually Instead</button>
+          </div>
+        `;
+      });
+    }
+
+    // Stop QR Scanner
+    function stopQRScanner() {
+      if (html5QrCode) {
+        html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
+        html5QrCode = null;
       }
     }
 
-    // Helper: Parse crop from recipe ID
-    function parseRecipeCrop(recipeId) {
-      // "DEMO-Lettuce-28Day" → "Lettuce"
-      if (!recipeId) return 'Unknown';
-      const parts = recipeId.split('-');
-      if (parts.length >= 2) {
-        return parts[1];
-      }
-      return recipeId;
+    // QR Scan Success
+    function onScanSuccess(decodedText, decodedResult) {
+      scannedData = decodedText;
+      stopQRScanner();
+      
+      document.getElementById('scanResult').innerHTML = `
+        <strong>✅ Scanned:</strong><br>
+        ${decodedText}
+      `;
+      document.getElementById('scanResult').style.display = 'block';
+      document.getElementById('confirmScan').style.display = 'block';
     }
 
-    // Helper: Parse variety from recipe ID
-    function parseRecipeVariety(recipeId) {
-      // For now, return generic. Could fetch from recipe API.
-      const crop = parseRecipeCrop(recipeId);
-      return `${crop} Mix`;
+    // QR Scan Error (silent)
+    function onScanError(error) {
+      // Ignore scanning errors
+    }
+
+    // Manual Entry
+    function manualEntry() {
+      const trayId = prompt('Enter Tray ID:');
+      if (trayId) {
+        scannedData = trayId;
+        onScanSuccess(trayId);
+      }
+    }
+
+    // Confirm Scan
+    function confirmScan() {
+      if (!scannedData) return;
+      
+      // Route to appropriate flow based on mode
+      switch (currentScanMode) {
+        case 'seed':
+          window.location.href = `/views/tray-setup.html?tray=${scannedData}`;
+          break;
+        case 'harvest':
+          window.location.href = `/views/tray-inventory.html?harvest=${scannedData}`;
+          break;
+        case 'move':
+          window.location.href = `/views/tray-inventory.html?move=${scannedData}`;
+          break;
+      }
     }
   </script>
-  <script src="/js/farm-assistant.js"></script>
 </body>
 </html>
