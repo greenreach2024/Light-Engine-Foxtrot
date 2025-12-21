@@ -674,14 +674,10 @@
         <h2 class="section-title purple">Farm Checklists</h2>
         
         <div class="checklist-tabs">
-          <button class="tab-btn active" onclick="switchChecklist('daily')">Daily</button>
-          <button class="tab-btn" onclick="switchChecklist('weekly')">Weekly</button>
-          <button class="tab-btn" onclick="switchChecklist('monthly')">Monthly</button>
-          <button class="tab-btn" onclick="switchChecklist('quarterly')">Quarterly</button>
-        </div>
-
-        <div id="checklistContainer" class="checklist-items">
-          <div class="spinner"></div>
+          <button class="tab-btn" onclick="openChecklistModal('daily')">Daily</button>
+          <button class="tab-btn" onclick="openChecklistModal('weekly')">Weekly</button>
+          <button class="tab-btn" onclick="openChecklistModal('monthly')">Monthly</button>
+          <button class="tab-btn" onclick="openChecklistModal('quarterly')">Quarterly</button>
         </div>
       </section>
     </div>
@@ -696,6 +692,21 @@
       </div>
       <div class="modal-body">
         <div id="inventoryContent">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checklist Modal -->
+  <div id="checklistModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="checklistModalTitle">Daily Checklist</h2>
+        <button class="close-btn" onclick="closeChecklistModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="checklistModalContent" class="checklist-items">
           <div class="spinner"></div>
         </div>
       </div>
@@ -766,12 +777,57 @@
       }
     }
 
-    // Scroll to Checklist Section
+    // Scroll to Checklist Section (opens modal instead)
     function scrollToChecklist() {
-      const checklistSection = document.querySelector('.checklist-section');
-      if (checklistSection) {
-        checklistSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      openChecklistModal('daily');
+    }
+
+    // Open Checklist Modal
+    function openChecklistModal(type) {
+      const modal = document.getElementById('checklistModal');
+      const title = document.getElementById('checklistModalTitle');
+      
+      // Update title
+      const titles = {
+        daily: 'Daily Checklist',
+        weekly: 'Weekly Checklist',
+        monthly: 'Monthly Checklist',
+        quarterly: 'Quarterly Checklist'
+      };
+      title.textContent = titles[type] || 'Checklist';
+      
+      // Load checklist
+      currentChecklistType = type;
+      loadChecklistInModal();
+      
+      // Show modal
+      modal.classList.add('active');
+    }
+
+    // Close Checklist Modal
+    function closeChecklistModal() {
+      document.getElementById('checklistModal').classList.remove('active');
+    }
+
+    // Load Checklist in Modal
+    function loadChecklistInModal() {
+      const container = document.getElementById('checklistModalContent');
+      const items = checklists[currentChecklistType];
+      
+      // Load completion state from localStorage
+      const completedKey = `checklist_${currentChecklistType}_${new Date().toDateString()}`;
+      const completed = JSON.parse(localStorage.getItem(completedKey) || '[]');
+      
+      container.innerHTML = items.map(item => `
+        <div class=\"checklist-item ${completed.includes(item.id) ? 'completed' : ''}\" 
+             onclick=\"toggleChecklistItem('${item.id}', '${currentChecklistType}')\">
+          <div class=\"checkbox\">${completed.includes(item.id) ? '<span class=\"checkmark\">\u2713</span>' : ''}</div>
+          <div class=\"checklist-text\">
+            <div class=\"task-name\">${item.text}</div>
+            <div class=\"task-time\">${item.time}</div>
+          </div>
+        </div>
+      `).join('');
     }
 
     // Initialize
@@ -883,27 +939,11 @@
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       event.target.classList.add('active');
       
-      loadChecklists();
+      loadChecklistInModal();
     }
 
-    // Load Checklists
+    // Load Checklists (for initial page load)
     function loadChecklists() {
-      const container = document.getElementById('checklistContainer');
-      const items = checklists[currentChecklistType];
-      
-      // Load completion state from localStorage
-      const completedKey = `checklist_${currentChecklistType}_${new Date().toDateString()}`;
-      const completed = JSON.parse(localStorage.getItem(completedKey) || '[]');
-      
-      container.innerHTML = items.map(item => `
-        <div class="checklist-item ${completed.includes(item.id) ? 'completed' : ''}" 
-             onclick="toggleChecklistItem('${item.id}', '${currentChecklistType}')">
-          <div class="checkbox"></div>
-          <div class="checklist-text">${item.text}</div>
-          <div class="checklist-time">${item.time}</div>
-        </div>
-      `).join('');
-      
       updateChecklistCount();
     }
 
@@ -919,7 +959,8 @@
       }
       
       localStorage.setItem(completedKey, JSON.stringify(completed));
-      loadChecklists();
+      loadChecklistInModal();
+      updateChecklistCount();
     }
 
     // Update Checklist Count
