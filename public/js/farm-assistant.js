@@ -280,7 +280,10 @@ class FarmAssistant {
       this.voices = window.speechSynthesis.getVoices();
       console.log('🔊 Voices loaded:', this.voices.length, 'voices available');
       if (this.voices.length > 0) {
-        console.log('🔊 Sample voices:', this.voices.slice(0, 3).map(v => v.name));
+        console.log('🔊 All available voices:');
+        this.voices.forEach((v, i) => {
+          console.log(`  ${i + 1}. ${v.name} (${v.lang}) ${v.localService ? '[Local]' : '[Remote]'}`);
+        });
       }
     };
     
@@ -311,9 +314,9 @@ class FarmAssistant {
     // Create speech utterance
     const utterance = new SpeechSynthesisUtterance(text);
     
-    // Configure voice settings
-    utterance.rate = 0.9; // Slightly slower for children
-    utterance.pitch = 1.1; // Slightly higher pitch for friendly tone
+    // Configure voice settings for child-friendly sound
+    utterance.rate = 0.85; // Slower for children to understand
+    utterance.pitch = 1.3; // Higher pitch for younger, friendlier sound
     utterance.volume = 1.0;
     
     // Get latest voices (refresh if needed)
@@ -322,16 +325,39 @@ class FarmAssistant {
     if (voices.length === 0) {
       console.warn('🔊 No voices available yet, speaking without voice selection');
     } else {
-      // Try to use a friendly voice
-      const preferredVoice = voices.find(v => 
-        v.name.includes('Samantha') || // macOS
-        v.name.includes('Google US English Female') || // Chrome
-        v.name.includes('Microsoft Zira') || // Windows
-        v.lang.startsWith('en-')
+      // Log all available voices for debugging
+      console.log('🔊 Available voices:', voices.map(v => `${v.name} (${v.lang})`).join(', '));
+      
+      // Try to find the best child-friendly voice
+      // Priority: Kid voices > Female voices > Young-sounding voices
+      let preferredVoice = voices.find(v => 
+        v.name.toLowerCase().includes('kid') ||
+        v.name.toLowerCase().includes('child') ||
+        v.name.toLowerCase().includes('junior')
       );
+      
+      if (!preferredVoice) {
+        preferredVoice = voices.find(v => 
+          v.name.includes('Samantha') || // macOS - warm female
+          v.name.includes('Karen') || // macOS - friendly
+          v.name.includes('Victoria') || // macOS - young
+          v.name.includes('Fiona') || // macOS - Scottish
+          v.name.includes('Google UK English Female') || // Chrome - British
+          v.name.includes('Google US English Female') || // Chrome
+          v.name.includes('Microsoft Zira') || // Windows
+          v.name.includes('Microsoft Jenny') || // Windows - neural
+          (v.name.toLowerCase().includes('female') && v.lang.startsWith('en'))
+        );
+      }
+      
+      if (!preferredVoice) {
+        // Fallback to any English voice
+        preferredVoice = voices.find(v => v.lang.startsWith('en'));
+      }
+      
       if (preferredVoice) {
         utterance.voice = preferredVoice;
-        console.log('🔊 Using voice:', preferredVoice.name);
+        console.log('🔊 Using voice:', preferredVoice.name, '(', preferredVoice.lang, ')');
       } else {
         console.log('🔊 Using default voice');
       }
