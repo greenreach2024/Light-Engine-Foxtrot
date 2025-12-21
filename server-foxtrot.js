@@ -9210,13 +9210,6 @@ mountMLRoutes(app);
 app.use('/api/health', healthRouter);
 
 /**
- * Text-to-Speech Routes (ElevenLabs)
- * - POST /api/tts/elevenlabs: Generate speech from text
- */
-const ttsRouter = require('./routes/tts');
-app.use('/api/tts', ttsRouter);
-
-/**
  * GreenReach Admin - Federated Health Monitoring Routes
  * - /api/admin/health/fleet: Aggregate health data from all registered farms
  * - /api/admin/health/farms: List all registered farms
