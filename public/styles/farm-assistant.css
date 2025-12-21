@@ -146,8 +146,7 @@
   object-fit: contain;
   margin-bottom: 1rem;
   border-radius: 16px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  padding: 1rem;
+  padding: 0.5rem;
   box-shadow: 0 0 30px rgba(16, 185, 129, 0.6), 0 0 60px rgba(16, 185, 129, 0.3);
 }
 
