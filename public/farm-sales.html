@@ -985,6 +985,9 @@
     
     // Check if already logged in
     window.addEventListener('DOMContentLoaded', async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isDemoMode = urlParams.get('demo') !== '0'; // Demo by default
+      
       const savedToken = localStorage.getItem('farm_token');
       const savedFarmId = localStorage.getItem('farm_id');
       const savedFarmName = localStorage.getItem('farm_name');
@@ -1026,6 +1029,34 @@
         } catch (error) {
           console.error('Failed to verify farm:', error);
           localStorage.clear();
+        }
+      } else if (isDemoMode) {
+        // Auto-login for demo mode
+        console.log('[Demo] Auto-logging in farm sales terminal');
+        try {
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          farmId = config.farmId || 'GR-00001';
+          farmName = config.farmName || 'Demo Farm';
+          userRole = 'manager';
+          
+          const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+          const tokensData = await tokensResponse.json();
+          
+          if (tokensData.ok) {
+            token = tokensData.tokens[farmId]['manager'] || tokensData.tokens[farmId]['staff'];
+            
+            localStorage.setItem('farm_token', token);
+            localStorage.setItem('farm_id', farmId);
+            localStorage.setItem('farm_name', farmName);
+            localStorage.setItem('user_role', userRole);
+            
+            console.log('[Demo] Auto-logged in as:', userRole);
+            showApp();
+          }
+        } catch (error) {
+          console.error('[Demo] Auto-login failed:', error);
         }
       }
     });
