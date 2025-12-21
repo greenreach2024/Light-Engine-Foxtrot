@@ -47,7 +47,6 @@ class FarmAssistant {
       <div class="assistant-container">
         <div class="assistant-header">
           <div class="header-content">
-            <span class="assistant-icon">🤖</span>
             <div class="header-text">
               <strong>Farm Assistant</strong>
               <small>${this.currentContext.page}</small>
@@ -63,7 +62,8 @@ class FarmAssistant {
             <div class="mascot-welcome">
               <img src="/images/cheo-mascot.webp" alt="Cheo the Farm Assistant" class="mascot-image" />
               <div class="welcome-text">
-                <strong>Hi! I'm your Farm Assistant. Ask me anything!</strong>
+                <strong>Hi I'm Cheo, your farm Assistant!</strong>
+                <strong class="love-to-help">I love to help!</strong>
                 <ul>
                   <li>"What's ready to harvest?"</li>
                   <li>"Show me the temperature"</li>
