@@ -460,6 +460,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="../styles/farm-assistant.css">
 </head>
 <body>
   <!-- Login Screen -->
@@ -1857,14 +1858,16 @@
               img { max-width: 100%; margin: 1rem 0; }
               button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
             </style>
-          </head>
+            <link rel="stylesheet" href="../styles/farm-assistant.css">
+</head>
           <body>
             <h2>Lot Code: ${lotCode}</h2>
             <img src="${barcodeUrl}" alt="Barcode">
             <br>
             <button onclick="window.print()">🖨️ Print</button>
             <button onclick="window.close()">Close</button>
-          </body>
+            <script src="../js/farm-assistant.js"></script>
+</body>
         </html>
       `);
       printWindow.document.close();
@@ -1899,5 +1902,6 @@
       }
     }
   </script>
+  <script src="../js/farm-assistant.js"></script>
 </body>
 </html>

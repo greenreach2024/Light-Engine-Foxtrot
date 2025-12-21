@@ -5,7 +5,7 @@
 
 class FarmAssistant {
   constructor() {
-    this.isMinimized = false;
+    this.isMinimized = true;
     this.conversationHistory = [];
     this.currentContext = this.detectContext();
     this.isListening = false;
@@ -44,16 +44,17 @@ class FarmAssistant {
     const widget = document.createElement('div');
     widget.id = 'farm-assistant';
     widget.innerHTML = `
-      <div class="assistant-container">
+      <div class="assistant-container minimized">
         <div class="assistant-header">
           <div class="header-content">
+            <img src="/images/cheo-mascot.svg" alt="Cheo" class="assistant-mascot-thumb" />
             <div class="header-text">
               <strong>Farm Assistant</strong>
               <small>${this.currentContext.page}</small>
             </div>
           </div>
           <button class="minimize-btn" id="minimizeBtn">
-            <span class="minimize-icon">−</span>
+            <span class="minimize-icon">+</span>
           </button>
         </div>
         
