@@ -309,56 +309,101 @@ class FarmAssistant {
       return;
     }
 
-    // Check if ResponsiveVoice is available (better quality)
-    if (window.responsiveVoice) {
-      console.log('🔊 Using ResponsiveVoice');
+    // Use ElevenLabs for high-quality voice (backend handles API key)
+    this.speakWithElevenLabs(text);
+  }
+
+  async speakWithElevenLabs(text) {
+    try {
+      console.log('🔊 Using ElevenLabs API for speech');
       
-      // Cancel any ongoing speech
+      const API_BASE = window.API_BASE || '';
+      const response = await fetch(`${API_BASE}/api/tts/elevenlabs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: text,
+          voice: 'rachel' // Young, friendly female voice
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`ElevenLabs API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success || !data.audio) {
+        throw new Error('Invalid response from TTS API');
+      }
+
+      // Play the audio
+      const audio = new Audio(data.audio);
+      
+      audio.onplay = () => {
+        this.isSpeaking = true;
+        console.log('🔊 ✅ ElevenLabs speech started:', text.substring(0, 30) + '...');
+      };
+
+      audio.onended = () => {
+        this.isSpeaking = false;
+        console.log('🔊 ✅ ElevenLabs speech ended');
+      };
+
+      audio.onerror = (error) => {
+        console.error('🔊 ❌ Audio playback error:', error);
+        this.isSpeaking = false;
+        // Fallback to browser voice
+        this.speakWithBrowserVoice(text);
+      };
+
+      await audio.play();
+
+    } catch (error) {
+      console.error('🔊 ❌ ElevenLabs error:', error.message);
+      console.log('🔊 Falling back to browser voice');
+      // Fallback to browser voice if ElevenLabs fails
+      this.speakWithBrowserVoice(text);
+    }
+  }
+
+  speakWithBrowserVoice(text) {
+    console.log('🔊 Using browser Web Speech API (fallback)');
+    
+    // Check if ResponsiveVoice is available
+    if (window.responsiveVoice) {
       if (window.responsiveVoice.isPlaying()) {
         window.responsiveVoice.cancel();
       }
       
-      // Use a child-friendly voice
-      // Options: "UK English Female", "US English Female", "Australian Female"
-      const voiceName = "UK English Female"; // British accent is friendly for kids
-      
       const options = {
-        pitch: 1.2,      // Slightly higher for friendlier sound
-        rate: 0.85,      // Slower for children to understand
+        pitch: 1.2,
+        rate: 0.85,
         volume: 1.0,
         onstart: () => {
           this.isSpeaking = true;
-          console.log('🔊 ✅ ResponsiveVoice speaking started:', text.substring(0, 30) + '...');
+          console.log('🔊 ✅ ResponsiveVoice speaking');
         },
         onend: () => {
           this.isSpeaking = false;
-          console.log('🔊 ✅ ResponsiveVoice speech ended');
-        },
-        onerror: (error) => {
-          console.error('🔊 ❌ ResponsiveVoice error:', error);
-          this.isSpeaking = false;
+          console.log('🔊 ✅ ResponsiveVoice ended');
         }
       };
       
-      window.responsiveVoice.speak(text, voiceName, options);
+      window.responsiveVoice.speak(text, "UK English Female", options);
       return;
     }
     
-    // Fallback to browser's Web Speech API
-    console.log('🔊 Using browser Web Speech API (fallback)');
-    
+    // Final fallback to native browser TTS
     if (!window.speechSynthesis) {
-      console.warn('🔊 Text-to-speech not supported');
+      console.warn('🔊 No TTS available');
       return;
     }
 
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
-
-    // Create speech utterance
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Configure voice settings for child-friendly sound
     utterance.rate = 0.85;
     utterance.pitch = 1.3;
     utterance.volume = 1.0;
@@ -369,31 +414,17 @@ class FarmAssistant {
       const preferredVoice = voices.find(v => 
         v.name.includes('Samantha') ||
         v.name.includes('Karen') ||
-        v.name.includes('Google UK English Female') ||
-        v.name.includes('Google US English Female') ||
         (v.name.toLowerCase().includes('female') && v.lang.startsWith('en'))
       );
       
       if (preferredVoice) {
         utterance.voice = preferredVoice;
-        console.log('🔊 Using voice:', preferredVoice.name);
       }
     }
 
-    utterance.onstart = () => {
-      this.isSpeaking = true;
-      console.log('🔊 ✅ Speaking started');
-    };
-
-    utterance.onend = () => {
-      this.isSpeaking = false;
-      console.log('🔊 ✅ Speech ended');
-    };
-
-    utterance.onerror = (event) => {
-      console.error('🔊 ❌ Speech error:', event.error);
-      this.isSpeaking = false;
-    };
+    utterance.onstart = () => this.isSpeaking = true;
+    utterance.onend = () => this.isSpeaking = false;
+    utterance.onerror = () => this.isSpeaking = false;
 
     // Speak the text
     console.log('🔊 Calling speechSynthesis.speak()');
