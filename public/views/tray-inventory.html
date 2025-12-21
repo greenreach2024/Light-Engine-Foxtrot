@@ -83,6 +83,137 @@
       50% { opacity: 0.5; }
     }
 
+    /* Voice Assistant Button */
+    .voice-assistant-btn {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border: 3px solid rgba(16, 185, 129, 0.3);
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .voice-assistant-btn:active {
+      transform: scale(0.95);
+    }
+
+    .voice-assistant-btn.listening {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      animation: pulse-glow 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 4px 30px rgba(239, 68, 68, 0.8); }
+    }
+
+    .voice-icon {
+      font-size: 2rem;
+      color: white;
+    }
+
+    /* Voice Assistant Modal */
+    .voice-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      backdrop-filter: blur(10px);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .voice-modal.active {
+      display: flex;
+    }
+
+    .voice-modal-content {
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid rgba(16, 185, 129, 0.3);
+      border-radius: 24px;
+      padding: 3rem;
+      max-width: 600px;
+      width: 90%;
+      text-align: center;
+    }
+
+    .voice-status {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #10b981;
+      margin-bottom: 1rem;
+    }
+
+    .voice-status.listening {
+      color: #ef4444;
+    }
+
+    .voice-transcript {
+      font-size: 1.5rem;
+      color: #cbd5e1;
+      min-height: 3rem;
+      margin-bottom: 2rem;
+    }
+
+    .voice-response {
+      background: rgba(16, 185, 129, 0.1);
+      border: 2px solid rgba(16, 185, 129, 0.3);
+      border-radius: 16px;
+      padding: 1.5rem;
+      font-size: 1.3rem;
+      color: #f8fafc;
+      min-height: 4rem;
+      margin-bottom: 2rem;
+      display: none;
+    }
+
+    .voice-response.active {
+      display: block;
+    }
+
+    .voice-commands {
+      text-align: left;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .voice-commands h4 {
+      color: #10b981;
+      margin-bottom: 1rem;
+      font-size: 1.2rem;
+    }
+
+    .voice-commands ul {
+      list-style: none;
+      padding: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .voice-commands li {
+      color: #94a3b8;
+      font-size: 0.95rem;
+      padding: 0.5rem;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 8px;
+    }
+
     /* Main Content Area - 2 Column Layout */
     .content-grid {
       display: grid;
@@ -683,6 +814,36 @@
     </div>
   </div>
 
+  <!-- Voice Assistant Button -->
+  <button class="voice-assistant-btn" onclick="toggleVoiceAssistant()" id="voiceBtn">
+    <span class="voice-icon">🎤</span>
+  </button>
+
+  <!-- Voice Assistant Modal -->
+  <div id="voiceModal" class="voice-modal">
+    <div class="voice-modal-content">
+      <h2 class="voice-status" id="voiceStatus">Tap microphone to speak</h2>
+      <div class="voice-transcript" id="voiceTranscript"></div>
+      <div class="voice-response" id="voiceResponse"></div>
+      
+      <div class="voice-commands">
+        <h4>Voice Commands:</h4>
+        <ul>
+          <li>"What's ready to harvest?"</li>
+          <li>"Show inventory"</li>
+          <li>"Check temperature"</li>
+          <li>"Today's tasks"</li>
+          <li>"How many trays active?"</li>
+          <li>"Seedling status"</li>
+          <li>"What's the humidity?"</li>
+          <li>"Close assistant"</li>
+        </ul>
+      </div>
+      
+      <button class="button button-secondary" onclick="closeVoiceAssistant()" style="margin-top: 2rem;">Close</button>
+    </div>
+  </div>
+
   <!-- Inventory View Modal -->
   <div id="inventoryModal" class="modal">
     <div class="modal-content">
@@ -828,6 +989,168 @@
           </div>
         </div>
       `).join('');
+    }
+
+    // Voice Assistant
+    let recognition;
+    let isListening = false;
+    let voiceData = {};
+
+    // Initialize Speech Recognition
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.toLowerCase();
+        document.getElementById('voiceTranscript').textContent = transcript;
+        processVoiceCommand(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        document.getElementById('voiceStatus').textContent = 'Error - Try again';
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        stopListening();
+      };
+    }
+
+    function toggleVoiceAssistant() {
+      const modal = document.getElementById('voiceModal');
+      if (!modal.classList.contains('active')) {
+        modal.classList.add('active');
+        // Start listening automatically when opened
+        setTimeout(() => startListening(), 500);
+      } else {
+        startListening();
+      }
+    }
+
+    function closeVoiceAssistant() {
+      document.getElementById('voiceModal').classList.remove('active');
+      if (isListening) {
+        recognition.stop();
+        isListening = false;
+      }
+    }
+
+    function startListening() {
+      if (!recognition) {
+        speakResponse('Voice recognition not supported on this device');
+        return;
+      }
+
+      document.getElementById('voiceStatus').textContent = 'Listening...';
+      document.getElementById('voiceStatus').classList.add('listening');
+      document.getElementById('voiceBtn').classList.add('listening');
+      document.getElementById('voiceTranscript').textContent = '';
+      document.getElementById('voiceResponse').classList.remove('active');
+      
+      isListening = true;
+      recognition.start();
+    }
+
+    function stopListening() {
+      document.getElementById('voiceStatus').textContent = 'Processing...';
+      document.getElementById('voiceStatus').classList.remove('listening');
+      document.getElementById('voiceBtn').classList.remove('listening');
+      isListening = false;
+    }
+
+    function processVoiceCommand(command) {
+      let response = '';
+
+      // Harvest commands
+      if (command.includes('harvest') || command.includes('ready')) {
+        const count = document.getElementById('harvestCount').textContent;
+        response = `You have ${count} trays ready to harvest today.`;
+      }
+      // Inventory commands
+      else if (command.includes('inventory') || command.includes('stock')) {
+        const trays = document.getElementById('activeTrays').textContent;
+        response = `Current inventory shows ${trays} active trays in production.`;
+      }
+      // Temperature commands
+      else if (command.includes('temperature') || command.includes('temp')) {
+        const temp = document.getElementById('currentTemp').textContent;
+        response = `Current temperature is ${temp}.`;
+      }
+      // Humidity commands
+      else if (command.includes('humidity')) {
+        response = 'Checking humidity levels now.';
+        fetch('/env')
+          .then(res => res.json())
+          .then(data => {
+            const humidity = data.zones[0]?.sensors?.rh?.current || 'unknown';
+            const resp = `Current humidity is ${humidity} percent.`;
+            showResponse(resp);
+            speakResponse(resp);
+          });
+        return;
+      }
+      // Tasks commands
+      else if (command.includes('task') || command.includes('checklist')) {
+        const tasks = document.getElementById('checklistCount').textContent;
+        response = `You have ${tasks} pending tasks on your checklist.`;
+      }
+      // Seedling commands
+      else if (command.includes('seedling')) {
+        const seedlings = document.getElementById('seedlingCount').textContent;
+        response = `There are ${seedlings} active seedlings being tracked.`;
+      }
+      // Tray count
+      else if (command.includes('tray') || command.includes('active')) {
+        const trays = document.getElementById('activeTrays').textContent;
+        response = `You have ${trays} active trays in the system.`;
+      }
+      // Close commands
+      else if (command.includes('close') || command.includes('exit') || command.includes('stop')) {
+        response = 'Closing assistant.';
+        showResponse(response);
+        speakResponse(response);
+        setTimeout(() => closeVoiceAssistant(), 2000);
+        return;
+      }
+      // Help
+      else if (command.includes('help') || command.includes('what can')) {
+        response = 'I can help you check harvest status, inventory, temperature, humidity, tasks, and seedling counts. Just ask!';
+      }
+      // Default
+      else {
+        response = 'I didn\'t understand that. Try asking about harvest, inventory, temperature, tasks, or seedlings.';
+      }
+
+      showResponse(response);
+      speakResponse(response);
+    }
+
+    function showResponse(text) {
+      const responseEl = document.getElementById('voiceResponse');
+      responseEl.textContent = text;
+      responseEl.classList.add('active');
+      document.getElementById('voiceStatus').textContent = 'Response';
+    }
+
+    function speakResponse(text) {
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        speechSynthesis.speak(utterance);
+
+        utterance.onend = () => {
+          setTimeout(() => {
+            document.getElementById('voiceStatus').textContent = 'Tap microphone to speak';
+          }, 1000);
+        };
+      }
     }
 
     // Initialize
