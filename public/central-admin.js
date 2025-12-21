@@ -187,8 +187,8 @@ function renderContextualSidebar() {
                 {
                     title: 'Wholesale',
                     items: [
-                        { label: 'Admin Dashboard', view: 'wholesale-admin' },
-                        { label: 'Buyer Portal', view: 'wholesale-buyer' }
+                        { label: 'Admin Dashboard', view: 'wholesale-admin', external: '/wholesale-admin.html' },
+                        { label: 'Buyer Portal', view: 'wholesale-buyer', external: '/wholesale.html' }
                     ]
                 },
                 {
@@ -302,11 +302,21 @@ function renderContextualSidebar() {
     nav.innerHTML = sections.map(section => `
         <div class="nav-section">
             <div class="nav-section-title">${section.title}</div>
-            ${section.items.map(item => `
-                <div class="nav-item ${item.active ? 'active' : ''}" onclick="navigate('${item.view}', this)">
-                    <span>${item.label}</span>
-                </div>
-            `).join('')}
+            ${section.items.map(item => {
+                if (item.external) {
+                    return `
+                        <a href="${item.external}" class="nav-item" style="text-decoration: none; color: inherit; display: block;">
+                            <span>${item.label}</span>
+                        </a>
+                    `;
+                } else {
+                    return `
+                        <div class="nav-item ${item.active ? 'active' : ''}" onclick="navigate('${item.view}', this)">
+                            <span>${item.label}</span>
+                        </div>
+                    `;
+                }
+            }).join('')}
         </div>
     `).join('');
 }
@@ -596,23 +606,30 @@ function renderFarmsTable(farms) {
         return;
     }
     
-    tbody.innerHTML = farms.map(farm => `
+    tbody.innerHTML = farms.map(farm => {
+        // Format last heartbeat/update
+        const lastUpdate = farm.lastHeartbeat 
+            ? new Date(farm.lastHeartbeat).toLocaleString()
+            : 'Never';
+        
+        return `
         <tr>
             <td><code>${farm.farmId}</code></td>
             <td><strong>${farm.name}</strong></td>
             <td><span class="badge badge-${getStatusBadgeClass(farm.status)}">${farm.status}</span></td>
-            <td>${farm.rooms}</td>
-            <td>${farm.zones}</td>
-            <td>${farm.devices}</td>
-            <td>${farm.trays}</td>
-            <td>${farm.energy} kWh</td>
+            <td>${farm.rooms || 0}</td>
+            <td>${farm.zones || 0}</td>
+            <td>${farm.devices || 0}</td>
+            <td>${farm.trays || 0}</td>
+            <td>${farm.energy || 0} kWh</td>
             <td>${farm.alerts > 0 ? `<span class="badge badge-danger">${farm.alerts}</span>` : '-'}</td>
-            <td>${farm.lastUpdate}</td>
+            <td>${lastUpdate}</td>
             <td>
                 <button class="btn" onclick="drillToFarm('${farm.farmId}')">View</button>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 /**
@@ -849,10 +866,6 @@ async function viewRoomDetail(farmId, roomId) {
         loadRoomZones(farmId, roomId, roomData.zones, trayCount),
         loadRoomDevices(farmId, roomId, roomData.devices),
         loadRoomTrays(farmId, roomId, roomData.zones, trayCount),
-        loadRoomEnergy(farmId, roomId, roomData.energyToday, roomData.energyWeek),
-        loadRoomTrends(farmId, roomId)
-    ]);
-}
         loadRoomEnergy(farmId, roomId, roomData.energyToday, roomData.energyWeek),
         loadRoomTrends(farmId, roomId)
     ]);

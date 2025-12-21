@@ -138,7 +138,7 @@ app.use(helmet({
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+      frameSrc: ["'self'"], // Allow iframes from same origin
       upgradeInsecureRequests: useHTTPS ? [] : null, // Explicitly disable for HTTP-only
     },
   },
