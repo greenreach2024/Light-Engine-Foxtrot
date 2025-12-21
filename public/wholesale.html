@@ -633,21 +633,24 @@
     .orders-list {
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 1.5rem;
     }
 
     .order-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 1.25rem;
+      padding: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 
     .order-header {
       display: flex;
       justify-content: space-between;
-      align-items: start;
+      align-items: center;
       margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--border);
     }
 
     .order-id {
@@ -657,35 +660,27 @@
     }
 
     .order-status {
-      padding: 0.25rem 0.75rem;
+      padding: 0.375rem 0.75rem;
       border-radius: 4px;
-      font-size: 0.8rem;
+      font-size: 0.875rem;
       font-weight: 600;
       text-transform: uppercase;
     }
 
-    .order-status.pending {
-      background: #fef3c7;
-      color: #92400e;
-    }
-
-    .order-status.confirmed {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .order-status.failed {
-      background: #fee2e2;
-      color: #991b1b;
-    }
+    .order-status.pending { background: #fef3c7; color: #92400e; }
+    .order-status.confirmed { background: #dbeafe; color: #1e40af; }
+    .order-status.processing { background: #e0e7ff; color: #4338ca; }
+    .order-status.shipped { background: #d1fae5; color: #065f46; }
+    .order-status.delivered { background: #d1fae5; color: #065f46; }
+    .order-status.completed { background: #d1fae5; color: #065f46; }
+    .order-status.cancelled { background: #fee2e2; color: #991b1b; }
+    .order-status.failed { background: #fee2e2; color: #991b1b; }
 
     .order-meta {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
-      margin-bottom: 1rem;
-      font-size: 0.875rem;
-      color: var(--text-secondary);
+      margin-bottom: 1.5rem;
     }
 
     .order-meta-item {
@@ -695,38 +690,164 @@
     }
 
     .order-meta-label {
-      font-weight: 500;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .order-meta-value {
+      font-size: 1rem;
       color: var(--text);
+      font-weight: 500;
+    }
+
+    .order-items {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+
+    .order-items-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .order-farms {
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--border);
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 6px;
     }
 
     .order-farms-title {
+      font-size: 0.9rem;
       font-weight: 600;
+      color: var(--text-secondary);
       margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .order-farm-item {
-      background: var(--bg);
-      border-radius: 6px;
-      padding: 0.75rem;
-      margin-bottom: 0.75rem;
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: start;
+      padding: 0.75rem;
+      background: var(--surface);
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    .order-farm-item:last-child {
+      margin-bottom: 0;
     }
 
     .order-farm-name {
-      font-weight: 500;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .order-farm-status {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    .order-farm-tracking {
+      margin-top: 0.5rem;
+      padding: 0.5rem;
+      background: #ecfdf5;
+      border-left: 3px solid var(--success);
+      border-radius: 4px;
+    }
+
+    .order-farm-tracking-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .order-farm-tracking-number {
+      font-family: 'Courier New', monospace;
+      font-size: 0.875rem;
+      color: var(--text);
+      margin-top: 0.25rem;
+    }
+
+    .order-farm-tracking-link {
+      font-size: 0.875rem;
+      color: var(--info);
+      text-decoration: none;
+      margin-left: 0.5rem;
+    }
+
+    .order-farm-tracking-link:hover {
+      text-decoration: underline;
     }
 
     .order-farm-total {
       font-weight: 600;
       color: var(--primary);
+      font-size: 1.125rem;
+    }
+
+    .order-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .order-action-btn {
+      padding: 0.625rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--primary);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .order-action-btn:hover {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .order-action-btn.primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .order-action-btn.primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .order-empty {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .order-empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+      font-weight: 600;
     }
 
     /* Loading Spinner */
@@ -1885,7 +2006,7 @@
         if (!container) return;
 
         if (!this.currentBuyer) {
-          container.innerHTML = '<p>Please sign in to view your order history.</p>';
+          container.innerHTML = '<div class="order-empty"><div class="order-empty-icon">[ ]</div><p>Please sign in to view your order history.</p></div>';
           return;
         }
 
@@ -1895,7 +2016,7 @@
         }
 
         if (this.orders.length === 0) {
-          container.innerHTML = '<p>No orders yet</p>';
+          container.innerHTML = '<div class="order-empty"><div class="order-empty-icon">[ ]</div><p>No orders yet. Start shopping to place your first wholesale order!</p></div>';
           return;
         }
 
@@ -1903,38 +2024,187 @@
           <div class="order-card">
             <div class="order-header">
               <div class="order-id">Order #${order.master_order_id.substring(0, 8)}</div>
-              <div class="order-status ${order.status}">${order.status}</div>
+              <div class="order-status ${order.status}">${order.status.toUpperCase()}</div>
             </div>
             <div class="order-meta">
               <div class="order-meta-item">
-                <span class="order-meta-label">Order Date:</span>
-                <span>${new Date(order.created_at).toLocaleDateString()}</span>
+                <span class="order-meta-label">Order Date</span>
+                <span class="order-meta-value">${new Date(order.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</span>
               </div>
               <div class="order-meta-item">
-                <span class="order-meta-label">Delivery Date:</span>
-                <span>${new Date(order.delivery_date).toLocaleDateString()}</span>
+                <span class="order-meta-label">Delivery Date</span>
+                <span class="order-meta-value">${new Date(order.delivery_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</span>
               </div>
               <div class="order-meta-item">
-                <span class="order-meta-label">Total:</span>
-                <span>$${order.grand_total.toFixed(2)}</span>
+                <span class="order-meta-label">Total Amount</span>
+                <span class="order-meta-value">$${order.grand_total.toFixed(2)}</span>
+              </div>
+              <div class="order-meta-item">
+                <span class="order-meta-label">Fulfillment</span>
+                <span class="order-meta-value">${order.fulfillment_cadence || 'One-time'}</span>
               </div>
             </div>
+            ${order.delivery_address ? `
+            <div class="order-items">
+              <div class="order-items-title">Delivery Address</div>
+              <div style="font-size: 0.9rem; color: var(--text); line-height: 1.6;">
+                ${order.delivery_address.street || ''}<br>
+                ${order.delivery_address.city || ''}, ${order.delivery_address.province || ''} ${order.delivery_address.postal_code || ''}
+              </div>
+            </div>
+            ` : ''}
             <div class="order-farms">
               <div class="order-farms-title">Fulfillment by Farm</div>
               ${order.farm_sub_orders.map(subOrder => `
                 <div class="order-farm-item">
                   <div>
                     <div class="order-farm-name">${subOrder.farm_name}</div>
-                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                      ${subOrder.items.length} item(s)
+                    <div class="order-farm-status">
+                      ${subOrder.items.length} item(s) - Status: ${subOrder.status || 'pending'}
+                      ${subOrder.tracking_number ? '<span style="color: var(--success); margin-left: 0.5rem;">Tracking Available</span>' : ''}
                     </div>
+                    ${subOrder.tracking_number ? `
+                    <div class="order-farm-tracking">
+                      <div class="order-farm-tracking-label">Tracking</div>
+                      <div class="order-farm-tracking-number">
+                        ${subOrder.tracking_number}
+                        <a href="${this.getTrackingUrl(subOrder.tracking_carrier || 'usps', subOrder.tracking_number)}" target="_blank" class="order-farm-tracking-link">
+                          Track Shipment
+                        </a>
+                      </div>
+                    </div>
+                    ` : ''}
                   </div>
                   <div class="order-farm-total">$${subOrder.subtotal.toFixed(2)}</div>
                 </div>
               `).join('')}
             </div>
+            <div class="order-actions">
+              <button class="order-action-btn primary" onclick="app.downloadInvoice('${order.master_order_id}')">
+                Download Invoice
+              </button>
+              <button class="order-action-btn" onclick="app.reorder('${order.master_order_id}')">
+                Reorder
+              </button>
+              <button class="order-action-btn" onclick="app.contactFarms('${order.master_order_id}')">
+                Contact Farms
+              </button>
+            </div>
           </div>
         `).join('');
+      },
+
+      getTrackingUrl(carrier, trackingNumber) {
+        const carriers = {
+          usps: `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumber}`,
+          ups: `https://www.ups.com/track?tracknum=${trackingNumber}`,
+          fedex: `https://www.fedex.com/fedextrack/?tracknumbers=${trackingNumber}`,
+          dhl: `https://www.dhl.com/en/express/tracking.html?AWB=${trackingNumber}`
+        };
+        return carriers[(carrier || '').toLowerCase()] || '#';
+      },
+
+      async downloadInvoice(orderId) {
+        try {
+          this.showLoading('Generating invoice...');
+          
+          const order = this.orders.find(o => o.master_order_id === orderId);
+          if (!order) {
+            this.hideLoading();
+            this.showToast('Order not found', 'error');
+            return;
+          }
+
+          // Create invoice data
+          const invoiceData = {
+            invoice_id: `INV-${orderId.substring(0, 8)}`,
+            order_id: orderId,
+            date: new Date().toISOString(),
+            buyer: {
+              business: order.buyer_name || this.currentBuyer?.businessName,
+              email: order.buyer_email || this.currentBuyer?.email,
+              address: order.delivery_address
+            },
+            items: order.farm_sub_orders.flatMap(sub => 
+              sub.items.map(item => ({
+                product: item.product_name,
+                quantity: item.quantity,
+                unit: item.unit,
+                price_per_unit: item.price_per_unit,
+                farm: sub.farm_name,
+                line_total: item.quantity * item.price_per_unit
+              }))
+            ),
+            subtotal: order.grand_total,
+            grand_total: order.grand_total,
+            delivery_date: order.delivery_date,
+            fulfillment: order.fulfillment_cadence || 'one_time'
+          };
+
+          // Download as JSON file
+          const blob = new Blob([JSON.stringify(invoiceData, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `invoice-${orderId.substring(0, 8)}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          this.hideLoading();
+          this.showToast('Invoice downloaded', 'success');
+        } catch (error) {
+          this.hideLoading();
+          console.error('Download invoice error:', error);
+          this.showToast('Failed to download invoice', 'error');
+        }
+      },
+
+      async reorder(orderId) {
+        try {
+          const order = this.orders.find(o => o.master_order_id === orderId);
+          if (!order) {
+            this.showToast('Order not found', 'error');
+            return;
+          }
+
+          // Extract all items from farm sub-orders
+          const allItems = (order.farm_sub_orders || []).flatMap(sub => sub.items || []);
+          
+          if (allItems.length === 0) {
+            this.showToast('No items to reorder', 'error');
+            return;
+          }
+
+          // Add items to cart
+          let addedCount = 0;
+          for (const item of allItems) {
+            // Check if item is still available in catalog
+            const catalogItem = this.catalog.find(c => c.sku_id === item.sku_id);
+            if (catalogItem) {
+              this.addToCart(item.sku_id, item.quantity);
+              addedCount++;
+            }
+          }
+
+          if (addedCount > 0) {
+            this.showToast(`${addedCount} item(s) added to cart`, 'success');
+            this.navigateTo('catalog');
+            // Open cart
+            document.getElementById('cart-panel').classList.add('open');
+          } else {
+            this.showToast('Items no longer available', 'info');
+          }
+        } catch (error) {
+          console.error('Reorder error:', error);
+          this.showToast('Failed to reorder', 'error');
+        }
+      },
+
+      contactFarms(orderId) {
+        // Placeholder for future messaging feature
+        this.showToast('Contact farms feature coming soon', 'info');
       },
 
       getStoredOrders() {

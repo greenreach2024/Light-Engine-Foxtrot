@@ -249,6 +249,11 @@
       color: #991b1b;
     }
 
+    .badge.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
     .btn {
       padding: 0.5rem 1rem;
       border: none;
@@ -552,6 +557,7 @@
     <button class="nav-tab" data-view="payments">Payments & Fees</button>
     <button class="nav-tab" data-view="orders">Orders</button>
     <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
+    <button class="nav-tab" data-view="compliance">Compliance Export</button>
   </nav>
 
   <main>
@@ -783,6 +789,94 @@
         </table>
       </div>
     </div>
+
+    <!-- Compliance Export View -->
+    <div id="compliance-view" class="view">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Compliance Export Tool</h2>
+        </div>
+        <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
+          Generate regulatory compliance reports including order transactions, farm source information, product details, and traceability events.
+          Designed for USDA traceability requirements, FDA FSMA, and state-level food safety programs.
+        </p>
+
+        <div class="card" style="margin-bottom: 1.5rem; background: var(--bg);">
+          <div class="card-header">
+            <h3 style="font-size: 1.125rem;">Export Configuration</h3>
+          </div>
+          <div style="padding: 1.5rem;">
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+              <div class="form-group">
+                <label for="export-start-date">Start Date</label>
+                <input type="date" id="export-start-date" />
+              </div>
+              <div class="form-group">
+                <label for="export-end-date">End Date</label>
+                <input type="date" id="export-end-date" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="export-format">Export Format</label>
+              <select id="export-format">
+                <option value="csv">CSV (Excel Compatible)</option>
+                <option value="json">JSON (API/Integration)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Data Scope</label>
+              <div style="display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; background: var(--surface); border-radius: 6px;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="export-orders" checked />
+                  Order Transactions
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="export-farms" checked />
+                  Farm Source Information
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="export-products" checked />
+                  Product Details & Certifications
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="export-traceability" checked />
+                  Traceability Events (QR scan data)
+                </label>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="admin.generateComplianceExport()">
+              Generate Export
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3 style="font-size: 1.125rem;">Export History</h3>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Records</th>
+                <th>Format</th>
+                <th>Date Range</th>
+                <th>Status</th>
+                <th>Generated</th>
+              </tr>
+            </thead>
+            <tbody id="export-history-table">
+              <tr>
+                <td colspan="6" class="empty-state">No exports generated yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- Onboard Farm Modal -->
@@ -871,7 +965,20 @@
           case 'reconciliation':
             this.loadRefunds();
             break;
+          case 'compliance':
+            this.initComplianceView();
+            break;
         }
+      },
+
+      initComplianceView() {
+        // Set default date range (last 30 days)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+
+        document.getElementById('export-start-date').value = startDate.toISOString().split('T')[0];
+        document.getElementById('export-end-date').value = endDate.toISOString().split('T')[0];
       },
 
       async loadOverview() {
@@ -1314,6 +1421,174 @@
       viewPaymentDetails(paymentId) {
         // Implement payment details modal
         this.showToast('Payment details modal not yet implemented', 'info');
+      },
+
+      async generateComplianceExport() {
+        try {
+          // Get form values
+          const startDate = document.getElementById('export-start-date').value;
+          const endDate = document.getElementById('export-end-date').value;
+          const format = document.getElementById('export-format').value;
+          const includeOrders = document.getElementById('export-orders').checked;
+          const includeFarms = document.getElementById('export-farms').checked;
+          const includeProducts = document.getElementById('export-products').checked;
+          const includeTraceability = document.getElementById('export-traceability').checked;
+
+          if (!startDate || !endDate) {
+            this.showToast('Please select start and end dates', 'error');
+            return;
+          }
+
+          if (new Date(startDate) > new Date(endDate)) {
+            this.showToast('Start date must be before end date', 'error');
+            return;
+          }
+
+          this.showToast('Generating compliance export...', 'info');
+
+          // Mock data generation (in production, fetch from API)
+          const records = this.generateComplianceRecords(startDate, endDate, {
+            includeOrders,
+            includeFarms,
+            includeProducts,
+            includeTraceability
+          });
+
+          if (records.length === 0) {
+            this.showToast('No records found for the selected date range', 'info');
+            return;
+          }
+
+          // Generate file
+          const filename = `compliance-export-${startDate}-to-${endDate}.${format}`;
+          let content, mimeType;
+
+          if (format === 'csv') {
+            content = this.generateCSV(records);
+            mimeType = 'text/csv';
+          } else {
+            content = JSON.stringify(records, null, 2);
+            mimeType = 'application/json';
+          }
+
+          // Download file
+          const blob = new Blob([content], { type: mimeType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          // Add to export history
+          this.addExportHistory({
+            filename,
+            records: records.length,
+            format,
+            dateRange: `${startDate} to ${endDate}`,
+            timestamp: new Date().toISOString()
+          });
+
+          this.showToast(`Export generated: ${records.length} records`, 'success');
+        } catch (error) {
+          console.error('Compliance export error:', error);
+          this.showToast('Failed to generate export', 'error');
+        }
+      },
+
+      generateComplianceRecords(startDate, endDate, options) {
+        const records = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        // Filter payments within date range
+        const relevantPayments = this.payments.filter(payment => {
+          const paymentDate = new Date(payment.created_at);
+          return paymentDate >= start && paymentDate <= end;
+        });
+
+        // Generate compliance records
+        relevantPayments.forEach(payment => {
+          const farm = this.farms.find(f => f.farm_id === payment.farm_id) || {};
+          
+          const record = {
+            traceability_id: `${payment.order_id}-${payment.farm_id}-${payment.payment_id.substring(0, 8)}`,
+            ...(options.includeOrders && {
+              order_id: payment.order_id,
+              order_date: payment.created_at,
+              order_status: payment.status,
+              buyer_id: payment.buyer_id || 'N/A',
+              buyer_email: 'buyer@example.com'
+            }),
+            ...(options.includeFarms && {
+              farm_id: payment.farm_id,
+              farm_name: farm.business_name || payment.farm_id,
+              farm_location: 'Location data not available',
+              farm_certifications: farm.certifications ? farm.certifications.join(', ') : 'N/A'
+            }),
+            ...(options.includeProducts && {
+              product_details: 'Product details from order items',
+              quantity: 'Variable',
+              price: payment.amount
+            }),
+            ...(options.includeTraceability && {
+              payment_id: payment.payment_id,
+              payment_status: payment.status,
+              payment_amount: payment.amount,
+              broker_fee: payment.broker_fee_amount,
+              fulfillment_timestamp: payment.created_at,
+              tracking_info: 'Available via farm sub-order'
+            })
+          };
+
+          records.push(record);
+        });
+
+        return records;
+      },
+
+      generateCSV(records) {
+        if (records.length === 0) return '';
+
+        // Get all unique keys
+        const keys = [...new Set(records.flatMap(r => Object.keys(r)))];
+        
+        // Generate CSV header
+        const header = keys.map(key => `"${key}"`).join(',');
+        
+        // Generate CSV rows
+        const rows = records.map(record => {
+          return keys.map(key => {
+            const value = record[key] !== undefined ? String(record[key]) : '';
+            return `"${value.replace(/"/g, '""')}"`;
+          }).join(',');
+        });
+
+        return [header, ...rows].join('\n');
+      },
+
+      addExportHistory(exportRecord) {
+        const table = document.getElementById('export-history-table');
+        
+        // Remove empty state if it exists
+        if (table.querySelector('.empty-state')) {
+          table.innerHTML = '';
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${exportRecord.filename}</td>
+          <td>${exportRecord.records}</td>
+          <td>${exportRecord.format.toUpperCase()}</td>
+          <td>${exportRecord.dateRange}</td>
+          <td><span class="badge badge-success">Complete</span></td>
+          <td>${new Date(exportRecord.timestamp).toLocaleString()}</td>
+        `;
+        
+        // Insert at the beginning (most recent first)
+        table.insertBefore(row, table.firstChild);
       },
 
       showToast(message, type = 'info') {
