@@ -643,11 +643,11 @@
             </div>
           </button>
           
-          <button class="action-btn purple" onclick="window.location.href='/views/farm-inventory.html'">
+          <button class="action-btn purple" onclick="openInventoryView()">
             <span class="action-icon"></span>
             <div class="action-text">
               <div>View Inventory</div>
-              <div class="action-subtitle">Full Details</div>
+              <div class="action-subtitle">Current & 48hr Forecast</div>
             </div>
           </button>
         </div>
@@ -676,6 +676,21 @@
           <div class="spinner"></div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Inventory View Modal -->
+  <div id="inventoryModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Current Inventory</h2>
+        <button class="close-btn" onclick="closeInventoryView()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="inventoryContent">
+          <div class="spinner"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -978,6 +993,195 @@
       if (trayId) {
         scannedData = trayId;
         onScanSuccess(trayId);
+      }
+    }
+
+    // Open Inventory View
+    function openInventoryView() {
+      document.getElementById('inventoryModal').classList.add('active');
+      loadInventoryData();
+    }
+
+    // Close Inventory View
+    function closeInventoryView() {
+      document.getElementById('inventoryModal').classList.remove('active');
+    }
+
+    // Load Inventory Data
+    async function loadInventoryData() {
+      const container = document.getElementById('inventoryContent');
+      
+      try {
+        // Fetch current inventory
+        const inventoryRes = await fetch('/api/inventory/current');
+        const inventoryData = await inventoryRes.json();
+        
+        // Fetch 48-hour forecast
+        const forecastRes = await fetch('/api/inventory/forecast');
+        const forecastData = await forecastRes.json();
+        
+        // Filter for next 48 hours
+        const now = Date.now();
+        const fortyEightHours = now + (48 * 60 * 60 * 1000);
+        const upcomingHarvests = forecastData.forecast?.filter(item => {
+          const harvestTime = new Date(item.harvest_date).getTime();
+          return harvestTime >= now && harvestTime <= fortyEightHours;
+        }) || [];
+        
+        // Group current inventory by crop
+        const cropGroups = {};
+        inventoryData.inventory?.forEach(item => {
+          const cropName = item.crop_name || 'Unknown';
+          if (!cropGroups[cropName]) {
+            cropGroups[cropName] = {
+              name: cropName,
+              trays: [],
+              totalPlants: 0
+            };
+          }
+          cropGroups[cropName].trays.push(item);
+          cropGroups[cropName].totalPlants += item.plant_count || 0;
+        });
+        
+        // Group upcoming harvests by crop
+        const harvestGroups = {};
+        upcomingHarvests.forEach(item => {
+          const cropName = item.crop_name || 'Unknown';
+          if (!harvestGroups[cropName]) {
+            harvestGroups[cropName] = {
+              name: cropName,
+              trays: [],
+              totalPlants: 0
+            };
+          }
+          harvestGroups[cropName].trays.push(item);
+          harvestGroups[cropName].totalPlants += item.expected_yield || 0;
+        });
+        
+        // Build HTML
+        let html = `
+          <div style="margin-bottom: 2rem;">
+            <h3 style="font-size: 1.75rem; color: #34d399; margin-bottom: 1.5rem;">Growing Now</h3>
+            <div style="display: grid; gap: 1rem;">
+        `;
+        
+        if (Object.keys(cropGroups).length === 0) {
+          html += `
+            <div style="text-align: center; padding: 3rem; color: #64748b;">
+              <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">📋</div>
+              <div style="font-size: 1.3rem;">No active trays</div>
+            </div>
+          `;
+        } else {
+          Object.values(cropGroups).forEach(group => {
+            html += `
+              <div style="
+                background: rgba(52, 211, 153, 0.1);
+                border: 2px solid rgba(52, 211, 153, 0.3);
+                border-radius: 16px;
+                padding: 1.5rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              ">
+                <div>
+                  <div style="font-size: 1.5rem; font-weight: 700; color: #34d399; margin-bottom: 0.5rem;">
+                    ${group.name}
+                  </div>
+                  <div style="font-size: 1.1rem; color: #cbd5e1;">
+                    ${group.trays.length} tray${group.trays.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <div style="
+                  background: rgba(52, 211, 153, 0.2);
+                  border: 2px solid rgba(52, 211, 153, 0.4);
+                  padding: 1rem 1.5rem;
+                  border-radius: 12px;
+                  text-align: center;
+                ">
+                  <div style="font-size: 2rem; font-weight: 800; color: #34d399; line-height: 1;">
+                    ${group.totalPlants}
+                  </div>
+                  <div style="font-size: 0.95rem; color: #cbd5e1; margin-top: 0.25rem;">
+                    plants
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+        }
+        
+        html += `
+            </div>
+          </div>
+          
+          <div>
+            <h3 style="font-size: 1.75rem; color: #fbbf24; margin-bottom: 1.5rem;">Ready Next 48 Hours</h3>
+            <div style="display: grid; gap: 1rem;">
+        `;
+        
+        if (Object.keys(harvestGroups).length === 0) {
+          html += `
+            <div style="text-align: center; padding: 3rem; color: #64748b;">
+              <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">✓</div>
+              <div style="font-size: 1.3rem;">Nothing due soon</div>
+            </div>
+          `;
+        } else {
+          Object.values(harvestGroups).forEach(group => {
+            const daysTillHarvest = Math.ceil((new Date(group.trays[0].harvest_date).getTime() - now) / (24 * 60 * 60 * 1000));
+            html += `
+              <div style="
+                background: rgba(251, 191, 36, 0.1);
+                border: 2px solid rgba(251, 191, 36, 0.3);
+                border-radius: 16px;
+                padding: 1.5rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              ">
+                <div>
+                  <div style="font-size: 1.5rem; font-weight: 700; color: #fbbf24; margin-bottom: 0.5rem;">
+                    ${group.name}
+                  </div>
+                  <div style="font-size: 1.1rem; color: #cbd5e1;">
+                    ${group.trays.length} tray${group.trays.length !== 1 ? 's' : ''} • ${daysTillHarvest} day${daysTillHarvest !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <div style="
+                  background: rgba(251, 191, 36, 0.2);
+                  border: 2px solid rgba(251, 191, 36, 0.4);
+                  padding: 1rem 1.5rem;
+                  border-radius: 12px;
+                  text-align: center;
+                ">
+                  <div style="font-size: 2rem; font-weight: 800; color: #fbbf24; line-height: 1;">
+                    ${group.totalPlants}
+                  </div>
+                  <div style="font-size: 0.95rem; color: #cbd5e1; margin-top: 0.25rem;">
+                    plants
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+        }
+        
+        html += `
+            </div>
+          </div>
+        `;
+        
+        container.innerHTML = html;
+        
+      } catch (error) {
+        console.error('Error loading inventory:', error);
+        container.innerHTML = `
+          <div style="text-align: center; padding: 3rem; color: #f87171;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">⚠</div>
+            <div style="font-size: 1.3rem;">Failed to load inventory</div>
+          </div>
+        `;
       }
     }
 
