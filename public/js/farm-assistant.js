@@ -266,33 +266,36 @@ class FarmAssistant {
   }
 
   initTextToSpeech() {
-    // Check if browser supports Web Speech Synthesis API
-    if (!window.speechSynthesis) {
+    // ResponsiveVoice will be loaded via script tag in HTML
+    // Check if either ResponsiveVoice or browser speech synthesis is available
+    if (window.responsiveVoice) {
+      console.log('🔊 ResponsiveVoice detected - using high-quality voices');
+      this.voiceEnabled = true;
+      
+      // Log available ResponsiveVoice voices
+      if (window.responsiveVoice.getVoices) {
+        const voices = window.responsiveVoice.getVoices();
+        console.log('🔊 ResponsiveVoice voices:', voices.map(v => v.name).join(', '));
+      }
+    } else if (window.speechSynthesis) {
+      console.log('🔊 Using browser Web Speech API (fallback)');
+      this.voiceEnabled = true;
+      this.voices = [];
+      
+      // Load voices for fallback
+      const loadVoices = () => {
+        this.voices = window.speechSynthesis.getVoices();
+        console.log('🔊 Browser voices loaded:', this.voices.length);
+      };
+      
+      loadVoices();
+      
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+      }
+    } else {
       console.warn('🔊 Text-to-speech not supported in this browser');
       this.voiceEnabled = false;
-      return;
-    }
-    
-    this.voices = [];
-    
-    // Load voices (they might not be available immediately)
-    const loadVoices = () => {
-      this.voices = window.speechSynthesis.getVoices();
-      console.log('🔊 Voices loaded:', this.voices.length, 'voices available');
-      if (this.voices.length > 0) {
-        console.log('🔊 All available voices:');
-        this.voices.forEach((v, i) => {
-          console.log(`  ${i + 1}. ${v.name} (${v.lang}) ${v.localService ? '[Local]' : '[Remote]'}`);
-        });
-      }
-    };
-    
-    // Load voices immediately if available
-    loadVoices();
-    
-    // Some browsers need this event to load voices
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = loadVoices;
     }
     
     console.log('🔊 Text-to-speech initialized, voiceEnabled:', this.voiceEnabled);
@@ -300,11 +303,52 @@ class FarmAssistant {
 
   speak(text) {
     console.log('🔊 speak() called with:', text.substring(0, 50) + '...');
-    console.log('🔊 voiceEnabled:', this.voiceEnabled, 'speechSynthesis:', !!window.speechSynthesis);
     
-    // Don't speak if voice is disabled or browser doesn't support it
-    if (!this.voiceEnabled || !window.speechSynthesis) {
-      console.warn('🔊 Voice disabled or not supported');
+    if (!this.voiceEnabled) {
+      console.warn('🔊 Voice disabled');
+      return;
+    }
+
+    // Check if ResponsiveVoice is available (better quality)
+    if (window.responsiveVoice) {
+      console.log('🔊 Using ResponsiveVoice');
+      
+      // Cancel any ongoing speech
+      if (window.responsiveVoice.isPlaying()) {
+        window.responsiveVoice.cancel();
+      }
+      
+      // Use a child-friendly voice
+      // Options: "UK English Female", "US English Female", "Australian Female"
+      const voiceName = "UK English Female"; // British accent is friendly for kids
+      
+      const options = {
+        pitch: 1.2,      // Slightly higher for friendlier sound
+        rate: 0.85,      // Slower for children to understand
+        volume: 1.0,
+        onstart: () => {
+          this.isSpeaking = true;
+          console.log('🔊 ✅ ResponsiveVoice speaking started:', text.substring(0, 30) + '...');
+        },
+        onend: () => {
+          this.isSpeaking = false;
+          console.log('🔊 ✅ ResponsiveVoice speech ended');
+        },
+        onerror: (error) => {
+          console.error('🔊 ❌ ResponsiveVoice error:', error);
+          this.isSpeaking = false;
+        }
+      };
+      
+      window.responsiveVoice.speak(text, voiceName, options);
+      return;
+    }
+    
+    // Fallback to browser's Web Speech API
+    console.log('🔊 Using browser Web Speech API (fallback)');
+    
+    if (!window.speechSynthesis) {
+      console.warn('🔊 Text-to-speech not supported');
       return;
     }
 
@@ -315,57 +359,30 @@ class FarmAssistant {
     const utterance = new SpeechSynthesisUtterance(text);
     
     // Configure voice settings for child-friendly sound
-    utterance.rate = 0.85; // Slower for children to understand
-    utterance.pitch = 1.3; // Higher pitch for younger, friendlier sound
+    utterance.rate = 0.85;
+    utterance.pitch = 1.3;
     utterance.volume = 1.0;
     
-    // Get latest voices (refresh if needed)
     const voices = this.voices && this.voices.length > 0 ? this.voices : window.speechSynthesis.getVoices();
     
-    if (voices.length === 0) {
-      console.warn('🔊 No voices available yet, speaking without voice selection');
-    } else {
-      // Log all available voices for debugging
-      console.log('🔊 Available voices:', voices.map(v => `${v.name} (${v.lang})`).join(', '));
-      
-      // Try to find the best child-friendly voice
-      // Priority: Kid voices > Female voices > Young-sounding voices
-      let preferredVoice = voices.find(v => 
-        v.name.toLowerCase().includes('kid') ||
-        v.name.toLowerCase().includes('child') ||
-        v.name.toLowerCase().includes('junior')
+    if (voices.length > 0) {
+      const preferredVoice = voices.find(v => 
+        v.name.includes('Samantha') ||
+        v.name.includes('Karen') ||
+        v.name.includes('Google UK English Female') ||
+        v.name.includes('Google US English Female') ||
+        (v.name.toLowerCase().includes('female') && v.lang.startsWith('en'))
       );
-      
-      if (!preferredVoice) {
-        preferredVoice = voices.find(v => 
-          v.name.includes('Samantha') || // macOS - warm female
-          v.name.includes('Karen') || // macOS - friendly
-          v.name.includes('Victoria') || // macOS - young
-          v.name.includes('Fiona') || // macOS - Scottish
-          v.name.includes('Google UK English Female') || // Chrome - British
-          v.name.includes('Google US English Female') || // Chrome
-          v.name.includes('Microsoft Zira') || // Windows
-          v.name.includes('Microsoft Jenny') || // Windows - neural
-          (v.name.toLowerCase().includes('female') && v.lang.startsWith('en'))
-        );
-      }
-      
-      if (!preferredVoice) {
-        // Fallback to any English voice
-        preferredVoice = voices.find(v => v.lang.startsWith('en'));
-      }
       
       if (preferredVoice) {
         utterance.voice = preferredVoice;
-        console.log('🔊 Using voice:', preferredVoice.name, '(', preferredVoice.lang, ')');
-      } else {
-        console.log('🔊 Using default voice');
+        console.log('🔊 Using voice:', preferredVoice.name);
       }
     }
 
     utterance.onstart = () => {
       this.isSpeaking = true;
-      console.log('🔊 ✅ Speaking started:', text.substring(0, 30) + '...');
+      console.log('🔊 ✅ Speaking started');
     };
 
     utterance.onend = () => {
@@ -374,7 +391,7 @@ class FarmAssistant {
     };
 
     utterance.onerror = (event) => {
-      console.error('🔊 ❌ Speech error:', event.error, event);
+      console.error('🔊 ❌ Speech error:', event.error);
       this.isSpeaking = false;
     };
 
