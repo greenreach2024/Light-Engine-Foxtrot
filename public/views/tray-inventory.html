@@ -577,7 +577,7 @@
   <div class="main-container">
     <!-- Top Header -->
     <div class="top-header">
-      <div class="farm-title">🌱 Farm Activity Hub</div>
+      <div class="farm-title">Farm Activity Hub</div>
       <div class="status-indicators">
         <div class="status-badge">
           <div class="status-dot"></div>
@@ -594,7 +594,7 @@
     <div class="content-grid">
       <!-- Today's Priorities - Full Width -->
       <section class="priorities-section">
-        <h2 class="section-title">🎯 Today's Priorities</h2>
+        <h2 class="section-title">Today's Priorities</h2>
         <div class="priority-items">
           <div class="priority-card">
             <div class="priority-number" id="harvestCount">0</div>
@@ -617,10 +617,10 @@
 
       <!-- Quick Actions - Left Column -->
       <section class="quick-actions">
-        <h2 class="section-title green">⚡ Quick Actions</h2>
+        <h2 class="section-title green">Quick Actions</h2>
         <div class="action-buttons">
           <button class="action-btn" onclick="openScanModal('seed')">
-            <span class="action-icon">🌱</span>
+            <span class="action-icon"></span>
             <div class="action-text">
               <div>Seed Tray</div>
               <div class="action-subtitle">Scan QR & Start New Tray</div>
@@ -628,7 +628,7 @@
           </button>
           
           <button class="action-btn blue" onclick="openScanModal('harvest')">
-            <span class="action-icon">✂️</span>
+            <span class="action-icon"></span>
             <div class="action-text">
               <div>Harvest</div>
               <div class="action-subtitle">Record Crop Harvest</div>
@@ -636,7 +636,7 @@
           </button>
           
           <button class="action-btn yellow" onclick="openScanModal('move')">
-            <span class="action-icon">📦</span>
+            <span class="action-icon"></span>
             <div class="action-text">
               <div>Move Tray</div>
               <div class="action-subtitle">Update Location</div>
@@ -644,7 +644,7 @@
           </button>
           
           <button class="action-btn purple" onclick="window.location.href='/views/farm-inventory.html'">
-            <span class="action-icon">📊</span>
+            <span class="action-icon"></span>
             <div class="action-text">
               <div>View Inventory</div>
               <div class="action-subtitle">Full Details</div>
@@ -655,7 +655,7 @@
 
       <!-- Harvest Today - Right Column -->
       <section class="harvest-section">
-        <h2 class="section-title orange">✂️ Harvest Today</h2>
+        <h2 class="section-title orange">Harvest Today</h2>
         <div id="harvestList" class="harvest-list">
           <div class="spinner"></div>
         </div>
@@ -663,7 +663,7 @@
 
       <!-- Checklists - Full Width Bottom -->
       <section class="checklist-section">
-        <h2 class="section-title purple">✅ Farm Checklists</h2>
+        <h2 class="section-title purple">Farm Checklists</h2>
         
         <div class="checklist-tabs">
           <button class="tab-btn active" onclick="switchChecklist('daily')">Daily</button>
@@ -809,7 +809,7 @@
       if (items.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
-            <div class="empty-state-icon">✅</div>
+            <div class="empty-state-icon"></div>
             <div class="empty-state-text">No harvests due today</div>
           </div>
         `;
@@ -821,8 +821,8 @@
           <div class="harvest-info">
             <div class="crop-name">${item.crop_name || 'Unknown Crop'}</div>
             <div class="crop-details">
-              <span>🌱 ${item.recipe_name || 'Recipe'}</span>
-              <span>📅 ${new Date(item.harvest_date).toLocaleDateString()}</span>
+              <span>${item.recipe_name || 'Recipe'}</span>
+              <span>${new Date(item.harvest_date).toLocaleDateString()}</span>
             </div>
           </div>
           <div class="tray-badge">${item.tray_id}</div>
@@ -903,9 +903,9 @@
       scannedData = null;
       
       const titles = {
-        seed: '🌱 Seed New Tray',
-        harvest: '✂️ Record Harvest',
-        move: '📦 Move Tray'
+        seed: 'Seed New Tray',
+        harvest: 'Record Harvest',
+        move: 'Move Tray'
       };
       
       document.getElementById('scanTitle').textContent = titles[mode];
@@ -960,7 +960,7 @@
       stopQRScanner();
       
       document.getElementById('scanResult').innerHTML = `
-        <strong>✅ Scanned:</strong><br>
+        <strong>Scanned:</strong><br>
         ${decodedText}
       `;
       document.getElementById('scanResult').style.display = 'block';
