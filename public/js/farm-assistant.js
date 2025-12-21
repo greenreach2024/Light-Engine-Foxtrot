@@ -133,14 +133,14 @@ class FarmAssistant {
               <div class="welcome-text">
                 <strong>Hi I'm Cheo, your farm Assistant!</strong>
                 <strong class="love-to-help">I love to help!</strong>
-                <ul>
-                  <li>"What's ready to harvest?"</li>
-                  <li>"Show me the temperature"</li>
-                  <li>"Where is the lettuce?"</li>
-                  <li>"Blink lights for basil"</li>
-                  <li>"Show planting schedule"</li>
-                </ul>
-                <strong>Type or click the microphone to speak!</strong>
+                <div class="example-queries">
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What\\'s ready to harvest?')">What's ready to harvest?</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show me the temperature')">Show me the temperature</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Where is the lettuce?')">Where is the lettuce?</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Blink lights for basil')">Blink lights for basil</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show planting schedule')">Show planting schedule</button>
+                </div>
+                <strong>Or type your own question below!</strong>
               </div>
             </div>
           </div>
@@ -314,6 +314,14 @@ class FarmAssistant {
     // Add user message
     this.addMessage(query, 'user');
     input.value = '';
+    
+    // Process query
+    await this.processQuery(query);
+  }
+
+  async handleExampleQuery(query) {
+    // Add user message
+    this.addMessage(query, 'user');
     
     // Process query
     await this.processQuery(query);
