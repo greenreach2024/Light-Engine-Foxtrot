@@ -10,6 +10,8 @@ class FarmAssistant {
     this.currentContext = this.detectContext();
     this.isListening = false;
     this.recognition = null;
+    this.isSpeaking = false;
+    this.voiceEnabled = true;
     this.jokes = [
       {
         type: 'joke',
@@ -79,6 +81,7 @@ class FarmAssistant {
     ];
     this.init();
     this.initVoiceRecognition();
+    this.initTextToSpeech();
   }
 
   init() {
@@ -260,6 +263,65 @@ class FarmAssistant {
       this.updateVoiceButton();
       console.log('🎤 Voice recognition ended');
     };
+  }
+
+  initTextToSpeech() {
+    // Check if browser supports Web Speech Synthesis API
+    if (!window.speechSynthesis) {
+      console.warn('Text-to-speech not supported in this browser');
+      this.voiceEnabled = false;
+      return;
+    }
+    
+    console.log('🔊 Text-to-speech initialized');
+  }
+
+  speak(text) {
+    // Don't speak if voice is disabled or browser doesn't support it
+    if (!this.voiceEnabled || !window.speechSynthesis) {
+      return;
+    }
+
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+
+    // Create speech utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Configure voice settings
+    utterance.rate = 0.9; // Slightly slower for children
+    utterance.pitch = 1.1; // Slightly higher pitch for friendly tone
+    utterance.volume = 1.0;
+    
+    // Try to use a friendly voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => 
+      v.name.includes('Samantha') || // macOS
+      v.name.includes('Google US English Female') || // Chrome
+      v.name.includes('Microsoft Zira') || // Windows
+      v.lang.startsWith('en-')
+    );
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.onstart = () => {
+      this.isSpeaking = true;
+      console.log('🔊 Speaking:', text);
+    };
+
+    utterance.onend = () => {
+      this.isSpeaking = false;
+      console.log('🔊 Speech ended');
+    };
+
+    utterance.onerror = (event) => {
+      console.error('🔊 Speech error:', event.error);
+      this.isSpeaking = false;
+    };
+
+    // Speak the text
+    window.speechSynthesis.speak(utterance);
   }
 
   toggleVoiceRecognition() {
@@ -544,10 +606,10 @@ class FarmAssistant {
       const data = await response.json();
       
       if (data.zones && data.zones.length > 0) {
-        // Temperature is in sensors.tempC.current (Celsius), convert to Fahrenheit
+        // Temperature is in sensors.tempC.current (Celsius), keep as Celsius
         const temps = data.zones.map(z => {
           const tempC = parseFloat(z.sensors?.tempC?.current || 0);
-          return (tempC * 9/5) + 32; // Convert C to F
+          return tempC; // Keep in Celsius
         });
         const humidities = data.zones.map(z => parseFloat(z.sensors?.rh?.current || 0));
         
@@ -571,7 +633,7 @@ class FarmAssistant {
             <div class="info-item">
               <div class="info-icon">🌡️</div>
               <div class="info-label">Temperature</div>
-              <div class="info-value">${avgTemp}°F</div>
+              <div class="info-value">${avgTemp}°C</div>
             </div>
           `;
         }
@@ -588,10 +650,10 @@ class FarmAssistant {
         
         popupContent += '</div>';
         
-        // Add status message
-        if (avgTemp >= 68 && avgTemp <= 78 && avgHumidity >= 50 && avgHumidity <= 70) {
+        // Add status message (Celsius thresholds: 20-26°C ideal, <18°C or >29°C warning)
+        if (avgTemp >= 20 && avgTemp <= 26 && avgHumidity >= 50 && avgHumidity <= 70) {
           popupContent += '<div class="status-message success">✅ Perfect conditions! Everything looks great!</div>';
-        } else if (avgTemp < 65 || avgTemp > 85) {
+        } else if (avgTemp < 18 || avgTemp > 29) {
           popupContent += '<div class="status-message warning">⚠️ Temperature needs attention</div>';
         } else {
           popupContent += '<div class="status-message ok">Conditions look good!</div>';
@@ -771,10 +833,10 @@ class FarmAssistant {
       let message = '<strong>Farm Health Status:</strong><ul>';
       
       if (data.zones && data.zones.length > 0) {
-        const avgTemp = (data.zones.reduce((sum, z) => sum + parseFloat(z.temperature || 0), 0) / data.zones.length).toFixed(1);
-        const avgHumidity = (data.zones.reduce((sum, z) => sum + parseFloat(z.humidity || 0), 0) / data.zones.length).toFixed(0);
+        const avgTemp = (data.zones.reduce((sum, z) => sum + parseFloat(z.sensors?.tempC?.current || 0), 0) / data.zones.length).toFixed(1);
+        const avgHumidity = (data.zones.reduce((sum, z) => sum + parseFloat(z.sensors?.rh?.current || 0), 0) / data.zones.length).toFixed(0);
         
-        message += `<li>🌡️ Average Temperature: ${avgTemp}°F</li>`;
+        message += `<li>🌡️ Average Temperature: ${avgTemp}°C</li>`;
         message += `<li>💧 Average Humidity: ${avgHumidity}%</li>`;
         message += `<li>📊 Active Zones: ${data.zones.length}</li>`;
       }
