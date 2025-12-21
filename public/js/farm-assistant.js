@@ -268,17 +268,40 @@ class FarmAssistant {
   initTextToSpeech() {
     // Check if browser supports Web Speech Synthesis API
     if (!window.speechSynthesis) {
-      console.warn('Text-to-speech not supported in this browser');
+      console.warn('🔊 Text-to-speech not supported in this browser');
       this.voiceEnabled = false;
       return;
     }
     
-    console.log('🔊 Text-to-speech initialized');
+    this.voices = [];
+    
+    // Load voices (they might not be available immediately)
+    const loadVoices = () => {
+      this.voices = window.speechSynthesis.getVoices();
+      console.log('🔊 Voices loaded:', this.voices.length, 'voices available');
+      if (this.voices.length > 0) {
+        console.log('🔊 Sample voices:', this.voices.slice(0, 3).map(v => v.name));
+      }
+    };
+    
+    // Load voices immediately if available
+    loadVoices();
+    
+    // Some browsers need this event to load voices
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+    
+    console.log('🔊 Text-to-speech initialized, voiceEnabled:', this.voiceEnabled);
   }
 
   speak(text) {
+    console.log('🔊 speak() called with:', text.substring(0, 50) + '...');
+    console.log('🔊 voiceEnabled:', this.voiceEnabled, 'speechSynthesis:', !!window.speechSynthesis);
+    
     // Don't speak if voice is disabled or browser doesn't support it
     if (!this.voiceEnabled || !window.speechSynthesis) {
+      console.warn('🔊 Voice disabled or not supported');
       return;
     }
 
@@ -293,34 +316,44 @@ class FarmAssistant {
     utterance.pitch = 1.1; // Slightly higher pitch for friendly tone
     utterance.volume = 1.0;
     
-    // Try to use a friendly voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(v => 
-      v.name.includes('Samantha') || // macOS
-      v.name.includes('Google US English Female') || // Chrome
-      v.name.includes('Microsoft Zira') || // Windows
-      v.lang.startsWith('en-')
-    );
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
+    // Get latest voices (refresh if needed)
+    const voices = this.voices && this.voices.length > 0 ? this.voices : window.speechSynthesis.getVoices();
+    
+    if (voices.length === 0) {
+      console.warn('🔊 No voices available yet, speaking without voice selection');
+    } else {
+      // Try to use a friendly voice
+      const preferredVoice = voices.find(v => 
+        v.name.includes('Samantha') || // macOS
+        v.name.includes('Google US English Female') || // Chrome
+        v.name.includes('Microsoft Zira') || // Windows
+        v.lang.startsWith('en-')
+      );
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+        console.log('🔊 Using voice:', preferredVoice.name);
+      } else {
+        console.log('🔊 Using default voice');
+      }
     }
 
     utterance.onstart = () => {
       this.isSpeaking = true;
-      console.log('🔊 Speaking:', text);
+      console.log('🔊 ✅ Speaking started:', text.substring(0, 30) + '...');
     };
 
     utterance.onend = () => {
       this.isSpeaking = false;
-      console.log('🔊 Speech ended');
+      console.log('🔊 ✅ Speech ended');
     };
 
     utterance.onerror = (event) => {
-      console.error('🔊 Speech error:', event.error);
+      console.error('🔊 ❌ Speech error:', event.error, event);
       this.isSpeaking = false;
     };
 
     // Speak the text
+    console.log('🔊 Calling speechSynthesis.speak()');
     window.speechSynthesis.speak(utterance);
   }
 
@@ -410,6 +443,20 @@ class FarmAssistant {
     // Save to history
     this.conversationHistory.push({ content, type, timestamp: Date.now() });
     this.saveHistory();
+    
+    // Speak assistant messages aloud (text-to-speech for children)
+    if (type === 'assistant' && this.voiceEnabled) {
+      // Remove HTML tags and emojis from speech
+      const cleanText = content
+        .replace(/<[^>]*>/g, '') // Remove HTML tags
+        .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Remove emojis
+        .trim();
+      
+      if (cleanText) {
+        console.log('🔊 Calling speak() for assistant message');
+        this.speak(cleanText);
+      }
+    }
   }
 
   async processQuery(query) {
