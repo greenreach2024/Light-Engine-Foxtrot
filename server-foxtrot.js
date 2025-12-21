@@ -10328,6 +10328,50 @@ app.get('/api/ml/automation/actions', asyncHandler(async (req, res) => {
  */
 app.get('/api/ml/energy-forecast', asyncHandler(async (req, res) => {
   try {
+    // Demo mode: generate synthetic energy forecast
+    if (isDemoMode()) {
+      const now = new Date();
+      const predictions = [];
+      
+      // Generate 24-hour forecast
+      for (let i = 0; i < 24; i++) {
+        const timestamp = new Date(now.getTime() + i * 60 * 60 * 1000);
+        const hour = timestamp.getHours();
+        
+        // Simulate energy usage pattern: higher during day (6-18), lower at night
+        let baseKwh = 5.0; // Base consumption
+        if (hour >= 6 && hour < 18) {
+          baseKwh += 8.0 * Math.sin((hour - 6) / 12 * Math.PI); // Peak during day
+        }
+        
+        const energyKwh = parseFloat(baseKwh.toFixed(2));
+        
+        predictions.push({
+          timestamp: timestamp.toISOString(),
+          energy_kwh: energyKwh,
+          confidence_lower: parseFloat((energyKwh * 0.85).toFixed(2)),
+          confidence_upper: parseFloat((energyKwh * 1.15).toFixed(2))
+        });
+      }
+      
+      const totalDailyKwh = predictions.reduce((sum, p) => sum + p.energy_kwh, 0);
+      
+      return res.json({
+        ok: true,
+        data: {
+          predictions: predictions,
+          total_daily_kwh: parseFloat(totalDailyKwh.toFixed(2)),
+          peak_kwh: Math.max(...predictions.map(p => p.energy_kwh)),
+          avg_kwh: parseFloat((totalDailyKwh / 24).toFixed(2))
+        },
+        metadata: {
+          generated_at: now.toISOString(),
+          validUntil: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+          demo: true
+        }
+      });
+    }
+    
     const insightsDir = path.join(__dirname, 'public', 'data', 'ml-insights');
     const latestPath = path.join(insightsDir, 'energy-forecast-latest.json');
     
