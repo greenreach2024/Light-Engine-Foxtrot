@@ -205,8 +205,27 @@ class FarmAssistant {
   }
 
   createInfoPopup(title, content) {
-    // Removed - user doesn't want popups
-    return;
+    // Create popup overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'assistant-popup-overlay';
+    
+    const popup = document.createElement('div');
+    popup.className = 'assistant-popup';
+    
+    popup.innerHTML = `
+      <div class="assistant-popup-header">${title}</div>
+      <div class="assistant-popup-content">${content}</div>
+      <button class="assistant-popup-close" onclick="this.closest('.assistant-popup-overlay').remove()">Close</button>
+    `;
+    
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    
+    // Auto-close after 15 seconds
+    setTimeout(() => {
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 500);
+    }, 15000);
   }
 
   attachEventListeners() {
@@ -1130,15 +1149,22 @@ class FarmAssistant {
       
       this.createInfoPopup(item.type === 'riddle' ? 'Riddle Time! 🧩' : 'Joke Time! 😄', popupContent);
       
-      // Show answer after 3 seconds
+      // Speak the question first
+      const questionText = item.question.replace(/[🤔😄]/g, '');
+      this.speak(questionText);
+      
+      // Show and speak answer after 3 seconds
       setTimeout(() => {
         const answerElement = document.querySelector('.joke-answer');
         if (answerElement) {
           answerElement.style.opacity = '1';
         }
+        // Speak the answer
+        const answerText = item.answer.replace(/[🤔😄]/g, '');
+        this.speak(answerText);
       }, 3000);
       
-      this.addMessage(`Here's a ${item.type === 'riddle' ? 'riddle' : 'joke'} for you! 😊`, 'assistant');
+      this.addMessage(`Here's a ${item.type === 'riddle' ? 'riddle' : 'joke'} for you!`, 'assistant');
       return true;
     }
     
