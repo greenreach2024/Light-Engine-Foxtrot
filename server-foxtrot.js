@@ -89,6 +89,7 @@ import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
 import wholesaleSquareOAuthRouter from './routes/wholesale/square-oauth.js';
 import wholesaleSLAPoliciesRouter from './routes/wholesale/sla-policies.js';
 import wholesaleNetworkRouter from './routes/wholesale/network.js';
+import wholesaleOrdersRouter from './routes/wholesale-orders.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
@@ -9378,6 +9379,18 @@ app.use('/api/wholesale/buyer/preferences', wholesaleSLAPoliciesRouter);
  * - GET /api/wholesale/network/recommendations: Network recommendations
  */
 app.use('/api/wholesale/network', wholesaleNetworkRouter);
+
+/**
+ * Wholesale Orders Routes (Multi-Farm Order Management)
+ * SkipTheDishes-style workflow with payment authorization and farm verification
+ * - POST /api/wholesale/orders/create: Place order with payment authorization
+ * - POST /api/wholesale/orders/farm-verify: Farm accepts/declines/modifies order
+ * - POST /api/wholesale/orders/buyer-review: Buyer reviews farm modifications
+ * - POST /api/wholesale/orders/confirm-pickup: QR code pickup verification
+ * - GET /api/wholesale/orders/pending-verification/:farm_id: Farm's pending orders
+ * - GET /api/wholesale/orders/:order_id: Complete order details
+ */
+app.use('/api/wholesale/orders', wholesaleOrdersRouter);
 
 /**
  * GreenReach: Audit Logging

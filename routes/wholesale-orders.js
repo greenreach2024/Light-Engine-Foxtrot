@@ -1,0 +1,345 @@
+/**
+ * Wholesale Orders Router - Multi-Farm Order Management
+ * Implements SkipTheDishes-style workflow with payment authorization and farm verification
+ */
+
+import express from 'express';
+import Stripe from 'stripe';
+
+const router = express.Router();
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+
+// Order status enums
+const OrderStatus = {
+  PENDING_PAYMENT: 'pending_payment',
+  PAYMENT_AUTHORIZED: 'payment_authorized',
+  SPLIT_COMPLETE: 'split_complete',
+  PENDING_FARM_VERIFICATION: 'pending_farm_verification',
+  PARTIAL_VERIFICATION: 'partial_verification',
+  FARMS_VERIFIED: 'farms_verified',
+  SEEKING_ALTERNATIVES: 'seeking_alternatives',
+  PENDING_BUYER_REVIEW: 'pending_buyer_review',
+  BUYER_APPROVED: 'buyer_approved',
+  BUYER_REJECTED: 'buyer_rejected',
+  READY_FOR_PICKUP: 'ready_for_pickup',
+  PICKED_UP: 'picked_up',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+  REFUNDED: 'refunded'
+};
+
+const SubOrderStatus = {
+  PENDING_VERIFICATION: 'pending_verification',
+  FARM_ACCEPTED: 'farm_accepted',
+  FARM_DECLINED: 'farm_declined',
+  FARM_MODIFIED: 'farm_modified',
+  BUYER_APPROVED: 'buyer_approved',
+  READY_FOR_PICKUP: 'ready_for_pickup',
+  PICKED_UP: 'picked_up',
+  PAYMENT_CAPTURED: 'payment_captured',
+  FARM_PAID: 'farm_paid',
+  CANCELLED: 'cancelled'
+};
+
+/**
+ * POST /api/wholesale/orders/create
+ * Place new wholesale order with payment authorization
+ */
+router.post('/create', async (req, res) => {
+  try {
+    const { buyer_id, buyer_name, buyer_email, delivery_address, delivery_city, 
+            delivery_province, fulfillment_cadence, delivery_instructions,
+            items, payment_method_id } = req.body;
+    
+    // Calculate totals
+    const total_amount = items.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
+    const platform_fee = total_amount * 0.10; // 10% platform fee
+    
+    // Authorize payment with Stripe (don't capture yet)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(total_amount * 100), // Convert to cents
+      currency: 'cad',
+      payment_method: payment_method_id,
+      confirm: true,
+      capture_method: 'manual', // IMPORTANT: Don't charge yet
+      description: `Wholesale Order - ${buyer_name}`,
+      metadata: {
+        buyer_email,
+        buyer_name
+      }
+    });
+    
+    if (paymentIntent.status !== 'requires_capture') {
+      return res.status(400).json({ 
+        error: 'Payment authorization failed',
+        details: paymentIntent.status 
+      });
+    }
+    
+    // Create order record (in production, use actual database)
+    const order = {
+      id: Date.now(), // Use proper ID generation in production
+      buyer_id,
+      buyer_name,
+      buyer_email,
+      delivery_address,
+      delivery_city,
+      delivery_province,
+      fulfillment_cadence,
+      delivery_instructions,
+      total_amount,
+      platform_fee,
+      status: OrderStatus.PAYMENT_AUTHORIZED,
+      payment_intent_id: paymentIntent.id,
+      verification_deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Split order by farm
+    const farmItems = {};
+    items.forEach(item => {
+      if (!farmItems[item.farm_id]) {
+        farmItems[item.farm_id] = [];
+      }
+      farmItems[item.farm_id].push(item);
+    });
+    
+    // Create sub-orders for each farm
+    const sub_orders = Object.entries(farmItems).map(([farm_id, farmItems]) => {
+      const sub_total = farmItems.reduce((sum, item) => 
+        sum + (item.price_per_unit * item.quantity), 0);
+      
+      return {
+        id: Date.now() + Math.random(), // Use proper ID generation
+        wholesale_order_id: order.id,
+        farm_id,
+        status: SubOrderStatus.PENDING_VERIFICATION,
+        sub_total,
+        items: farmItems.map(item => ({
+          sku_id: item.sku_id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          unit: item.unit,
+          price_per_unit: item.price_per_unit,
+          line_total: item.price_per_unit * item.quantity,
+          original_quantity: item.quantity
+        })),
+        verification_deadline: order.verification_deadline
+      };
+    });
+    
+    order.sub_orders = sub_orders;
+    order.status = OrderStatus.PENDING_FARM_VERIFICATION;
+    
+    // TODO: Send notifications to farms
+    console.log(`[Wholesale Orders] Created order #${order.id} with ${sub_orders.length} sub-orders`);
+    
+    res.json({
+      success: true,
+      order_id: order.id,
+      payment_intent_id: paymentIntent.id,
+      total_amount,
+      verification_deadline: order.verification_deadline,
+      message: 'Order placed successfully. Farms have 24 hours to verify.'
+    });
+    
+  } catch (error) {
+    console.error('[Wholesale Orders] Create order error:', error);
+    res.status(500).json({ 
+      error: 'Failed to create order',
+      details: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/wholesale/orders/farm-verify
+ * Farm accepts, declines, or modifies order
+ */
+router.post('/farm-verify', async (req, res) => {
+  try {
+    const { farm_id, sub_order_id, action, modifications, reason } = req.body;
+    
+    // TODO: Fetch sub-order from database
+    // TODO: Verify farm_id matches sub-order
+    // TODO: Check deadline hasn't passed
+    
+    let newStatus;
+    let message;
+    
+    switch (action) {
+      case 'accept':
+        newStatus = SubOrderStatus.FARM_ACCEPTED;
+        message = 'Order accepted successfully';
+        // TODO: Check if all sub-orders verified -> update main order status
+        break;
+        
+      case 'decline':
+        newStatus = SubOrderStatus.FARM_DECLINED;
+        message = 'Order declined';
+        // TODO: Trigger alternative farm search
+        break;
+        
+      case 'modify':
+        newStatus = SubOrderStatus.FARM_MODIFIED;
+        message = 'Modifications submitted for buyer review';
+        // TODO: Save modifications
+        // TODO: Update main order status to PENDING_BUYER_REVIEW
+        // TODO: Notify buyer
+        break;
+        
+      default:
+        return res.status(400).json({ error: 'Invalid action' });
+    }
+    
+    console.log(`[Wholesale Orders] Farm ${farm_id} ${action}ed sub-order #${sub_order_id}`);
+    
+    res.json({
+      success: true,
+      sub_order_id,
+      new_status: newStatus,
+      message
+    });
+    
+  } catch (error) {
+    console.error('[Wholesale Orders] Farm verify error:', error);
+    res.status(500).json({ error: 'Failed to process verification' });
+  }
+});
+
+/**
+ * POST /api/wholesale/orders/buyer-review
+ * Buyer accepts or rejects farm modifications
+ */
+router.post('/buyer-review', async (req, res) => {
+  try {
+    const { order_id, action, reason } = req.body;
+    
+    // TODO: Fetch order from database
+    // TODO: Verify order has modifications pending review
+    
+    if (action === 'accept') {
+      // TODO: Update sub-order quantities
+      // TODO: Adjust payment authorization if total changed
+      // TODO: Update order status to READY_FOR_PICKUP
+      
+      console.log(`[Wholesale Orders] Buyer accepted modifications for order #${order_id}`);
+      
+      res.json({
+        success: true,
+        message: 'Modifications accepted. Order will proceed to pickup.',
+        new_status: OrderStatus.READY_FOR_PICKUP
+      });
+      
+    } else if (action === 'reject') {
+      // Cancel payment authorization
+      // TODO: Get payment_intent_id from order
+      // await stripe.paymentIntents.cancel(payment_intent_id);
+      
+      // TODO: Update order status to CANCELLED
+      // TODO: Notify farms
+      
+      console.log(`[Wholesale Orders] Buyer rejected modifications for order #${order_id}`);
+      
+      res.json({
+        success: true,
+        message: 'Order cancelled and payment authorization released.',
+        new_status: OrderStatus.CANCELLED
+      });
+      
+    } else {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+    
+  } catch (error) {
+    console.error('[Wholesale Orders] Buyer review error:', error);
+    res.status(500).json({ error: 'Failed to process review' });
+  }
+});
+
+/**
+ * POST /api/wholesale/orders/confirm-pickup
+ * Confirm pickup with QR code verification
+ */
+router.post('/confirm-pickup', async (req, res) => {
+  try {
+    const { sub_order_id, qr_code, confirmed_by_farm_id } = req.body;
+    
+    // TODO: Verify QR code matches sub-order
+    // TODO: Verify farm_id matches
+    // TODO: Update sub-order status to PICKED_UP
+    
+    // TODO: Check if all sub-orders picked up -> capture payment
+    // const paymentIntent = await stripe.paymentIntents.capture(payment_intent_id);
+    
+    console.log(`[Wholesale Orders] Pickup confirmed for sub-order #${sub_order_id}`);
+    
+    res.json({
+      success: true,
+      message: 'Pickup confirmed. Payment will be processed.',
+      new_status: SubOrderStatus.PICKED_UP
+    });
+    
+  } catch (error) {
+    console.error('[Wholesale Orders] Confirm pickup error:', error);
+    res.status(500).json({ error: 'Failed to confirm pickup' });
+  }
+});
+
+/**
+ * GET /api/wholesale/orders/pending-verification/:farm_id
+ * Get pending orders for a farm
+ */
+router.get('/pending-verification/:farm_id', async (req, res) => {
+  try {
+    const { farm_id } = req.params;
+    
+    // TODO: Query database for sub-orders where:
+    // - farm_id matches
+    // - status = PENDING_VERIFICATION
+    // - verification_deadline hasn't passed
+    
+    // Mock data for now
+    const pendingOrders = [];
+    
+    res.json({
+      success: true,
+      farm_id,
+      pending_count: pendingOrders.length,
+      orders: pendingOrders
+    });
+    
+  } catch (error) {
+    console.error('[Wholesale Orders] Get pending error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending orders' });
+  }
+});
+
+/**
+ * GET /api/wholesale/orders/:order_id
+ * Get complete order details
+ */
+router.get('/:order_id', async (req, res) => {
+  try {
+    const { order_id } = req.params;
+    
+    // TODO: Fetch order with all sub-orders and line items
+    
+    res.json({
+      success: true,
+      order: {
+        id: order_id,
+        // ... order data
+      }
+    });
+    
+  } catch (error) {
+    console.error('[Wholesale Orders] Get order error:', error);
+    res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
+export default router;
