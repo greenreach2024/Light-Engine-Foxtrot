@@ -905,18 +905,24 @@
         farmName = config.farmName || 'Demo Farm';
         userRole = selectedRole;
         
-        // Get demo tokens for the current farm
-        const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
-        const tokensData = await tokensResponse.json();
-        
-        if (!tokensData.ok) {
-          throw new Error('Failed to get demo tokens');
+        // Try to get demo tokens (works in dev/demo mode)
+        try {
+          const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+          const tokensData = await tokensResponse.json();
+          
+          if (tokensData.ok && tokensData.tokens && tokensData.tokens[farmId]) {
+            token = tokensData.tokens[farmId][selectedRole];
+          }
+        } catch (tokenError) {
+          console.log('[Login] Demo tokens not available (production mode), proceeding without token');
+          // In production, we can proceed without token for display-only mode
+          token = null;
         }
         
-        token = tokensData.tokens[farmId][selectedRole];
-        
         // Save to localStorage
-        localStorage.setItem('farm_token', token);
+        if (token) {
+          localStorage.setItem('farm_token', token);
+        }
         localStorage.setItem('farm_id', farmId);
         localStorage.setItem('farm_name', farmName);
         localStorage.setItem('user_role', userRole);
@@ -924,6 +930,7 @@
         // Show app
         showApp();
       } catch (error) {
+        console.error('[Login] Error:', error);
         document.getElementById('login-error').textContent = 'Failed to connect: ' + error.message;
         document.getElementById('login-error').classList.remove('hidden');
       }
