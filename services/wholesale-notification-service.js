@@ -1,9 +1,11 @@
 /**
  * GreenReach Wholesale Notification Service
- * Email and SMS notifications for farms and buyers
+ * Email, SMS, and push notifications for farms and buyers
  */
 
 import nodemailer from 'nodemailer';
+import smsService from './sms-service.js';
+import pushService from './push-notification-service.js';
 
 class WholesaleNotificationService {
   constructor() {
@@ -180,12 +182,18 @@ support@greenreach.ca
     
     // Send SMS if phone provided
     if (phone) {
-      await this.sendSMS(phone, `
-GreenReach Order #${order.id}
-${hoursLeft}hrs to respond
-$${subOrder.sub_total.toFixed(2)} total
-View: ${this.appUrl}/wholesale-farm-orders.html
-      `.trim());
+      await smsService.notifyFarmNewOrder(phone, order.id, subOrder.sub_total, hoursLeft);
+    }
+    
+    // Send push notification if farm has mobile devices registered
+    if (farmContact.device_tokens && farmContact.device_tokens.length > 0) {
+      await pushService.notifyFarmNewOrder(
+        farmContact.device_tokens,
+        order.id,
+        order.buyer_name,
+        subOrder.sub_total,
+        hoursLeft
+      );
     }
   }
 
@@ -342,10 +350,18 @@ View: ${this.appUrl}/wholesale-farm-orders.html
    * Send SMS notification
    */
   async sendSMS(phone, message) {
-    // TODO: Integrate with Twilio or AWS SNS
-    console.log(`[Notifications] SMS to ${phone}: ${message}`);
-    // For now, just log. In production, use Twilio:
-    // await twilioClient.messages.create({ body: message, to: phone, from: TWILIO_NUMBER });
+    return await smsService.send(phone, message);
+  }
+
+  /**
+   * Send push notification
+   */
+  async sendPush(deviceTokens, notification, data) {
+    if (Array.isArray(deviceTokens)) {
+      return await pushService.sendToDevices(deviceTokens, notification, data);
+    } else {
+      return await pushService.sendToDevice(deviceTokens, notification, data);
+    }
   }
 
   /**
