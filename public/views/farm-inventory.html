@@ -564,14 +564,22 @@
     const API_BASE = window.location.origin;
 
     async function loadInventory() {
+      console.log('[loadInventory] Starting...');
       showLoading();
 
       try {
+        console.log('[loadInventory] Fetching data from:', API_BASE);
         const [currentResp, forecastResp, groupsResp] = await Promise.all([
           fetch(`${API_BASE}/api/inventory/current`),
           fetch(`${API_BASE}/api/inventory/forecast`),
           fetch(`${API_BASE}/data/groups.json`)
         ]);
+
+        console.log('[loadInventory] Response status:', {
+          current: currentResp.status,
+          forecast: forecastResp.status,
+          groups: groupsResp.status
+        });
 
         if (!currentResp.ok || !forecastResp.ok || !groupsResp.ok) {
           throw new Error('Failed to load inventory data');
@@ -582,16 +590,25 @@
         const groupsResponse = await groupsResp.json();
         const groupsData = groupsResponse.groups || [];
 
+        console.log('[loadInventory] Data loaded:', {
+          currentData: !!currentData,
+          forecastData: !!forecastData,
+          groupsCount: groupsData.length
+        });
+
         // Calculate unique crops
         const uniqueCrops = new Set(groupsData.map(g => g.crop).filter(Boolean));
 
+        console.log('[loadInventory] Rendering...');
         renderSummaryCards(currentData, uniqueCrops.size);
         renderForecast(forecastData);
         renderInventoryByLocation(currentData, groupsData, forecastData);
         renderInventoryByCrop(currentData, groupsData, forecastData);
         renderInventoryByHarvest(currentData, groupsData, forecastData);
+        console.log('[loadInventory] Rendering complete!');
       } catch (error) {
-        console.error('Error loading inventory:', error);
+        console.error('[loadInventory] Error:', error);
+        console.error('[loadInventory] Error stack:', error.stack);
         showError('Failed to load inventory data. Please try again.');
       }
     }
