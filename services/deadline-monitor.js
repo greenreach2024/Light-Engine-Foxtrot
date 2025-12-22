@@ -61,6 +61,35 @@ class DeadlineMonitor {
         delivery_province: 'ON'
       };
       
+      // CRITICAL: Release inventory reservation when order expires
+      console.log(`[Deadline Monitor] Releasing inventory reservation for expired sub-order #${subOrder.id}`);
+      try {
+        const farmApiUrl = process.env[`FARM_${subOrder.farm_id}_API_URL`] || `http://localhost:8091`;
+        const farmApiKey = process.env[`FARM_${subOrder.farm_id}_API_KEY`] || 'demo-key';
+        
+        const releaseResponse = await fetch(`${farmApiUrl}/api/wholesale/inventory/release`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Farm-ID': subOrder.farm_id,
+            'X-API-Key': farmApiKey
+          },
+          body: JSON.stringify({
+            order_id: mainOrder.id,
+            reason: 'Farm verification deadline expired'
+          })
+        });
+        
+        const releaseData = await releaseResponse.json();
+        if (releaseData.ok) {
+          console.log(`[Deadline Monitor] ✅ Released ${releaseData.released} reservations at farm ${subOrder.farm_id}`);
+        } else {
+          console.error(`[Deadline Monitor] ❌ Failed to release reservation: ${releaseData.error}`);
+        }
+      } catch (releaseError) {
+        console.error(`[Deadline Monitor] Error releasing inventory reservation:`, releaseError);
+      }
+      
       // Notify buyer about expiration
       await notificationService.notifyBuyerDeadlineExpired(mainOrder, subOrder);
       

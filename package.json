@@ -13,7 +13,10 @@
     "smoke": "node scripts/smoke.js",
     "test": "node --test --test-timeout=10000 \"tests/**/*.mjs\"",
     "nutrient:setpoints": "node scripts/nutrient-push-setpoints.js",
-    "mock:heatmap": "node scripts/generate-mock-heatmap-data.cjs"
+    "mock:heatmap": "node scripts/generate-mock-heatmap-data.cjs",
+    "setup:notifications": "node scripts/setup-notifications.js",
+    "test:notifications": "node scripts/test-notifications.js",
+    "test:overselling": "node scripts/test-overselling-prevention.js"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.956.0",

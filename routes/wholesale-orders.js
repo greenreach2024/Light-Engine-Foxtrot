@@ -274,6 +274,96 @@ router.post('/create', async (req, res) => {
     order.sub_orders = sub_orders;
     order.status = OrderStatus.PENDING_FARM_VERIFICATION;
     
+    // CRITICAL: Reserve inventory at each farm immediately after payment authorization
+    console.log(`[Wholesale Orders] Reserving inventory at ${sub_orders.length} farms...`);
+    const reservationResults = [];
+    
+    for (const subOrder of sub_orders) {
+      try {
+        const farmApiUrl = process.env[`FARM_${subOrder.farm_id}_API_URL`] || `http://localhost:8091`;
+        const farmApiKey = process.env[`FARM_${subOrder.farm_id}_API_KEY`] || 'demo-key';
+        
+        const reservationPayload = {
+          order_id: order.id,
+          items: subOrder.items.map(item => ({
+            sku_id: item.sku_id,
+            quantity: item.quantity
+          }))
+        };
+        
+        const reservationResponse = await fetch(`${farmApiUrl}/api/wholesale/inventory/reserve`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Farm-ID': subOrder.farm_id,
+            'X-API-Key': farmApiKey
+          },
+          body: JSON.stringify(reservationPayload)
+        });
+        
+        const reservationData = await reservationResponse.json();
+        
+        if (!reservationData.ok) {
+          throw new Error(`Reservation failed: ${reservationData.error}`);
+        }
+        
+        reservationResults.push({
+          farm_id: subOrder.farm_id,
+          success: true,
+          reserved: reservationData.reserved
+        });
+        
+        console.log(`[Wholesale Orders] ✅ Reserved inventory at farm ${subOrder.farm_id}`);
+        
+      } catch (error) {
+        console.error(`[Wholesale Orders] ❌ Failed to reserve inventory at farm ${subOrder.farm_id}:`, error);
+        reservationResults.push({
+          farm_id: subOrder.farm_id,
+          success: false,
+          error: error.message
+        });
+        
+        // If ANY farm reservation fails, we need to rollback all previous reservations
+        // This prevents partial orders that can't be fulfilled
+        console.log('[Wholesale Orders] Rolling back all reservations due to failure...');
+        
+        for (const prevResult of reservationResults) {
+          if (prevResult.success) {
+            try {
+              const farmApiUrl = process.env[`FARM_${prevResult.farm_id}_API_URL`] || `http://localhost:8091`;
+              const farmApiKey = process.env[`FARM_${prevResult.farm_id}_API_KEY`] || 'demo-key';
+              
+              await fetch(`${farmApiUrl}/api/wholesale/inventory/release`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Farm-ID': prevResult.farm_id,
+                  'X-API-Key': farmApiKey
+                },
+                body: JSON.stringify({
+                  order_id: order.id,
+                  reason: 'Rollback due to partial reservation failure'
+                })
+              });
+            } catch (releaseError) {
+              console.error(`[Wholesale Orders] Failed to release reservation at farm ${prevResult.farm_id}:`, releaseError);
+            }
+          }
+        }
+        
+        // Refund payment authorization
+        // TODO: Implement payment refund/void
+        
+        return res.status(500).json({
+          error: 'Failed to reserve inventory',
+          details: `Unable to reserve inventory at farm ${subOrder.farm_id}. Order cancelled and payment refunded.`,
+          failed_farm: subOrder.farm_id
+        });
+      }
+    }
+    
+    console.log(`[Wholesale Orders] ✅ Successfully reserved inventory at all ${sub_orders.length} farms`);
+    
     // Send notifications to farms and buyer
     console.log(`[Wholesale Orders] Created order #${order.id} with ${sub_orders.length} sub-orders`);
     
