@@ -7,6 +7,7 @@ import express from 'express';
 import { PaymentProviderFactory } from '../lib/payment-providers/base.js';
 import '../lib/payment-providers/square.js'; // Ensure Square provider is registered
 import crypto from 'crypto';
+import notificationService from '../services/wholesale-notification-service.js';
 
 const router = express.Router();
 
@@ -48,9 +49,9 @@ const SubOrderStatus = {
  */
 router.post('/create', async (req, res) => {
   try {
-    const { buyer_id, buyer_name, buyer_email, delivery_address, delivery_city, 
-            delivery_province, fulfillment_cadence, delivery_instructions,
-            items, payment_method_id } = req.body;
+    const { buyer_id, buyer_name, buyer_email, buyer_phone, delivery_address, delivery_city, 
+            delivery_province, delivery_postal_code, fulfillment_cadence, delivery_instructions,
+            preferred_pickup_time, items, payment_method_id } = req.body;
     
     // Calculate totals
     const total_amount = items.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
@@ -105,11 +106,14 @@ router.post('/create', async (req, res) => {
       buyer_id,
       buyer_name,
       buyer_email,
+      buyer_phone,
       delivery_address,
       delivery_city,
       delivery_province,
+      delivery_postal_code,
       fulfillment_cadence,
       delivery_instructions,
+      preferred_pickup_time,
       total_amount,
       platform_fee,
       status: OrderStatus.PAYMENT_AUTHORIZED,
@@ -155,8 +159,24 @@ router.post('/create', async (req, res) => {
     order.sub_orders = sub_orders;
     order.status = OrderStatus.PENDING_FARM_VERIFICATION;
     
-    // TODO: Send notifications to farms
+    // Send notifications to farms and buyer
     console.log(`[Wholesale Orders] Created order #${order.id} with ${sub_orders.length} sub-orders`);
+    
+    // Send notification to buyer confirming order placement
+    await notificationService.notifyBuyerOrderPlaced(order);
+    
+    // Send notifications to each farm with logistics details
+    for (const subOrder of sub_orders) {
+      // TODO: Fetch farm contact info from database
+      const farmContact = {
+        farm_id: subOrder.farm_id,
+        farm_name: `Farm ${subOrder.farm_id}`, // Replace with actual lookup
+        email: `farm${subOrder.farm_id}@example.com`, // Replace with actual lookup
+        phone: null // Replace with actual lookup if available
+      };
+      
+      await notificationService.notifyFarmNewOrder(farmContact, order, subOrder);
+    }
     
     res.json({
       success: true,
@@ -225,9 +245,25 @@ router.post('/farm-verify', async (req, res) => {
         performanceMetrics.modified = true;
         performanceMetrics.modifications = modifications;
         performanceMetrics.modification_reason = reason;
+        
+        // Notify buyer about modifications
+        // TODO: Fetch full order details from database
+        const modifiedSubOrder = {
+          farm_id,
+          farm_name: `Farm ${farm_id}`, // Replace with actual lookup
+          modification_reason: reason,
+          modifications
+        };
+        
+        const orderForNotification = {
+          id: sub_order_id, // Replace with actual order_id lookup
+          buyer_email: 'buyer@example.com' // TODO: Get from order
+        };
+        
+        await notificationService.notifyBuyerModifications(orderForNotification, [modifiedSubOrder]);
+        
         // TODO: Save modifications
         // TODO: Update main order status to PENDING_BUYER_REVIEW
-        // TODO: Notify buyer
         // TODO: Track modification rate for farm performance
         break;
         
