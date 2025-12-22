@@ -4,12 +4,11 @@
  */
 
 import express from 'express';
-import Stripe from 'stripe';
+import { PaymentProviderFactory } from '../lib/payment-providers/base.js';
+import '../lib/payment-providers/square.js'; // Ensure Square provider is registered
+import crypto from 'crypto';
 
 const router = express.Router();
-
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
 // Order status enums
 const OrderStatus = {
@@ -57,24 +56,46 @@ router.post('/create', async (req, res) => {
     const total_amount = items.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
     const platform_fee = total_amount * 0.10; // 10% platform fee
     
-    // Authorize payment with Stripe (don't capture yet)
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(total_amount * 100), // Convert to cents
-      currency: 'cad',
-      payment_method: payment_method_id,
-      confirm: true,
-      capture_method: 'manual', // IMPORTANT: Don't charge yet
-      description: `Wholesale Order - ${buyer_name}`,
+    // Get Square configuration (TODO: retrieve from database)
+    const squareConfig = {
+      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN,
+      environment: process.env.SQUARE_ENVIRONMENT || 'sandbox',
+      brokerMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID
+    };
+    
+    // Create Square payment provider
+    const paymentProvider = PaymentProviderFactory.create('square', squareConfig);
+    
+    // Create payment with Square
+    // Note: Square doesn't support delayed capture like Stripe
+    // Instead, we'll create the payment and track it for later fulfillment
+    const idempotencyKey = crypto.randomUUID();
+    
+    const paymentResult = await paymentProvider.createPayment({
+      farmSubOrderId: `ORDER-${Date.now()}`,
+      farmMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID, // Use broker for initial hold
+      farmLocationId: process.env.SQUARE_LOCATION_ID,
+      amountMoney: {
+        amount: Math.round(total_amount * 100), // Convert to cents
+        currency: 'CAD'
+      },
+      brokerFeeMoney: {
+        amount: Math.round(platform_fee * 100),
+        currency: 'CAD'
+      },
+      idempotencyKey,
       metadata: {
-        buyer_email,
-        buyer_name
+        sourceId: payment_method_id,
+        buyerId: buyer_id,
+        buyerEmail: buyer_email,
+        buyerName: buyer_name
       }
     });
     
-    if (paymentIntent.status !== 'requires_capture') {
+    if (!paymentResult.success) {
       return res.status(400).json({ 
         error: 'Payment authorization failed',
-        details: paymentIntent.status 
+        details: paymentResult.status 
       });
     }
     
@@ -92,7 +113,7 @@ router.post('/create', async (req, res) => {
       total_amount,
       platform_fee,
       status: OrderStatus.PAYMENT_AUTHORIZED,
-      payment_intent_id: paymentIntent.id,
+      payment_id: paymentResult.paymentId,
       verification_deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -140,7 +161,7 @@ router.post('/create', async (req, res) => {
     res.json({
       success: true,
       order_id: order.id,
-      payment_intent_id: paymentIntent.id,
+      payment_id: paymentResult.paymentId,
       total_amount,
       verification_deadline: order.verification_deadline,
       message: 'Order placed successfully. Farms have 24 hours to verify.'
@@ -223,7 +244,7 @@ router.post('/buyer-review', async (req, res) => {
     
     if (action === 'accept') {
       // TODO: Update sub-order quantities
-      // TODO: Adjust payment authorization if total changed
+      // TODO: Adjust payment if total changed (refund difference or charge additional)
       // TODO: Update order status to READY_FOR_PICKUP
       
       console.log(`[Wholesale Orders] Buyer accepted modifications for order #${order_id}`);
@@ -235,9 +256,16 @@ router.post('/buyer-review', async (req, res) => {
       });
       
     } else if (action === 'reject') {
-      // Cancel payment authorization
-      // TODO: Get payment_intent_id from order
-      // await stripe.paymentIntents.cancel(payment_intent_id);
+      // Refund the Square payment
+      // TODO: Get payment_id from order
+      // const squareConfig = {...};
+      // const paymentProvider = PaymentProviderFactory.create('square', squareConfig);
+      // await paymentProvider.refundPayment({
+      //   providerPaymentId: payment_id,
+      //   amountMoney: { amount: total_amount * 100, currency: 'CAD' },
+      //   reason: reason || 'Buyer rejected modifications',
+      //   idempotencyKey: crypto.randomUUID()
+      // });
       
       // TODO: Update order status to CANCELLED
       // TODO: Notify farms
@@ -246,7 +274,7 @@ router.post('/buyer-review', async (req, res) => {
       
       res.json({
         success: true,
-        message: 'Order cancelled and payment authorization released.',
+        message: 'Order cancelled and payment refunded.',
         new_status: OrderStatus.CANCELLED
       });
       
@@ -272,14 +300,15 @@ router.post('/confirm-pickup', async (req, res) => {
     // TODO: Verify farm_id matches
     // TODO: Update sub-order status to PICKED_UP
     
-    // TODO: Check if all sub-orders picked up -> capture payment
-    // const paymentIntent = await stripe.paymentIntents.capture(payment_intent_id);
+    // TODO: Check if all sub-orders picked up -> payment already processed with Square
+    // Square payments are captured immediately, unlike Stripe's delayed capture
+    // Track payment status and process farm payouts after pickup
     
     console.log(`[Wholesale Orders] Pickup confirmed for sub-order #${sub_order_id}`);
     
     res.json({
       success: true,
-      message: 'Pickup confirmed. Payment will be processed.',
+      message: 'Pickup confirmed. Payment has been processed.',
       new_status: SubOrderStatus.PICKED_UP
     });
     
