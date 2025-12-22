@@ -2016,6 +2016,12 @@
     const ENV_CACHE_TTL_MS = 30000; // 30 seconds cache
 
     document.addEventListener('DOMContentLoaded', () => {
+      console.log('[Farm Summary] DOMContentLoaded fired');
+      console.log('[Farm Summary] Chart.js available:', typeof Chart !== 'undefined');
+      console.log('[Farm Summary] loadAnomalySparkline defined:', typeof loadAnomalySparkline === 'function');
+      console.log('[Farm Summary] loadEnergyForecast defined:', typeof loadEnergyForecast === 'function');
+      console.log('[Farm Summary] loadTempForecast defined:', typeof loadTempForecast === 'function');
+      
       ensureChartCanvas();
       loadData();
       loadWeather();
@@ -2025,6 +2031,7 @@
       initializeAdminTooltipTracking(); // Initialize tooltip tracking for highlighted cards
       
       // Load ML Insights Dashboard widgets
+      console.log('[Farm Summary] Calling ML loading functions...');
       loadAnomalySparkline();
       loadEnergyForecast();
       loadTempForecast();

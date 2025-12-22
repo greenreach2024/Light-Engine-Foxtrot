@@ -800,8 +800,11 @@
     
     // Check if already logged in
     window.addEventListener('DOMContentLoaded', async () => {
+      console.log('[Store] DOMContentLoaded fired');
       const urlParams = new URLSearchParams(window.location.search);
       const isDemoMode = urlParams.get('demo') !== '0'; // Demo by default
+      console.log('[Store] URL params:', window.location.search);
+      console.log('[Store] isDemoMode:', isDemoMode);
       
       const savedToken = localStorage.getItem('farm_store_token');
       const savedEmail = localStorage.getItem('farm_store_email');
@@ -809,7 +812,14 @@
       const savedFarmId = localStorage.getItem('farm_id');
       const savedFarmName = localStorage.getItem('farm_name');
       
+      console.log('[Store] Saved credentials:', {
+        hasToken: !!savedToken,
+        hasEmail: !!savedEmail,
+        hasName: !!savedName
+      });
+      
       if (savedToken && savedEmail) {
+        console.log('[Store] Using saved credentials');
         token = savedToken;
         customerEmail = savedEmail;
         customerName = savedName;
