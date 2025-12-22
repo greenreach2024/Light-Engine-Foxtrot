@@ -64,13 +64,13 @@
         phone: '(604) 555-0100',
         buyerType: 'restaurant',
         location: {
-          street: '1234 Robson Street',
-          city: 'Vancouver',
-          province: 'BC',
-          postalCode: 'V6E 1A7',
+          street: '123 Princess Street',
+          city: 'Kingston',
+          province: 'ON',
+          postalCode: 'K7L 1A1',
           country: 'Canada',
-          latitude: 49.2827,
-          longitude: -123.1207
+          latitude: 44.2312,
+          longitude: -76.4860
         },
         preferences: {
           sustainabilityPriority: 'high',
@@ -679,7 +679,7 @@
             delivery_address: {
               street: document.getElementById('delivery-address')?.value || 'TBD',
               city: document.getElementById('delivery-city')?.value || 'TBD',
-              province: document.getElementById('delivery-province')?.value || 'BC',
+              province: document.getElementById('delivery-province')?.value || 'ON',
               postalCode: document.getElementById('delivery-postal')?.value || 'TBD',
               country: 'Canada',
               instructions: document.getElementById('delivery-instructions')?.value || ''
@@ -779,7 +779,7 @@
             delivery_address: {
               street: document.getElementById('delivery-address').value,
               city: document.getElementById('delivery-city').value,
-              province: document.getElementById('delivery-province')?.value || 'BC',
+              province: document.getElementById('delivery-province')?.value || 'ON',
               postalCode: document.getElementById('delivery-postal').value,
               country: 'Canada',
               instructions: document.getElementById('delivery-instructions').value
@@ -1238,7 +1238,7 @@
           type: 'decrease',
           currentPrice: 2.20,
           previousPrice: 2.50,
-          summary: 'Increased local greenhouse production from BC farms has improved availability. Mild weather conditions have extended growing season. Competitive pricing as multiple farms increase capacity.'
+          summary: 'Increased local greenhouse production from Ontario farms has improved availability. Consistent growing conditions have extended production season. Competitive pricing as regional farms increase capacity.'
         }
       ];
 
