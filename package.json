@@ -16,7 +16,9 @@
     "mock:heatmap": "node scripts/generate-mock-heatmap-data.cjs",
     "setup:notifications": "node scripts/setup-notifications.js",
     "test:notifications": "node scripts/test-notifications.js",
-    "test:overselling": "node scripts/test-overselling-prevention.js"
+    "test:overselling": "node scripts/test-overselling-prevention.js",
+    "cleanup:reservations": "node scripts/cleanup-expired-reservations.js",
+    "reports:weekly": "node scripts/send-weekly-reports.js"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.956.0",
