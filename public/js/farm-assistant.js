@@ -79,6 +79,38 @@ class FarmAssistant {
         answer: 'An egg.'
       }
     ];
+    this.funFacts = [
+      {
+        fact: "Want to be an astronaut—would you try a 'space salad'? Astronauts have grown leafy greens in NASA's Veggie system on the International Space Station—and they've even eaten space-grown lettuce!",
+        question: 'If you could grow one food in space, what would you pick?',
+        icon: '🚀'
+      },
+      {
+        fact: "What if your plants had a robot babysitter—would that be cool? NASA's Advanced Plant Habitat is like a super-smart space greenhouse with 180+ sensors watching things like humidity, oxygen, and moisture.",
+        question: 'If you could add ONE "plant sensor power," what would it measure?',
+        icon: '🤖'
+      },
+      {
+        fact: "Want to live on the Moon—how would you get fresh food? That's one reason NASA studies plant-growing systems in space: learning how to grow food when you can't just run to a grocery store.",
+        question: 'What do you think would be the hardest part—light, water, or space?',
+        icon: '🌙'
+      },
+      {
+        fact: 'Would you garden in the coldest place on Earth? In Antarctica, the EDEN ISS greenhouse has grown lots of fresh foods (like lettuce, cucumbers, tomatoes, herbs—and more).',
+        question: 'If you had an Antarctic greenhouse, what would you name it?',
+        icon: '❄️'
+      },
+      {
+        fact: 'Would you eat greens grown in a tunnel under a city? In London, an underground hydroponic farm grows plants without sunlight, using LED lights in old tunnels.',
+        question: 'If you found a secret farm underground, what would you hope they\'re growing?',
+        icon: '🚇'
+      },
+      {
+        fact: "Could fog help grow lettuce in a desert—like magic? In Chile's Atacama Desert, people have used fog-catching nets to collect water and grow crops (including lettuce) using hydroponics.",
+        question: 'If you could "catch" water from the air, where would you put your fog net?',
+        icon: '🌫️'
+      }
+    ];
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
@@ -140,6 +172,8 @@ class FarmAssistant {
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What\\'s ready to harvest?')">What's ready to harvest?</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show me the temperature')">Show me the temperature</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Where is the lettuce?')">Where is the lettuce?</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Fun fact!')">Fun Fact!</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Tell me a joke')">Tell me a joke</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Blink lights for basil')">Blink lights for basil</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show planting schedule')">Show planting schedule</button>
                 </div>
@@ -479,6 +513,9 @@ class FarmAssistant {
 
   async processQuery(query) {
     const lowerQuery = query.toLowerCase();
+    
+    // Fun facts (educational and engaging for kids!)
+    if (this.matchFunFactRequest(lowerQuery)) return;
     
     // Joke/Riddle requests (fun for kids!)
     if (this.matchJokeRequest(lowerQuery)) return;
@@ -1102,6 +1139,41 @@ class FarmAssistant {
       }, 3000);
       
       this.addMessage(`Here's a ${item.type === 'riddle' ? 'riddle' : 'joke'} for you! 😊`, 'assistant');
+      return true;
+    }
+    
+    return false;
+  }
+
+  matchFunFactRequest(query) {
+    const funFactPatterns = /fun fact|tell me a fun fact|interesting fact|cool fact|amazing fact|did you know/i;
+    
+    if (funFactPatterns.test(query)) {
+      // Pick a random fun fact
+      const fact = this.funFacts[Math.floor(Math.random() * this.funFacts.length)];
+      
+      // Create child-friendly popup with the fun fact
+      const popupContent = `
+        <div class="joke-display">
+          <div class="joke-icon" style="font-size: 64px;">${fact.icon}</div>
+          <div class="joke-text">
+            <p class="joke-question" style="font-size: 24px; line-height: 1.5;">${fact.fact}</p>
+            <p class="joke-answer" style="opacity: 0; transition: opacity 0.5s ease-in; color: #10b981; font-size: 22px; margin-top: 20px;">${fact.question}</p>
+          </div>
+        </div>
+      `;
+      
+      this.createInfoPopup('Amazing Farm Fact! 🌱', popupContent);
+      
+      // Show question after 4 seconds
+      setTimeout(() => {
+        const answerElement = document.querySelector('.joke-answer');
+        if (answerElement) {
+          answerElement.style.opacity = '1';
+        }
+      }, 4000);
+      
+      this.addMessage(`Here's an amazing farm fact! 🌟`, 'assistant');
       return true;
     }
     
