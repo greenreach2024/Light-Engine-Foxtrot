@@ -1277,39 +1277,56 @@
         return;
       }
 
-      // Get farms with coordinates from admin API
+      // Get farms with coordinates
       let farmsInCatalog = [];
       
-      try {
-        const response = await fetch('/api/admin/farms?status=active');
-        const data = await response.json();
-        
-        if (data.farms && data.farms.length > 0) {
-          farmsInCatalog = data.farms
-            .filter(f => f.location && f.location.lat && f.location.lng)
-            .map(f => ({
-              farm_id: f.farmId,
-              farm_name: f.name,
-              city: f.address?.city || '',
-              state: f.address?.state || '',
-              latitude: f.location.lat,
-              longitude: f.location.lng
-            }));
-        }
-      } catch (error) {
-        console.warn('Failed to load farms from admin API:', error);
+      // Try demo farm data first if in demo mode
+      if (this.demoMode && this.demoData?.farms) {
+        farmsInCatalog = this.demoData.farms
+          .filter(f => f.latitude && f.longitude)
+          .map(f => ({
+            farm_id: f.farm_id,
+            farm_name: f.name,
+            city: f.location || '',
+            state: '',
+            latitude: f.latitude,
+            longitude: f.longitude
+          }));
       }
       
-      // Fallback to demo farm if no farms found
+      // If no demo farms, try admin API
+      if (farmsInCatalog.length === 0) {
+        try {
+          const response = await fetch('/api/admin/farms?status=active');
+          const data = await response.json();
+          
+          if (data.farms && data.farms.length > 0) {
+            farmsInCatalog = data.farms
+              .filter(f => f.location && f.location.lat && f.location.lng)
+              .map(f => ({
+                farm_id: f.farmId,
+                farm_name: f.name,
+                city: f.address?.city || '',
+                state: f.address?.state || '',
+                latitude: f.location.lat,
+                longitude: f.location.lng
+              }));
+          }
+        } catch (error) {
+          console.warn('Failed to load farms from admin API:', error);
+        }
+      }
+      
+      // Fallback to Kingston-based demo farm if no farms found
       if (farmsInCatalog.length === 0) {
         farmsInCatalog = [
           { 
             farm_id: 'GR-00001', 
             farm_name: 'Demo Farm - Light Engine Showcase', 
-            city: 'Demo City', 
-            state: 'CA', 
-            latitude: 34.0522, 
-            longitude: -118.2437 
+            city: 'Kingston', 
+            state: 'ON', 
+            latitude: 44.2312, 
+            longitude: -76.4860
           }
         ];
       }
@@ -1322,8 +1339,8 @@
         const distance = this.calculateDistance(
           buyerLat,
           buyerLng,
-          farm.latitude || 34.0522,
-          farm.longitude || -118.2437
+          farm.latitude || 44.2312,
+          farm.longitude || -76.4860
         );
         
         return {
