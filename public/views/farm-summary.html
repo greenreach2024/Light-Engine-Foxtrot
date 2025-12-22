@@ -1989,11 +1989,11 @@
     </div>
   </div>
 
-  <!-- Chart.js for ML Dashboard Widgets - Using unpkg CDN (more reliable) -->
-  <script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js" crossorigin="anonymous"></script>
+  <!-- Chart.js for ML Dashboard Widgets - Served locally to avoid CDN blocking -->
+  <script src="/lib/chart.umd.js"></script>
 
   <script>
-    console.log('🔄 FARM SUMMARY - CODE VERSION 2.2 LOADED - Dec 22, 2025 - Chart.js fix');
+    console.log('🔄 FARM SUMMARY - CODE VERSION 2.3 LOADED - Dec 22, 2025 - Local Chart.js');
     console.log('🔄 If you see this message, the updated file is being served!');
     
     const queryParams = new URLSearchParams(window.location.search);
