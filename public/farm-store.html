@@ -828,21 +828,30 @@
           customerEmail = 'customer@demo.com';
           customerName = 'Demo Customer';
           
-          const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
-          const tokensData = await tokensResponse.json();
-          
-          if (tokensData.ok) {
-            token = tokensData.tokens[farmId]['customer'] || tokensData.tokens[farmId]['manager'];
+          // Try to get demo tokens (works in dev/demo mode)
+          try {
+            const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+            const tokensData = await tokensResponse.json();
             
-            localStorage.setItem('farm_store_token', token);
-            localStorage.setItem('farm_store_email', customerEmail);
-            localStorage.setItem('farm_store_name', customerName);
-            localStorage.setItem('farm_id', farmId);
-            localStorage.setItem('farm_name', farmName);
-            
-            console.log('[Demo] Auto-logged in as:', customerName);
-            showApp();
+            if (tokensData.ok && tokensData.tokens && tokensData.tokens[farmId]) {
+              token = tokensData.tokens[farmId]['customer'] || tokensData.tokens[farmId]['manager'];
+            }
+          } catch (tokenError) {
+            console.log('[Demo] Demo tokens not available (production mode), proceeding without token');
+            token = null;
           }
+          
+          // Save and show app (works with or without token)
+          if (token) {
+            localStorage.setItem('farm_store_token', token);
+          }
+          localStorage.setItem('farm_store_email', customerEmail);
+          localStorage.setItem('farm_store_name', customerName);
+          localStorage.setItem('farm_id', farmId);
+          localStorage.setItem('farm_name', farmName);
+          
+          console.log('[Demo] Auto-logged in as:', customerName);
+          showApp();
         } catch (error) {
           console.error('[Demo] Auto-login failed:', error);
         }
