@@ -61,6 +61,46 @@
       font-weight: 500;
     }
 
+    /* Mini Cart in Header */
+    #header-cart {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255,255,255,0.15);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    #header-cart:hover {
+      background: rgba(255,255,255,0.25);
+      transform: translateY(-1px);
+    }
+
+    #header-cart-icon {
+      font-size: 1.25rem;
+    }
+
+    #header-cart-summary {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      line-height: 1.3;
+    }
+
+    #header-cart-items {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+
+    #header-cart-total {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
     header h1 {
       font-size: 1.75rem;
       font-weight: 600;
@@ -1033,20 +1073,21 @@
       position: fixed;
       bottom: 2rem;
       right: 2rem;
-      width: 60px;
-      height: 60px;
+      width: 75px;
+      height: 75px;
       background: var(--accent);
       color: white;
       border: none;
       border-radius: 50%;
-      font-size: 1.5rem;
+      font-size: 1.75rem;
       cursor: pointer;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
       transition: all 0.2s;
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
+      z-index: 999;
     }
 
     .cart-badge:hover {
@@ -1054,16 +1095,32 @@
       background: #73b035;
     }
 
+    .cart-badge.pulse {
+      animation: cartPulse 0.6s ease-out;
+    }
+
+    @keyframes cartPulse {
+      0%, 100% { transform: scale(1); }
+      25% { transform: scale(1.15); }
+      50% { transform: scale(1.05); }
+      75% { transform: scale(1.1); }
+    }
+
     .cart-badge-count {
       position: absolute;
-      top: -4px;
-      right: -4px;
+      top: -6px;
+      right: -6px;
       background: var(--error);
       color: white;
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
-      font-size: 0.75rem;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      border: 2px solid white;
     }
 
     /* Order History Enhancements */
@@ -1430,6 +1487,13 @@
       <p>Fresh produce from trusted farm partners</p>
     </div>
     <div id="header-actions">
+      <div id="header-cart" data-action="toggle-cart" style="display: none;">
+        <span id="header-cart-icon">🛒</span>
+        <div id="header-cart-summary">
+          <span id="header-cart-items">0 items</span>
+          <span id="header-cart-total">$0.00</span>
+        </div>
+      </div>
       <button class="btn btn-secondary" id="sign-in-btn">Sign In / Register</button>
       <div id="buyer-profile">
         <span id="buyer-name-display"></span>
@@ -1666,7 +1730,7 @@
           <span id="cart-total">$0.00</span>
         </div>
       </div>
-      <button class="cart-checkout-btn" data-action="go-checkout">Proceed to Checkout</button>
+      <button class="cart-checkout-btn" data-action="go-checkout">Place Order</button>
     </div>
   </div>
 

@@ -586,6 +586,25 @@
       this.renderCart();
       this.showToast(`Added ${sku.product_name} to cart`, 'success');
       if (qtyInput) qtyInput.value = '1';
+      
+      // Pulse animation on cart badge
+      const badge = document.querySelector('.cart-badge');
+      if (badge) {
+        badge.classList.remove('pulse');
+        void badge.offsetWidth; // Force reflow
+        badge.classList.add('pulse');
+      }
+      
+      // Auto-open cart panel briefly (3 seconds)
+      const cartPanel = document.getElementById('cart-panel');
+      if (cartPanel && !cartPanel.classList.contains('open')) {
+        cartPanel.classList.add('open');
+        setTimeout(() => {
+          if (cartPanel.classList.contains('open')) {
+            cartPanel.classList.remove('open');
+          }
+        }, 3000);
+      }
     },
 
     removeFromCart(skuId) {
@@ -613,12 +632,22 @@
       const itemsContainer = document.getElementById('cart-items');
       if (!itemsContainer) return;
 
+      const headerCart = document.getElementById('header-cart');
+      const headerCartItems = document.getElementById('header-cart-items');
+      const headerCartTotal = document.getElementById('header-cart-total');
+
       if (this.cart.length === 0) {
         itemsContainer.innerHTML = '<div class="cart-empty">Your cart is empty</div>';
         document.getElementById('cart-total').textContent = '$0.00';
         document.getElementById('cart-count').textContent = '0';
+        
+        // Hide header cart when empty
+        if (headerCart) headerCart.style.display = 'none';
         return;
       }
+
+      // Show header cart when items present
+      if (headerCart) headerCart.style.display = 'flex';
 
       itemsContainer.innerHTML = this.cart
         .map(
@@ -644,8 +673,16 @@
         .join('');
 
       const total = this.cart.reduce((sum, item) => sum + Number(item.price_per_unit) * Number(item.quantity), 0);
-      document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
-      document.getElementById('cart-count').textContent = this.cart.length.toString();
+      const totalStr = `$${total.toFixed(2)}`;
+      const itemCount = this.cart.length;
+      const itemsText = itemCount === 1 ? '1 item' : `${itemCount} items`;
+      
+      // Update all cart displays
+      document.getElementById('cart-total').textContent = totalStr;
+      document.getElementById('cart-count').textContent = itemCount.toString();
+      
+      if (headerCartItems) headerCartItems.textContent = itemsText;
+      if (headerCartTotal) headerCartTotal.textContent = totalStr;
     },
 
     toggleCart() {
