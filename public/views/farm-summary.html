@@ -1991,9 +1991,21 @@
 
   <!-- Chart.js for ML Dashboard Widgets -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
+  <!-- Fallback: Load from alternative CDN if primary fails -->
+  <script>
+    window.addEventListener('error', function(e) {
+      if (e.target.tagName === 'SCRIPT' && e.target.src.includes('chart.js')) {
+        console.warn('[Chart.js] Primary CDN failed, loading from unpkg...');
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js';
+        document.head.appendChild(script);
+      }
+    }, true);
+  </script>
 
   <script>
-    console.log('🔄 FARM SUMMARY - CODE VERSION 2.1 LOADED - Oct 27, 2025 - Zone seed date fix');
+    console.log('🔄 FARM SUMMARY - CODE VERSION 2.2 LOADED - Dec 22, 2025 - Chart.js fix');
     console.log('🔄 If you see this message, the updated file is being served!');
     
     const queryParams = new URLSearchParams(window.location.search);
@@ -2030,11 +2042,19 @@
       initializeMLToggle();
       initializeAdminTooltipTracking(); // Initialize tooltip tracking for highlighted cards
       
-      // Load ML Insights Dashboard widgets
-      console.log('[Farm Summary] Calling ML loading functions...');
-      loadAnomalySparkline();
-      loadEnergyForecast();
-      loadTempForecast();
+      // Wait for Chart.js to load before initializing ML widgets
+      function waitForChartJS() {
+        if (typeof Chart !== 'undefined') {
+          console.log('[Farm Summary] Chart.js loaded successfully, initializing ML widgets...');
+          loadAnomalySparkline();
+          loadEnergyForecast();
+          loadTempForecast();
+        } else {
+          console.log('[Farm Summary] Waiting for Chart.js to load...');
+          setTimeout(waitForChartJS, 100);
+        }
+      }
+      waitForChartJS();
 
   // Refresh data frequently so trends stay fresh (Heat Map also uses 60s)
   updateInterval = setInterval(loadData, 300000); // Refresh every 5 minutes (300 seconds)
