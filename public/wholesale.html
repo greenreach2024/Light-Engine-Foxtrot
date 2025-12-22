@@ -1071,8 +1071,9 @@
     /* Cart Badge */
     .cart-badge {
       position: fixed;
-      bottom: 2rem;
-      right: 2rem;
+      top: 50%;
+      right: 1.5rem;
+      transform: translateY(-50%);
       width: 75px;
       height: 75px;
       background: var(--accent);
@@ -1086,12 +1087,11 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
       z-index: 999;
     }
 
     .cart-badge:hover {
-      transform: scale(1.1);
+      transform: translateY(-50%) scale(1.1);
       background: #73b035;
     }
 
@@ -1100,10 +1100,10 @@
     }
 
     @keyframes cartPulse {
-      0%, 100% { transform: scale(1); }
-      25% { transform: scale(1.15); }
-      50% { transform: scale(1.05); }
-      75% { transform: scale(1.1); }
+      0%, 100% { transform: translateY(-50%) scale(1); }
+      25% { transform: translateY(-50%) scale(1.15); }
+      50% { transform: translateY(-50%) scale(1.05); }
+      75% { transform: translateY(-50%) scale(1.1); }
     }
 
     .cart-badge-count {
