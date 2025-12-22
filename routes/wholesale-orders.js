@@ -184,6 +184,8 @@ router.post('/farm-verify', async (req, res) => {
   try {
     const { farm_id, sub_order_id, action, modifications, reason } = req.body;
     
+    const response_time = new Date(); // TODO: Calculate from order created_at
+    
     // TODO: Fetch sub-order from database
     // TODO: Verify farm_id matches sub-order
     // TODO: Check deadline hasn't passed
@@ -191,32 +193,53 @@ router.post('/farm-verify', async (req, res) => {
     let newStatus;
     let message;
     
+    // Track performance metrics for GreenReach Central
+    const performanceMetrics = {
+      farm_id,
+      sub_order_id,
+      action,
+      response_time,
+      reason
+    };
+    
     switch (action) {
       case 'accept':
         newStatus = SubOrderStatus.FARM_ACCEPTED;
         message = 'Order accepted successfully';
+        performanceMetrics.accepted = true;
         // TODO: Check if all sub-orders verified -> update main order status
         break;
         
       case 'decline':
         newStatus = SubOrderStatus.FARM_DECLINED;
         message = 'Order declined';
+        performanceMetrics.declined = true;
+        performanceMetrics.decline_reason = reason;
         // TODO: Trigger alternative farm search
+        // TODO: Track decline rate for farm performance
         break;
         
       case 'modify':
         newStatus = SubOrderStatus.FARM_MODIFIED;
         message = 'Modifications submitted for buyer review';
+        performanceMetrics.modified = true;
+        performanceMetrics.modifications = modifications;
+        performanceMetrics.modification_reason = reason;
         // TODO: Save modifications
         // TODO: Update main order status to PENDING_BUYER_REVIEW
         // TODO: Notify buyer
+        // TODO: Track modification rate for farm performance
         break;
         
       default:
         return res.status(400).json({ error: 'Invalid action' });
     }
     
+    // TODO: Save performance metrics to database for analytics
+    // INSERT INTO farm_performance_events (farm_id, sub_order_id, action, response_time, ...)
+    
     console.log(`[Wholesale Orders] Farm ${farm_id} ${action}ed sub-order #${sub_order_id}`);
+    console.log(`[Performance] Captured metrics:`, performanceMetrics);
     
     res.json({
       success: true,
@@ -247,6 +270,9 @@ router.post('/buyer-review', async (req, res) => {
       // TODO: Adjust payment if total changed (refund difference or charge additional)
       // TODO: Update order status to READY_FOR_PICKUP
       
+      // Track buyer acceptance for farm performance
+      // TODO: UPDATE farm_performance SET buyer_acceptance_count++
+      
       console.log(`[Wholesale Orders] Buyer accepted modifications for order #${order_id}`);
       
       res.json({
@@ -267,10 +293,15 @@ router.post('/buyer-review', async (req, res) => {
       //   idempotencyKey: crypto.randomUUID()
       // });
       
+      // Track buyer rejection for farm performance (negative metric)
+      // TODO: UPDATE farm_performance SET buyer_rejection_count++, quality_score--
+      // This is critical for GreenReach to track farms with high modification rejection rates
+      
       // TODO: Update order status to CANCELLED
       // TODO: Notify farms
       
       console.log(`[Wholesale Orders] Buyer rejected modifications for order #${order_id}`);
+      console.log(`[Performance] Buyer rejection logged - will impact farm quality score`);
       
       res.json({
         success: true,

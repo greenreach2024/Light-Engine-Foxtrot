@@ -90,6 +90,7 @@ import wholesaleSquareOAuthRouter from './routes/wholesale/square-oauth.js';
 import wholesaleSLAPoliciesRouter from './routes/wholesale/sla-policies.js';
 import wholesaleNetworkRouter from './routes/wholesale/network.js';
 import wholesaleOrdersRouter from './routes/wholesale-orders.js';
+import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
@@ -9391,6 +9392,18 @@ app.use('/api/wholesale/network', wholesaleNetworkRouter);
  * - GET /api/wholesale/orders/:order_id: Complete order details
  */
 app.use('/api/wholesale/orders', wholesaleOrdersRouter);
+
+/**
+ * Farm Performance Analytics (GreenReach Central)
+ * Track verification rates, response times, and reliability for broker accountability
+ * - GET /api/wholesale/farm-performance/dashboard: Network-wide performance overview
+ * - GET /api/wholesale/farm-performance/:farm_id: Detailed farm metrics
+ * - GET /api/wholesale/farm-performance/leaderboard: Top performing farms
+ * - GET /api/wholesale/farm-performance/alerts: Performance alerts requiring attention
+ * - POST /api/wholesale/farm-performance/flag: Flag farm for review
+ * - GET /api/wholesale/farm-performance/trends: Performance trends over time
+ */
+app.use('/api/wholesale/farm-performance', wholesaleFarmPerformanceRouter);
 
 /**
  * GreenReach: Audit Logging

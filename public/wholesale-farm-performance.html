@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farm Performance Dashboard - GreenReach Central</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7f3;
+      color: #333;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #2d5016 0%, #3d6b1f 100%);
+      color: white;
+      padding: 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .header p {
+      opacity: 0.9;
+      font-size: 1.1rem;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .metric-card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+
+    .metric-card h3 {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #2d5016;
+      margin-bottom: 0.25rem;
+    }
+
+    .metric-label {
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    .section {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      margin-bottom: 2rem;
+      overflow: hidden;
+    }
+
+    .section-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .section-header h2 {
+      font-size: 1.5rem;
+      color: #2d5016;
+    }
+
+    .filters {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .filters select {
+      padding: 0.5rem 1rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .farm-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .farm-table thead {
+      background: #f8f9f8;
+    }
+
+    .farm-table th {
+      text-align: left;
+      padding: 1rem 1.5rem;
+      font-weight: 600;
+      color: #555;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .farm-table td {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .farm-table tbody tr:hover {
+      background: #fafbfa;
+    }
+
+    .farm-name {
+      font-weight: 500;
+      color: #2d5016;
+    }
+
+    .farm-id {
+      font-size: 0.85rem;
+      color: #999;
+      display: block;
+      margin-top: 0.25rem;
+    }
+
+    .score {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .score-excellent {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .score-good {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .score-fair {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .score-poor {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .metric-percentage {
+      font-weight: 500;
+    }
+
+    .metric-percentage.high {
+      color: #28a745;
+    }
+
+    .metric-percentage.medium {
+      color: #ffc107;
+    }
+
+    .metric-percentage.low {
+      color: #dc3545;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .badge-danger {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .badge-success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .alerts-section {
+      padding: 1.5rem;
+    }
+
+    .alert-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 1rem;
+      border-left: 4px solid #dc3545;
+      background: #fff5f5;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+    }
+
+    .alert-item.medium {
+      border-left-color: #ffc107;
+      background: #fffbf0;
+    }
+
+    .alert-icon {
+      font-size: 1.5rem;
+      margin-right: 1rem;
+    }
+
+    .alert-content {
+      flex: 1;
+    }
+
+    .alert-farm {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.25rem;
+    }
+
+    .alert-message {
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .alert-time {
+      font-size: 0.8rem;
+      color: #999;
+      margin-top: 0.25rem;
+    }
+
+    .empty-state {
+      padding: 3rem;
+      text-align: center;
+      color: #999;
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #82c341;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #6fa835;
+    }
+
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #5a6268;
+    }
+
+    .response-time {
+      font-weight: 500;
+    }
+
+    .response-time.fast {
+      color: #28a745;
+    }
+
+    .response-time.normal {
+      color: #17a2b8;
+    }
+
+    .response-time.slow {
+      color: #ffc107;
+    }
+
+    .response-time.very-slow {
+      color: #dc3545;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Farm Performance Dashboard</h1>
+    <p>Monitor farm reliability and response metrics across the GreenReach network</p>
+  </div>
+
+  <div class="container">
+    <!-- Summary Metrics -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <h3>Network Average</h3>
+        <div class="metric-value" id="avgAcceptance">--</div>
+        <div class="metric-label">Acceptance Rate</div>
+      </div>
+      <div class="metric-card">
+        <h3>Response Time</h3>
+        <div class="metric-value" id="avgResponse">--</div>
+        <div class="metric-label">Average Hours</div>
+      </div>
+      <div class="metric-card">
+        <h3>Active Farms</h3>
+        <div class="metric-value" id="activeFarms">--</div>
+        <div class="metric-label">Last 30 Days</div>
+      </div>
+      <div class="metric-card">
+        <h3>Total Orders</h3>
+        <div class="metric-value" id="totalOrders">--</div>
+        <div class="metric-label">This Period</div>
+      </div>
+    </div>
+
+    <!-- Performance Alerts -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Performance Alerts</h2>
+        <button class="btn btn-secondary" onclick="refreshAlerts()">Refresh</button>
+      </div>
+      <div class="alerts-section" id="alertsContainer">
+        <div class="empty-state">
+          <div class="empty-state-icon">✓</div>
+          <p>No active alerts. All farms performing within acceptable ranges.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Farm Performance Table -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Farm Performance Metrics</h2>
+        <div class="filters">
+          <select id="timeframeFilter" onchange="loadDashboard()">
+            <option value="7d">Last 7 Days</option>
+            <option value="30d" selected>Last 30 Days</option>
+            <option value="90d">Last 90 Days</option>
+          </select>
+          <select id="sortFilter" onchange="sortTable()">
+            <option value="score">Quality Score</option>
+            <option value="acceptance">Acceptance Rate</option>
+            <option value="response">Response Time</option>
+            <option value="orders">Order Volume</option>
+          </select>
+        </div>
+      </div>
+      <table class="farm-table">
+        <thead>
+          <tr>
+            <th>Farm</th>
+            <th>Quality Score</th>
+            <th>Acceptance Rate</th>
+            <th>Avg Response</th>
+            <th>Orders</th>
+            <th>Buyer Rejections</th>
+            <th>Flags</th>
+          </tr>
+        </thead>
+        <tbody id="farmTableBody">
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">
+                <p>Loading farm performance data...</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const app = {
+      async init() {
+        await this.loadDashboard();
+        await this.loadAlerts();
+        
+        // Auto-refresh every 5 minutes
+        setInterval(() => {
+          this.loadDashboard();
+          this.loadAlerts();
+        }, 5 * 60 * 1000);
+      },
+
+      async loadDashboard() {
+        try {
+          const timeframe = document.getElementById('timeframeFilter').value;
+          const response = await fetch(`/api/wholesale/farm-performance/dashboard?timeframe=${timeframe}`);
+          const data = await response.json();
+
+          if (data.ok) {
+            this.updateSummaryMetrics(data.metrics.summary);
+            this.renderFarmTable(data.metrics.farms);
+          }
+        } catch (error) {
+          console.error('Failed to load dashboard:', error);
+        }
+      },
+
+      updateSummaryMetrics(summary) {
+        document.getElementById('avgAcceptance').textContent = 
+          summary.avg_acceptance_rate ? `${summary.avg_acceptance_rate.toFixed(1)}%` : '--';
+        document.getElementById('avgResponse').textContent = 
+          summary.avg_response_time_hours ? summary.avg_response_time_hours.toFixed(1) : '--';
+        document.getElementById('activeFarms').textContent = summary.active_farms || '--';
+        document.getElementById('totalOrders').textContent = summary.total_orders_processed || '--';
+      },
+
+      renderFarmTable(farms) {
+        const tbody = document.getElementById('farmTableBody');
+        
+        if (!farms || farms.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <div class="empty-state-icon">📊</div>
+                  <p>No farm performance data available for selected period.</p>
+                </div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = farms.map(farm => `
+          <tr>
+            <td>
+              <div class="farm-name">${farm.farm_name}</div>
+              <span class="farm-id">${farm.farm_id}</span>
+            </td>
+            <td>
+              <span class="score ${this.getScoreClass(farm.metrics.quality_score)}">
+                ${farm.metrics.quality_score.toFixed(1)}
+              </span>
+            </td>
+            <td>
+              <span class="metric-percentage ${this.getPercentageClass(farm.metrics.acceptance_rate)}">
+                ${farm.metrics.acceptance_rate.toFixed(1)}%
+              </span>
+            </td>
+            <td>
+              <span class="response-time ${this.getResponseClass(farm.metrics.avg_response_time_hours)}">
+                ${farm.metrics.avg_response_time_hours.toFixed(1)}h
+              </span>
+            </td>
+            <td>${farm.metrics.orders_received}</td>
+            <td>
+              ${farm.metrics.buyer_rejections > 0 
+                ? `<span class="badge badge-warning">${farm.metrics.buyer_rejections}</span>` 
+                : '0'}
+            </td>
+            <td>${this.renderFlags(farm.flags)}</td>
+          </tr>
+        `).join('');
+      },
+
+      getScoreClass(score) {
+        if (score >= 90) return 'score-excellent';
+        if (score >= 80) return 'score-good';
+        if (score >= 70) return 'score-fair';
+        return 'score-poor';
+      },
+
+      getPercentageClass(pct) {
+        if (pct >= 85) return 'high';
+        if (pct >= 70) return 'medium';
+        return 'low';
+      },
+
+      getResponseClass(hours) {
+        if (hours <= 4) return 'fast';
+        if (hours <= 8) return 'normal';
+        if (hours <= 16) return 'slow';
+        return 'very-slow';
+      },
+
+      renderFlags(flags) {
+        const activeFlags = Object.entries(flags)
+          .filter(([key, value]) => value)
+          .map(([key]) => key.replace(/_/g, ' '));
+
+        if (activeFlags.length === 0) return '--';
+
+        return activeFlags.map(flag => 
+          `<span class="badge badge-danger">${flag}</span>`
+        ).join(' ');
+      },
+
+      async loadAlerts() {
+        try {
+          const response = await fetch('/api/wholesale/farm-performance/alerts');
+          const data = await response.json();
+
+          if (data.ok) {
+            this.renderAlerts(data.alerts);
+          }
+        } catch (error) {
+          console.error('Failed to load alerts:', error);
+        }
+      },
+
+      renderAlerts(alerts) {
+        const container = document.getElementById('alertsContainer');
+        
+        if (!alerts || alerts.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">✓</div>
+              <p>No active alerts. All farms performing within acceptable ranges.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = alerts.map(alert => `
+          <div class="alert-item ${alert.severity}">
+            <div class="alert-icon">${this.getAlertIcon(alert.severity)}</div>
+            <div class="alert-content">
+              <div class="alert-farm">${alert.farm_name} (${alert.farm_id})</div>
+              <div class="alert-message">${alert.message}</div>
+              <div class="alert-time">${new Date(alert.timestamp).toLocaleString()}</div>
+            </div>
+          </div>
+        `).join('');
+      },
+
+      getAlertIcon(severity) {
+        if (severity === 'high') return '🔴';
+        if (severity === 'medium') return '⚠️';
+        return 'ℹ️';
+      },
+
+      sortTable() {
+        // TODO: Implement client-side sorting
+        console.log('Sort by:', document.getElementById('sortFilter').value);
+      }
+    };
+
+    function refreshAlerts() {
+      app.loadAlerts();
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+      app.init();
+    });
+  </script>
+</body>
+</html>
