@@ -1989,20 +1989,8 @@
     </div>
   </div>
 
-  <!-- Chart.js for ML Dashboard Widgets -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  
-  <!-- Fallback: Load from alternative CDN if primary fails -->
-  <script>
-    window.addEventListener('error', function(e) {
-      if (e.target.tagName === 'SCRIPT' && e.target.src.includes('chart.js')) {
-        console.warn('[Chart.js] Primary CDN failed, loading from unpkg...');
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js';
-        document.head.appendChild(script);
-      }
-    }, true);
-  </script>
+  <!-- Chart.js for ML Dashboard Widgets - Using unpkg CDN (more reliable) -->
+  <script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js" crossorigin="anonymous"></script>
 
   <script>
     console.log('🔄 FARM SUMMARY - CODE VERSION 2.2 LOADED - Dec 22, 2025 - Chart.js fix');
@@ -2042,15 +2030,32 @@
       initializeMLToggle();
       initializeAdminTooltipTracking(); // Initialize tooltip tracking for highlighted cards
       
-      // Wait for Chart.js to load before initializing ML widgets
+      // Wait for Chart.js to load before initializing ML widgets (with timeout)
+      let chartJsAttempts = 0;
+      const maxAttempts = 50; // 5 seconds max (50 * 100ms)
+      
       function waitForChartJS() {
+        chartJsAttempts++;
+        
         if (typeof Chart !== 'undefined') {
-          console.log('[Farm Summary] Chart.js loaded successfully, initializing ML widgets...');
+          console.log('[Farm Summary] Chart.js loaded successfully after', chartJsAttempts, 'attempts, initializing ML widgets...');
           loadAnomalySparkline();
           loadEnergyForecast();
           loadTempForecast();
+        } else if (chartJsAttempts >= maxAttempts) {
+          console.error('[Farm Summary] Chart.js failed to load after', maxAttempts, 'attempts (5 seconds)');
+          console.error('[Farm Summary] ML widgets will not be available');
+          // Show error in each widget
+          ['anomalySparklineLoading', 'energyForecastLoading', 'tempForecastLoading'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+              el.innerHTML = '<div style="color: #f87171; text-align: center;">Chart library failed to load. Please refresh.</div>';
+            }
+          });
         } else {
-          console.log('[Farm Summary] Waiting for Chart.js to load...');
+          if (chartJsAttempts % 10 === 0) {
+            console.log('[Farm Summary] Still waiting for Chart.js...', chartJsAttempts, 'attempts');
+          }
           setTimeout(waitForChartJS, 100);
         }
       }
