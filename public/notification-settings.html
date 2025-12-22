@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notification Settings - GreenReach</title>
+  <link rel="stylesheet" href="/styles/foxtrot-main.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+
+    h1 {
+      color: #2d3748;
+      margin-top: 0;
+      border-bottom: 3px solid #48bb78;
+      padding-bottom: 15px;
+    }
+
+    h2 {
+      color: #48bb78;
+      margin-top: 30px;
+      font-size: 1.3rem;
+    }
+
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #f7fafc;
+      border-radius: 8px;
+      border-left: 4px solid #48bb78;
+    }
+
+    .section.warning {
+      border-left-color: #f6ad55;
+      background: #fffaf0;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #2d3748;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="time"] {
+      width: 100%;
+      padding: 10px 15px;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #48bb78;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-right: 12px;
+      cursor: pointer;
+    }
+
+    .checkbox-group label {
+      margin: 0;
+      font-weight: normal;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .checkbox-group .description {
+      font-size: 0.9rem;
+      color: #718096;
+      margin-top: 4px;
+    }
+
+    .button {
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      color: white;
+      padding: 12px 30px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 10px;
+      transition: transform 0.2s;
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+    }
+
+    .button.secondary {
+      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+    }
+
+    .button.danger {
+      background: linear-gradient(135deg, #fc8181 0%, #f56565 100%);
+    }
+
+    .device-list {
+      margin-top: 15px;
+    }
+
+    .device-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      border: 2px solid #e2e8f0;
+    }
+
+    .device-item.active {
+      border-color: #48bb78;
+    }
+
+    .device-info {
+      flex: 1;
+    }
+
+    .device-name {
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .device-meta {
+      font-size: 0.9rem;
+      color: #718096;
+      margin-top: 4px;
+    }
+
+    .device-status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .device-status.active {
+      background: #c6f6d5;
+      color: #22543d;
+    }
+
+    .device-status.inactive {
+      background: #fed7d7;
+      color: #742a2a;
+    }
+
+    .alert {
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    .alert.success {
+      background: #c6f6d5;
+      color: #22543d;
+      border-left: 4px solid #48bb78;
+    }
+
+    .alert.error {
+      background: #fed7d7;
+      color: #742a2a;
+      border-left: 4px solid #f56565;
+    }
+
+    .alert.info {
+      background: #bee3f8;
+      color: #2c5282;
+      border-left: 4px solid #4299e1;
+    }
+
+    .quiet-hours {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .permission-request {
+      text-align: center;
+      padding: 30px;
+      background: #fff5f5;
+      border-radius: 8px;
+      border: 2px dashed #fc8181;
+    }
+
+    .permission-request p {
+      margin-bottom: 20px;
+      color: #742a2a;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 20px;
+      }
+
+      .quiet-hours {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Notification Settings</h1>
+    
+    <div id="alerts"></div>
+
+    <!-- Contact Information -->
+    <div class="section">
+      <h2>Contact Information</h2>
+      <div class="form-group">
+        <label for="farmName">Farm Name</label>
+        <input type="text" id="farmName" readonly>
+      </div>
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" required>
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone Number (for SMS)</label>
+        <input type="tel" id="phone" placeholder="+1 613 555 1234">
+        <small style="color: #718096;">Format: +1 for Canada/US, +44 for UK, etc.</small>
+      </div>
+    </div>
+
+    <!-- Email Notifications -->
+    <div class="section">
+      <h2>Email Notifications</h2>
+      <div class="checkbox-group">
+        <input type="checkbox" id="emailEnabled" checked>
+        <label for="emailEnabled">
+          Enable Email Notifications
+          <div class="description">Receive notifications via email</div>
+        </label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="emailNewOrder" checked>
+        <label for="emailNewOrder">
+          New Wholesale Order
+          <div class="description">When a buyer places an order requiring verification</div>
+        </label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="emailDeadline" checked>
+        <label for="emailDeadline">
+          Deadline Reminders
+          <div class="description">Reminders 18hrs, 6hrs before verification deadline</div>
+        </label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="emailModified" checked>
+        <label for="emailModified">
+          Order Modified
+          <div class="description">When buyer modifies order quantities or details</div>
+        </label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="emailPickup" checked>
+        <label for="emailPickup">
+          Pickup Ready
+          <div class="description">When buyer is ready to pick up order</div>
+        </label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="emailWeekly" checked>
+        <label for="emailWeekly">
+          Weekly Performance Summary
+          <div class="description">Weekly report of orders, revenue, and performance metrics</div>
+        </label>
+      </div>
+    </div>
+
+    <!-- SMS Notifications -->
+    <div class="section">
+      <h2>SMS Notifications</h2>
+      <div class="alert info">
+        <strong>Note:</strong> SMS messages are brief alerts for urgent situations. Full details are sent via email.
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="smsEnabled" checked>
+        <label for="smsEnabled">
+          Enable SMS Notifications
+          <div class="description">Receive text message alerts to your phone</div>
+        </label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="smsNewOrder" checked>
+        <label for="smsNewOrder">
+          New Order Alert
+          <div class="description">Immediate SMS when new order arrives</div>
+        </label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="smsUrgent" checked>
+        <label for="smsUrgent">
+          Urgent Deadline Reminders
+          <div class="description">SMS alerts 6hrs, 2hrs, 30min before deadline</div>
+        </label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="smsPickup">
+        <label for="smsPickup">
+          Pickup Ready Alert
+          <div class="description">SMS when order is ready for pickup</div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Push Notifications -->
+    <div class="section">
+      <h2>Mobile Push Notifications</h2>
+      
+      <div id="pushPermissionRequest" class="permission-request" style="display: none;">
+        <p><strong>Push notifications are not enabled on this device.</strong></p>
+        <p>Click the button below to allow notifications from GreenReach.</p>
+        <button class="button" onclick="requestNotificationPermission()">Enable Push Notifications</button>
+      </div>
+
+      <div id="pushSettings">
+        <div class="checkbox-group">
+          <input type="checkbox" id="pushEnabled" checked>
+          <label for="pushEnabled">
+            Enable Push Notifications
+            <div class="description">Receive notifications on your mobile device or tablet</div>
+          </label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="pushNewOrder" checked>
+          <label for="pushNewOrder">
+            New Order Push
+            <div class="description">Instant notification when order arrives</div>
+          </label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="pushDeadline" checked>
+          <label for="pushDeadline">
+            Deadline Alerts
+            <div class="description">Push alerts as deadlines approach</div>
+          </label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="pushModified" checked>
+          <label for="pushModified">
+            Order Modifications
+            <div class="description">When order details change</div>
+          </label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="pushPickup" checked>
+          <label for="pushPickup">
+            Pickup Ready
+            <div class="description">When order is ready for collection</div>
+          </label>
+        </div>
+
+        <h3 style="margin-top: 25px; color: #2d3748;">Registered Devices</h3>
+        <div class="device-list" id="deviceList">
+          <p style="color: #718096;">Loading devices...</p>
+        </div>
+        <button class="button secondary" onclick="registerCurrentDevice()">Register This Device</button>
+      </div>
+    </div>
+
+    <!-- Quiet Hours -->
+    <div class="section warning">
+      <h2>Quiet Hours</h2>
+      <p style="color: #744210; margin-top: 0;">Do not send notifications during these hours (except critical emergencies).</p>
+      
+      <div class="checkbox-group">
+        <input type="checkbox" id="quietHoursEnabled">
+        <label for="quietHoursEnabled">
+          Enable Quiet Hours
+          <div class="description">Suppress non-urgent notifications during specified times</div>
+        </label>
+      </div>
+
+      <div class="quiet-hours">
+        <div class="form-group">
+          <label for="quietStart">Start Time</label>
+          <input type="time" id="quietStart" value="22:00">
+        </div>
+        <div class="form-group">
+          <label for="quietEnd">End Time</label>
+          <input type="time" id="quietEnd" value="08:00">
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Buttons -->
+    <div style="margin-top: 30px; text-align: right;">
+      <button class="button secondary" onclick="loadPreferences()">Reset</button>
+      <button class="button" onclick="savePreferences()">Save Preferences</button>
+    </div>
+  </div>
+
+  <script>
+    let farmId = null;
+
+    // Load farm ID and preferences on page load
+    async function init() {
+      try {
+        // Get farm ID from localStorage or API
+        farmId = localStorage.getItem('farm_id') || 'GR-00001';
+        
+        // Load existing preferences
+        await loadPreferences();
+        
+        // Check push notification permission
+        await checkPushPermission();
+        
+        // Load registered devices
+        await loadDevices();
+      } catch (error) {
+        console.error('Initialization failed:', error);
+        showAlert('Failed to load notification settings', 'error');
+      }
+    }
+
+    async function loadPreferences() {
+      try {
+        const response = await fetch(`/api/farms/${farmId}/notification-preferences`);
+        const data = await response.json();
+        
+        if (data.ok && data.preferences) {
+          const prefs = data.preferences;
+          
+          // Contact info
+          document.getElementById('farmName').value = prefs.farm_name || '';
+          document.getElementById('email').value = prefs.email || '';
+          document.getElementById('phone').value = prefs.phone || '';
+          
+          // Email preferences
+          document.getElementById('emailEnabled').checked = prefs.email_enabled !== false;
+          document.getElementById('emailNewOrder').checked = prefs.email_new_order !== false;
+          document.getElementById('emailDeadline').checked = prefs.email_deadline_reminder !== false;
+          document.getElementById('emailModified').checked = prefs.email_order_modified !== false;
+          document.getElementById('emailPickup').checked = prefs.email_pickup_ready !== false;
+          document.getElementById('emailWeekly').checked = prefs.email_weekly_summary !== false;
+          
+          // SMS preferences
+          document.getElementById('smsEnabled').checked = prefs.sms_enabled !== false;
+          document.getElementById('smsNewOrder').checked = prefs.sms_new_order !== false;
+          document.getElementById('smsUrgent').checked = prefs.sms_deadline_urgent !== false;
+          document.getElementById('smsPickup').checked = prefs.sms_pickup_ready === true;
+          
+          // Push preferences
+          document.getElementById('pushEnabled').checked = prefs.push_enabled !== false;
+          document.getElementById('pushNewOrder').checked = prefs.push_new_order !== false;
+          document.getElementById('pushDeadline').checked = prefs.push_deadline_reminder !== false;
+          document.getElementById('pushModified').checked = prefs.push_order_modified !== false;
+          document.getElementById('pushPickup').checked = prefs.push_pickup_ready !== false;
+          
+          // Quiet hours
+          document.getElementById('quietHoursEnabled').checked = prefs.quiet_hours_enabled === true;
+          document.getElementById('quietStart').value = prefs.quiet_hours_start || '22:00';
+          document.getElementById('quietEnd').value = prefs.quiet_hours_end || '08:00';
+        }
+      } catch (error) {
+        console.error('Failed to load preferences:', error);
+        showAlert('Using default notification settings', 'info');
+      }
+    }
+
+    async function savePreferences() {
+      try {
+        const preferences = {
+          email: document.getElementById('email').value,
+          phone: document.getElementById('phone').value,
+          
+          email_enabled: document.getElementById('emailEnabled').checked,
+          email_new_order: document.getElementById('emailNewOrder').checked,
+          email_deadline_reminder: document.getElementById('emailDeadline').checked,
+          email_order_modified: document.getElementById('emailModified').checked,
+          email_pickup_ready: document.getElementById('emailPickup').checked,
+          email_weekly_summary: document.getElementById('emailWeekly').checked,
+          
+          sms_enabled: document.getElementById('smsEnabled').checked,
+          sms_new_order: document.getElementById('smsNewOrder').checked,
+          sms_deadline_urgent: document.getElementById('smsUrgent').checked,
+          sms_pickup_ready: document.getElementById('smsPickup').checked,
+          
+          push_enabled: document.getElementById('pushEnabled').checked,
+          push_new_order: document.getElementById('pushNewOrder').checked,
+          push_deadline_reminder: document.getElementById('pushDeadline').checked,
+          push_order_modified: document.getElementById('pushModified').checked,
+          push_pickup_ready: document.getElementById('pushPickup').checked,
+          
+          quiet_hours_enabled: document.getElementById('quietHoursEnabled').checked,
+          quiet_hours_start: document.getElementById('quietStart').value,
+          quiet_hours_end: document.getElementById('quietEnd').value,
+        };
+        
+        const response = await fetch(`/api/farms/${farmId}/notification-preferences`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(preferences)
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+          showAlert('Preferences saved successfully!', 'success');
+        } else {
+          showAlert(data.message || 'Failed to save preferences', 'error');
+        }
+      } catch (error) {
+        console.error('Failed to save preferences:', error);
+        showAlert('Failed to save preferences. Please try again.', 'error');
+      }
+    }
+
+    async function checkPushPermission() {
+      if (!('Notification' in window)) {
+        document.getElementById('pushSettings').style.display = 'none';
+        showAlert('Push notifications are not supported in this browser', 'info');
+        return;
+      }
+      
+      if (Notification.permission === 'denied') {
+        document.getElementById('pushSettings').style.display = 'none';
+        document.getElementById('pushPermissionRequest').style.display = 'block';
+      } else if (Notification.permission === 'default') {
+        document.getElementById('pushPermissionRequest').style.display = 'block';
+      }
+    }
+
+    async function requestNotificationPermission() {
+      try {
+        const permission = await Notification.requestPermission();
+        
+        if (permission === 'granted') {
+          document.getElementById('pushPermissionRequest').style.display = 'none';
+          document.getElementById('pushSettings').style.display = 'block';
+          showAlert('Push notifications enabled!', 'success');
+          await registerCurrentDevice();
+        } else {
+          showAlert('Push notification permission denied', 'error');
+        }
+      } catch (error) {
+        console.error('Failed to request permission:', error);
+        showAlert('Failed to enable notifications', 'error');
+      }
+    }
+
+    async function registerCurrentDevice() {
+      try {
+        // This would integrate with Firebase Cloud Messaging
+        // For now, show placeholder
+        showAlert('Device registration feature coming soon! Contact support to enable push notifications.', 'info');
+        
+        // TODO: Implement Firebase registration
+        // const token = await getFirebaseToken();
+        // await fetch(`/api/farms/${farmId}/register-device`, {
+        //   method: 'POST',
+        //   headers: { 'Content-Type': 'application/json' },
+        //   body: JSON.stringify({ device_token: token, platform: 'web' })
+        // });
+      } catch (error) {
+        console.error('Failed to register device:', error);
+        showAlert('Failed to register device', 'error');
+      }
+    }
+
+    async function loadDevices() {
+      try {
+        const response = await fetch(`/api/farms/${farmId}/devices`);
+        const data = await response.json();
+        
+        const deviceList = document.getElementById('deviceList');
+        
+        if (data.ok && data.devices && data.devices.length > 0) {
+          deviceList.innerHTML = data.devices.map(device => `
+            <div class="device-item ${device.is_active ? 'active' : ''}">
+              <div class="device-info">
+                <div class="device-name">${device.device_name || device.platform}</div>
+                <div class="device-meta">
+                  ${device.device_model || ''} • 
+                  Registered ${new Date(device.created_at).toLocaleDateString()}
+                  ${device.last_used_at ? ` • Last used ${new Date(device.last_used_at).toLocaleDateString()}` : ''}
+                </div>
+              </div>
+              <span class="device-status ${device.is_active ? 'active' : 'inactive'}">
+                ${device.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          `).join('');
+        } else {
+          deviceList.innerHTML = '<p style="color: #718096;">No devices registered yet. Click "Register This Device" to get started.</p>';
+        }
+      } catch (error) {
+        console.error('Failed to load devices:', error);
+        document.getElementById('deviceList').innerHTML = '<p style="color: #742a2a;">Failed to load devices</p>';
+      }
+    }
+
+    function showAlert(message, type = 'info') {
+      const alertsDiv = document.getElementById('alerts');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      alertsDiv.appendChild(alert);
+      
+      setTimeout(() => {
+        alert.style.opacity = '0';
+        alert.style.transition = 'opacity 0.5s';
+        setTimeout(() => alert.remove(), 500);
+      }, 5000);
+    }
+
+    // Initialize on page load
+    init();
+  </script>
+</body>
+</html>
