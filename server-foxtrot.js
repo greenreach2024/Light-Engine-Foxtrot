@@ -88,6 +88,7 @@ import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-w
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
 import wholesaleSquareOAuthRouter from './routes/wholesale/square-oauth.js';
 import wholesaleSLAPoliciesRouter from './routes/wholesale/sla-policies.js';
+import wholesaleNetworkRouter from './routes/wholesale/network.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
@@ -9366,6 +9367,17 @@ app.use('/api/wholesale/webhooks/fulfillment', wholesaleFulfillmentWebhooksRoute
 app.use('/api/wholesale/sla', wholesaleSLAPoliciesRouter);
 app.use('/api/wholesale/substitution', wholesaleSLAPoliciesRouter);
 app.use('/api/wholesale/buyer/preferences', wholesaleSLAPoliciesRouter);
+
+/**
+ * Wholesale Network Routes (Edge Farm)
+ * Returns local farm data for wholesale admin dashboard
+ * - GET /api/wholesale/network/farms: List network farms (returns local farm)
+ * - GET /api/wholesale/network/snapshots: Inventory snapshots
+ * - GET /api/wholesale/network/aggregate: Aggregated catalog
+ * - GET /api/wholesale/network/market-events: Market events
+ * - GET /api/wholesale/network/recommendations: Network recommendations
+ */
+app.use('/api/wholesale/network', wholesaleNetworkRouter);
 
 /**
  * GreenReach: Audit Logging
