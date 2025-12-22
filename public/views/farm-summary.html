@@ -1750,12 +1750,12 @@
         <!-- Anomaly Score Sparkline -->
         <div class="ml-widget card-highlight" style="background: rgba(30, 41, 59, 0.6); border-radius: 8px; padding: 1rem; height: 100%; display: flex; flex-direction: column; border: 2px solid rgba(100, 116, 139, 0.3);">
           <h3 style="color: #94a3b8; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Anomaly Detection (24h)</h3>
-          <div style="flex: 1; position: relative; min-height: 0;">
-            <canvas id="anomalySparklineChart"></canvas>
-          </div>
-          <div id="anomalySparklineLoading" class="loading" style="padding: 1rem; text-align: center; color: #64748b; font-size: 0.75rem;">
-            <div class="spinner"></div>
-            Loading...
+          <div style="flex: 1; position: relative; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+            <canvas id="anomalySparklineChart" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+            <div id="anomalySparklineLoading" class="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #64748b; font-size: 0.75rem;">
+              <div class="spinner"></div>
+              Loading...
+            </div>
           </div>
           <div id="anomalySparklineError" style="display: none; color: #f87171; font-size: 0.75rem; margin-top: 0.5rem;"></div>
           <div class="card-info-tooltip">
@@ -1767,18 +1767,18 @@
         <!-- Energy Forecast -->
         <div class="ml-widget card-highlight" style="background: rgba(30, 41, 59, 0.6); border-radius: 8px; padding: 1rem; height: 100%; display: flex; flex-direction: column; border: 2px solid rgba(100, 116, 139, 0.3);">
           <h3 style="color: #94a3b8; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Energy Forecast (24h)</h3>
-          <div style="flex: 1; position: relative; min-height: 0;">
-            <canvas id="energyForecastChart"></canvas>
+          <div style="flex: 1; position: relative; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+            <canvas id="energyForecastChart" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+            <div id="energyForecastLoading" class="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #64748b; font-size: 0.75rem;">
+              <div class="spinner"></div>
+              Loading...
+            </div>
           </div>
           <div id="energyForecastSummary" style="margin-top: 0.5rem; font-size: 0.75rem; color: #cbd5e1;">
             <div style="display: flex; justify-content: space-between;">
               <span>Total Predicted:</span>
               <strong id="totalEnergyValue" style="color: #3b82f6;">-- kWh</strong>
             </div>
-          </div>
-          <div id="energyForecastLoading" class="loading" style="padding: 1rem; text-align: center; color: #64748b; font-size: 0.75rem;">
-            <div class="spinner"></div>
-            Loading...
           </div>
           <div id="energyForecastError" style="display: none; color: #f87171; font-size: 0.75rem; margin-top: 0.5rem;"></div>
           <div class="card-info-tooltip">
@@ -1790,12 +1790,12 @@
         <!-- Temperature Forecast with Confidence -->
         <div class="ml-widget card-highlight" style="background: rgba(30, 41, 59, 0.6); border-radius: 8px; padding: 1rem; height: 100%; display: flex; flex-direction: column; border: 2px solid rgba(100, 116, 139, 0.3);">
           <h3 style="color: #94a3b8; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Temp Forecast (4h ahead)</h3>
-          <div style="flex: 1; position: relative; min-height: 0;">
-            <canvas id="tempForecastChart"></canvas>
-          </div>
-          <div id="tempForecastLoading" class="loading" style="padding: 1rem; text-align: center; color: #64748b; font-size: 0.75rem;">
-            <div class="spinner"></div>
-            Loading...
+          <div style="flex: 1; position: relative; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+            <canvas id="tempForecastChart" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+            <div id="tempForecastLoading" class="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #64748b; font-size: 0.75rem;">
+              <div class="spinner"></div>
+              Loading...
+            </div>
           </div>
           <div id="tempForecastError" style="display: none; color: #f87171; font-size: 0.75rem; margin-top: 0.5rem;"></div>
           <div class="card-info-tooltip">
