@@ -819,6 +819,8 @@
       } else if (isDemoMode) {
         // Auto-login for demo mode
         console.log('[Demo] Auto-logging in farm store');
+        console.log('[Demo] isDemoMode:', isDemoMode);
+        console.log('[Demo] No saved credentials found, initiating auto-login');
         try {
           const response = await fetch('/api/config/app');
           const config = await response.json();
@@ -851,9 +853,12 @@
           localStorage.setItem('farm_name', farmName);
           
           console.log('[Demo] Auto-logged in as:', customerName);
+          console.log('[Demo] Calling showApp()...');
           showApp();
+          console.log('[Demo] showApp() completed');
         } catch (error) {
           console.error('[Demo] Auto-login failed:', error);
+          console.error('[Demo] Error details:', error.message, error.stack);
         }
       }
     });

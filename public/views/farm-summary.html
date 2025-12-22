@@ -4131,18 +4131,25 @@
     let tempForecastChart = null;
 
     async function loadAnomalySparkline() {
+      console.log('[Anomaly Sparkline] Starting load...');
       const canvas = document.getElementById('anomalySparklineChart');
       const loading = document.getElementById('anomalySparklineLoading');
       const error = document.getElementById('anomalySparklineError');
       
-      if (!canvas) return;
+      if (!canvas) {
+        console.warn('[Anomaly Sparkline] Canvas not found');
+        return;
+      }
       
       try {
+        console.log('[Anomaly Sparkline] Showing loading...');
         loading.style.display = 'block';
         canvas.style.display = 'none';
         error.style.display = 'none';
         
+        console.log('[Anomaly Sparkline] Fetching data...');
         const response = await fetch('/api/ml/anomalies/statistics?hours=24');
+        console.log('[Anomaly Sparkline] Response status:', response.status);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const data = await response.json();
@@ -4236,19 +4243,26 @@
     }
 
     async function loadEnergyForecast() {
+      console.log('[Energy Forecast] Starting load...');
       const canvas = document.getElementById('energyForecastChart');
       const loading = document.getElementById('energyForecastLoading');
       const error = document.getElementById('energyForecastError');
       const totalValue = document.getElementById('totalEnergyValue');
       
-      if (!canvas) return;
+      if (!canvas) {
+        console.warn('[Energy Forecast] Canvas not found');
+        return;
+      }
       
       try {
+        console.log('[Energy Forecast] Showing loading...');
         loading.style.display = 'block';
         canvas.style.display = 'none';
         error.style.display = 'none';
         
+        console.log('[Energy Forecast] Fetching data from /api/ml/energy-forecast');
         const response = await fetch('/api/ml/energy-forecast');
+        console.log('[Energy Forecast] Response status:', response.status);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const result = await response.json();
@@ -4351,13 +4365,18 @@
     }
 
     async function loadTempForecast() {
+      console.log('[Temp Forecast] Starting load...');
       const canvas = document.getElementById('tempForecastChart');
       const loading = document.getElementById('tempForecastLoading');
       const error = document.getElementById('tempForecastError');
       
-      if (!canvas) return;
+      if (!canvas) {
+        console.warn('[Temp Forecast] Canvas not found');
+        return;
+      }
       
       try {
+        console.log('[Temp Forecast] Showing loading...');
         loading.style.display = 'block';
         canvas.style.display = 'none';
         error.style.display = 'none';
