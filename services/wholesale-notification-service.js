@@ -349,6 +349,270 @@ View: ${this.appUrl}/wholesale-farm-orders.html
   }
 
   /**
+   * Notify buyer that farm declined and alternatives are being sought
+   */
+  async notifyBuyerSeekingAlternatives(order, declinedSubOrder, alternativeFarms) {
+    const subject = `Order #${order.id} Update - Finding Alternative Farm`;
+    
+    const htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #2d5016 0%, #3d6b1f 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1>Order Update</h1>
+          </div>
+          
+          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong>⚠️ Order Update</strong><br/>
+            One of your farms was unable to fulfill part of your order.<br/>
+            We're automatically finding alternative farms for you.
+          </div>
+          
+          <div style="background: #f5f7f3; padding: 20px; margin: 20px 0; border-radius: 4px;">
+            <h3>What Happened</h3>
+            <p>Farm ${declinedSubOrder.farm_name || declinedSubOrder.farm_id} declined ${declinedSubOrder.items.length} item(s) from your order.</p>
+            <p><strong>Declined Amount:</strong> $${declinedSubOrder.sub_total.toFixed(2)}</p>
+            <p><strong>Reason:</strong> ${declinedSubOrder.decline_reason || 'Not specified'}</p>
+          </div>
+          
+          <div style="background: #d4edda; border-left: 4px solid #38a169; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong>✓ Good News!</strong><br/>
+            We found ${alternativeFarms.length} alternative farm(s) in your area.<br/>
+            They have been notified and have 24 hours to accept your order.
+          </div>
+          
+          <p><strong>Your Options:</strong></p>
+          <ul style="line-height: 1.8;">
+            <li>Wait for alternative farms to respond (recommended)</li>
+            <li>Request partial refund for declined items</li>
+            <li>Cancel entire order for full refund</li>
+          </ul>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${this.appUrl}/wholesale.html?view=orders&order_id=${order.id}" 
+               style="display: inline-block; background: #82c341; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              View Order Status →
+            </a>
+          </div>
+          
+          <div style="color: #666; font-size: 0.9rem; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+            <p>We'll notify you as soon as alternative farms respond.</p>
+            <p>Questions? Contact: support@greenreach.ca</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    try {
+      await this.emailTransporter.sendMail({
+        from: this.fromEmail,
+        to: order.buyer_email,
+        subject,
+        html: htmlBody
+      });
+      console.log(`[Notifications] Alternative search notice sent to ${order.buyer_email}`);
+    } catch (error) {
+      console.error('[Notifications] Alternative notice failed:', error.message);
+    }
+  }
+
+  /**
+   * Notify buyer about partial refund
+   */
+  async notifyBuyerRefund(order, subOrder, refundAmount) {
+    const subject = `Order #${order.id} - Partial Refund Processed`;
+    
+    const htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #2d5016 0%, #3d6b1f 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1>Refund Processed</h1>
+          </div>
+          
+          <div style="background: #d4edda; border-left: 4px solid #38a169; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong>✓ Refund Issued</strong><br/>
+            <span style="font-size: 1.5rem; font-weight: bold; color: #2d5016;">$${refundAmount.toFixed(2)} CAD</span>
+          </div>
+          
+          <div style="background: #f5f7f3; padding: 20px; margin: 20px 0; border-radius: 4px;">
+            <h3>Why This Happened</h3>
+            <p>Unfortunately, no alternative farms were available to fulfill part of your order.</p>
+            <p><strong>Unavailable Items:</strong></p>
+            <ul>
+              ${subOrder.items.map(item => `<li>${item.product_name} (${item.quantity} ${item.unit})</li>`).join('')}
+            </ul>
+          </div>
+          
+          <div style="background: #e7f3ff; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <h4>Refund Details</h4>
+            <p><strong>Amount:</strong> $${refundAmount.toFixed(2)}</p>
+            <p><strong>Payment Method:</strong> Square</p>
+            <p><strong>Processing Time:</strong> 5-10 business days</p>
+            <p><strong>Remaining Order:</strong> $${(order.total_amount - refundAmount).toFixed(2)}</p>
+          </div>
+          
+          ${order.total_amount - refundAmount > 0 ? `
+          <div style="background: #d4edda; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong>Good News!</strong><br/>
+            The rest of your order is still being prepared by other farms.
+          </div>
+          ` : ''}
+          
+          <div style="color: #666; font-size: 0.9rem; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+            <p>We apologize for the inconvenience.</p>
+            <p>Questions? Contact: support@greenreach.ca</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    try {
+      await this.emailTransporter.sendMail({
+        from: this.fromEmail,
+        to: order.buyer_email,
+        subject,
+        html: htmlBody
+      });
+      console.log(`[Notifications] Refund notice sent to ${order.buyer_email}`);
+    } catch (error) {
+      console.error('[Notifications] Refund notice failed:', error.message);
+    }
+  }
+
+  /**
+   * Notify buyer that entire order is cancelled
+   */
+  async notifyBuyerOrderCancelled(order, refundAmount) {
+    const subject = `Order #${order.id} Cancelled - Full Refund`;
+    
+    const htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto;">
+          <div style="background: #c53030; color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1>Order Cancelled</h1>
+            <p style="margin: 0;">Order #${order.id}</p>
+          </div>
+          
+          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong>⚠️ Order Cancelled</strong><br/>
+            Unfortunately, no farms were able to fulfill your order.
+          </div>
+          
+          <div style="background: #d4edda; border-left: 4px solid #38a169; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong>✓ Full Refund Issued</strong><br/>
+            <span style="font-size: 1.5rem; font-weight: bold; color: #2d5016;">$${refundAmount.toFixed(2)} CAD</span>
+          </div>
+          
+          <div style="background: #f5f7f3; padding: 20px; margin: 20px 0; border-radius: 4px;">
+            <h3>What Happened</h3>
+            <p>All farms assigned to your order were unable to fulfill due to:</p>
+            <ul>
+              <li>Insufficient inventory</li>
+              <li>Scheduling conflicts</li>
+              <li>No alternative farms available</li>
+            </ul>
+          </div>
+          
+          <div style="background: #e7f3ff; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <h4>Refund Details</h4>
+            <p><strong>Full Amount:</strong> $${refundAmount.toFixed(2)}</p>
+            <p><strong>Payment Method:</strong> Square</p>
+            <p><strong>Processing Time:</strong> 5-10 business days</p>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${this.appUrl}/wholesale.html" 
+               style="display: inline-block; background: #82c341; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              Browse Available Farms →
+            </a>
+          </div>
+          
+          <div style="color: #666; font-size: 0.9rem; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+            <p>We sincerely apologize for the inconvenience.</p>
+            <p>Our network is expanding daily. Please try again soon!</p>
+            <p>Questions? Contact: support@greenreach.ca</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    try {
+      await this.emailTransporter.sendMail({
+        from: this.fromEmail,
+        to: order.buyer_email,
+        subject,
+        html: htmlBody
+      });
+      console.log(`[Notifications] Cancellation notice sent to ${order.buyer_email}`);
+    } catch (error) {
+      console.error('[Notifications] Cancellation notice failed:', error.message);
+    }
+  }
+
+  /**
+   * Notify buyer that deadline expired for a farm
+   */
+  async notifyBuyerDeadlineExpired(order, expiredSubOrder) {
+    const subject = `Order #${order.id} Update - Farm Didn't Respond`;
+    
+    const htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #2d5016 0%, #3d6b1f 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1>Order Update</h1>
+          </div>
+          
+          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong>⏰ Deadline Expired</strong><br/>
+            Farm ${expiredSubOrder.farm_name || expiredSubOrder.farm_id} did not respond within 24 hours.<br/>
+            Automatically searching for alternatives...
+          </div>
+          
+          <div style="background: #f5f7f3; padding: 20px; margin: 20px 0; border-radius: 4px;">
+            <h3>Affected Items</h3>
+            <ul>
+              ${expiredSubOrder.items.map(item => `<li>${item.product_name} (${item.quantity} ${item.unit})</li>`).join('')}
+            </ul>
+            <p><strong>Amount:</strong> $${expiredSubOrder.sub_total.toFixed(2)}</p>
+          </div>
+          
+          <p>We'll notify you as soon as we find an alternative farm or process your partial refund.</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${this.appUrl}/wholesale.html?view=orders&order_id=${order.id}" 
+               style="display: inline-block; background: #82c341; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              View Order Status →
+            </a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    try {
+      await this.emailTransporter.sendMail({
+        from: this.fromEmail,
+        to: order.buyer_email,
+        subject,
+        html: htmlBody
+      });
+      console.log(`[Notifications] Deadline expired notice sent to ${order.buyer_email}`);
+    } catch (error) {
+      console.error('[Notifications] Expired notice failed:', error.message);
+    }
+  }
+
+  /**
    * Format fulfillment cadence for display
    */
   formatCadence(cadence) {

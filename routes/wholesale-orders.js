@@ -8,6 +8,7 @@ import { PaymentProviderFactory } from '../lib/payment-providers/base.js';
 import '../lib/payment-providers/square.js'; // Ensure Square provider is registered
 import crypto from 'crypto';
 import notificationService from '../services/wholesale-notification-service.js';
+import alternativeFarmService from '../services/alternative-farm-service.js';
 
 const router = express.Router();
 
@@ -232,10 +233,43 @@ router.post('/farm-verify', async (req, res) => {
         
       case 'decline':
         newStatus = SubOrderStatus.FARM_DECLINED;
-        message = 'Order declined';
+        message = 'Order declined - searching for alternatives';
         performanceMetrics.declined = true;
         performanceMetrics.decline_reason = reason;
-        // TODO: Trigger alternative farm search
+        
+        // Trigger alternative farm search
+        console.log(`[Wholesale Orders] Farm ${farm_id} declined - searching for alternatives`);
+        
+        // TODO: Fetch full order and sub-order from database
+        const declinedSubOrder = {
+          id: sub_order_id,
+          farm_id,
+          farm_name: `Farm ${farm_id}`,
+          sub_total: 0, // Get from database
+          items: [],
+          decline_reason: reason,
+          declined_at: new Date().toISOString()
+        };
+        
+        const mainOrder = {
+          id: 1, // Get from database
+          buyer_email: 'buyer@example.com', // Get from database
+          delivery_city: 'Kingston',
+          delivery_province: 'ON'
+        };
+        
+        // Find alternative farms (async - don't wait)
+        alternativeFarmService.findAlternatives(declinedSubOrder, mainOrder)
+          .then(result => {
+            if (result.success) {
+              console.log(`[Wholesale Orders] ${result.alternatives_notified} alternatives notified`);
+            } else if (result.refund_required) {
+              console.log(`[Wholesale Orders] No alternatives found - refunding $${result.refund_amount}`);
+              alternativeFarmService.processPartialRefund(mainOrder, declinedSubOrder);
+            }
+          })
+          .catch(err => console.error('[Wholesale Orders] Alternative search failed:', err));
+        
         // TODO: Track decline rate for farm performance
         break;
         
