@@ -764,6 +764,30 @@
       border-bottom: 2px solid var(--border);
     }
 
+    /* Stripe Payment Styles */
+    .payment-info {
+      margin-top: 1rem;
+    }
+
+    .stripe-card-element {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      background: white;
+      margin-top: 1rem;
+    }
+
+    .card-errors {
+      color: var(--error);
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    #place-order-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .form-group {
       margin-bottom: 1rem;
     }
@@ -1697,9 +1721,26 @@
           </div>
         </div>
 
+        <div class="checkout-section">
+          <h2>Payment Method</h2>
+          <div class="payment-info">
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+              <strong>Payment Authorization:</strong> Your card will be authorized for the full amount, 
+              but <strong>not charged</strong> until farms confirm and you pick up your order.
+            </p>
+            <div id="card-element" class="stripe-card-element">
+              <!-- Stripe Card Element mounted here -->
+            </div>
+            <div id="card-errors" class="card-errors" role="alert"></div>
+          </div>
+        </div>
+
         <div class="checkout-actions">
           <button type="button" class="btn btn-secondary" id="back-to-catalog-btn">Back to Catalog</button>
-          <button type="button" class="btn btn-success" id="place-order-btn">Place Order</button>
+          <button type="button" class="btn btn-success" id="place-order-btn">
+            <span id="place-order-text">Place Order</span>
+            <span id="place-order-spinner" style="display: none;">Processing...</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1837,6 +1878,9 @@
       </form>
     </div>
   </div>
+  <!-- Stripe.js -->
+  <script src="https://js.stripe.com/v3/"></script>
+  
   <script src="/js/wholesale.js" defer></script>
 </body>
 </html>

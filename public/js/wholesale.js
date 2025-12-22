@@ -1473,10 +1473,217 @@
         Math.sin(dLon/2) * Math.sin(dLon/2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       return R * c;
+    },
+
+    /**
+     * Initialize Stripe and mount card element
+     */
+    stripeInstance: null,
+    cardElement: null,
+    
+    initializeStripe() {
+      // Use test publishable key (should be from environment variable in production)
+      const stripe = Stripe('pk_test_51QWImID4okxjlqBc8bv5vXnvqSaZqmqH5YhN2sE0WM4qnC0VHjZPSQfBQ4XFB9DW8K6QMvd0cQs3xPBCqb3WjxhT00xT5zJZKL');
+      this.stripeInstance = stripe;
+      
+      const elements = stripe.elements();
+      this.cardElement = elements.create('card', {
+        style: {
+          base: {
+            fontSize: '16px',
+            color: '#1a1a1a',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            '::placeholder': {
+              color: '#999',
+            },
+          },
+          invalid: {
+            color: '#c53030',
+          },
+        },
+      });
+      
+      const cardElementContainer = document.getElementById('card-element');
+      if (cardElementContainer) {
+        this.cardElement.mount('#card-element');
+        
+        this.cardElement.on('change', (event) => {
+          const displayError = document.getElementById('card-errors');
+          if (event.error) {
+            displayError.textContent = event.error.message;
+          } else {
+            displayError.textContent = '';
+          }
+        });
+      }
+    },
+
+    /**
+     * Create payment method with Stripe
+     */
+    async createPaymentMethod() {
+      if (!this.stripeInstance || !this.cardElement) {
+        throw new Error('Stripe not initialized');
+      }
+      
+      const billingDetails = {
+        name: document.getElementById('buyer-name')?.value,
+        email: document.getElementById('buyer-email')?.value,
+        address: {
+          line1: document.getElementById('delivery-address')?.value,
+          city: document.getElementById('delivery-city')?.value,
+          state: document.getElementById('delivery-province')?.value,
+          postal_code: document.getElementById('delivery-postal')?.value,
+        },
+      };
+      
+      const { error, paymentMethod } = await this.stripeInstance.createPaymentMethod({
+        type: 'card',
+        card: this.cardElement,
+        billing_details: billingDetails,
+      });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      return paymentMethod.id;
+    },
+
+    /**
+     * Place wholesale order with payment authorization
+     */
+    async placeOrder() {
+      const placeOrderBtn = document.getElementById('place-order-btn');
+      const placeOrderText = document.getElementById('place-order-text');
+      const placeOrderSpinner = document.getElementById('place-order-spinner');
+      
+      if (!placeOrderBtn) return;
+      
+      try {
+        // Disable button
+        placeOrderBtn.disabled = true;
+        placeOrderText.style.display = 'none';
+        placeOrderSpinner.style.display = 'inline';
+        
+        // Validate cart
+        if (this.cart.length === 0) {
+          throw new Error('Your cart is empty');
+        }
+        
+        // Validate form
+        const form = document.getElementById('checkout-form');
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          throw new Error('Please fill in all required fields');
+        }
+        
+        // Create payment method
+        const paymentMethodId = await this.createPaymentMethod();
+        
+        // Prepare order data
+        const orderData = {
+          buyer_id: this.currentBuyer?.id || 'demo-buyer-001',
+          buyer_name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName,
+          buyer_email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
+          buyer_phone: this.currentBuyer?.phone || '',
+          delivery_address: document.getElementById('delivery-address')?.value,
+          delivery_city: document.getElementById('delivery-city')?.value,
+          delivery_province: document.getElementById('delivery-province')?.value,
+          delivery_postal_code: document.getElementById('delivery-postal')?.value,
+          delivery_instructions: document.getElementById('delivery-instructions')?.value || null,
+          fulfillment_cadence: document.getElementById('fulfillment-cadence')?.value || 'one_time',
+          cart_items: this.cart.map(item => ({
+            sku_id: item.sku_id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit: item.unit,
+            price_per_unit: item.price_per_unit,
+            farm_id: item.farm_id
+          })),
+          payment_method_id: paymentMethodId
+        };
+        
+        // Submit order to backend
+        const response = await fetch('/api/wholesale/orders/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {})
+          },
+          body: JSON.stringify(orderData)
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message || 'Failed to place order');
+        }
+        
+        // Success!
+        this.showToast('Order placed successfully!', 'success');
+        
+        // Clear cart
+        this.cart = [];
+        this.renderCart();
+        
+        // Show success message and order details
+        const successMessage = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: var(--success); margin-bottom: 1rem;">✓</div>
+            <h2>Order Placed Successfully!</h2>
+            <p style="margin: 1rem 0;">Order #${result.order_id}</p>
+            <p style="margin: 1rem 0; color: var(--text-secondary);">
+              Your payment has been authorized but <strong>not charged yet</strong>.
+              <br/>Farms have 24 hours to confirm their portions.
+              <br/>You'll receive an email when farms respond.
+            </p>
+            <p style="margin: 1.5rem 0;">
+              <strong>Total Authorized:</strong> $${result.total_amount.toFixed(2)}
+            </p>
+            <button class="btn btn-primary" onclick="app.navigateTo('orders')">View My Orders</button>
+          </div>
+        `;
+        
+        document.querySelector('.checkout-container').innerHTML = successMessage;
+        
+      } catch (error) {
+        console.error('Order placement error:', error);
+        this.showToast(error.message || 'Failed to place order', 'error');
+        const cardErrors = document.getElementById('card-errors');
+        if (cardErrors) {
+          cardErrors.textContent = error.message;
+        }
+      } finally {
+        // Re-enable button
+        placeOrderBtn.disabled = false;
+        placeOrderText.style.display = 'inline';
+        placeOrderSpinner.style.display = 'none';
+      }
     }
   };
 
   document.addEventListener('DOMContentLoaded', () => {
     app.init();
+    
+    // Initialize Stripe when navigating to checkout
+    const checkoutNavBtn = document.querySelector('[data-view="checkout"]');
+    if (checkoutNavBtn) {
+      checkoutNavBtn.addEventListener('click', () => {
+        setTimeout(() => {
+          if (!app.stripeInstance) {
+            app.initializeStripe();
+          }
+        }, 100);
+      });
+    }
+    
+    // Handle place order button
+    const placeOrderBtn = document.getElementById('place-order-btn');
+    if (placeOrderBtn) {
+      placeOrderBtn.addEventListener('click', () => {
+        app.placeOrder();
+      });
+    }
   });
 })();
