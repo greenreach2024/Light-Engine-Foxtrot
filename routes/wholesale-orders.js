@@ -9,6 +9,7 @@ import '../lib/payment-providers/square.js'; // Ensure Square provider is regist
 import crypto from 'crypto';
 import notificationService from '../services/wholesale-notification-service.js';
 import alternativeFarmService from '../services/alternative-farm-service.js';
+import farmSelectionOptimizer from '../services/farm-selection-optimizer.js';
 
 const router = express.Router();
 
@@ -51,12 +52,131 @@ const SubOrderStatus = {
 router.post('/create', async (req, res) => {
   try {
     const { buyer_id, buyer_name, buyer_email, buyer_phone, delivery_address, delivery_city, 
-            delivery_province, delivery_postal_code, fulfillment_cadence, delivery_instructions,
-            preferred_pickup_time, items, payment_method_id } = req.body;
+            delivery_province, delivery_postal_code, delivery_latitude, delivery_longitude,
+            fulfillment_cadence, delivery_instructions, preferred_pickup_time, items, 
+            payment_method_id, filters } = req.body;
     
-    // Calculate totals
+    console.log('[Wholesale] Creating order with farm optimization...');
+    
+    // STEP 1: Use farm selection optimizer to find best farms
+    const optimizedFarms = await farmSelectionOptimizer.selectFarms({
+      items,
+      buyer: {
+        latitude: delivery_latitude || 44.2312, // Kingston default if not provided
+        longitude: delivery_longitude || -76.4860,
+        city: delivery_city,
+        address: delivery_address
+      },
+      filters: filters || {} // e.g., { organic: true, locallyGrown: true }
+    });
+    
+    if (optimizedFarms.length === 0) {
+      return res.status(400).json({
+        error: 'No farms found matching your requirements',
+        message: 'Try expanding your search radius or adjusting filters'
+      });
+    }
+    
+    console.log(`[Wholesale] Optimizer selected ${optimizedFarms.length} farms`);
+    console.log('[Wholesale] Top 3 selections:', optimizedFarms.slice(0, 3).map(f => ({
+      farm: f.farm_name,
+      distance: `${f.distance.toFixed(1)}km`,
+      cluster: f.clusterInfo?.clusterId,
+      score: f.totalScore.toFixed(1)
+    })));
+    
+    // STEP 2: Match items to optimized farms (prefer clustered farms)
+    const farmItems = {};
+    const assignedItems = new Set();
+    
+    // First pass: assign items to farms in clusters (most efficient)
+    for (const farm of optimizedFarms.filter(f => f.clusterInfo !== null)) {
+      for (const item of items) {
+        if (assignedItems.has(item.id)) continue;
+        
+        const farmHasProduct = farm.availableProducts?.some(p =>
+          p.product_id === item.product_id && 
+          p.available_quantity >= item.quantity
+        );
+        
+        if (farmHasProduct) {
+          if (!farmItems[farm.farm_id]) {
+            farmItems[farm.farm_id] = {
+              farm,
+              items: []
+            };
+          }
+          farmItems[farm.farm_id].items.push(item);
+          assignedItems.add(item.id);
+        }
+      }
+    }
+    
+    // Second pass: assign remaining items to any available farm
+    for (const item of items) {
+      if (assignedItems.has(item.id)) continue;
+      
+      const availableFarm = optimizedFarms.find(farm =>
+        farm.availableProducts?.some(p =>
+          p.product_id === item.product_id && 
+          p.available_quantity >= item.quantity
+        )
+      );
+      
+      if (availableFarm) {
+        if (!farmItems[availableFarm.farm_id]) {
+          farmItems[availableFarm.farm_id] = {
+            farm: availableFarm,
+            items: []
+          };
+        }
+        farmItems[availableFarm.farm_id].items.push(item);
+        assignedItems.add(item.id);
+      }
+    }
+    
+    // Check if all items were assigned
+    if (assignedItems.size < items.length) {
+      const unassigned = items.filter(i => !assignedItems.has(i.id));
+      return res.status(400).json({
+        error: 'Some products are not available',
+        unavailable_items: unassigned.map(i => i.product_name)
+      });
+    }
+    
+    // STEP 3: Calculate totals and logistics summary
     const total_amount = items.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
     const platform_fee = total_amount * 0.10; // 10% platform fee
+    
+    // Calculate logistics efficiency metrics for buyer visibility
+    const clusters = [...new Set(Object.values(farmItems)
+      .map(f => f.farm.clusterInfo?.clusterId)
+      .filter(c => c !== null && c !== undefined))];
+    
+    const logisticsSummary = {
+      totalFarms: Object.keys(farmItems).length,
+      clusteredFarms: Object.values(farmItems).filter(f => f.farm.clusterInfo !== null).length,
+      numberOfClusters: clusters.length,
+      avgDistance: (Object.values(farmItems).reduce((sum, f) => sum + f.farm.distance, 0) / 
+                    Object.keys(farmItems).length).toFixed(1),
+      estimatedPickupTime: Math.max(...Object.values(farmItems).map(f => 
+        f.farm.estimatedDeliveryTime || 60
+      )),
+      routeEfficiency: clusters.length > 0 ? 'high' : 
+                       Object.keys(farmItems).length === 1 ? 'medium' : 'low',
+      farmDetails: Object.values(farmItems).map(f => ({
+        farm_id: f.farm.farm_id,
+        farm_name: f.farm.farm_name,
+        distance: `${f.farm.distance.toFixed(1)}km`,
+        cluster: f.farm.clusterInfo?.clusterId || 'none',
+        efficiency: f.farm.routeEfficiency
+      }))
+    };
+    
+    console.log('[Wholesale] Logistics summary:', logisticsSummary);
+    
+    // STEP 4: Create payment authorization
+    // STEP 4: Create payment authorization
     
     // Get Square configuration (TODO: retrieve from database)
     const squareConfig = {
@@ -69,16 +189,14 @@ router.post('/create', async (req, res) => {
     const paymentProvider = PaymentProviderFactory.create('square', squareConfig);
     
     // Create payment with Square
-    // Note: Square doesn't support delayed capture like Stripe
-    // Instead, we'll create the payment and track it for later fulfillment
     const idempotencyKey = crypto.randomUUID();
     
     const paymentResult = await paymentProvider.createPayment({
       farmSubOrderId: `ORDER-${Date.now()}`,
-      farmMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID, // Use broker for initial hold
+      farmMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID,
       farmLocationId: process.env.SQUARE_LOCATION_ID,
       amountMoney: {
-        amount: Math.round(total_amount * 100), // Convert to cents
+        amount: Math.round(total_amount * 100),
         currency: 'CAD'
       },
       brokerFeeMoney: {
@@ -101,9 +219,9 @@ router.post('/create', async (req, res) => {
       });
     }
     
-    // Create order record (in production, use actual database)
+    // STEP 5: Create order with optimized farm assignments
     const order = {
-      id: Date.now(), // Use proper ID generation in production
+      id: Date.now(),
       buyer_id,
       buyer_name,
       buyer_email,
@@ -120,31 +238,27 @@ router.post('/create', async (req, res) => {
       status: OrderStatus.PAYMENT_AUTHORIZED,
       payment_id: paymentResult.paymentId,
       verification_deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      logistics_summary: logisticsSummary,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
     
-    // Split order by farm
-    const farmItems = {};
-    items.forEach(item => {
-      if (!farmItems[item.farm_id]) {
-        farmItems[item.farm_id] = [];
-      }
-      farmItems[item.farm_id].push(item);
-    });
-    
-    // Create sub-orders for each farm
-    const sub_orders = Object.entries(farmItems).map(([farm_id, farmItems]) => {
-      const sub_total = farmItems.reduce((sum, item) => 
+    // Create sub-orders for each optimized farm
+    const sub_orders = Object.entries(farmItems).map(([farm_id, farmData]) => {
+      const sub_total = farmData.items.reduce((sum, item) => 
         sum + (item.price_per_unit * item.quantity), 0);
       
       return {
-        id: Date.now() + Math.random(), // Use proper ID generation
+        id: Date.now() + Math.random(),
         wholesale_order_id: order.id,
-        farm_id,
+        farm_id: farmData.farm.farm_id,
+        farm_name: farmData.farm.farm_name,
+        distance_km: farmData.farm.distance,
+        cluster_id: farmData.farm.clusterInfo?.clusterId || null,
+        route_efficiency: farmData.farm.routeEfficiency,
         status: SubOrderStatus.PENDING_VERIFICATION,
         sub_total,
-        items: farmItems.map(item => ({
+        items: farmData.items.map(item => ({
           sku_id: item.sku_id,
           product_name: item.product_name,
           quantity: item.quantity,
@@ -185,7 +299,9 @@ router.post('/create', async (req, res) => {
       payment_id: paymentResult.paymentId,
       total_amount,
       verification_deadline: order.verification_deadline,
-      message: 'Order placed successfully. Farms have 24 hours to verify.'
+      logistics: logisticsSummary,
+      message: 'Order placed successfully. Farms have 24 hours to verify.',
+      optimization_note: `Selected ${logisticsSummary.totalFarms} farms with ${logisticsSummary.routeEfficiency} route efficiency`
     });
     
   } catch (error) {
