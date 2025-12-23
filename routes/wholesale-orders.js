@@ -13,6 +13,68 @@ import farmSelectionOptimizer from '../services/farm-selection-optimizer.js';
 
 const router = express.Router();
 
+/**
+ * Calculate weighted average pricing for multi-farm orders
+ * When multiple farms fulfill the same product, calculate buyer's final price
+ * based on each farm's contribution weighted by quantity
+ */
+function calculateWeightedPricing(originalItems, sub_orders) {
+  const pricesByProduct = new Map();
+  
+  // Group items by product across all farms
+  for (const subOrder of sub_orders) {
+    for (const item of subOrder.items) {
+      const productKey = item.product_name;
+      
+      if (!pricesByProduct.has(productKey)) {
+        pricesByProduct.set(productKey, {
+          product_name: item.product_name,
+          sku_id: item.sku_id,
+          unit: item.unit,
+          total_quantity: 0,
+          total_cost: 0,
+          farm_contributions: []
+        });
+      }
+      
+      const productData = pricesByProduct.get(productKey);
+      productData.total_quantity += item.quantity;
+      productData.total_cost += item.line_total;
+      productData.farm_contributions.push({
+        farm_id: subOrder.farm_id,
+        farm_name: subOrder.farm_name,
+        quantity: item.quantity,
+        price_per_unit: item.price_per_unit,
+        line_total: item.line_total
+      });
+    }
+  }
+  
+  // Calculate weighted average price for each product
+  const weighted_prices = [];
+  
+  for (const [productName, data] of pricesByProduct.entries()) {
+    const weightedPrice = data.total_cost / data.total_quantity;
+    
+    weighted_prices.push({
+      product_name: productName,
+      sku_id: data.sku_id,
+      unit: data.unit,
+      total_quantity: data.total_quantity,
+      weighted_price_per_unit: Number(weightedPrice.toFixed(2)),
+      total_cost: Number(data.total_cost.toFixed(2)),
+      farm_contributions: data.farm_contributions,
+      is_multi_farm: data.farm_contributions.length > 1
+    });
+  }
+  
+  return {
+    weighted_prices,
+    total_farms: sub_orders.length,
+    multi_farm_products: weighted_prices.filter(p => p.is_multi_farm).length
+  };
+}
+
 // Order status enums
 const OrderStatus = {
   PENDING_PAYMENT: 'pending_payment',
@@ -274,6 +336,15 @@ router.post('/create', async (req, res) => {
     order.sub_orders = sub_orders;
     order.status = OrderStatus.PENDING_FARM_VERIFICATION;
     
+    // Calculate weighted average price for multi-farm orders (for buyer transparency)
+    const weightedPricing = calculateWeightedPricing(items, sub_orders);
+    order.pricing_breakdown = weightedPricing;
+    
+    console.log('[Wholesale Orders] Pricing breakdown:', {
+      total_farms: sub_orders.length,
+      weighted_prices: weightedPricing.weighted_prices
+    });
+    
     // CRITICAL: Reserve inventory at each farm immediately after payment authorization
     console.log(`[Wholesale Orders] Reserving inventory at ${sub_orders.length} farms...`);
     const reservationResults = [];
@@ -486,13 +557,34 @@ router.post('/farm-verify', async (req, res) => {
         performanceMetrics.modifications = modifications;
         performanceMetrics.modification_reason = reason;
         
+        // Validate and process price adjustments if included
+        if (modifications && modifications.adjusted_prices) {
+          console.log('[Wholesale Orders] Farm adjusting prices:', modifications.adjusted_prices);
+          
+          // Track original prices for buyer comparison
+          const priceAdjustments = modifications.adjusted_prices.map(adj => ({
+            sku_id: adj.sku_id,
+            product_name: adj.product_name,
+            original_price: adj.original_price,
+            adjusted_price: adj.adjusted_price,
+            quantity: adj.quantity,
+            price_change_percent: ((adj.adjusted_price - adj.original_price) / adj.original_price * 100).toFixed(1),
+            reason: adj.reason || 'Price adjustment by farm'
+          }));
+          
+          modifications.price_adjustments = priceAdjustments;
+          performanceMetrics.price_adjusted = true;
+          performanceMetrics.price_adjustment_count = priceAdjustments.length;
+        }
+        
         // Notify buyer about modifications
         // TODO: Fetch full order details from database
         const modifiedSubOrder = {
           farm_id,
           farm_name: `Farm ${farm_id}`, // Replace with actual lookup
           modification_reason: reason,
-          modifications
+          modifications,
+          requires_buyer_approval: true
         };
         
         const orderForNotification = {
@@ -502,8 +594,9 @@ router.post('/farm-verify', async (req, res) => {
         
         await notificationService.notifyBuyerModifications(orderForNotification, [modifiedSubOrder]);
         
-        // TODO: Save modifications
+        // TODO: Save modifications to database
         // TODO: Update main order status to PENDING_BUYER_REVIEW
+        // TODO: Recalculate weighted prices if price modified
         // TODO: Track modification rate for farm performance
         break;
         
