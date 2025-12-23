@@ -13401,6 +13401,7 @@ app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
   
   // Allow demo farms (LOCAL-FARM and GR-00001) without authentication
   const isDemoFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001');
+  let session = null;
   
   if (!isDemoFarm) {
     // Verify authentication for non-demo farms
@@ -13413,7 +13414,7 @@ app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
     }
     
     const token = authHeader.substring(7);
-    const session = global.farmAdminSessions?.get(token);
+    session = global.farmAdminSessions?.get(token);
     
     if (!session || session.farmId !== farmId) {
       return res.status(403).json({
@@ -13424,6 +13425,7 @@ app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
   }
   
   // Mock activity data (in production, fetch from database)
+  const userEmail = session?.email || 'demo@farm.com';
   const activity = [
     {
       timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
@@ -13434,7 +13436,7 @@ app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
     {
       timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
       description: 'New growth group planted: ROOM-A-Z1-G03',
-      user: session.email,
+      user: userEmail,
       status: 'active'
     },
     {
