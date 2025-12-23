@@ -499,6 +499,73 @@
             }
         }
 
+        /* Grower Management Styles */
+        .grower-tab {
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: var(--text-secondary);
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .grower-tab:hover {
+            color: var(--text-primary);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .grower-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            background: transparent;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px 8px;
+            transition: transform 0.2s;
+        }
+
+        .btn-icon:hover {
+            transform: scale(1.2);
+        }
+
+        .badge-secondary {
+            background: rgba(156, 163, 175, 0.15);
+            color: var(--text-muted);
+        }
+
+        .badge-primary {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--primary);
+        }
+
         /* Toast animations */
         @keyframes slideIn {
             from {
@@ -2127,6 +2194,222 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Grower Management View -->
+            <div id="grower-mgmt-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Grower Network</span>
+                </div>
+
+                <div class="header">
+                    <h1>Grower Network Management</h1>
+                    <button class="btn-primary" onclick="openInviteGrowerModal()">
+                        <span>📧</span> Invite Grower
+                    </button>
+                </div>
+
+                <!-- Network Dashboard -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Growers</div>
+                        <div class="kpi-value" id="grower-total">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Farms</div>
+                        <div class="kpi-value" id="grower-active-farms">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Contracts</div>
+                        <div class="kpi-value" id="grower-active-contracts">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Pending Invitations</div>
+                        <div class="kpi-value" id="grower-pending-invites">--</div>
+                    </div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="grower-tabs" style="display: flex; gap: 10px; margin: 20px 0; border-bottom: 2px solid var(--border-color);">
+                    <button class="grower-tab active" onclick="showGrowerTab('directory')" data-tab="directory">Grower Directory</button>
+                    <button class="grower-tab" onclick="showGrowerTab('farms')" data-tab="farms">Farm Assignments</button>
+                    <button class="grower-tab" onclick="showGrowerTab('contracts')" data-tab="contracts">Contracts</button>
+                    <button class="grower-tab" onclick="showGrowerTab('performance')" data-tab="performance">Performance</button>
+                    <button class="grower-tab" onclick="showGrowerTab('invitations')" data-tab="invitations">Invitations</button>
+                </div>
+
+                <!-- Grower Directory Tab -->
+                <div id="grower-directory-tab" class="grower-tab-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Growers</div>
+                            <div style="display: flex; gap: 10px;">
+                                <select id="grower-status-filter" onchange="loadGrowerList()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                                    <option value="">All Status</option>
+                                    <option value="active">Active</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="suspended">Suspended</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                                <input type="text" id="grower-search" placeholder="Search growers..." onkeyup="loadGrowerList()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); min-width: 250px;">
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Contact</th>
+                                        <th>Farms</th>
+                                        <th>Pricing Tier</th>
+                                        <th>Status</th>
+                                        <th>Joined</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grower-list-tbody">
+                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading growers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Farm Assignments Tab -->
+                <div id="grower-farms-tab" class="grower-tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Farm Assignments</div>
+                            <button class="btn-primary" onclick="openAssignFarmModal()">
+                                <span>➕</span> Assign Farm
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Farm Name</th>
+                                        <th>Grower</th>
+                                        <th>Location</th>
+                                        <th>Capacity</th>
+                                        <th>Certifications</th>
+                                        <th>Assigned Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="farm-assignments-tbody">
+                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading farm assignments...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contracts Tab -->
+                <div id="grower-contracts-tab" class="grower-tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Contracts</div>
+                            <button class="btn-primary" onclick="openCreateContractModal()">
+                                <span>📄</span> Create Contract
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Contract ID</th>
+                                        <th>Grower</th>
+                                        <th>Type</th>
+                                        <th>Status</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Value</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="contracts-tbody">
+                                    <tr><td colspan="8" style="text-align: center; padding: 20px;">Loading contracts...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Tab -->
+                <div id="grower-performance-tab" class="grower-tab-content" style="display: none;">
+                    <!-- Leaderboard -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div class="card-title">🏆 Top Performing Growers</div>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Grower</th>
+                                        <th>Acceptance Rate</th>
+                                        <th>Avg Response Time</th>
+                                        <th>On-Time %</th>
+                                        <th>Quality Score</th>
+                                        <th>Revenue (30d)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboard-tbody">
+                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading leaderboard...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Detailed Performance Metrics -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Performance Details</div>
+                            <select id="performance-grower-select" onchange="loadGrowerPerformance()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                                <option value="">Select a grower...</option>
+                            </select>
+                        </div>
+                        <div class="card-body" id="performance-details">
+                            <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                                Select a grower to view detailed performance metrics
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Invitations Tab -->
+                <div id="grower-invitations-tab" class="grower-tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Grower Invitations</div>
+                            <button class="btn-primary" onclick="openInviteGrowerModal()">
+                                <span>📧</span> Send Invitation
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>Business Name</th>
+                                        <th>Invited By</th>
+                                        <th>Status</th>
+                                        <th>Sent Date</th>
+                                        <th>Expires</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="invitations-tbody">
+                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading invitations...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -2488,6 +2771,398 @@
                 if (viewName === 'network') {
                     loadNetworkDashboard();
                 }
+                // Load data for grower management view
+                if (viewName === 'grower-mgmt') {
+                    loadGrowerManagementDashboard();
+                }
+            }
+        }
+
+        // ==================== GROWER MANAGEMENT FUNCTIONS ====================
+        const GROWER_API_URL = 'http://localhost:8000';
+        let allGrowers = [];
+
+        async function loadGrowerManagementDashboard() {
+            await Promise.all([
+                loadGrowerDashboardStats(),
+                loadGrowerList(),
+                loadFarmAssignments(),
+                loadContracts(),
+                loadInvitations(),
+                loadLeaderboard()
+            ]);
+        }
+
+        async function loadGrowerDashboardStats() {
+            try {
+                const response = await fetch(`${GROWER_API_URL}/api/growers/dashboard`);
+                const data = await response.json();
+                
+                document.getElementById('grower-total').textContent = data.total_growers;
+                document.getElementById('grower-active-farms').textContent = data.active_farms;
+                document.getElementById('grower-active-contracts').textContent = data.active_contracts;
+                document.getElementById('grower-pending-invites').textContent = data.pending_invitations;
+            } catch (error) {
+                console.error('Error loading grower dashboard stats:', error);
+            }
+        }
+
+        async function loadGrowerList() {
+            try {
+                const statusFilter = document.getElementById('grower-status-filter')?.value || '';
+                const searchQuery = document.getElementById('grower-search')?.value.toLowerCase() || '';
+                
+                const response = await fetch(`${GROWER_API_URL}/api/growers/list${statusFilter ? `?status=${statusFilter}` : ''}`);
+                const data = await response.json();
+                
+                allGrowers = data.growers;
+                let filtered = allGrowers;
+                
+                if (searchQuery) {
+                    filtered = allGrowers.filter(g => 
+                        g.business_name.toLowerCase().includes(searchQuery) ||
+                        g.contact_name.toLowerCase().includes(searchQuery) ||
+                        g.email.toLowerCase().includes(searchQuery)
+                    );
+                }
+                
+                const tbody = document.getElementById('grower-list-tbody');
+                if (filtered.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-secondary);">No growers found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = filtered.map(grower => `
+                    <tr>
+                        <td><strong>${grower.business_name}</strong><br><small style="color: var(--text-secondary);">${grower.contact_name}</small></td>
+                        <td>${grower.email}<br><small style="color: var(--text-secondary);">${grower.phone || 'N/A'}</small></td>
+                        <td>${grower.assigned_farms || 0}</td>
+                        <td><span class="badge badge-${getPricingTierColor(grower.pricing_tier)}">${grower.pricing_tier.toUpperCase()}</span></td>
+                        <td><span class="badge badge-${getGrowerStatusColor(grower.status)}">${grower.status.toUpperCase()}</span></td>
+                        <td>${new Date(grower.joined_date).toLocaleDateString()}</td>
+                        <td>
+                            <button onclick="viewGrowerDetails('${grower.grower_id}')" class="btn-icon" title="View Details">👁️</button>
+                            <button onclick="updateGrowerStatus('${grower.grower_id}', '${grower.status}')" class="btn-icon" title="Update Status">✏️</button>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                // Populate performance grower selector
+                const perfSelect = document.getElementById('performance-grower-select');
+                if (perfSelect) {
+                    perfSelect.innerHTML = '<option value="">Select a grower...</option>' +
+                        allGrowers.map(g => `<option value="${g.grower_id}">${g.business_name}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Error loading grower list:', error);
+                document.getElementById('grower-list-tbody').innerHTML = 
+                    '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--error);">Error loading growers</td></tr>';
+            }
+        }
+
+        async function loadFarmAssignments() {
+            try {
+                const response = await fetch(`${GROWER_API_URL}/api/farms/list`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('farm-assignments-tbody');
+                if (data.farms.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-secondary);">No farm assignments found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.farms.map(farm => `
+                    <tr>
+                        <td><strong>${farm.farm_name}</strong></td>
+                        <td>${farm.grower_business_name}<br><small style="color: var(--text-secondary);">${farm.grower_id}</small></td>
+                        <td>${farm.location}</td>
+                        <td>${farm.capacity}</td>
+                        <td>${farm.certifications.map(c => `<span class="badge badge-success">${c}</span>`).join(' ') || 'None'}</td>
+                        <td>${new Date(farm.assigned_date).toLocaleDateString()}</td>
+                        <td>
+                            <button onclick="viewFarmDetails('${farm.farm_id}')" class="btn-icon" title="View Details">👁️</button>
+                            <button onclick="unassignFarm('${farm.farm_id}')" class="btn-icon" title="Unassign">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading farm assignments:', error);
+                document.getElementById('farm-assignments-tbody').innerHTML = 
+                    '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--error);">Error loading farm assignments</td></tr>';
+            }
+        }
+
+        async function loadContracts() {
+            try {
+                const response = await fetch(`${GROWER_API_URL}/api/contracts/list`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('contracts-tbody');
+                if (data.contracts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--text-secondary);">No contracts found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.contracts.map(contract => `
+                    <tr>
+                        <td><strong>${contract.contract_id}</strong></td>
+                        <td>${contract.grower_business_name}<br><small style="color: var(--text-secondary);">${contract.grower_id}</small></td>
+                        <td>${contract.contract_type.toUpperCase()}</td>
+                        <td><span class="badge badge-${getContractStatusColor(contract.status)}">${contract.status.toUpperCase()}</span></td>
+                        <td>${new Date(contract.start_date).toLocaleDateString()}</td>
+                        <td>${new Date(contract.end_date).toLocaleDateString()}</td>
+                        <td>$${contract.value ? contract.value.toLocaleString() : 'N/A'}</td>
+                        <td>
+                            <button onclick="viewContractDetails('${contract.contract_id}')" class="btn-icon" title="View Details">👁️</button>
+                            ${contract.status === 'draft' ? `<button onclick="signContract('${contract.contract_id}')" class="btn-icon" title="Sign">✍️</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading contracts:', error);
+                document.getElementById('contracts-tbody').innerHTML = 
+                    '<tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--error);">Error loading contracts</td></tr>';
+            }
+        }
+
+        async function loadLeaderboard() {
+            try {
+                const response = await fetch(`${GROWER_API_URL}/api/leaderboard?limit=10`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('leaderboard-tbody');
+                if (data.leaderboard.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-secondary);">No performance data available</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.leaderboard.map((entry, index) => `
+                    <tr>
+                        <td><strong>${index + 1}</strong></td>
+                        <td>${entry.grower_business_name}<br><small style="color: var(--text-secondary);">${entry.grower_id}</small></td>
+                        <td>${entry.acceptance_rate.toFixed(1)}%</td>
+                        <td>${entry.avg_response_time_hours.toFixed(1)}h</td>
+                        <td>${entry.on_time_fulfillment_rate.toFixed(1)}%</td>
+                        <td><strong style="color: ${entry.quality_score >= 90 ? 'var(--success)' : entry.quality_score >= 70 ? 'var(--warning)' : 'var(--error)'};">${entry.quality_score.toFixed(1)}</strong></td>
+                        <td>$${entry.total_revenue_30d.toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+                document.getElementById('leaderboard-tbody').innerHTML = 
+                    '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--error);">Error loading leaderboard</td></tr>';
+            }
+        }
+
+        async function loadGrowerPerformance() {
+            const growerId = document.getElementById('performance-grower-select')?.value;
+            if (!growerId) {
+                document.getElementById('performance-details').innerHTML = 
+                    '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Select a grower to view detailed performance metrics</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${GROWER_API_URL}/api/performance/${growerId}`);
+                const data = await response.json();
+                const perf = data.performance;
+                
+                document.getElementById('performance-details').innerHTML = `
+                    <div class="kpi-grid" style="margin-bottom: 20px;">
+                        <div class="kpi-card">
+                            <div class="kpi-label">Acceptance Rate</div>
+                            <div class="kpi-value">${perf.acceptance_rate.toFixed(1)}%</div>
+                            <div class="kpi-label" style="font-size: 12px; margin-top: 5px;">${perf.orders_accepted} / ${perf.orders_received} orders</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">Avg Response Time</div>
+                            <div class="kpi-value">${perf.avg_response_time_hours.toFixed(1)}h</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">On-Time Fulfillment</div>
+                            <div class="kpi-value">${perf.on_time_fulfillment_rate.toFixed(1)}%</div>
+                            <div class="kpi-label" style="font-size: 12px; margin-top: 5px;">${perf.orders_fulfilled_on_time} / ${perf.orders_fulfilled} orders</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">Quality Score</div>
+                            <div class="kpi-value" style="color: ${perf.quality_score >= 90 ? 'var(--success)' : perf.quality_score >= 70 ? 'var(--warning)' : 'var(--error)'};">${perf.quality_score.toFixed(1)}</div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 8px;">Revenue (30 days)</div>
+                            <div style="font-size: 24px; color: var(--primary);">$${perf.total_revenue_30d.toLocaleString()}</div>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 8px;">Growth Rate</div>
+                            <div style="font-size: 24px; color: ${perf.growth_rate_percentage >= 0 ? 'var(--success)' : 'var(--error)'};">
+                                ${perf.growth_rate_percentage >= 0 ? '↑' : '↓'} ${Math.abs(perf.growth_rate_percentage).toFixed(1)}%
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading grower performance:', error);
+                document.getElementById('performance-details').innerHTML = 
+                    '<div style="text-align: center; padding: 40px; color: var(--error);">Error loading performance data</div>';
+            }
+        }
+
+        async function loadInvitations() {
+            try {
+                const response = await fetch(`${GROWER_API_URL}/api/invitations/list`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('invitations-tbody');
+                if (data.invitations.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-secondary);">No invitations found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.invitations.map(invite => `
+                    <tr>
+                        <td>${invite.email}</td>
+                        <td>${invite.business_name || 'N/A'}</td>
+                        <td>${invite.invited_by}</td>
+                        <td><span class="badge badge-${getInvitationStatusColor(invite.status)}">${invite.status.toUpperCase()}</span></td>
+                        <td>${new Date(invite.sent_date).toLocaleDateString()}</td>
+                        <td>${new Date(invite.expires_date).toLocaleDateString()}</td>
+                        <td>
+                            ${invite.status === 'pending' ? `
+                                <button onclick="resendInvitation('${invite.invitation_id}')" class="btn-icon" title="Resend">📧</button>
+                                <button onclick="revokeInvitation('${invite.invitation_id}')" class="btn-icon" title="Revoke">🗑️</button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading invitations:', error);
+                document.getElementById('invitations-tbody').innerHTML = 
+                    '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--error);">Error loading invitations</td></tr>';
+            }
+        }
+
+        function showGrowerTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.grower-tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.grower-tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            const selectedTab = document.getElementById(`grower-${tabName}-tab`);
+            if (selectedTab) {
+                selectedTab.style.display = 'block';
+            }
+            
+            // Add active class to clicked button
+            const activeBtn = document.querySelector(`.grower-tab[data-tab="${tabName}"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+        }
+
+        // Helper functions for badge colors
+        function getGrowerStatusColor(status) {
+            const colors = {
+                'active': 'success',
+                'pending': 'warning',
+                'suspended': 'danger',
+                'inactive': 'secondary'
+            };
+            return colors[status] || 'secondary';
+        }
+
+        function getPricingTierColor(tier) {
+            const colors = {
+                'standard': 'secondary',
+                'preferred': 'info',
+                'premium': 'warning',
+                'custom': 'primary'
+            };
+            return colors[tier] || 'secondary';
+        }
+
+        function getContractStatusColor(status) {
+            const colors = {
+                'active': 'success',
+                'draft': 'warning',
+                'expired': 'danger',
+                'terminated': 'danger'
+            };
+            return colors[status] || 'secondary';
+        }
+
+        function getInvitationStatusColor(status) {
+            const colors = {
+                'pending': 'warning',
+                'accepted': 'success',
+                'declined': 'danger',
+                'expired': 'secondary'
+            };
+            return colors[status] || 'secondary';
+        }
+
+        // Placeholder functions for modals (to be implemented)
+        function openInviteGrowerModal() {
+            alert('Invite Grower modal - To be implemented');
+        }
+
+        function openAssignFarmModal() {
+            alert('Assign Farm modal - To be implemented');
+        }
+
+        function openCreateContractModal() {
+            alert('Create Contract modal - To be implemented');
+        }
+
+        function viewGrowerDetails(growerId) {
+            console.log('View grower details:', growerId);
+            alert(`View details for grower: ${growerId}`);
+        }
+
+        function updateGrowerStatus(growerId, currentStatus) {
+            console.log('Update grower status:', growerId, currentStatus);
+            alert(`Update status for grower: ${growerId}`);
+        }
+
+        function viewFarmDetails(farmId) {
+            console.log('View farm details:', farmId);
+            alert(`View details for farm: ${farmId}`);
+        }
+
+        function unassignFarm(farmId) {
+            if (confirm('Are you sure you want to unassign this farm?')) {
+                console.log('Unassign farm:', farmId);
+                alert(`Unassign farm: ${farmId}`);
+            }
+        }
+
+        function viewContractDetails(contractId) {
+            console.log('View contract details:', contractId);
+            alert(`View details for contract: ${contractId}`);
+        }
+
+        function signContract(contractId) {
+            if (confirm('Are you sure you want to sign this contract?')) {
+                console.log('Sign contract:', contractId);
+                alert(`Sign contract: ${contractId}`);
+            }
+        }
+
+        function resendInvitation(invitationId) {
+            console.log('Resend invitation:', invitationId);
+            alert(`Resend invitation: ${invitationId}`);
+        }
+
+        function revokeInvitation(invitationId) {
+            if (confirm('Are you sure you want to revoke this invitation?')) {
+                console.log('Revoke invitation:', invitationId);
+                alert(`Revoke invitation: ${invitationId}`);
             }
         }
 
