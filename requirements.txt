@@ -30,3 +30,6 @@ requests>=2.31.0
 # Label printing with QR codes
 qrcode[pil]>=7.4.2
 pillow>=10.0.0
+
+# AI Vision for plant health analysis
+openai>=1.10.0

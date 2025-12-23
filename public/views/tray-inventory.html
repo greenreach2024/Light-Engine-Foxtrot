@@ -1063,6 +1063,86 @@
     </div>
   </div>
 
+  <!-- Checklist Photo QA Modal -->
+  <div id="checklistPhotoModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h2 id="checklistPhotoTitle">Photo Quality Check</h2>
+        <button class="close-btn" onclick="closeChecklistPhoto()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Step 1: Take Photo -->
+        <div id="photoStep1" style="text-align: center;">
+          <p style="margin-bottom: 2rem; font-size: 1.2rem; color: #cbd5e1;">
+            Take a photo of the tray for AI quality analysis
+          </p>
+          <input type="file" id="checklistPhotoInput" accept="image/*" capture="environment" style="display: none;" onchange="handleChecklistPhoto(event)">
+          <button class="button button-primary" style="font-size: 1.2rem; padding: 1.5rem 3rem;" onclick="document.getElementById('checklistPhotoInput').click()">
+            Take Photo
+          </button>
+        </div>
+
+        <!-- Step 2: Photo Preview & Scan Tray -->
+        <div id="photoStep2" style="display: none;">
+          <div style="margin-bottom: 2rem;">
+            <h4 style="color: #60a5fa; margin-bottom: 1rem;">Photo Captured</h4>
+            <img id="checklistPhotoPreview" style="max-width: 100%; border-radius: 12px; border: 2px solid rgba(52, 211, 153, 0.3);">
+          </div>
+          <p style="margin-bottom: 1.5rem; font-size: 1.1rem; color: #cbd5e1;">
+            Scan tray QR code to link this photo to a specific tray
+          </p>
+          <div style="display: flex; gap: 1rem;">
+            <button class="button button-secondary" onclick="retakePhoto()">Retake Photo</button>
+            <button class="button button-primary" onclick="scanTrayForPhoto()">Scan Tray Code</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Weight (if needed) -->
+        <div id="photoStep3" style="display: none;">
+          <div style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; border: 1px solid rgba(52, 211, 153, 0.3);">
+            <p style="color: #cbd5e1; margin-bottom: 0.5rem;">Tray: <span id="photoTrayCode" style="color: #34d399; font-weight: 600;"></span></p>
+          </div>
+          
+          <h4 style="color: #60a5fa; margin-bottom: 1.5rem;">Enter Weight (Optional)</h4>
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+            <input type="number" id="photoWeight" step="0.01" placeholder="Weight" style="width: 100%; padding: 1.5rem; font-size: 1.5rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 2px solid rgba(52, 211, 153, 0.3); color: #f8fafc; text-align: center;">
+            <select id="photoWeightUnit" style="width: 100%; padding: 1.5rem; font-size: 1.5rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 2px solid rgba(52, 211, 153, 0.3); color: #f8fafc;">
+              <option value="kg">kg</option>
+              <option value="lbs">lbs</option>
+              <option value="oz">oz</option>
+            </select>
+          </div>
+          
+          <div style="display: flex; gap: 1rem;">
+            <button class="button button-secondary" onclick="skipWeight()">Skip Weight</button>
+            <button class="button button-primary" onclick="submitPhotoQA()">Submit QA</button>
+          </div>
+        </div>
+
+        <!-- Step 4: AI Analysis -->
+        <div id="photoStep4" style="display: none; text-align: center;">
+          <div class="spinner" style="margin: 3rem auto;"></div>
+          <p style="font-size: 1.2rem; color: #cbd5e1;">Analyzing plant health with AI...</p>
+        </div>
+
+        <!-- Step 5: Results -->
+        <div id="photoStep5" style="display: none;">
+          <div style="text-align: center; margin-bottom: 2rem;">
+            <div id="qaResultIcon" style="font-size: 5rem; margin-bottom: 1rem;"></div>
+            <h3 id="qaResultText" style="margin-bottom: 1rem;"></h3>
+          </div>
+          
+          <div style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(52, 211, 153, 0.3);">
+            <h4 style="color: #60a5fa; margin-bottom: 1rem;">AI Analysis Results</h4>
+            <div id="aiAnalysisDetails" style="color: #cbd5e1; line-height: 1.8;"></div>
+          </div>
+          
+          <button class="button button-primary" style="margin-top: 2rem; width: 100%;" onclick="closeChecklistPhoto()">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Load QR Code Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -1078,33 +1158,50 @@
     let currentQACheckpoint = null;
     let selectedQAResult = null;
     
-    // Checklists Data
+    // Checklist Photo QA State
+    let checklistPhotoData = {
+      itemId: null,
+      itemText: null,
+      hasWeight: false,
+      checkpointType: null,
+      photoFile: null,
+      photoBase64: null,
+      trayCode: null,
+      weight: null,
+      weightUnit: null
+    };
+    
+    // Checklists Data with QA photo capabilities
     const checklists = {
       daily: [
-        { id: 'd1', text: 'Check temperature and humidity levels', time: 'Morning' },
-        { id: 'd2', text: 'Inspect all trays for pests or disease', time: 'Morning' },
-        { id: 'd3', text: 'Water/feed trays as scheduled', time: 'Morning/Evening' },
-        { id: 'd4', text: 'Record any issues or observations', time: 'Evening' },
-        { id: 'd5', text: 'Clean work areas and tools', time: 'Evening' }
+        { id: 'd1', text: 'Check temperature and humidity levels', time: 'Morning', hasPhoto: false, hasWeight: false },
+        { id: 'd2', text: 'Check germination rate', time: 'Morning', hasPhoto: true, hasWeight: false, checkpointType: 'GERMINATION' },
+        { id: 'd3', text: 'Inspect all trays for pests or disease', time: 'Morning', hasPhoto: true, hasWeight: false, checkpointType: 'GROWTH_MIDPOINT' },
+        { id: 'd4', text: 'Water/feed trays as scheduled', time: 'Morning/Evening', hasPhoto: false, hasWeight: false },
+        { id: 'd5', text: 'Check plants for growth progress', time: 'Midday', hasPhoto: true, hasWeight: false, checkpointType: 'GROWTH_MIDPOINT' },
+        { id: 'd6', text: 'Record any issues or observations', time: 'Evening', hasPhoto: false, hasWeight: false },
+        { id: 'd7', text: 'Clean work areas and tools', time: 'Evening', hasPhoto: false, hasWeight: false }
       ],
       weekly: [
-        { id: 'w1', text: 'Deep clean all growing areas', time: 'Monday' },
-        { id: 'w2', text: 'Check and calibrate sensors', time: 'Tuesday' },
-        { id: 'w3', text: 'Inspect irrigation system', time: 'Wednesday' },
-        { id: 'w4', text: 'Review inventory and place orders', time: 'Thursday' },
-        { id: 'w5', text: 'Plan next week\'s seeding schedule', time: 'Friday' }
+        { id: 'w1', text: 'Deep clean all growing areas', time: 'Monday', hasPhoto: false, hasWeight: false },
+        { id: 'w2', text: 'Check seedling health and uniformity', time: 'Tuesday', hasPhoto: true, hasWeight: false, checkpointType: 'GROWTH_MIDPOINT' },
+        { id: 'w3', text: 'Check harvest ready trays', time: 'Wednesday', hasPhoto: true, hasWeight: true, checkpointType: 'PRE_HARVEST' },
+        { id: 'w4', text: 'Check and calibrate sensors', time: 'Thursday', hasPhoto: false, hasWeight: false },
+        { id: 'w5', text: 'Inspect irrigation system', time: 'Thursday', hasPhoto: false, hasWeight: false },
+        { id: 'w6', text: 'Review inventory and place orders', time: 'Friday', hasPhoto: false, hasWeight: false },
+        { id: 'w7', text: 'Plan next week\'s seeding schedule', time: 'Friday', hasPhoto: false, hasWeight: false }
       ],
       monthly: [
-        { id: 'm1', text: 'Complete system performance review', time: 'Week 1' },
-        { id: 'm2', text: 'Deep clean HVAC and ventilation', time: 'Week 2' },
-        { id: 'm3', text: 'Inventory supplies and equipment', time: 'Week 3' },
-        { id: 'm4', text: 'Review financial metrics and yields', time: 'Week 4' }
+        { id: 'm1', text: 'Complete system performance review', time: 'Week 1', hasPhoto: false, hasWeight: false },
+        { id: 'm2', text: 'Deep clean HVAC and ventilation', time: 'Week 2', hasPhoto: false, hasWeight: false },
+        { id: 'm3', text: 'Inventory supplies and equipment', time: 'Week 3', hasPhoto: false, hasWeight: false },
+        { id: 'm4', text: 'Review financial metrics and yields', time: 'Week 4', hasPhoto: false, hasWeight: false }
       ],
       quarterly: [
-        { id: 'q1', text: 'Complete equipment maintenance cycle', time: 'Quarter Start' },
-        { id: 'q2', text: 'Review and update SOPs', time: 'Quarter Start' },
-        { id: 'q3', text: 'Conduct staff training sessions', time: 'Mid-Quarter' },
-        { id: 'q4', text: 'Strategic planning and goal review', time: 'Quarter End' }
+        { id: 'q1', text: 'Complete equipment maintenance cycle', time: 'Quarter Start', hasPhoto: false, hasWeight: false },
+        { id: 'q2', text: 'Review and update SOPs', time: 'Quarter Start', hasPhoto: false, hasWeight: false },
+        { id: 'q3', text: 'Conduct staff training sessions', time: 'Mid-Quarter', hasPhoto: false, hasWeight: false },
+        { id: 'q4', text: 'Strategic planning and goal review', time: 'Quarter End', hasPhoto: false, hasWeight: false }
       ]
     };
 
@@ -1390,13 +1487,20 @@
       const completed = JSON.parse(localStorage.getItem(completedKey) || '[]');
       
       container.innerHTML = items.map(item => `
-        <div class=\"checklist-item ${completed.includes(item.id) ? 'completed' : ''}\" 
-             onclick=\"toggleChecklistItem('${item.id}', '${currentChecklistType}')\">
-          <div class=\"checkbox\">${completed.includes(item.id) ? '<span class=\"checkmark\">\u2713</span>' : ''}</div>
-          <div class=\"checklist-text\">
-            <div class=\"task-name\">${item.text}</div>
-            <div class=\"task-time\">${item.time}</div>
+        <div class="checklist-item ${completed.includes(item.id) ? 'completed' : ''}" data-item-id="${item.id}">
+          <div class="checkbox" onclick="toggleChecklistItem('${item.id}', '${currentChecklistType}')">
+            ${completed.includes(item.id) ? '<span class="checkmark">\u2713</span>' : ''}
           </div>
+          <div class="checklist-text">
+            <div class="task-name">${item.text}</div>
+            <div class="task-time">${item.time}</div>
+          </div>
+          ${item.hasPhoto ? `
+            <button class="button button-primary" style="margin-left: auto; padding: 0.5rem 1rem; font-size: 0.9rem;" 
+                    onclick="event.stopPropagation(); startChecklistQA('${item.id}', '${item.text}', ${item.hasWeight || false}, '${item.checkpointType || ''}')">
+              + Photo QA
+            </button>
+          ` : ''}
         </div>
       `).join('');
     }
@@ -2289,6 +2393,257 @@
         content.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 2rem;">Error loading harvest list</div>';
       }
     }
+
+    // ============================================================================
+    // CHECKLIST PHOTO QA FUNCTIONS
+    // ============================================================================
+
+    function startChecklistQA(itemId, itemText, hasWeight, checkpointType) {
+      // Reset state
+      checklistPhotoData = {
+        itemId,
+        itemText,
+        hasWeight,
+        checkpointType,
+        photoFile: null,
+        photoBase64: null,
+        trayCode: null,
+        weight: null,
+        weightUnit: 'kg'
+      };
+
+      // Update modal title
+      document.getElementById('checklistPhotoTitle').textContent = itemText;
+
+      // Show photo step
+      document.getElementById('photoStep1').style.display = 'block';
+      document.getElementById('photoStep2').style.display = 'none';
+      document.getElementById('photoStep3').style.display = 'none';
+      document.getElementById('photoStep4').style.display = 'none';
+      document.getElementById('photoStep5').style.display = 'none';
+
+      // Open modal
+      document.getElementById('checklistPhotoModal').classList.add('active');
+    }
+
+    async function handleChecklistPhoto(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      checklistPhotoData.photoFile = file;
+
+      // Convert to base64 for preview and upload
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        checklistPhotoData.photoBase64 = e.target.result;
+        document.getElementById('checklistPhotoPreview').src = e.target.result;
+
+        // Show preview step
+        document.getElementById('photoStep1').style.display = 'none';
+        document.getElementById('photoStep2').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function retakePhoto() {
+      document.getElementById('photoStep2').style.display = 'none';
+      document.getElementById('photoStep1').style.display = 'block';
+      document.getElementById('checklistPhotoInput').value = '';
+    }
+
+    function scanTrayForPhoto() {
+      // Close photo modal temporarily
+      document.getElementById('checklistPhotoModal').classList.remove('active');
+
+      // Open scan modal
+      currentScanMode = 'checklist-photo';
+      document.getElementById('scanTitle').textContent = 'Scan Tray QR Code';
+      document.getElementById('scanModal').classList.add('active');
+      startQRScanner();
+    }
+
+    function continueWithPhotoQA(trayCode) {
+      checklistPhotoData.trayCode = trayCode;
+      document.getElementById('photoTrayCode').textContent = trayCode;
+
+      // Close scan modal
+      closeScanModal();
+
+      // Re-open photo modal
+      document.getElementById('checklistPhotoModal').classList.add('active');
+
+      // Show weight step if needed, otherwise submit
+      if (checklistPhotoData.hasWeight) {
+        document.getElementById('photoStep2').style.display = 'none';
+        document.getElementById('photoStep3').style.display = 'block';
+      } else {
+        submitPhotoQA();
+      }
+    }
+
+    function skipWeight() {
+      checklistPhotoData.weight = null;
+      submitPhotoQA();
+    }
+
+    async function submitPhotoQA() {
+      try {
+        // Show loading
+        document.getElementById('photoStep2').style.display = 'none';
+        document.getElementById('photoStep3').style.display = 'none';
+        document.getElementById('photoStep4').style.display = 'block';
+
+        // Get weight if entered
+        const weightInput = document.getElementById('photoWeight');
+        if (weightInput && weightInput.value) {
+          const weight = parseFloat(weightInput.value);
+          const unit = document.getElementById('photoWeightUnit').value;
+          // Convert to kg
+          if (unit === 'lbs') {
+            checklistPhotoData.weight = weight * 0.453592;
+          } else if (unit === 'oz') {
+            checklistPhotoData.weight = weight * 0.0283495;
+          } else {
+            checklistPhotoData.weight = weight;
+          }
+        }
+
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('photo', checklistPhotoData.photoFile);
+        formData.append('tray_code', checklistPhotoData.trayCode);
+        formData.append('checklist_item', checklistPhotoData.itemText);
+
+        if (checklistPhotoData.checkpointType) {
+          formData.append('checkpoint_type', checklistPhotoData.checkpointType);
+        }
+
+        if (checklistPhotoData.weight) {
+          formData.append('weight_kg', checklistPhotoData.weight);
+        }
+
+        // Get crop type from tray if possible (optional)
+        // Could fetch from API here
+
+        // Submit to backend
+        const response = await fetch('/api/qa/checklist-photo', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          // Show results
+          displayPhotoQAResults(data);
+
+          // Mark checklist item as complete
+          toggleChecklistItem(checklistPhotoData.itemId, currentChecklistType);
+        } else {
+          throw new Error(data.error || 'Failed to submit QA');
+        }
+
+      } catch (error) {
+        console.error('Error submitting photo QA:', error);
+        alert('Error submitting quality check: ' + error.message);
+        closeChecklistPhoto();
+      }
+    }
+
+    function displayPhotoQAResults(data) {
+      const analysis = data.analysis;
+      const qaResult = data.qa_checkpoint.result;
+
+      // Show results step
+      document.getElementById('photoStep4').style.display = 'none';
+      document.getElementById('photoStep5').style.display = 'block';
+
+      // Set result icon and text
+      const resultIcon = document.getElementById('qaResultIcon');
+      const resultText = document.getElementById('qaResultText');
+
+      if (qaResult === 'PASS') {
+        resultIcon.textContent = '✓';
+        resultIcon.style.color = '#10b981';
+        resultText.textContent = 'Quality Check PASSED';
+        resultText.style.color = '#10b981';
+      } else if (qaResult === 'PASS_WITH_NOTES') {
+        resultIcon.textContent = '⚠';
+        resultIcon.style.color = '#f59e0b';
+        resultText.textContent = 'Passed with Observations';
+        resultText.style.color = '#f59e0b';
+      } else {
+        resultIcon.textContent = '✕';
+        resultIcon.style.color = '#ef4444';
+        resultText.textContent = 'Quality Check FAILED';
+        resultText.style.color = '#ef4444';
+      }
+
+      // Display AI analysis
+      const detailsDiv = document.getElementById('aiAnalysisDetails');
+      detailsDiv.innerHTML = `
+        <div style="margin-bottom: 1rem;">
+          <strong style="color: #60a5fa;">Health Score:</strong> 
+          <span style="color: ${analysis.health_score >= 80 ? '#10b981' : analysis.health_score >= 60 ? '#f59e0b' : '#ef4444'}; font-size: 1.5rem; font-weight: 700;">
+            ${analysis.health_score}/100
+          </span>
+        </div>
+        <div style="margin-bottom: 0.8rem;">
+          <strong style="color: #60a5fa;">Overall Assessment:</strong> ${analysis.assessment}
+        </div>
+        <div style="margin-bottom: 0.8rem;">
+          <strong style="color: #60a5fa;">Color Quality:</strong> ${analysis.color_quality}
+        </div>
+        <div style="margin-bottom: 0.8rem;">
+          <strong style="color: #60a5fa;">Size & Growth:</strong> ${analysis.size_growth}
+        </div>
+        <div style="margin-bottom: 0.8rem;">
+          <strong style="color: #60a5fa;">Disease Signs:</strong> ${analysis.disease_signs}
+        </div>
+        <div style="margin-bottom: 0.8rem;">
+          <strong style="color: #60a5fa;">Pest Damage:</strong> ${analysis.pest_damage}
+        </div>
+        ${analysis.recommendations && analysis.recommendations.length > 0 ? `
+          <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
+            <strong style="color: #60a5fa;">Recommendations:</strong>
+            <ul style="margin: 0.5rem 0 0 1.5rem; color: #cbd5e1;">
+              ${analysis.recommendations.map(r => `<li>${r}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        ${!analysis.ai_available ? `
+          <div style="margin-top: 1rem; padding: 1rem; background: rgba(245, 158, 11, 0.1); border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24;">
+            <strong>Note:</strong> AI analysis unavailable - manual review recommended
+          </div>
+        ` : ''}
+      `;
+    }
+
+    function closeChecklistPhoto() {
+      document.getElementById('checklistPhotoModal').classList.remove('active');
+      
+      // Reset form
+      document.getElementById('checklistPhotoInput').value = '';
+      document.getElementById('photoWeight').value = '';
+      
+      // Reset steps
+      document.getElementById('photoStep1').style.display = 'block';
+      document.getElementById('photoStep2').style.display = 'none';
+      document.getElementById('photoStep3').style.display = 'none';
+      document.getElementById('photoStep4').style.display = 'none';
+      document.getElementById('photoStep5').style.display = 'none';
+    }
+
+    // Enhanced confirmScan to handle checklist photo flow
+    const originalConfirmScan = window.confirmScan;
+    window.confirmScan = function() {
+      if (currentScanMode === 'checklist-photo' && scannedData) {
+        continueWithPhotoQA(scannedData);
+      } else if (originalConfirmScan) {
+        originalConfirmScan();
+      }
+    };
+
   </script>
 </body>
 </html>
