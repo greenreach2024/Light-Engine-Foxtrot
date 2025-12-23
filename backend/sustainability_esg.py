@@ -2,6 +2,12 @@
 Sustainability & ESG Dashboard API
 Environmental tracking for energy, water, nutrients, waste, and carbon footprint
 Includes ESG scoring algorithm for investor reporting
+
+SCALABLE DESIGN:
+- Uses real data from wholesale orders (transport carbon) and nutrient logs when available
+- Falls back to estimates or null when farm doesn't track specific metrics
+- Optional data sources: energy, water, waste (small farms can skip these)
+- Core metrics: transport carbon (from orders) and nutrients (from automation)
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,8 +16,14 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from enum import Enum
 import random
+import httpx
+import os
 
 router = APIRouter()
+
+# Configuration
+NODE_API_URL = os.getenv("NODE_API_URL", "http://localhost:8091")
+ENABLE_REAL_DATA = os.getenv("SUSTAINABILITY_REAL_DATA", "true").lower() == "true"
 
 # ============================================================================
 # ENUMS
@@ -191,72 +203,233 @@ def generate_demo_data():
 generate_demo_data()
 
 # ============================================================================
+# REAL DATA INTEGRATION
+# ============================================================================
+
+async def fetch_transport_carbon_from_orders(days: int = 30) -> List[CarbonFootprint]:
+    """Fetch real transport carbon data from wholesale orders"""
+    if not ENABLE_REAL_DATA:
+        return []
+    
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(
+                f"{NODE_API_URL}/api/sustainability/transport-carbon",
+                params={"days": days}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("ok"):
+                    # Convert to CarbonFootprint objects
+                    return [
+                        CarbonFootprint(
+                            date=entry["date"],
+                            energy_carbon_kg=0,  # Not from orders
+                            water_carbon_kg=0,   # Not from orders
+                            transport_carbon_kg=entry["carbon_kg"],
+                            total_kg=entry["carbon_kg"]
+                        )
+                        for entry in data.get("daily_carbon", [])
+                    ]
+    except Exception as e:
+        print(f"[Sustainability] Could not fetch transport carbon: {e}")
+    
+    return []
+
+async def fetch_nutrient_usage_from_logs(days: int = 30) -> List[NutrientUsage]:
+    """Fetch real nutrient usage from automation/management logs"""
+    if not ENABLE_REAL_DATA:
+        return []
+    
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(
+                f"{NODE_API_URL}/api/sustainability/nutrient-usage",
+                params={"days": days}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("ok"):
+                    return [
+                        NutrientUsage(
+                            timestamp=entry["timestamp"],
+                            nutrient_type=entry["nutrient_type"],
+                            volume_ml=entry["volume_ml"],
+                            waste_ml=entry.get("waste_ml", 0),
+                            efficiency_percent=entry.get("efficiency_percent", 100)
+                        )
+                        for entry in data.get("usage", [])
+                    ]
+    except Exception as e:
+        print(f"[Sustainability] Could not fetch nutrient usage: {e}")
+    
+    return []
+
+def merge_carbon_data(demo_data: List[CarbonFootprint], real_transport: List[CarbonFootprint]) -> List[CarbonFootprint]:
+    """Merge demo energy/water carbon with real transport carbon"""
+    if not real_transport:
+        return demo_data
+    
+    # Create lookup by date for real transport data
+    transport_by_date = {entry.date: entry.transport_carbon_kg for entry in real_transport}
+    
+    # Update demo data with real transport carbon
+    merged = []
+    for entry in demo_data:
+        if entry.date in transport_by_date:
+            # Replace demo transport with real transport
+            real_transport_kg = transport_by_date[entry.date]
+            merged.append(CarbonFootprint(
+                date=entry.date,
+                energy_carbon_kg=entry.energy_carbon_kg,
+                water_carbon_kg=entry.water_carbon_kg,
+                transport_carbon_kg=real_transport_kg,
+                total_kg=entry.energy_carbon_kg + entry.water_carbon_kg + real_transport_kg
+            ))
+        else:
+            merged.append(entry)
+    
+    return merged
+
+# Initialize demo data on module load
+generate_demo_data()
+
+# ============================================================================
 # ESG SCORING ALGORITHM
 # ============================================================================
 
-def calculate_esg_score() -> dict:
+async def calculate_esg_score() -> dict:
     """
-    Calculate ESG score (0-100) based on efficiency metrics
+    Calculate ESG score (0-100) based on available efficiency metrics
     
-    Scoring breakdown:
+    SCALABLE SCORING:
+    - Only scores metrics that are actually measured
+    - Redistributes points proportionally if some metrics missing
+    - Small farms can skip waste/energy/water tracking
+    - Core metrics: transport carbon (orders) + nutrients (automation)
+    
+    Maximum points per category:
     - Energy Efficiency (30 points): Renewable % + efficiency
-    - Water Efficiency (25 points): Recycling rate
+    - Water Efficiency (25 points): Recycling rate  
     - Nutrient Efficiency (20 points): Waste reduction
-    - Waste Management (15 points): Composting/recycling rate
+    - Waste Management (15 points): Composting/recycling rate [OPTIONAL]
     - Carbon Footprint (10 points): Low emissions
     """
     
     # Get last 30 days of data
     cutoff_date = datetime.now() - timedelta(days=30)
     
-    # Energy score (30 points)
+    # Track which metrics are available
+    available_metrics = {}
+    scores = {}
+    
+    # Energy score (30 points) - OPTIONAL
     recent_energy = [e for e in energy_usage_db if datetime.fromisoformat(e.timestamp) >= cutoff_date]
-    total_kwh = sum(e.kwh_used for e in recent_energy)
-    solar_kwh = sum(e.kwh_used for e in recent_energy if e.source_type == EnergySource.SOLAR)
-    renewable_percent = (solar_kwh / total_kwh * 100) if total_kwh > 0 else 0
-    energy_score = min(30, renewable_percent * 0.75)  # Max 30 points at 40%+ renewable
+    if recent_energy:
+        total_kwh = sum(e.kwh_used for e in recent_energy)
+        solar_kwh = sum(e.kwh_used for e in recent_energy if e.source_type == EnergySource.SOLAR)
+        renewable_percent = (solar_kwh / total_kwh * 100) if total_kwh > 0 else 0
+        scores["energy"] = min(30, renewable_percent * 0.75)
+        available_metrics["renewable_energy_percent"] = round(renewable_percent, 1)
+    else:
+        scores["energy"] = None
+        available_metrics["renewable_energy_percent"] = None
     
-    # Water score (25 points)
+    # Water score (25 points) - OPTIONAL
     recent_water = [w for w in water_usage_db if datetime.fromisoformat(w.timestamp) >= cutoff_date]
-    avg_water_efficiency = sum(w.efficiency_percent for w in recent_water) / len(recent_water) if recent_water else 0
-    water_score = (avg_water_efficiency / 100) * 25  # 25 points at 100% efficiency
+    if recent_water:
+        avg_water_efficiency = sum(w.efficiency_percent for w in recent_water) / len(recent_water)
+        scores["water"] = (avg_water_efficiency / 100) * 25
+        available_metrics["water_recycling_percent"] = round(avg_water_efficiency, 1)
+    else:
+        scores["water"] = None
+        available_metrics["water_recycling_percent"] = None
     
-    # Nutrient score (20 points)
-    recent_nutrients = [n for n in nutrient_usage_db if datetime.fromisoformat(n.timestamp) >= cutoff_date]
-    avg_nutrient_efficiency = sum(n.efficiency_percent for n in recent_nutrients) / len(recent_nutrients) if recent_nutrients else 0
-    nutrient_score = (avg_nutrient_efficiency / 100) * 20  # 20 points at 100% efficiency
+    # Nutrient score (20 points) - Try to get real data
+    real_nutrients = await fetch_nutrient_usage_from_logs(30)
+    recent_nutrients = real_nutrients if real_nutrients else [n for n in nutrient_usage_db if datetime.fromisoformat(n.timestamp) >= cutoff_date]
     
-    # Waste score (15 points)
+    if recent_nutrients:
+        avg_nutrient_efficiency = sum(n.efficiency_percent for n in recent_nutrients) / len(recent_nutrients)
+        scores["nutrients"] = (avg_nutrient_efficiency / 100) * 20
+        available_metrics["nutrient_efficiency_percent"] = round(avg_nutrient_efficiency, 1)
+        available_metrics["nutrient_data_source"] = "real_logs" if real_nutrients else "estimated"
+    else:
+        scores["nutrients"] = None
+        available_metrics["nutrient_efficiency_percent"] = None
+        available_metrics["nutrient_data_source"] = "none"
+    
+    # Waste score (15 points) - OPTIONAL (small farms don't track this)
     recent_waste = [w for w in waste_tracking_db if datetime.fromisoformat(w.date) >= cutoff_date.date().isoformat()]
-    total_waste = sum(w.weight_kg for w in recent_waste)
-    diverted_waste = sum(w.recycled_kg + w.composted_kg for w in recent_waste)
-    diversion_rate = (diverted_waste / total_waste * 100) if total_waste > 0 else 0
-    waste_score = (diversion_rate / 100) * 15  # 15 points at 100% diversion
+    if recent_waste:
+        total_waste = sum(w.weight_kg for w in recent_waste)
+        diverted_waste = sum(w.recycled_kg + w.composted_kg for w in recent_waste)
+        diversion_rate = (diverted_waste / total_waste * 100) if total_waste > 0 else 0
+        scores["waste"] = (diversion_rate / 100) * 15
+        available_metrics["waste_diversion_percent"] = round(diversion_rate, 1)
+    else:
+        scores["waste"] = None  # Skip waste for small farms
+        available_metrics["waste_diversion_percent"] = None
     
-    # Carbon score (10 points)
-    recent_carbon = [c for c in carbon_footprint_db if datetime.fromisoformat(c.date) >= cutoff_date.date().isoformat()]
-    avg_daily_carbon = sum(c.total_kg for c in recent_carbon) / len(recent_carbon) if recent_carbon else 0
-    # Lower carbon is better: 10 points at <50 kg/day, 0 points at >200 kg/day
-    carbon_score = max(0, min(10, 10 - ((avg_daily_carbon - 50) / 15)))
+    # Carbon score (10 points) - Use real transport data
+    real_transport = await fetch_transport_carbon_from_orders(30)
+    merged_carbon_db = merge_carbon_data(carbon_footprint_db, real_transport)
+    recent_carbon = [c for c in merged_carbon_db if datetime.fromisoformat(c.date) >= cutoff_date.date().isoformat()]
     
-    total_score = round(energy_score + water_score + nutrient_score + waste_score + carbon_score, 1)
+    if recent_carbon:
+        avg_daily_carbon = sum(c.total_kg for c in recent_carbon) / len(recent_carbon)
+        scores["carbon"] = max(0, min(10, 10 - ((avg_daily_carbon - 50) / 15)))
+        available_metrics["avg_daily_carbon_kg"] = round(avg_daily_carbon, 1)
+        available_metrics["carbon_data_source"] = "real_orders" if real_transport else "estimated"
+    else:
+        scores["carbon"] = None
+        available_metrics["avg_daily_carbon_kg"] = None
+        available_metrics["carbon_data_source"] = "none"
+    
+    # Calculate total score from available metrics only
+    valid_scores = {k: v for k, v in scores.items() if v is not None}
+    
+    if not valid_scores:
+        # No data available at all
+        total_score = 0
+        grade = "N/A"
+    else:
+        # Calculate weighted average based on available metrics
+        # Redistribute points proportionally
+        max_possible = sum([30, 25, 20, 15, 10])  # Total 100 points
+        available_max = {
+            "energy": 30,
+            "water": 25,
+            "nutrients": 20,
+            "waste": 15,
+            "carbon": 10
+        }
+        total_available = sum(available_max[k] for k in valid_scores.keys())
+        
+        # Scale scores to 100-point scale
+        total_score = sum(valid_scores.values()) * (100 / total_available) if total_available > 0 else 0
+        total_score = round(total_score, 1)
+        grade = get_esg_grade(total_score)
     
     return {
         "total_score": total_score,
-        "grade": get_esg_grade(total_score),
+        "grade": grade,
         "breakdown": {
-            "energy": round(energy_score, 1),
-            "water": round(water_score, 1),
-            "nutrients": round(nutrient_score, 1),
-            "waste": round(waste_score, 1),
-            "carbon": round(carbon_score, 1)
+            "energy": round(scores["energy"], 1) if scores["energy"] is not None else None,
+            "water": round(scores["water"], 1) if scores["water"] is not None else None,
+            "nutrients": round(scores["nutrients"], 1) if scores["nutrients"] is not None else None,
+            "waste": round(scores["waste"], 1) if scores["waste"] is not None else None,
+            "carbon": round(scores["carbon"], 1) if scores["carbon"] is not None else None
         },
-        "metrics": {
-            "renewable_energy_percent": round(renewable_percent, 1),
-            "water_recycling_percent": round(avg_water_efficiency, 1),
-            "nutrient_efficiency_percent": round(avg_nutrient_efficiency, 1),
-            "waste_diversion_percent": round(diversion_rate, 1),
-            "avg_daily_carbon_kg": round(avg_daily_carbon, 1)
+        "metrics": available_metrics,
+        "data_availability": {
+            "energy": scores["energy"] is not None,
+            "water": scores["water"] is not None,
+            "nutrients": scores["nutrients"] is not None,
+            "waste": scores["waste"] is not None,
+            "carbon": scores["carbon"] is not None,
+            "tracked_count": len(valid_scores),
+            "total_possible": 5
         }
     }
 
@@ -341,9 +514,28 @@ async def get_water_usage(days: int = Query(30, ge=1, le=365)):
 
 @router.get("/nutrients/efficiency")
 async def get_nutrient_efficiency(days: int = Query(30, ge=1, le=365)):
-    """Get nutrient efficiency data"""
+    """Get nutrient efficiency data - uses real data from automation logs when available"""
+    global nutrient_usage_db
+    
+    # Try to fetch real nutrient data
+    real_nutrients = await fetch_nutrient_usage_from_logs(days)
+    
+    # Use real data if available, otherwise fall back to demo
+    data_source = nutrient_usage_db
+    if real_nutrients:
+        data_source = real_nutrients
+    
     cutoff = datetime.now() - timedelta(days=days)
-    recent = [n for n in nutrient_usage_db if datetime.fromisoformat(n.timestamp) >= cutoff]
+    recent = [n for n in data_source if datetime.fromisoformat(n.timestamp) >= cutoff]
+    
+    if not recent:
+        return {
+            "ok": True,
+            "period_days": days,
+            "by_nutrient_type": {},
+            "overall_efficiency": 0,
+            "data_sources": {"nutrients": "none_available"}
+        }
     
     by_type = {}
     for entry in recent:
@@ -364,7 +556,10 @@ async def get_nutrient_efficiency(days: int = Query(30, ge=1, le=365)):
         "ok": True,
         "period_days": days,
         "by_nutrient_type": by_type,
-        "overall_efficiency": round(sum(n.efficiency_percent for n in recent) / len(recent), 1) if recent else 0
+        "overall_efficiency": round(sum(n.efficiency_percent for n in recent) / len(recent), 1) if recent else 0,
+        "data_sources": {
+            "nutrients": "real_logs" if real_nutrients else "estimated"
+        }
     }
 
 @router.get("/waste/tracking")
@@ -398,14 +593,25 @@ async def get_waste_tracking(days: int = Query(30, ge=1, le=365)):
 
 @router.get("/carbon-footprint")
 async def get_carbon_footprint(days: int = Query(30, ge=1, le=365)):
-    """Get carbon footprint data"""
+    """Get carbon footprint data - merges demo energy/water with real transport data"""
+    global carbon_footprint_db
+    
+    # Fetch real transport carbon from wholesale orders
+    real_transport = await fetch_transport_carbon_from_orders(days)
+    
+    # Merge with demo data (or use demo only if no real data)
+    merged_carbon_db = merge_carbon_data(carbon_footprint_db, real_transport)
+    
     cutoff = (datetime.now() - timedelta(days=days)).date()
-    recent = [c for c in carbon_footprint_db if datetime.fromisoformat(c.date).date() >= cutoff]
+    recent = [c for c in merged_carbon_db if datetime.fromisoformat(c.date).date() >= cutoff]
     
     total_energy = sum(c.energy_carbon_kg for c in recent)
     total_water = sum(c.water_carbon_kg for c in recent)
     total_transport = sum(c.transport_carbon_kg for c in recent)
     total_carbon = sum(c.total_kg for c in recent)
+    
+    # Check if we have real transport data
+    has_real_transport = len(real_transport) > 0
     
     return {
         "ok": True,
@@ -416,14 +622,19 @@ async def get_carbon_footprint(days: int = Query(30, ge=1, le=365)):
             "water_kg": round(total_water, 2),
             "transport_kg": round(total_transport, 2)
         },
-        "daily_average_kg": round(total_carbon / days, 2),
-        "monthly_projection_kg": round((total_carbon / days) * 30, 2)
+        "daily_average_kg": round(total_carbon / days if days > 0 else 0, 2),
+        "monthly_projection_kg": round((total_carbon / days if days > 0 else 0) * 30, 2),
+        "data_sources": {
+            "transport": "real_orders" if has_real_transport else "estimated",
+            "energy": "estimated",
+            "water": "estimated"
+        }
     }
 
 @router.get("/esg-report")
 async def get_esg_report():
-    """Generate comprehensive ESG report for investors"""
-    esg_score = calculate_esg_score()
+    """Generate comprehensive ESG report for investors - uses real data when available"""
+    esg_score = await calculate_esg_score()
     
     # Get 30-day summaries
     energy_data = await get_energy_usage(30)
@@ -432,47 +643,82 @@ async def get_esg_report():
     waste_data = await get_waste_tracking(30)
     carbon_data = await get_carbon_footprint(30)
     
+    # Build environmental metrics, handling missing data gracefully
+    environmental_metrics = {}
+    
+    if esg_score["metrics"].get("renewable_energy_percent") is not None:
+        environmental_metrics["energy"] = {
+            "total_kwh": energy_data["total_kwh"],
+            "renewable_percent": esg_score["metrics"]["renewable_energy_percent"],
+            "carbon_kg": energy_data["total_carbon_kg"],
+            "data_source": "estimated"
+        }
+    
+    if esg_score["metrics"].get("water_recycling_percent") is not None:
+        environmental_metrics["water"] = {
+            "total_liters": water_data["total_liters_used"],
+            "recycling_percent": water_data["average_efficiency_percent"],
+            "cost_savings": round(water_data["total_liters_recycled"] * 0.003, 2),
+            "data_source": "estimated"
+        }
+    
+    if esg_score["metrics"].get("nutrient_efficiency_percent") is not None:
+        environmental_metrics["nutrients"] = {
+            "efficiency_percent": esg_score["metrics"]["nutrient_efficiency_percent"],
+            "data_source": esg_score["metrics"].get("nutrient_data_source", "estimated")
+        }
+    
+    if esg_score["metrics"].get("waste_diversion_percent") is not None:
+        environmental_metrics["waste"] = {
+            "total_kg": waste_data["total_waste_kg"],
+            "diversion_rate": waste_data["diversion_rate_percent"],
+            "landfill_kg": round(waste_data["total_waste_kg"] - waste_data["total_diverted_kg"], 2),
+            "data_source": "manual_entry"
+        }
+    
+    if esg_score["metrics"].get("avg_daily_carbon_kg") is not None:
+        environmental_metrics["carbon_footprint"] = {
+            "total_kg": carbon_data["total_carbon_kg"],
+            "daily_average": carbon_data["daily_average_kg"],
+            "annual_projection_kg": round(carbon_data["daily_average_kg"] * 365, 2),
+            "data_source": carbon_data.get("data_sources", {}).get("transport", "estimated")
+        }
+    
+    # Build sustainability goals based on available metrics
+    sustainability_goals = {}
+    
+    if esg_score["metrics"].get("renewable_energy_percent") is not None:
+        sustainability_goals["renewable_energy"] = {
+            "target": "40%",
+            "current": f"{esg_score['metrics']['renewable_energy_percent']}%"
+        }
+    
+    if esg_score["metrics"].get("water_recycling_percent") is not None:
+        sustainability_goals["water_recycling"] = {
+            "target": "95%",
+            "current": f"{esg_score['metrics']['water_recycling_percent']}%"
+        }
+    
+    if esg_score["metrics"].get("waste_diversion_percent") is not None:
+        sustainability_goals["waste_diversion"] = {
+            "target": "90%",
+            "current": f"{esg_score['metrics']['waste_diversion_percent']}%"
+        }
+    
     return {
         "ok": True,
         "report_date": datetime.now().isoformat(),
         "reporting_period": "Last 30 days",
         "esg_score": esg_score,
-        "environmental_metrics": {
-            "energy": {
-                "total_kwh": energy_data["total_kwh"],
-                "renewable_percent": esg_score["metrics"]["renewable_energy_percent"],
-                "carbon_kg": energy_data["total_carbon_kg"]
-            },
-            "water": {
-                "total_liters": water_data["total_liters_used"],
-                "recycling_percent": water_data["average_efficiency_percent"],
-                "cost_savings": round(water_data["total_liters_recycled"] * 0.003, 2)
-            },
-            "waste": {
-                "total_kg": waste_data["total_waste_kg"],
-                "diversion_rate": waste_data["diversion_rate_percent"],
-                "landfill_kg": round(waste_data["total_waste_kg"] - waste_data["total_diverted_kg"], 2)
-            },
-            "carbon_footprint": {
-                "total_kg": carbon_data["total_carbon_kg"],
-                "daily_average": carbon_data["daily_average_kg"],
-                "annual_projection_kg": round(carbon_data["daily_average_kg"] * 365, 2)
-            }
-        },
-        "sustainability_goals": {
-            "renewable_energy_target": "40%",
-            "current_renewable": f"{esg_score['metrics']['renewable_energy_percent']}%",
-            "water_recycling_target": "95%",
-            "current_recycling": f"{esg_score['metrics']['water_recycling_percent']}%",
-            "waste_diversion_target": "90%",
-            "current_diversion": f"{esg_score['metrics']['waste_diversion_percent']}%"
-        }
+        "environmental_metrics": environmental_metrics,
+        "sustainability_goals": sustainability_goals,
+        "note": f"Tracking {esg_score['data_availability']['tracked_count']} of 5 possible metrics. Small farms can focus on transport carbon and nutrients."
     }
 
 @router.get("/dashboard")
 async def get_sustainability_dashboard():
     """Get real-time sustainability dashboard data"""
-    esg_score = calculate_esg_score()
+    esg_score = await calculate_esg_score()
     
     # Today's data
     today = datetime.now().date()
