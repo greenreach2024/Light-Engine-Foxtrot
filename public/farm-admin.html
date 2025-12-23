@@ -853,6 +853,7 @@
         }
     </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <script src="/lib/chart.umd.js"></script>
 </head>
 <body>
     <!-- Page Header Navigation -->
@@ -1204,6 +1205,143 @@
                             </form>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Production Planning Section -->
+            <div id="section-planning" class="content-section" style="display: none;">
+                <div class="header">
+                    <h1>Production Planning</h1>
+                    <div class="header-actions">
+                        <select id="planningHorizon" onchange="loadPlanningData()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                            <option value="WEEKLY">Weekly</option>
+                            <option value="MONTHLY" selected>Monthly</option>
+                            <option value="QUARTERLY">Quarterly</option>
+                            <option value="ANNUAL">Annual</option>
+                        </select>
+                        <button class="btn" onclick="generateSchedule()">Generate Schedule</button>
+                        <button class="btn btn-primary" onclick="createProductionPlan()">New Production Plan</button>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                    <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%); border-left: 4px solid var(--accent-green);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Forecasted Demand</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-green);" id="forecasted-demand">0 kg</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="demand-trend">--</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%); border-left: 4px solid var(--accent-blue);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Active Plans</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-blue);" id="active-plans-count">0</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="active-plans-details">No active plans</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(109, 40, 217, 0.05) 100%); border-left: 4px solid var(--accent-purple);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Capacity Utilization</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-purple);" id="capacity-utilization">0%</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="capacity-details">0 / 2000 cells</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%); border-left: 4px solid var(--accent-orange);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Upcoming Harvests</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-orange);" id="upcoming-harvests">0</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Next 7 days</div>
+                    </div>
+                </div>
+
+                <!-- Demand Forecast Chart -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h3 style="font-size: 16px; color: var(--text-primary); margin-bottom: 15px;">Demand Forecast</h3>
+                    <canvas id="demandForecastChart" style="max-height: 300px;"></canvas>
+                </div>
+
+                <!-- Recommended Planting Schedule -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="font-size: 16px; color: var(--text-primary);">Recommended Planting Schedule</h3>
+                        <button class="btn" onclick="applyRecommendations()">Apply All</button>
+                    </div>
+                    <div id="recommendations-list" style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Crop</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Seed Date</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Harvest Date</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Quantity</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Expected Yield</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recommendations-table-body">
+                                <tr>
+                                    <td colspan="6" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                                        Loading recommendations...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Production Plans List -->
+                <div class="card">
+                    <h3 style="font-size: 16px; color: var(--text-primary); margin-bottom: 15px;">Production Plans</h3>
+                    <div id="production-plans-list" style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Plan ID</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Crop</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Target Date</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Quantity</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Status</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Created</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="plans-table-body">
+                                <tr>
+                                    <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                                        No production plans yet
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Production Plan Modal -->
+            <div id="newPlanModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; overflow-y: auto; padding: 20px;">
+                <div class="card" style="max-width: 600px; margin: 40px auto; background: var(--bg-card);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
+                        <h2 style="font-size: 20px; color: var(--text-primary);">New Production Plan</h2>
+                        <button onclick="closeNewPlan()" style="background: none; border: none; font-size: 24px; color: var(--text-secondary); cursor: pointer;">&times;</button>
+                    </div>
+                    <form id="newPlanForm" onsubmit="submitNewPlan(event)">
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Crop *</label>
+                            <select name="crop" required style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary);">
+                                <option value="">Select crop...</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Target Harvest Date *</label>
+                            <input type="date" name="target_date" required style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary);">
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Quantity (plants) *</label>
+                            <input type="number" name="quantity" required min="1" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary);">
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Notes</label>
+                            <textarea name="notes" rows="3" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); font-family: inherit; resize: vertical;"></textarea>
+                        </div>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                            <button type="button" class="btn" onclick="closeNewPlan()">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create Plan</button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
@@ -1994,6 +2132,343 @@
 
     <script src="/farm-admin.js?v=2025-12-10-01"></script>
     
+    <!-- Production Planning System JavaScript -->
+    <script>
+        const PLANNING_BACKEND_URL = window.location.origin;
+        let demandChart = null;
+
+        async function loadPlanningData() {
+            await Promise.all([
+                loadPlanningStats(),
+                loadDemandForecast(),
+                loadRecommendations(),
+                loadProductionPlans()
+            ]);
+        }
+
+        async function loadPlanningStats() {
+            try {
+                const horizon = document.getElementById('planningHorizon').value;
+                
+                // Load capacity
+                const capacityRes = await fetch(`${PLANNING_BACKEND_URL}/api/planning/capacity`);
+                const capacityData = await capacityRes.json();
+                
+                if (capacityData.ok) {
+                    document.getElementById('capacity-utilization').textContent = 
+                        `${capacityData.capacity.utilization_percentage.toFixed(1)}%`;
+                    document.getElementById('capacity-details').textContent = 
+                        `${capacityData.capacity.cells_occupied} / ${capacityData.capacity.total_capacity} cells`;
+                    document.getElementById('upcoming-harvests').textContent = 
+                        capacityData.capacity.upcoming_harvests_next_7_days;
+                }
+
+                // Load demand forecast
+                const forecastRes = await fetch(`${PLANNING_BACKEND_URL}/api/planning/demand-forecast?horizon=${horizon}`);
+                const forecastData = await forecastRes.json();
+                
+                if (forecastData.ok && forecastData.forecasts.length > 0) {
+                    const totalDemand = forecastData.forecasts.reduce((sum, f) => sum + f.forecasted_quantity, 0);
+                    document.getElementById('forecasted-demand').textContent = `${totalDemand.toFixed(1)} kg`;
+                    
+                    const avgGrowth = forecastData.forecasts.reduce((sum, f) => sum + f.growth_rate, 0) / forecastData.forecasts.length;
+                    const trendText = avgGrowth > 0 ? `+${(avgGrowth * 100).toFixed(1)}% trend` : `${(avgGrowth * 100).toFixed(1)}% trend`;
+                    document.getElementById('demand-trend').textContent = trendText;
+                }
+
+                // Load production plans
+                const plansRes = await fetch(`${PLANNING_BACKEND_URL}/api/planning/plans/list?status=active`);
+                const plansData = await plansRes.json();
+                
+                if (plansData.ok) {
+                    const activeCount = plansData.plans.filter(p => p.status === 'active').length;
+                    document.getElementById('active-plans-count').textContent = activeCount;
+                    document.getElementById('active-plans-details').textContent = 
+                        activeCount > 0 ? `${plansData.plans.length} total plans` : 'No active plans';
+                }
+            } catch (error) {
+                console.error('Error loading planning stats:', error);
+            }
+        }
+
+        async function loadDemandForecast() {
+            try {
+                const horizon = document.getElementById('planningHorizon').value;
+                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/demand-forecast?horizon=${horizon}`);
+                const data = await response.json();
+                
+                if (data.ok && data.forecasts.length > 0) {
+                    const ctx = document.getElementById('demandForecastChart').getContext('2d');
+                    
+                    if (demandChart) {
+                        demandChart.destroy();
+                    }
+
+                    const colors = [
+                        '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'
+                    ];
+
+                    const datasets = data.forecasts.map((forecast, idx) => ({
+                        label: forecast.crop,
+                        data: [
+                            { x: 'Current', y: forecast.current_avg_daily },
+                            { x: 'Forecast', y: forecast.forecasted_quantity / (horizon === 'WEEKLY' ? 7 : 30) }
+                        ],
+                        borderColor: colors[idx % colors.length],
+                        backgroundColor: colors[idx % colors.length] + '33',
+                        tension: 0.3
+                    }));
+
+                    demandChart = new Chart(ctx, {
+                        type: 'line',
+                        data: { datasets },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: true, position: 'top' },
+                                tooltip: { mode: 'index', intersect: false }
+                            },
+                            scales: {
+                                x: { display: true, title: { display: true, text: 'Period' } },
+                                y: { 
+                                    display: true, 
+                                    title: { display: true, text: 'Daily Production (kg)' },
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading demand forecast:', error);
+            }
+        }
+
+        async function loadRecommendations() {
+            try {
+                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/recommendations`);
+                const data = await response.json();
+                
+                if (data.ok && data.recommendations.length > 0) {
+                    const tbody = document.getElementById('recommendations-table-body');
+                    tbody.innerHTML = data.recommendations.map(rec => `
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 12px; color: var(--text-primary);">${rec.crop}</td>
+                            <td style="padding: 12px; color: var(--text-primary);">${new Date(rec.recommended_seed_date).toLocaleDateString()}</td>
+                            <td style="padding: 12px; color: var(--text-primary);">${new Date(rec.expected_harvest_date).toLocaleDateString()}</td>
+                            <td style="padding: 12px; color: var(--text-primary);">${rec.recommended_quantity} plants</td>
+                            <td style="padding: 12px; color: var(--text-primary);">${rec.expected_yield.toFixed(1)} kg</td>
+                            <td style="padding: 12px;">
+                                <button class="btn" onclick="applyRecommendation('${rec.crop}', '${rec.recommended_seed_date}', ${rec.recommended_quantity})" style="padding: 6px 12px; font-size: 13px;">Apply</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    document.getElementById('recommendations-table-body').innerHTML = `
+                        <tr>
+                            <td colspan="6" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                                No recommendations available
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading recommendations:', error);
+            }
+        }
+
+        async function loadProductionPlans() {
+            try {
+                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/plans/list`);
+                const data = await response.json();
+                
+                if (data.ok && data.plans.length > 0) {
+                    const tbody = document.getElementById('plans-table-body');
+                    tbody.innerHTML = data.plans.map(plan => {
+                        const statusColors = {
+                            'active': 'var(--accent-green)',
+                            'completed': 'var(--accent-blue)',
+                            'cancelled': 'var(--accent-red)'
+                        };
+                        return `
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 12px; color: var(--text-primary);">${plan.plan_id}</td>
+                            <td style="padding: 12px; color: var(--text-primary);">${plan.crop}</td>
+                            <td style="padding: 12px; color: var(--text-primary);">${new Date(plan.target_date).toLocaleDateString()}</td>
+                            <td style="padding: 12px; color: var(--text-primary);">${plan.quantity} plants</td>
+                            <td style="padding: 12px;">
+                                <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; background: ${statusColors[plan.status]}22; color: ${statusColors[plan.status]};">
+                                    ${plan.status}
+                                </span>
+                            </td>
+                            <td style="padding: 12px; color: var(--text-primary);">${new Date(plan.created_at).toLocaleDateString()}</td>
+                            <td style="padding: 12px;">
+                                <button class="btn" onclick="viewPlanDetail('${plan.plan_id}')" style="padding: 6px 12px; font-size: 13px;">View</button>
+                            </td>
+                        </tr>
+                    `;
+                    }).join('');
+                } else {
+                    document.getElementById('plans-table-body').innerHTML = `
+                        <tr>
+                            <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                                No production plans yet
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading production plans:', error);
+            }
+        }
+
+        async function generateSchedule() {
+            try {
+                const horizon = document.getElementById('planningHorizon').value;
+                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/schedule/generate?horizon=${horizon}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    alert(`Generated ${data.schedule.length} planting recommendations`);
+                    await loadRecommendations();
+                } else {
+                    alert('Error generating schedule');
+                }
+            } catch (error) {
+                console.error('Error generating schedule:', error);
+                alert('Error generating schedule');
+            }
+        }
+
+        async function createProductionPlan() {
+            // Load crop options
+            try {
+                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/crops`);
+                const data = await response.json();
+                
+                if (data.ok) {
+                    const select = document.querySelector('#newPlanForm select[name="crop"]');
+                    select.innerHTML = '<option value="">Select crop...</option>' +
+                        Object.keys(data.crops).map(crop => `<option value="${crop}">${crop}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Error loading crops:', error);
+            }
+            
+            document.getElementById('newPlanModal').style.display = 'block';
+        }
+
+        function closeNewPlan() {
+            document.getElementById('newPlanModal').style.display = 'none';
+            document.getElementById('newPlanForm').reset();
+        }
+
+        async function submitNewPlan(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            
+            const planData = {
+                crop: formData.get('crop'),
+                target_date: formData.get('target_date'),
+                quantity: parseInt(formData.get('quantity')),
+                notes: formData.get('notes') || ''
+            };
+
+            try {
+                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/plans/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(planData)
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    alert(`Production plan ${data.plan.plan_id} created successfully`);
+                    closeNewPlan();
+                    await loadProductionPlans();
+                    await loadPlanningStats();
+                } else {
+                    alert('Error creating production plan: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error creating production plan:', error);
+                alert('Error creating production plan');
+            }
+        }
+
+        async function applyRecommendation(crop, seedDate, quantity) {
+            const planData = {
+                crop: crop,
+                target_date: seedDate,
+                quantity: quantity,
+                notes: 'Auto-generated from recommendation'
+            };
+
+            try {
+                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/plans/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(planData)
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    alert(`Production plan created for ${crop}`);
+                    await loadProductionPlans();
+                    await loadPlanningStats();
+                } else {
+                    alert('Error creating plan from recommendation');
+                }
+            } catch (error) {
+                console.error('Error applying recommendation:', error);
+                alert('Error applying recommendation');
+            }
+        }
+
+        async function applyRecommendations() {
+            if (!confirm('Apply all recommended planting schedules?')) return;
+            
+            try {
+                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/recommendations`);
+                const data = await response.json();
+                
+                if (data.ok && data.recommendations.length > 0) {
+                    for (const rec of data.recommendations) {
+                        await applyRecommendation(rec.crop, rec.recommended_seed_date, rec.recommended_quantity);
+                    }
+                    alert(`Applied ${data.recommendations.length} recommendations`);
+                }
+            } catch (error) {
+                console.error('Error applying recommendations:', error);
+                alert('Error applying recommendations');
+            }
+        }
+
+        function viewPlanDetail(planId) {
+            alert(`Plan detail view for ${planId} - Coming soon`);
+        }
+
+        // Load data when section becomes active
+        document.addEventListener('DOMContentLoaded', () => {
+            const planningSection = document.getElementById('section-planning');
+            if (planningSection) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.attributeName === 'style') {
+                            if (planningSection.style.display !== 'none') {
+                                loadPlanningData();
+                            }
+                        }
+                    });
+                });
+                observer.observe(planningSection, { attributes: true });
+            }
+        });
+    </script>
+
     <!-- Traceability System JavaScript -->
     <script>
         // Traceability API calls
