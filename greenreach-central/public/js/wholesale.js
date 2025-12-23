@@ -1238,7 +1238,7 @@
           type: 'decrease',
           currentPrice: 2.20,
           previousPrice: 2.50,
-          summary: 'Increased local greenhouse production from BC farms has improved availability. Mild weather conditions have extended growing season. Competitive pricing as multiple farms increase capacity.'
+          summary: 'Increased BC farm production has improved availability. Mild weather conditions have extended growing season. Competitive pricing as multiple farms increase capacity.'
         }
       ];
 

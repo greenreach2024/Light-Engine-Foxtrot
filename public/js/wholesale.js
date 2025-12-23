@@ -1275,7 +1275,7 @@
           type: 'decrease',
           currentPrice: 2.20,
           previousPrice: 2.50,
-          summary: 'Increased local greenhouse production from Ontario farms has improved availability. Consistent growing conditions have extended production season. Competitive pricing as regional farms increase capacity.'
+          summary: 'Increased Ontario farm production has improved availability. Consistent growing conditions have extended production season. Competitive pricing as regional farms increase capacity.'
         }
       ];
 
