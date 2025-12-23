@@ -1826,6 +1826,128 @@
                 </div>
             </div>
 
+            <!-- Network Dashboard View -->
+            <div id="network-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); showView('overview')">Overview</a>
+                    <span>/</span>
+                    <span>Network Dashboard</span>
+                </div>
+
+                <div class="header">
+                    <h1>Multi-Farm Network Dashboard</h1>
+                    <div class="header-actions">
+                        <select id="network-timeframe" onchange="loadNetworkDashboard()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="exportNetworkReport()">Export Report</button>
+                    </div>
+                </div>
+
+                <!-- Network Health KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Farms</div>
+                        <div class="kpi-value" id="network-total-farms">0</div>
+                        <div class="kpi-change positive" id="network-farms-status">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Network Production</div>
+                        <div class="kpi-value" id="network-total-production">0 kg</div>
+                        <div class="kpi-change positive" id="network-production-trend">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Network Revenue</div>
+                        <div class="kpi-value" id="network-total-revenue">$0</div>
+                        <div class="kpi-change positive" id="network-revenue-trend">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg QA Score</div>
+                        <div class="kpi-value" id="network-qa-score">0%</div>
+                        <div class="kpi-change" id="network-qa-trend">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Capacity Utilization</div>
+                        <div class="kpi-value" id="network-capacity">0%</div>
+                        <div class="kpi-change" id="network-capacity-details">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Batches</div>
+                        <div class="kpi-value" id="network-active-batches">0</div>
+                        <div class="kpi-change" id="network-batches-status">--</div>
+                    </div>
+                </div>
+
+                <!-- Network Alerts -->
+                <div id="network-alerts-section" style="margin-bottom: 30px;"></div>
+
+                <!-- Farm Status Grid -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <div class="card-header">
+                        <div class="card-title">Farm Network Status</div>
+                        <div class="filter-bar">
+                            <select id="filter-farm-status" onchange="filterNetworkFarms()">
+                                <option value="">All Statuses</option>
+                                <option value="ONLINE">Online</option>
+                                <option value="WARNING">Warning</option>
+                                <option value="OFFLINE">Offline</option>
+                                <option value="MAINTENANCE">Maintenance</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="farm-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+                            <!-- Farm cards will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparative Analytics Chart -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <div class="card-header">
+                        <div class="card-title">Comparative Farm Performance</div>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="comparison-metric" onchange="loadComparativeAnalytics()" style="padding: 6px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.9rem;">
+                                <option value="production_kg">Production (kg)</option>
+                                <option value="revenue">Revenue ($)</option>
+                                <option value="qa_score">QA Score (%)</option>
+                                <option value="capacity_utilization">Capacity Utilization (%)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="comparativeChart" style="max-height: 350px;"></canvas>
+                    </div>
+                </div>
+
+                <!-- Network Production Trends -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Network Production Trend</div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="networkTrendChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Farm Detail Modal -->
+            <div id="farmDetailModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto; padding: 20px;">
+                <div class="card" style="max-width: 900px; margin: 40px auto; background: var(--bg-card);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--border);">
+                        <h2 id="farmDetailName" style="font-size: 20px; color: var(--text-primary);">Farm Details</h2>
+                        <button onclick="closeFarmDetail()" style="background: none; border: none; font-size: 28px; color: var(--text-secondary); cursor: pointer;">&times;</button>
+                    </div>
+                    <div style="padding: 20px;">
+                        <div id="farmDetailContent">
+                            <!-- Farm detail content will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Environmental Dashboard View -->
             <div id="environmental-view" class="view" style="display: none;">
                 <div class="breadcrumb">
@@ -2008,6 +2130,385 @@
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Network Dashboard JavaScript
+        const NETWORK_API_URL = window.location.origin;
+        let comparativeChart = null;
+        let trendChart = null;
+        let allFarms = [];
+
+        async function loadNetworkDashboard() {
+            await Promise.all([
+                loadNetworkStats(),
+                loadNetworkFarms(),
+                loadComparativeAnalytics(),
+                loadNetworkTrends(),
+                loadNetworkAlerts()
+            ]);
+        }
+
+        async function loadNetworkStats() {
+            try {
+                const response = await fetch(`${NETWORK_API_URL}/api/network/dashboard`);
+                const data = await response.json();
+                
+                if (data.ok) {
+                    // Network Health
+                    const health = data.dashboard.network_health;
+                    document.getElementById('network-total-farms').textContent = health.total_farms;
+                    document.getElementById('network-farms-status').textContent = 
+                        `${health.online} online, ${health.warning} warning, ${health.offline} offline`;
+                    
+                    // Production
+                    const prod = data.dashboard.total_production_7_days;
+                    document.getElementById('network-total-production').textContent = `${prod.toFixed(1)} kg`;
+                    document.getElementById('network-production-trend').textContent = 
+                        `${data.dashboard.daily_avg_production.toFixed(1)} kg/day avg`;
+                    
+                    // Top Performers (use first farm's revenue as network total for demo)
+                    if (data.dashboard.top_producers_7_days.length > 0) {
+                        const totalRevenue = data.dashboard.top_producers_7_days.reduce((sum, f) => sum + f.total_production, 0) * 5; // Estimate $5/kg
+                        document.getElementById('network-total-revenue').textContent = `$${totalRevenue.toFixed(0)}`;
+                    }
+                    
+                    // QA Score (average from top performers)
+                    const avgQA = data.dashboard.top_performers_qa.reduce((sum, f) => sum + f.avg_qa_score, 0) / data.dashboard.top_performers_qa.length;
+                    document.getElementById('network-qa-score').textContent = `${avgQA.toFixed(1)}%`;
+                    
+                    // Capacity
+                    const cap = data.dashboard.total_capacity;
+                    document.getElementById('network-capacity').textContent = `${cap.utilization_percentage.toFixed(1)}%`;
+                    document.getElementById('network-capacity-details').textContent = 
+                        `${cap.cells_occupied} / ${cap.total_capacity} cells`;
+                    
+                    // Active Batches
+                    document.getElementById('network-active-batches').textContent = cap.active_batches;
+                }
+            } catch (error) {
+                console.error('Error loading network stats:', error);
+            }
+        }
+
+        async function loadNetworkFarms() {
+            try {
+                const response = await fetch(`${NETWORK_API_URL}/api/network/farms/list`);
+                const data = await response.json();
+                
+                if (data.ok) {
+                    allFarms = data.farms;
+                    renderFarmGrid(allFarms);
+                }
+            } catch (error) {
+                console.error('Error loading network farms:', error);
+            }
+        }
+
+        function renderFarmGrid(farms) {
+            const grid = document.getElementById('farm-grid');
+            const statusColors = {
+                'ONLINE': 'var(--accent-green)',
+                'WARNING': 'var(--accent-yellow)',
+                'OFFLINE': 'var(--accent-red)',
+                'MAINTENANCE': 'var(--accent-blue)'
+            };
+
+            grid.innerHTML = farms.map(farm => `
+                <div class="card" style="cursor: pointer; transition: transform 0.2s; border-left: 4px solid ${statusColors[farm.status]};" onclick="viewFarmDetail('${farm.farm_id}')">
+                    <div style="padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                            <div>
+                                <h3 style="font-size: 16px; color: var(--text-primary); margin-bottom: 5px;">${farm.farm_name}</h3>
+                                <div style="font-size: 12px; color: var(--text-muted);">${farm.farm_id}</div>
+                            </div>
+                            <span style="padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; background: ${statusColors[farm.status]}22; color: ${statusColors[farm.status]};">
+                                ${farm.status}
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Location</div>
+                                <div style="font-size: 13px; color: var(--text-primary);">${farm.location}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Type</div>
+                                <div style="font-size: 13px; color: var(--text-primary);">${farm.farm_type}</div>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Production (7d)</div>
+                                <div style="font-size: 14px; font-weight: 600; color: var(--accent-green);">${farm.metrics_7_days.total_production.toFixed(1)} kg</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-muted);">QA Score</div>
+                                <div style="font-size: 14px; font-weight: 600; color: ${farm.metrics_7_days.avg_qa_score >= 90 ? 'var(--accent-green)' : 'var(--accent-yellow)'};">${farm.metrics_7_days.avg_qa_score.toFixed(1)}%</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Capacity</div>
+                                <div style="font-size: 14px; font-weight: 600; color: var(--accent-blue);">${farm.metrics_7_days.avg_capacity_utilization.toFixed(0)}%</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Active Batches</div>
+                                <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${farm.metrics_7_days.total_active_batches}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterNetworkFarms() {
+            const statusFilter = document.getElementById('filter-farm-status').value;
+            const filtered = statusFilter ? allFarms.filter(f => f.status === statusFilter) : allFarms;
+            renderFarmGrid(filtered);
+        }
+
+        async function loadComparativeAnalytics() {
+            try {
+                const metric = document.getElementById('comparison-metric').value;
+                const days = document.getElementById('network-timeframe').value;
+                const response = await fetch(`${NETWORK_API_URL}/api/network/comparative-analytics?metric=${metric}&days=${days}`);
+                const data = await response.json();
+                
+                if (data.ok && data.comparison.length > 0) {
+                    const ctx = document.getElementById('comparativeChart').getContext('2d');
+                    
+                    if (comparativeChart) {
+                        comparativeChart.destroy();
+                    }
+
+                    const labels = data.comparison.map(f => f.farm_name);
+                    const values = data.comparison.map(f => f.value);
+                    const colors = data.comparison.map((f, idx) => 
+                        ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'][idx % 5]
+                    );
+
+                    comparativeChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: metric.replace('_', ' ').toUpperCase(),
+                                data: values,
+                                backgroundColor: colors.map(c => c + '88'),
+                                borderColor: colors,
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            scales: {
+                                y: { 
+                                    beginAtZero: true,
+                                    title: { display: true, text: data.comparison[0]?.unit || '' }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading comparative analytics:', error);
+            }
+        }
+
+        async function loadNetworkTrends() {
+            try {
+                const days = document.getElementById('network-timeframe').value;
+                const response = await fetch(`${NETWORK_API_URL}/api/network/trends?days=${days}`);
+                const data = await response.json();
+                
+                if (data.ok && data.trends.length > 0) {
+                    const ctx = document.getElementById('networkTrendChart').getContext('2d');
+                    
+                    if (trendChart) {
+                        trendChart.destroy();
+                    }
+
+                    const labels = data.trends.map(t => new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                    const production = data.trends.map(t => t.total_production);
+                    const revenue = data.trends.map(t => t.total_revenue);
+
+                    trendChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Production (kg)',
+                                    data: production,
+                                    borderColor: '#10b981',
+                                    backgroundColor: '#10b98133',
+                                    yAxisID: 'y',
+                                    tension: 0.3
+                                },
+                                {
+                                    label: 'Revenue ($)',
+                                    data: revenue,
+                                    borderColor: '#3b82f6',
+                                    backgroundColor: '#3b82f633',
+                                    yAxisID: 'y1',
+                                    tension: 0.3
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            scales: {
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: { display: true, text: 'Production (kg)' }
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    title: { display: true, text: 'Revenue ($)' },
+                                    grid: { drawOnChartArea: false }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading network trends:', error);
+            }
+        }
+
+        async function loadNetworkAlerts() {
+            try {
+                const response = await fetch(`${NETWORK_API_URL}/api/network/alerts`);
+                const data = await response.json();
+                
+                if (data.ok && data.alerts.length > 0) {
+                    const section = document.getElementById('network-alerts-section');
+                    const criticalAlerts = data.alerts.filter(a => a.severity === 'critical');
+                    const warningAlerts = data.alerts.filter(a => a.severity === 'warning');
+                    
+                    let html = '';
+                    if (criticalAlerts.length > 0) {
+                        html += `<div class="alert alert-danger" style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--accent-red); border-radius: 8px; padding: 15px; margin-bottom: 10px;">
+                            <strong>Critical Alerts (${criticalAlerts.length}):</strong> ${criticalAlerts.map(a => `${a.farm_name}: ${a.message}`).join(' • ')}
+                        </div>`;
+                    }
+                    if (warningAlerts.length > 0) {
+                        html += `<div class="alert alert-warning" style="background: rgba(245, 158, 11, 0.1); border: 1px solid var(--accent-yellow); border-radius: 8px; padding: 15px;">
+                            <strong>Warnings (${warningAlerts.length}):</strong> ${warningAlerts.map(a => `${a.farm_name}: ${a.message}`).join(' • ')}
+                        </div>`;
+                    }
+                    section.innerHTML = html;
+                } else {
+                    document.getElementById('network-alerts-section').innerHTML = '';
+                }
+            } catch (error) {
+                console.error('Error loading network alerts:', error);
+            }
+        }
+
+        async function viewFarmDetail(farmId) {
+            try {
+                const response = await fetch(`${NETWORK_API_URL}/api/network/farms/${farmId}`);
+                const data = await response.json();
+                
+                if (data.ok) {
+                    const farm = data.farm;
+                    document.getElementById('farmDetailName').textContent = farm.farm_name;
+                    
+                    const summary = data.summary;
+                    document.getElementById('farmDetailContent').innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px;">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Production (30d)</div>
+                                <div class="kpi-value">${summary.total_production.toFixed(1)} kg</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Revenue (30d)</div>
+                                <div class="kpi-value">$${summary.total_revenue.toFixed(0)}</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Avg QA Score</div>
+                                <div class="kpi-value">${summary.avg_qa_score.toFixed(1)}%</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Capacity</div>
+                                <div class="kpi-value">${farm.capacity} cells</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Active Batches</div>
+                                <div class="kpi-value">${summary.active_batches}</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Orders Fulfilled</div>
+                                <div class="kpi-value">${summary.orders_fulfilled}</div>
+                            </div>
+                        </div>
+                        <div style="color: var(--text-secondary); font-size: 14px;">
+                            <p><strong>Farm ID:</strong> ${farm.farm_id}</p>
+                            <p><strong>Location:</strong> ${farm.location}</p>
+                            <p><strong>Type:</strong> ${farm.farm_type}</p>
+                            <p><strong>Status:</strong> <span style="color: ${farm.status === 'ONLINE' ? 'var(--accent-green)' : 'var(--accent-yellow)'};">${farm.status}</span></p>
+                            <p><strong>Operator:</strong> ${farm.operator_name}</p>
+                        </div>
+                    `;
+                    
+                    document.getElementById('farmDetailModal').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading farm detail:', error);
+            }
+        }
+
+        function closeFarmDetail() {
+            document.getElementById('farmDetailModal').style.display = 'none';
+        }
+
+        function exportNetworkReport() {
+            alert('Network report export - Coming soon');
+        }
+
+        function showView(viewName) {
+            // Hide all views
+            document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+            // Show selected view
+            const view = document.getElementById(`${viewName}-view`);
+            if (view) {
+                view.style.display = 'block';
+                // Load data for network view
+                if (viewName === 'network') {
+                    loadNetworkDashboard();
+                }
+            }
+        }
+
+        // Load network dashboard when view becomes active
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if network view exists
+            const networkView = document.getElementById('network-view');
+            if (networkView) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.attributeName === 'style') {
+                            if (networkView.style.display !== 'none') {
+                                loadNetworkDashboard();
+                            }
+                        }
+                    });
+                });
+                observer.observe(networkView, { attributes: true });
+            }
+        });
+    </script>
     <script src="/central-admin.js"></script>
 </body>
 </html>
