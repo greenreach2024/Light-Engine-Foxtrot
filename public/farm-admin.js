@@ -1558,35 +1558,46 @@ function checkForScheduledPriceUpdates() {
  * Insurance valuation based on current inventory, growth stages, and retail pricing
  */
 
-// Growth parameters by crop type (days to harvest and retail price per unit)
+// Growth parameters by crop type (days to harvest and retail price per POUND)
+// Pricing matches crop-pricing.json - weight-based model ($/lb)
 const cropGrowthParams = {
-    // Lettuce varieties - 28-35 day cycle, sold per head
-    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerUnit: 8.10, yieldFactor: 0.92 },
-    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerUnit: 4.99, yieldFactor: 0.90 },
-    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerUnit: 4.99, yieldFactor: 0.91 },
-    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerUnit: 4.30, yieldFactor: 0.91 },
-    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerUnit: 4.99, yieldFactor: 0.90 },
+    // Lettuce varieties - 28-35 day cycle, priced per lb
+    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerLb: 5.00, yieldFactor: 0.90 },
+    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.90 },
     
-    // Basil varieties - 21-28 day cycle, sold per 0.75 oz package
-    'Genovese Basil': { daysToHarvest: 25, retailPricePerUnit: 5.38, yieldFactor: 0.88 },
-    'Thai Basil': { daysToHarvest: 25, retailPricePerUnit: 5.38, yieldFactor: 0.88 },
-    'Purple Basil': { daysToHarvest: 25, retailPricePerUnit: 5.38, yieldFactor: 0.87 },
-    'Lemon Basil': { daysToHarvest: 24, retailPricePerUnit: 5.38, yieldFactor: 0.87 },
-    'Holy Basil': { daysToHarvest: 26, retailPricePerUnit: 5.38, yieldFactor: 0.86 },
+    // Kale varieties - 35-42 day cycle, priced per lb
+    'Lacinato Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
+    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
+    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
+    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 6.50, yieldFactor: 0.92 },
+    'Red Russian Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
     
-    // Arugula varieties - 21-28 day cycle, sold per 5 oz bag
-    'Baby Arugula': { daysToHarvest: 21, retailPricePerUnit: 6.75, yieldFactor: 0.93 },
-    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerUnit: 6.75, yieldFactor: 0.91 },
-    'Wild Arugula': { daysToHarvest: 28, retailPricePerUnit: 6.75, yieldFactor: 0.89 },
-    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerUnit: 6.75, yieldFactor: 0.90 },
-    'Red Arugula': { daysToHarvest: 24, retailPricePerUnit: 6.75, yieldFactor: 0.90 },
+    // Asian Greens - priced per lb
+    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 5.50, yieldFactor: 0.90 },
+    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 6.00, yieldFactor: 0.91 },
     
-    // Kale varieties - 35-42 day cycle, sold per bunch
-    'Curly Kale': { daysToHarvest: 38, retailPricePerUnit: 6.10, yieldFactor: 0.89 },
-    'Lacinato Kale': { daysToHarvest: 40, retailPricePerUnit: 6.10, yieldFactor: 0.88 },
-    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerUnit: 6.10, yieldFactor: 0.88 },
-    'Baby Kale': { daysToHarvest: 28, retailPricePerUnit: 6.10, yieldFactor: 0.92 },
-    'Red Russian Kale': { daysToHarvest: 38, retailPricePerUnit: 6.10, yieldFactor: 0.89 }
+    // Specialty Greens - priced per lb
+    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 8.00, yieldFactor: 0.87 },
+    'Watercress': { daysToHarvest: 25, retailPricePerLb: 7.00, yieldFactor: 0.90 },
+    
+    // Arugula varieties - 21-28 day cycle, priced per lb
+    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.93 },
+    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.91 },
+    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 6.75, yieldFactor: 0.89 },
+    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
+    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
+    
+    // Basil varieties - 21-28 day cycle, priced per lb (~$114/lb for premium herbs)
+    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
+    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
+    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.87 },
+    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 114.72, yieldFactor: 0.87 },
+    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 114.72, yieldFactor: 0.86 }
 };
 
 // Global crop value data
@@ -1606,20 +1617,23 @@ function calculateGrowthPercentage(crop, daysPostSeed) {
 }
 
 /**
- * Calculate tray value based on plant count and growth stage
- * Value = plantCount × retailPricePerUnit × growthPercentage × yieldFactor
+ * Calculate tray value based on plant count, weight per plant, and growth stage
+ * Value = plantCount × lbsPerPlant × retailPricePerLb × growthPercentage × yieldFactor
  */
 function calculateTrayValue(crop, plantCount, daysPostSeed) {
     const params = cropGrowthParams[crop];
     if (!params) return 0;
     
     const growthPercent = calculateGrowthPercentage(crop, daysPostSeed) / 100;
-    const retailPricePerUnit = params.retailPricePerUnit;
+    const retailPricePerLb = params.retailPricePerLb;
     const yieldFactor = params.yieldFactor;
+    
+    // Average weight per plant (in lbs) - conservative estimate
+    const lbsPerPlant = 0.125; // ~2oz per plant average
     
     // Value grows with maturity (S-curve approximation)
     const growthCurve = Math.pow(growthPercent, 1.3);
-    const totalValue = plantCount * retailPricePerUnit * growthCurve * yieldFactor;
+    const totalValue = plantCount * lbsPerPlant * retailPricePerLb * growthCurve * yieldFactor;
     
     return totalValue;
 }
