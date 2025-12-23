@@ -96,7 +96,10 @@ carbon_footprint_db: List[CarbonFootprint] = []
 # ============================================================================
 
 def generate_demo_data():
-    """Generate 90 days of demo sustainability data"""
+    """Generate 90 days of demo sustainability data - controlled by demo_config.py"""
+    from .demo_config import should_use_demo_data
+    if not should_use_demo_data("sustainability_esg"):
+        return  # Skip demo data in production
     global energy_usage_db, water_usage_db, nutrient_usage_db, waste_tracking_db, carbon_footprint_db
     
     energy_usage_db = []

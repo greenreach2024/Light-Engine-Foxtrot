@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
+import requests
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -405,6 +406,23 @@ def seed_tray(
     )
     db.commit()
     db.refresh(tray_run)
+    
+    # Track inventory usage for seeds and grow media
+    try:
+        requests.post(
+            "http://localhost:8000/api/inventory/usage/tray-seeding",
+            json={
+                "tray_id": str(tray_id),
+                "tray_format": tray.tray_format.format_name,
+                "plant_site_count": planted_count,
+                "crop_variety": payload.recipeId,  # Using recipe_id as crop identifier
+                "seed_date": payload.seedDate.isoformat()
+            },
+            timeout=5.0
+        )
+    except Exception as e:
+        print(f"Warning: Failed to track tray seeding usage: {e}")
+    
     return {
         "trayRunId": str(tray_run.tray_run_id),
         "trayId": str(tray_id),

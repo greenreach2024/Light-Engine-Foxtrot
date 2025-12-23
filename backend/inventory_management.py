@@ -138,9 +138,13 @@ supplies_db: List[SupplyItem] = []
 # ============================================================================
 # DEMO DATA
 # ============================================================================
+from .demo_config import should_use_demo_data, DEMO_FARM_ID
 
 def initialize_demo_data():
-    """Initialize demo inventory data"""
+    """Initialize demo inventory data - controlled by demo_config.py"""
+    if not should_use_demo_data("inventory_management"):
+        return  # Skip demo data initialization in production
+        
     global seeds_db, packaging_db, nutrients_db, equipment_db, supplies_db
     
     # Demo Seeds

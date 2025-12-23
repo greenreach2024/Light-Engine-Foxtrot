@@ -47,6 +47,7 @@ from backend.auth import (
 from backend.auth_routes import router as auth_router
 from backend.inventory_routes import router as inventory_router
 from backend.inventory_management import router as inventory_management_router
+from backend.inventory_usage_tracking import router as inventory_usage_router
 from backend.sustainability_esg import router as sustainability_router
 from backend.grower_management import router as grower_management_router
 from backend.labels import router as labels_router
@@ -259,7 +260,11 @@ LOGGER.info(" Inventory routes loaded (trays, placements, rollups)")
 
 # Advanced Inventory Management (Enterprise ERP)
 app.include_router(inventory_management_router, prefix="/api/inventory", tags=["inventory-management"])
-LOGGER.info("📦 Advanced inventory management routes loaded (seeds, packaging, nutrients, equipment, supplies)")
+LOGGER.info("Advanced inventory management routes loaded (seeds, packaging, nutrients, equipment, supplies)")
+
+# Automated Usage Tracking
+app.include_router(inventory_usage_router, prefix="/api/inventory", tags=["usage-tracking"])
+LOGGER.info("Automated usage tracking loaded (tray seeding, nutrient dosing)")
 
 # Sustainability & ESG Dashboard (Enterprise ERP)
 app.include_router(sustainability_router, prefix="/api/sustainability", tags=["sustainability"])
@@ -1722,6 +1727,20 @@ async def _startup() -> None:
         except SetupAssistError as exc:
             LOGGER.error("Failed to initialise AI Assist: %s", exc)
     app.state.AI_ASSIST_SERVICE = ai_service
+    
+    # Start MQTT usage tracker for automatic inventory tracking
+    if MQTT_AVAILABLE and config.mqtt:
+        try:
+            from .mqtt_usage_tracker import start_usage_tracker
+            start_usage_tracker(
+                broker=config.mqtt.host,
+                port=config.mqtt.port,
+                username=config.mqtt.username,
+                password=config.mqtt.password
+            )
+            LOGGER.info("MQTT usage tracker started for automated inventory tracking")
+        except Exception as e:
+            LOGGER.warning(f"Could not start MQTT usage tracker: {e}")
 
     if not app.state.discovery_task:
         app.state.discovery_task = asyncio.create_task(
@@ -1744,6 +1763,15 @@ async def _shutdown():
         t.cancel()
         with contextlib.suppress(Exception):
             await t
+    
+    # Stop MQTT usage tracker
+    if MQTT_AVAILABLE:
+        try:
+            from .mqtt_usage_tracker import stop_usage_tracker
+            stop_usage_tracker()
+            LOGGER.info("MQTT usage tracker stopped")
+        except Exception as e:
+            LOGGER.warning(f"Error stopping MQTT usage tracker: {e}")
 
 
 @app.get("/health", tags=["health"])

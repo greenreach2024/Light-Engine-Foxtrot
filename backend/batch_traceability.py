@@ -87,7 +87,11 @@ class BatchDatabase:
         self._init_demo_data()
     
     def _init_demo_data(self):
-        """Initialize with demo data"""
+        """Initialize with demo data - controlled by demo_config.py"""
+        from .demo_config import should_use_demo_data
+        if not should_use_demo_data("batch_traceability"):
+            return  # Skip demo data in production
+            
         demo_batch_id = "BATCH-2024-001"
         
         self.batches[demo_batch_id] = {

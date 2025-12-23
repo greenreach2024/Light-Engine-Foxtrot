@@ -148,7 +148,10 @@ class PlanningDatabase:
             print("[Planning] No real wholesale orders found, using demo data only")
     
     def _init_demo_data(self):
-        """Initialize with demo sales data (fallback/supplement)"""
+        """Initialize with demo sales data (fallback/supplement) - controlled by demo_config.py"""
+        from .demo_config import should_use_demo_data
+        if not should_use_demo_data("production_planning"):
+            return  # Skip demo data in production
         # Simulate 60 days of sales history
         today = datetime.now()
         

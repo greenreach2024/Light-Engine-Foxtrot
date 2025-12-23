@@ -153,7 +153,11 @@ class QADatabase:
         self._init_demo_data()
     
     def _init_demo_data(self):
-        """Initialize with demo QA records"""
+        """Initialize with demo QA records - controlled by demo_config.py"""
+        from .demo_config import should_use_demo_data
+        if not should_use_demo_data("quality_control"):
+            return  # Skip demo data in production
+            
         demo_checkpoint_id = str(uuid.uuid4())
         
         self.checkpoints[demo_checkpoint_id] = {

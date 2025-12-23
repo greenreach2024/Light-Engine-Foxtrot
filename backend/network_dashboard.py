@@ -45,7 +45,10 @@ class NetworkDatabase:
         self._init_demo_data()
     
     def _init_demo_data(self):
-        """Initialize with demo farm network"""
+        """Initialize with demo farm network - controlled by demo_config.py"""
+        from .demo_config import should_use_demo_data
+        if not should_use_demo_data("network_dashboard"):
+            return  # Skip demo data in production
         
         farms_data = [
             {

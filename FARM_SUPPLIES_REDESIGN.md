@@ -1,5 +1,28 @@
 # Farm Supplies & Operations - Inventory Redesign
 
+## Implementation Status
+
+**Phase 1: Rename & Reorganize** - COMPLETED
+- Renamed section to "Farm Supplies & Operations"
+- Reorganized tabs: Planting Materials first, Nutrients second
+- Updated all CSS classes and JavaScript functions
+- Added "Used This Week" and "Days Until Empty" columns
+
+**Phase 2: Automated Calculations** - COMPLETED
+- Created `backend/inventory_usage_tracking.py` with:
+  - Tray seeding tracking endpoint
+  - Nutrient dosing tracking endpoint
+  - Weekly usage summary endpoint
+  - Dashboard aggregation endpoint
+- Integrated tray seeding QR workflow to auto-record seed/media usage
+- Created MQTT listener service to track nutrient dosing in real-time
+- Updated frontend to display automated usage data
+
+**Phase 3: GreenReach Integration** - NOT STARTED
+**Phase 4: Smart Reorder Logic** - NOT STARTED
+
+---
+
 ## Executive Summary
 
 **Current Problem**: "Inventory Management" is confusing - sounds like crop inventory. System requires too many manual inputs that could be calculated automatically from existing data (tray assignments, nutrient dosing logs).

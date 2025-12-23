@@ -125,7 +125,10 @@ performance_db: Dict[str, PerformanceMetrics] = {}
 # ============================================================================
 
 def initialize_demo_data():
-    """Initialize demo grower network with 5 growers and performance data"""
+    """Initialize demo grower network with 5 growers and performance data - controlled by demo_config.py"""
+    from .demo_config import should_use_demo_data
+    if not should_use_demo_data("grower_management"):
+        return  # Skip demo data in production
     global growers_db, farms_db, contracts_db, invitations_db, performance_db
     
     growers_db = []
