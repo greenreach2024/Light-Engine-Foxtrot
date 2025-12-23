@@ -9406,6 +9406,14 @@ app.use('/api/wholesale/orders', wholesaleOrdersRouter);
 app.use('/api/wholesale/farm-performance', wholesaleFarmPerformanceRouter);
 
 /**
+ * Advanced Inventory Management & Sustainability APIs
+ * Served by Python FastAPI backend on port 8000
+ * - /api/inventory/*: Advanced inventory management (seeds, packaging, nutrients, equipment, supplies)
+ * - /api/sustainability/*: Environmental tracking and ESG reporting
+ * See backend/server.py for full endpoint documentation
+ */
+
+/**
  * GreenReach: Audit Logging
  * Comprehensive audit trail for compliance and debugging
  * - GET /api/audit/logs: Query audit logs with filters
