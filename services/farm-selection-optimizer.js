@@ -14,7 +14,7 @@
  * 4. Overall logistics cost and efficiency
  */
 
-import db from '../lib/db.js';
+import db from '../lib/database.js';
 
 class FarmSelectionOptimizer {
   constructor() {

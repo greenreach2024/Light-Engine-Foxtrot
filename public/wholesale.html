@@ -591,6 +591,12 @@
       border: 1px solid #a5b4fc;
     }
 
+    .food-safety-cert {
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      color: white;
+      border: none;
+    }
+
     .sku-actions {
       display: flex;
       gap: 0.75rem;
@@ -1707,6 +1713,9 @@
           </div>
           <button type="button" class="btn btn-primary" id="apply-filters-btn">Apply Filters</button>
           <button type="button" class="btn btn-secondary" id="clear-filters-btn">Clear All</button>
+          <button type="button" class="btn btn-accent" id="request-product-btn" style="margin-left: auto; background: var(--accent); color: white;">
+            Request Product
+          </button>
         </div>
       </div>
       <div id="catalog-grid" class="catalog-grid">
@@ -1783,6 +1792,20 @@
               <label for="delivery-instructions">Delivery Instructions (optional)</label>
               <textarea id="delivery-instructions" placeholder="Loading dock hours, gate codes, etc."></textarea>
             </div>
+
+            <div class="form-group">
+              <label for="delivery-time-slot">Preferred Delivery Time</label>
+              <select id="delivery-time-slot" required>
+                <option value="">Select time slot...</option>
+                <option value="morning">Morning (8am - 12pm)</option>
+                <option value="afternoon">Afternoon (12pm - 4pm)</option>
+                <option value="evening">Evening (4pm - 8pm)</option>
+                <option value="flexible">Flexible - Any time</option>
+              </select>
+              <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                Farms will coordinate delivery within your preferred window
+              </p>
+            </div>
           </form>
         </div>
 
@@ -1819,8 +1842,15 @@
 
     <!-- Orders View -->
     <div id="orders-view" class="view">
-      <h1>My Orders</h1>
-      <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Track your wholesale orders and shipments</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <div>
+          <h1 style="margin: 0;">My Orders</h1>
+          <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0;">Track your wholesale orders and shipments</p>
+        </div>
+        <button id="pay-all-btn" class="btn btn-primary" style="display: none;">
+          Pay All Outstanding
+        </button>
+      </div>
       <div id="orders-list" class="orders-list">
         <!-- Order cards populated by JS -->
       </div>
@@ -1852,6 +1882,169 @@
     <span>🛒</span>
     <span class="cart-badge-count" id="cart-count">0</span>
   </button>
+
+  <!-- Product Request Modal -->
+  <div id="product-request-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2>Request a Product</h2>
+        <button class="modal-close" data-action="close-product-request">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+          Can't find what you're looking for? Submit a product request and we'll notify farms that can fulfill your order.
+        </p>
+        <form id="product-request-form">
+          <div class="form-group">
+            <label for="request-product-name">Product Name *</label>
+            <input type="text" id="request-product-name" required placeholder="e.g. Cherry Tomatoes" />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="request-quantity">Quantity *</label>
+              <input type="number" id="request-quantity" required min="1" step="0.1" placeholder="50" />
+            </div>
+            <div class="form-group">
+              <label for="request-unit">Unit *</label>
+              <select id="request-unit" required>
+                <option value="lbs">lbs</option>
+                <option value="kg">kg</option>
+                <option value="units">units</option>
+                <option value="bunches">bunches</option>
+                <option value="cases">cases</option>
+                <option value="boxes">boxes</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="request-needed-by">Needed By Date *</label>
+            <input type="date" id="request-needed-by" required />
+          </div>
+
+          <div class="form-group">
+            <label for="request-description">Description (optional)</label>
+            <textarea id="request-description" rows="3" placeholder="Specify variety, size, or other requirements..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="request-max-price">Maximum Price per Unit (optional)</label>
+            <input type="number" id="request-max-price" min="0" step="0.01" placeholder="e.g. 5.00" />
+          </div>
+
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="request-organic" />
+              Organic certification required
+            </label>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 1.5rem;">
+            <button type="submit" class="btn btn-primary">Submit Request</button>
+            <button type="button" class="btn btn-secondary" data-action="close-product-request">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch Payment Modal -->
+  <div id="batch-payment-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2>Pay All Outstanding Invoices</h2>
+        <button class="modal-close" data-action="close-batch-payment">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+          Process a single payment to settle all outstanding invoices with your farms.
+        </p>
+
+        <div id="batch-payment-summary" style="margin-bottom: 1.5rem;">
+          <!-- Populated by JS -->
+        </div>
+
+        <div style="background: var(--bg); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 1.1rem; font-weight: 600;">Total Amount:</span>
+            <span id="batch-payment-total" style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">$0.00</span>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="process-batch-payment-btn" class="btn btn-primary">Process Payment</button>
+          <button type="button" class="btn btn-secondary" data-action="close-batch-payment">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Buyer Auth Modal -->
+  <div id="product-request-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2>Request a Product</h2>
+        <button class="modal-close" data-action="close-product-request">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+          Can't find what you're looking for? Submit a product request and we'll notify farms that can fulfill your order.
+        </p>
+        <form id="product-request-form">
+          <div class="form-group">
+            <label for="request-product-name">Product Name *</label>
+            <input type="text" id="request-product-name" required placeholder="e.g. Cherry Tomatoes" />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="request-quantity">Quantity *</label>
+              <input type="number" id="request-quantity" required min="1" step="0.1" placeholder="50" />
+            </div>
+            <div class="form-group">
+              <label for="request-unit">Unit *</label>
+              <select id="request-unit" required>
+                <option value="lbs">lbs</option>
+                <option value="kg">kg</option>
+                <option value="units">units</option>
+                <option value="bunches">bunches</option>
+                <option value="cases">cases</option>
+                <option value="boxes">boxes</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="request-needed-by">Needed By Date *</label>
+            <input type="date" id="request-needed-by" required />
+          </div>
+
+          <div class="form-group">
+            <label for="request-description">Description (optional)</label>
+            <textarea id="request-description" rows="3" placeholder="Specify variety, size, or other requirements..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="request-max-price">Maximum Price per Unit (optional)</label>
+            <input type="number" id="request-max-price" min="0" step="0.01" placeholder="e.g. 5.00" />
+          </div>
+
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="request-organic" />
+              Organic certification required
+            </label>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 1.5rem;">
+            <button type="submit" class="btn btn-primary">Submit Request</button>
+            <button type="button" class="btn btn-secondary" data-action="close-product-request">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <!-- Buyer Auth Modal -->
   <div id="auth-modal" class="auth-modal">

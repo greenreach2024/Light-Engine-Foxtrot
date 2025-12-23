@@ -17,6 +17,7 @@
     farmPerformance: {},
     currentBuyer: null,
     authTab: 'sign-in',
+    productRequests: [],
 
     get token() {
       return localStorage.getItem(STORAGE_TOKEN) || '';
@@ -556,6 +557,7 @@
                   <span class="farm-tag">${f.farm_name}</span>
                   <span class="farm-qty">${f.qty_available} ${sku.unit}</span>
                   <div class="farm-badges">
+                    ${this.getFarmCertificationBadges(f.farm_id)}
                     ${this.getFarmQualityBadge(f.farm_id)}
                     ${this.getFarmResponseTime(f.farm_id)}
                     ${this.getFarmReliability(f.farm_id)}
@@ -872,6 +874,7 @@
         if (response.ok && json?.status === 'ok') {
           this.orders = json.data.orders || [];
           this.renderOrders();
+          this.updatePayAllButton();
           return;
         }
       } catch (error) {
@@ -879,6 +882,7 @@
       }
 
       this.renderOrders();
+      this.updatePayAllButton();
     },
 
     renderOrders() {
@@ -1249,6 +1253,27 @@
       
       let className = rate >= 95 ? 'reliability-excellent' : 'reliability-good';
       return `<span class="farm-reliability ${className}" title="Order fulfillment rate">${rate.toFixed(0)}% reliable</span>`;
+    },
+
+    getFarmCertificationBadges(farmId) {
+      // Get farm data from directory
+      const farm = this.farmDirectory[farmId] || this.networkFarms.find(f => f.farm_id === farmId);
+      if (!farm || !farm.certifications) return '';
+
+      // Check for food safety certification
+      const foodSafetyCerts = ['CanadaGAP', 'GlobalGAP', 'HACCP', 'SQF', 'BRC', 'FSSC 22000'];
+      const hasFoodSafety = farm.certifications.some(cert => 
+        foodSafetyCerts.some(fs => cert.toLowerCase().includes(fs.toLowerCase()))
+      );
+
+      if (!hasFoodSafety) return '';
+
+      // Get the actual cert name
+      const cert = farm.certifications.find(c => 
+        foodSafetyCerts.some(fs => c.toLowerCase().includes(fs.toLowerCase()))
+      );
+
+      return `<span class="farm-cert-badge food-safety-cert" title="Food Safety Certified: ${cert}">🛡️ Food Safety</span>`;
     },
 
     /**
@@ -1679,6 +1704,7 @@
           delivery_province: document.getElementById('delivery-province')?.value,
           delivery_postal_code: document.getElementById('delivery-postal')?.value,
           delivery_instructions: document.getElementById('delivery-instructions')?.value || null,
+          delivery_time_slot: document.getElementById('delivery-time-slot')?.value || 'flexible',
           fulfillment_cadence: document.getElementById('fulfillment-cadence')?.value || 'one_time',
           cart_items: this.cart.map(item => ({
             sku_id: item.sku_id,
@@ -1747,6 +1773,232 @@
         placeOrderText.style.display = 'inline';
         placeOrderSpinner.style.display = 'none';
       }
+    },
+
+    // === PRODUCT REQUESTS ===
+    
+    openProductRequestModal() {
+      const modal = document.getElementById('product-request-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        // Set minimum date to tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const minDate = tomorrow.toISOString().split('T')[0];
+        document.getElementById('request-needed-by').min = minDate;
+      }
+    },
+
+    closeProductRequestModal() {
+      const modal = document.getElementById('product-request-modal');
+      if (modal) {
+        modal.style.display = 'none';
+        document.getElementById('product-request-form').reset();
+      }
+    },
+
+    async submitProductRequest(e) {
+      e.preventDefault();
+      
+      if (!this.currentBuyer) {
+        this.showToast('Please sign in to submit a product request', 'error');
+        return;
+      }
+
+      const formData = {
+        buyer_id: this.currentBuyer.id,
+        product_name: document.getElementById('request-product-name').value,
+        quantity: parseFloat(document.getElementById('request-quantity').value),
+        unit: document.getElementById('request-unit').value,
+        needed_by_date: document.getElementById('request-needed-by').value,
+        description: document.getElementById('request-description').value || null,
+        max_price_per_unit: parseFloat(document.getElementById('request-max-price').value) || null,
+        certifications_required: document.getElementById('request-organic').checked ? ['Organic'] : []
+      };
+
+      try {
+        const response = await fetch('/api/wholesale/product-requests/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+          },
+          body: JSON.stringify(formData)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message || 'Failed to submit request');
+        }
+
+        this.showToast(`Request submitted! ${result.matched_farms} farms notified`, 'success');
+        this.closeProductRequestModal();
+        
+        // Reload requests if on that view
+        if (this.currentView === 'requests') {
+          await this.loadProductRequests();
+        }
+
+      } catch (error) {
+        console.error('Product request error:', error);
+        this.showToast(error.message || 'Failed to submit request', 'error');
+      }
+    },
+
+    async loadProductRequests() {
+      if (!this.currentBuyer) return;
+
+      try {
+        const response = await fetch(`/api/wholesale/product-requests/buyer/${this.currentBuyer.id}`, {
+          headers: {
+            'Authorization': `Bearer ${this.token}`
+          }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.ok) {
+          this.productRequests = result.requests || [];
+          this.renderProductRequests();
+        }
+
+      } catch (error) {
+        console.error('Failed to load product requests:', error);
+      }
+    },
+
+    renderProductRequests() {
+      // This would be called when viewing the "My Requests" tab
+      // For now, we'll add a view later
+      console.log('Product requests:', this.productRequests);
+    },
+
+    // === BATCH PAYMENTS ===
+    
+    openBatchPaymentModal() {
+      // Get all unpaid orders
+      const unpaidOrders = this.orders.filter(order => 
+        order.payment_status === 'authorized' || order.payment_status === 'pending'
+      );
+
+      if (unpaidOrders.length === 0) {
+        this.showToast('No outstanding invoices to pay', 'info');
+        return;
+      }
+
+      // Group by farm and calculate totals
+      const farmTotals = {};
+      let grandTotal = 0;
+
+      unpaidOrders.forEach(order => {
+        const farmId = order.farm_id || 'MULTIPLE';
+        if (!farmTotals[farmId]) {
+          farmTotals[farmId] = {
+            farm_name: order.farm_name || 'Multiple Farms',
+            orders: [],
+            total: 0
+          };
+        }
+        farmTotals[farmId].orders.push(order);
+        farmTotals[farmId].total += order.total_amount || 0;
+        grandTotal += order.total_amount || 0;
+      });
+
+      // Render summary
+      const summaryHtml = Object.values(farmTotals).map(farm => `
+        <div style="padding: 0.75rem; border-bottom: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong>${farm.farm_name}</strong>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                ${farm.orders.length} order${farm.orders.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+            <div style="font-weight: 600; color: var(--primary);">
+              $${farm.total.toFixed(2)}
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('batch-payment-summary').innerHTML = summaryHtml;
+      document.getElementById('batch-payment-total').textContent = `$${grandTotal.toFixed(2)}`;
+      
+      const modal = document.getElementById('batch-payment-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+      }
+    },
+
+    closeBatchPaymentModal() {
+      const modal = document.getElementById('batch-payment-modal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    },
+
+    async processBatchPayment() {
+      const btn = document.getElementById('process-batch-payment-btn');
+      if (!btn) return;
+
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = 'Processing...';
+
+      try {
+        const unpaidOrders = this.orders.filter(order => 
+          order.payment_status === 'authorized' || order.payment_status === 'pending'
+        );
+
+        const orderIds = unpaidOrders.map(o => o.order_id);
+
+        // In production, this would call the backend API
+        const response = await fetch('/api/wholesale/orders/batch-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+          },
+          body: JSON.stringify({ order_ids: orderIds })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message || 'Payment failed');
+        }
+
+        this.showToast(`Successfully paid ${orderIds.length} invoice${orderIds.length !== 1 ? 's' : ''}`, 'success');
+        this.closeBatchPaymentModal();
+        
+        // Reload orders
+        await this.loadOrders();
+
+      } catch (error) {
+        console.error('Batch payment error:', error);
+        this.showToast(error.message || 'Payment failed', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    },
+
+    updatePayAllButton() {
+      const payAllBtn = document.getElementById('pay-all-btn');
+      if (!payAllBtn) return;
+
+      const unpaidOrders = this.orders.filter(order => 
+        order.payment_status === 'authorized' || order.payment_status === 'pending'
+      );
+
+      if (unpaidOrders.length > 0) {
+        const total = unpaidOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+        payAllBtn.textContent = `Pay All Outstanding ($${total.toFixed(2)})`;
+        payAllBtn.style.display = 'inline-block';
+      } else {
+        payAllBtn.style.display = 'none';
+      }
     }
   };
 
@@ -1770,6 +2022,50 @@
     if (placeOrderBtn) {
       placeOrderBtn.addEventListener('click', () => {
         app.placeOrder();
+      });
+    }
+
+    // Product request modal handlers
+    const requestProductBtn = document.getElementById('request-product-btn');
+    if (requestProductBtn) {
+      requestProductBtn.addEventListener('click', () => {
+        app.openProductRequestModal();
+      });
+    }
+
+    const closeRequestBtns = document.querySelectorAll('[data-action="close-product-request"]');
+    closeRequestBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        app.closeProductRequestModal();
+      });
+    });
+
+    const productRequestForm = document.getElementById('product-request-form');
+    if (productRequestForm) {
+      productRequestForm.addEventListener('submit', (e) => {
+        app.submitProductRequest(e);
+      });
+    }
+
+    // Batch payment handlers
+    const payAllBtn = document.getElementById('pay-all-btn');
+    if (payAllBtn) {
+      payAllBtn.addEventListener('click', () => {
+        app.openBatchPaymentModal();
+      });
+    }
+
+    const closeBatchPaymentBtns = document.querySelectorAll('[data-action="close-batch-payment"]');
+    closeBatchPaymentBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        app.closeBatchPaymentModal();
+      });
+    });
+
+    const processBatchPaymentBtn = document.getElementById('process-batch-payment-btn');
+    if (processBatchPaymentBtn) {
+      processBatchPaymentBtn.addEventListener('click', () => {
+        app.processBatchPayment();
       });
     }
   });

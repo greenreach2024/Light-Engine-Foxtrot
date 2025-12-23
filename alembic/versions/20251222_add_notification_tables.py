@@ -10,6 +10,7 @@ and notification delivery tracking for SMS and push notifications.
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+import json
 
 # revision identifiers
 revision = '20251222_notifications'
@@ -84,7 +85,7 @@ def upgrade():
         sa.Column('disabled_reason', sa.String(100)),  # 'invalid_token', 'app_uninstalled', etc.
         
         # Topic subscriptions (for group notifications)
-        sa.Column('subscribed_topics', postgresql.JSONB(), default=[]),  # ['all_farms', 'ontario_farms', etc.]
+        sa.Column('subscribed_topics', sa.Text(), default='[]'),  # JSON array as text for SQLite compatibility
         
         # Metadata
         sa.Column('created_at', sa.DateTime(), default=sa.func.now()),
@@ -117,7 +118,7 @@ def upgrade():
         
         # Service-specific tracking IDs
         sa.Column('external_id', sa.String(255)),  # Twilio SID, FCM message ID, etc.
-        sa.Column('provider_response', postgresql.JSONB()),  # Raw response from service
+        sa.Column('provider_response', sa.Text()),  # Raw JSON response as text for SQLite compatibility
         
         # Message content (for debugging)
         sa.Column('subject', sa.String(255)),
