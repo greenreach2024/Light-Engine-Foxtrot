@@ -2011,12 +2011,98 @@
           window.location.href = `/views/tray-setup.html?tray=${scannedData}`;
           break;
         case 'harvest':
-          window.location.href = `/views/tray-inventory.html?harvest=${scannedData}`;
+          performHarvest(scannedData);
           break;
         case 'move':
           window.location.href = `/views/tray-inventory.html?move=${scannedData}`;
           break;
       }
+    }
+
+    // Perform Harvest and Print Label
+    async function performHarvest(trayRunId) {
+      try {
+        // Show loading state
+        const scanResult = document.getElementById('scanResult');
+        scanResult.innerHTML = '<div class="spinner"></div><div style="margin-top: 1rem; color: #94a3b8;">Recording harvest...</div>';
+        scanResult.style.display = 'block';
+        
+        // Call harvest API (auto-creates batch and lot code)
+        const response = await fetch(`${API_BASE}/api/tray-runs/${trayRunId}/harvest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            harvestedAt: new Date().toISOString(),
+            actualWeight: prompt('Enter harvest weight (kg):', '1.5') || '1.5',
+            note: 'Harvested via Activity Hub scan'
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to record harvest');
+        }
+        
+        const data = await response.json();
+        
+        // Success! Show result with print option
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
+              Harvest Recorded
+            </div>
+            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
+              Lot: ${data.lotCode}<br>
+              Batch: ${data.batchId}
+            </div>
+            <button 
+              onclick="printHarvestLabel('${data.lotCode}', '${trayRunId}')"
+              style="
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                border: none;
+                border-radius: 12px;
+                padding: 1rem 2rem;
+                font-size: 1.3rem;
+                font-weight: 700;
+                color: white;
+                cursor: pointer;
+                margin-top: 1rem;
+              "
+            >
+              🖨️ Print Harvest Label
+            </button>
+            <div style="margin-top: 1rem;">
+              <button onclick="closeScanModal()" class="button">Done</button>
+            </div>
+          </div>
+        `;
+        
+        // Refresh harvest list
+        loadDashboardData();
+        
+      } catch (error) {
+        console.error('Error recording harvest:', error);
+        const scanResult = document.getElementById('scanResult');
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: #ef4444;">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">✗</div>
+            <div style="font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem;">
+              Harvest Failed
+            </div>
+            <div style="font-size: 1.1rem;">
+              ${error.message}
+            </div>
+            <button onclick="closeScanModal()" class="button" style="margin-top: 1rem;">Close</button>
+          </div>
+        `;
+      }
+    }
+
+    // Print Harvest Label
+    function printHarvestLabel(lotCode, trayRunId) {
+      // Open label in new window to print
+      const labelUrl = `${API_BASE}/api/labels/harvest?lot_code=${lotCode}&tray_run_id=${trayRunId}`;
+      window.open(labelUrl, '_blank', 'width=600,height=800');
     }
 
     // Show Simple Planting Schedule

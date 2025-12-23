@@ -26,3 +26,7 @@ numpy>=1.26.0
 pandas>=2.2.0
 statsmodels>=0.14.0
 requests>=2.31.0
+
+# Label printing with QR codes
+qrcode[pil]>=7.4.2
+pillow>=10.0.0

@@ -465,9 +465,13 @@ def harvest_tray(tray_run_id: str, payload: HarvestRequest, db: Session = Depend
     tray_run.status = "HARVESTED"
     harvested_at = payload.harvestedAt or datetime.utcnow()
     
-    # Store lot code if provided
-    if payload.lot_code:
-        tray_run.lot_code = payload.lot_code
+    # Generate lot code if not provided (format: LOT-YYYY-MM-DD-HHMMSS)
+    if not payload.lot_code:
+        lot_code = f"LOT-{harvested_at.strftime('%Y-%m-%d-%H%M%S')}"
+        tray_run.lot_code = lot_code
+    else:
+        lot_code = payload.lot_code
+        tray_run.lot_code = lot_code
     
     # Store actual weight if provided
     if payload.actualWeight is not None:
@@ -490,11 +494,51 @@ def harvest_tray(tray_run_id: str, payload: HarvestRequest, db: Session = Depend
         )
     )
     db.commit()
+    
+    # Auto-create traceability batch (imported at top: from backend.batch_traceability import db as batch_db)
+    try:
+        from backend.batch_traceability import db as batch_db, BatchStatus, EventType
+        import uuid
+        
+        # Create batch
+        batch_id = f"BATCH-{harvested_at.strftime('%Y%m%d-%H%M%S')}"
+        batch_db.batches[batch_id] = {
+            "batch_id": batch_id,
+            "crop_name": tray_run.recipe_id or "Unknown Crop",
+            "variety": "",
+            "seed_source": "Tray System",
+            "quantity": int(payload.actualWeight) if payload.actualWeight else 0,
+            "location": active_placement.location_id if active_placement else "Unknown",
+            "status": BatchStatus.HARVESTED,
+            "created_date": harvested_at.isoformat(),
+            "expected_harvest_date": harvested_at.isoformat(),
+            "notes": f"Auto-created from harvest scan (Tray: {tray_run_id})",
+            "lot_code": lot_code,
+            "tray_run_id": tray_run_id
+        }
+        
+        # Create harvest event
+        event_id = str(uuid.uuid4())
+        batch_db.events[event_id] = {
+            "event_id": event_id,
+            "batch_id": batch_id,
+            "event_type": EventType.HARVEST,
+            "timestamp": harvested_at.isoformat(),
+            "location": active_placement.location_id if active_placement else "Unknown",
+            "quantity": int(payload.actualWeight) if payload.actualWeight else 0,
+            "operator": "Worker",
+            "notes": f"Harvested from tray {tray_run_id}"
+        }
+    except Exception as e:
+        print(f"[Harvest] Failed to create traceability batch: {e}")
+    
     return {
         "trayRunId": str(tray_run_id),
         "status": tray_run.status,
         "harvestedAt": harvested_at.isoformat(),
-        "lotCode": tray_run.lot_code,
+        "lotCode": lot_code,
+        "batchId": batch_id if 'batch_id' in locals() else None,
+        "printLabelUrl": f"/api/labels/harvest?lot_code={lot_code}"
     }
 
 

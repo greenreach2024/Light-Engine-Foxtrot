@@ -49,6 +49,7 @@ from backend.inventory_routes import router as inventory_router
 from backend.inventory_management import router as inventory_management_router
 from backend.sustainability_esg import router as sustainability_router
 from backend.grower_management import router as grower_management_router
+from backend.labels import router as labels_router
 from backend.automation import AutomationEngine, lux_balancing_rule, occupancy_rule
 from backend.config import EnvironmentConfig, LightingFixture, load_config
 from backend.device_discovery import (
@@ -266,6 +267,10 @@ LOGGER.info("🌱 Sustainability & ESG dashboard routes loaded (energy, water, c
 # Grower Management (Multi-Tenant Network)
 app.include_router(grower_management_router, prefix="/api/growers", tags=["grower-management"])
 LOGGER.info("👥 Grower management routes loaded (network, contracts, performance, invitations)")
+
+# Label Printing System (Harvest & Wholesale Packing)
+app.include_router(labels_router, tags=["labels"])
+LOGGER.info("🏷️  Label printing routes loaded (harvest labels, packing labels with traceability)")
 
 
 def _require_state(name: str) -> Any:
