@@ -14,6 +14,7 @@
     demoData: null,
     farmDirectory: {},
     networkFarms: [],
+    farmPerformance: {},
     currentBuyer: null,
     authTab: 'sign-in',
 
@@ -45,6 +46,7 @@
 
       this.setupSourcingControls();
       await this.loadNetworkFarms();
+      await this.loadFarmPerformance();
 
       await this.loadCatalog();
       await this.loadOrders();
@@ -549,7 +551,17 @@
               </div>
             </div>
             <div class="sku-farms">
-              ${(sku.farms || []).map((f) => `<span class="farm-tag">${f.farm_name} (${f.qty_available} ${sku.unit})</span>`).join('')}
+              ${(sku.farms || []).map((f) => `
+                <div class="farm-tag-container">
+                  <span class="farm-tag">${f.farm_name}</span>
+                  <span class="farm-qty">${f.qty_available} ${sku.unit}</span>
+                  <div class="farm-badges">
+                    ${this.getFarmQualityBadge(f.farm_id)}
+                    ${this.getFarmResponseTime(f.farm_id)}
+                    ${this.getFarmReliability(f.farm_id)}
+                  </div>
+                </div>
+              `).join('')}
             </div>
             <div class="sku-actions">
               <input type="number" id="qty-${sku.sku_id}" min="0.1" step="0.1" max="${sku.total_qty_available}" value="1" />
@@ -1162,6 +1174,81 @@
         console.warn('Failed to load network farms:', error);
         select.innerHTML = '<option value="">Farms unavailable</option>';
       }
+    },
+
+    async loadFarmPerformance() {
+      try {
+        const response = await fetch('/api/wholesale/farm-performance/dashboard?timeframe=30d');
+        const data = await response.json().catch(() => null);
+        
+        if (data?.farms) {
+          // Convert array to lookup object keyed by farm_id
+          this.farmPerformance = {};
+          data.farms.forEach(farm => {
+            this.farmPerformance[farm.farm_id] = farm.metrics;
+          });
+          console.log(`[Wholesale] Loaded performance data for ${data.farms.length} farms`);
+        }
+      } catch (error) {
+        console.warn('[Wholesale] Farm performance data unavailable:', error);
+        this.farmPerformance = {};
+      }
+    },
+
+    getFarmQualityBadge(farmId) {
+      const metrics = this.farmPerformance[farmId];
+      if (!metrics) return '';
+      
+      const score = metrics.quality_score || 0;
+      let badge = '';
+      let className = '';
+      
+      if (score >= 90) {
+        badge = 'Excellent';
+        className = 'farm-quality-excellent';
+      } else if (score >= 80) {
+        badge = 'Good';
+        className = 'farm-quality-good';
+      } else if (score >= 70) {
+        badge = 'Fair';
+        className = 'farm-quality-fair';
+      } else {
+        return ''; // Don't show badge for poor scores
+      }
+      
+      return `<span class="farm-quality-badge ${className}" title="Quality Score: ${score.toFixed(0)}/100">✓ ${badge}</span>`;
+    },
+
+    getFarmResponseTime(farmId) {
+      const metrics = this.farmPerformance[farmId];
+      if (!metrics || !metrics.avg_response_time_hours) return '';
+      
+      const hours = metrics.avg_response_time_hours;
+      let className = '';
+      let icon = '';
+      
+      if (hours <= 4) {
+        className = 'response-fast';
+        icon = '⚡';
+      } else if (hours <= 12) {
+        className = 'response-normal';
+        icon = '✓';
+      } else {
+        return ''; // Don't show slow response times
+      }
+      
+      return `<span class="farm-response ${className}" title="Average response time">${icon} ${hours.toFixed(1)}h</span>`;
+    },
+
+    getFarmReliability(farmId) {
+      const metrics = this.farmPerformance[farmId];
+      if (!metrics || !metrics.acceptance_rate) return '';
+      
+      const rate = metrics.acceptance_rate;
+      if (rate < 85) return ''; // Don't show low reliability
+      
+      let className = rate >= 95 ? 'reliability-excellent' : 'reliability-good';
+      return `<span class="farm-reliability ${className}" title="Order fulfillment rate">${rate.toFixed(0)}% reliable</span>`;
     },
 
     /**
