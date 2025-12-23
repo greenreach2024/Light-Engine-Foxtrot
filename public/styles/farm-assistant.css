@@ -721,3 +721,194 @@
   transform: translateY(0);
   box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
 }
+
+/* Large Popup Overlay for Jokes, Riddles, and Fun Facts */
+.assistant-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.assistant-popup {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 3px solid rgba(96, 165, 250, 0.4);
+  border-radius: 24px;
+  padding: 3rem;
+  max-width: 90%;
+  width: 600px;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+  animation: popupSlide 0.4s ease;
+}
+
+@keyframes popupSlide {
+  from {
+    transform: scale(0.8) translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.assistant-popup-header {
+  font-size: 32px;
+  font-weight: bold;
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: 2rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.assistant-popup-content {
+  color: #f8fafc;
+  font-size: 20px;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.assistant-popup-close {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 32px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.assistant-popup-close:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.5);
+}
+
+/* Joke/Riddle Display Styles */
+.joke-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  padding: 1rem;
+}
+
+.joke-icon {
+  font-size: 80px;
+  line-height: 1;
+  animation: bounce 1s ease infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.joke-text {
+  width: 100%;
+  text-align: center;
+}
+
+.joke-question {
+  font-size: 28px;
+  color: #fbbf24;
+  font-weight: 600;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.4;
+}
+
+.joke-answer {
+  font-size: 24px;
+  color: #10b981;
+  font-weight: 500;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Big Info Display (Weather, etc.) */
+.big-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.info-icon {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.info-label {
+  font-size: 18px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 48px;
+  font-weight: bold;
+  color: #60a5fa;
+  line-height: 1;
+}
+
+.status-message {
+  text-align: center;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  font-size: 22px;
+  font-weight: 600;
+  margin-top: 1rem;
+}
+
+.status-message.success {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 2px solid rgba(16, 185, 129, 0.4);
+}
+
+.status-message.warning {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  border: 2px solid rgba(251, 191, 36, 0.4);
+}
+
+.status-message.ok {
+  background: rgba(96, 165, 250, 0.2);
+  color: #60a5fa;
+  border: 2px solid rgba(96, 165, 250, 0.4);
+}
