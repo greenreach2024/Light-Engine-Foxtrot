@@ -144,8 +144,8 @@
             }
         }
 
-        /* Inventory Tab Styles */
-        .inv-tab {
+        /* Farm Supplies Tab Styles */
+        .supplies-tab {
             background: transparent;
             border: none;
             padding: 12px 20px;
@@ -157,17 +157,17 @@
             transition: all 0.2s;
         }
 
-        .inv-tab:hover {
+        .supplies-tab:hover {
             color: var(--text-primary);
             border-bottom-color: var(--accent-blue);
         }
 
-        .inv-tab.active {
+        .supplies-tab.active {
             color: var(--accent-blue);
             border-bottom-color: var(--accent-blue);
         }
 
-        .inv-tab-content {
+        .supplies-tab-content {
             display: none;
         }
 
@@ -953,9 +953,9 @@
 
                 <div class="nav-section">
                     <div class="nav-section-title">Enterprise ERP</div>
-                    <a href="#inventory-mgmt" class="nav-item" data-section="inventory-mgmt">
+                    <a href="#farm-supplies" class="nav-item" data-section="farm-supplies">
                         <span class="nav-item-icon">■</span>
-                        Inventory Management
+                        Farm Supplies & Operations
                     </a>
                     <a href="#sustainability" class="nav-item" data-section="sustainability">
                         <span class="nav-item-icon">■</span>
@@ -1173,17 +1173,17 @@
                 <!-- Inventory Tabs -->
                 <div class="card">
                     <div style="border-bottom: 1px solid var(--border); padding: 16px; display: flex; gap: 16px;">
-                        <button onclick="showInventoryTab('seeds')" id="invTab-seeds" class="inv-tab active">Seeds</button>
-                        <button onclick="showInventoryTab('packaging')" id="invTab-packaging" class="inv-tab">Packaging</button>
-                        <button onclick="showInventoryTab('nutrients')" id="invTab-nutrients" class="inv-tab">Nutrients</button>
-                        <button onclick="showInventoryTab('equipment')" id="invTab-equipment" class="inv-tab">Equipment</button>
-                        <button onclick="showInventoryTab('supplies')" id="invTab-supplies" class="inv-tab">Supplies</button>
+                        <button onclick="showSuppliesTab('planting')" id="suppliesTab-planting" class="supplies-tab active">Planting Materials</button>
+                        <button onclick="showSuppliesTab('nutrients')" id="suppliesTab-nutrients" class="supplies-tab">Nutrients</button>
+                        <button onclick="showSuppliesTab('packaging')" id="suppliesTab-packaging" class="supplies-tab">Packaging</button>
+                        <button onclick="showSuppliesTab('equipment')" id="suppliesTab-equipment" class="supplies-tab">Equipment</button>
+                        <button onclick="showSuppliesTab('lab')" id="suppliesTab-lab" class="supplies-tab">Lab Supplies</button>
                     </div>
 
-                    <!-- Seeds Tab -->
-                    <div id="invContent-seeds" class="inv-tab-content">
+                    <!-- Planting Materials Tab -->
+                    <div id="suppliesContent-planting" class="supplies-tab-content">
                         <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
-                            <h3>Seed Inventory</h3>
+                            <h3>Planting Materials</h3>
                             <button onclick="showAddSeedModal()" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add Seed</button>
                         </div>
                         <div class="table-container">
@@ -1192,10 +1192,10 @@
                                     <tr>
                                         <th>Variety</th>
                                         <th>Quantity</th>
-                                        <th>Germination Rate</th>
+                                        <th>Used This Week</th>
+                                        <th>Grow Media (kg)</th>
                                         <th>Expiration</th>
-                                        <th>Alert</th>
-                                        <th>Supplier</th>
+                                        <th>Status</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -1206,8 +1206,8 @@
                         </div>
                     </div>
 
-                    <!-- Packaging Tab -->
-                    <div id="invContent-packaging" class="inv-tab-content" style="display: none;">
+                    <!-- Nutrients Tab -->
+                    <div id="suppliesContent-nutrients" class="supplies-tab-content" style="display: none;">
                         <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
                             <h3>Packaging Materials</h3>
                             <button onclick="showAddPackagingModal()" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add Packaging</button>
@@ -1258,7 +1258,7 @@
                     </div>
 
                     <!-- Equipment Tab -->
-                    <div id="invContent-equipment" class="inv-tab-content" style="display: none;">
+                    <div id="suppliesContent-equipment" class="supplies-tab-content" style="display: none;">
                         <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
                             <h3>Equipment</h3>
                             <button onclick="logMaintenance()" style="padding: 8px 16px; background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">Log Maintenance</button>
@@ -1283,10 +1283,10 @@
                         </div>
                     </div>
 
-                    <!-- Supplies Tab -->
-                    <div id="invContent-supplies" class="inv-tab-content" style="display: none;">
+                    <!-- Lab Supplies Tab -->
+                    <div id="suppliesContent-lab" class="supplies-tab-content" style="display: none;">
                         <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
-                            <h3>Supplies</h3>
+                            <h3>Lab Supplies</h3>
                             <button onclick="recordSupplyUsage()" style="padding: 8px 16px; background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">Record Usage</button>
                         </div>
                         <div class="table-container">
@@ -3219,27 +3219,27 @@
         });
 
         // ===================================================================
-        // INVENTORY MANAGEMENT FUNCTIONS
+        // FARM SUPPLIES & OPERATIONS FUNCTIONS
         // ===================================================================
         
         const INVENTORY_API = 'http://localhost:8000/api/inventory';
         
-        function showInventoryTab(tab) {
+        function showSuppliesTab(tab) {
             // Update tab buttons
-            document.querySelectorAll('.inv-tab').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`invTab-${tab}`).classList.add('active');
+            document.querySelectorAll('.supplies-tab').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`suppliesTab-${tab}`).classList.add('active');
             
             // Update tab content
-            document.querySelectorAll('.inv-tab-content').forEach(content => content.style.display = 'none');
-            document.getElementById(`invContent-${tab}`).style.display = 'block';
+            document.querySelectorAll('.supplies-tab-content').forEach(content => content.style.display = 'none');
+            document.getElementById(`suppliesContent-${tab}`).style.display = 'block';
             
             // Load data for active tab
             switch(tab) {
-                case 'seeds': loadSeeds(); break;
-                case 'packaging': loadPackaging(); break;
+                case 'planting': loadSeeds(); break;
                 case 'nutrients': loadNutrients(); break;
+                case 'packaging': loadPackaging(); break;
                 case 'equipment': loadEquipment(); break;
-                case 'supplies': loadSupplies(); break;
+                case 'lab': loadSupplies(); break;
             }
         }
 
