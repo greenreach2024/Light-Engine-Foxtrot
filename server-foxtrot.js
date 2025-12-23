@@ -13399,23 +13399,28 @@ app.post('/api/farm/auth/logout', asyncHandler(async (req, res) => {
 app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
   const { farmId } = req.params;
   
-  // Verify authentication
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      status: 'error',
-      message: 'Authentication required'
-    });
-  }
+  // Allow demo farms (LOCAL-FARM and GR-00001) without authentication
+  const isDemoFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001');
   
-  const token = authHeader.substring(7);
-  const session = global.farmAdminSessions?.get(token);
-  
-  if (!session || session.farmId !== farmId) {
-    return res.status(403).json({
-      status: 'error',
-      message: 'Access denied'
-    });
+  if (!isDemoFarm) {
+    // Verify authentication for non-demo farms
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Authentication required'
+      });
+    }
+    
+    const token = authHeader.substring(7);
+    const session = global.farmAdminSessions?.get(token);
+    
+    if (!session || session.farmId !== farmId) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Access denied'
+      });
+    }
   }
   
   // Mock activity data (in production, fetch from database)
@@ -13533,17 +13538,22 @@ app.get('/api/billing/usage/:farmId', asyncHandler(async (req, res) => {
   
   console.log(`[billing] GET /api/billing/usage/${farmId} called`);
   
-  // Verify authentication
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    const session = global.farmAdminSessions?.get(token);
-    
-    if (!session || session.farmId !== farmId) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Access denied'
-      });
+  // Allow demo farms (LOCAL-FARM and GR-00001) without authentication
+  const isDemoFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001');
+  
+  if (!isDemoFarm) {
+    // Verify authentication for non-demo farms
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const session = global.farmAdminSessions?.get(token);
+      
+      if (!session || session.farmId !== farmId) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'Access denied'
+        });
+      }
     }
   }
   
