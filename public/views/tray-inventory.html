@@ -347,6 +347,15 @@
       box-shadow: 0 2px 8px rgba(139, 92, 246, 0.5);
     }
 
+    .action-btn.red {
+      background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .action-btn.red:active {
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+    }
+
     .action-icon {
       font-size: 3rem;
       line-height: 1;
@@ -706,6 +715,37 @@
     ::-webkit-scrollbar-thumb:hover {
       background: rgba(148, 163, 184, 0.5);
     }
+
+    /* QA Checkpoint Styles */
+    .checkpoint-btn {
+      background: rgba(30, 41, 59, 0.8);
+      border: 2px solid rgba(52, 211, 153, 0.3);
+      border-radius: 12px;
+      padding: 1.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      color: #f8fafc;
+      text-align: center;
+    }
+
+    .checkpoint-btn:hover {
+      background: rgba(52, 211, 153, 0.2);
+      border-color: rgba(52, 211, 153, 0.6);
+      transform: translateY(-2px);
+    }
+
+    .checkpoint-btn:active {
+      transform: translateY(0);
+    }
+
+    .qa-step {
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
@@ -783,6 +823,14 @@
             <div class="action-text">
               <div>View Inventory</div>
               <div class="action-subtitle">Current & 48hr Forecast</div>
+            </div>
+          </button>
+          
+          <button class="action-btn red" onclick="openQACheckpoint()">
+            <span class="action-icon"></span>
+            <div class="action-text">
+              <div>QA Checkpoint</div>
+              <div class="action-subtitle">Record Quality Check</div>
             </div>
           </button>
         </div>
@@ -886,6 +934,135 @@
     </div>
   </div>
 
+  <!-- QA Checkpoint Modal -->
+  <div id="qaModal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-header">
+        <h2>Quality Assurance Checkpoint</h2>
+        <button class="close-btn" onclick="closeQACheckpoint()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Step 1: Select Batch -->
+        <div id="qaStep1" class="qa-step">
+          <h3 style="margin-bottom: 1.5rem; color: #60a5fa;">Step 1: Select Batch</h3>
+          <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; margin-bottom: 0.5rem; color: #94a3b8;">Batch ID</label>
+            <input type="text" id="qaBatchId" placeholder="Enter Batch ID or scan QR" style="width: 100%; padding: 1rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(52, 211, 153, 0.3); color: #f8fafc; font-size: 1rem;">
+          </div>
+          <button class="button button-primary" onclick="loadBatchForQA()">Load Batch</button>
+        </div>
+
+        <!-- Step 2: Select Checkpoint Type -->
+        <div id="qaStep2" class="qa-step" style="display: none;">
+          <h3 style="margin-bottom: 1.5rem; color: #60a5fa;">Step 2: Select Checkpoint</h3>
+          <div id="batchInfo" style="background: rgba(30, 41, 59, 0.8); padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid rgba(52, 211, 153, 0.3);"></div>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <button class="checkpoint-btn" onclick="selectCheckpoint('SEEDING')">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
+              <div style="font-weight: 600;">Seeding</div>
+            </button>
+            <button class="checkpoint-btn" onclick="selectCheckpoint('GERMINATION')">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
+              <div style="font-weight: 600;">Germination</div>
+            </button>
+            <button class="checkpoint-btn" onclick="selectCheckpoint('TRANSPLANT')">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
+              <div style="font-weight: 600;">Transplant</div>
+            </button>
+            <button class="checkpoint-btn" onclick="selectCheckpoint('GROWTH_MIDPOINT')">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
+              <div style="font-weight: 600;">Growth Midpoint</div>
+            </button>
+            <button class="checkpoint-btn" onclick="selectCheckpoint('PRE_HARVEST')">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
+              <div style="font-weight: 600;">Pre-Harvest</div>
+            </button>
+            <button class="checkpoint-btn" onclick="selectCheckpoint('POST_HARVEST')">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
+              <div style="font-weight: 600;">Post-Harvest</div>
+            </button>
+            <button class="checkpoint-btn" onclick="selectCheckpoint('PACKING')">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
+              <div style="font-weight: 600;">Packing</div>
+            </button>
+            <button class="checkpoint-btn" onclick="selectCheckpoint('PRE_SHIPMENT')">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
+              <div style="font-weight: 600;">Pre-Shipment</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 3: QA Form -->
+        <div id="qaStep3" class="qa-step" style="display: none;">
+          <h3 style="margin-bottom: 1.5rem; color: #60a5fa;">Step 3: Quality Check</h3>
+          
+          <div style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid rgba(59, 130, 246, 0.3);">
+            <h4 style="color: #60a5fa; margin-bottom: 1rem;">QA Standards</h4>
+            <div id="qaStandards" style="color: #cbd5e1; line-height: 1.8;"></div>
+          </div>
+
+          <form id="qaForm" onsubmit="submitQACheckpoint(event)">
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; color: #94a3b8;">Inspector Name</label>
+              <input type="text" name="inspector" required placeholder="Your name" style="width: 100%; padding: 1rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(52, 211, 153, 0.3); color: #f8fafc; font-size: 1rem;">
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; color: #94a3b8;">Result</label>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+                <button type="button" class="result-btn" data-result="PASS" onclick="selectResult('PASS')" style="background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; color: #10b981; padding: 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                  Pass
+                </button>
+                <button type="button" class="result-btn" data-result="PASS_WITH_NOTES" onclick="selectResult('PASS_WITH_NOTES')" style="background: rgba(245, 158, 11, 0.2); border: 2px solid #f59e0b; color: #f59e0b; padding: 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                  Pass w/ Notes
+                </button>
+                <button type="button" class="result-btn" data-result="FAIL" onclick="selectResult('FAIL')" style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; color: #ef4444; padding: 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                  Fail
+                </button>
+                <button type="button" class="result-btn" data-result="PENDING" onclick="selectResult('PENDING')" style="background: rgba(107, 114, 128, 0.2); border: 2px solid #6b7280; color: #9ca3af; padding: 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                  Pending
+                </button>
+              </div>
+              <input type="hidden" name="result" id="qaResult" required>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; color: #94a3b8;">Notes</label>
+              <textarea name="notes" rows="4" placeholder="Observations, measurements, or issues..." style="width: 100%; padding: 1rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(52, 211, 153, 0.3); color: #f8fafc; font-size: 1rem; font-family: inherit; resize: vertical;"></textarea>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; color: #94a3b8;">Photo (Optional)</label>
+              <input type="file" name="photo" accept="image/*" capture="environment" style="width: 100%; padding: 1rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(52, 211, 153, 0.3); color: #f8fafc; font-size: 1rem;">
+              <div id="photoPreview" style="margin-top: 1rem; display: none;">
+                <img id="previewImage" style="max-width: 100%; border-radius: 8px;">
+              </div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+              <label style="display: block; margin-bottom: 0.5rem; color: #94a3b8;">Metrics (JSON format, optional)</label>
+              <textarea name="metrics" rows="2" placeholder='{"germination_rate": 95.5, "avg_height_cm": 8.2}' style="width: 100%; padding: 1rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(52, 211, 153, 0.3); color: #f8fafc; font-size: 0.9rem; font-family: monospace; resize: vertical;"></textarea>
+            </div>
+
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+              <button type="button" class="button button-secondary" onclick="backToCheckpointSelect()">Back</button>
+              <button type="submit" class="button button-primary">Submit Checkpoint</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Success Message -->
+        <div id="qaSuccess" class="qa-step" style="display: none; text-align: center;">
+          <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;"></div>
+          <h3 style="color: #10b981; margin-bottom: 1rem;">Checkpoint Recorded Successfully</h3>
+          <p style="color: #cbd5e1; margin-bottom: 2rem;" id="successMessage"></p>
+          <button class="button button-primary" onclick="resetQAModal()">Record Another</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Load QR Code Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -895,6 +1072,11 @@
     let scannedData = null;
     let html5QrCode = null;
     let currentChecklistType = 'daily';
+    
+    // QA State
+    let currentQABatch = null;
+    let currentQACheckpoint = null;
+    let selectedQAResult = null;
     
     // Checklists Data
     const checklists = {
@@ -965,6 +1147,238 @@
     function closeChecklistModal() {
       document.getElementById('checklistModal').classList.remove('active');
     }
+
+    // === QA CHECKPOINT FUNCTIONS ===
+    const QA_BACKEND_URL = window.location.origin;
+
+    function openQACheckpoint() {
+      resetQAModal();
+      document.getElementById('qaModal').classList.add('active');
+    }
+
+    function closeQACheckpoint() {
+      document.getElementById('qaModal').classList.remove('active');
+      resetQAModal();
+    }
+
+    function resetQAModal() {
+      currentQABatch = null;
+      currentQACheckpoint = null;
+      selectedQAResult = null;
+      
+      document.getElementById('qaStep1').style.display = 'block';
+      document.getElementById('qaStep2').style.display = 'none';
+      document.getElementById('qaStep3').style.display = 'none';
+      document.getElementById('qaSuccess').style.display = 'none';
+      
+      document.getElementById('qaBatchId').value = '';
+      document.getElementById('qaForm').reset();
+      document.getElementById('qaResult').value = '';
+      
+      // Reset result buttons
+      document.querySelectorAll('.result-btn').forEach(btn => {
+        btn.style.opacity = '0.6';
+        btn.style.transform = 'scale(1)';
+      });
+    }
+
+    async function loadBatchForQA() {
+      const batchId = document.getElementById('qaBatchId').value.trim();
+      if (!batchId) {
+        alert('Please enter a Batch ID');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${QA_BACKEND_URL}/api/traceability/batches/${batchId}`);
+        const data = await response.json();
+        
+        if (data.ok && data.batch) {
+          currentQABatch = data.batch;
+          
+          // Display batch info
+          document.getElementById('batchInfo').innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+              <div>
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.25rem;">Batch ID</div>
+                <div style="color: #f8fafc; font-weight: 600;">${data.batch.batch_id}</div>
+              </div>
+              <div>
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.25rem;">Crop</div>
+                <div style="color: #f8fafc; font-weight: 600;">${data.batch.crop} - ${data.batch.variety}</div>
+              </div>
+              <div>
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.25rem;">Quantity</div>
+                <div style="color: #f8fafc; font-weight: 600;">${data.batch.quantity} plants</div>
+              </div>
+              <div>
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.25rem;">Status</div>
+                <div style="color: #10b981; font-weight: 600; text-transform: capitalize;">${data.batch.status}</div>
+              </div>
+              <div>
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.25rem;">Location</div>
+                <div style="color: #f8fafc; font-weight: 600;">${data.batch.location}</div>
+              </div>
+              <div>
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.25rem;">Created</div>
+                <div style="color: #f8fafc; font-weight: 600;">${new Date(data.batch.created_at).toLocaleDateString()}</div>
+              </div>
+            </div>
+          `;
+          
+          // Show step 2
+          document.getElementById('qaStep1').style.display = 'none';
+          document.getElementById('qaStep2').style.display = 'block';
+        } else {
+          alert('Batch not found. Please check the ID and try again.');
+        }
+      } catch (error) {
+        console.error('Error loading batch:', error);
+        alert('Error loading batch information');
+      }
+    }
+
+    async function selectCheckpoint(checkpointType) {
+      currentQACheckpoint = checkpointType;
+      
+      // Load QA standards for this checkpoint
+      try {
+        const response = await fetch(`${QA_BACKEND_URL}/api/quality/standards/${checkpointType}`);
+        const data = await response.json();
+        
+        if (data.ok && data.standards) {
+          document.getElementById('qaStandards').innerHTML = `
+            <ul style="list-style: none; padding: 0; margin: 0;">
+              ${data.standards.criteria.map(criterion => `
+                <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(100, 116, 139, 0.3);">
+                   ${criterion}
+                </li>
+              `).join('')}
+            </ul>
+          `;
+        }
+      } catch (error) {
+        console.error('Error loading standards:', error);
+      }
+      
+      // Show step 3
+      document.getElementById('qaStep2').style.display = 'none';
+      document.getElementById('qaStep3').style.display = 'block';
+    }
+
+    function backToCheckpointSelect() {
+      document.getElementById('qaStep3').style.display = 'none';
+      document.getElementById('qaStep2').style.display = 'block';
+      document.getElementById('qaForm').reset();
+      selectedQAResult = null;
+    }
+
+    function selectResult(result) {
+      selectedQAResult = result;
+      document.getElementById('qaResult').value = result;
+      
+      // Visual feedback
+      document.querySelectorAll('.result-btn').forEach(btn => {
+        if (btn.dataset.result === result) {
+          btn.style.opacity = '1';
+          btn.style.transform = 'scale(1.05)';
+        } else {
+          btn.style.opacity = '0.6';
+          btn.style.transform = 'scale(1)';
+        }
+      });
+    }
+
+    // Photo preview
+    document.addEventListener('DOMContentLoaded', () => {
+      const photoInput = document.querySelector('input[name="photo"]');
+      if (photoInput) {
+        photoInput.addEventListener('change', (event) => {
+          const file = event.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              document.getElementById('previewImage').src = e.target.result;
+              document.getElementById('photoPreview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+      }
+    });
+
+    async function submitQACheckpoint(event) {
+      event.preventDefault();
+      
+      if (!selectedQAResult) {
+        alert('Please select a result (Pass/Fail/etc)');
+        return;
+      }
+
+      const formData = new FormData(event.target);
+      const photoFile = formData.get('photo');
+      
+      // Convert photo to base64 if present
+      let photoData = null;
+      if (photoFile && photoFile.size > 0) {
+        photoData = await fileToBase64(photoFile);
+      }
+
+      // Parse metrics JSON if present
+      let metrics = null;
+      const metricsStr = formData.get('metrics');
+      if (metricsStr && metricsStr.trim()) {
+        try {
+          metrics = JSON.parse(metricsStr);
+        } catch (e) {
+          alert('Invalid JSON format in metrics field');
+          return;
+        }
+      }
+
+      const checkpointData = {
+        batch_id: currentQABatch.batch_id,
+        checkpoint_type: currentQACheckpoint,
+        inspector: formData.get('inspector'),
+        result: selectedQAResult,
+        notes: formData.get('notes') || '',
+        photo_data: photoData,
+        metrics: metrics
+      };
+
+      try {
+        const response = await fetch(`${QA_BACKEND_URL}/api/quality/checkpoints/record`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(checkpointData)
+        });
+        const data = await response.json();
+        
+        if (data.ok) {
+          document.getElementById('successMessage').textContent = 
+            `Checkpoint ${data.checkpoint.checkpoint_id} recorded for ${currentQABatch.batch_id}`;
+          
+          document.getElementById('qaStep3').style.display = 'none';
+          document.getElementById('qaSuccess').style.display = 'block';
+        } else {
+          alert('Error recording checkpoint: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error submitting QA checkpoint:', error);
+        alert('Error submitting checkpoint');
+      }
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // === END QA FUNCTIONS ===
 
     // Load Checklist in Modal
     function loadChecklistInModal() {
