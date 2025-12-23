@@ -131,7 +131,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://code.responsivevoice.org", "https://web.squarecdn.com"], // Note: unsafe-inline/eval needed for dynamic UI
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://code.responsivevoice.org", "https://web.squarecdn.com", "https://cdn.jsdelivr.net"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
@@ -13083,12 +13083,13 @@ app.get('/api/admin/farms/:farmId', createDemoModeHandler(), asyncHandler(async 
   const registry = loadFarmRegistry();
   const farmConfig = registry.farms.find(f => f.farmId === farmId);
   
-  if (!farmConfig) {
+  // LOCAL-FARM and GR-00001 use demo data, not registry
+  if (!farmConfig && farmId !== 'LOCAL-FARM' && farmId !== 'GR-00001') {
     return res.status(404).json({ error: 'Farm not found' });
   }
   
-  // Check if this is GR-00001 (demo farm) and load detailed data
-  if (farmId === 'GR-00001') {
+  // Check if this is GR-00001 or LOCAL-FARM (demo farm) and load detailed data
+  if (farmId === 'GR-00001' || farmId === 'LOCAL-FARM') {
     try {
       const demoDataPath = path.join(__dirname, 'public/data/demo-farm-data.json');
       const demoData = JSON.parse(fs.readFileSync(demoDataPath, 'utf8'));
