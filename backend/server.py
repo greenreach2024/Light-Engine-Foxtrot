@@ -48,6 +48,7 @@ from backend.auth_routes import router as auth_router
 from backend.inventory_routes import router as inventory_router
 from backend.inventory_management import router as inventory_management_router
 from backend.sustainability_esg import router as sustainability_router
+from backend.grower_management import router as grower_management_router
 from backend.automation import AutomationEngine, lux_balancing_rule, occupancy_rule
 from backend.config import EnvironmentConfig, LightingFixture, load_config
 from backend.device_discovery import (
@@ -261,6 +262,10 @@ LOGGER.info("📦 Advanced inventory management routes loaded (seeds, packaging,
 # Sustainability & ESG Dashboard (Enterprise ERP)
 app.include_router(sustainability_router, prefix="/api/sustainability", tags=["sustainability"])
 LOGGER.info("🌱 Sustainability & ESG dashboard routes loaded (energy, water, carbon, waste tracking)")
+
+# Grower Management (Multi-Tenant Network)
+app.include_router(grower_management_router, prefix="/api/growers", tags=["grower-management"])
+LOGGER.info("👥 Grower management routes loaded (network, contracts, performance, invitations)")
 
 
 def _require_state(name: str) -> Any:
