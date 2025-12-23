@@ -144,6 +144,66 @@
             }
         }
 
+        /* Inventory Tab Styles */
+        .inv-tab {
+            background: transparent;
+            border: none;
+            padding: 12px 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .inv-tab:hover {
+            color: var(--text-primary);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        .inv-tab.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        .inv-tab-content {
+            display: none;
+        }
+
+        .alert-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .alert-critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid #ef4444;
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+            border: 1px solid #f59e0b;
+        }
+
+        .alert-low {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid #3b82f6;
+        }
+
+        .alert-normal {
+            background: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+            border: 1px solid #10b981;
+        }
+
         .main-layout {
             display: grid;
             grid-template-columns: 260px 1fr;
@@ -893,6 +953,14 @@
 
                 <div class="nav-section">
                     <div class="nav-section-title">Enterprise ERP</div>
+                    <a href="#inventory-mgmt" class="nav-item" data-section="inventory-mgmt">
+                        <span class="nav-item-icon">■</span>
+                        Inventory Management
+                    </a>
+                    <a href="#sustainability" class="nav-item" data-section="sustainability">
+                        <span class="nav-item-icon">■</span>
+                        Sustainability & ESG
+                    </a>
                     <a href="#traceability" class="nav-item" data-section="traceability">
                         <span class="nav-item-icon">■</span>
                         Traceability
@@ -1072,6 +1140,359 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Management Section -->
+            <div id="section-inventory-mgmt" class="content-section" style="display: none;">
+                <div class="header">
+                    <h1>Advanced Inventory Management</h1>
+                </div>
+
+                <!-- Inventory Dashboard -->
+                <div class="stats-grid" style="margin-bottom: 24px;">
+                    <div class="stat-card" style="border-left: 4px solid #f44336;">
+                        <div class="stat-value" id="criticalAlerts">0</div>
+                        <div class="stat-label">Critical Alerts</div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #ff9800;">
+                        <div class="stat-value" id="warningAlerts">0</div>
+                        <div class="stat-label">Warnings</div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #4caf50;">
+                        <div class="stat-value" id="totalInventoryValue">$0</div>
+                        <div class="stat-label">Total Value</div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #2196f3;">
+                        <div class="stat-value" id="maintenanceDue">0</div>
+                        <div class="stat-label">Maintenance Due</div>
+                    </div>
+                </div>
+
+                <!-- Inventory Tabs -->
+                <div class="card">
+                    <div style="border-bottom: 1px solid var(--border); padding: 16px; display: flex; gap: 16px;">
+                        <button onclick="showInventoryTab('seeds')" id="invTab-seeds" class="inv-tab active">Seeds</button>
+                        <button onclick="showInventoryTab('packaging')" id="invTab-packaging" class="inv-tab">Packaging</button>
+                        <button onclick="showInventoryTab('nutrients')" id="invTab-nutrients" class="inv-tab">Nutrients</button>
+                        <button onclick="showInventoryTab('equipment')" id="invTab-equipment" class="inv-tab">Equipment</button>
+                        <button onclick="showInventoryTab('supplies')" id="invTab-supplies" class="inv-tab">Supplies</button>
+                    </div>
+
+                    <!-- Seeds Tab -->
+                    <div id="invContent-seeds" class="inv-tab-content">
+                        <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Seed Inventory</h3>
+                            <button onclick="showAddSeedModal()" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add Seed</button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Variety</th>
+                                        <th>Quantity</th>
+                                        <th>Germination Rate</th>
+                                        <th>Expiration</th>
+                                        <th>Alert</th>
+                                        <th>Supplier</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="seedsList">
+                                    <tr><td colspan="7" style="text-align: center; padding: 40px;">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Packaging Tab -->
+                    <div id="invContent-packaging" class="inv-tab-content" style="display: none;">
+                        <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Packaging Materials</h3>
+                            <button onclick="showAddPackagingModal()" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add Packaging</button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Stock Level</th>
+                                        <th>Reorder Point</th>
+                                        <th>Status</th>
+                                        <th>Cost/Unit</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="packagingList">
+                                    <tr><td colspan="6" style="text-align: center; padding: 40px;">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Nutrients Tab -->
+                    <div id="invContent-nutrients" class="inv-tab-content" style="display: none;">
+                        <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Nutrient Solutions</h3>
+                            <button onclick="recordNutrientUsage()" style="padding: 8px 16px; background: linear-gradient(135deg, #2196F3 0%, #1976d2 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">Record Usage</button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Volume Remaining</th>
+                                        <th>Total Volume</th>
+                                        <th>Percentage</th>
+                                        <th>Concentration</th>
+                                        <th>Expiration</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nutrientsList">
+                                    <tr><td colspan="7" style="text-align: center; padding: 40px;">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Equipment Tab -->
+                    <div id="invContent-equipment" class="inv-tab-content" style="display: none;">
+                        <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Equipment</h3>
+                            <button onclick="logMaintenance()" style="padding: 8px 16px; background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">Log Maintenance</button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Category</th>
+                                        <th>Status</th>
+                                        <th>Last Maintenance</th>
+                                        <th>Next Maintenance</th>
+                                        <th>Days Until</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="equipmentList">
+                                    <tr><td colspan="7" style="text-align: center; padding: 40px;">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Supplies Tab -->
+                    <div id="invContent-supplies" class="inv-tab-content" style="display: none;">
+                        <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Supplies</h3>
+                            <button onclick="recordSupplyUsage()" style="padding: 8px 16px; background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">Record Usage</button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Quantity</th>
+                                        <th>Unit</th>
+                                        <th>Reorder Threshold</th>
+                                        <th>Status</th>
+                                        <th>Last Used</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="suppliesList">
+                                    <tr><td colspan="7" style="text-align: center; padding: 40px;">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reorder Alerts Card -->
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <h2>Reorder Alerts</h2>
+                    </div>
+                    <div id="reorderAlertsList" style="padding: 16px;">
+                        Loading alerts...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sustainability & ESG Section -->
+            <div id="section-sustainability" class="content-section" style="display: none;">
+                <div class="header">
+                    <h1>Sustainability & ESG Dashboard</h1>
+                    <div class="header-actions">
+                        <button onclick="exportESGReport()" style="padding: 8px 16px; background: linear-gradient(135deg, #2196F3 0%, #1976d2 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">Export ESG Report</button>
+                    </div>
+                </div>
+
+                <!-- ESG Score Card -->
+                <div class="card" style="margin-bottom: 24px;">
+                    <div style="padding: 32px; text-align: center;">
+                        <div style="font-size: 48px; font-weight: bold; color: #4caf50; margin-bottom: 8px;" id="esgScore">-</div>
+                        <div style="font-size: 24px; color: var(--text-secondary); margin-bottom: 16px;" id="esgGrade">-</div>
+                        <div style="display: flex; justify-content: center; gap: 32px; margin-top: 24px;">
+                            <div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">Energy</div>
+                                <div style="font-size: 20px; font-weight: bold;" id="energyScore">-</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">Water</div>
+                                <div style="font-size: 20px; font-weight: bold;" id="waterScore">-</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">Nutrients</div>
+                                <div style="font-size: 20px; font-weight: bold;" id="nutrientsScore">-</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">Waste</div>
+                                <div style="font-size: 20px; font-weight: bold;" id="wasteScore">-</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">Carbon</div>
+                                <div style="font-size: 20px; font-weight: bold;" id="carbonScore">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Environmental Metrics Grid -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 24px;">
+                    <!-- Energy Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Energy Usage (30 days)</h3>
+                        </div>
+                        <div style="padding: 16px;">
+                            <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="totalEnergy">-</div>
+                            <div style="color: var(--text-secondary); margin-bottom: 16px;">Total kWh</div>
+                            <div style="display: flex; gap: 16px;">
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Renewable</div>
+                                    <div style="font-size: 18px; font-weight: bold; color: #4caf50;" id="renewablePercent">-</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Carbon (kg)</div>
+                                    <div style="font-size: 18px; font-weight: bold;" id="energyCarbon">-</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Cost (CAD)</div>
+                                    <div style="font-size: 18px; font-weight: bold;" id="energyCost">-</div>
+                                </div>
+                            </div>
+                            <canvas id="energyChart" style="margin-top: 16px; max-height: 200px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Water Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Water Usage (30 days)</h3>
+                        </div>
+                        <div style="padding: 16px;">
+                            <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="totalWater">-</div>
+                            <div style="color: var(--text-secondary); margin-bottom: 16px;">Total Liters</div>
+                            <div style="display: flex; gap: 16px;">
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Recycling</div>
+                                    <div style="font-size: 18px; font-weight: bold; color: #2196f3;" id="waterRecycling">-</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Savings (CAD)</div>
+                                    <div style="font-size: 18px; font-weight: bold;" id="waterSavings">-</div>
+                                </div>
+                            </div>
+                            <canvas id="waterChart" style="margin-top: 16px; max-height: 200px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Carbon Footprint Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Carbon Footprint (30 days)</h3>
+                        </div>
+                        <div style="padding: 16px;">
+                            <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="totalCarbon">-</div>
+                            <div style="color: var(--text-secondary); margin-bottom: 16px;">Total kg CO2</div>
+                            <div style="display: flex; gap: 16px;">
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Daily Avg</div>
+                                    <div style="font-size: 18px; font-weight: bold;" id="dailyCarbon">-</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Annual Projection</div>
+                                    <div style="font-size: 18px; font-weight: bold;" id="annualCarbon">-</div>
+                                </div>
+                            </div>
+                            <canvas id="carbonChart" style="margin-top: 16px; max-height: 200px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Waste Management Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Waste Management (30 days)</h3>
+                        </div>
+                        <div style="padding: 16px;">
+                            <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="totalWaste">-</div>
+                            <div style="color: var(--text-secondary); margin-bottom: 16px;">Total kg</div>
+                            <div style="display: flex; gap: 16px;">
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Diversion Rate</div>
+                                    <div style="font-size: 18px; font-weight: bold; color: #4caf50;" id="diversionRate">-</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Landfill</div>
+                                    <div style="font-size: 18px; font-weight: bold;" id="landfillWaste">-</div>
+                                </div>
+                            </div>
+                            <canvas id="wasteChart" style="margin-top: 16px; max-height: 200px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sustainability Goals -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Sustainability Goals</h2>
+                    </div>
+                    <div style="padding: 16px;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                            <div>
+                                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                    <span>Renewable Energy</span>
+                                    <span id="renewableProgress" style="font-weight: bold;">-</span>
+                                </div>
+                                <div style="height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden;">
+                                    <div id="renewableBar" style="height: 100%; background: linear-gradient(90deg, #4caf50, #45a049); width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Target: 40%</div>
+                            </div>
+                            <div>
+                                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                    <span>Water Recycling</span>
+                                    <span id="recyclingProgress" style="font-weight: bold;">-</span>
+                                </div>
+                                <div style="height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden;">
+                                    <div id="recyclingBar" style="height: 100%; background: linear-gradient(90deg, #2196f3, #1976d2); width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Target: 95%</div>
+                            </div>
+                            <div>
+                                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                    <span>Waste Diversion</span>
+                                    <span id="diversionProgress" style="font-weight: bold;">-</span>
+                                </div>
+                                <div style="height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden;">
+                                    <div id="diversionBar" style="height: 100%; background: linear-gradient(90deg, #ff9800, #f57c00); width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Target: 90%</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2746,6 +3167,21 @@
                 });
             });
             
+            // Listen for inventory management section
+            document.querySelectorAll('[data-section="inventory-mgmt"]').forEach(link => {
+                link.addEventListener('click', () => {
+                    loadInventoryDashboard();
+                    loadSeeds();
+                });
+            });
+
+            // Listen for sustainability section
+            document.querySelectorAll('[data-section="sustainability"]').forEach(link => {
+                link.addEventListener('click', () => {
+                    loadSustainabilityDashboard();
+                });
+            });
+            
             // Search functionality
             const searchInput = document.getElementById('traceabilitySearch');
             if (searchInput) {
@@ -2756,7 +3192,471 @@
                 });
             }
         });
+
+        // ===================================================================
+        // INVENTORY MANAGEMENT FUNCTIONS
+        // ===================================================================
+        
+        const INVENTORY_API = 'http://localhost:8000/api/inventory';
+        
+        function showInventoryTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.inv-tab').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`invTab-${tab}`).classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.inv-tab-content').forEach(content => content.style.display = 'none');
+            document.getElementById(`invContent-${tab}`).style.display = 'block';
+            
+            // Load data for active tab
+            switch(tab) {
+                case 'seeds': loadSeeds(); break;
+                case 'packaging': loadPackaging(); break;
+                case 'nutrients': loadNutrients(); break;
+                case 'equipment': loadEquipment(); break;
+                case 'supplies': loadSupplies(); break;
+            }
+        }
+
+        async function loadInventoryDashboard() {
+            try {
+                const [dashboardRes, alertsRes] = await Promise.all([
+                    fetch(`${INVENTORY_API}/dashboard`),
+                    fetch(`${INVENTORY_API}/reorder-alerts`)
+                ]);
+                
+                const dashboard = await dashboardRes.json();
+                const alerts = await alertsRes.json();
+                
+                if (dashboard.ok) {
+                    document.getElementById('totalInventoryValue').textContent = 
+                        `$${dashboard.total_value.toLocaleString()}`;
+                    
+                    // Count alerts by severity
+                    let critical = 0, warning = 0;
+                    Object.values(dashboard.alerts_by_category).forEach(items => {
+                        items.forEach(item => {
+                            if (item.alert_level === 'critical') critical++;
+                            else if (item.alert_level === 'warning') warning++;
+                        });
+                    });
+                    
+                    document.getElementById('criticalAlerts').textContent = critical;
+                    document.getElementById('warningAlerts').textContent = warning;
+                    
+                    // Count equipment needing maintenance
+                    const maintenanceDue = Object.values(dashboard.alerts_by_category.equipment || [])
+                        .filter(eq => eq.status === 'maintenance_due' || eq.status === 'maintenance_overdue').length;
+                    document.getElementById('maintenanceDue').textContent = maintenanceDue;
+                }
+                
+                if (alerts.ok) {
+                    displayReorderAlerts(alerts.alerts);
+                }
+            } catch (error) {
+                console.error('Error loading inventory dashboard:', error);
+            }
+        }
+
+        async function loadSeeds() {
+            try {
+                const response = await fetch(`${INVENTORY_API}/seeds/list`);
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    document.getElementById('seedsList').innerHTML = 
+                        '<tr><td colspan=\"7\" style=\"text-align:center;padding:40px;color:var(--text-secondary);\">Error loading seeds</td></tr>';
+                    return;
+                }
+                
+                const tbody = document.getElementById('seedsList');
+                if (data.seeds.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan=\"7\" style=\"text-align:center;padding:40px;color:var(--text-secondary);\">No seeds in inventory</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.seeds.map(seed => `
+                    <tr>
+                        <td>${seed.variety}</td>
+                        <td>${seed.quantity_grams}g</td>
+                        <td>${seed.germination_rate}%</td>
+                        <td>${new Date(seed.expiration_date).toLocaleDateString()}</td>
+                        <td>${getAlertBadge(seed.alert_level, seed.days_until_expiration)}</td>
+                        <td>${seed.supplier}</td>
+                        <td>
+                            <button onclick="editSeed('${seed.seed_id}')" style="padding:4px 8px;background:var(--accent-blue);color:white;border:none;border-radius:4px;cursor:pointer;">Edit</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading seeds:', error);
+            }
+        }
+
+        async function loadPackaging() {
+            try {
+                const response = await fetch(`${INVENTORY_API}/packaging/list`);
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    document.getElementById('packagingList').innerHTML = 
+                        '<tr><td colspan=\"6\" style=\"text-align:center;padding:40px;color:var(--text-secondary);\">Error loading packaging</td></tr>';
+                    return;
+                }
+                
+                const tbody = document.getElementById('packagingList');
+                tbody.innerHTML = data.packaging.map(pkg => `
+                    <tr>
+                        <td>${pkg.name} (${pkg.type})</td>
+                        <td>${pkg.quantity} ${pkg.unit}</td>
+                        <td>${pkg.reorder_point}</td>
+                        <td>${getAlertBadge(pkg.alert_level, pkg.quantity)}</td>
+                        <td>$${pkg.cost_per_unit.toFixed(2)}</td>
+                        <td>
+                            <button onclick="restockPackaging('${pkg.packaging_id}')" style="padding:4px 8px;background:var(--accent-green);color:white;border:none;border-radius:4px;cursor:pointer;">Restock</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading packaging:', error);
+            }
+        }
+
+        async function loadNutrients() {
+            try {
+                const response = await fetch(`${INVENTORY_API}/nutrients/list`);
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    document.getElementById('nutrientsList').innerHTML = 
+                        '<tr><td colspan=\"7\" style=\"text-align:center;padding:40px;color:var(--text-secondary);\">Error loading nutrients</td></tr>';
+                    return;
+                }
+                
+                const tbody = document.getElementById('nutrientsList');
+                tbody.innerHTML = data.nutrients.map(nut => {
+                    const percent = (nut.volume_remaining_ml / nut.volume_ml * 100).toFixed(1);
+                    return `
+                    <tr>
+                        <td>${nut.name} (${nut.type})</td>
+                        <td>${nut.volume_remaining_ml}ml</td>
+                        <td>${nut.volume_ml}ml</td>
+                        <td>
+                            <div style="width:100px;height:20px;background:var(--bg-elevated);border-radius:4px;overflow:hidden;">
+                                <div style="width:${percent}%;height:100%;background:linear-gradient(90deg,#4caf50,#45a049);"></div>
+                            </div>
+                            ${percent}%
+                        </td>
+                        <td>${nut.concentration}</td>
+                        <td>${new Date(nut.expiration_date).toLocaleDateString()}</td>
+                        <td>
+                            <button onclick="showRecordNutrientUsage('${nut.nutrient_id}')" style="padding:4px 8px;background:var(--accent-blue);color:white;border:none;border-radius:4px;cursor:pointer;">Record</button>
+                        </td>
+                    </tr>
+                `}).join('');
+            } catch (error) {
+                console.error('Error loading nutrients:', error);
+            }
+        }
+
+        async function loadEquipment() {
+            try {
+                const response = await fetch(`${INVENTORY_API}/equipment/list`);
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    document.getElementById('equipmentList').innerHTML = 
+                        '<tr><td colspan=\"7\" style=\"text-align:center;padding:40px;color:var(--text-secondary);\">Error loading equipment</td></tr>';
+                    return;
+                }
+                
+                const tbody = document.getElementById('equipmentList');
+                tbody.innerHTML = data.equipment.map(eq => `
+                    <tr>
+                        <td>${eq.name}</td>
+                        <td>${eq.category}</td>
+                        <td>${getStatusBadge(eq.status)}</td>
+                        <td>${new Date(eq.last_maintenance).toLocaleDateString()}</td>
+                        <td>${new Date(eq.next_maintenance).toLocaleDateString()}</td>
+                        <td>${eq.days_until_maintenance > 0 ? eq.days_until_maintenance : 'OVERDUE'}</td>
+                        <td>
+                            <button onclick="showLogMaintenance('${eq.equipment_id}')" style="padding:4px 8px;background:var(--accent-yellow);color:white;border:none;border-radius:4px;cursor:pointer;">Log</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading equipment:', error);
+            }
+        }
+
+        async function loadSupplies() {
+            try {
+                const response = await fetch(`${INVENTORY_API}/supplies/list`);
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    document.getElementById('suppliesList').innerHTML = 
+                        '<tr><td colspan=\"7\" style=\"text-align:center;padding:40px;color:var(--text-secondary);\">Error loading supplies</td></tr>';
+                    return;
+                }
+                
+                const tbody = document.getElementById('suppliesList');
+                tbody.innerHTML = data.supplies.map(sup => `
+                    <tr>
+                        <td>${sup.name}</td>
+                        <td>${sup.quantity}</td>
+                        <td>${sup.unit}</td>
+                        <td>${sup.reorder_threshold}</td>
+                        <td>${getAlertBadge(sup.alert_level, sup.quantity)}</td>
+                        <td>${sup.last_used ? new Date(sup.last_used).toLocaleDateString() : 'Never'}</td>
+                        <td>
+                            <button onclick="showRecordSupplyUsage('${sup.supply_id}')" style=\"padding:4px 8px;background:var(--accent-purple);color:white;border:none;border-radius:4px;cursor:pointer;\">Use</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading supplies:', error);
+            }
+        }
+
+        function displayReorderAlerts(alerts) {
+            const container = document.getElementById('reorderAlertsList');
+            if (alerts.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-secondary);text-align:center;">No reorder alerts</p>';
+                return;
+            }
+            
+            container.innerHTML = alerts.map(alert => `
+                <div style="padding:12px;margin-bottom:8px;background:var(--bg-secondary);border-left:4px solid ${
+                    alert.alert_level === 'critical' ? '#ef4444' : 
+                    alert.alert_level === 'warning' ? '#f59e0b' : '#3b82f6'
+                };border-radius:4px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <strong>${alert.item_name}</strong> - ${alert.category}
+                            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">${alert.message}</div>
+                        </div>
+                        <span class="alert-${alert.alert_level}">${alert.alert_level.toUpperCase()}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getAlertBadge(level, value) {
+            const badges = {
+                'critical': `<span class="alert-badge alert-critical">CRITICAL ${value >= 0 ? '(' + value + ')' : ''}</span>`,
+                'warning': `<span class="alert-badge alert-warning">WARNING ${value >= 0 ? '(' + value + ')' : ''}</span>`,
+                'low': `<span class="alert-badge alert-low">LOW</span>`,
+                'normal': `<span class="alert-badge alert-normal">OK</span>`
+            };
+            return badges[level] || badges.normal;
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                'operational': '<span class="alert-badge alert-normal">Operational</span>',
+                'maintenance_due': '<span class="alert-badge alert-warning">Due Soon</span>',
+                'maintenance_overdue': '<span class="alert-badge alert-critical">OVERDUE</span>',
+                'out_of_service': '<span class="alert-badge alert-critical">Out of Service</span>'
+            };
+            return badges[status] || status;
+        }
+
+        // Placeholder functions for modals
+        function showAddSeedModal() { alert('Add Seed modal - to be implemented'); }
+        function showAddPackagingModal() { alert('Add Packaging modal - to be implemented'); }
+        function editSeed(id) { alert('Edit seed: ' + id); }
+        function restockPackaging(id) { alert('Restock packaging: ' + id); }
+        function showRecordNutrientUsage(id) { alert('Record nutrient usage: ' + id); }
+        function showLogMaintenance(id) { alert('Log maintenance: ' + id); }
+        function showRecordSupplyUsage(id) { alert('Record supply usage: ' + id); }
+        function recordNutrientUsage() { alert('Record Nutrient Usage - to be implemented'); }
+        function logMaintenance() { alert('Log Maintenance - to be implemented'); }
+        function recordSupplyUsage() { alert('Record Supply Usage - to be implemented'); }
+
+        // ===================================================================
+        // SUSTAINABILITY DASHBOARD FUNCTIONS
+        // ===================================================================
+        
+        const SUSTAINABILITY_API = 'http://localhost:8000/api/sustainability';
+        let energyChart, waterChart, carbonChart, wasteChart;
+
+        async function loadSustainabilityDashboard() {
+            try {
+                const [esgRes, energyRes, waterRes, carbonRes, wasteRes, trendsRes] = await Promise.all([
+                    fetch(`${SUSTAINABILITY_API}/esg-report`),
+                    fetch(`${SUSTAINABILITY_API}/energy/usage?days=30`),
+                    fetch(`${SUSTAINABILITY_API}/water/usage?days=30`),
+                    fetch(`${SUSTAINABILITY_API}/carbon-footprint?days=30`),
+                    fetch(`${SUSTAINABILITY_API}/waste/tracking?days=30`),
+                    fetch(`${SUSTAINABILITY_API}/trends?days=30`)
+                ]);
+                
+                const esg = await esgRes.json();
+                const energy = await energyRes.json();
+                const water = await waterRes.json();
+                const carbon = await carbonRes.json();
+                const waste = await wasteRes.json();
+                const trends = await trendsRes.json();
+                
+                if (esg.ok) {
+                    displayESGScore(esg);
+                    displayEnergyData(energy);
+                    displayWaterData(water);
+                    displayCarbonData(carbon);
+                    displayWasteData(waste);
+                    displaySustainabilityGoals(esg);
+                    
+                    if (trends.ok) {
+                        createSustainabilityCharts(trends.trends);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading sustainability dashboard:', error);
+            }
+        }
+
+        function displayESGScore(data) {
+            document.getElementById('esgScore').textContent = data.esg_score.total_score;
+            document.getElementById('esgGrade').textContent = `Grade: ${data.esg_score.grade}`;
+            document.getElementById('energyScore').textContent = data.esg_score.breakdown.energy;
+            document.getElementById('waterScore').textContent = data.esg_score.breakdown.water;
+            document.getElementById('nutrientsScore').textContent = data.esg_score.breakdown.nutrients;
+            document.getElementById('wasteScore').textContent = data.esg_score.breakdown.waste;
+            document.getElementById('carbonScore').textContent = data.esg_score.breakdown.carbon;
+        }
+
+        function displayEnergyData(data) {
+            if (!data.ok) return;
+            document.getElementById('totalEnergy').textContent = `${data.total_kwh.toLocaleString()} kWh`;
+            document.getElementById('renewablePercent').textContent = 
+                `${((data.by_source.solar?.kwh || 0) / data.total_kwh * 100).toFixed(1)}%`;
+            document.getElementById('energyCarbon').textContent = `${data.total_carbon_kg.toFixed(0)} kg`;
+            document.getElementById('energyCost').textContent = `$${data.total_cost_cad.toFixed(2)}`;
+        }
+
+        function displayWaterData(data) {
+            if (!data.ok) return;
+            document.getElementById('totalWater').textContent = `${data.total_liters_used.toLocaleString()} L`;
+            document.getElementById('waterRecycling').textContent = `${data.average_efficiency_percent.toFixed(1)}%`;
+            document.getElementById('waterSavings').textContent = 
+                `$${(data.total_liters_recycled * 0.003).toFixed(2)}`;
+        }
+
+        function displayCarbonData(data) {
+            if (!data.ok) return;
+            document.getElementById('totalCarbon').textContent = `${data.total_carbon_kg.toFixed(0)} kg`;
+            document.getElementById('dailyCarbon').textContent = `${data.daily_average_kg.toFixed(1)} kg/day`;
+            document.getElementById('annualCarbon').textContent = 
+                `${(data.daily_average_kg * 365).toFixed(0)} kg/year`;
+        }
+
+        function displayWasteData(data) {
+            if (!data.ok) return;
+            document.getElementById('totalWaste').textContent = `${data.total_waste_kg.toFixed(1)} kg`;
+            document.getElementById('diversionRate').textContent = `${data.diversion_rate_percent.toFixed(1)}%`;
+            document.getElementById('landfillWaste').textContent = 
+                `${(data.total_waste_kg - data.total_diverted_kg).toFixed(1)} kg`;
+        }
+
+        function displaySustainabilityGoals(data) {
+            const renewable = data.esg_score.metrics.renewable_energy_percent;
+            const recycling = data.esg_score.metrics.water_recycling_percent;
+            const diversion = data.esg_score.metrics.waste_diversion_percent;
+            
+            document.getElementById('renewableProgress').textContent = `${renewable.toFixed(1)}%`;
+            document.getElementById('renewableBar').style.width = `${(renewable / 40) * 100}%`;
+            
+            document.getElementById('recyclingProgress').textContent = `${recycling.toFixed(1)}%`;
+            document.getElementById('recyclingBar').style.width = `${(recycling / 95) * 100}%`;
+            
+            document.getElementById('diversionProgress').textContent = `${diversion.toFixed(1)}%`;
+            document.getElementById('diversionBar').style.width = `${(diversion / 90) * 100}%`;
+        }
+
+        function createSustainabilityCharts(trends) {
+            const labels = trends.map(t => new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            
+            // Energy Chart
+            const energyCtx = document.getElementById('energyChart');
+            if (energyChart) energyChart.destroy();
+            energyChart = new Chart(energyCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Energy (kWh)',
+                        data: trends.map(t => t.energy_kwh),
+                        borderColor: '#4caf50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+            
+            // Water Chart
+            const waterCtx = document.getElementById('waterChart');
+            if (waterChart) waterChart.destroy();
+            waterChart = new Chart(waterCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Water (L)',
+                        data: trends.map(t => t.water_liters),
+                        borderColor: '#2196f3',
+                        backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+            
+            // Carbon Chart
+            const carbonCtx = document.getElementById('carbonChart');
+            if (carbonChart) carbonChart.destroy();
+            carbonChart = new Chart(carbonCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Carbon (kg)',
+                        data: trends.map(t => t.carbon_kg),
+                        borderColor: '#ff9800',
+                        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        async function exportESGReport() {
+            try {
+                const response = await fetch(`${SUSTAINABILITY_API}/esg-report`);
+                const data = await response.json();
+                
+                if (data.ok) {
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `esg-report-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                console.error('Error exporting ESG report:', error);
+                alert('Error exporting ESG report');
+            }
+        }
     </script>
+
+    <!-- Chart.js for sustainability charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
     <!-- Intro Card Component -->
     <script src="/js/intro-card.js?v=5"></script>
