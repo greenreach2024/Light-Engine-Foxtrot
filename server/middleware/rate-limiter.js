@@ -97,28 +97,28 @@ export function startRateLimitCleanup(intervalMs = 60000) {
 // Strict rate limiter for authentication endpoints
 export const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 login attempts per 15 minutes
+  max: 10, // 10 login attempts per 15 minutes
   message: 'Too many login attempts, please try again later.',
 });
 
 // Standard rate limiter for API endpoints
 export const apiRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per 15 minutes
+  max: 500, // 500 requests per 15 minutes
   message: 'Too many requests, please try again later.',
 });
 
 // Relaxed rate limiter for read-only endpoints
 export const readRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // 300 requests per 15 minutes
+  max: 1000, // 1000 requests per 15 minutes
   message: 'Too many requests, please try again later.',
 });
 
 // Strict rate limiter for write operations
 export const writeRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // 30 write requests per 15 minutes
+  max: 100, // 100 write requests per 15 minutes
   message: 'Too many write requests, please try again later.',
 });
 
