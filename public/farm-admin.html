@@ -2829,19 +2829,44 @@
             };
 
             try {
-                const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/plans/create`, {
+                // Step 1: Create production plan
+                const planResponse = await fetch(`${PLANNING_BACKEND_URL}/api/planning/plans/create`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(planData)
                 });
-                const data = await response.json();
+                const planData_result = await planResponse.json();
                 
-                if (data.ok) {
-                    alert(`Production plan created for ${crop}`);
+                if (!planData_result.ok) {
+                    alert('Error creating plan from recommendation');
+                    return;
+                }
+
+                // Step 2: Automatically create batch from the same recommendation
+                const batchData = {
+                    crop_name: crop,
+                    variety: '',
+                    seed_source: 'Standard',
+                    quantity: quantity,
+                    location: 'To be assigned',
+                    expected_harvest_date: seedDate,
+                    notes: `Auto-created from AI recommendation (Plan: ${planData_result.plan_id})`
+                };
+
+                const batchResponse = await fetch(`${BACKEND_URL}/api/traceability/batches/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(batchData)
+                });
+                const batchResult = await batchResponse.json();
+                
+                if (batchResult.ok) {
+                    alert(`✅ Created plan AND batch ${batchResult.batch_id} for ${crop}\n\nReady to seed ${quantity} units!`);
                     await loadProductionPlans();
                     await loadPlanningStats();
+                    await loadBatches(); // Refresh batch list
                 } else {
-                    alert('Error creating plan from recommendation');
+                    alert(`⚠️ Plan created but batch creation failed.\nPlease create batch manually.`);
                 }
             } catch (error) {
                 console.error('Error applying recommendation:', error);

@@ -6985,6 +6985,79 @@ app.get('/api/wholesale/orders/pending', asyncHandler(async (req, res) => {
   }
 }));
 
+// Get order history for demand forecasting
+app.get('/api/wholesale/orders/history', asyncHandler(async (req, res) => {
+  try {
+    const { days = 60 } = req.query;
+    const wholesale = await getWholesaleIntegration();
+    
+    // Get all completed orders
+    const allOrders = [];
+    const completedStatuses = ['completed', 'picked_up', 'payment_captured'];
+    
+    for (const orderId of wholesale.state.allOrders || []) {
+      const order = await wholesale.getOrder(orderId);
+      if (order && completedStatuses.includes(order.status)) {
+        allOrders.push(order);
+      }
+    }
+    
+    // Filter by date range
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
+    
+    const recentOrders = allOrders.filter(order => {
+      const orderDate = new Date(order.created_at || order.order_date);
+      return orderDate >= cutoffDate;
+    });
+    
+    // Extract sales data by crop
+    const salesHistory = [];
+    for (const order of recentOrders) {
+      const orderDate = new Date(order.created_at || order.order_date).toISOString().split('T')[0];
+      
+      // Process each item in the order
+      for (const item of order.items || []) {
+        salesHistory.push({
+          date: orderDate,
+          crop: item.product_name || item.crop_name,
+          quantity: item.quantity || 0,
+          unit: item.unit || 'kg'
+        });
+      }
+      
+      // Also check sub_orders if present (multi-farm orders)
+      if (order.sub_orders) {
+        for (const subOrder of order.sub_orders) {
+          for (const item of subOrder.items || []) {
+            salesHistory.push({
+              date: orderDate,
+              crop: item.product_name || item.crop_name,
+              quantity: item.quantity || 0,
+              unit: item.unit || 'kg'
+            });
+          }
+        }
+      }
+    }
+    
+    res.json({
+      ok: true,
+      sales_history: salesHistory,
+      total_orders: recentOrders.length,
+      days: parseInt(days)
+    });
+  } catch (error) {
+    console.error('[wholesale] Order history error:', error);
+    res.json({
+      ok: true,
+      sales_history: [],
+      total_orders: 0,
+      days: parseInt(req.query.days || 60)
+    });
+  }
+}));
+
 // Fulfill order
 app.post('/api/wholesale/orders/:orderId/fulfill', asyncHandler(async (req, res) => {
   const { orderId } = req.params;

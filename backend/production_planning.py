@@ -9,8 +9,29 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from enum import Enum
 import statistics
+import httpx
 
 router = APIRouter()
+
+# Node.js server URL for fetching real data
+NODE_API_URL = "http://localhost:8091"
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+async def fetch_wholesale_order_history(days: int = 60) -> List[Dict]:
+    """Fetch real wholesale order history from Node.js server"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{NODE_API_URL}/api/wholesale/orders/history?days={days}")
+            data = response.json()
+            if data.get("ok") and data.get("sales_history"):
+                return data["sales_history"]
+            return []
+    except Exception as e:
+        print(f"[Planning] Could not fetch wholesale history: {e}")
+        return []
 
 # ============================================================================
 # MODELS
@@ -108,10 +129,26 @@ class PlanningDatabase:
         self.plans = {}
         self.schedules = {}
         self.sales_history = []
+        self.real_wholesale_data_loaded = False
         self._init_demo_data()
     
+    async def load_real_wholesale_data(self):
+        """Load real wholesale order data and merge with demo data"""
+        if self.real_wholesale_data_loaded:
+            return
+        
+        real_orders = await fetch_wholesale_order_history(days=60)
+        
+        if real_orders:
+            print(f"[Planning] Loaded {len(real_orders)} real wholesale orders")
+            # Add real orders to history (they take precedence)
+            self.sales_history.extend(real_orders)
+            self.real_wholesale_data_loaded = True
+        else:
+            print("[Planning] No real wholesale orders found, using demo data only")
+    
     def _init_demo_data(self):
-        """Initialize with demo sales data"""
+        """Initialize with demo sales data (fallback/supplement)"""
         # Simulate 60 days of sales history
         today = datetime.now()
         
@@ -147,6 +184,9 @@ db = PlanningDatabase()
 @router.get("/api/planning/demand-forecast")
 async def get_demand_forecast(crop: Optional[str] = None, horizon: str = "monthly"):
     """Get demand forecast based on sales history"""
+    
+    # Load real wholesale order data
+    await db.load_real_wholesale_data()
     
     # Filter sales by crop if specified
     sales = db.sales_history
@@ -210,7 +250,9 @@ async def get_demand_forecast(crop: Optional[str] = None, horizon: str = "monthl
         "ok": True,
         "forecasts": forecasts,
         "data_points": len(sales),
-        "horizon": horizon
+        "horizon": horizon,
+        "data_source": "real_wholesale_orders" if db.real_wholesale_data_loaded else "demo_data",
+        "real_orders_count": len([s for s in db.sales_history if s not in db.sales_history[:len(db.sales_history)//2]]) if db.real_wholesale_data_loaded else 0
     }
 
 @router.post("/api/planning/schedule/generate")
@@ -404,6 +446,9 @@ async def list_production_plans(status: Optional[str] = None):
 @router.get("/api/planning/recommendations")
 async def get_planting_recommendations():
     """Get AI-driven planting recommendations"""
+    
+    # Load real wholesale order data
+    await db.load_real_wholesale_data()
     
     # Get demand forecast
     forecast_response = await get_demand_forecast(horizon="monthly")
