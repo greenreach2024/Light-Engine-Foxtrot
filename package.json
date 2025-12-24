@@ -18,7 +18,9 @@
     "test:notifications": "node scripts/test-notifications.js",
     "test:overselling": "node scripts/test-overselling-prevention.js",
     "cleanup:reservations": "node scripts/cleanup-expired-reservations.js",
-    "reports:weekly": "node scripts/send-weekly-reports.js"
+    "reports:weekly": "node scripts/send-weekly-reports.js",
+    "build:edge": "webpack --config webpack.edge.config.cjs",
+    "build:edge:analyze": "webpack --config webpack.edge.config.cjs --profile --json > dist/stats.json"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.956.0",
@@ -52,7 +54,15 @@
   "author": "Peter Gilbert",
   "license": "MIT",
   "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
     "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2"
+    "@types/react-dom": "^19.2.2",
+    "babel-loader": "^10.0.0",
+    "javascript-obfuscator": "^5.1.0",
+    "terser-webpack-plugin": "^5.3.16",
+    "webpack": "^5.104.1",
+    "webpack-cli": "^6.0.1",
+    "webpack-obfuscator": "^3.6.0"
   }
 }
