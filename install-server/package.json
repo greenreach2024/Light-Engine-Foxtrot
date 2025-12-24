@@ -1,0 +1,30 @@
+{
+  "name": "lightengine-install-server",
+  "version": "1.0.0",
+  "description": "Light Engine installation server - serves binaries, checksums, and install script",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development nodemon server.js",
+    "test": "node test-server.js"
+  },
+  "keywords": [
+    "lightengine",
+    "installation",
+    "distribution"
+  ],
+  "author": "GreenReach Inc.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.18.2",
+    "morgan": "^1.10.0",
+    "compression": "^1.7.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
