@@ -23,6 +23,11 @@ budget.json
 cors-config.json
 lifecycle-policy.json
 
+# License system - PRIVATE KEYS ONLY
+config/greenreach-private.pem
+config/demo-license.json
+/etc/lightengine/
+
 # Logs & backups
 *.log
 nohup.out

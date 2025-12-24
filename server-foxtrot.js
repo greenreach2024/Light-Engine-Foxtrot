@@ -74,8 +74,10 @@ import lightsDB from './lib/lights-database.js';
 import ScheduleExecutor from './lib/schedule-executor.js';
 import { solveSpectrum, toPWM } from './lib/spectral-solver.js';
 import { mountMLRoutes } from './routes/ml.js';
+import { validateLicense } from './lib/license-manager.js';
 import healthRouter from './routes/health.js';
 import adminHealthRouter from './routes/admin-health.js';
+import licenseRouter from './routes/license.js';
 import wholesaleSyncRouter from './routes/wholesale-sync.js';
 import wholesaleReservationsRouter, { cleanupExpiredReservations } from './routes/wholesale-reservations.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
@@ -9385,6 +9387,15 @@ app.get('/api/harvest', (req, res) => {
  * - /api/ml/effects: Learn device effects on RH/temp using Ridge regression
  */
 mountMLRoutes(app);
+
+/**
+ * License Management Routes
+ * - GET /api/license: Get license info
+ * - POST /api/license/validate: Force license validation
+ * - GET /api/license/features: Get available features
+ * - GET /api/license/check/:feature: Check if feature is enabled
+ */
+app.use('/api', licenseRouter);
 
 /**
  * AI Health Monitoring Routes
@@ -21360,13 +21371,30 @@ async function startServer() {
   console.log('[charlie] Controller:', getController());
   console.log('[charlie] Forwarder:', getForwarder());
 
-  SERVER = app.listen(PORT, '0.0.0.0', () => {
+  SERVER = app.listen(PORT, '0.0.0.0', async () => {
     const address = SERVER.address();
     console.log(`[charlie]  Server successfully started on ${address.address}:${address.port}`);
     console.log(`[charlie] running http://127.0.0.1:${PORT} → ${getController()}`);
     console.log(`[charlie] Demo mode check: isDemoMode() = ${isDemoMode()}`);
     if (isDemoMode()) {
       console.log(`[charlie] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
+    }
+    
+    // Validate license (Task #2 - License Validation)
+    try {
+      const licenseResult = await validateLicense();
+      if (licenseResult.valid) {
+        console.log(`[License] ✅ Valid license - Reason: ${licenseResult.reason}`);
+        if (licenseResult.license) {
+          console.log(`[License] Farm: ${licenseResult.license.farmId} (${licenseResult.license.tier})`);
+          console.log(`[License] Features: ${licenseResult.license.features?.join(', ') || 'all'}`);
+        }
+      } else {
+        console.error(`[License] ❌ License validation failed: ${licenseResult.reason}`);
+        console.error('[License] ⚠️  Some features may be restricted');
+      }
+    } catch (error) {
+      console.error('[License] ❌ License check error:', error.message);
     }
     
     // Initialize database (Task #3 - Database Persistence)
