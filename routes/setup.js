@@ -1,0 +1,353 @@
+/**
+ * Setup Activation API Routes
+ * Handles edge device activation, license provisioning, and initial configuration
+ */
+
+import express from 'express';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+
+const execAsync = promisify(exec);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const router = express.Router();
+
+// In-memory store of activation codes (in production, this would be a database)
+// Format: { code: { farmId, tier, expiresAt, used: false } }
+const activationCodes = new Map();
+
+/**
+ * Generate hardware fingerprint for the device
+ */
+async function generateFingerprint() {
+  try {
+    const networkInterfaces = os.networkInterfaces();
+    let mac = '';
+    
+    // Get first non-internal MAC address
+    for (const [name, interfaces] of Object.entries(networkInterfaces)) {
+      for (const iface of interfaces) {
+        if (!iface.internal && iface.mac && iface.mac !== '00:00:00:00:00:00') {
+          mac = iface.mac;
+          break;
+        }
+      }
+      if (mac) break;
+    }
+    
+    // Get CPU info
+    const cpus = os.cpus();
+    const cpuModel = cpus[0]?.model || '';
+    
+    // Get disk UUID (Linux only)
+    let diskUuid = '';
+    try {
+      const { stdout } = await execAsync('lsblk -no UUID / | head -1');
+      diskUuid = stdout.trim();
+    } catch (error) {
+      console.warn('[Setup] Could not get disk UUID:', error.message);
+    }
+    
+    // Create fingerprint hash
+    const fingerprintData = `${mac}|${cpuModel}|${diskUuid}`;
+    const hash = crypto.createHash('sha256').update(fingerprintData).digest('hex');
+    
+    return hash;
+  } catch (error) {
+    console.error('[Setup] Error generating fingerprint:', error);
+    throw new Error('Failed to generate hardware fingerprint');
+  }
+}
+
+/**
+ * Sign license data with private key
+ */
+function signLicense(licenseData, privateKeyPath) {
+  try {
+    const privateKey = fs.readFileSync(privateKeyPath, 'utf-8');
+    const sign = crypto.createSign('RSA-SHA256');
+    sign.update(JSON.stringify(licenseData));
+    const signature = sign.sign(privateKey, 'base64');
+    return signature;
+  } catch (error) {
+    console.error('[Setup] Error signing license:', error);
+    throw new Error('Failed to sign license');
+  }
+}
+
+/**
+ * POST /api/setup/activate
+ * Activate edge device with activation code
+ */
+router.post('/activate', async (req, res) => {
+  try {
+    const { activationCode, farmName, timezone, networkConfig } = req.body;
+    
+    if (!activationCode) {
+      return res.status(400).json({ error: 'Activation code required' });
+    }
+    
+    // Verify activation code
+    const activation = activationCodes.get(activationCode.toUpperCase());
+    if (!activation) {
+      return res.status(404).json({ error: 'Invalid activation code' });
+    }
+    
+    if (activation.used) {
+      return res.status(400).json({ error: 'Activation code already used' });
+    }
+    
+    if (new Date() > new Date(activation.expiresAt)) {
+      return res.status(400).json({ error: 'Activation code expired' });
+    }
+    
+    // Generate hardware fingerprint
+    const fingerprint = await generateFingerprint();
+    
+    // Create license
+    const licenseId = `LIC-${Date.now()}`;
+    const licenseData = {
+      licenseId,
+      farmId: activation.farmId,
+      farmName: farmName || activation.farmName,
+      tier: activation.tier,
+      features: getFeaturesByTier(activation.tier),
+      hardwareFingerprint: fingerprint,
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year
+      activatedWith: activationCode
+    };
+    
+    // Sign license
+    const privateKeyPath = path.join(__dirname, '../config/greenreach-private.pem');
+    if (!fs.existsSync(privateKeyPath)) {
+      return res.status(500).json({ 
+        error: 'Server configuration error',
+        message: 'Private key not found. Cannot sign license.'
+      });
+    }
+    
+    const signature = signLicense(licenseData, privateKeyPath);
+    const signedLicense = { ...licenseData, signature };
+    
+    // Save license to /etc/lightengine/license.json
+    const licenseDir = '/etc/lightengine';
+    const licensePath = path.join(licenseDir, 'license.json');
+    
+    // Create directory if it doesn't exist (requires root)
+    if (!fs.existsSync(licenseDir)) {
+      try {
+        fs.mkdirSync(licenseDir, { recursive: true, mode: 0o700 });
+      } catch (error) {
+        console.error('[Setup] Failed to create license directory:', error);
+        return res.status(500).json({
+          error: 'Permission denied',
+          message: 'Cannot create /etc/lightengine directory. Run as root.'
+        });
+      }
+    }
+    
+    // Write license file
+    try {
+      fs.writeFileSync(licensePath, JSON.stringify(signedLicense, null, 2), { mode: 0o600 });
+    } catch (error) {
+      console.error('[Setup] Failed to write license file:', error);
+      return res.status(500).json({
+        error: 'Permission denied',
+        message: 'Cannot write license file. Run as root.'
+      });
+    }
+    
+    // Mark activation code as used
+    activation.used = true;
+    activation.usedAt = new Date().toISOString();
+    activation.deviceFingerprint = fingerprint;
+    
+    // Save network config if provided
+    if (networkConfig) {
+      const configPath = '/opt/lightengine/config/network.json';
+      try {
+        fs.writeFileSync(configPath, JSON.stringify(networkConfig, null, 2));
+      } catch (error) {
+        console.warn('[Setup] Failed to save network config:', error);
+      }
+    }
+    
+    console.log(`[Setup] Device activated successfully`);
+    console.log(`  License ID: ${licenseId}`);
+    console.log(`  Farm: ${licenseData.farmName} (${licenseData.farmId})`);
+    console.log(`  Tier: ${licenseData.tier}`);
+    console.log(`  Fingerprint: ${fingerprint.substring(0, 16)}...`);
+    
+    res.json({
+      ok: true,
+      message: 'Device activated successfully',
+      license: {
+        licenseId,
+        farmId: licenseData.farmId,
+        farmName: licenseData.farmName,
+        tier: licenseData.tier,
+        features: licenseData.features,
+        expiresAt: licenseData.expiresAt
+      },
+      accessUrl: `http://${getDeviceIP()}:8091`,
+      qrCode: generateQRCodeUrl(licenseData.farmId)
+    });
+    
+  } catch (error) {
+    console.error('[Setup] Activation error:', error);
+    res.status(500).json({
+      error: 'Activation failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/setup/hardware
+ * Get hardware information for display
+ */
+router.get('/hardware', async (req, res) => {
+  try {
+    const fingerprint = await generateFingerprint();
+    const networkInterfaces = os.networkInterfaces();
+    
+    // Get primary interface info
+    let primaryInterface = null;
+    let ipAddress = null;
+    
+    for (const [name, interfaces] of Object.entries(networkInterfaces)) {
+      for (const iface of interfaces) {
+        if (!iface.internal && iface.family === 'IPv4') {
+          primaryInterface = name;
+          ipAddress = iface.address;
+          break;
+        }
+      }
+      if (primaryInterface) break;
+    }
+    
+    res.json({
+      ok: true,
+      hardware: {
+        fingerprint: fingerprint.substring(0, 16) + '...',
+        fullFingerprint: fingerprint,
+        hostname: os.hostname(),
+        platform: os.platform(),
+        arch: os.arch(),
+        cpus: os.cpus().length,
+        memory: (os.totalmem() / 1024 / 1024 / 1024).toFixed(2) + ' GB',
+        primaryInterface,
+        ipAddress
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to get hardware info',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/setup/generate-code
+ * Generate activation code (admin only - for testing)
+ */
+router.post('/generate-code', (req, res) => {
+  const { farmId, farmName, tier, expiresInDays } = req.body;
+  
+  if (!farmId || !tier) {
+    return res.status(400).json({ error: 'farmId and tier required' });
+  }
+  
+  // Generate unique code
+  const code = `GR-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const expiresAt = new Date(Date.now() + (expiresInDays || 30) * 24 * 60 * 60 * 1000);
+  
+  activationCodes.set(code, {
+    farmId,
+    farmName: farmName || farmId,
+    tier,
+    expiresAt: expiresAt.toISOString(),
+    used: false,
+    createdAt: new Date().toISOString()
+  });
+  
+  res.json({
+    ok: true,
+    activationCode: code,
+    farmId,
+    tier,
+    expiresAt: expiresAt.toISOString()
+  });
+});
+
+/**
+ * GET /api/setup/status
+ * Check if device is already activated
+ */
+router.get('/status', (req, res) => {
+  const licensePath = '/etc/lightengine/license.json';
+  const isActivated = fs.existsSync(licensePath);
+  
+  if (isActivated) {
+    try {
+      const license = JSON.parse(fs.readFileSync(licensePath, 'utf-8'));
+      res.json({
+        ok: true,
+        activated: true,
+        license: {
+          farmId: license.farmId,
+          farmName: license.farmName,
+          tier: license.tier,
+          expiresAt: license.expiresAt
+        }
+      });
+    } catch (error) {
+      res.json({
+        ok: true,
+        activated: true,
+        error: 'Cannot read license file'
+      });
+    }
+  } else {
+    res.json({
+      ok: true,
+      activated: false
+    });
+  }
+});
+
+// Helper functions
+function getFeaturesByTier(tier) {
+  const features = {
+    'inventory-only': ['inventory', 'scheduling', 'wholesale', 'reporting'],
+    'full': ['inventory', 'scheduling', 'wholesale', 'reporting', 'automation', 'climate_control', 'sensors'],
+    'enterprise': ['*'] // All features
+  };
+  return features[tier] || [];
+}
+
+function getDeviceIP() {
+  const networkInterfaces = os.networkInterfaces();
+  for (const interfaces of Object.values(networkInterfaces)) {
+    for (const iface of interfaces) {
+      if (!iface.internal && iface.family === 'IPv4') {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+function generateQRCodeUrl(farmId) {
+  const deviceIP = getDeviceIP();
+  const url = `http://${deviceIP}:8091`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+}
+
+export default router;

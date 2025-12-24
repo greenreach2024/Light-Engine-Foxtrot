@@ -97,6 +97,7 @@ import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
+import setupRouter from './routes/setup.js';
 import auditLogger, { auditMiddleware, createAuditRoutes } from './lib/wholesale/audit-logger.js';
 import { checkAndControlEnvironment } from './controller/checkAndControlEnvironment.js';
 import { coreAllocator } from './controller/coreAllocator.js';
@@ -9412,6 +9413,15 @@ app.use('/api', licenseRouter);
  * - /api/health/insights: Get health insights with scores and recommendations
  */
 app.use('/api/health', healthRouter);
+
+/**
+ * Edge Device Setup & Activation Routes
+ * - POST /api/setup/activate: Activate device with activation code
+ * - GET /api/setup/hardware: Get hardware information
+ * - GET /api/setup/status: Check activation status
+ * - POST /api/setup/generate-code: Generate activation code (admin only)
+ */
+app.use('/api/setup', setupRouter);
 
 /**
  * GreenReach Admin - Federated Health Monitoring Routes
