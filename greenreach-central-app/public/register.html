@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register New Farm - GreenReach Central</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 3rem;
+    }
+    
+    h1 {
+      font-size: 2rem;
+      color: #1a202c;
+      margin-bottom: 0.5rem;
+    }
+    
+    .subtitle {
+      color: #718096;
+      margin-bottom: 2rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    
+    label {
+      display: block;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+      font-size: 0.875rem;
+    }
+    
+    input, select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    
+    input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .help-text {
+      font-size: 0.75rem;
+      color: #718096;
+      margin-top: 0.25rem;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 1rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .result {
+      margin-top: 2rem;
+      padding: 1.5rem;
+      border-radius: 8px;
+      display: none;
+    }
+    
+    .result.success {
+      background: #f0fdf4;
+      border: 2px solid #10b981;
+      display: block;
+    }
+    
+    .result.error {
+      background: #fef2f2;
+      border: 2px solid #ef4444;
+      display: block;
+    }
+    
+    .result-title {
+      font-weight: 600;
+      font-size: 1.125rem;
+      margin-bottom: 1rem;
+    }
+    
+    .success .result-title {
+      color: #10b981;
+    }
+    
+    .error .result-title {
+      color: #ef4444;
+    }
+    
+    .code-box {
+      background: #1a202c;
+      color: #10b981;
+      padding: 1rem;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 1.5rem;
+      text-align: center;
+      letter-spacing: 0.1em;
+      margin: 1rem 0;
+    }
+    
+    .info-item {
+      margin: 0.5rem 0;
+      padding: 0.75rem;
+      background: #f7fafc;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .info-label {
+      font-weight: 600;
+      color: #4a5568;
+    }
+    
+    .info-value {
+      color: #2d3748;
+      font-family: monospace;
+    }
+    
+    .copy-btn {
+      padding: 0.25rem 0.75rem;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    
+    .copy-btn:hover {
+      background: #5568d3;
+    }
+    
+    .instructions {
+      background: #eef2ff;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+    
+    .instructions strong {
+      color: #667eea;
+    }
+    
+    .link {
+      color: #667eea;
+      text-decoration: none;
+      word-break: break-all;
+    }
+    
+    .link:hover {
+      text-decoration: underline;
+    }
+    
+    .error-list {
+      list-style: none;
+      margin: 0.5rem 0;
+    }
+    
+    .error-list li {
+      padding: 0.5rem;
+      background: #fee2e2;
+      border-radius: 4px;
+      margin: 0.25rem 0;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌱 Register New Farm</h1>
+    <p class="subtitle">Provision a new Light Engine instance</p>
+    
+    <form id="registerForm">
+      <div class="form-group">
+        <label for="farmName">Farm Name *</label>
+        <input type="text" id="farmName" required placeholder="e.g., Butterhead Greens Farm">
+        <div class="help-text">Business name for the farm</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="contactEmail">Contact Email *</label>
+        <input type="email" id="contactEmail" required placeholder="contact@farm.com">
+        <div class="help-text">Primary contact for this farm</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="tier">Subscription Tier *</label>
+        <select id="tier" required>
+          <option value="inventory-only">Inventory Only - $49/month</option>
+          <option value="full" selected>Full Automation - $149/month</option>
+          <option value="enterprise">Enterprise - $299/month</option>
+        </select>
+        <div class="help-text">Features and capabilities level</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="deploymentMode">Deployment Mode *</label>
+        <select id="deploymentMode" required>
+          <option value="cloud" selected>Cloud Hosted</option>
+          <option value="edge">Edge Device (On-Premises)</option>
+          <option value="desktop">Desktop Application</option>
+        </select>
+        <div class="help-text">Where the farm will be deployed</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="licenseDuration">License Duration (Days) *</label>
+        <input type="number" id="licenseDuration" value="365" min="1" max="3650" required>
+        <div class="help-text">Standard: 365 days (1 year)</div>
+      </div>
+      
+      <button type="submit" class="btn" id="submitBtn">
+        Register Farm
+      </button>
+    </form>
+    
+    <div class="result" id="result"></div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    const ADMIN_TOKEN = new URLSearchParams(window.location.search).get('token') || 
+                        localStorage.getItem('adminToken') || 
+                        'dev-admin-token-change-in-production';
+    
+    const form = document.getElementById('registerForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const result = document.getElementById('result');
+    
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Registering...';
+      
+      const formData = {
+        farmName: document.getElementById('farmName').value.trim(),
+        contactEmail: document.getElementById('contactEmail').value.trim(),
+        tier: document.getElementById('tier').value,
+        deploymentMode: document.getElementById('deploymentMode').value,
+        licenseDuration: parseInt(document.getElementById('licenseDuration').value)
+      };
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/provisioning/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${ADMIN_TOKEN}`
+          },
+          body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+          showSuccess(data);
+        } else {
+          showError(data);
+        }
+      } catch (error) {
+        showError({ error: 'Network Error', message: error.message });
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Register Farm';
+      }
+    });
+    
+    function showSuccess(data) {
+      const { farm, activation, urls, license } = data;
+      
+      result.className = 'result success';
+      result.innerHTML = `
+        <div class="result-title">✅ Farm Registered Successfully!</div>
+        
+        <div class="info-item">
+          <span class="info-label">Farm ID:</span>
+          <span class="info-value">${farm.id}</span>
+        </div>
+        
+        <div class="info-item">
+          <span class="info-label">Subdomain:</span>
+          <span class="info-value">${farm.subdomain}.greenreach.io</span>
+        </div>
+        
+        <div class="info-item">
+          <span class="info-label">Tier:</span>
+          <span class="info-value">${farm.tier}</span>
+        </div>
+        
+        <p style="margin: 1.5rem 0 0.5rem; font-weight: 600; color: #10b981;">Activation Code:</p>
+        <div class="code-box" id="activationCode">${activation.code}</div>
+        <button class="copy-btn" onclick="copyCode('${activation.code}')">Copy Code</button>
+        
+        <div class="instructions">
+          <p><strong>Next Steps:</strong></p>
+          <p style="margin-top: 0.5rem;">
+            ${farm.deploymentMode === 'cloud' ? 
+              `Visit <a href="${urls.cloud}" class="link" target="_blank">${urls.cloud}</a> and use the activation code to complete setup.` :
+              farm.deploymentMode === 'edge' ?
+              `Run this command on the edge device:<br><code style="display: block; margin-top: 0.5rem; padding: 0.5rem; background: white; border-radius: 4px; font-size: 0.75rem;">${urls.edgeInstall}</code>` :
+              `Download the desktop app and enter the activation code during first launch.`
+            }
+          </p>
+          <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #6366f1;">
+            Activation code expires in 7 days: ${new Date(activation.expiresAt).toLocaleString()}
+          </p>
+        </div>
+        
+        <div style="margin-top: 1rem;">
+          <p style="font-weight: 600; margin-bottom: 0.5rem;">Access URLs:</p>
+          <p style="font-size: 0.875rem; margin: 0.25rem 0;">
+            <strong>Cloud:</strong> <a href="${urls.cloud}" class="link" target="_blank">${urls.cloud}</a>
+          </p>
+          <p style="font-size: 0.875rem; margin: 0.25rem 0;">
+            <strong>Activation:</strong> <a href="${urls.activation}" class="link" target="_blank">${urls.activation}</a>
+          </p>
+        </div>
+        
+        <div style="margin-top: 1.5rem;">
+          <button class="btn" onclick="location.reload()">Register Another Farm</button>
+        </div>
+      `;
+    }
+    
+    function showError(data) {
+      result.className = 'result error';
+      result.innerHTML = `
+        <div class="result-title">❌ Registration Failed</div>
+        <p style="color: #991b1b; margin-bottom: 1rem;">${data.error || 'Unknown error'}</p>
+        ${data.message ? `<p style="font-size: 0.875rem; color: #7f1d1d;">${data.message}</p>` : ''}
+        ${data.errors ? `
+          <ul class="error-list">
+            ${data.errors.map(err => `<li>${err}</li>`).join('')}
+          </ul>
+        ` : ''}
+      `;
+    }
+    
+    function copyCode(code) {
+      navigator.clipboard.writeText(code).then(() => {
+        alert('Activation code copied to clipboard!');
+      });
+    }
+  </script>
+</body>
+</html>
