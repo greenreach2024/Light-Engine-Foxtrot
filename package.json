@@ -20,7 +20,9 @@
     "cleanup:reservations": "node scripts/cleanup-expired-reservations.js",
     "reports:weekly": "node scripts/send-weekly-reports.js",
     "build:edge": "webpack --config webpack.edge.config.cjs",
-    "build:edge:analyze": "webpack --config webpack.edge.config.cjs --profile --json > dist/stats.json"
+    "build:edge:analyze": "webpack --config webpack.edge.config.cjs --profile --json > dist/stats.json",
+    "build:pkg": "node scripts/build-binaries.js",
+    "build:pkg:test": "node scripts/test-binary.js"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.956.0",
@@ -60,6 +62,7 @@
     "@types/react-dom": "^19.2.2",
     "babel-loader": "^10.0.0",
     "javascript-obfuscator": "^5.1.0",
+    "pkg": "^5.8.1",
     "terser-webpack-plugin": "^5.3.16",
     "webpack": "^5.104.1",
     "webpack-cli": "^6.0.1",
