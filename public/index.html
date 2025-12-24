@@ -3,11 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#10b981">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Light Engine">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Light Engine Foxtrot</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
   <link rel="stylesheet" href="./styles.foxtrot.css?v={{BUILD_TIME}}">
   <link rel="stylesheet" href="./styles/switchbot-manager.css?v={{BUILD_TIME}}">
   <link rel="stylesheet" href="./styles/iot-manager.css?v={{BUILD_TIME}}">
+  <link rel="stylesheet" href="/css/pwa.css?v={{BUILD_TIME}}">
   <!-- Console wrapper for demo mode - loaded FIRST to suppress all console output -->
   <script src="/js/console-wrapper.js?v={{BUILD_TIME}}"></script>
   <script>
@@ -2787,5 +2795,6 @@
   </script>
   <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
   <script src="/js/farm-assistant.js"></script>
+  <script src="/js/pwa-installer.js"></script>
 </body>
 </html>

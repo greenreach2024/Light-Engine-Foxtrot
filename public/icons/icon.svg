@@ -1,0 +1,28 @@
+<!-- SVG icon that can be used as placeholder and scaled to any size -->
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#10b981" rx="80"/>
+  
+  <!-- Light bulb icon -->
+  <g transform="translate(256, 256)">
+    <!-- Bulb -->
+    <path d="M -60 -80 Q -60 -140 0 -140 Q 60 -140 60 -80 Q 60 -20 40 20 L 40 60 L -40 60 L -40 20 Q -60 -20 -60 -80 Z" 
+          fill="white" stroke="white" stroke-width="4"/>
+    
+    <!-- Base -->
+    <rect x="-40" y="60" width="80" height="15" fill="white"/>
+    <rect x="-35" y="75" width="70" height="10" fill="white"/>
+    <rect x="-30" y="85" width="60" height="10" fill="white"/>
+    
+    <!-- Light rays -->
+    <line x1="-100" y1="-80" x2="-120" y2="-80" stroke="white" stroke-width="8" stroke-linecap="round"/>
+    <line x1="100" y1="-80" x2="120" y2="-80" stroke="white" stroke-width="8" stroke-linecap="round"/>
+    <line x1="-80" y1="-120" x2="-95" y2="-135" stroke="white" stroke-width="8" stroke-linecap="round"/>
+    <line x1="80" y1="-120" x2="95" y2="-135" stroke="white" stroke-width="8" stroke-linecap="round"/>
+    <line x1="0" y1="-160" x2="0" y2="-180" stroke="white" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Brand text (optional, small sizes will hide it) -->
+  <text x="256" y="440" font-family="Arial, sans-serif" font-size="48" font-weight="bold" 
+        text-anchor="middle" fill="white">LIGHT ENGINE</text>
+</svg>
