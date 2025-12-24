@@ -75,6 +75,7 @@ import ScheduleExecutor from './lib/schedule-executor.js';
 import { solveSpectrum, toPWM } from './lib/spectral-solver.js';
 import { mountMLRoutes } from './routes/ml.js';
 import { validateLicense } from './lib/license-manager.js';
+import { autoEnforceFeatures, requireFeature } from './server/middleware/feature-flags.js';
 import healthRouter from './routes/health.js';
 import adminHealthRouter from './routes/admin-health.js';
 import licenseRouter from './routes/license.js';
@@ -1917,6 +1918,10 @@ if (RATE_LIMITING_ENABLED) {
   app.use('/api', apiRateLimiter);
   console.log('[Security] ✅ Rate limiting applied to /api routes');
 }
+
+// Apply feature flag enforcement (license-based access control)
+app.use(autoEnforceFeatures());
+console.log('[Security] ✅ Feature flag enforcement enabled');
 
 // Apply audit logging if enabled
 if (AUDIT_LOG_ENABLED) {

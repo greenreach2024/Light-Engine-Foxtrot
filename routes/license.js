@@ -6,6 +6,7 @@
 
 import express from 'express';
 import { validateLicense, getLicenseInfo, hasFeature, getLicenseTier } from '../lib/license-manager.js';
+import { getAvailableFeatures } from '../server/middleware/feature-flags.js';
 
 const router = express.Router();
 
@@ -72,20 +73,13 @@ router.post('/license/validate', async (req, res) => {
  */
 router.get('/license/features', async (req, res) => {
   try {
+    const features = await getAvailableFeatures();
     const info = await getLicenseInfo();
     
-    if (!info) {
-      return res.json({
-        ok: true,
-        tier: 'inventory-only',
-        features: ['inventory', 'scheduling', 'wholesale'],
-      });
-    }
-
     res.json({
       ok: true,
-      tier: info.tier,
-      features: info.features || [],
+      tier: info?.tier || 'inventory-only',
+      features,
     });
   } catch (err) {
     console.error('[License API] Error:', err);
