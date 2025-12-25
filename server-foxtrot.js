@@ -96,6 +96,7 @@ import wholesaleOrdersRouter from './routes/wholesale-orders.js';
 import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
+import { router as migrationRouter, initDb as initMigrationDb } from './routes/migration.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
 import setupRouter from './routes/setup.js';
@@ -9436,6 +9437,17 @@ app.use('/api/health', healthRouter);
  * - GET /api/mdns/status: Get discovery system status
  */
 app.use('/api/mdns', mdnsDiscoveryRouter);
+
+/**
+ * Cloud-to-Edge Migration Routes
+ * - POST /api/migration/export: Export complete farm data from cloud
+ * - GET /api/migration/download/:exportId: Download export package
+ * - POST /api/migration/import: Import data into edge deployment
+ * - POST /api/migration/validate: Validate export data before import
+ * - POST /api/migration/rollback/:rollbackId: Rollback migration to pre-import state
+ * - GET /api/migration/status: Get migration history and status
+ */
+app.use('/api/migration', migrationRouter);
 
 /**
  * Edge Device Setup & Activation Routes
@@ -21466,6 +21478,12 @@ async function startServer() {
         console.log(`[Database] Mode: ${dbResult.mode}`);
         if (dbResult.enabled) {
           console.log('[Database] ✅ PostgreSQL ready for production');
+          
+          // Initialize migration system with database pool
+          if (dbResult.pool) {
+            initMigrationDb(dbResult.pool);
+            console.log('[Migration] ✅ Cloud-to-edge migration system initialized');
+          }
         }
       } catch (error) {
         console.error('[Database] ❌ Initialization error:', error.message);
