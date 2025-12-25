@@ -95,6 +95,7 @@ import wholesaleNetworkRouter from './routes/wholesale/network.js';
 import wholesaleOrdersRouter from './routes/wholesale-orders.js';
 import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
+import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
 import setupRouter from './routes/setup.js';
@@ -1850,9 +1851,20 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Handle SIGTERM and SIGINT gracefully
 let SERVER = null;
+let mdnsAdvertiser = null; // Global mDNS advertiser instance
 async function gracefulShutdown(signal = 'SIGTERM') {
   console.log(`🛑 Received ${signal}, shutting down gracefully`);
   try {
+    // Stop mDNS advertising
+    if (mdnsAdvertiser) {
+      try {
+        mdnsAdvertiser.destroy();
+        console.log('[mDNS] Stopped advertising');
+      } catch (error) {
+        console.error('[mDNS] Shutdown error:', error);
+      }
+    }
+    
     if (scheduleExecutor && typeof scheduleExecutor.stop === 'function') {
       try { await scheduleExecutor.stop(); } catch {}
     }
@@ -9413,6 +9425,17 @@ app.use('/api', licenseRouter);
  * - /api/health/insights: Get health insights with scores and recommendations
  */
 app.use('/api/health', healthRouter);
+
+/**
+ * mDNS Discovery Routes
+ * - GET /api/mdns/discover: Start discovery and return list
+ * - GET /api/mdns/services: Get all discovered services
+ * - GET /api/mdns/services/:name: Get specific service details
+ * - POST /api/mdns/refresh: Restart discovery
+ * - DELETE /api/mdns/services/:name: Remove service from list
+ * - GET /api/mdns/status: Get discovery system status
+ */
+app.use('/api/mdns', mdnsDiscoveryRouter);
 
 /**
  * Edge Device Setup & Activation Routes
@@ -21385,6 +21408,30 @@ async function startServer() {
   }
   console.log('[charlie] Controller:', getController());
   console.log('[charlie] Forwarder:', getForwarder());
+
+  // Initialize mDNS advertiser for edge devices (Task #19)
+  try {
+    const { MDNSAdvertiser } = await import('./lib/mdns-advertiser.js');
+    mdnsAdvertiser = new MDNSAdvertiser({
+      serviceName: 'Light Engine',
+      serviceType: 'http',
+      port: PORT,
+      hostname: 'light-engine',
+      txtRecord: {
+        version: '1.0.0',
+        deployment: process.env.DEPLOYMENT_MODE || 'edge'
+      }
+    });
+    
+    const started = mdnsAdvertiser.start();
+    if (started) {
+      console.log('[mDNS] ✅ Broadcasting as light-engine.local');
+    } else {
+      console.log('[mDNS] ℹ️  mDNS not available (install bonjour-service for local discovery)');
+    }
+  } catch (error) {
+    console.log('[mDNS] ℹ️  mDNS not enabled:', error.message);
+  }
 
   SERVER = app.listen(PORT, '0.0.0.0', async () => {
     const address = SERVER.address();
