@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <title>Edge Device Setup - Light Engine</title>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0f1e; --surface: #111827; --surface-2: #1a2332;
+            --text-primary: #e5e7eb; --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6; --accent-blue-light: #60a5fa;
+            --accent-green: #10b981; --accent-green-light: #6ee7b7;
+            --border: #2d3748; --warning: #f59e0b; --success: #10b981;
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.7; }
+        header { background: rgba(10, 15, 30, 0.8); backdrop-filter: saturate(180%) blur(20px); border-bottom: 2px solid var(--accent-blue); box-shadow: var(--glow-blue); padding: 20px 40px; position: sticky; top: 0; z-index: 100; }
+        nav { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 24px; font-weight: 600; color: var(--accent-blue-light); text-decoration: none; text-shadow: var(--glow-blue); }
+        .nav-links { display: flex; gap: 24px; }
+        .nav-links a { color: var(--text-secondary); text-decoration: none; transition: color 0.3s; }
+        .nav-links a:hover { color: var(--accent-blue-light); }
+        .container { max-width: 1200px; margin: 0 auto; padding: 60px 40px; display: grid; grid-template-columns: 280px 1fr; gap: 60px; }
+        .sidebar { position: sticky; top: 100px; height: fit-content; }
+        .toc { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 24px; }
+        .toc-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--accent-blue-light); }
+        .toc-list { list-style: none; }
+        .toc-list li { margin-bottom: 12px; }
+        .toc-list a { color: var(--text-secondary); text-decoration: none; font-size: 14px; transition: color 0.3s; display: block; }
+        .toc-list a:hover { color: var(--accent-blue-light); }
+        .toc-list a.active { color: var(--accent-green-light); font-weight: 600; }
+        .content { min-width: 0; }
+        h1 { font-size: 48px; margin-bottom: 16px; background: linear-gradient(135deg, var(--accent-blue-light) 0%, var(--accent-green-light) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.6)); }
+        .subtitle { font-size: 20px; color: var(--text-secondary); margin-bottom: 40px; }
+        .badge { display: inline-block; padding: 6px 16px; background: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent-green); border-radius: 12px; font-size: 14px; color: var(--accent-green-light); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; }
+        h2 { font-size: 32px; margin-top: 60px; margin-bottom: 24px; color: var(--accent-blue-light); padding-bottom: 12px; border-bottom: 2px solid var(--border); }
+        h3 { font-size: 24px; margin-top: 40px; margin-bottom: 16px; color: var(--accent-green-light); }
+        p { margin-bottom: 16px; color: var(--text-secondary); }
+        ul, ol { margin-left: 24px; margin-bottom: 16px; }
+        li { margin-bottom: 8px; color: var(--text-secondary); }
+        .alert { padding: 20px; border-radius: 8px; margin: 24px 0; border-left: 4px solid; }
+        .alert-info { background: rgba(59, 130, 246, 0.1); border-color: var(--accent-blue); color: var(--accent-blue-light); }
+        .alert-success { background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--accent-green-light); }
+        .alert-warning { background: rgba(245, 158, 11, 0.1); border-color: var(--warning); color: var(--warning); }
+        .alert-title { font-weight: 600; margin-bottom: 8px; font-size: 16px; }
+        .step-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 24px 0; }
+        .step-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 24px; transition: all 0.3s; }
+        .step-card:hover { border-color: var(--accent-blue); box-shadow: var(--glow-blue); }
+        .step-number { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--accent-blue); color: white; border-radius: 50%; font-weight: 600; margin-bottom: 12px; box-shadow: var(--glow-blue); font-size: 18px; }
+        .step-title { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+        .step-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+        .benefits-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 24px 0; }
+        .benefit-card { background: var(--surface); border: 2px solid var(--border); border-radius: 8px; padding: 20px; }
+        .benefit-title { font-size: 16px; font-weight: 600; color: var(--accent-green-light); margin-bottom: 8px; }
+        .benefit-desc { font-size: 14px; color: var(--text-secondary); }
+        .device-card { background: var(--surface); border: 2px solid var(--accent-green); border-radius: 12px; padding: 24px; margin: 24px 0; box-shadow: var(--glow-green); }
+        .device-name { font-size: 24px; font-weight: 600; color: var(--accent-green-light); margin-bottom: 8px; }
+        .device-specs { list-style: none; margin: 16px 0; }
+        .device-specs li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+        .spec-label { font-weight: 600; color: var(--text-primary); }
+        .spec-value { color: var(--accent-green-light); }
+        footer { background: var(--surface); border-top: 1px solid var(--border); padding: 40px; text-align: center; color: var(--text-secondary); margin-top: 80px; }
+        footer a { color: var(--accent-blue-light); text-decoration: none; }
+        footer a:hover { color: var(--accent-green-light); }
+        @media (max-width: 1024px) { .container { grid-template-columns: 1fr; } .sidebar { position: static; } .benefits-grid, .step-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { h1 { font-size: 36px; } h2 { font-size: 28px; } .nav-links { display: none; } }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/docs/index.html">Documentation</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="toc">
+                <div class="toc-title">Contents</div>
+                <ul class="toc-list">
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#benefits">Why Edge?</a></li>
+                    <li><a href="#hardware">What You Get</a></li>
+                    <li><a href="#installation">Plug & Play Setup</a></li>
+                    <li><a href="#network">Connect to Network</a></li>
+                    <li><a href="#devices">Add Sensors</a></li>
+                    <li><a href="#automation">Recipe Automation</a></li>
+                    <li><a href="#backup">Auto Backups</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="content">
+            <h1 id="overview">Edge Device Setup</h1>
+            <p class="subtitle">Install and configure Symcod W101M industrial touchscreen computer</p>
+            <span class="badge">Complete System</span>
+
+            <div class="alert alert-info">
+                <div class="alert-title">What is an Edge Device?</div>
+                <p style="margin: 0;">The Symcod W101M is an industrial-grade touchscreen computer that runs Light Engine locally at your farm. Provides local control, offline operation, and connects to GreenReach Central for wholesale marketplace access. Complete system - no assembly required.</p>
+            </div>
+
+            <h2 id="benefits">Why Choose Edge Device?</h2>
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <div class="benefit-title">Offline Operation</div>
+                    <div class="benefit-desc">Continues working during internet outages - all control is local</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Local Data Storage</div>
+                    <div class="benefit-desc">All farm data stored locally on device - syncs when online</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">No Monthly Cloud Fees</div>
+                    <div class="benefit-desc">One-time hardware cost - no recurring hosting charges</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Complete Control</div>
+                    <div class="benefit-desc">Full access to system - customize and configure as needed</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">mDNS Discovery</div>
+                    <div class="benefit-desc">Access at farm.local from any device on your network</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Hardware Integration</div>
+                    <div class="benefit-desc">Connect USB sensors, RS-485 controllers, IP cameras directly</div>
+                </div>
+            </div>
+
+            <h2 id="hardware">Hardware Specifications</h2>
+            <div class="device-card">
+                <div class="device-name">Symcod W101M Industrial Computer</div>
+                <p style="margin: 16px 0; color: var(--text-secondary);">Complete all-in-one system - no assembly required</p>
+                <ul class="device-specs">
+                    <li><span class="spec-label">Processor</span><span class="spec-value">Intel N97 @ 3.6GHz (4 cores)</span></li>
+                    <li><span class="spec-label">Memory</span><span class="spec-value">8 GB DDR4 RAM</span></li>
+                    <li><span class="spec-label">Storage</span><span class="spec-value">240 GB NVMe SSD</span></li>
+                    <li><span class="spec-label">Touchscreen</span><span class="spec-value">10.1" capacitive multi-touch (1280x800)</span></li>
+                    <li><span class="spec-label">Connectivity</span><span class="spec-value">WiFi 6, Gigabit Ethernet, Bluetooth 5.0</span></li>
+                    <li><span class="spec-label">USB Ports</span><span class="spec-value">4x USB 3.0 for sensors and devices</span></li>
+                    <li><span class="spec-label">Operating System</span><span class="spec-value">Ubuntu Linux with Light Engine software</span></li>
+                </ul>
+                <p style="margin-top: 16px; color: var(--text-secondary);"><strong>Purchase:</strong> Available from symcod.com, AliExpress, Amazon (~$400-500)</p>
+            </div>
+
+            <div class="alert alert-info">
+                <div class="alert-title">What's Included</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li>Symcod W101M touchscreen computer (complete system)</li>
+                    <li>Power adapter with cable</li>
+                    <li>Ethernet cable</li>
+                    <li>Wall mounting hardware</li>
+                    <li>USB cables for peripherals</li>
+                </ul>
+            </div>
+
+            <h2 id="installation">Installation Steps</h2>
+            
+            <div class="alert alert-info">
+                <div class="alert-title">Installation Process</div>
+                <p style="margin: 0;">Light Engine software must be installed on the Symcod W101M. Installation method and time estimate depend on distribution approach (OS image, installer script, or manual setup). Check current installation guide at portal.greenreach.io/downloads.</p>
+            </div>
+
+            <div class="step-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Unbox Device</div>
+                    <div class="step-desc">Remove Symcod W101M from packaging. No assembly required - complete system ready to use.</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Connect Network</div>
+                    <div class="step-desc">Connect ethernet cable (recommended) or prepare WiFi credentials. Device needs internet for software installation and registration</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Install Light Engine</div>
+                    <div class="step-desc">Install Light Engine software using current installation method from portal.greenreach.io/downloads (OS image, installer script, or manual install)</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <div class="step-title">Get Registration Code</div>
+                    <div class="step-desc">Log in to portal.greenreach.io → Farm Settings → Edge Devices → Add New Device. Copy 8-character registration code</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">5</div>
+                    <div class="step-title">Complete Setup Wizard</div>
+                    <div class="step-desc">First-run wizard guides through network configuration, farm registration (8-character code), and hardware detection (5-10 minutes)</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">6</div>
+                    <div class="step-title">Access Dashboard</div>
+                    <div class="step-desc">Dashboard loads after setup. Access from other devices at http://farm.local on same network</div>
+                </div>
+            </div>
+
+            <h3>First-Run Wizard</h3>
+            <p>After powering on, the touchscreen displays a 5-step wizard:</p>
+
+            <ol style="list-style-type: decimal; margin-left: 24px;">
+                <li><strong>Welcome</strong> - Overview of setup process</li>
+                <li><strong>Network Configuration</strong> - Choose Ethernet (DHCP) or WiFi (enter password with on-screen keyboard)</li>
+                <li><strong>Farm Registration</strong> - Enter 8-character code from GreenReach Central dashboard</li>
+                <li><strong>Hardware Detection</strong> - Scans for USB sensors, RS-485 controllers, network devices (30-45 seconds)</li>
+                <li><strong>Completion</strong> - Setup complete, dashboard access enabled</li>
+            </ol>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Estimated Time</div>
+                <p style="margin: 0;">First-run wizard takes approximately 5-10 minutes to complete. Most time spent on automatic hardware detection scan.</p>
+            </div>
+
+            <h2 id="network">Network Access</h2>
+
+            <h3>Connecting During Setup</h3>
+            <p>The first-run wizard includes network configuration:</p>
+            
+            <div class="step-grid">
+                <div class="step-card">
+                    <div class="step-title">Ethernet (Recommended)</div>
+                    <div class="step-desc">Connect ethernet cable before powering on. Wizard detects connection and configures via DHCP automatically. No additional setup required.</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-title">WiFi</div>
+                    <div class="step-desc">Select your network from list in wizard. Enter password using touchscreen keyboard. Device connects and verifies internet access.</div>
+                </div>
+            </div>
+
+            <h3>Access from Other Devices</h3>
+            <p>After setup completes, access dashboard from any device on the same network:</p>
+
+            <div class="step-grid">
+                <div class="step-card">
+                    <div class="step-title">mDNS Hostname (Easy)</div>
+                    <div class="step-desc">Open browser and go to: <strong>http://farm.local</strong><br><br>Works on macOS, iOS, Linux. Windows requires iTunes or Bonjour Print Services installed.</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-title">IP Address (Alternative)</div>
+                    <div class="step-desc">Find IP address on touchscreen: Dashboard → Settings → Network Info<br><br>Enter in browser: <strong>http://192.168.1.XXX:3042</strong></div>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Network Requirements</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li>Internet access required for initial registration and recipe downloads</li>
+                    <li>Local network access only needed for day-to-day operation</li>
+                    <li>System continues working if internet connection lost (offline operation)</li>
+                    <li>Port 3042 must not be blocked by firewall for remote access</li>
+                </ul>
+            </div>
+
+            <h2 id="devices">Hardware Integration</h2>
+            
+            <div class="alert alert-info">
+                <div class="alert-title">Hardware Detection During Setup</div>
+                <p style="margin: 0;">First-run wizard includes 30-45 second hardware detection scan that searches for USB sensors, RS-485 Modbus controllers, and network devices. Detected hardware is listed in wizard completion screen.</p>
+            </div>
+
+            <h3>Supported Connection Types</h3>
+            <ul>
+                <li><strong>USB Sensors</strong> - Temperature, humidity, CO2 monitors connected via USB 3.0 ports</li>
+                <li><strong>RS-485 Modbus</strong> - Industrial controllers using RS-485 serial communication</li>
+                <li><strong>Network Devices</strong> - IP cameras (RTSP/ONVIF), network-enabled controllers via Ethernet/WiFi</li>
+                <li><strong>Bluetooth</strong> - Wireless sensors and controllers via Bluetooth 5.0</li>
+            </ul>
+
+            <h3>After Initial Setup</h3>
+            <p>To add additional hardware after completing first-run wizard:</p>
+            <ol>
+                <li>Connect new device to Symcod W101M via USB or network</li>
+                <li>Dashboard → Settings → Hardware → Scan for Devices</li>
+                <li>Configure detected device (assign name, zone, device type)</li>
+                <li>Device appears in zone dashboard with current readings</li>
+            </ol>
+
+            <div class="alert alert-warning">
+                <div class="alert-title">Device Compatibility</div>
+                <p style="margin: 0;">Not all sensors and controllers are automatically detected. Some devices require manual configuration or driver installation. Check compatibility list at docs.greenreach.io/hardware before purchasing.</p>
+            </div>
+
+            <h2 id="automation">Recipe-Based Automation</h2>
+            <p>Light Engine automates your farm using research-validated grow recipes - no manual programming required:</p>
+
+            <div class="alert alert-success">
+                <div class="alert-title">How Recipe Automation Works</div>
+                <p style="margin: 0;">Choose a crop recipe (lettuce, basil, tomatoes, etc.) and Light Engine automatically controls lights, temperature, humidity, and irrigation based on research-validated schedules. Environmental targets adjust automatically as crops progress through growth stages.</p>
+            </div>
+
+            <h3>60+ Research-Validated Recipes</h3>
+            <p>Light Engine includes professionally-developed crop recipes with complete automation for all environmental controls. Sample recipes include:</p>
+
+            <div class="step-grid">
+                <div class="step-card">
+                    <div class="step-title">Leafy Greens</div>
+                    <div class="step-desc">Buttercrunch Lettuce, Bibb Butterhead, Romaine, Arugula, Watercress, Tatsoi, Mizuna, Komatsuna</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-title">Brassicas</div>
+                    <div class="step-desc">Lacinato Kale, Red Russian Kale, Swiss Chard, Bloomsdale Spinach</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-title">Herbs</div>
+                    <div class="step-desc">Genovese Basil, Thai Basil, Santo Cilantro, Italian Parsley, Greek Oregano, Common Thyme, Rosemary, Sage, Chervil, Marjoram, Dill, Sorrel, Lovage</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-title">Specialty Greens</div>
+                    <div class="step-desc">Frisée Endive, Escarole Batavian, Salad Bowl Oakleaf, Mei Qing Pak Choi</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-title">Tomatoes</div>
+                    <div class="step-desc">Better Boy, Celebrity, Brandywine, Heatmaster F1, San Marzano, Sun Gold</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-title">Strawberries</div>
+                    <div class="step-desc">Albion, Chandler, Tribute, Tristar, Seascape, Sequoia, Monterey, Eversweet, Ozark Beauty, Fort Laramie, Mara de Bois, Jewel</div>
+                </div>
+            </div>
+
+            <p style="margin-top: 24px; color: var(--text-secondary);">Each recipe includes day-by-day targets for: light spectrum (blue/green/red/far-red %), PPFD intensity, photoperiod, temperature, VPD, max humidity, nutrient EC, and pH levels.</p>
+
+            <h3>How to Activate a Recipe</h3>
+            <div class="step-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Add Crop</div>
+                    <div class="step-desc">Tap Dashboard → Add Crop button</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Choose Recipe</div>
+                    <div class="step-desc">Select from 60+ research-validated recipes</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Assign Room</div>
+                    <div class="step-desc">Select which grow room to apply recipe</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <div class="step-title">Set Start Date</div>
+                    <div class="step-desc">When did you plant/transplant?</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">5</div>
+                    <div class="step-title">Automation Starts</div>
+                    <div class="step-desc">All controls activate immediately based on recipe</div>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <div class="alert-title">What Gets Automated</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li><strong>Light Schedule</strong> - On/off times and intensity (PPFD) adjust automatically</li>
+                    <li><strong>Temperature Control</strong> - Exhaust fans, heaters activate to maintain target range</li>
+                    <li><strong>Humidity Control</strong> - Dehumidifiers, misters maintain target relative humidity</li>
+                    <li><strong>VPD Optimization</strong> - Balances temperature and humidity for ideal vapor pressure deficit</li>
+                    <li><strong>Growth Stage Transitions</strong> - Environmental targets change as crop matures (seedling → veg → flower → harvest)</li>
+                    <li><strong>Irrigation Schedules</strong> - Watering frequency and duration based on crop needs</li>
+                </ul>
+            </div>
+
+            <h3>Monitoring Recipe Performance</h3>
+            <p>Dashboard shows real-time performance vs recipe targets:</p>
+            <ul>
+                <li><strong>Green Status</strong> - Environment within recipe range, everything optimal</li>
+                <li><strong>Yellow Warning</strong> - Slightly outside range, controllers adjusting</li>
+                <li><strong>Red Alert</strong> - Significantly outside range, intervention may be needed</li>
+                <li><strong>Growth Progress</strong> - Days into recipe, current growth stage, estimated harvest date</li>
+            </ul>
+
+            <h2 id="backup">Automatic Backups</h2>
+            <p>Your farm data is automatically backed up - no setup required:</p>
+
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <div class="benefit-title">Local Backups</div>
+                    <div class="benefit-desc">Daily backup to USB drive (if plugged in) or internal storage</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Cloud Backups (Optional)</div>
+                    <div class="benefit-desc">Enable cloud backups in Settings for off-site protection</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Version History</div>
+                    <div class="benefit-desc">Keeps last 30 days of backups - restore from any date</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">One-Click Restore</div>
+                    <div class="benefit-desc">Restore from backup in Settings → Backups → Restore</div>
+                </div>
+            </div>
+
+            <h3>What Gets Backed Up</h3>
+            <ul>
+                <li>Farm profile and grow room configurations</li>
+                <li>All inventory data and tray scan history</li>
+                <li>Harvest records and weight logs</li>
+                <li>Automation rules and schedules</li>
+                <li>Device configurations and names</li>
+                <li>User accounts and permissions</li>
+                <li>Sales records and wholesale orders</li>
+            </ul>
+
+            <div class="alert alert-warning">
+                <div class="alert-title">Plug in USB Drive for Local Backups</div>
+                <p style="margin: 0;">For extra protection, plug a USB flash drive or external hard drive into any USB port. Light Engine automatically uses it for daily backups. Recommended: 32 GB or larger USB drive.</p>
+            </div>
+
+            <h2>Need Help?</h2>
+            <div class="alert alert-info">
+                <div class="alert-title">Support Resources</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li>Email: <a href="mailto:support@greenreach.io" style="color: var(--accent-green-light);">support@greenreach.io</a></li>
+                    <li>Phone: 1-800-GROW-NOW (during business hours)</li>
+                    <li>Video Tutorials: <a href="/docs/index.html" style="color: var(--accent-green-light);">Documentation Hub</a></li>
+                    <li>Free Onboarding Call: Schedule at <a href="https://portal.greenreach.io" style="color: var(--accent-green-light);">portal.greenreach.io</a></li>
+                </ul>
+            </div>
+
+            <a href="/docs/index.html" style="display: inline-block; background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-light) 100%); color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; margin-top: 24px;">Back to Documentation</a>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GreenReach. All rights reserved. | 
+           <a href="/privacy">Privacy Policy</a> | 
+           <a href="/terms">Terms of Service</a> | 
+           <a href="mailto:support@greenreach.io">Support</a>
+        </p>
+    </footer>
+
+    <script>
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.toc-list a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) { link.classList.add('active'); }
+                    });
+                }
+            });
+        }, { rootMargin: '-50% 0px -50% 0px' });
+        document.querySelectorAll('h2[id], h3[id]').forEach(heading => { observer.observe(heading); });
+    </script>
+</body>
+</html>

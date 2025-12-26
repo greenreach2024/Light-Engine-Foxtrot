@@ -1,0 +1,529 @@
+<!-- 
+  Advanced Tray Tracking Dashboard Components
+  Insert these sections into public/views/tray-inventory.html
+-->
+
+<!-- SECTION 1: Filter Controls (Insert after top header) -->
+<div class="filter-controls" id="filterControls" style="display: none;">
+  <div class="filter-panel">
+    <h3>🔍 Advanced Filters</h3>
+    
+    <div class="filter-grid">
+      <div class="filter-group">
+        <label>Crop Type</label>
+        <select id="filterCropType" onchange="applyFilters()">
+          <option value="all">All Crops</option>
+          <option value="lettuce">Lettuce</option>
+          <option value="kale">Kale</option>
+          <option value="basil">Basil</option>
+          <option value="microgreens">Microgreens</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Location</label>
+        <select id="filterLocation" onchange="applyFilters()">
+          <option value="all">All Locations</option>
+          <option value="zone-a">Zone A</option>
+          <option value="zone-b">Zone B</option>
+          <option value="zone-c">Zone C</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Status</label>
+        <select id="filterStatus" onchange="applyFilters()">
+          <option value="all">All Status</option>
+          <option value="SEEDED">Seeded</option>
+          <option value="IN_GROW">Growing</option>
+          <option value="READY">Ready to Harvest</option>
+          <option value="HARVESTED">Harvested</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Plant Date From</label>
+        <input type="date" id="filterDateFrom" onchange="applyFilters()">
+      </div>
+
+      <div class="filter-group">
+        <label>Plant Date To</label>
+        <input type="date" id="filterDateTo" onchange="applyFilters()">
+      </div>
+
+      <div class="filter-group">
+        <button class="button button-secondary" onclick="clearFilters()">
+          Clear Filters
+        </button>
+      </div>
+    </div>
+
+    <div class="filter-stats">
+      Showing <strong id="filteredCount">0</strong> of <strong id="totalCount">0</strong> trays
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 2: Batch Harvest Controls (Insert in quick actions section) -->
+<div class="batch-controls" id="batchControls" style="display: none;">
+  <div class="batch-panel">
+    <h3>📦 Batch Harvest Mode</h3>
+    <p>Select trays by tapping them, then record harvest for all at once.</p>
+    
+    <div class="batch-stats">
+      <div class="batch-stat">
+        <div class="batch-stat-value" id="batchSelectedCount">0</div>
+        <div class="batch-stat-label">Trays Selected</div>
+      </div>
+      <div class="batch-stat">
+        <div class="batch-stat-value" id="batchEstWeight">0 kg</div>
+        <div class="batch-stat-label">Est. Total Yield</div>
+      </div>
+    </div>
+
+    <div class="batch-actions">
+      <button class="button button-primary" onclick="performBatchHarvest()">
+        ✓ Record Batch Harvest
+      </button>
+      <button class="button button-secondary" onclick="clearBatchSelection()">
+        Clear Selection
+      </button>
+      <button class="button button-secondary" onclick="toggleBatchHarvestMode()">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: Yield Analytics Modal -->
+<div id="analyticsModal" class="modal">
+  <div class="modal-content modal-large">
+    <div class="modal-header">
+      <h2>📊 Yield Analytics</h2>
+      <button class="close-btn" onclick="closeAnalyticsModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="analytics-tabs">
+        <button class="tab-btn active" onclick="showAnalyticsTab('chart')">Chart View</button>
+        <button class="tab-btn" onclick="showAnalyticsTab('table')">Table View</button>
+        <button class="tab-btn" onclick="showAnalyticsTab('comparison')">Comparison</button>
+      </div>
+
+      <!-- Chart View -->
+      <div id="analyticsChart" class="analytics-view">
+        <h3>Average Yield by Crop</h3>
+        <div id="yieldChart" class="yield-chart"></div>
+      </div>
+
+      <!-- Table View -->
+      <div id="analyticsTable" class="analytics-view" style="display: none;">
+        <h3>Detailed Yield Statistics</h3>
+        <table class="analytics-table">
+          <thead>
+            <tr>
+              <th>Crop</th>
+              <th>Trays</th>
+              <th>Total Yield</th>
+              <th>Avg Yield</th>
+              <th>Min Yield</th>
+              <th>Max Yield</th>
+              <th>vs Expected</th>
+            </tr>
+          </thead>
+          <tbody id="yieldTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Comparison View -->
+      <div id="analyticsComparison" class="analytics-view" style="display: none;">
+        <h3>Performance Comparison</h3>
+        <div id="comparisonChart" class="comparison-chart"></div>
+      </div>
+
+      <div class="analytics-footer">
+        <button class="button button-secondary" onclick="exportAnalytics()">
+          📥 Export to CSV
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 4: Photo Timeline Modal -->
+<div id="photoTimelineModal" class="modal">
+  <div class="modal-content modal-large">
+    <div class="modal-header">
+      <h2>📸 Photo History Timeline</h2>
+      <button class="close-btn" onclick="closePhotoTimeline()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="tray-info-banner">
+        <h3 id="timelineTrayCode">TRAY-0001</h3>
+        <p id="timelineCropInfo">Lettuce - Planted Dec 1, 2025</p>
+      </div>
+
+      <div id="photoTimeline" class="photo-timeline">
+        <!-- Timeline items will be inserted here -->
+      </div>
+
+      <div class="timeline-footer">
+        <button class="button button-primary" onclick="addPhotoToTimeline()">
+          📷 Add New Photo
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 5: Enhanced CSS Styles -->
+<style>
+  /* Filter Controls */
+  .filter-controls {
+    background: rgba(30, 41, 59, 0.95);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 1.5rem;
+    animation: slideDown 0.3s ease;
+  }
+
+  .filter-panel h3 {
+    color: #34d399;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+  }
+
+  .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .filter-group label {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .filter-group select,
+  .filter-group input[type="date"] {
+    width: 100%;
+    padding: 0.5rem;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 0.95rem;
+  }
+
+  .filter-stats {
+    color: #cbd5e1;
+    font-size: 0.95rem;
+    padding: 0.75rem;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  /* Batch Controls */
+  .batch-controls {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    animation: slideUp 0.3s ease;
+  }
+
+  .batch-panel {
+    background: rgba(16, 185, 129, 0.95);
+    border: 2px solid #10b981;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 30px rgba(16, 185, 129, 0.4);
+    min-width: 400px;
+  }
+
+  .batch-panel h3 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+
+  .batch-panel p {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .batch-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .batch-stat {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .batch-stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: white;
+  }
+
+  .batch-stat-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+  }
+
+  .batch-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .batch-actions .button {
+    flex: 1;
+  }
+
+  .tray-card.selected {
+    border: 3px solid #10b981;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+    transform: scale(1.02);
+  }
+
+  /* Analytics Modal */
+  .modal-large {
+    max-width: 1200px;
+  }
+
+  .analytics-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .analytics-tabs .tab-btn {
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 1rem;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s;
+  }
+
+  .analytics-tabs .tab-btn.active {
+    color: #10b981;
+    border-bottom-color: #10b981;
+  }
+
+  .yield-chart {
+    padding: 1rem;
+  }
+
+  .chart-bar {
+    margin-bottom: 1.5rem;
+  }
+
+  .chart-label {
+    color: #cbd5e1;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .chart-bar-container {
+    background: rgba(15, 23, 42, 0.8);
+    border-radius: 8px;
+    height: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chart-bar-fill {
+    background: linear-gradient(90deg, #10b981, #34d399);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding-left: 1rem;
+    color: white;
+    font-weight: 600;
+    transition: width 0.5s ease;
+  }
+
+  .chart-count {
+    color: #64748b;
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+  }
+
+  .analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .analytics-table th {
+    background: rgba(59, 130, 246, 0.1);
+    color: #60a5fa;
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+  }
+
+  .analytics-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    color: #cbd5e1;
+  }
+
+  .analytics-table tr:hover {
+    background: rgba(59, 130, 246, 0.05);
+  }
+
+  /* Photo Timeline */
+  .tray-info-banner {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  .tray-info-banner h3 {
+    color: #10b981;
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .tray-info-banner p {
+    color: #94a3b8;
+  }
+
+  .photo-timeline {
+    position: relative;
+    padding-left: 2rem;
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .photo-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, #10b981, #34d399);
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-bottom: 2rem;
+  }
+
+  .timeline-marker {
+    position: absolute;
+    left: -2.5rem;
+    top: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #10b981;
+    border: 3px solid rgba(30, 41, 59, 0.95);
+  }
+
+  .timeline-content {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 12px;
+    padding: 1rem;
+  }
+
+  .timeline-date {
+    color: #60a5fa;
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+
+  .timeline-photo {
+    width: 100%;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+  }
+
+  .timeline-analysis {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .timeline-analysis strong {
+    color: #10b981;
+  }
+
+  .analysis-issues {
+    color: #f59e0b;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .timeline-note {
+    color: #94a3b8;
+    font-style: italic;
+    font-size: 0.9rem;
+  }
+
+  .timeline-footer {
+    text-align: center;
+    padding: 1.5rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+    margin-top: 1rem;
+  }
+
+  /* Animations */
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 20px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+</style>
+
+<!-- SECTION 6: Toggle Button in Header -->
+<button class="button button-secondary" onclick="toggleFilters()" style="margin-left: 1rem;">
+  🔍 Filters
+</button>
+
+<button class="button button-primary" onclick="toggleBatchHarvestMode()" id="batchHarvestBtn">
+  📦 Batch Harvest
+</button>
+
+<button class="button button-secondary" onclick="openAnalyticsModal()">
+  📊 Analytics
+</button>

@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self' https://install.greenreach.io https://central.greenreach.io; frame-ancestors 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Primary Meta Tags -->
+    <title>Light Engine Edge - Complete Farm Automation | Professional Vertical Farm Control</title>
+    <meta name="title" content="Light Engine Edge - Complete Farm Automation">
+    <meta name="description" content="Enterprise-grade climate control, lighting automation, and ML-powered monitoring for commercial vertical farms. DMX512, Modbus RTU, and IoT sensor integration with touchscreen control.">
+    <meta name="keywords" content="vertical farm automation, indoor agriculture control, grow light automation, climate control system, farm management software, precision agriculture, CEA technology">
+    <meta name="author" content="GreenReach">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://www.lightengine.io/landing-edge.html">
+    <meta property="og:title" content="Light Engine Edge - Complete Farm Automation">
+    <meta property="og:description" content="Professional-grade automation with hardware integration, ML anomaly detection, and touchscreen control for commercial vertical farms.">
+    <meta property="og:image" content="https://www.lightengine.io/images/edge-preview.jpg">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://www.lightengine.io/landing-edge.html">
+    <meta property="twitter:title" content="Light Engine Edge - Complete Farm Automation">
+    <meta property="twitter:description" content="Professional-grade automation with hardware integration, ML anomaly detection, and touchscreen control for commercial vertical farms.">
+    <meta property="twitter:image" content="https://www.lightengine.io/images/edge-preview.jpg">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --dark-bg: #0a0f1e;
+            --dark-surface: #111827;
+            --dark-surface-2: #1a2332;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-blue-light: #60a5fa;
+            --accent-green: #10b981;
+            --accent-green-light: #6ee7b7;
+            --accent-green-dark: #059669;
+            --border-dark: #2d3748;
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 15, 30, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            z-index: 1000;
+            border-bottom: 2px solid var(--accent-blue);
+            box-shadow: var(--glow-blue);
+        }
+
+        nav {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 16px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--accent-blue-light);
+            text-decoration: none;
+            text-shadow: var(--glow-blue);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-cta {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green-light);
+            padding: 8px 20px;
+            border-radius: 20px;
+            border: 2px solid var(--accent-green);
+            font-weight: 500;
+            box-shadow: var(--glow-green);
+        }
+
+        .nav-cta:hover {
+            background: rgba(16, 185, 129, 0.3);
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.7), 0 0 60px rgba(16, 185, 129, 0.4);
+        }
+
+        .nav-cta:hover {
+            background: var(--accent-green-dark);
+        }
+
+        /* Hero Section */
+        .hero {
+            margin-top: 80px;
+            padding: 100px 40px 80px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 1200px;
+            height: 1200px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid var(--accent-blue);
+            border-radius: 20px;
+            font-size: 14px;
+            color: var(--accent-blue-light);
+            margin-bottom: 24px;
+            box-shadow: var(--glow-blue);
+        }
+
+        h1 {
+            font-size: 72px;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--accent-blue-light) 0%, var(--accent-green-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.6));
+        }
+
+        .hero-subtitle {
+            font-size: 24px;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            line-height: 1.5;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green-light);
+            padding: 16px 36px;
+            border-radius: 24px;
+            text-decoration: none;
+            font-size: 17px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: 2px solid var(--accent-green);
+            cursor: pointer;
+            box-shadow: var(--glow-green);
+        }
+
+        .btn-primary:hover {
+            background: rgba(16, 185, 129, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.7), 0 0 60px rgba(16, 185, 129, 0.4), 0 10px 30px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--accent-blue-light);
+            padding: 16px 36px;
+            border-radius: 24px;
+            text-decoration: none;
+            font-size: 17px;
+            font-weight: 500;
+            border: 2px solid var(--accent-blue);
+            transition: all 0.3s;
+            box-shadow: var(--glow-blue);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.7), 0 0 60px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Hero Visual */
+        .hero-visual {
+            margin-top: 80px;
+            position: relative;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .device-mockup {
+            width: 100%;
+            height: 600px;
+            background: linear-gradient(135deg, var(--dark-surface-2) 0%, #0f1f1a 100%);
+            border-radius: 24px;
+            border: 1px solid var(--border-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .device-mockup::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                repeating-linear-gradient(90deg, transparent, transparent 99px, var(--border-dark) 99px, var(--border-dark) 100px),
+                repeating-linear-gradient(0deg, transparent, transparent 99px, var(--border-dark) 99px, var(--border-dark) 100px);
+            opacity: 0.3;
+        }
+
+        .device-screen {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+        }
+
+        .device-icon {
+            font-size: 120px;
+            margin-bottom: 20px;
+            opacity: 0.6;
+        }
+
+        /* Features Section */
+        .features {
+            padding: 120px 40px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 80px;
+        }
+
+        .section-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            background: var(--dark-surface-2);
+            border: 1px solid var(--border-dark);
+            border-radius: 16px;
+            font-size: 13px;
+            color: var(--accent-green);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .section-title {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .section-description {
+            font-size: 20px;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--dark-surface);
+            border: 1px solid var(--border-dark);
+            border-radius: 16px;
+            padding: 48px 32px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            background: var(--dark-surface-2);
+            border-color: var(--accent-green);
+            transform: translateY(-4px);
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 24px;
+            display: block;
+        }
+
+        .feature-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-description {
+            color: var(--text-secondary);
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        /* Specs Section */
+        .specs {
+            padding: 120px 40px;
+            background: var(--dark-surface);
+            border-top: 1px solid var(--border-dark);
+            border-bottom: 1px solid var(--border-dark);
+        }
+
+        .specs-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .specs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 48px;
+            margin-top: 60px;
+        }
+
+        .spec-item {
+            border-bottom: 1px solid var(--border-dark);
+            padding-bottom: 24px;
+        }
+
+        .spec-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .spec-value {
+            font-size: 20px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 120px 40px;
+            text-align: center;
+        }
+
+        .cta-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--dark-surface);
+            border: 1px solid var(--accent-green);
+            border-radius: 24px;
+            padding: 80px 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-green) 0%, #059669 100%);
+        }
+
+        .cta-title {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 24px;
+        }
+
+        .cta-description {
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+        }
+
+        .price-tag {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--accent-green);
+            margin-bottom: 40px;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--dark-bg);
+            border-top: 1px solid var(--border-dark);
+            padding: 60px 40px 40px;
+        }
+
+        .footer-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 48px;
+            margin-bottom: 40px;
+        }
+
+        .footer-column h4 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .footer-column ul {
+            list-style: none;
+        }
+
+        .footer-column li {
+            margin-bottom: 12px;
+        }
+
+        .footer-column a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .footer-column a:hover {
+            color: var(--accent-green);
+        }
+
+        .footer-bottom {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-top: 30px;
+            border-top: 1px solid var(--border-dark);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 48px;
+            }
+
+            .hero-subtitle {
+                font-size: 20px;
+            }
+
+            .section-title {
+                font-size: 36px;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cta-container {
+                padding: 60px 40px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#specs">Specifications</a>
+                <a href="/docs" rel="noopener">Documentation</a>
+                <a href="/landing-cloud.html">Cloud Solution</a>
+                <a href="/downloads.html" class="nav-cta">Download</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-content">
+                <span class="hero-badge">EDGE DEVICE</span>
+                <h1>Complete Farm<br>Automation</h1>
+                <p class="hero-subtitle">
+                    Professional-grade climate control, lighting automation, and ML-powered monitoring 
+                    for commercial vertical farms. Built for the most demanding growing operations.
+                </p>
+                <div class="cta-buttons">
+                    <a href="/downloads.html" class="btn-primary">Download Installer</a>
+                    <a href="/docs/EDGE_DEPLOYMENT_GUIDE.md" class="btn-secondary" rel="noopener">View Installation Guide</a>
+                </div>
+            </div>
+
+            <div class="hero-visual">
+                <div class="device-mockup">
+                    <div class="device-screen">
+                        <div class="device-icon"></div>
+                        <div style="font-size: 24px; color: var(--text-secondary);">Touchscreen Interface</div>
+                        <div style="font-size: 16px; color: var(--text-secondary); margin-top: 8px;">Real-time monitoring & control</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="features">
+            <div class="section-header">
+                <span class="section-badge">Capabilities</span>
+                <h2 class="section-title">Built for Professional Growers</h2>
+                <p class="section-description">
+                    Enterprise-grade automation with hardware integration, ML anomaly detection, 
+                    and touchscreen control for commercial growing operations.
+                </p>
+            </div>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <span class="feature-icon"></span>
+                    <h3 class="feature-title">Automated Lighting</h3>
+                    <p class="feature-description">
+                        DMX512 control for professional grow lights. Sunrise/sunset simulation, 
+                        DLI optimization, and per-spectrum intensity control.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <span class="feature-icon"></span>
+                    <h3 class="feature-title">Climate Control</h3>
+                    <p class="feature-description">
+                        Precision temperature, humidity, and VPD management. Automated HVAC, 
+                        dehumidifiers, and CO₂ injection based on growth stage.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <span class="feature-icon"></span>
+                    <h3 class="feature-title">Sensor Integration</h3>
+                    <p class="feature-description">
+                        Atlas Scientific pH/EC sensors, PAR meters, soil moisture probes. 
+                        Modbus RTU and RS-485 protocols supported.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <span class="feature-icon"></span>
+                    <h3 class="feature-title">ML Anomaly Detection</h3>
+                    <p class="feature-description">
+                        IsolationForest algorithms detect equipment failures, environmental 
+                        anomalies, and pest/disease outbreaks before they impact yield.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <span class="feature-icon"></span>
+                    <h3 class="feature-title">Touchscreen Interface</h3>
+                    <p class="feature-description">
+                        7-10" display optimized for farm floor workers. Large buttons for 
+                        gloved hands, voice assistant for hands-free operation.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <span class="feature-icon"></span>
+                    <h3 class="feature-title">Cloud Sync</h3>
+                    <p class="feature-description">
+                        Optional cloud synchronization for remote monitoring, multi-site 
+                        management, and team collaboration across locations.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section id="specs" class="specs">
+            <div class="specs-container">
+                <div class="section-header">
+                    <span class="section-badge">Technical Specifications</span>
+                    <h2 class="section-title">Hardware Requirements</h2>
+                </div>
+
+                <div class="specs-grid">
+                    <div class="spec-item">
+                        <div class="spec-label">Supported Platforms</div>
+                        <div class="spec-value">Raspberry Pi 4, Intel NUC, Ubuntu Server</div>
+                    </div>
+
+                    <div class="spec-item">
+                        <div class="spec-label">Minimum RAM</div>
+                        <div class="spec-value">4 GB (8 GB recommended)</div>
+                    </div>
+
+                    <div class="spec-item">
+                        <div class="spec-label">Storage</div>
+                        <div class="spec-value">32 GB microSD or SSD</div>
+                    </div>
+
+                    <div class="spec-item">
+                        <div class="spec-label">Network</div>
+                        <div class="spec-value">Ethernet (primary), WiFi (backup)</div>
+                    </div>
+
+                    <div class="spec-item">
+                        <div class="spec-label">Protocols</div>
+                        <div class="spec-value">DMX512, Modbus RTU, RS-485, GPIO</div>
+                    </div>
+
+                    <div class="spec-item">
+                        <div class="spec-label">Display</div>
+                        <div class="spec-value">7-10" touchscreen (optional)</div>
+                    </div>
+
+                    <div class="spec-item">
+                        <div class="spec-label">Operating System</div>
+                        <div class="spec-value">Ubuntu 22.04 LTS, Raspberry Pi OS</div>
+                    </div>
+
+                    <div class="spec-item">
+                        <div class="spec-label">Installation Time</div>
+                        <div class="spec-value">30 minutes (one-line installer)</div>
+                    </div>
+
+                    <div class="spec-item">
+                        <div class="spec-label">Update Method</div>
+                        <div class="spec-value">Automatic OTA updates</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta-section">
+            <div class="cta-container">
+                <h2 class="cta-title">Ready to Automate?</h2>
+                <p class="cta-description">
+                    Download the edge device installer and transform your grow operation 
+                    with professional automation in under 30 minutes.
+                </p>
+                <div class="price-tag">Free for Single Farm</div>
+                <div class="cta-buttons">
+                    <a href="/downloads.html" class="btn-primary">Download Installer</a>
+                    <a href="/docs/edge-deployment.html" class="btn-secondary">Installation Guide</a>
+                </div>
+                <p style="margin-top: 24px; color: var(--text-secondary); font-size: 14px;">
+                    One-line installer: <code style="background: var(--dark-bg); padding: 4px 12px; border-radius: 6px;">curl -fsSL https://install.greenreach.io | bash</code>
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-column">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="/landing-edge.html">Edge Device</a></li>
+                    <li><a href="/landing-cloud.html">Cloud Solution</a></li>
+                    <li><a href="/downloads">Downloads</a></li>
+                    <li><a href="/pricing">Pricing</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="/docs">Documentation</a></li>
+                    <li><a href="/docs/EDGE_DEPLOYMENT_GUIDE.md">Installation Guide</a></li>
+                    <li><a href="/docs/DESKTOP_APP_GUIDE.md">Desktop App Guide</a></li>
+                    <li><a href="https://community.greenreach.io">Community Forum</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Company</h4>
+                <ul>
+                    <li><a href="/about">About</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                    <li><a href="/careers">Careers</a></li>
+                    <li><a href="/blog">Blog</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="mailto:support@greenreach.io">Email Support</a></li>
+                    <li><a href="/docs/troubleshooting">Troubleshooting</a></li>
+                    <li><a href="/status">System Status</a></li>
+                    <li><a href="/security">Security</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 GreenReach. All rights reserved. | <a href="/privacy" style="color: var(--text-secondary);">Privacy</a> | <a href="/terms" style="color: var(--text-secondary);">Terms</a></p>
+        </div>
+    </footer>
+</body>
+</html>

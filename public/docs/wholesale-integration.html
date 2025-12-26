@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <title>Wholesale Integration Guide - Light Engine</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0a0f1e;
+            --surface: #111827;
+            --surface-2: #1a2332;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-blue-light: #60a5fa;
+            --accent-green: #10b981;
+            --accent-green-light: #6ee7b7;
+            --border: #2d3748;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
+
+        header {
+            background: rgba(10, 15, 30, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 2px solid var(--accent-blue);
+            box-shadow: var(--glow-blue);
+            padding: 20px 40px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--accent-blue-light);
+            text-decoration: none;
+            text-shadow: var(--glow-blue);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-blue-light);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 40px;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 60px;
+        }
+
+        .sidebar {
+            position: sticky;
+            top: 100px;
+            height: fit-content;
+        }
+
+        .toc {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .toc-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--accent-blue-light);
+        }
+
+        .toc-list {
+            list-style: none;
+        }
+
+        .toc-list li {
+            margin-bottom: 12px;
+        }
+
+        .toc-list a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+            display: block;
+        }
+
+        .toc-list a:hover {
+            color: var(--accent-blue-light);
+        }
+
+        .toc-list a.active {
+            color: var(--accent-green-light);
+            font-weight: 600;
+        }
+
+        .content {
+            min-width: 0;
+        }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--accent-blue-light) 0%, var(--accent-green-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.6));
+        }
+
+        .subtitle {
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 16px;
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid var(--accent-blue);
+            border-radius: 12px;
+            font-size: 14px;
+            color: var(--accent-blue-light);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 24px;
+            box-shadow: var(--glow-blue);
+        }
+
+        h2 {
+            font-size: 32px;
+            margin-top: 60px;
+            margin-bottom: 24px;
+            color: var(--accent-blue-light);
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        h3 {
+            font-size: 24px;
+            margin-top: 40px;
+            margin-bottom: 16px;
+            color: var(--accent-green-light);
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        ul, ol {
+            margin-left: 24px;
+            margin-bottom: 16px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .feature-card {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .feature-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--accent-green-light);
+            margin-bottom: 8px;
+        }
+
+        .feature-desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .alert {
+            padding: 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+            border-left: 4px solid;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue-light);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: var(--warning);
+            color: var(--warning);
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--success);
+            color: var(--accent-green-light);
+        }
+
+        .alert-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .code-block {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+            position: relative;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            color: var(--accent-green-light);
+            line-height: 1.6;
+            white-space: pre;
+            display: block;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+
+        .copy-btn:hover {
+            opacity: 1;
+            box-shadow: var(--glow-blue);
+        }
+
+        .workflow {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+
+        .workflow-step {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .workflow-step:last-child {
+            border-bottom: none;
+        }
+
+        .workflow-arrow {
+            margin: 0 16px;
+            color: var(--accent-blue-light);
+        }
+
+        footer {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 40px;
+            text-align: center;
+            color: var(--text-secondary);
+            margin-top: 80px;
+        }
+
+        footer a {
+            color: var(--accent-blue-light);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: var(--accent-green-light);
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: static;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 36px;
+            }
+
+            h2 {
+                font-size: 28px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/docs/index.html">Documentation</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="toc">
+                <div class="toc-title">Contents</div>
+                <ul class="toc-list">
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#seller-setup">Getting Started</a></li>
+                    <li><a href="#buyer-setup">How Buyers Shop</a></li>
+                    <li><a href="#orders">Receiving Orders</a></li>
+                    <li><a href="#payments">Payments</a></li>
+                    <li><a href="#api">Reports & Analytics</a></li>
+                    <li><a href="#troubleshooting">Troubleshooting</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="content">
+            <h1 id="overview">Wholesale Integration</h1>
+            <p class="subtitle">Connect your farm to the GreenReach wholesale marketplace</p>
+            <span class="badge">OPTIONAL FEATURE</span>
+
+            <div class="alert alert-info">
+                <div class="alert-title">What is GreenReach Wholesale?</div>
+                <p style="margin: 0;">GreenReach Central operates a wholesale marketplace where restaurants, retailers, and distributors shop from multiple farms in one order. Your Light Engine installation automatically shares your inventory with this marketplace, and you receive wholesale orders directly in your dashboard.</p>
+            </div>
+
+            <div class="alert alert-success">
+                <div class="alert-title">How It Works</div>
+                <ol style="margin: 0; padding-left: 40px;">
+                    <li style="margin-bottom: 12px;">Your Light Engine installation shares available inventory with GreenReach Central</li>
+                    <li style="margin-bottom: 12px;">Buyers browse products from all connected farms in one marketplace</li>
+                    <li style="margin-bottom: 12px;">When a buyer orders your products, you receive a notification</li>
+                    <li style="margin-bottom: 12px;">You verify you can fulfill the order (or decline if inventory changed)</li>
+                    <li style="margin-bottom: 12px;">You prepare and pack the order</li>
+                    <li>Buyer picks up or you deliver according to order details</li>
+                </ol>
+            </div>
+
+            <h2>Key Benefits</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-title">Automatic Listing</div>
+                    <div class="feature-desc">Your inventory appears in marketplace automatically - no manual updates needed</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">Order Notifications</div>
+                    <div class="feature-desc">Receive instant alerts when buyers order your products</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">24-Hour Verification</div>
+                    <div class="feature-desc">You have 24 hours to verify you can fulfill each order</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">Flexible Fulfillment</div>
+                    <div class="feature-desc">Farm pickup, local delivery, or shipping - you choose</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">Payment Handling</div>
+                    <div class="feature-desc">Buyers pay through marketplace, you receive payment after delivery</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">Multi-Buyer Orders</div>
+                    <div class="feature-desc">One buyer can order from multiple farms in single checkout</div>
+                </div>
+            </div>
+
+            <h2 id="seller-setup">Getting Started</h2>
+
+            <h3>Enable Wholesale</h3>
+            <p>Wholesale integration is automatically enabled on all Light Engine installations. Your inventory is shared with GreenReach Central marketplace every 5 minutes.</p>
+
+            <p><strong>To verify wholesale is active:</strong></p>
+            <ol>
+                <li>Open Sync Monitor (sync-monitor.html in your browser)</li>
+                <li>Check "Connection Status" shows "Connected"</li>
+                <li>Review "Last Sync Times" → Inventory (should be within 5 minutes)</li>
+            </ol>
+            
+            <p><strong>To configure wholesale settings:</strong></p>
+            <ol>
+                <li>Dashboard (farm-admin.html) → Settings Tab → Integrations Section</li>
+                <li>Check "Enable wholesale marketplace sync" checkbox</li>
+                <li>Enter your GreenReach API Key (from GreenReach Central dashboard)</li>
+                <li>Save settings</li>
+            </ol>
+
+            <h3>Your Farm Profile Is Pre-Configured</h3>
+            <p>Your farm's basic information is already set up in the system. This information is shared with wholesale buyers:</p>
+
+            <ul style="margin-left: 40px;">
+                <li style="margin-bottom: 12px;"><strong>Farm Name:</strong> Configured in config/farms.json</li>
+                <li style="margin-bottom: 12px;"><strong>Contact Information:</strong> Email and phone from farms.json</li>
+                <li style="margin-bottom: 12px;"><strong>Location:</strong> GPS coordinates for distance calculations</li>
+                <li style="margin-bottom: 12px;"><strong>Certifications:</strong> Selected during initial setup wizard (Step 3)</li>
+            </ul>
+
+            <div class="alert alert-info" style="margin-top: 20px;">
+                <div class="alert-title">About Certifications</div>
+                <p style="margin: 0;">During the touchscreen setup wizard (Step 3: Farm Certifications), you selected which certifications and practices apply to your farm. These checkboxes automatically populate your wholesale marketplace profile:</p>
+                <ul style="margin: 12px 0 0 24px;">
+                    <li>USDA Organic, GAP Certified, Food Safety Certified, Greenhouse Certified</li>
+                    <li>Pesticide Free, Non-GMO, Hydroponic, Local, Year-Round Production</li>
+                    <li>Woman-Owned, Veteran-Owned, Minority-Owned, Family Farm, Sustainable Practices</li>
+                </ul>
+            </div>
+
+            <h3>Pricing Is Automatic</h3>
+            <p>Wholesale pricing uses a simple markup model. You don't manually set wholesale prices for each product.</p>
+
+            <ul style="margin-left: 40px;">
+                <li style="margin-bottom: 12px;"><strong>Retail Pricing:</strong> Set your direct-to-consumer prices in farm-admin.html → Crop Pricing</li>
+                <li style="margin-bottom: 12px;"><strong>Wholesale Discount:</strong> Configured in farm-admin.html → Settings (default: 40% discount)</li>
+                <li style="margin-bottom: 12px;"><strong>Automatic Calculation:</strong> Wholesale price = Retail × (1 - discount %)</li>
+            </ul>
+
+            <div class="alert alert-info" style="margin-top: 20px;">
+                <div class="alert-title">Example: Butterhead Lettuce</div>
+                <p style="margin: 0;">If your retail price is <strong>$4.00/head</strong> and wholesale discount is <strong>40%</strong>:<br>
+                Wholesale price = $4.00 × (1 - 0.40) = <strong>$2.40/head</strong></p>
+            </div>
+
+            <h2 id="buyer-setup">How Buyers Use the Marketplace</h2>
+
+            <p><strong>Note:</strong> Buyers access GreenReach Central marketplace (separate platform). This section explains the buyer experience so you understand the order flow.</p>
+
+            <h3>Buyer Registration</h3>
+            <p>Restaurants and retailers register as wholesale buyers on GreenReach Central:</p>
+            <ol>
+                <li>Visit GreenReach Central marketplace</li>
+                <li>Click "Sign In / Register" button</li>
+                <li>Select "Register" tab</li>
+                <li>Enter business information:
+                    <ul>
+                        <li>Business name</li>
+                        <li>Contact name and work email</li>
+                        <li>Business type (restaurant, retailer, caterer, distributor, meal service, food co-op)</li>
+                        <li>Business postal code and province</li>
+                    </ul>
+                </li>
+                <li>Create password</li>
+                <li>Submit registration</li>
+            </ol>
+
+            <h3>Buyer Shopping Experience</h3>
+            <p>When buyers browse the marketplace, they see products from all connected farms:</p>
+            <ol>
+                <li>Browse products by category</li>
+                <li>View farm details and certifications</li>
+                <li>Add items from multiple farms to cart</li>
+                <li>At checkout, see which farms fulfill each item</li>
+                <li>Pay once through Square payment system</li>
+                <li>GreenReach sends order notifications to each farm</li>
+            </ol>
+
+            <h2 id="orders">Receiving and Fulfilling Orders</h2>
+
+            <h3>Order Notification</h3>
+            <p>When a buyer orders your products, you receive email notification with order details.</p>
+            
+            <h3>View Orders in Dashboard</h3>
+            <p>Open <strong>wholesale-farm-orders.html</strong> in your browser to see all incoming orders. The dashboard shows:</p>
+            <ul>
+                <li>Pending orders requiring action within 24 hours</li>
+                <li>Order details: buyer name, items, quantities, total amount</li>
+                <li>Action buttons: Accept Order, Modify Quantities, Decline Order</li>
+            </ul>
+
+            <h3>Order Verification (24-Hour Window)</h3>
+            <p>You have 24 hours to verify you can fulfill the order. Review the order in wholesale-farm-orders.html and choose one of three actions:</p>
+
+            <p><strong>Option 1: Accept Order</strong></p>
+            <ol>
+                <li>Confirm you have all items in requested quantities</li>
+                <li>Accept the order</li>
+                <li>Inventory is reserved for this buyer</li>
+                <li>Buyer receives confirmation</li>
+            </ol>
+
+            <p><strong>Option 2: Modify Quantities</strong></p>
+            <ol>
+                <li>Adjust quantities for items you can provide</li>
+                <li>Example: Ordered 50 heads lettuce, you have 40 heads available</li>
+                <li>Add note explaining changes</li>
+                <li>Submit modifications</li>
+                <li>Buyer receives notification and can accept or cancel</li>
+            </ol>
+
+            <p><strong>Option 3: Decline Order</strong></p>
+            <ol>
+                <li>Select reason (insufficient inventory, weather damage, equipment failure, other)</li>
+                <li>Add optional note</li>
+                <li>Decline the order</li>
+                <li>GreenReach may find alternate farm to fulfill</li>
+            </ol>
+
+            <div class="alert alert-warning">
+                <div class="alert-title">24-Hour Verification Deadline</div>
+                <p style="margin: 0;">If you don't respond within 24 hours, the order is automatically canceled and buyer receives full refund.</p>
+            </div>
+
+            <h3>Fulfilling the Order</h3>
+            <p>After accepting an order:</p>
+
+            <ol>
+                <li>Harvest products (if not already harvested)</li>
+                <li>Wash, trim, and pack according to buyer specifications</li>
+                <li>Label packages with buyer name and order number</li>
+                <li>Store at proper temperature until pickup</li>
+                <li>Coordinate pickup with buyer</li>
+            </ol>
+
+            <h3>Order Pickup</h3>
+            <p>When buyer arrives for pickup:</p>
+            <ol>
+                <li>Verify buyer identity</li>
+                <li>Load products into buyer's vehicle</li>
+                <li>Confirm pickup in system</li>
+                <li>Payment is processed automatically through Square</li>
+            </ol>
+
+            <h2 id="payments">Payment Processing</h2>
+
+            <h3>How Payments Work</h3>
+            <p>GreenReach uses Square to process all wholesale payments:</p>
+
+            <ol>
+                <li><strong>Buyer Pays:</strong> Credit card charged when order is placed</li>
+                <li><strong>Commission:</strong> GreenReach collects 12% commission for marketplace services</li>
+                <li><strong>Your Payment:</strong> You receive 88% of order value</li>
+                <li><strong>Processing:</strong> Square handles payment splits and commission distribution</li>
+            </ol>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Payment Example</div>
+                <p>Buyer orders $100 worth of produce from your farm:</p>
+                <ul style="margin: 0;">
+                    <li><strong>Buyer pays:</strong> $100.00</li>
+                    <li><strong>GreenReach commission (12%):</strong> $12.00</li>
+                    <li><strong>You receive:</strong> $88.00</li>
+                    <li>Commission covers: payment processing, marketplace platform, buyer acquisition, order coordination</li>
+                </ul>
+            </div>
+
+            <h2 id="troubleshooting">Troubleshooting</h2>
+
+            <h3>Not Receiving Order Notifications</h3>
+            <p><strong>Check your email:</strong></p>
+            <ul>
+                <li>Verify email address is correct in your farm profile</li>
+                <li>Check spam/junk folder for order notifications</li>
+                <li>Contact support@greenreach.io if issue persists</li>
+            </ul>
+
+            <a href="/docs/index.html" style="display: inline-block; background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-light) 100%); color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; margin-top: 24px;">Back to Documentation</a>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GreenReach. All rights reserved. | 
+           <a href="/privacy">Privacy Policy</a> | 
+           <a href="/terms">Terms of Service</a> | 
+           <a href="mailto:support@greenreach.io">Support</a>
+        </p>
+    </footer>
+
+    <script>
+        function copyCode(button) {
+            const codeBlock = button.nextElementSibling;
+            const code = codeBlock.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                }, 2000);
+            });
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.toc-list a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, { rootMargin: '-50% 0px -50% 0px' });
+
+        document.querySelectorAll('h2[id], h3[id]').forEach(heading => {
+            observer.observe(heading);
+        });
+    </script>
+</body>
+</html>

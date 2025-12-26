@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <title>Cloud Portal Setup - Light Engine</title>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0f1e; --surface: #111827; --surface-2: #1a2332;
+            --text-primary: #e5e7eb; --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6; --accent-blue-light: #60a5fa;
+            --accent-green: #10b981; --accent-green-light: #6ee7b7;
+            --border: #2d3748; --warning: #f59e0b; --success: #10b981;
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.7; }
+        header { background: rgba(10, 15, 30, 0.8); backdrop-filter: saturate(180%) blur(20px); border-bottom: 2px solid var(--accent-blue); box-shadow: var(--glow-blue); padding: 20px 40px; position: sticky; top: 0; z-index: 100; }
+        nav { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 24px; font-weight: 600; color: var(--accent-blue-light); text-decoration: none; text-shadow: var(--glow-blue); }
+        .nav-links { display: flex; gap: 24px; }
+        .nav-links a { color: var(--text-secondary); text-decoration: none; transition: color 0.3s; }
+        .nav-links a:hover { color: var(--accent-blue-light); }
+        .container { max-width: 1200px; margin: 0 auto; padding: 60px 40px; display: grid; grid-template-columns: 280px 1fr; gap: 60px; }
+        .sidebar { position: sticky; top: 100px; height: fit-content; }
+        .toc { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 24px; }
+        .toc-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--accent-blue-light); }
+        .toc-list { list-style: none; }
+        .toc-list li { margin-bottom: 12px; }
+        .toc-list a { color: var(--text-secondary); text-decoration: none; font-size: 14px; transition: color 0.3s; display: block; }
+        .toc-list a:hover { color: var(--accent-blue-light); }
+        .toc-list a.active { color: var(--accent-green-light); font-weight: 600; }
+        .content { min-width: 0; }
+        h1 { font-size: 48px; margin-bottom: 16px; background: linear-gradient(135deg, var(--accent-blue-light) 0%, var(--accent-green-light) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.6)); }
+        .subtitle { font-size: 20px; color: var(--text-secondary); margin-bottom: 40px; }
+        .badge { display: inline-block; padding: 6px 16px; background: rgba(59, 130, 246, 0.2); border: 1px solid var(--accent-blue); border-radius: 12px; font-size: 14px; color: var(--accent-blue-light); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; }
+        h2 { font-size: 32px; margin-top: 60px; margin-bottom: 24px; color: var(--accent-blue-light); padding-bottom: 12px; border-bottom: 2px solid var(--border); }
+        h3 { font-size: 24px; margin-top: 40px; margin-bottom: 16px; color: var(--accent-green-light); }
+        p { margin-bottom: 16px; color: var(--text-secondary); }
+        ul, ol { margin-left: 24px; margin-bottom: 16px; }
+        li { margin-bottom: 8px; color: var(--text-secondary); }
+        .alert { padding: 20px; border-radius: 8px; margin: 24px 0; border-left: 4px solid; }
+        .alert-info { background: rgba(59, 130, 246, 0.1); border-color: var(--accent-blue); color: var(--accent-blue-light); }
+        .alert-success { background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--accent-green-light); }
+        .alert-warning { background: rgba(245, 158, 11, 0.1); border-color: var(--warning); color: var(--warning); }
+        .alert-title { font-weight: 600; margin-bottom: 8px; font-size: 16px; }
+        .step-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 24px 0; }
+        .step-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 24px; transition: all 0.3s; }
+        .step-card:hover { border-color: var(--accent-blue); box-shadow: var(--glow-blue); }
+        .step-number { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--accent-blue); color: white; border-radius: 50%; font-weight: 600; margin-bottom: 12px; box-shadow: var(--glow-blue); font-size: 18px; }
+        .step-title { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+        .step-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+        .benefits-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 24px 0; }
+        .benefit-card { background: var(--surface); border: 2px solid var(--border); border-radius: 8px; padding: 20px; }
+        .benefit-title { font-size: 16px; font-weight: 600; color: var(--accent-green-light); margin-bottom: 8px; }
+        .benefit-desc { font-size: 14px; color: var(--text-secondary); }
+        .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin: 24px 0; }
+        .pricing-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 32px; text-align: center; transition: all 0.3s; }
+        .pricing-card:hover { border-color: var(--accent-blue); box-shadow: var(--glow-blue); transform: translateY(-4px); }
+        .pricing-card.featured { border-color: var(--accent-green); box-shadow: var(--glow-green); }
+        .plan-name { font-size: 24px; font-weight: 600; color: var(--accent-blue-light); margin-bottom: 8px; }
+        .plan-price { font-size: 48px; font-weight: 700; color: var(--accent-green-light); margin-bottom: 4px; }
+        .plan-price span { font-size: 18px; color: var(--text-secondary); }
+        .plan-desc { color: var(--text-secondary); margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+        .plan-features { list-style: none; text-align: left; margin: 0; }
+        .plan-features li { margin-bottom: 12px; padding-left: 24px; position: relative; }
+        .plan-features li:before { content: "✓"; position: absolute; left: 0; color: var(--accent-green-light); font-weight: 600; }
+        .cta-button { display: inline-block; background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-light) 100%); color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; margin-top: 24px; }
+        .cta-button:hover { box-shadow: var(--glow-blue); transform: translateY(-2px); }
+        .cta-button.primary { background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-light) 100%); }
+        .cta-button.primary:hover { box-shadow: var(--glow-green); }
+        footer { background: var(--surface); border-top: 1px solid var(--border); padding: 40px; text-align: center; color: var(--text-secondary); margin-top: 80px; }
+        footer a { color: var(--accent-blue-light); text-decoration: none; }
+        footer a:hover { color: var(--accent-green-light); }
+        @media (max-width: 1024px) { .container { grid-template-columns: 1fr; } .sidebar { position: static; } .benefits-grid, .step-grid, .pricing-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { h1 { font-size: 36px; } h2 { font-size: 28px; } .nav-links { display: none; } .plan-price { font-size: 36px; } }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/docs/index.html">Documentation</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="toc">
+                <div class="toc-title">Contents</div>
+                <ul class="toc-list">
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#benefits">Cloud Benefits</a></li>
+                    <li><a href="#setup">Access Dashboard</a></li>
+                    <li><a href="#team">AWS Infrastructure</a></li>
+                    <li><a href="#security">Security Features</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="content">
+            <h1 id="overview">Cloud Deployment</h1>
+            <p class="subtitle">Light Engine hosted on AWS - access from anywhere via web browser</p>
+            <span class="badge">Managed Hosting</span>
+
+            <div class="alert alert-info">
+                <div class="alert-title">What is Cloud Deployment?</div>
+                <p style="margin: 0;">Cloud deployment runs Light Engine on AWS Elastic Beanstalk - same software as edge devices, but hosted and managed in the cloud. Access your farm dashboard from any web browser without hardware installation. All data stored in AWS RDS PostgreSQL with automatic backups.</p>
+            </div>
+
+            <h2 id="benefits">Why Choose Cloud Deployment?</h2>
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <div class="benefit-title">No Hardware Required</div>
+                    <div class="benefit-desc">No Symcod device to purchase - runs entirely on AWS infrastructure</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Access Anywhere</div>
+                    <div class="benefit-desc">Manage farm from any device with web browser - laptop, tablet, phone</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Automatic Updates</div>
+                    <div class="benefit-desc">Software updates deployed automatically - always latest version</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Automatic Backups</div>
+                    <div class="benefit-desc">PostgreSQL RDS with automated daily backups and point-in-time recovery</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">CloudWatch Monitoring</div>
+                    <div class="benefit-desc">Built-in health monitoring with email alerts for system issues</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Managed Infrastructure</div>
+                    <div class="benefit-desc">AWS handles server maintenance, security patches, and scaling</div>
+                </div>
+            </div>
+
+            <h2 id="setup">Access Cloud Dashboard</h2>
+            
+            <div class="alert alert-warning">
+                <div class="alert-title">Contact for Cloud Hosting</div>
+                <p style="margin: 0;">Cloud deployment requires AWS account setup and configuration. Contact info@greenreachfarms.com for managed hosting options and pricing. Self-hosted AWS deployment instructions available in technical documentation.</p>
+            </div>
+
+            <h3>Current Production Deployment</h3>
+            <p>Light Engine Foxtrot is deployed on AWS Elastic Beanstalk:</p>
+            <ul>
+                <li><strong>Platform:</strong> AWS Elastic Beanstalk (Node.js 18)</li>
+                <li><strong>Database:</strong> PostgreSQL RDS with automated backups</li>
+                <li><strong>Region:</strong> US East (Virginia)</li>
+                <li><strong>Instance:</strong> t3.small (2 vCPU, 2 GB RAM)</li>
+                <li><strong>Monitoring:</strong> CloudWatch with email alerts</li>
+                <li><strong>Security:</strong> Rate limiting, audit logging, JWT authentication</li>
+            </ul>
+
+            <h3>What's Included</h3>
+            <ul>
+                <li>Complete farm management dashboard</li>
+                <li>60+ research-validated crop recipes</li>
+                <li>Inventory tracking and tray management</li>
+                <li>Environmental monitoring integration</li>
+                <li>Automation scheduling and control</li>
+                <li>Sales and customer management</li>
+                <li>Reporting and analytics</li>
+                <li>Automatic database backups (daily)</li>
+            </ul>
+
+            <h2 id="team">AWS Infrastructure</h2>
+            <p>Cloud deployment uses Amazon Web Services infrastructure:</p>
+
+            <h3>Application Hosting</h3>
+            <ul>
+                <li><strong>Elastic Beanstalk:</strong> Managed application platform with auto-scaling capability</li>
+                <li><strong>EC2 Instances:</strong> t3.small (2 vCPU, 2 GB RAM) - upgradeable for larger farms</li>
+                <li><strong>Load Balancing:</strong> Optional for high availability deployments</li>
+                <li><strong>Auto Scaling:</strong> Automatic capacity adjustment based on demand</li>
+            </ul>
+
+            <h3>Database</h3>
+            <ul>
+                <li><strong>RDS PostgreSQL:</strong> Managed database service with automated maintenance</li>
+                <li><strong>Automated Backups:</strong> Daily snapshots with 7-day retention</li>
+                <li><strong>Point-in-Time Recovery:</strong> Restore database to any point in time</li>
+                <li><strong>Multi-AZ Option:</strong> High availability with automatic failover</li>
+            </ul>
+
+            <h3>Monitoring & Alerts</h3>
+            <ul>
+                <li><strong>CloudWatch Alarms:</strong> CPU, memory, network, and status monitoring</li>
+                <li><strong>Email Notifications:</strong> SNS alerts for system issues</li>
+                <li><strong>Health Dashboard:</strong> Real-time system health and performance metrics</li>
+                <li><strong>Application Logs:</strong> Centralized logging for troubleshooting</li>
+            </ul>
+
+            <h2 id="security">Security Features</h2>
+            <p>Production deployment includes enterprise security:</p>
+
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <div class="benefit-title">Rate Limiting</div>
+                    <div class="benefit-desc">100 requests per 15 minutes per IP address to prevent abuse</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Audit Logging</div>
+                    <div class="benefit-desc">All API requests logged to CloudWatch and local files</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">JWT Authentication</div>
+                    <div class="benefit-desc">Secure token-based authentication with AWS Secrets Manager</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">CORS Protection</div>
+                    <div class="benefit-desc">Cross-origin request filtering to prevent unauthorized access</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Encrypted Secrets</div>
+                    <div class="benefit-desc">Database credentials and JWT secrets stored in AWS Secrets Manager</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">VPC Security Groups</div>
+                    <div class="benefit-desc">Network-level firewall rules controlling inbound/outbound traffic</div>
+                </div>
+            </div>
+
+            <h2>Need Help?</h2>
+            <div class="alert alert-info">
+                <div class="alert-title">Contact Information</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li>Email: <a href="mailto:info@greenreachfarms.com" style="color: var(--accent-green-light);">info@greenreachfarms.com</a></li>
+                    <li>Documentation: <a href="/docs/index.html" style="color: var(--accent-green-light);">Technical Documentation Hub</a></li>
+                    <li>AWS Deployment Guide: Available in docs/AWS_DEPLOYMENT_GUIDE.md</li>
+                </ul>
+            </div>
+
+            <a href="/docs/index.html" class="cta-button primary" style="display: inline-block; margin-top: 24px;">Back to Documentation</a>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GreenReach. All rights reserved. | 
+           <a href="/privacy">Privacy Policy</a> | 
+           <a href="/terms">Terms of Service</a> | 
+           <a href="mailto:support@greenreach.io">Support</a>
+        </p>
+    </footer>
+
+    <script>
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.toc-list a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) { link.classList.add('active'); }
+                    });
+                }
+            });
+        }, { rootMargin: '-50% 0px -50% 0px' });
+        document.querySelectorAll('h2[id], h3[id]').forEach(heading => { observer.observe(heading); });
+    </script>
+</body>
+</html>

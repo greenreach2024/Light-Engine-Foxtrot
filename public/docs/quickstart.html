@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <title>Quick Start - Light Engine</title>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0f1e; --surface: #111827; --surface-2: #1a2332;
+            --text-primary: #e5e7eb; --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6; --accent-blue-light: #60a5fa;
+            --accent-green: #10b981; --accent-green-light: #6ee7b7;
+            --border: #2d3748; --warning: #f59e0b; --success: #10b981;
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.7; }
+        header { background: rgba(10, 15, 30, 0.8); backdrop-filter: saturate(180%) blur(20px); border-bottom: 2px solid var(--accent-blue); box-shadow: var(--glow-blue); padding: 20px 40px; position: sticky; top: 0; z-index: 100; }
+        nav { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 24px; font-weight: 600; color: var(--accent-blue-light); text-decoration: none; text-shadow: var(--glow-blue); }
+        .nav-links { display: flex; gap: 24px; }
+        .nav-links a { color: var(--text-secondary); text-decoration: none; transition: color 0.3s; }
+        .nav-links a:hover { color: var(--accent-blue-light); }
+        .container { max-width: 1200px; margin: 0 auto; padding: 60px 40px; display: grid; grid-template-columns: 280px 1fr; gap: 60px; }
+        .sidebar { position: sticky; top: 100px; height: fit-content; }
+        .toc { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 24px; }
+        .toc-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--accent-blue-light); }
+        .toc-list { list-style: none; }
+        .toc-list li { margin-bottom: 12px; }
+        .toc-list a { color: var(--text-secondary); text-decoration: none; font-size: 14px; transition: color 0.3s; display: block; }
+        .toc-list a:hover { color: var(--accent-blue-light); }
+        .toc-list a.active { color: var(--accent-green-light); font-weight: 600; }
+        .content { min-width: 0; }
+        h1 { font-size: 48px; margin-bottom: 16px; background: linear-gradient(135deg, var(--accent-blue-light) 0%, var(--accent-green-light) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.6)); }
+        .subtitle { font-size: 20px; color: var(--text-secondary); margin-bottom: 40px; }
+        .badge { display: inline-block; padding: 6px 16px; background: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent-green); border-radius: 12px; font-size: 14px; color: var(--accent-green-light); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; }
+        h2 { font-size: 32px; margin-top: 60px; margin-bottom: 24px; color: var(--accent-blue-light); padding-bottom: 12px; border-bottom: 2px solid var(--border); }
+        h3 { font-size: 24px; margin-top: 40px; margin-bottom: 16px; color: var(--accent-green-light); }
+        p { margin-bottom: 16px; color: var(--text-secondary); }
+        ul, ol { margin-left: 24px; margin-bottom: 16px; }
+        li { margin-bottom: 8px; color: var(--text-secondary); }
+        .alert { padding: 20px; border-radius: 8px; margin: 24px 0; border-left: 4px solid; }
+        .alert-info { background: rgba(59, 130, 246, 0.1); border-color: var(--accent-blue); color: var(--accent-blue-light); }
+        .alert-success { background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--accent-green-light); }
+        .alert-title { font-weight: 600; margin-bottom: 8px; font-size: 16px; }
+        .code-block { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin: 24px 0; position: relative; overflow-x: auto; }
+        .code-block code { font-family: 'Monaco', 'Courier New', monospace; font-size: 14px; color: var(--accent-green-light); line-height: 1.6; white-space: pre; display: block; }
+        .copy-btn { position: absolute; top: 12px; right: 12px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer; opacity: 0.7; transition: opacity 0.3s; }
+        .copy-btn:hover { opacity: 1; box-shadow: var(--glow-blue); }
+        .step-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 24px 0; }
+        .step-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 24px; transition: all 0.3s; }
+        .step-card:hover { border-color: var(--accent-blue); box-shadow: var(--glow-blue); }
+        .step-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--accent-blue); color: white; border-radius: 50%; font-weight: 600; margin-bottom: 12px; box-shadow: var(--glow-blue); }
+        .step-title { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+        .step-desc { font-size: 14px; color: var(--text-secondary); }
+        .links-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 24px 0; }
+        .link-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-decoration: none; display: block; transition: all 0.3s; }
+        .link-item:hover { border-color: var(--accent-green); box-shadow: var(--glow-green); }
+        .link-title { font-size: 16px; font-weight: 600; color: var(--accent-green-light); margin-bottom: 4px; }
+        .link-url { font-size: 12px; color: var(--text-secondary); font-family: monospace; }
+        footer { background: var(--surface); border-top: 1px solid var(--border); padding: 40px; text-align: center; color: var(--text-secondary); margin-top: 80px; }
+        footer a { color: var(--accent-blue-light); text-decoration: none; }
+        footer a:hover { color: var(--accent-green-light); }
+        @media (max-width: 1024px) { .container { grid-template-columns: 1fr; } .sidebar { position: static; } .step-grid, .links-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { h1 { font-size: 36px; } h2 { font-size: 28px; } .nav-links { display: none; } }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/docs/index.html">Documentation</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="toc">
+                <div class="toc-title">Contents</div>
+                <ul class="toc-list">
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#prerequisites">Symcod Setup</a></li>
+                    <li><a href="#local-dev">Dashboard Access</a></li>
+                    <li><a href="#testing">First Tasks</a></li>
+                    <li><a href="#next-steps">Learn More</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="content">
+            <h1 id="overview">Quick Start</h1>
+            <p class="subtitle">Your Symcod W101M device is ready to use - just power on and follow the touchscreen wizard.</p>
+            <span class="badge">For Growers</span>
+
+            <div class="alert alert-success">
+                <div class="alert-title">Pre-Installed & Ready</div>
+                <p style="margin: 0;">Your Symcod W101M ships with Light Engine already installed. No downloads, no installation, no setup commands. Just power on.</p>
+            </div>
+
+            <h2 id="prerequisites">Getting Started with Symcod W101M</h2>
+            
+            <h3>Step 1: Physical Setup</h3>
+            <ol>
+                <li>Unpack your Symcod W101M device</li>
+                <li>Connect power adapter (included)</li>
+                <li>Connect ethernet cable to your router (for initial setup)</li>
+                <li>Press power button</li>
+                <li>Device boots in 30 seconds - touchscreen lights up</li>
+            </ol>
+
+            <h3>Step 2: Touchscreen Setup Wizard</h3>
+            <p>The setup wizard guides you through 6 simple steps. Takes about 10 minutes:</p>
+
+            <div class="step-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Welcome</div>
+                    <div class="step-desc">Tap "Start Setup"</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Network</div>
+                    <div class="step-desc">Connect to WiFi (or use ethernet)</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Farm Info</div>
+                    <div class="step-desc">Enter farm name and location</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <div class="step-title">Certifications</div>
+                    <div class="step-desc">Select certifications (USDA Organic, GlobalGAP, etc.)</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">5</div>
+                    <div class="step-title">Hardware</div>
+                    <div class="step-desc">System scans for sensors automatically</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">6</div>
+                    <div class="step-title">Complete</div>
+                    <div class="step-desc">Dashboard launches automatically</div>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <div class="alert-title">What You Need</div>
+                <p style="margin-bottom: 8px;">Before starting setup, have ready:</p>
+                <ol style="margin: 0; padding-left: 20px;">
+                    <li><strong>WiFi password</strong> (if not using ethernet)</li>
+                    <li><strong>Farm name</strong> (example: "Oakwood Farms")</li>
+                    <li><strong>Certification info</strong> (if your farm has certifications)</li>
+                </ol>
+            </div>
+
+            <h2 id="local-dev">Accessing Your Dashboard</h2>
+            
+            <p>After setup completes, access your dashboard three ways:</p>
+
+            <h3>On the Symcod Touchscreen</h3>
+            <p>Dashboard opens automatically on the device screen. Use it like an iPad.</p>
+
+            <h3>From Your Computer or Tablet</h3>
+            <p>Open any browser and go to:</p>
+            <ul>
+                <li><strong>http://light-engine.local</strong> (works on most networks)</li>
+                <li>Or use the IP address shown on Symcod screen</li>
+            </ul>
+
+            <h3>Via Cloud Portal</h3>
+            <p>Access your farm from anywhere at <strong>portal.greenreach.io</strong></p>
+
+            <h2 id="testing">First Tasks After Setup</h2>
+
+            <div class="step-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Choose a Recipe</div>
+                    <div class="step-desc">Dashboard → Recipes → Pick from 60+ validated crops</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Create First Tray</div>
+                    <div class="step-desc">Dashboard → Trays → Add Tray → Select crop and seed date</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Print QR Labels</div>
+                    <div class="step-desc">Tools → QR Generator → Generate labels for tracking</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <div class="step-title">Record Harvest</div>
+                    <div class="step-desc">Tap tray → Record Harvest → Enter weight</div>
+                </div>
+            </div>
+
+            <h2 id="next-steps">Learn More</h2>
+
+            <div class="step-grid">
+                <a href="/docs/first-run-setup.html" class="step-card" style="text-decoration: none;">
+                    <div class="step-title">First Run Setup</div>
+                    <div class="step-desc">Detailed guide to the touchscreen setup wizard</div>
+                </a>
+                <a href="/docs/tray-tracking.html" class="step-card" style="text-decoration: none;">
+                    <div class="step-title">Tray Tracking</div>
+                    <div class="step-desc">How to track trays with QR labels</div>
+                </a>
+                <a href="/docs/wholesale-integration.html" class="step-card" style="text-decoration: none;">
+                    <div class="step-title">Wholesale Orders</div>
+                    <div class="step-desc">Sell to restaurants via GreenReach Central</div>
+                </a>
+                <a href="/docs/edge-deployment.html" class="step-card" style="text-decoration: none;">
+                    <div class="step-title">Device Specs</div>
+                    <div class="step-desc">Symcod W101M technical specifications</div>
+                </a>
+            </div>
+
+            <div class="alert alert-info">
+                <div class="alert-title">60+ Pre-Loaded Recipes</div>
+                <p style="margin-bottom: 12px;">Light Engine includes research-validated recipes for:</p>
+                <ul style="margin: 0;">
+                    <li><strong>Leafy Greens:</strong> Butterhead Lettuce, Romaine, Arugula, Kale, Spinach, Bok Choy, Swiss Chard</li>
+                    <li><strong>Herbs:</strong> Basil (multiple varieties), Cilantro, Parsley, Mint, Dill, Oregano</li>
+                    <li><strong>Specialty:</strong> Microgreens (15+ varieties), Edible Flowers, Cherry Tomatoes, Cucumbers, Strawberries</li>
+                </ul>
+                <p style="margin-top: 12px; margin-bottom: 0;">Each recipe includes lighting schedules, temperature ranges, humidity targets, and growth stage transitions.</p>
+            </div>
+
+            <div class="alert alert-success">
+                <div class="alert-title">Need Help?</div>
+                <p style="margin: 0;">Questions? Email <a href="mailto:support@greenreach.io" style="color: var(--accent-green-light);">support@greenreach.io</a> for assistance.</p>
+            </div>
+
+            <a href="/docs/index.html" style="display: inline-block; background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-light) 100%); color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; margin-top: 24px;">Back to Documentation</a>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GreenReach. All rights reserved. | 
+           <a href="/privacy">Privacy Policy</a> | 
+           <a href="/terms">Terms of Service</a> | 
+           <a href="mailto:support@greenreach.io">Support</a>
+        </p>
+    </footer>
+
+    <script>
+        function copyCode(button) {
+            const codeBlock = button.nextElementSibling;
+            const code = codeBlock.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                button.textContent = 'Copied!';
+                setTimeout(() => { button.textContent = 'Copy'; }, 2000);
+            });
+        }
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.toc-list a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) { link.classList.add('active'); }
+                    });
+                }
+            });
+        }, { rootMargin: '-50% 0px -50% 0px' });
+        document.querySelectorAll('h2[id], h3[id]').forEach(heading => { observer.observe(heading); });
+    </script>
+</body>
+</html>

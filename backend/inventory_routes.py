@@ -841,4 +841,87 @@ def harvest_forecast_buckets(db: Session = Depends(get_db)):
     }
 
 
-__all__ = ["router"]
+@router.get("/analytics/yield-by-tray")
+def get_yield_analytics(request: Request, db: Session = Depends(get_db)):
+    """Get yield analytics aggregated by crop type"""
+    
+    results = db.query(
+        TrayRun.recipe_id,
+        func.count(TrayRun.tray_run_id).label('tray_count'),
+        func.sum(TrayRun.actual_weight).label('total_yield'),
+        func.avg(TrayRun.actual_weight).label('avg_yield'),
+        func.min(TrayRun.actual_weight).label('min_yield'),
+        func.max(TrayRun.actual_weight).label('max_yield')
+    ).filter(
+        TrayRun.status == 'HARVESTED',
+        TrayRun.actual_weight.isnot(None)
+    ).group_by(
+        TrayRun.recipe_id
+    ).all()
+    
+    plan_store = _get_plan_store(request)
+    
+    analytics = []
+    for result in results:
+        # Get recipe name from plan store
+        recipe = plan_store.get(result.recipe_id) if plan_store else None
+        crop_name = recipe.get('name', 'Unknown') if recipe else 'Unknown'
+        expected_yield = recipe.get('expectedYield', 2.0) if recipe else 2.0
+        
+        analytics.append({
+            'recipeId': result.recipe_id,
+            'cropName': crop_name,
+            'trayCount': result.tray_count,
+            'totalYield': float(result.total_yield or 0),
+            'avgYield': float(result.avg_yield or 0),
+            'minYield': float(result.min_yield or 0),
+            'maxYield': float(result.max_yield or 0),
+            'expectedYield': expected_yield
+        })
+    
+    return analytics
+
+
+@router.get("/tray-runs/{tray_run_id}/photos")
+def get_tray_photos(tray_run_id: str, db: Session = Depends(get_db)):
+    """Get photo history for a tray run"""
+    
+    # Get tray run to get tray code
+    tray_run = db.query(TrayRun).filter_by(tray_run_id=tray_run_id).first()
+    if not tray_run:
+        raise HTTPException(status_code=404, detail="Tray run not found")
+    
+    # Get tray to get QR code
+    tray = db.query(Tray).filter_by(tray_id=str(tray_run.tray_id)).first()
+    if not tray:
+        return []
+    
+    # Query photos from database (assuming quality_control_photos table exists)
+    # This is a placeholder - adjust table name and columns as needed
+    try:
+        photos_query = db.execute(
+            """
+            SELECT id, image_url, created_at, note, ai_analysis
+            FROM quality_control_photos
+            WHERE tray_code = :tray_code
+            ORDER BY created_at DESC
+            """,
+            {"tray_code": tray.qr_code_value}
+        )
+        
+        photos = []
+        for row in photos_query:
+            photos.append({
+                'id': str(row.id),
+                'imageUrl': row.image_url,
+                'createdAt': row.created_at.isoformat(),
+                'note': row.note,
+                'aiAnalysis': row.ai_analysis
+            })
+        
+        return photos
+    except Exception as e:
+        # If table doesn't exist or query fails, return empty array
+        return []
+
+

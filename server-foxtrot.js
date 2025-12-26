@@ -9450,6 +9450,31 @@ app.use('/api/mdns', mdnsDiscoveryRouter);
 app.use('/api/migration', migrationRouter);
 
 /**
+ * QR Code Bulk Generator Routes
+ * - POST /api/qr-generator/generate: Generate sequential QR codes (PDF or JSON)
+ * - GET /api/qr-generator/available-range: Get next available code range
+ * - POST /api/qr-generator/validate: Check if codes already exist
+ */
+import { router as qrGeneratorRouter } from './routes/qr-generator.js';
+app.use('/api/qr-generator', qrGeneratorRouter);
+
+/**
+ * Thermal Printer API Routes
+ * - POST /api/printer/print-tray: Print tray label with QR code
+ * - POST /api/printer/print-harvest: Print harvest label
+ * - POST /api/printer/print-packing: Print wholesale packing label
+ * - POST /api/printer/print-raw: Print raw ZPL/EPL data
+ * - GET /api/printer/queue: View print queue status
+ * - GET /api/printer/job/:id: Get job status
+ * - DELETE /api/printer/job/:id: Cancel pending job
+ * - POST /api/printer/clear: Clear completed jobs
+ * - POST /api/printer/test: Test printer connection
+ * - GET /api/printer/list: List available USB printers
+ */
+import { router as printerRouter } from './routes/thermal-printer.js';
+app.use('/api/printer', printerRouter);
+
+/**
  * Edge Device Setup & Activation Routes
  * - POST /api/setup/activate: Activate device with activation code
  * - GET /api/setup/hardware: Get hardware information

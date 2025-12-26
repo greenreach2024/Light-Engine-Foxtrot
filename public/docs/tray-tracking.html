@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <title>Tray Tracking System - Light Engine</title>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0f1e;
+            --surface: #111827;
+            --surface-2: #1a2332;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-blue-light: #60a5fa;
+            --accent-green: #10b981;
+            --accent-green-light: #6ee7b7;
+            --border: #2d3748;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.7; }
+        header { background: rgba(10, 15, 30, 0.8); backdrop-filter: saturate(180%) blur(20px); border-bottom: 2px solid var(--accent-blue); box-shadow: var(--glow-blue); padding: 20px 40px; position: sticky; top: 0; z-index: 100; }
+        nav { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 24px; font-weight: 600; color: var(--accent-blue-light); text-decoration: none; text-shadow: var(--glow-blue); }
+        .nav-links { display: flex; gap: 24px; }
+        .nav-links a { color: var(--text-secondary); text-decoration: none; transition: color 0.3s; }
+        .nav-links a:hover { color: var(--accent-blue-light); }
+        .container { max-width: 1200px; margin: 0 auto; padding: 60px 40px; display: grid; grid-template-columns: 280px 1fr; gap: 60px; }
+        .sidebar { position: sticky; top: 100px; height: fit-content; }
+        .toc { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 24px; }
+        .toc-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--accent-blue-light); }
+        .toc-list { list-style: none; }
+        .toc-list li { margin-bottom: 12px; }
+        .toc-list a { color: var(--text-secondary); text-decoration: none; font-size: 14px; transition: color 0.3s; display: block; }
+        .toc-list a:hover { color: var(--accent-blue-light); }
+        .toc-list a.active { color: var(--accent-green-light); font-weight: 600; }
+        .content { min-width: 0; }
+        h1 { font-size: 48px; margin-bottom: 16px; background: linear-gradient(135deg, var(--accent-blue-light) 0%, var(--accent-green-light) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.6)); }
+        .subtitle { font-size: 20px; color: var(--text-secondary); margin-bottom: 40px; }
+        .badge { display: inline-block; padding: 6px 16px; background: rgba(59, 130, 246, 0.2); border: 1px solid var(--accent-blue); border-radius: 12px; font-size: 14px; color: var(--accent-blue-light); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; box-shadow: var(--glow-blue); }
+        h2 { font-size: 32px; margin-top: 60px; margin-bottom: 24px; color: var(--accent-blue-light); padding-bottom: 12px; border-bottom: 2px solid var(--border); }
+        h3 { font-size: 24px; margin-top: 40px; margin-bottom: 16px; color: var(--accent-green-light); }
+        p { margin-bottom: 16px; color: var(--text-secondary); }
+        ul, ol { margin-left: 24px; margin-bottom: 16px; }
+        li { margin-bottom: 8px; color: var(--text-secondary); }
+        .alert { padding: 20px; border-radius: 8px; margin: 24px 0; border-left: 4px solid; }
+        .alert-info { background: rgba(59, 130, 246, 0.1); border-color: var(--accent-blue); color: var(--accent-blue-light); }
+        .alert-warning { background: rgba(245, 158, 11, 0.1); border-color: var(--warning); color: var(--warning); }
+        .alert-success { background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--accent-green-light); }
+        .alert-title { font-weight: 600; margin-bottom: 8px; font-size: 16px; }
+        .code-block { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin: 24px 0; position: relative; overflow-x: auto; }
+        .code-block code { font-family: 'Monaco', 'Courier New', monospace; font-size: 14px; color: var(--accent-green-light); line-height: 1.6; white-space: pre; display: block; }
+        .copy-btn { position: absolute; top: 12px; right: 12px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer; opacity: 0.7; transition: opacity 0.3s; }
+        .copy-btn:hover { opacity: 1; box-shadow: var(--glow-blue); }
+        .printer-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0; }
+        .printer-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; }
+        .printer-name { font-size: 18px; font-weight: 600; color: var(--accent-blue-light); margin-bottom: 12px; }
+        footer { background: var(--surface); border-top: 1px solid var(--border); padding: 40px; text-align: center; color: var(--text-secondary); margin-top: 80px; }
+        footer a { color: var(--accent-blue-light); text-decoration: none; }
+        footer a:hover { color: var(--accent-green-light); }
+        @media (max-width: 1024px) { .container { grid-template-columns: 1fr; } .sidebar { position: static; } .printer-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { h1 { font-size: 36px; } h2 { font-size: 28px; } .nav-links { display: none; } }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/docs/index.html">Documentation</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="toc">
+                <div class="toc-title">Contents</div>
+                <ul class="toc-list">
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#qr-generator">Printing Labels</a></li>
+                    <li><a href="#thermal-printing">Using Labels</a></li>
+                    <li><a href="#dashboard">Finding Trays</a></li>
+                    <li><a href="#batch-harvest">Batch Harvest</a></li>
+                    <li><a href="#photo-timeline">Photo Timeline</a></li>
+                    <li><a href="#analytics">Yield Reports</a></li>
+                    <li><a href="#troubleshooting">Common Questions</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="content">
+            <h1 id="overview">Tray Tracking System</h1>
+            <p class="subtitle">Track every tray from seeding to harvest with QR labels and photo documentation</p>
+            <span class="badge">FEATURE</span>
+
+            <div class="alert alert-success">
+                <div class="alert-title">Track Your Trays</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li><strong>QR Code Labels:</strong> Print waterproof labels for every tray</li>
+                    <li><strong>Photo Timeline:</strong> Take pictures throughout the grow cycle</li>
+                    <li><strong>Batch Harvest:</strong> Record multiple trays at once to save time</li>
+                    <li><strong>Yield Reports:</strong> See which crops perform best</li>
+                </ul>
+            </div>
+
+            <h2 id="qr-generator">Printing Tray Labels</h2>
+            
+            <p><strong>What you need:</strong> Brother or Zebra thermal label printer with waterproof labels (2" x 3" recommended)</p>
+
+            <h3>Step 1: Generate QR Codes</h3>
+            <ol>
+                <li>From your farm dashboard, tap <strong>Tools</strong></li>
+                <li>Tap <strong>QR Label Generator</strong></li>
+                <li>Enter your <strong>Farm ID</strong> (shown at top of dashboard)</li>
+                <li>Choose a prefix like <strong>FARM-TRAY-</strong></li>
+                <li>Enter starting number (example: <strong>1000</strong> if this is your first batch)</li>
+                <li>Enter how many labels you need (example: <strong>500</strong> for 500 trays)</li>
+                <li>Tap <strong>Generate Codes</strong></li>
+                <li>A PDF file will download with all your QR code labels</li>
+            </ol>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Tip: Start Number</div>
+                <p>If this is your first time printing labels, start at <strong>1000</strong>. The system tracks which codes you've used so next time it will suggest <strong>1500</strong> automatically.</p>
+            </div>
+
+            <h3>Step 2: Print Labels</h3>
+            <ol>
+                <li>Connect your Brother or Zebra printer to your Symcod device via USB or WiFi</li>
+                <li>Load waterproof labels into the printer</li>
+                <li>Open the PDF file you downloaded</li>
+                <li>Print all pages - each QR code will fit on one label</li>
+                <li>Peel and stick labels onto clean, dry tray edges</li>
+            </ol>
+
+            <h2 id="thermal-printing">Using Labels on Your Farm</h2>
+
+            <h3>First Time Scanning a Tray</h3>
+            <ol>
+                <li>Put fresh tray on your seeding bench</li>
+                <li>Stick QR label on edge of tray</li>
+                <li>Open <strong>Dashboard</strong> → <strong>Trays</strong></li>
+                <li>Tap <strong>+ New Tray</strong></li>
+                <li>Scan or type the QR code</li>
+                <li>Select crop (example: <strong>Butterhead Lettuce</strong>)</li>
+                <li>Enter seed date (today by default)</li>
+                <li>Tap <strong>Create Tray</strong></li>
+                <li>System automatically links the QR code to this tray</li>
+            </ol>
+
+            <div class="alert alert-info">
+                <div class="alert-title">What Happens</div>
+                <p>The first time you scan a QR code, Light Engine <strong>registers</strong> that code to your new tray. After that, anytime you scan that same code, it pulls up this tray's information.</p>
+            </div>
+
+            <h3>Scanning Trays Later</h3>
+            <ol>
+                <li>From <strong>Dashboard</strong> → <strong>Trays</strong></li>
+                <li>Tap <strong>Search Tray</strong></li>
+                <li>Scan the QR code on the tray</li>
+                <li>System instantly shows you that tray's details:
+                    <ul>
+                        <li>Crop type and planting date</li>
+                        <li>Days since seeding</li>
+                        <li>Expected harvest date</li>
+                        <li>Weight recorded (if harvested)</li>
+                        <li>Photos taken over time</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h2 id="dashboard">Finding and Filtering Trays</h2>
+
+            <p>As your tray inventory grows, you'll need to filter and sort trays to find what you're looking for quickly.</p>
+
+            <h3>Filter Trays by Crop</h3>
+            <ol>
+                <li>Open <strong>Dashboard</strong> → <strong>Trays</strong></li>
+                <li>Tap the <strong>Filter</strong> button at top</li>
+                <li>Select <strong>Crop Type</strong> dropdown</li>
+                <li>Choose crop (example: <strong>Arugula</strong>)</li>
+                <li>System shows only arugula trays</li>
+            </ol>
+
+            <h3>Filter by Location</h3>
+            <ol>
+                <li>From Tray Filters screen</li>
+                <li>Select <strong>Location</strong> dropdown</li>
+                <li>Choose location (example: <strong>Germination Room</strong>)</li>
+                <li>System shows only trays in that room</li>
+            </ol>
+
+            <h3>Filter by Date Range</h3>
+            <ol>
+                <li>From Tray Filters screen</li>
+                <li>Tap <strong>Date From</strong> and choose start date</li>
+                <li>Tap <strong>Date To</strong> and choose end date</li>
+                <li>System shows trays seeded in that date range</li>
+            </ol>
+
+            <h3>Filter by Status</h3>
+            <ol>
+                <li>From Tray Filters screen</li>
+                <li>Select <strong>Status</strong> dropdown</li>
+                <li>Choose status:
+                    <ul>
+                        <li><strong>Seeded:</strong> Trays just planted</li>
+                        <li><strong>Growing:</strong> Trays actively growing</li>
+                        <li><strong>Ready:</strong> Trays ready to harvest</li>
+                        <li><strong>Harvested:</strong> Already harvested</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Combine Filters</div>
+                <p>You can use multiple filters at once. For example: Show all <strong>Butterhead Lettuce</strong> trays in <strong>Grow Room 2</strong> that are <strong>Ready</strong> to harvest.</p>
+            </div>
+
+            <h2 id="batch-harvest">Batch Harvest Recording</h2>
+
+            <p><strong>Problem:</strong> Recording harvest weight for 50+ trays one-by-one takes too long.</p>
+            <p><strong>Solution:</strong> Batch Harvest Mode lets you select multiple trays and record their total weight at once.</p>
+
+            <h3>How to Record Batch Harvest</h3>
+            <ol>
+                <li>Open <strong>Dashboard</strong> → <strong>Trays</strong></li>
+                <li>Tap <strong>Batch Harvest</strong> button at top</li>
+                <li>Now tap each tray you want to harvest - they turn blue when selected</li>
+                <li>Counter shows how many selected (example: <strong>12 trays selected</strong>)</li>
+                <li>When all trays selected, tap <strong>Record Harvest</strong></li>
+                <li>Enter <strong>total weight</strong> for all trays combined (example: <strong>36 kg</strong>)</li>
+                <li>Tap <strong>Save</strong></li>
+                <li>System divides weight equally (36 kg ÷ 12 trays = 3 kg per tray)</li>
+                <li>All 12 trays marked as <strong>Harvested</strong></li>
+            </ol>
+
+            <div class="alert alert-success">
+                <div class="alert-title">Time Savings</div>
+                <p>Batch Harvest mode cuts harvest recording time by <strong>80%</strong>. Instead of entering weight for 50 trays individually (15 minutes), do it in one action (3 minutes).</p>
+            </div>
+
+            <h2 id="photo-timeline">Photo Timeline</h2>
+
+            <p>Track how each tray grows by taking pictures at key stages (seeding, germination, mature, harvest-ready).</p>
+
+            <h3>Take a Photo of a Tray</h3>
+            <ol>
+                <li>Open <strong>Dashboard</strong> → <strong>Trays</strong></li>
+                <li>Scan or tap the tray you want to photograph</li>
+                <li>Tap <strong>Add Photo</strong> button</li>
+                <li>Take picture with your device camera (or upload from gallery)</li>
+                <li>Add note (optional, example: <strong>"Day 7 - good germination"</strong>)</li>
+                <li>Tap <strong>Save Photo</strong></li>
+            </ol>
+
+            <h3>View Photo History</h3>
+            <ol>
+                <li>Open any tray details page</li>
+                <li>Scroll down to <strong>Photo Timeline</strong> section</li>
+                <li>See all photos in chronological order with dates</li>
+                <li>Tap any photo to view full size</li>
+            </ol>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Why Photos Matter</div>
+                <p>Photos let you compare growth patterns across batches. If one lettuce tray looks stunted at Day 10, you can compare its photo to previous batches to diagnose issues.</p>
+            </div>
+
+            <h2 id="analytics">Yield Reports</h2>
+
+            <p>See which crops perform best and track yield trends over time.</p>
+
+            <h3>View Yield Analytics</h3>
+            <ol>
+                <li>Open <strong>Dashboard</strong> → <strong>Reports</strong></li>
+                <li>Tap <strong>Yield by Crop</strong></li>
+                <li>System shows chart and table with:
+                    <ul>
+                        <li><strong>Total Yield:</strong> Sum of all harvested trays for that crop</li>
+                        <li><strong>Average per Tray:</strong> Typical weight you can expect</li>
+                        <li><strong>Minimum:</strong> Lowest-performing tray</li>
+                        <li><strong>Maximum:</strong> Best-performing tray</li>
+                        <li><strong>Performance %:</strong> Actual yield vs. expected yield</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h3>Example Report</h3>
+            <table style="width: 100%; margin: 1rem 0; border-collapse: collapse;">
+                <thead style="background: rgba(52, 211, 153, 0.2);">
+                    <tr>
+                        <th style="padding: 0.75rem; text-align: left; border: 1px solid rgba(148, 163, 184, 0.3);">Crop</th>
+                        <th style="padding: 0.75rem; text-align: left; border: 1px solid rgba(148, 163, 184, 0.3);">Trays</th>
+                        <th style="padding: 0.75rem; text-align: left; border: 1px solid rgba(148, 163, 184, 0.3);">Total Yield</th>
+                        <th style="padding: 0.75rem; text-align: left; border: 1px solid rgba(148, 163, 184, 0.3);">Avg/Tray</th>
+                        <th style="padding: 0.75rem; text-align: left; border: 1px solid rgba(148, 163, 184, 0.3);">Performance</th>
+                    </tr>
+                </thead>
+                <tbody style="background: rgba(30, 41, 59, 0.4);">
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">Butterhead Lettuce</td>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">120</td>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">360 kg</td>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">3.0 kg</td>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">105%</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">Arugula</td>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">80</td>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">144 kg</td>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">1.8 kg</td>
+                        <td style="padding: 0.75rem; border: 1px solid rgba(148, 163, 184, 0.3);">97%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="alert alert-success">
+                <div class="alert-title">What the Numbers Mean</div>
+                <p><strong>105% Performance</strong> means your actual yield is 5% higher than expected. This helps you identify which crops are most profitable and which need recipe adjustments.</p>
+            </div>
+
+            <h2 id="troubleshooting">Common Questions</h2>
+
+            <h3>Can I reuse QR labels if I clean trays?</h3>
+            <p><strong>Yes.</strong> The QR code stays linked to that physical tray. When you scan it for the next crop cycle, just create a new tray run with a new seed date. The system tracks multiple grow cycles for the same QR code.</p>
+
+            <h3>What if a label gets damaged or falls off?</h3>
+            <ol>
+                <li>Print a replacement label with the <strong>same QR code</strong></li>
+                <li>From QR Generator, use "Print Single Code" option</li>
+                <li>Enter the exact code (example: <strong>FARM-TRAY-1234</strong>)</li>
+                <li>Print and stick new label on tray</li>
+                <li>System recognizes it's the same tray</li>
+            </ol>
+
+            <h3>Can I track trays without QR codes?</h3>
+            <p><strong>Yes.</strong> You can create trays manually without scanning. Just give each tray a unique name (example: <strong>Lettuce-Batch-01-Tray-12</strong>). QR codes just make scanning faster.</p>
+
+            <h3>How many trays can the system handle?</h3>
+            <p>Light Engine tracks <strong>unlimited trays</strong>. Farms with 10,000+ active trays see no performance issues.</p>
+
+            <h3>Do photos take up a lot of storage?</h3>
+            <p>Photos are automatically compressed to <strong>300 KB</strong> each. Even with 5 photos per tray across 1,000 trays, you'll only use ~1.5 GB of storage.</p>
+
+            <div class="alert alert-success">
+                <div class="alert-title">Summary</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li><strong>Print QR labels</strong> once using the generator</li>
+                    <li><strong>Stick labels</strong> on trays and scan to register</li>
+                    <li><strong>Use filters</strong> to find trays by crop, location, date, or status</li>
+                    <li><strong>Batch Harvest</strong> to record 50+ trays in minutes instead of hours</li>
+                    <li><strong>Take photos</strong> to document growth and troubleshoot issues</li>
+                    <li><strong>View yield reports</strong> to see which crops perform best</li>
+                </ul>
+            </div>
+
+            <a href="/docs/index.html" style="display: inline-block; background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-light) 100%); color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; margin-top: 24px;">Back to Documentation</a>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GreenReach. All rights reserved. | 
+           <a href="/privacy">Privacy Policy</a> | 
+           <a href="/terms">Terms of Service</a> | 
+           <a href="mailto:support@greenreach.io">Support</a>
+        </p>
+    </footer>
+
+    <script>
+        function copyCode(button) {
+            const codeBlock = button.nextElementSibling;
+            const code = codeBlock.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                button.textContent = 'Copied!';
+                setTimeout(() => { button.textContent = 'Copy'; }, 2000);
+            });
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.toc-list a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, { rootMargin: '-50% 0px -50% 0px' });
+
+        document.querySelectorAll('h2[id], h3[id]').forEach(heading => {
+            observer.observe(heading);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <title>Documentation - Light Engine</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0a0f1e;
+            --surface: #111827;
+            --surface-2: #1a2332;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-blue-light: #60a5fa;
+            --accent-green: #10b981;
+            --accent-green-light: #6ee7b7;
+            --border: #2d3748;
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        header {
+            background: rgba(10, 15, 30, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 2px solid var(--accent-blue);
+            box-shadow: var(--glow-blue);
+            padding: 20px 40px;
+        }
+
+        nav {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--accent-blue-light);
+            text-decoration: none;
+            text-shadow: var(--glow-blue);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-blue-light);
+        }
+
+        main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 80px 40px;
+        }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--accent-blue-light) 0%, var(--accent-green-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.6));
+        }
+
+        .subtitle {
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 60px;
+        }
+
+        .doc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 32px;
+            margin-bottom: 60px;
+        }
+
+        .doc-card {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+        }
+
+        .doc-card:hover {
+            border-color: var(--accent-blue);
+            box-shadow: var(--glow-blue);
+            transform: translateY(-4px);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .doc-card.featured {
+            border-color: var(--accent-green);
+        }
+
+        .doc-card.featured:hover {
+            border-color: var(--accent-green);
+            box-shadow: var(--glow-green);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .doc-icon {
+            font-size: 36px;
+            margin-bottom: 16px;
+            color: var(--accent-blue-light);
+        }
+
+        .doc-card.featured .doc-icon {
+            color: var(--accent-green-light);
+        }
+
+        .doc-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .doc-description {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .doc-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid var(--accent-blue);
+            border-radius: 12px;
+            font-size: 12px;
+            color: var(--accent-blue-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .doc-card.featured .doc-badge {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: var(--accent-green);
+            color: var(--accent-green-light);
+        }
+
+        .section-title {
+            font-size: 32px;
+            margin-bottom: 24px;
+            color: var(--accent-blue-light);
+        }
+
+        footer {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 40px;
+            text-align: center;
+            color: var(--text-secondary);
+            margin-top: 80px;
+        }
+
+        footer a {
+            color: var(--accent-blue-light);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: var(--accent-green-light);
+        }
+
+        @media (max-width: 768px) {
+            .doc-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 36px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/docs/index.html">Documentation</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <h1>Documentation</h1>
+        <p class="subtitle">Complete guides for installation, deployment, and management of Light Engine systems.</p>
+
+        <h2 class="section-title">Getting Started</h2>
+        <div class="doc-grid">
+            <a href="/docs/quickstart.html" class="doc-card featured">
+                <div class="doc-icon"></div>
+                <h3 class="doc-title">Quick Start</h3>
+                <p class="doc-description">
+                    Get up and running in 30 minutes. Start tracking crops and monitoring your farm immediately.
+                </p>
+                <span class="doc-badge">Start Here</span>
+            </a>
+
+            <a href="/docs/first-run-setup.html" class="doc-card featured">
+                <div class="doc-icon"></div>
+                <h3 class="doc-title">First Run Setup</h3>
+                <p class="doc-description">
+                    6-step touchscreen wizard to configure your Symcod device - WiFi, farm registration, and certifications.
+                </p>
+                <span class="doc-badge">10 Minutes</span>
+            </a>
+        </div>
+
+        <h2 class="section-title">Farm Management</h2>
+        <div class="doc-grid">
+            <a href="/docs/tray-tracking.html" class="doc-card">
+                <div class="doc-icon"></div>
+                <h3 class="doc-title">Tray Tracking System</h3>
+                <p class="doc-description">
+                    Print QR labels, track trays from seeding to harvest, batch harvest recording, and yield reports.
+                </p>
+                <span class="doc-badge">Feature</span>
+            </a>
+
+            <a href="/docs/wholesale-integration.html" class="doc-card">
+                <div class="doc-icon"></div>
+                <h3 class="doc-title">Wholesale Orders</h3>
+                <p class="doc-description">
+                    Connect to GreenReach Central wholesale marketplace. Receive orders, verify, pack, and deliver to buyers.
+                </p>
+                <span class="doc-badge">B2B Sales</span>
+            </a>
+        </div>
+
+        <h2 class="section-title">Device Information</h2>
+        <div class="doc-grid">
+            <a href="/docs/edge-deployment.html" class="doc-card">
+                <div class="doc-icon"></div>
+                <h3 class="doc-title">Symcod W101M Specifications</h3>
+                <p class="doc-description">
+                    Intel N97 processor, 8GB RAM, 240GB NVMe storage, 10.1" touchscreen. Includes 11 crop lighting recipes.
+                </p>
+                <span class="doc-badge">Reference</span>
+            </a>
+
+            <a href="/docs/cloud-deployment.html" class="doc-card">
+                <div class="doc-icon"></div>
+                <h3 class="doc-title">Cloud Deployment</h3>
+                <p class="doc-description">
+                    Deploy Light Engine on AWS - access farm dashboard from any web browser without hardware installation.
+                </p>
+                <span class="doc-badge">Remote</span>
+            </a>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 GreenReach. All rights reserved. | 
+           <a href="/privacy">Privacy Policy</a> | 
+           <a href="/terms">Terms of Service</a> | 
+           <a href="mailto:support@greenreach.io">Support</a>
+        </p>
+    </footer>
+</body>
+</html>

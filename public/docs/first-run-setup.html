@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <title>First Run Setup Guide - Light Engine</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0a0f1e;
+            --surface: #111827;
+            --surface-2: #1a2332;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-blue-light: #60a5fa;
+            --accent-green: #10b981;
+            --accent-green-light: #6ee7b7;
+            --border: #2d3748;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
+
+        header {
+            background: rgba(10, 15, 30, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 2px solid var(--accent-blue);
+            box-shadow: var(--glow-blue);
+            padding: 20px 40px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--accent-blue-light);
+            text-decoration: none;
+            text-shadow: var(--glow-blue);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-blue-light);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 40px;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 60px;
+        }
+
+        .sidebar {
+            position: sticky;
+            top: 100px;
+            height: fit-content;
+        }
+
+        .toc {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .toc-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--accent-blue-light);
+        }
+
+        .toc-list {
+            list-style: none;
+        }
+
+        .toc-list li {
+            margin-bottom: 12px;
+        }
+
+        .toc-list a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+            display: block;
+        }
+
+        .toc-list a:hover {
+            color: var(--accent-blue-light);
+        }
+
+        .toc-list a.active {
+            color: var(--accent-green-light);
+            font-weight: 600;
+        }
+
+        .content {
+            min-width: 0;
+        }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--accent-blue-light) 0%, var(--accent-green-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.6));
+        }
+
+        .subtitle {
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 16px;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid var(--success);
+            border-radius: 12px;
+            font-size: 14px;
+            color: var(--accent-green-light);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 24px;
+            box-shadow: var(--glow-green);
+        }
+
+        h2 {
+            font-size: 32px;
+            margin-top: 60px;
+            margin-bottom: 24px;
+            color: var(--accent-blue-light);
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        h3 {
+            font-size: 24px;
+            margin-top: 40px;
+            margin-bottom: 16px;
+            color: var(--accent-green-light);
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        ul, ol {
+            margin-left: 24px;
+            margin-bottom: 16px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .wizard-steps {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin: 32px 0;
+        }
+
+        .step-card {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-light) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 auto 12px;
+            color: white;
+        }
+
+        .step-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .step-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .alert {
+            padding: 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+            border-left: 4px solid;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue-light);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: var(--warning);
+            color: var(--warning);
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--success);
+            color: var(--accent-green-light);
+        }
+
+        .alert-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .code-block {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+            position: relative;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            color: var(--accent-green-light);
+            line-height: 1.6;
+            white-space: pre;
+            display: block;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+
+        .copy-btn:hover {
+            opacity: 1;
+            box-shadow: var(--glow-blue);
+        }
+
+        .checklist {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+
+        .checklist li {
+            list-style: none;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .checklist li:last-child {
+            border-bottom: none;
+        }
+
+        .checklist li::before {
+            content: "";
+            margin-right: 12px;
+        }
+
+        footer {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 40px;
+            text-align: center;
+            color: var(--text-secondary);
+            margin-top: 80px;
+        }
+
+        footer a {
+            color: var(--accent-blue-light);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: var(--accent-green-light);
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: static;
+            }
+
+            .wizard-steps {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 36px;
+            }
+
+            h2 {
+                font-size: 28px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/docs/index.html">Documentation</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="toc">
+                <div class="toc-title">Contents</div>
+                <ul class="toc-list">
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#checklist">Pre-Installation</a></li>
+                    <li><a href="#wizard">Setup Wizard</a></li>
+                    <li><a href="#network">Network Config</a></li>
+                    <li><a href="#registration">Registration</a></li>
+                    <li><a href="#certifications">Certifications</a></li>
+                    <li><a href="#hardware">Hardware Detection</a></li>
+                    <li><a href="#complete">Completion</a></li>
+                    <li><a href="#post-setup">Post-Setup</a></li>
+                    <li><a href="#troubleshooting">Troubleshooting</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="content">
+            <h1 id="overview">First Run Setup</h1>
+            <p class="subtitle">Touchscreen-optimized wizard for provisioning new edge devices in 6 simple steps</p>
+            <span class="badge">10 MIN</span>
+
+            <div class="alert alert-info">
+                <div class="alert-title">What You'll Accomplish</div>
+                <p style="margin: 0;">This guide walks you through the complete first-run setup process from unboxing to operational status. The touchscreen-optimized wizard makes provisioning fast and error-free.</p>
+            </div>
+
+            <h2 id="checklist">Pre-Installation Checklist</h2>
+            
+            <p>Before starting the setup wizard, ensure you have:</p>
+
+            <div class="checklist">
+                <ul>
+                    <li>Registration code from GreenReach Central (8 characters)</li>
+                    <li>Network credentials (WiFi SSID/password if using wireless)</li>
+                    <li>Farm details (name, address, contact information)</li>
+                    <li>Hardware inventory list</li>
+                    <li>Internet connectivity test completed</li>
+                </ul>
+            </div>
+
+            <h3>Hardware Requirements</h3>
+            <ul>
+                <li><strong>Symcod W101M</strong> 10.1" industrial touchscreen computer (Intel N97 @ 3.6GHz, 8GB RAM, 240GB NVMe)</li>
+                <li><strong>Power Supply:</strong> 12V DC adapter (included with Symcod)</li>
+                <li><strong>Network:</strong> Ethernet cable (recommended) or WiFi</li>
+            </ul>
+
+            <h2 id="wizard">6-Step Setup Wizard</h2>
+
+            <div class="wizard-steps">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Welcome</div>
+                    <div class="step-desc">Overview & preparation</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Network</div>
+                    <div class="step-desc">Ethernet or WiFi</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Registration</div>
+                    <div class="step-desc">Farm activation</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <div class="step-title">Certifications</div>
+                    <div class="step-desc">GAP, Organic, Practices</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">5</div>
+                    <div class="step-title">Hardware</div>
+                    <div class="step-desc">Device detection</div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">6</div>
+                    <div class="step-title">Complete</div>
+                    <div class="step-desc">Review & launch</div>
+                </div>
+            </div>
+
+            <h3>Step 1: Welcome Screen</h3>
+            <p>The wizard starts with a welcome screen providing an overview of the 6-step process and estimated completion time (5-10 minutes).</p>
+            
+            <div class="alert alert-success">
+                <div class="alert-title">Setup Duration</div>
+                <p style="margin: 0;">Total time: 5-10 minutes depending on network speed and number of devices.</p>
+            </div>
+
+            <h2 id="network">Step 2: Network Configuration</h2>
+
+            <h3>Option A: Ethernet (Recommended)</h3>
+            <p><strong>Advantages:</strong></p>
+            <ul>
+                <li>More reliable connection</li>
+                <li>Higher bandwidth and lower latency</li>
+                <li>No credential management</li>
+                <li>Automatic DHCP configuration</li>
+            </ul>
+
+            <p><strong>Steps:</strong></p>
+            <ol>
+                <li>Connect Ethernet cable to device</li>
+                <li>Tap <strong>Ethernet</strong> button in wizard</li>
+                <li>System automatically detects connection</li>
+                <li>IP address assigned via DHCP</li>
+                <li>Connection test runs automatically</li>
+            </ol>
+
+            <div class="alert alert-warning">
+                <div class="alert-title">Troubleshooting Ethernet</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li><strong>No Connection:</strong> Check cable is securely connected</li>
+                    <li><strong>No IP Address:</strong> Verify DHCP enabled on router</li>
+                    <li><strong>Test Failed:</strong> Check firewall settings</li>
+                </ul>
+            </div>
+
+            <h3>Option B: WiFi</h3>
+            <p><strong>When to Use:</strong> Ethernet not available, temporary setup, or mobile installations</p>
+
+            <p><strong>Steps:</strong></p>
+            <ol>
+                <li>Tap <strong>WiFi</strong> button in wizard</li>
+                <li>Wait for network scan (10-30 seconds)</li>
+                <li>Select your network from list</li>
+                <li>Use on-screen keyboard to enter password</li>
+                <li>Tap <strong>Connect</strong></li>
+                <li>Wait for connection test (10-15 seconds)</li>
+            </ol>
+
+            <p><strong>WiFi Requirements:</strong></p>
+            <ul>
+                <li>2.4GHz or 5GHz network</li>
+                <li>WPA2 or WPA3 security</li>
+                <li>Minimum signal strength: -70 dBm</li>
+                <li>Outbound ports 443, 3000, 3001 open</li>
+            </ul>
+
+            <h2 id="registration">Step 3: Farm Registration</h2>
+
+            <p>Register your edge device with GreenReach Central to enable data synchronization and remote management.</p>
+
+            <h3>Obtain Registration Code</h3>
+            <ol>
+                <li>Log into GreenReach Central dashboard</li>
+                <li>Navigate to <strong>Farms → Add New Farm</strong></li>
+                <li>Click <strong>Generate Registration Code</strong></li>
+                <li>Copy the 8-character code (e.g., <code>A7F2B1C9</code>)</li>
+            </ol>
+
+            <h3>Enter Code in Wizard</h3>
+            <ol>
+                <li>Tap the registration code input field</li>
+                <li>On-screen keyboard appears automatically</li>
+                <li>Type the 8-character code (case-sensitive)</li>
+                <li>Code is validated in real-time</li>
+            </ol>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Security Notes</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li>Registration codes expire after 24 hours</li>
+                    <li>Each code can only be used once</li>
+                    <li>API credentials are encrypted at rest</li>
+                    <li>TLS 1.3 used for all communication</li>
+                </ul>
+            </div>
+
+            <h3>Registration Verification</h3>
+            <p>The wizard will:</p>
+            <ul>
+                <li>Call GreenReach Central API</li>
+                <li>Validate registration code</li>
+                <li>Retrieve farm configuration</li>
+                <li>Download API credentials</li>
+                <li>Establish secure connection</li>
+            </ul>
+
+            <h2 id="certifications">Step 4: Farm Certifications</h2>
+
+            <p>Help wholesale buyers and customers find your farm by sharing your certifications and growing practices. This information appears in the GreenReach wholesale marketplace and farm profile.</p>
+
+            <h3>Certifications</h3>
+            <p>Select any certifications your farm holds:</p>
+            <ul>
+                <li><strong>GAP Certified:</strong> Good Agricultural Practices</li>
+                <li><strong>USDA Organic:</strong> Certified organic production</li>
+                <li><strong>Food Safety Certified:</strong> GFSI, SQF, or other food safety standards</li>
+                <li><strong>Greenhouse Grown:</strong> Certified greenhouse operation</li>
+            </ul>
+
+            <h3>Growing Practices</h3>
+            <p>Select practices that apply to your farm:</p>
+            <ul>
+                <li><strong>Pesticide Free:</strong> No pesticides used</li>
+                <li><strong>Non-GMO:</strong> No genetically modified crops</li>
+                <li><strong>Hydroponic Growing:</strong> Soilless cultivation system</li>
+                <li><strong>Local:</strong> Farm within 100 miles of buyers</li>
+                <li><strong>Year-Round Production:</strong> Continuous crop cycles</li>
+            </ul>
+
+            <h3>Special Attributes</h3>
+            <p>Highlight what makes your farm unique:</p>
+            <ul>
+                <li><strong>Woman-Owned Business</strong></li>
+                <li><strong>Veteran-Owned Business</strong></li>
+                <li><strong>Minority-Owned Business</strong></li>
+                <li><strong>Family Farm</strong></li>
+                <li><strong>Sustainable Practices</strong></li>
+            </ul>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Why This Matters</div>
+                <p style="margin: 0;">Buyers often search for specific certifications or practices. Selecting accurate tags helps your farm appear in relevant searches and builds trust with wholesale customers.</p>
+            </div>
+
+            <h2 id="hardware">Step 5: Hardware Detection</h2>
+
+            <p>Automatic discovery and enumeration of connected devices. The wizard scans for:</p>
+
+            <h3>USB Devices</h3>
+            <ul>
+                <li>Temperature/humidity sensors</li>
+                <li>CO2 sensors</li>
+                <li>Webcams</li>
+                <li>Serial adapters (FTDI, CH340)</li>
+            </ul>
+
+            <h3>Serial Ports (RS-485/Modbus)</h3>
+            <ul>
+                <li>Environmental controllers</li>
+                <li>Industrial sensors</li>
+                <li>HVAC equipment</li>
+                <li>Lighting controllers</li>
+            </ul>
+
+            <h3>Network Devices</h3>
+            <ul>
+                <li>IP cameras (RTSP/ONVIF)</li>
+                <li>Network sensors</li>
+                <li>PoE devices</li>
+                <li>IoT gateways</li>
+            </ul>
+
+            <div class="alert alert-success">
+                <div class="alert-title">Scan Duration</div>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li>USB scan: 2-5 seconds</li>
+                    <li>Serial scan: 5-10 seconds</li>
+                    <li>Network scan: 10-30 seconds</li>
+                    <li>Total time: ~30-45 seconds</li>
+                </ul>
+            </div>
+
+            <h3>Device Categorization</h3>
+            <p>Devices are automatically categorized:</p>
+            <ul>
+                <li><strong>Lights:</strong> LED controllers, grow lights, spectrum controllers</li>
+                <li><strong>Fans:</strong> Exhaust fans, circulation fans, HVAC blowers</li>
+                <li><strong>Sensors:</strong> Temperature, humidity, CO2, pH, EC, lux</li>
+                <li><strong>Cameras:</strong> IP cameras, USB webcams, monitoring systems</li>
+                <li><strong>Other:</strong> Uncategorized or unknown devices</li>
+            </ul>
+
+            <p><strong>Manual Override:</strong> Tap any device to view details, change type, assign to zone, or set custom name.</p>
+
+            <h2 id="complete">Step 6: Completion</h2>
+            <p>Setup is complete! The wizard displays a summary of configured settings.</p>
+
+            <p><strong>Final Steps:</strong></p>
+            <ol>
+                <li>Review configuration summary</li>
+                <li>Tap <strong>Go to Dashboard</strong> to access main interface</li>
+            </ol>
+
+            <p><strong>What Happens Next:</strong></p>
+            <ul>
+                <li>Edge device registers with Central API</li>
+                <li>Initial data sync begins</li>
+                <li>Hardware devices added to farm database</li>
+                <li>Monitoring starts immediately</li>
+            </ul>
+
+            <h2 id="post-setup">Post-Setup Configuration</h2>
+
+            <h3>Farm Profile</h3>
+            <ol>
+                <li><strong>Basic Information:</strong> Farm name, legal entity, address, contact info, business hours</li>
+                <li><strong>Layout Configuration:</strong> Number of rooms, zones per room, tray capacity, growing method</li>
+                <li><strong>Crop Selection:</strong> Primary crops, growing cycles, target harvest dates, inventory SKUs</li>
+            </ol>
+
+            <h3>Zone Assignment</h3>
+            <p>Map hardware devices to physical zones:</p>
+            <ol>
+                <li>Navigate to <strong>Setup → Zones</strong></li>
+                <li>Select a zone (e.g., "Room 1 - Zone A")</li>
+                <li>Assign detected devices (lights, fans, sensors)</li>
+                <li>Configure zone-specific settings</li>
+            </ol>
+
+            <h3>Automation Rules</h3>
+            <p>Configure basic automation:</p>
+            <ul>
+                <li><strong>Climate Control:</strong> Temperature range (65-75°F), humidity (60-70%), CO2 supplementation</li>
+                <li><strong>Lighting Schedule:</strong> On/off times, spectrum profiles, DLI targets (12-18 mol/m²/day)</li>
+                <li><strong>Fan Control:</strong> Circulation schedule, exhaust triggers, fresh air exchange rates</li>
+            </ul>
+
+            <h2 id="troubleshooting">Troubleshooting</h2>
+
+            <h3>Wizard Won't Start</h3>
+            <p><strong>Symptoms:</strong> Blank screen or frozen at welcome screen</p>
+            <p><strong>Solutions:</strong></p>
+            <ol>
+                <li>Check power supply is connected</li>
+                <li>Verify device is powered on (LED indicator)</li>
+                <li>Restart the device</li>
+                <li>Contact support if issue persists</li>
+            </ol>
+
+            <h3>Network Connection Failed</h3>
+            <p><strong>Ethernet Issues:</strong></p>
+            <ul>
+                <li>Verify cable is CAT5e or better</li>
+                <li>Check router DHCP pool not exhausted</li>
+                <li>Try different port on router</li>
+                <li>Check for PoE compatibility</li>
+            </ul>
+
+            <p><strong>WiFi Issues:</strong></p>
+            <ul>
+                <li>Verify password is correct (case-sensitive)</li>
+                <li>Check signal strength (minimum -70 dBm)</li>
+                <li>Try 2.4GHz network if 5GHz has issues</li>
+                <li>Ensure WiFi not on isolated VLAN</li>
+            </ul>
+
+            <h3>Registration Failed</h3>
+            <p><strong>Solutions:</strong></p>
+            <ol>
+                <li>Verify code is exactly 8 characters</li>
+                <li>Check code hasn't expired (24hr limit)</li>
+                <li>Verify internet connectivity</li>
+                <li>Check firewall allows outbound port 443</li>
+                <li>Verify Central API is online (status.greenreach.com)</li>
+            </ol>
+
+            <h3>No Devices Detected</h3>
+            <p><strong>USB Devices:</strong></p>
+            <ul>
+                <li>Check USB cables are securely connected</li>
+                <li>Try different USB port</li>
+                <li>Verify device is powered on</li>
+                <li>Run hardware detection again</li>
+            </ul>
+
+            <p><strong>Serial Devices:</strong></p>
+            <ul>
+                <li>Verify baud rate matches device (9600/19200/115200)</li>
+                <li>Check RS-485 termination resistors</li>
+                <li>Verify Modbus address configuration</li>
+                <li>Check wiring connections</li>
+            </ul>
+
+            <p><strong>Network Devices:</strong></p>
+            <ul>
+                <li>Verify devices on same network</li>
+                <li>Check devices not behind firewall</li>
+                <li>Verify device IP address is correct</li>
+                <li>Check ONVIF/RTSP enabled for cameras</li>
+            </ul>
+
+            <h3>Touchscreen Calibration</h3>
+            <p>If touchscreen is misaligned or unresponsive:</p>
+            <ol>
+                <li>Navigate to <strong>Settings → Touchscreen → Calibrate</strong></li>
+                <li>Tap each target (top-left, top-right, bottom-right, bottom-left, center)</li>
+                <li>Test calibration with test points</li>
+                <li>Save calibration if accurate</li>
+                <li>Restart if issues persist</li>
+            </ol>
+
+            <div class="alert alert-info">
+                <div class="alert-title">Need Help?</div>
+                <p style="margin-bottom: 12px;">Our support team is available:</p>
+                <ul style="margin: 0;">
+                    <li>Email: support@greenreach.io</li>
+                    <li>Phone: 1-800-473-3673</li>
+                    <li>Chat: Available in dashboard</li>
+                    <li>Docs: docs.greenreach.com</li>
+                </ul>
+            </div>
+
+            <a href="/docs/index.html" style="display: inline-block; background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-light) 100%); color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; margin-top: 24px;">Back to Documentation</a>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GreenReach. All rights reserved. | 
+           <a href="/privacy">Privacy Policy</a> | 
+           <a href="/terms">Terms of Service</a> | 
+           <a href="mailto:support@greenreach.io">Support</a>
+        </p>
+    </footer>
+
+    <script>
+        function copyCode(button) {
+            const codeBlock = button.nextElementSibling;
+            const code = codeBlock.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                }, 2000);
+            });
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.toc-list a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, { rootMargin: '-50% 0px -50% 0px' });
+
+        document.querySelectorAll('h2[id], h3[id]').forEach(heading => {
+            observer.observe(heading);
+        });
+    </script>
+</body>
+</html>

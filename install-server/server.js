@@ -78,6 +78,51 @@ app.get('/greenreach-public.pem', (req, res) => {
   res.sendFile(publicKey);
 });
 
+// Serve desktop and mobile installers
+app.get('/downloads/:filename', (req, res) => {
+  const { filename } = req.params;
+  
+  // Security: only allow specific filename patterns
+  const allowedPatterns = [
+    /^Light-Engine-Setup-\d+\.\d+\.\d+\.exe$/,
+    /^Light-Engine-\d+\.\d+\.\d+\.dmg$/,
+    /^Light-Engine-\d+\.\d+\.\d+\.apk$/,
+    /^Light-Engine-\d+\.\d+\.\d+\.ipa$/,
+    /^Light-Engine-(Setup-)?[\d\.]+\.(exe|dmg|apk|ipa)\.sha256$/
+  ];
+  
+  const isAllowed = allowedPatterns.some(pattern => pattern.test(filename));
+  if (!isAllowed) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  
+  const filePath = path.join(BINARIES_DIR, filename);
+  
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ 
+      error: 'File not found',
+      filename,
+      message: 'Installer has not been built yet. Run build scripts.'
+    });
+  }
+  
+  // Set appropriate content type
+  const ext = path.extname(filename);
+  const contentTypes = {
+    '.exe': 'application/x-msdownload',
+    '.dmg': 'application/x-apple-diskimage',
+    '.apk': 'application/vnd.android.package-archive',
+    '.ipa': 'application/octet-stream',
+    '.sha256': 'text/plain'
+  };
+  
+  const contentType = contentTypes[ext] || 'application/octet-stream';
+  
+  res.type(contentType);
+  res.set('Content-Disposition', `attachment; filename="${filename}"`);
+  res.sendFile(filePath);
+});
+
 // Serve binary for specific platform
 app.get('/lightengine-:platform', (req, res) => {
   const { platform } = req.params;
@@ -229,6 +274,10 @@ app.use((req, res) => {
     message: 'Invalid endpoint',
     endpoints: {
       '/': 'Installation script (curl -sSL https://install.greenreach.io | bash)',
+      '/downloads/Light-Engine-Setup-1.0.0.exe': 'Windows desktop installer',
+      '/downloads/Light-Engine-1.0.0.dmg': 'macOS desktop installer',
+      '/downloads/Light-Engine-1.0.0.apk': 'Android mobile app',
+      '/downloads/Light-Engine-1.0.0.ipa': 'iOS mobile app (TestFlight)',
       '/greenreach-public.pem': 'Public key for license verification',
       '/lightengine-linux-x64': 'Binary for Linux x86_64',
       '/lightengine-linux-arm64': 'Binary for Linux ARM64',
@@ -260,6 +309,7 @@ app.listen(PORT, () => {
   console.log('');
   console.log('Endpoints:');
   console.log(`  GET /                          - Installation script`);
+  console.log(`  GET /downloads/*.exe|dmg|apk   - Desktop/mobile installers`);
   console.log(`  GET /greenreach-public.pem     - Public key`);
   console.log(`  GET /lightengine-linux-x64     - Linux x86_64 binary`);
   console.log(`  GET /lightengine-linux-arm64   - Linux ARM64 binary`);
