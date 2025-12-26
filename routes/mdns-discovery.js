@@ -3,9 +3,10 @@
  * Provides REST API for discovering and managing local network devices
  */
 
-const express = require('express');
+import express from 'express';
+import { MDNSBrowser } from '../lib/mdns-advertiser.js';
+
 const router = express.Router();
-const { MDNSBrowser } = require('../lib/mdns-advertiser');
 
 // Store discovered services
 let discoveredServices = [];
@@ -194,4 +195,4 @@ process.on('SIGTERM', () => {
   }
 });
 
-module.exports = router;
+export default router;
