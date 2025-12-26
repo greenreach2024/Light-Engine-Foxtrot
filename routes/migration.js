@@ -5,12 +5,14 @@
  * with full hardware support while preserving all data.
  */
 
-const express = require('express');
+import express from 'express';
+import pg from 'pg';
+import fs from 'fs/promises';
+import path from 'path';
+import crypto from 'crypto';
+
+const { Pool } = pg;
 const router = express.Router();
-const { Pool } = require('pg');
-const fs = require('fs').promises;
-const path = require('path');
-const crypto = require('crypto');
 
 // Database pool
 let db;
@@ -704,4 +706,4 @@ router.post('/validate', async (req, res) => {
   }
 });
 
-module.exports = { router, initDb };
+export { router, initDb };
