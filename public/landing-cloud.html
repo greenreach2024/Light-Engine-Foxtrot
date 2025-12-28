@@ -4,12 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    
-    <!-- Security Headers -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self' https://central.greenreach.io https://apps.apple.com https://play.google.com; frame-ancestors 'none';">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
     <meta name="robots" content="index, follow">
     
     <!-- Primary Meta Tags -->
@@ -45,18 +39,19 @@
         }
 
         :root {
-            --light-bg: #0a0f1e;
-            --light-surface: #111827;
-            --text-primary: #e5e7eb;
-            --text-secondary: #9ca3af;
+            --light-bg: #ffffff;
+            --light-surface: #f9fafb;
+            --light-surface-2: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
             --accent-green: #10b981;
-            --accent-green-light: #6ee7b7;
+            --accent-green-light: #34d399;
             --accent-blue: #3b82f6;
             --accent-blue-light: #60a5fa;
-            --border-light: #2d3748;
-            --shadow: rgba(0, 0, 0, 0.5);
-            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
-            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+            --border-light: #e5e7eb;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.3);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.3);
         }
 
         body {
@@ -73,11 +68,11 @@
             top: 0;
             left: 0;
             right: 0;
-            background: rgba(10, 15, 30, 0.8);
+            background: rgba(255, 255, 255, 0.8);
             backdrop-filter: saturate(180%) blur(20px);
             z-index: 1000;
-            border-bottom: 2px solid var(--accent-blue);
-            box-shadow: var(--glow-blue);
+            border-bottom: 2px solid var(--border-light);
+            box-shadow: 0 2px 8px var(--shadow);
         }
 
         nav {
@@ -92,9 +87,8 @@
         .logo {
             font-size: 20px;
             font-weight: 600;
-            color: var(--accent-blue-light);
+            color: var(--accent-blue);
             text-decoration: none;
-            text-shadow: var(--glow-blue);
         }
 
         .nav-links {
@@ -115,22 +109,16 @@
         }
 
         .nav-cta {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--accent-green-light);
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
             padding: 8px 20px;
             border-radius: 20px;
             border: 2px solid var(--accent-green);
             font-weight: 500;
-            box-shadow: var(--glow-green);
         }
 
         .nav-cta:hover {
-            background: rgba(16, 185, 129, 0.3);
-            box-shadow: 0 0 30px rgba(16, 185, 129, 0.7), 0 0 60px rgba(16, 185, 129, 0.4);
-        }
-
-        .nav-cta:hover {
-            background: var(--accent-green-light);
+            background: var(--accent-green);
             color: white;
         }
 
@@ -139,7 +127,7 @@
             margin-top: 80px;
             padding: 100px 40px 80px;
             text-align: center;
-            background: linear-gradient(180deg, #ffffff 0%, var(--light-bg) 100%);
+            background: linear-gradient(180deg, #f9fafb 0%, #ffffff 100%);
         }
 
         .hero-content {
@@ -150,13 +138,13 @@
         .hero-badge {
             display: inline-block;
             padding: 8px 20px;
-            background: var(--light-surface);
-            border: 1px solid var(--border-light);
+            background: rgba(59, 130, 246, 0.1);
+            border: 2px solid var(--accent-blue);
             border-radius: 20px;
             font-size: 14px;
-            color: var(--accent-green);
+            color: var(--accent-blue);
             margin-bottom: 24px;
-            box-shadow: 0 2px 8px var(--shadow);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
         }
 
         h1 {
@@ -164,11 +152,18 @@
             font-weight: 700;
             line-height: 1.1;
             margin-bottom: 24px;
-            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-green) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.4));
         }
 
         .hero-highlight {
-            color: var(--accent-green);
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-green) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .hero-subtitle {
@@ -235,6 +230,124 @@
             max-width: 1200px;
             margin-left: auto;
             margin-right: auto;
+        }
+
+        /* Image Popup Modal */
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 20px;
+        }
+
+        .image-modal.active {
+            display: flex;
+        }
+
+        .image-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            width: auto;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            cursor: default;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 24px;
+            color: #111827;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            z-index: 10001;
+        }
+
+        .modal-close:hover {
+            background: white;
+            transform: scale(1.1);
+        }
+
+        .hero-card-image {
+            cursor: pointer;
+            transition: transform 0.3s, opacity 0.5s;
+            image-rendering: -webkit-optimize-contrast;
+        }
+
+        .hero-card-image:hover {
+            transform: scale(1.02);
+        }
+
+        .carousel-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1);
+            background: #e5e7eb;
+            padding: 30px;
+        }
+
+        .carousel-image {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            width: calc(100% - 60px);
+            height: calc(100% - 60px);
+            object-fit: contain;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+            border-radius: 8px;
+        }
+
+        .carousel-image.active {
+            opacity: 1;
+        }
+
+        .carousel-dots {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .carousel-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .carousel-dot.active {
+            background: white;
+            width: 24px;
+            border-radius: 5px;
         }
 
         .device-mockup {
@@ -327,12 +440,45 @@
             padding: 48px 32px;
             transition: all 0.3s;
             box-shadow: 0 2px 8px var(--shadow);
+            position: relative;
+            overflow: hidden;
         }
 
         .feature-card:hover {
             box-shadow: 0 8px 24px var(--shadow);
             transform: translateY(-4px);
             border-color: var(--accent-green);
+        }
+
+        .feature-card:hover .feature-content {
+            opacity: 1 !important;
+        }
+
+        .feature-card:hover .feature-image {
+            display: none !important;
+        }
+
+        .feature-content {
+            position: relative;
+            z-index: 2;
+            transition: opacity 0.5s ease;
+        }
+
+        .feature-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            z-index: 1;
+            transition: opacity 1s ease;
+            pointer-events: none;
+        }
+
+        .feature-image.active {
+            opacity: 0.95;
         }
 
         .feature-icon {
@@ -639,7 +785,6 @@
                 <a href="#platforms">Platforms</a>
                 <a href="#pricing">Pricing</a>
                 <a href="/landing-edge.html">Edge Device</a>
-                <a href="/downloads.html" class="nav-cta">Try Free</a>
             </div>
         </nav>
     </header>
@@ -648,25 +793,21 @@
         <section class="hero">
             <div class="hero-content">
                 <span class="hero-badge">CLOUD + DESKTOP</span>
-                <h1>Farm Management<br><span class="hero-highlight">Made Simple</span></h1>
+                <h1>Complete<br><span class="hero-highlight">Seed-to-Sale Efficiency</span></h1>
                 <p class="hero-subtitle">
-                    Track inventory, run your farm store POS, sell online, and connect to the 
-                    GreenReach wholesale marketplace. No hardware required.
+                    Greater control, transparency, and reduced food waste. Sell what you grow!
                 </p>
-                <div class="cta-buttons">
-                    <a href="https://central.greenreach.io/register" class="btn-primary" rel="noopener noreferrer" target="_blank">Start Free Trial</a>
-                    <a href="/downloads.html" class="btn-secondary">Download Apps</a>
-                </div>
-                <p class="trial-note">14-day free trial • No credit card required</p>
             </div>
 
             <div class="hero-visual">
-                <div class="device-mockup">
-                    <div class="device-screen">
-                        <div class="device-icon"></div>
-                        <div style="font-size: 24px; color: var(--text-secondary); font-weight: 600;">Dashboard</div>
-                        <div style="font-size: 16px; color: var(--text-secondary); margin-top: 8px;">Inventory • Sales • Analytics</div>
-                    </div>
+                <div class="carousel-container">
+                    <img src="images/farm-admin.png" alt="Farm Admin Dashboard" class="carousel-image active">
+                    <img src="images/greenreach-wholesale.png" alt="GreenReach Wholesale Portal" class="carousel-image">
+                    <img src="images/farm-sales-terminal.png" alt="Farm Sales Terminal" class="carousel-image">
+                    <img src="images/screenshot-inventory.png" alt="Inventory Management" class="carousel-image">
+                    <img src="images/farm-room-ml.png" alt="Farm Room ML Insights" class="carousel-image">
+                    <img src="images/plant-farm/_MAT9331.JPG" alt="Farm Production" class="carousel-image">
+                    <img src="images/plant-farm/8x19IMG_4919.JPG" alt="Growing Operations" class="carousel-image">
                 </div>
             </div>
         </section>
@@ -674,68 +815,169 @@
         <section id="features" class="features">
             <div class="section-header">
                 <span class="section-badge">Everything You Need</span>
-                <h2 class="section-title">Manage Your Farm Business</h2>
+                <h2 class="section-title">Growing is the Easy Part</h2>
                 <p class="section-description">
-                    Complete farm management solution with inventory tracking, point-of-sale, 
-                    online store, and wholesale marketplace access.
+                    With complete seed-to-sale visibility, you stay in control from planning to payment. Track and forecast inventory, spot demand trends, and use AI-assisted price checks to validate what you charge. Built-in point-of-sale plus online and wholesale channels help ensure what you grow gets sold—on time, at the right price, with less waste.
                 </p>
             </div>
 
             <div class="feature-grid">
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Inventory Management</h3>
-                    <p class="feature-description">
-                        Track every tray from seed to sale. QR code scanning, harvest recording, 
-                        yield analytics, and expiration monitoring.
-                    </p>
+                <div class="feature-card" data-feature="inventory">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Inventory Management</h3>
+                        <p class="feature-description">
+                            Inventory that updates itself. Forecast what's coming next with planting and harvest schedules, and track performance with farm and regional crop trends. Know what you have, what's next, and when it's ready to sell.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Point of Sale</h3>
-                    <p class="feature-description">
-                        Square-integrated POS for your farm store. Accept payments, print receipts, 
-                        track daily sales, and manage customer accounts.
-                    </p>
+                <div class="feature-card" data-feature="pos">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Point of Sale</h3>
+                        <p class="feature-description">
+                            Accept payments, print receipts, and track daily sales—fully linked to live inventory. Every sale updates stock automatically and creates a traceable record from harvest to customer, supporting audit and reporting requirements.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Online Store</h3>
-                    <p class="feature-description">
-                        Build your farm's online store in minutes. Custom subdomain, product catalog, 
-                        checkout, and order fulfillment management.
-                    </p>
+                <div class="feature-card" data-feature="store">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Online Store</h3>
+                        <p class="feature-description">
+                            Launch your farm's online store in minutes—connected to live inventory. Use a custom subdomain, publish your product catalog, accept checkout orders, and manage fulfillment from harvest to pickup or delivery.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Wholesale Marketplace</h3>
-                    <p class="feature-description">
-                        Sell to restaurants and retailers through GreenReach wholesale network. 
-                        Automated ordering, delivery scheduling, and invoicing.
-                    </p>
+                <div class="feature-card" data-feature="wholesale">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Wholesale Marketplace</h3>
+                        <p class="feature-description">
+                            Sell to restaurants and retailers through GreenReach wholesale network. 
+                            Automated ordering, delivery scheduling, and invoicing.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Business Analytics</h3>
-                    <p class="feature-description">
-                        Track revenue, analyze crop profitability, forecast harvests, and optimize 
-                        pricing with AI-powered market recommendations.
-                    </p>
+                <div class="feature-card" data-feature="analytics">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Business Analytics</h3>
+                        <p class="feature-description">
+                            Track revenue, measure crop profitability, forecast harvests, and optimize pricing with AI-assisted market intelligence. Our AI screener monitors national and international pricing signals and the events that move them, then delivers real trend reporting with source-linked commentary and citations—so your pricing is easy to justify and consistent across every sales channel.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Multi-Device Sync</h3>
-                    <p class="feature-description">
-                        Access from desktop, mobile, and tablet. Real-time synchronization across 
-                        all devices with offline-first architecture.
-                    </p>
+                <div class="feature-card" data-feature="sync">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Multi-Device Sync</h3>
+                        <p class="feature-description">
+                            Access from desktop, mobile, and tablet. Real-time synchronization across 
+                            all devices with offline-first architecture.
+                        </p>
+                    </div>
                 </div>
             </div>
+
+            <script>
+            // Feature card image rotation
+            (function() {
+                const images = [
+                    '/public/images/plant-farm/iGrow.jpg',
+                    '/public/images/plant-farm/IMG_4981.jpeg',
+                    '/public/images/plant-farm/IMG_5244.jpeg',
+                    '/public/images/plant-farm/IMG_5308.jpeg',
+                    '/public/images/plant-farm/IMG_5507.jpeg',
+                    '/public/images/plant-farm/IMG_5522.jpeg',
+                    '/public/images/plant-farm/IMG_5581.jpeg',
+                    '/public/images/plant-farm/IMG_5582.jpeg',
+                    '/public/images/plant-farm/IMG_5663.jpeg',
+                    '/public/images/plant-farm/IMG_5677.jpeg',
+                    '/public/images/plant-farm/IMG_5753.jpeg',
+                    '/public/images/plant-farm/IMG_5900.jpeg',
+                    '/public/images/plant-farm/IMG_6028.jpeg',
+                    '/public/images/plant-farm/IMG_6095.jpeg',
+                    '/public/images/plant-farm/IMG_6162.jpeg',
+                    '/public/images/plant-farm/Lettuce.jpg'
+                ];
+
+                const cards = document.querySelectorAll('.feature-card');
+                let activeCards = new Set();
+                const MAX_ACTIVE = 2;
+
+                function getRandomImage() {
+                    return images[Math.floor(Math.random() * images.length)];
+                }
+
+                function getRandomCard() {
+                    return cards[Math.floor(Math.random() * cards.length)];
+                }
+
+                function showImage(card) {
+                    const img = card.querySelector('.feature-image');
+                    const content = card.querySelector('.feature-content');
+                    
+                    img.src = getRandomImage();
+                    
+                    // Fade in image, fade out content
+                    setTimeout(() => {
+                        img.classList.add('active');
+                        content.style.opacity = '0';
+                    }, 100);
+
+                    // Hold for 3-5 seconds
+                    const holdTime = 3000 + Math.random() * 2000;
+                    
+                    setTimeout(() => {
+                        // Fade out image, fade in content
+                        img.classList.remove('active');
+                        content.style.opacity = '1';
+                        
+                        setTimeout(() => {
+                            activeCards.delete(card);
+                        }, 1000);
+                    }, holdTime);
+                }
+
+                function rotateImages() {
+                    // Only show images if less than MAX_ACTIVE are showing
+                    if (activeCards.size < MAX_ACTIVE) {
+                        let card;
+                        let attempts = 0;
+                        
+                        // Find a card that's not currently showing an image
+                        do {
+                            card = getRandomCard();
+                            attempts++;
+                        } while (activeCards.has(card) && attempts < 20);
+                        
+                        if (!activeCards.has(card)) {
+                            activeCards.add(card);
+                            showImage(card);
+                        }
+                    }
+                    
+                    // Schedule next rotation (2-4 seconds)
+                    const nextInterval = 2000 + Math.random() * 2000;
+                    setTimeout(rotateImages, nextInterval);
+                }
+
+                // Start rotation after page load
+                setTimeout(rotateImages, 2000);
+            })();
+            </script>
         </section>
 
         <section id="platforms" class="platforms">
@@ -755,7 +997,7 @@
                         <p class="platform-description">
                             Windows and macOS apps with offline support and local database.
                         </p>
-                        <a href="/downloads.html" class="platform-link">Download →</a>
+                        <a href="/public/downloads.html" class="platform-link">Download →</a>
                     </div>
 
                     <div class="platform-card">
@@ -764,7 +1006,7 @@
                         <p class="platform-description">
                             iOS and Android apps for QR scanning and on-the-go management.
                         </p>
-                        <a href="/downloads.html" class="platform-link">Get App →</a>
+                        <a href="/public/downloads.html" class="platform-link">Get App →</a>
                     </div>
 
                     <div class="platform-card">
@@ -788,76 +1030,7 @@
             </div>
         </section>
 
-        <section id="pricing" class="pricing">
-            <div class="pricing-container">
-                <div class="section-header">
-                    <span class="section-badge">Simple Pricing</span>
-                    <h2 class="section-title">Choose Your Plan</h2>
-                    <p class="section-description">
-                        Start free, upgrade as you grow. All plans include 14-day free trial.
-                    </p>
-                </div>
 
-                <div class="pricing-grid">
-                    <div class="pricing-card">
-                        <div class="pricing-name">Free</div>
-                        <div class="pricing-price">$0</div>
-                        <div class="pricing-period">Forever</div>
-                        <ul class="pricing-features">
-                            <li>Desktop & Mobile Apps</li>
-                            <li>1 User</li>
-                            <li>10 Active Trays</li>
-                            <li>Basic Inventory</li>
-                            <li>Harvest Tracking</li>
-                            <li>Community Support</li>
-                        </ul>
-                        <a href="/downloads.html" class="btn-secondary">Download</a>
-                    </div>
-
-                    <div class="pricing-card featured">
-                        <div class="pricing-badge">Most Popular</div>
-                        <div class="pricing-name">Starter</div>
-                        <div class="pricing-price">$49</div>
-                        <div class="pricing-period">per month</div>
-                        <ul class="pricing-features">
-                            <li>Everything in Free</li>
-                            <li>Cloud Sync</li>
-                            <li>Point of Sale</li>
-                            <li>Online Store</li>
-                            <li>100 Products</li>
-                            <li>Email Support</li>
-                        </ul>
-                        <a href="https://central.greenreach.io/register" class="btn-primary" rel="noopener noreferrer" target="_blank">Start Free Trial</a>
-                    </div>
-
-                    <div class="pricing-card">
-                        <div class="pricing-name">Pro</div>
-                        <div class="pricing-price">$199</div>
-                        <div class="pricing-period">per month</div>
-                        <ul class="pricing-features">
-                            <li>Everything in Starter</li>
-                            <li>5 Users</li>
-                            <li>Unlimited Products</li>
-                            <li>Wholesale Marketplace</li>
-                            <li>Advanced Analytics</li>
-                            <li>Priority Support</li>
-                        </ul>
-                        <a href="https://central.greenreach.io/register" class="btn-secondary" rel="noopener noreferrer" target="_blank">Start Free Trial</a>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="cta-section">
-            <div class="cta-container">
-                <h2 class="cta-title">Start Growing Smarter Today</h2>
-                <p class="cta-description">
-                    Join hundreds of farms using Light Engine to streamline operations 
-                    and increase profitability. No credit card required.
-                </p>
-                <a href="https://central.greenreach.io/register" class="btn-white" rel="noopener noreferrer" target="_blank">Start Free Trial</a>
-            </div>
-        </section>
     </main>
 
     <footer>
@@ -867,33 +1040,26 @@
                 <ul>
                     <li><a href="/landing-cloud.html">Cloud Solution</a></li>
                     <li><a href="/landing-edge.html">Edge Device</a></li>
-                    <li><a href="/downloads">Downloads</a></li>
-                    <li><a href="/pricing">Pricing</a></li>
+                    <li><a href="/public/downloads.html">Downloads</a></li>
                 </ul>
             </div>
             <div class="footer-column">
                 <h4>Resources</h4>
                 <ul>
-                    <li><a href="/docs">Documentation</a></li>
-                    <li><a href="/docs/CLOUD_DEPLOYMENT_GUIDE.md">Setup Guide</a></li>
+                    <li><a href="/public/docs/quickstart.html">Quick Start Guides</a></li>
                     <li><a href="/docs/DESKTOP_APP_GUIDE.md">Desktop Guide</a></li>
-                    <li><a href="https://community.greenreach.io">Community</a></li>
                 </ul>
             </div>
             <div class="footer-column">
                 <h4>Company</h4>
                 <ul>
-                    <li><a href="/about">About</a></li>
                     <li><a href="/contact">Contact</a></li>
-                    <li><a href="/careers">Careers</a></li>
-                    <li><a href="/blog">Blog</a></li>
                 </ul>
             </div>
             <div class="footer-column">
                 <h4>Support</h4>
                 <ul>
                     <li><a href="mailto:support@greenreach.io">Email Support</a></li>
-                    <li><a href="/docs/troubleshooting">Help Center</a></li>
                     <li><a href="/status">System Status</a></li>
                     <li><a href="/security">Security</a></li>
                 </ul>
@@ -903,5 +1069,35 @@
             <p>&copy; 2025 GreenReach. All rights reserved. | <a href="/privacy" style="color: var(--text-secondary);">Privacy</a> | <a href="/terms" style="color: var(--text-secondary);">Terms</a></p>
         </div>
     </footer>
+
+    <script>
+        let currentSlide = 0;
+        let carouselInterval;
+
+        function showSlide(index) {
+            const images = document.querySelectorAll('.carousel-image');
+            
+            images.forEach((img) => {
+                img.classList.remove('active');
+            });
+            
+            currentSlide = index;
+            if (currentSlide >= images.length) currentSlide = 0;
+            if (currentSlide < 0) currentSlide = images.length - 1;
+            
+            images[currentSlide].classList.add('active');
+        }
+
+        function nextSlide() {
+            showSlide(currentSlide + 1);
+        }
+
+        function startCarousel() {
+            carouselInterval = setInterval(nextSlide, 4000);
+        }
+
+        // Start carousel on page load
+        startCarousel();
+    </script>
 </body>
 </html>

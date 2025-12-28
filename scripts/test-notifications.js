@@ -4,6 +4,9 @@
  * Verifies email, SMS, and push notifications are working correctly
  */
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 import notificationService from '../services/wholesale-notification-service.js';
 
 console.log('═══════════════════════════════════════════════════════════════');

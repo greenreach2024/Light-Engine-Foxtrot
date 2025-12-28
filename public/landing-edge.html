@@ -342,12 +342,45 @@
             border-radius: 16px;
             padding: 48px 32px;
             transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
         }
 
         .feature-card:hover {
             background: var(--dark-surface-2);
             border-color: var(--accent-green);
             transform: translateY(-4px);
+        }
+
+        .feature-card:hover .feature-content {
+            opacity: 1 !important;
+        }
+
+        .feature-card:hover .feature-image {
+            display: none !important;
+        }
+
+        .feature-content {
+            position: relative;
+            z-index: 2;
+            transition: opacity 0.5s ease;
+        }
+
+        .feature-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            z-index: 1;
+            transition: opacity 1s ease;
+            pointer-events: none;
+        }
+
+        .feature-image.active {
+            opacity: 0.95;
         }
 
         .video-cards-container {
@@ -457,8 +490,6 @@
                 width: 90%;
             }
         }
-
-        .feature-icon {
 
         .feature-icon {
             font-size: 48px;
@@ -573,32 +604,39 @@
         .footer-content {
             max-width: 1400px;
             margin: 0 auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 40px;
-            margin-bottom: 24px;
-            flex-wrap: wrap;
-            padding: 0 40px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 48px;
+            margin-bottom: 40px;
         }
 
-        .footer-content a {
-            color: var(--text-secondary) !important;
-            text-decoration: none !important;
+        .footer-column {
+            /* Empty but explicit */
+        }
+
+        .footer-column h4 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .footer-column ul {
+            list-style: none;
+        }
+
+        .footer-column li {
+            margin-bottom: 12px;
+        }
+
+        .footer-column a {
+            color: var(--text-secondary);
+            text-decoration: none;
             font-size: 14px;
             transition: color 0.3s;
         }
 
-        .footer-content a:hover {
-            color: var(--text-primary) !important;
-        }
-        
-        .footer-content a:visited {
-            color: var(--text-secondary) !important;
-        }
-        
-        .footer-content a:visited:hover {
-            color: var(--text-primary) !important;
+        .footer-column a:hover {
+            color: var(--accent-green);
         }
 
         .footer-bottom {
@@ -636,16 +674,6 @@
             .nav-links {
                 display: none;
             }
-
-            .footer-content {
-                flex-direction: column;
-                align-items: center;
-                gap: 30px;
-            }
-
-            .footer-column {
-                text-align: center;
-            }
         }
     </style>
 </head>
@@ -656,9 +684,9 @@
             <div class="nav-links">
                 <a href="#features">Features</a>
                 <a href="#specs">Specifications</a>
-                <a href="/docs" rel="noopener">Documentation</a>
+                <a href="/public/docs/quickstart.html" rel="noopener">Quick Start Guides</a>
                 <a href="/landing-cloud.html">Cloud Solution</a>
-                <a href="/downloads.html" class="nav-cta">Download</a>
+                <a href="/public/downloads.html" class="nav-cta">Download</a>
             </div>
         </nav>
     </header>
@@ -672,7 +700,7 @@
                     The ultimate urban growing solution—built to make indoor farming easier, more efficient, and community-driven. Streamlined workflows, reduced labour, and crop diversity you won't find anywhere else. No green thumb needed.
                 </p>
                 <div class="cta-buttons">
-                    <a href="/downloads.html" class="btn-primary">Download Installer</a>
+                    <a href="/public/downloads.html" class="btn-primary">Download Installer</a>
                     <a href="/docs/EDGE_DEPLOYMENT_GUIDE.md" class="btn-secondary" rel="noopener">View Installation Guide</a>
                 </div>
             </div>
@@ -692,6 +720,12 @@
                             </div>
                             <div class="carousel-item">
                                 <img src="images/farm-admin-dashboard.png" alt="Farm Admin Dashboard - Operations overview">
+                            </div>
+                            <div class="carousel-item">
+                                <img src="images/plant-farm/_MAT9331.JPG" alt="Farm Production">
+                            </div>
+                            <div class="carousel-item">
+                                <img src="images/plant-farm/8x19IMG_4919.JPG" alt="Growing Operations">
                             </div>
                         </div>
                     </div>
@@ -723,55 +757,161 @@
             </div>
 
             <div class="feature-grid">
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Automated Lighting</h3>
-                    <p class="feature-description">
-                        Optimized lighting, automatically. We adjust light levels as crops grow to deliver what plants need—reducing energy waste and plant stress for more consistent harvests and a more efficient farm.
-                    </p>
+                <div class="feature-card" data-feature="lighting">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Automated Lighting</h3>
+                        <p class="feature-description">
+                            Optimized lighting, automatically. We adjust light levels as crops grow to deliver what plants need—reducing energy waste and plant stress for more consistent harvests and a more efficient farm.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Climate Control</h3>
-                    <p class="feature-description">
-                        A grow room that learns your space. Smart circulation fans help create distinct zones within a single room, so different crops can thrive side-by-side. We automatically manage temperature and humidity, reusing heat and moisture where possible—cutting waste while keeping plants comfortable and consistent.
-                    </p>
+                <div class="feature-card" data-feature="climate">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Climate Control</h3>
+                        <p class="feature-description">
+                            A grow room that learns your space. Smart circulation fans help create distinct zones within a single room, so different crops can thrive side-by-side. We automatically manage temperature and humidity, reusing heat and moisture where possible—cutting waste while keeping plants comfortable and consistent.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Nutrient Management Integration</h3>
-                    <p class="feature-description">
-                        Multi-crop nutrients made simple. Choose what you're growing, and the system automatically applies the right nutrient recipe—matched to the specific seed and growth stage. No guessing, no research, no manual mixing decisions. From seed to harvest, consistent results every time.
-                    </p>
+                <div class="feature-card" data-feature="nutrients">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Nutrient Management Integration</h3>
+                        <p class="feature-description">
+                            Multi-crop nutrients made simple. Choose what you're growing, and the system automatically applies the right nutrient recipe—matched to the specific seed and growth stage. No guessing, no research, no manual mixing decisions. From seed to harvest, consistent results every time.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Early Issue Detection</h3>
-                    <p class="feature-description">
-                        Artificial intelligence–assisted monitoring watches your equipment and growing conditions around the clock. It flags unusual changes early—like airflow dropping, humidity drifting, or a crop showing signs of stress—so you can act before quality or yield is affected. Your built-in assistant explains what changed and suggests what to check next.
-                    </p>
+                <div class="feature-card" data-feature="detection">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Early Issue Detection</h3>
+                        <p class="feature-description">
+                            Artificial intelligence–assisted monitoring watches your equipment and growing conditions around the clock. It flags unusual changes early—like airflow dropping, humidity drifting, or a crop showing signs of stress—so you can act before quality or yield is affected. Your built-in assistant explains what changed and suggests what to check next.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Seed to Sale</h3>
-                    <p class="feature-description">
-                        Know what to seed, when to harvest, and what you'll have available—without spreadsheets. Inventory is captured automatically and stays connected from the grow room to retail and wholesale ordering. As crops are seeded and harvested, current and future availability updates in real time, so buyers can order with confidence and you can fulfill on time. Built-in traceability keeps every batch documented and ready for compliance.
-                    </p>
+                <div class="feature-card" data-feature="seedtosale">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Seed to Sale</h3>
+                        <p class="feature-description">
+                            Know what to seed, when to harvest, and what you'll have available—without spreadsheets. Inventory is captured automatically and stays connected from the grow room to retail and wholesale ordering. As crops are seeded and harvested, current and future availability updates in real time, so buyers can order with confidence and you can fulfill on time. Built-in traceability keeps every batch documented and ready for compliance.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <span class="feature-icon"></span>
-                    <h3 class="feature-title">Cloud Sync</h3>
-                    <p class="feature-description">
-                        Optional cloud synchronization for remote monitoring, multi-site 
-                        management, and team collaboration across locations.
-                    </p>
+                <div class="feature-card" data-feature="sync">
+                    <img class="feature-image" alt="Farm">
+                    <div class="feature-content">
+                        <span class="feature-icon"></span>
+                        <h3 class="feature-title">Cloud Sync</h3>
+                        <p class="feature-description">
+                            Optional cloud synchronization for remote monitoring, multi-site 
+                            management, and team collaboration across locations.
+                        </p>
+                    </div>
                 </div>
             </div>
+
+            <script>
+            // Feature card image rotation
+            (function() {
+                const images = [
+                    '/public/images/plant-farm/iGrow.jpg',
+                    '/public/images/plant-farm/IMG_4981.jpeg',
+                    '/public/images/plant-farm/IMG_5244.jpeg',
+                    '/public/images/plant-farm/IMG_5308.jpeg',
+                    '/public/images/plant-farm/IMG_5507.jpeg',
+                    '/public/images/plant-farm/IMG_5522.jpeg',
+                    '/public/images/plant-farm/IMG_5581.jpeg',
+                    '/public/images/plant-farm/IMG_5582.jpeg',
+                    '/public/images/plant-farm/IMG_5663.jpeg',
+                    '/public/images/plant-farm/IMG_5677.jpeg',
+                    '/public/images/plant-farm/IMG_5753.jpeg',
+                    '/public/images/plant-farm/IMG_5900.jpeg',
+                    '/public/images/plant-farm/IMG_6028.jpeg',
+                    '/public/images/plant-farm/IMG_6095.jpeg',
+                    '/public/images/plant-farm/IMG_6162.jpeg',
+                    '/public/images/plant-farm/Lettuce.jpg'
+                ];
+
+                const cards = document.querySelectorAll('.feature-card[data-feature]');
+                let activeCards = new Set();
+                const MAX_ACTIVE = 2;
+
+                function getRandomImage() {
+                    return images[Math.floor(Math.random() * images.length)];
+                }
+
+                function getRandomCard() {
+                    return cards[Math.floor(Math.random() * cards.length)];
+                }
+
+                function showImage(card) {
+                    const img = card.querySelector('.feature-image');
+                    const content = card.querySelector('.feature-content');
+                    
+                    img.src = getRandomImage();
+                    
+                    // Fade in image, fade out content
+                    setTimeout(() => {
+                        img.classList.add('active');
+                        content.style.opacity = '0';
+                    }, 100);
+
+                    // Hold for 3-5 seconds
+                    const holdTime = 3000 + Math.random() * 2000;
+                    
+                    setTimeout(() => {
+                        // Fade out image, fade in content
+                        img.classList.remove('active');
+                        content.style.opacity = '1';
+                        
+                        setTimeout(() => {
+                            activeCards.delete(card);
+                        }, 1000);
+                    }, holdTime);
+                }
+
+                function rotateImages() {
+                    // Only show images if less than MAX_ACTIVE are showing
+                    if (activeCards.size < MAX_ACTIVE) {
+                        let card;
+                        let attempts = 0;
+                        
+                        // Find a card that's not currently showing an image
+                        do {
+                            card = getRandomCard();
+                            attempts++;
+                        } while (activeCards.has(card) && attempts < 20);
+                        
+                        if (!activeCards.has(card)) {
+                            activeCards.add(card);
+                            showImage(card);
+                        }
+                    }
+                    
+                    // Schedule next rotation (2-4 seconds)
+                    const nextInterval = 2000 + Math.random() * 2000;
+                    setTimeout(rotateImages, nextInterval);
+                }
+
+                // Start rotation after page load
+                setTimeout(rotateImages, 2000);
+            })();
+            </script>
 
             <div class="video-cards-container">
                 <div class="feature-card-video" onclick="openVideoModal()">
@@ -894,33 +1034,41 @@
     </main>
 
     <footer>
-        <div style="width: 100%; background: var(--dark-surface); padding: 60px 40px 40px; border-top: 2px solid var(--border-dark);">
-            <div style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: center; align-items: center; gap: 40px; margin-bottom: 24px; flex-wrap: wrap;">
-                <a href="/landing-edge.html" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Edge Device</a>
-                <a href="/landing-cloud.html" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Cloud Solution</a>
-                <a href="/downloads" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Downloads</a>
-                <a href="/pricing" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Pricing</a>
-                <a href="/docs" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Documentation</a>
-                <a href="/docs/EDGE_DEPLOYMENT_GUIDE.md" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Installation Guide</a>
+        <div class="footer-content">
+            <div class="footer-column">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="/landing-cloud.html">Cloud Solution</a></li>
+                    <li><a href="/landing-edge.html">Edge Device</a></li>
+                    <li><a href="/public/downloads.html">Downloads</a></li>
+                </ul>
             </div>
-            <div style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: center; align-items: center; gap: 40px; margin-bottom: 24px; flex-wrap: wrap;">
-                <a href="/docs/DESKTOP_APP_GUIDE.md" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Desktop App Guide</a>
-                <a href="https://community.greenreach.io" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Community Forum</a>
-                <a href="/about" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">About</a>
-                <a href="/contact" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Contact</a>
-                <a href="/careers" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Careers</a>
-                <a href="/blog" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Blog</a>
+            <div class="footer-column">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="/public/docs/quickstart.html">Quick Start Guides</a></li>
+                    <li><a href="/docs/DESKTOP_APP_GUIDE.md">Desktop Guide</a></li>
+                </ul>
             </div>
-            <div style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: center; align-items: center; gap: 40px; margin-bottom: 40px; flex-wrap: wrap;">
-                <a href="mailto:support@greenreach.io" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Email Support</a>
-                <a href="/docs/troubleshooting" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Troubleshooting</a>
-                <a href="/status" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">System Status</a>
-                <a href="/security" style="color: #9ca3af !important; text-decoration: none; font-size: 14px; transition: color 0.3s;">Security</a>
+            <div class="footer-column">
+                <h4>Company</h4>
+                <ul>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="mailto:support@greenreach.io">Email Support</a></li>
+                    <li><a href="/status">System Status</a></li>
+                    <li><a href="/security">Security</a></li>
+                </ul>
             </div>
         </div>
         <div class="footer-bottom">
             <p>&copy; 2025 GreenReach. All rights reserved. | <a href="/privacy" style="color: var(--text-secondary);">Privacy</a> | <a href="/terms" style="color: var(--text-secondary);">Terms</a></p>
         </div>
     </footer>
+
 </body>
 </html>

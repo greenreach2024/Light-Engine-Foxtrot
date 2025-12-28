@@ -1,10 +1,14 @@
 // CORS middleware configuration
-// Allowed origins for production (S3 frontend + Elastic Beanstalk backend)
+// Allowed origins for production (S3 frontend + Elastic Beanstalk backend + Custom Domain)
 const ALLOWED_ORIGINS = [
   'http://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
   'http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
   'https://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
   'https://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+  'http://urbanyeild.ca',  // Custom domain - Production
+  'https://urbanyeild.ca',  // Custom domain - Production (HTTPS)
+  'http://www.urbanyeild.ca',  // Custom domain with www
+  'https://www.urbanyeild.ca',  // Custom domain with www (HTTPS)
   'http://localhost:8091',  // Local development
   'http://127.0.0.1:8091',  // Local development
 ];
