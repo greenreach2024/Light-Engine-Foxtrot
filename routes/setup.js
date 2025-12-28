@@ -20,6 +20,18 @@ const router = express.Router();
 // Format: { code: { farmId, tier, expiresAt, used: false } }
 const activationCodes = new Map();
 
+// Initialize test activation code
+activationCodes.set('TEST1234', {
+  farmId: 'FARM-TEST-001',
+  farmName: 'Test Farm',
+  tier: 'pro',
+  expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year
+  used: false,
+  createdAt: new Date().toISOString()
+});
+
+console.log('[Setup] Test activation code initialized: TEST1234');
+
 /**
  * Generate hardware fingerprint for the device
  */
@@ -349,5 +361,130 @@ function generateQRCodeUrl(farmId) {
   const url = `http://${deviceIP}:8091`;
   return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
 }
+
+/**
+ * POST /api/setup/complete
+ * Completes edge device setup by saving credentials to /config/farm-credentials.json
+ * Called by setup wizard after successful registration with GreenReach Central
+ */
+router.post('/complete', async (req, res) => {
+    try {
+        const { saveCredentials, isRegistered, getFarmId } = await import('../lib/farm-credentials.js');
+        
+        const { 
+            farmId, 
+            farmName, 
+            credentials, 
+            endpoints, 
+            certifications,
+            registrationCode,
+            save_credentials 
+        } = req.body;
+        
+        // Validate required fields
+        if (!farmId || !credentials) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: farmId, credentials'
+            });
+        }
+        
+        // Validate credential structure
+        const requiredKeys = ['wholesale_api_key', 'pos_api_key', 'device_api_key', 'jwt_secret'];
+        const missingKeys = requiredKeys.filter(key => !credentials[key]);
+        
+        if (missingKeys.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Missing required credentials: ${missingKeys.join(', ')}`
+            });
+        }
+        
+        // Check if already registered
+        if (isRegistered()) {
+            const existingFarmId = getFarmId();
+            return res.status(409).json({
+                success: false,
+                message: 'Edge device already registered',
+                farm_id: existingFarmId
+            });
+        }
+        
+        // Save credentials to /config/farm-credentials.json
+        await saveCredentials({
+            farm_id: farmId,
+            farm_name: farmName || 'Light Engine Farm',
+            credentials: {
+                wholesale_api_key: credentials.wholesale_api_key,
+                pos_api_key: credentials.pos_api_key,
+                device_api_key: credentials.device_api_key,
+                jwt_secret: credentials.jwt_secret
+            },
+            endpoints: endpoints || {
+                wholesale_api: 'https://wholesale.greenreach.io',
+                monitoring_api: 'https://monitor.greenreach.io',
+                update_api: 'https://updates.greenreach.io',
+                cloud_api: 'https://api.greenreach.io'
+            },
+            registered_at: new Date().toISOString(),
+            registration_code: registrationCode,
+            certifications: certifications || {},
+            status: 'active'
+        });
+        
+        console.log(`✅ Setup complete - Farm registered: ${farmId}`);
+        
+        res.json({
+            success: true,
+            message: 'Setup complete - credentials saved',
+            farm_id: farmId,
+            farm_name: farmName,
+            next_url: '/farm-admin.html'
+        });
+        
+    } catch (error) {
+        console.error('Setup completion error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save credentials',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/setup/status
+ * Check if edge device has been registered with GreenReach Central
+ */
+router.get('/status', async (req, res) => {
+    try {
+        const { isRegistered, getFarmId, getFarmName } = await import('../lib/farm-credentials.js');
+        
+        if (isRegistered()) {
+            const farmId = getFarmId();
+            const farmName = getFarmName();
+            res.json({
+                registered: true,
+                farm_id: farmId,
+                farm_name: farmName,
+                message: 'Edge device registered'
+            });
+        } else {
+            res.json({
+                registered: false,
+                message: 'Edge device not registered - run setup wizard',
+                setup_url: '/farm-admin.html#settings'
+            });
+        }
+        
+    } catch (error) {
+        console.error('Setup status check error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check registration status',
+            error: error.message
+        });
+    }
+});
 
 export default router;
