@@ -30,6 +30,7 @@ import { startHealthCheckService } from './services/healthCheck.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
+import deadlineMonitor from '../services/deadline-monitor.js';
 import logger from './utils/logger.js';
 
 // Load environment variables
@@ -203,6 +204,10 @@ async function startServer() {
       logger.info('Starting background services...');
       startHealthCheckService(app);
       startSyncMonitor(app);
+      
+      // Start deadline monitor for wholesale orders
+      logger.info('Starting deadline monitor service...');
+      deadlineMonitor.start();
     } else {
       logger.warn('Skipping background services (database not ready)');
     }
