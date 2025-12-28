@@ -347,6 +347,15 @@
       box-shadow: 0 2px 8px rgba(139, 92, 246, 0.5);
     }
 
+    .action-btn.orange {
+      background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+    }
+
+    .action-btn.orange:active {
+      box-shadow: 0 2px 8px rgba(249, 115, 22, 0.5);
+    }
+
     .action-btn.red {
       background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
       box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
@@ -826,6 +835,14 @@
             </div>
           </button>
           
+          <button class="action-btn orange" onclick="openOrderDashboard()">
+            <span class="action-icon">📋</span>
+            <div class="action-text">
+              <div>View Orders</div>
+              <div class="action-subtitle">Wholesale Order Dashboard</div>
+            </div>
+          </button>
+          
           <button class="action-btn red" onclick="openQACheckpoint()">
             <span class="action-icon"></span>
             <div class="action-text">
@@ -1247,6 +1264,11 @@
 
     // === QA CHECKPOINT FUNCTIONS ===
     const QA_BACKEND_URL = window.location.origin;
+
+    function openOrderDashboard() {
+      // Open wholesale order dashboard in new tab
+      window.open('/wholesale-farm-orders.html', '_blank');
+    }
 
     function openQACheckpoint() {
       resetQAModal();
