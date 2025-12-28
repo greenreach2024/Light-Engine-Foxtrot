@@ -280,6 +280,19 @@
       letter-spacing: 0.05em;
     }
 
+    .priority-urgent {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ef4444;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
     /* Quick Actions - Left Column */
     .quick-actions {
       background: rgba(30, 41, 59, 0.9);
@@ -916,15 +929,16 @@
             <div class="priority-number" id="harvestCount">0</div>
             <div class="priority-label">Ready to Harvest</div>
           </div>
-          <div class="priority-card" onclick="openInventoryView()">
-            <div class="priority-number" id="seedlingCount">0</div>
-            <div class="priority-label">Seedlings Active</div>
+          <div class="priority-card" onclick="scrollToOrders()">
+            <div class="priority-number" id="orderCount">0</div>
+            <div class="priority-label">Pending Orders</div>
+            <div class="priority-urgent" id="orderUrgent" style="display: none;">⚠️ URGENT</div>
           </div>
           <div class="priority-card" onclick="scrollToChecklist()">
             <div class="priority-number" id="checklistCount">0</div>
             <div class="priority-label">Tasks Pending</div>
           </div>
-          <div class="priority-card">
+          <div class="priority-card" onclick="openInventoryView()">
             <div class="priority-number" id="activeTrays">0</div>
             <div class="priority-label">Active Trays</div>
           </div>
@@ -1367,6 +1381,14 @@
       const harvestSection = document.querySelector('.harvest-section');
       if (harvestSection) {
         harvestSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    // Scroll to Order Pick List Section
+    function scrollToOrders() {
+      const orderSection = document.querySelector('.order-picklist-section');
+      if (orderSection) {
+        orderSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
 
@@ -1977,6 +1999,9 @@
         container.innerHTML = `
           <div class="empty-state">No pending orders</div>
         `;
+        // Update priority card
+        document.getElementById('orderCount').textContent = '0';
+        document.getElementById('orderUrgent').style.display = 'none';
         return;
       }
 
@@ -1986,6 +2011,22 @@
         const deadlineB = new Date(b.verification_deadline || b.deadline);
         return deadlineA - deadlineB;
       });
+
+      // Check for urgent orders
+      const urgentCount = orders.filter(order => {
+        const deadline = new Date(order.verification_deadline || order.deadline);
+        const hoursRemaining = (deadline - new Date()) / (1000 * 60 * 60);
+        return hoursRemaining < 6;
+      }).length;
+
+      // Update priority card
+      document.getElementById('orderCount').textContent = orders.length;
+      const urgentIndicator = document.getElementById('orderUrgent');
+      if (urgentCount > 0) {
+        urgentIndicator.style.display = 'block';
+      } else {
+        urgentIndicator.style.display = 'none';
+      }
 
       container.innerHTML = orders.map(order => {
         const deadline = new Date(order.verification_deadline || order.deadline);
