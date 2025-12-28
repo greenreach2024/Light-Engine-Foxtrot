@@ -914,6 +914,7 @@
     </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
   <script src="/lib/chart.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <!-- Page Header Navigation -->
@@ -2261,6 +2262,28 @@
                                         <input type="password" id="settings-api-key" placeholder="Enter API key" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                         <small style="color: var(--text-muted);">From GreenReach Central dashboard</small>
                                     </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Device Pairing for Activity Hub Tablets -->
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Tablet Device Pairing</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">
+                                    Generate a QR code to pair tablets with this farm's Activity Hub. Each tablet must scan this code for secure access.
+                                </p>
+                                <button class="btn-primary" onclick="generatePairingQR()" style="width: 100%; margin-bottom: 15px;">
+                                    🔐 Generate Pairing QR Code
+                                </button>
+                                <div id="pairingQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <h4 style="color: #1a2332; margin-bottom: 10px;">Scan with Tablet</h4>
+                                    <div id="pairingQRCode" style="display: inline-block;"></div>
+                                    <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
+                                        Farm: <strong id="pairingFarmName" style="color: #1a2332;"></strong><br>
+                                        Token expires in 24 hours
+                                    </p>
+                                    <button class="btn-secondary" onclick="closePairingQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
+                                        Close
+                                    </button>
                                 </div>
                             </div>
                         </div>

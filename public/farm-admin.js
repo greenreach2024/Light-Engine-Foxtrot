@@ -3141,5 +3141,76 @@ function resetSettings() {
         loadSettings();
         showToast('Settings reset to defaults', 'info');
     }
+}
+
+// === DEVICE PAIRING QR CODE GENERATION ===
+
+/**
+ * Generate QR code for tablet device pairing
+ */
+async function generatePairingQR() {
+    try {
+        // Get farm info from localStorage or current session
+        const farmId = localStorage.getItem('farm_id') || 'FARM-001';
+        const farmName = localStorage.getItem('farm_name') || 'Demo Farm';
+        
+        // Call API to generate device token
+        const response = await fetch('/api/auth/generate-device-token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                farm_id: farmId,
+                farm_name: farmName,
+                role: 'manager'  // Activity Hub access level
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to generate device token');
+        }
+        
+        const data = await response.json();
+        const deviceToken = data.token;
+        
+        // Create QR code data (format: DEVICE_PAIR|{token}|{farm_id}|{farm_name})
+        const qrData = `DEVICE_PAIR|${deviceToken}|${farmId}|${farmName}`;
+        
+        // Clear previous QR code
+        const qrContainer = document.getElementById('pairingQRCode');
+        qrContainer.innerHTML = '';
+        
+        // Generate QR code
+        new QRCode(qrContainer, {
+            text: qrData,
+            width: 256,
+            height: 256,
+            colorDark: '#1a2332',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+        
+        // Update farm name display
+        document.getElementById('pairingFarmName').textContent = farmName;
+        
+        // Show QR code container
+        document.getElementById('pairingQRContainer').style.display = 'block';
+        
+        showToast('Pairing QR code generated successfully', 'success');
+        
+    } catch (error) {
+        console.error('Error generating pairing QR:', error);
+        showToast('Error generating pairing QR code: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Close pairing QR code display
+ */
+function closePairingQR() {
+    document.getElementById('pairingQRContainer').style.display = 'none';
+}
+
     // Would generate and download ZIP of all receipts
 }

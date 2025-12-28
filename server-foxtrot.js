@@ -9747,6 +9747,16 @@ import farmSalesFulfillmentRouter from './routes/farm-sales/fulfillment.js';
 import farmSalesReportsRouter from './routes/farm-sales/reports.js';
 import farmSalesQuickBooksRouter from './routes/farm-sales/quickbooks.js';
 import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
+import authRouter from './routes/auth.js';
+
+/**
+ * Authentication & Device Pairing
+ * JWT token generation and validation for Activity Hub tablets
+ * - POST /api/auth/generate-device-token: Generate pairing token for tablet
+ * - POST /api/auth/validate-device-token: Validate scanned QR code token
+ * - GET /api/ping: Health check for edge device availability
+ */
+app.use('/api/auth', authRouter);
 
 /**
  * Farm Sales: Customer Management
