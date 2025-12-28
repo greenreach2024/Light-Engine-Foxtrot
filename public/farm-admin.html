@@ -3760,6 +3760,11 @@
               <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Phone</label>
               <input type="tel" id="setup-contact-phone" placeholder="+1 (555) 123-4567" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
             </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Website</label>
+              <input type="url" id="setup-contact-website" placeholder="https://yourfarm.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Used for branding across the platform</div>
+            </div>
           </div>
         </div>
         
@@ -3769,6 +3774,10 @@
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Where is your farm located?</p>
           
           <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button type="button" id="setup-use-location" onclick="useCurrentLocation()" style="padding: 10px 16px; background: var(--accent-green); border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; white-space: nowrap;">📍 Use Current Location</button>
+              <span id="setup-location-status" style="font-size: 12px; color: var(--text-muted);"></span>
+            </div>
             <div>
               <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Street Address *</label>
               <input type="text" id="setup-address" placeholder="123 Main Street" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
@@ -3798,6 +3807,8 @@
                 <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
               </select>
             </div>
+            <input type="hidden" id="setup-latitude">
+            <input type="hidden" id="setup-longitude">
           </div>
         </div>
         

@@ -3502,12 +3502,15 @@ async function completeSetup() {
         const contactName = document.getElementById('setup-contact-name').value.trim();
         const contactEmail = document.getElementById('setup-contact-email').value.trim();
         const contactPhone = document.getElementById('setup-contact-phone').value.trim();
+        const contactWebsite = document.getElementById('setup-contact-website').value.trim();
         
         const address = document.getElementById('setup-address').value.trim();
         const city = document.getElementById('setup-city').value.trim();
         const state = document.getElementById('setup-state').value.trim();
         const postal = document.getElementById('setup-postal').value.trim();
         const timezone = document.getElementById('setup-timezone').value;
+        const latitude = document.getElementById('setup-latitude').value;
+        const longitude = document.getElementById('setup-longitude').value;
         
         // Collect certifications
         const certifications = Array.from(document.querySelectorAll('input[name="certification"]:checked'))
@@ -3534,14 +3537,17 @@ async function completeSetup() {
                 contact: {
                     name: contactName,
                     email: contactEmail,
-                    phone: contactPhone
+                    phone: contactPhone,
+                    website: contactWebsite
                 },
                 location: {
                     address: address,
                     city: city,
                     state: state,
                     postalCode: postal,
-                    timezone: timezone
+                    timezone: timezone,
+                    latitude: latitude ? parseFloat(latitude) : null,
+                    longitude: longitude ? parseFloat(longitude) : null
                 },
                 certifications: {
                     certifications: certifications,
@@ -3572,10 +3578,13 @@ async function completeSetup() {
             state: state,
             postalCode: postal,
             timezone: timezone,
+            latitude: latitude ? parseFloat(latitude) : null,
+            longitude: longitude ? parseFloat(longitude) : null,
             contact: {
                 name: contactName,
                 email: contactEmail,
-                phone: contactPhone
+                phone: contactPhone,
+                website: contactWebsite
             },
             registered: new Date().toISOString()
         };
@@ -3614,3 +3623,85 @@ async function completeSetup() {
 window.addEventListener('DOMContentLoaded', () => {
     checkFirstTimeSetup();
 });
+
+/**
+ * Use current GPS location to populate address fields
+ */
+async function useCurrentLocation() {
+    const statusEl = document.getElementById('setup-location-status');
+    const btn = document.getElementById('setup-use-location');
+    
+    if (!navigator.geolocation) {
+        statusEl.textContent = 'Geolocation not supported';
+        statusEl.style.color = 'var(--error-red)';
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.textContent = '⏳ Getting location...';
+    statusEl.textContent = 'Requesting GPS coordinates...';
+    statusEl.style.color = 'var(--text-muted)';
+    
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            
+            // Store coordinates
+            document.getElementById('setup-latitude').value = lat;
+            document.getElementById('setup-longitude').value = lon;
+            
+            statusEl.textContent = 'Location captured! Fetching address...';
+            
+            try {
+                // Reverse geocode to get address
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+                const data = await response.json();
+                
+                if (data && data.address) {
+                    const addr = data.address;
+                    
+                    // Fill in address fields
+                    if (addr.road) {
+                        const street = addr.house_number ? `${addr.house_number} ${addr.road}` : addr.road;
+                        document.getElementById('setup-address').value = street;
+                    }
+                    if (addr.city || addr.town || addr.village) {
+                        document.getElementById('setup-city').value = addr.city || addr.town || addr.village;
+                    }
+                    if (addr.state) {
+                        document.getElementById('setup-state').value = addr.state;
+                    }
+                    if (addr.postcode) {
+                        document.getElementById('setup-postal').value = addr.postcode;
+                    }
+                    
+                    statusEl.textContent = '✔ Location and address captured!';
+                    statusEl.style.color = 'var(--accent-green)';
+                } else {
+                    statusEl.textContent = 'GPS captured, but could not determine address';
+                    statusEl.style.color = 'var(--text-secondary)';
+                }
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                statusEl.textContent = 'GPS captured, geocoding failed';
+                statusEl.style.color = 'var(--text-secondary)';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '📍 Use Current Location';
+        },
+        (error) => {
+            console.error('Geolocation error:', error);
+            statusEl.textContent = 'Location access denied or unavailable';
+            statusEl.style.color = 'var(--error-red)';
+            btn.disabled = false;
+            btn.textContent = '📍 Use Current Location';
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
