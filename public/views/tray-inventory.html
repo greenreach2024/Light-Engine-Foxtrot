@@ -1125,10 +1125,38 @@
         <button class="close-btn" onclick="closeScanModal()">&times;</button>
       </div>
       <div class="modal-body">
+        <!-- Batch Mode Toggle (only for harvest) -->
+        <div id="batchModeToggle" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.1); border: 2px solid rgba(59, 130, 246, 0.3); border-radius: 12px;">
+          <label style="display: flex; align-items: center; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="batchModeCheckbox" onchange="toggleBatchMode()" style="width: 24px; height: 24px; margin-right: 1rem; cursor: pointer;">
+            <div>
+              <div style="font-weight: 700; font-size: 1.2rem; color: #60a5fa; margin-bottom: 0.25rem;">Batch Harvest Mode</div>
+              <div style="font-size: 0.95rem; color: #94a3b8;">Scan multiple trays of the same crop, then set weight for all at once</div>
+            </div>
+          </label>
+        </div>
+
+        <!-- Batch Tray List -->
+        <div id="batchTrayList" style="display: none; margin-bottom: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h4 style="color: #60a5fa; font-size: 1.1rem;">Scanned Trays (<span id="batchCount">0</span>)</h4>
+            <button onclick="clearBatchTrays()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">Clear All</button>
+          </div>
+          <div id="batchTraysContainer" style="max-height: 200px; overflow-y: auto; background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 1rem;">
+            <!-- Batch trays will be listed here -->
+          </div>
+        </div>
+
         <div id="qrReader"></div>
         <div id="scanResult" class="scan-result" style="display: none;"></div>
         <button class="button button-secondary" onclick="manualEntry()">Enter Manually</button>
         <button class="button button-primary" id="confirmScan" style="display: none;" onclick="confirmScan()">Continue</button>
+        
+        <!-- Batch Harvest Actions -->
+        <div id="batchActions" style="display: none; margin-top: 1rem; gap: 1rem; display: none;">
+          <button class="button button-secondary" onclick="scanAnotherTray()">Scan Another Tray</button>
+          <button class="button button-primary" onclick="processBatchHarvest()">Set Weight & Harvest All</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1351,6 +1379,10 @@
     let scannedData = null;
     let html5QrCode = null;
     let currentChecklistType = 'daily';
+    
+    // Batch Harvest State
+    let batchHarvestMode = false;
+    let batchHarvestTrays = [];
     
     // QA State
     let currentQABatch = null;
@@ -2460,7 +2492,189 @@
       document.getElementById('scanResult').style.display = 'none';
       document.getElementById('confirmScan').style.display = 'none';
       
+      // Show batch mode toggle only for harvest
+      const batchToggle = document.getElementById('batchModeToggle');
+      if (mode === 'harvest') {
+        batchToggle.style.display = 'block';
+        if (batchHarvestMode) {
+          document.getElementById('batchTrayList').style.display = 'block';
+          updateBatchTrayList();
+        }
+      } else {
+        batchToggle.style.display = 'none';
+        document.getElementById('batchTrayList').style.display = 'none';
+      }
+      
       startQRScanner();
+    }
+
+    // Toggle Batch Harvest Mode
+    function toggleBatchMode() {
+      batchHarvestMode = document.getElementById('batchModeCheckbox').checked;
+      
+      if (batchHarvestMode) {
+        document.getElementById('batchTrayList').style.display = 'block';
+        batchHarvestTrays = [];
+        updateBatchTrayList();
+      } else {
+        document.getElementById('batchTrayList').style.display = 'none';
+        document.getElementById('batchActions').style.display = 'none';
+        batchHarvestTrays = [];
+      }
+    }
+
+    // Update Batch Tray List Display
+    function updateBatchTrayList() {
+      document.getElementById('batchCount').textContent = batchHarvestTrays.length;
+      const container = document.getElementById('batchTraysContainer');
+      
+      if (batchHarvestTrays.length === 0) {
+        container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 1rem;">No trays scanned yet</div>';
+      } else {
+        container.innerHTML = batchHarvestTrays.map((tray, index) => `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: rgba(30, 41, 59, 0.6); border-radius: 8px; margin-bottom: 0.5rem;">
+            <span style="color: #f8fafc; font-weight: 600;">${index + 1}. Tray ${tray}</span>
+            <button onclick="removeBatchTray(${index})" style="background: transparent; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; padding: 0.25rem 0.5rem;">&times;</button>
+          </div>
+        `).join('');
+      }
+    }
+
+    // Remove a tray from batch
+    function removeBatchTray(index) {
+      batchHarvestTrays.splice(index, 1);
+      updateBatchTrayList();
+      
+      if (batchHarvestTrays.length === 0) {
+        document.getElementById('batchActions').style.display = 'none';
+      }
+    }
+
+    // Clear all batch trays
+    function clearBatchTrays() {
+      if (confirm(`Clear all ${batchHarvestTrays.length} scanned trays?`)) {
+        batchHarvestTrays = [];
+        updateBatchTrayList();
+        document.getElementById('batchActions').style.display = 'none';
+        document.getElementById('qrReader').style.display = 'block';
+        document.getElementById('scanResult').style.display = 'none';
+      }
+    }
+
+    // Scan another tray in batch mode
+    function scanAnotherTray() {
+      document.getElementById('scanResult').style.display = 'none';
+      document.getElementById('batchActions').style.display = 'none';
+      document.getElementById('qrReader').style.display = 'block';
+      scannedData = null;
+      startQRScanner();
+    }
+
+    // Process batch harvest
+    async function processBatchHarvest() {
+      if (batchHarvestTrays.length === 0) {
+        alert('No trays to harvest');
+        return;
+      }
+
+      const weight = prompt(`Enter harvest weight (kg) for ALL ${batchHarvestTrays.length} trays:`, '1.5');
+      if (!weight) return;
+
+      // Show loading
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+          <div class="spinner"></div>
+          <div style="margin-top: 1rem; color: #94a3b8;">Harvesting ${batchHarvestTrays.length} trays...</div>
+        </div>
+      `;
+      scanResult.style.display = 'block';
+      document.getElementById('batchActions').style.display = 'none';
+      document.getElementById('qrReader').style.display = 'none';
+
+      let successful = 0;
+      let failed = 0;
+      const results = [];
+
+      for (const trayId of batchHarvestTrays) {
+        try {
+          const harvestData = {
+            trayRunId: trayId,
+            harvestedAt: new Date().toISOString(),
+            actualWeight: weight,
+            note: `Batch harvest via Activity Hub (${batchHarvestTrays.length} trays)`
+          };
+
+          if (!isOnline) {
+            await queueOfflineAction('harvest', harvestData);
+            successful++;
+          } else {
+            const response = await fetch(`${currentAPI}/api/tray-runs/${trayId}/harvest`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(harvestData)
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              results.push({ trayId, lotCode: data.lotCode, batchId: data.batchId });
+              successful++;
+            } else {
+              failed++;
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to harvest tray ${trayId}:`, error);
+          failed++;
+        }
+      }
+
+      // Show results
+      if (isOnline) {
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 1rem;">
+              Batch Harvest Complete
+            </div>
+            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1.5rem;">
+              ${successful} trays harvested successfully${failed > 0 ? `, ${failed} failed` : ''}
+            </div>
+            <div style="max-height: 200px; overflow-y: auto; background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; text-align: left;">
+              ${results.map((r, i) => `
+                <div style="padding: 0.5rem; border-bottom: 1px solid rgba(148, 163, 184, 0.2); color: #cbd5e1;">
+                  ${i + 1}. Tray ${r.trayId} → Lot: ${r.lotCode}
+                </div>
+              `).join('')}
+            </div>
+            <button onclick="closeScanModal()" class="button button-primary">Done</button>
+          </div>
+        `;
+      } else {
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: #f97316; margin-bottom: 1rem;">📦</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #f97316; margin-bottom: 0.5rem;">
+              Saved Offline
+            </div>
+            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
+              ${successful} trays queued - will sync when connection is restored
+            </div>
+            <button onclick="closeScanModal()" class="button button-primary">Done</button>
+          </div>
+        `;
+      }
+
+      // Reset batch state
+      batchHarvestTrays = [];
+      batchHarvestMode = false;
+      document.getElementById('batchModeCheckbox').checked = false;
+      document.getElementById('batchTrayList').style.display = 'none';
+
+      // Reload dashboard
+      setTimeout(() => {
+        loadDashboardData();
+      }, 2000);
     }
 
     // Close Scan Modal
@@ -2506,12 +2720,45 @@
       scannedData = decodedText;
       stopQRScanner();
       
-      document.getElementById('scanResult').innerHTML = `
-        <strong>Scanned:</strong><br>
-        ${decodedText}
-      `;
-      document.getElementById('scanResult').style.display = 'block';
-      document.getElementById('confirmScan').style.display = 'block';
+      // Handle batch mode for harvest
+      if (batchHarvestMode && currentScanMode === 'harvest') {
+        // Add to batch
+        if (!batchHarvestTrays.includes(decodedText)) {
+          batchHarvestTrays.push(decodedText);
+          updateBatchTrayList();
+          
+          document.getElementById('scanResult').innerHTML = `
+            <div style="text-align: center; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 2px solid #10b981; border-radius: 12px;">
+              <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">✓</div>
+              <div style="font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Tray Added</div>
+              <div style="color: #cbd5e1;">Tray ${decodedText}</div>
+              <div style="color: #94a3b8; font-size: 0.9rem; margin-top: 0.5rem;">Total: ${batchHarvestTrays.length} trays</div>
+            </div>
+          `;
+          document.getElementById('scanResult').style.display = 'block';
+          document.getElementById('qrReader').style.display = 'none';
+          document.getElementById('batchActions').style.display = 'flex';
+        } else {
+          document.getElementById('scanResult').innerHTML = `
+            <div style="text-align: center; padding: 1.5rem; background: rgba(245, 158, 11, 0.1); border: 2px solid #f59e0b; border-radius: 12px;">
+              <div style="font-size: 2rem; color: #f59e0b; margin-bottom: 0.5rem;">⚠</div>
+              <div style="font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">Already Scanned</div>
+              <div style="color: #cbd5e1;">Tray ${decodedText} is already in the batch</div>
+            </div>
+          `;
+          document.getElementById('scanResult').style.display = 'block';
+          document.getElementById('qrReader').style.display = 'none';
+          document.getElementById('batchActions').style.display = 'flex';
+        }
+      } else {
+        // Normal single-scan mode
+        document.getElementById('scanResult').innerHTML = `
+          <strong>Scanned:</strong><br>
+          ${decodedText}
+        `;
+        document.getElementById('scanResult').style.display = 'block';
+        document.getElementById('confirmScan').style.display = 'block';
+      }
     }
 
     // QR Scan Error (silent)
