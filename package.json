@@ -17,6 +17,7 @@
     "setup:notifications": "node scripts/setup-notifications.js",
     "test:notifications": "node scripts/test-notifications.js",
     "test:overselling": "node scripts/test-overselling-prevention.js",
+    "test:alerts": "node scripts/test-alert-system.js",
     "cleanup:reservations": "node scripts/cleanup-expired-reservations.js",
     "reports:weekly": "node scripts/send-weekly-reports.js",
     "build:edge": "webpack --config webpack.edge.config.cjs",
