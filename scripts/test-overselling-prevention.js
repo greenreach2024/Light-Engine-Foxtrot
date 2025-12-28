@@ -8,7 +8,7 @@ import fetch from 'node-fetch';
 
 const FARM_API_URL = process.env.FARM_API_URL || 'http://localhost:8091';
 const FARM_ID = process.env.FARM_ID || 'light-engine-demo';
-const API_KEY = process.env.FARM_API_KEY || 'demo-key';
+const API_KEY = process.env.FARM_API_KEY || '8ad845e7efb313f81138be73034bc4a05c9343cbfc225814124dee373055ee72';
 
 console.log('═══════════════════════════════════════════════════════════════');
 console.log('  Overselling Prevention Test');
