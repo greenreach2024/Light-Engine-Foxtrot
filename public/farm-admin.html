@@ -3719,6 +3719,7 @@
           <div class="setup-progress-step" data-step="2" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="3" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="4" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
+          <div class="setup-progress-step" data-step="5" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
         </div>
       </div>
       
@@ -3812,8 +3813,32 @@
           </div>
         </div>
         
-        <!-- Step 4: Certifications -->
+        <!-- Step 4: Rooms & Zones -->
         <div id="setup-step-4" class="setup-step" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Grow Spaces</h3>
+          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Add your grow rooms and zones within each room.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <!-- Add Room Input -->
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+              <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Room Name</label>
+                <input type="text" id="setup-new-room" placeholder="e.g., Flower A, Veg Room" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+              </div>
+              <button type="button" onclick="addSetupRoom()" style="padding: 10px 20px; background: var(--accent-blue); border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 500; white-space: nowrap;">Add Room</button>
+            </div>
+            
+            <!-- Rooms List -->
+            <div id="setup-rooms-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 350px; overflow-y: auto;">
+              <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px;">
+                No rooms added yet. Add at least one room to continue.
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Step 5: Certifications -->
+        <div id="setup-step-5" class="setup-step" style="display: none;">
           <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Certifications & Practices</h3>
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Help buyers discover your farm through certifications and practices (optional).</p>
           

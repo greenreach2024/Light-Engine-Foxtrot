@@ -3252,8 +3252,10 @@ function closePairingQR() {
 // ============================================================================
 
 let currentSetupStep = 1;
-const totalSetupSteps = 4;
-let setupData = {};
+const totalSetupSteps = 5;
+let setupData = {
+    rooms: []
+};
 
 /**
  * Check if first-time setup is needed
@@ -3408,6 +3410,14 @@ function validateSetupStep(step) {
             break;
             
         case 4:
+            // Rooms - at least one room required
+            if (!setupData.rooms || setupData.rooms.length === 0) {
+                isValid = false;
+                errorMessage = 'Please add at least one room to continue';
+            }
+            break;
+            
+        case 5:
             // Certifications are optional, always valid
             isValid = true;
             break;
@@ -3549,6 +3559,7 @@ async function completeSetup() {
                     latitude: latitude ? parseFloat(latitude) : null,
                     longitude: longitude ? parseFloat(longitude) : null
                 },
+                rooms: setupData.rooms || [],
                 certifications: {
                     certifications: certifications,
                     practices: practices,
@@ -3580,6 +3591,7 @@ async function completeSetup() {
             timezone: timezone,
             latitude: latitude ? parseFloat(latitude) : null,
             longitude: longitude ? parseFloat(longitude) : null,
+            rooms: setupData.rooms || [],
             contact: {
                 name: contactName,
                 email: contactEmail,
@@ -3598,6 +3610,15 @@ async function completeSetup() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(farmData)
             });
+            
+            // Save rooms to /rooms endpoint if any rooms were added
+            if (setupData.rooms && setupData.rooms.length > 0) {
+                await fetch('/rooms', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(setupData.rooms)
+                });
+            }
         } catch (e) {
             console.warn('Could not save to localStorage/backend:', e);
         }
@@ -3623,6 +3644,146 @@ async function completeSetup() {
 window.addEventListener('DOMContentLoaded', () => {
     checkFirstTimeSetup();
 });
+
+/**
+ * Add a room to the setup wizard
+ */
+function addSetupRoom() {
+    const roomInput = document.getElementById('setup-new-room');
+    const roomName = roomInput.value.trim();
+    
+    if (!roomName) {
+        showSetupError('Please enter a room name');
+        return;
+    }
+    
+    // Check for duplicate room names
+    if (setupData.rooms.some(r => r.name.toLowerCase() === roomName.toLowerCase())) {
+        showSetupError('A room with this name already exists');
+        return;
+    }
+    
+    // Add room
+    const room = {
+        id: Date.now().toString(),
+        name: roomName,
+        zones: []
+    };
+    
+    setupData.rooms.push(room);
+    roomInput.value = '';
+    
+    renderSetupRooms();
+    showSetupSuccess(`Room "${roomName}" added`);
+}
+
+/**
+ * Render rooms list in setup wizard
+ */
+function renderSetupRooms() {
+    const container = document.getElementById('setup-rooms-list');
+    
+    if (!setupData.rooms || setupData.rooms.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px;">
+                No rooms added yet. Add at least one room to continue.
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = setupData.rooms.map(room => `
+        <div style="border: 1px solid var(--border); border-radius: 8px; padding: 15px; background: var(--bg-card);">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                <div>
+                    <div style="font-weight: 600; font-size: 15px; color: var(--text-primary); margin-bottom: 4px;">${escapeHtml(room.name)}</div>
+                    <div style="font-size: 12px; color: var(--text-muted);">${room.zones.length} zone${room.zones.length !== 1 ? 's' : ''}</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" onclick="removeSetupRoom('${room.id}')" style="padding: 6px 12px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--error-red); border-radius: 4px; cursor: pointer; font-size: 12px;">Remove</button>
+                </div>
+            </div>
+            
+            <!-- Add Zone Input -->
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <input type="text" id="zone-input-${room.id}" placeholder="Add zone (optional)" style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); font-size: 13px;">
+                <button type="button" onclick="addSetupZone('${room.id}')" style="padding: 8px 16px; background: var(--accent-green); border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Add Zone</button>
+            </div>
+            
+            <!-- Zones List -->
+            ${room.zones.length > 0 ? `
+                <div style="margin-top: 10px; display: flex; flex-wrap: gap; gap: 6px;">
+                    ${room.zones.map(zone => `
+                        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--accent-blue); color: white; border-radius: 4px; font-size: 12px;">
+                            <span>${escapeHtml(zone.name)}</span>
+                            <button type="button" onclick="removeSetupZone('${room.id}', '${zone.id}')" style="background: none; border: none; color: white; cursor: pointer; padding: 0; font-size: 14px; line-height: 1;">×</button>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+/**
+ * Add a zone to a room in setup wizard
+ */
+function addSetupZone(roomId) {
+    const zoneInput = document.getElementById(`zone-input-${roomId}`);
+    const zoneName = zoneInput.value.trim();
+    
+    if (!zoneName) {
+        return;
+    }
+    
+    const room = setupData.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    
+    // Check for duplicate zone names in this room
+    if (room.zones.some(z => z.name.toLowerCase() === zoneName.toLowerCase())) {
+        showSetupError('A zone with this name already exists in this room');
+        return;
+    }
+    
+    // Add zone
+    const zone = {
+        id: Date.now().toString(),
+        name: zoneName
+    };
+    
+    room.zones.push(zone);
+    zoneInput.value = '';
+    
+    renderSetupRooms();
+}
+
+/**
+ * Remove a room from setup wizard
+ */
+function removeSetupRoom(roomId) {
+    setupData.rooms = setupData.rooms.filter(r => r.id !== roomId);
+    renderSetupRooms();
+}
+
+/**
+ * Remove a zone from a room in setup wizard
+ */
+function removeSetupZone(roomId, zoneId) {
+    const room = setupData.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    
+    room.zones = room.zones.filter(z => z.id !== zoneId);
+    renderSetupRooms();
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 /**
  * Use current GPS location to populate address fields
