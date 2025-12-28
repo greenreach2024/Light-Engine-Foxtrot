@@ -2786,8 +2786,52 @@ async function refreshPaymentMethods() {
 /**
  * Connect Square account
  */
-function connectSquare() {
-    window.open('/setup-wizard.html?section=payments', '_blank');
+async function connectSquare() {
+    try {
+        // Get Square OAuth URL from backend
+        const response = await fetch('/api/farm/square/authorize', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                farmId: 'FARM-001', // TODO: Get from session/config
+                farmName: 'Light Engine Farm'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+            showToast('Failed to initialize Square connection', 'error');
+            return;
+        }
+        
+        // Open Square OAuth in popup
+        const width = 600;
+        const height = 700;
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+        
+        const popup = window.open(
+            data.data.authorizationUrl,
+            'square-oauth',
+            `width=${width},height=${height},left=${left},top=${top}`
+        );
+        
+        // Listen for callback message
+        window.addEventListener('message', function handleSquareCallback(event) {
+            if (event.data.type === 'square-connected') {
+                window.removeEventListener('message', handleSquareCallback);
+                showToast('Square account connected successfully!', 'success');
+                loadPaymentMethods(); // Refresh payment methods display
+            }
+        });
+        
+    } catch (error) {
+        console.error('Square connection error:', error);
+        showToast('Failed to connect Square account', 'error');
+    }
 }
 
 /**
@@ -3026,15 +3070,6 @@ async function checkSquareStatus() {
 }
 
 /**
- * Open setup wizard for reconfiguration
- */
-function openSetupWizard() {
-    if (confirm('This will open the setup wizard to update your certifications. Continue?')) {
-        window.location.href = '/setup-wizard.html';
-    }
-}
-
-/**
  * Rescan hardware devices
  */
 async function scanHardware() {
@@ -3211,6 +3246,374 @@ async function generatePairingQR() {
 function closePairingQR() {
     document.getElementById('pairingQRContainer').style.display = 'none';
 }
+
+// ============================================================================
+// FIRST-TIME SETUP FUNCTIONS
+// ============================================================================
+
+let currentSetupStep = 1;
+const totalSetupSteps = 4;
+let setupData = {};
+
+/**
+ * Check if first-time setup is needed
+ */
+async function checkFirstTimeSetup() {
+    try {
+        const response = await fetch('/api/setup/status');
+        const data = await response.json();
+        
+        // If not registered, show first-time setup modal
+        if (!data.registered) {
+            showFirstTimeSetup();
+        }
+    } catch (error) {
+        console.log('Setup status check failed, assuming first-time setup needed');
+        showFirstTimeSetup();
+    }
+}
+
+/**
+ * Show first-time setup modal
+ */
+function showFirstTimeSetup() {
+    const modal = document.getElementById('first-time-setup-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        currentSetupStep = 1;
+        updateSetupStepDisplay();
+    }
+}
+
+/**
+ * Navigate to next setup step
+ */
+async function setupNextStep() {
+    // Validate current step
+    if (!validateSetupStep(currentSetupStep)) {
+        return;
+    }
+    
+    // If step 1, verify activation code
+    if (currentSetupStep === 1) {
+        const activationCode = document.getElementById('setup-activation-code').value.trim();
+        if (!activationCode || activationCode.length !== 8) {
+            showSetupError('Please enter a valid 8-character activation code');
+            return;
+        }
+        
+        // Call activation API
+        const activated = await activateDevice(activationCode);
+        if (!activated) {
+            return; // Error already shown
+        }
+    }
+    
+    // Move to next step
+    if (currentSetupStep < totalSetupSteps) {
+        currentSetupStep++;
+        updateSetupStepDisplay();
+    }
+}
+
+/**
+ * Navigate to previous setup step
+ */
+function setupPreviousStep() {
+    if (currentSetupStep > 1) {
+        currentSetupStep--;
+        updateSetupStepDisplay();
+    }
+}
+
+/**
+ * Update setup step display
+ */
+function updateSetupStepDisplay() {
+    // Hide all steps
+    for (let i = 1; i <= totalSetupSteps; i++) {
+        const step = document.getElementById(`setup-step-${i}`);
+        if (step) step.style.display = 'none';
+    }
+    
+    // Show current step
+    const currentStep = document.getElementById(`setup-step-${currentSetupStep}`);
+    if (currentStep) currentStep.style.display = 'block';
+    
+    // Update progress indicator
+    document.querySelectorAll('.setup-progress-step').forEach((el, index) => {
+        if (index < currentSetupStep) {
+            el.style.background = 'var(--accent-blue)';
+        } else {
+            el.style.background = 'var(--border)';
+        }
+    });
+    
+    // Update buttons
+    const backBtn = document.getElementById('setup-back-btn');
+    const nextBtn = document.getElementById('setup-next-btn');
+    const completeBtn = document.getElementById('setup-complete-btn');
+    
+    if (backBtn) backBtn.style.display = currentSetupStep > 1 ? 'block' : 'none';
+    if (nextBtn) nextBtn.style.display = currentSetupStep < totalSetupSteps ? 'block' : 'none';
+    if (completeBtn) completeBtn.style.display = currentSetupStep === totalSetupSteps ? 'block' : 'none';
+}
+
+/**
+ * Validate current setup step
+ */
+function validateSetupStep(step) {
+    let isValid = true;
+    let errorMessage = '';
+    
+    switch (step) {
+        case 1:
+            const code = document.getElementById('setup-activation-code').value.trim();
+            if (!code || code.length !== 8) {
+                isValid = false;
+                errorMessage = 'Please enter a valid 8-character activation code';
+            }
+            break;
+            
+        case 2:
+            const farmName = document.getElementById('setup-farm-name').value.trim();
+            const contactName = document.getElementById('setup-contact-name').value.trim();
+            const contactEmail = document.getElementById('setup-contact-email').value.trim();
+            
+            if (!farmName) {
+                isValid = false;
+                errorMessage = 'Farm name is required';
+            } else if (!contactName) {
+                isValid = false;
+                errorMessage = 'Contact name is required';
+            } else if (!contactEmail) {
+                isValid = false;
+                errorMessage = 'Contact email is required';
+            } else if (!contactEmail.includes('@')) {
+                isValid = false;
+                errorMessage = 'Please enter a valid email address';
+            }
+            break;
+            
+        case 3:
+            const address = document.getElementById('setup-address').value.trim();
+            const city = document.getElementById('setup-city').value.trim();
+            const state = document.getElementById('setup-state').value.trim();
+            const postal = document.getElementById('setup-postal').value.trim();
+            
+            if (!address || !city || !state || !postal) {
+                isValid = false;
+                errorMessage = 'Please complete all location fields';
+            }
+            break;
+            
+        case 4:
+            // Certifications are optional, always valid
+            isValid = true;
+            break;
+    }
+    
+    if (!isValid && errorMessage) {
+        showSetupError(errorMessage);
+    }
+    
+    return isValid;
+}
+
+/**
+ * Show setup error message
+ */
+function showSetupError(message) {
+    const statusEl = document.getElementById('setup-activation-status');
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        statusEl.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        statusEl.style.color = '#fca5a5';
+        statusEl.textContent = message;
+    }
+    
+    showToast(message, 'error');
+}
+
+/**
+ * Show setup success message
+ */
+function showSetupSuccess(message) {
+    const statusEl = document.getElementById('setup-activation-status');
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.background = 'rgba(16, 185, 129, 0.1)';
+        statusEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+        statusEl.style.color = '#6ee7b7';
+        statusEl.textContent = message;
+    }
+    
+    showToast(message, 'success');
+}
+
+/**
+ * Activate device with activation code
+ */
+async function activateDevice(activationCode) {
+    try {
+        const response = await fetch('/api/setup/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activationCode })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.ok) {
+            showSetupError(data.message || 'Invalid activation code');
+            return false;
+        }
+        
+        // Store activation data
+        setupData.farmId = data.license?.farmId;
+        setupData.tier = data.license?.tier;
+        setupData.activationCode = activationCode;
+        
+        showSetupSuccess('Activation successful');
+        
+        // Auto-advance to next step after 1 second
+        setTimeout(() => {
+            currentSetupStep++;
+            updateSetupStepDisplay();
+        }, 1000);
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Activation error:', error);
+        showSetupError('Activation failed: ' + error.message);
+        return false;
+    }
+}
+
+/**
+ * Complete setup and save all data
+ */
+async function completeSetup() {
+    try {
+        // Collect all data
+        const farmName = document.getElementById('setup-farm-name').value.trim();
+        const contactName = document.getElementById('setup-contact-name').value.trim();
+        const contactEmail = document.getElementById('setup-contact-email').value.trim();
+        const contactPhone = document.getElementById('setup-contact-phone').value.trim();
+        
+        const address = document.getElementById('setup-address').value.trim();
+        const city = document.getElementById('setup-city').value.trim();
+        const state = document.getElementById('setup-state').value.trim();
+        const postal = document.getElementById('setup-postal').value.trim();
+        const timezone = document.getElementById('setup-timezone').value;
+        
+        // Collect certifications
+        const certifications = Array.from(document.querySelectorAll('input[name="certification"]:checked'))
+            .map(cb => cb.value);
+        const practices = Array.from(document.querySelectorAll('input[name="practice"]:checked'))
+            .map(cb => cb.value);
+        const attributes = Array.from(document.querySelectorAll('input[name="attribute"]:checked'))
+            .map(cb => cb.value);
+        
+        // Call setup completion API
+        const response = await fetch('/api/setup/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                farmId: setupData.farmId,
+                farmName: farmName,
+                registrationCode: setupData.activationCode,
+                credentials: {
+                    wholesale_api_key: `wsk_${Math.random().toString(36).substr(2, 20)}`,
+                    pos_api_key: `posk_${Math.random().toString(36).substr(2, 20)}`,
+                    device_api_key: `devk_${Math.random().toString(36).substr(2, 20)}`,
+                    jwt_secret: Math.random().toString(36).substr(2, 32)
+                },
+                contact: {
+                    name: contactName,
+                    email: contactEmail,
+                    phone: contactPhone
+                },
+                location: {
+                    address: address,
+                    city: city,
+                    state: state,
+                    postalCode: postal,
+                    timezone: timezone
+                },
+                certifications: {
+                    certifications: certifications,
+                    practices: practices,
+                    attributes: attributes
+                },
+                endpoints: {
+                    wholesale_api: 'https://wholesale.greenreach.io',
+                    monitoring_api: 'https://monitor.greenreach.io',
+                    update_api: 'https://updates.greenreach.io',
+                    cloud_api: 'https://api.greenreach.io'
+                }
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Setup failed');
+        }
+        
+        // Also save to localStorage for index.html farm wizard compatibility
+        const farmData = {
+            farmId: setupData.farmId,
+            farmName: farmName,
+            address: address,
+            city: city,
+            state: state,
+            postalCode: postal,
+            timezone: timezone,
+            contact: {
+                name: contactName,
+                email: contactEmail,
+                phone: contactPhone
+            },
+            registered: new Date().toISOString()
+        };
+        
+        try {
+            localStorage.setItem('gr.farm', JSON.stringify(farmData));
+            
+            // Also POST to /farm endpoint for index.html compatibility
+            await fetch('/farm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(farmData)
+            });
+        } catch (e) {
+            console.warn('Could not save to localStorage/backend:', e);
+        }
+        
+        // Success! Close modal and refresh page
+        const modal = document.getElementById('first-time-setup-modal');
+        if (modal) modal.style.display = 'none';
+        
+        showToast('Setup complete! Welcome to Light Engine.', 'success');
+        
+        // Reload page to show dashboard with setup data
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
+        
+    } catch (error) {
+        console.error('Setup completion error:', error);
+        showToast('Setup failed: ' + error.message, 'error');
+    }
+}
+
+// Check for first-time setup on page load
+window.addEventListener('DOMContentLoaded', () => {
+    checkFirstTimeSetup();
+});
 
     // Would generate and download ZIP of all receipts
 }

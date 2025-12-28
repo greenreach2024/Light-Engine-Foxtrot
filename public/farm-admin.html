@@ -2143,7 +2143,6 @@
                                     <!-- Loaded from setup wizard -->
                                 </div>
                             </div>
-                            <button class="btn-secondary" onclick="openSetupWizard()" style="margin-top: 10px;">Update Certifications</button>
                         </div>
                     </div>
 
@@ -2240,29 +2239,12 @@
                         <h2 style="margin-bottom: 20px;">Integration Settings</h2>
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Square Payment Processing</h3>
-                                <div id="square-connection-status" style="padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border);">
-                                    <p style="margin: 0; color: var(--text-secondary);">Status: <span id="square-status-text" style="color: var(--text-primary);">Checking...</span></p>
-                                </div>
-                                <button class="btn-secondary" onclick="connectSquare()" style="width: 100%;">Configure Square</button>
-                            </div>
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">GreenReach Central Sync</h3>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Wholesale Marketplace</h3>
                                 <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                    <input type="checkbox" id="greenreach-sync-enabled">
-                                    <span>Enable wholesale marketplace sync</span>
+                                    <input type="checkbox" id="greenreach-wholesale-enabled" checked>
+                                    <span>Enable wholesale orders</span>
                                 </label>
-                                <div style="display: flex; flex-direction: column; gap: 10px;">
-                                    <div>
-                                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Sync Endpoint</label>
-                                        <input type="text" id="greenreach-endpoint" placeholder="https://central.greenreach.app" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-family: monospace;">
-                                    </div>
-                                    <div>
-                                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">API Key</label>
-                                        <input type="password" id="settings-api-key" placeholder="Enter API key" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                        <small style="color: var(--text-muted);">From GreenReach Central dashboard</small>
-                                    </div>
-                                </div>
+                                <p style="color: var(--text-muted); font-size: 11px; margin: 0;">Opt-out to disable wholesale orders from GreenReach Central. All other services (monitoring, updates, support) remain active.</p>
                             </div>
                             
                             <!-- Device Pairing for Activity Hub Tablets -->
@@ -2272,7 +2254,7 @@
                                     Generate a QR code to pair tablets with this farm's Activity Hub. Each tablet must scan this code for secure access.
                                 </p>
                                 <button class="btn-primary" onclick="generatePairingQR()" style="width: 100%; margin-bottom: 15px;">
-                                    🔐 Generate Pairing QR Code
+                                    Generate Pairing QR Code
                                 </button>
                                 <div id="pairingQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
                                     <h4 style="color: #1a2332; margin-bottom: 10px;">Scan with Tablet</h4>
@@ -2286,35 +2268,6 @@
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Hardware Configuration -->
-                    <div class="card">
-                        <h2 style="margin-bottom: 20px;">Hardware Configuration</h2>
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Detected Hardware</h3>
-                                <div style="padding: 12px; background: var(--bg-secondary); border-radius: 6px; border: 1px solid var(--border);">
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                        <span style="color: var(--text-muted);">Lights:</span>
-                                        <span id="hardware-lights" style="color: var(--text-primary);">0</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                        <span style="color: var(--text-muted);">Fans:</span>
-                                        <span id="hardware-fans" style="color: var(--text-primary);">0</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                        <span style="color: var(--text-muted);">Sensors:</span>
-                                        <span id="hardware-sensors" style="color: var(--text-primary);">0</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: var(--text-muted);">Other Devices:</span>
-                                        <span id="hardware-other" style="color: var(--text-primary);">0</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <button class="btn-secondary" onclick="scanHardware()" style="width: 100%;">Rescan Hardware</button>
                         </div>
                     </div>
 
@@ -3752,6 +3705,197 @@
             }, 500);
         });
     </script>
+  <!-- First-Time Setup Modal -->
+  <div id="first-time-setup-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-primary); width: 600px; max-width: 90%; max-height: 90vh; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); display: flex; flex-direction: column;">
+      <!-- Header -->
+      <div style="padding: 30px 30px 20px 30px; border-bottom: 1px solid var(--border);">
+        <h2 style="margin: 0 0 8px 0; font-size: 24px; color: var(--text-primary);">First-Time Setup</h2>
+        <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Welcome to Light Engine. Complete setup to access your farm management system.</p>
+        
+        <!-- Progress Indicator -->
+        <div style="display: flex; gap: 8px; margin-top: 20px;">
+          <div class="setup-progress-step" data-step="1" style="flex: 1; height: 4px; background: var(--accent-blue); border-radius: 2px; transition: all 0.3s;"></div>
+          <div class="setup-progress-step" data-step="2" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
+          <div class="setup-progress-step" data-step="3" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
+          <div class="setup-progress-step" data-step="4" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
+        </div>
+      </div>
+      
+      <!-- Content Area -->
+      <div style="flex: 1; overflow-y: auto; padding: 30px;">
+        <!-- Step 1: Activation -->
+        <div id="setup-step-1" class="setup-step">
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Activate Your Light Engine</h3>
+          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Enter the 8-character activation code included with your Light Engine device.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Activation Code</label>
+              <input type="text" id="setup-activation-code" maxlength="8" placeholder="XXXXXXXX" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-family: monospace; font-size: 16px; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
+            </div>
+            <div id="setup-activation-status" style="display: none; padding: 12px; border-radius: 6px; font-size: 13px;"></div>
+          </div>
+        </div>
+        
+        <!-- Step 2: Business Profile -->
+        <div id="setup-step-2" class="setup-step" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Business Profile</h3>
+          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Tell us about your farm business.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Farm Name *</label>
+              <input type="text" id="setup-farm-name" placeholder="e.g., Sunrise Organic Farm" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Contact Name *</label>
+              <input type="text" id="setup-contact-name" placeholder="Primary contact person" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Email *</label>
+              <input type="email" id="setup-contact-email" placeholder="contact@yourfarm.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Phone</label>
+              <input type="tel" id="setup-contact-phone" placeholder="+1 (555) 123-4567" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+            </div>
+          </div>
+        </div>
+        
+        <!-- Step 3: Location -->
+        <div id="setup-step-3" class="setup-step" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Farm Location</h3>
+          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Where is your farm located?</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Street Address *</label>
+              <input type="text" id="setup-address" placeholder="123 Main Street" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">City *</label>
+                <input type="text" id="setup-city" placeholder="City" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">State/Province *</label>
+                <input type="text" id="setup-state" placeholder="State" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
+              </div>
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Postal Code *</label>
+              <input type="text" id="setup-postal" placeholder="12345" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Timezone *</label>
+              <select id="setup-timezone" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
+                <option value="America/New_York">Eastern Time (ET)</option>
+                <option value="America/Chicago">Central Time (CT)</option>
+                <option value="America/Denver">Mountain Time (MT)</option>
+                <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                <option value="America/Anchorage">Alaska Time (AKT)</option>
+                <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Step 4: Certifications -->
+        <div id="setup-step-4" class="setup-step" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Certifications & Practices</h3>
+          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Help buyers discover your farm through certifications and practices (optional).</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 20px; max-height: 400px; overflow-y: auto; padding-right: 10px;">
+            <div>
+              <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: var(--accent-blue);">Certifications</h4>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="certification" value="GAP" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">GAP Certified (Good Agricultural Practices)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="certification" value="USDA Organic" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">USDA Organic Certified</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="certification" value="Food Safety" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Food Safety Certified (GFSI, SQF)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="certification" value="Greenhouse" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Greenhouse Grown Certified</span>
+                </label>
+              </div>
+            </div>
+            
+            <div>
+              <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: var(--accent-green);">Growing Practices</h4>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="practice" value="Pesticide Free" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Pesticide Free</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="practice" value="Non-GMO" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Non-GMO</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="practice" value="Hydroponic" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Hydroponic Growing</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="practice" value="Local" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Local (within 100 miles)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="practice" value="Year-Round" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Year-Round Production</span>
+                </label>
+              </div>
+            </div>
+            
+            <div>
+              <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: var(--accent-yellow);">Farm Attributes</h4>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="attribute" value="Woman Owned" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Woman-Owned Business</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="attribute" value="Veteran Owned" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Veteran-Owned Business</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="attribute" value="Minority Owned" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Minority-Owned Business</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="attribute" value="Family Farm" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Family Farm</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" name="attribute" value="Sustainable" style="width: 18px; height: 18px;">
+                  <span style="font-size: 13px;">Sustainable Practices</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Footer -->
+      <div style="padding: 20px 30px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <button id="setup-back-btn" onclick="setupPreviousStep()" style="display: none; padding: 10px 20px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary); border-radius: 6px; cursor: pointer; font-weight: 500;">Back</button>
+        <div style="flex: 1;"></div>
+        <div style="display: flex; gap: 10px;">
+          <button id="setup-next-btn" onclick="setupNextStep()" style="padding: 10px 24px; background: var(--accent-blue); border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s;">Next</button>
+          <button id="setup-complete-btn" onclick="completeSetup()" style="display: none; padding: 10px 24px; background: var(--accent-green); border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s;">Complete Setup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
   <script src="/js/farm-assistant.js"></script>
 </body>
