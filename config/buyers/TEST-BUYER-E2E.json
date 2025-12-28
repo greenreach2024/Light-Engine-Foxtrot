@@ -1,0 +1,10 @@
+{
+  "buyer_id": "TEST-BUYER-E2E",
+  "business_name": "The Local Café",
+  "contact_name": "Jane Smith",
+  "email": "buyer-test@urbanyeild.ca",
+  "phone": "+17093983166",
+  "buyer_type": "cafe",
+  "status": "active",
+  "created_at": "2025-12-28T18:42:29.546Z"
+}

@@ -1,0 +1,16 @@
+{
+  "farm_id": "TEST-FARM-E2E",
+  "name": "End-to-End Test Farm",
+  "contact_name": "Test Farm Owner",
+  "email": "farm-test@urbanyeild.ca",
+  "phone": "+17093983166",
+  "api_url": "http://localhost:8091",
+  "api_key": "test-api-key-f797jlyv2",
+  "notification_preferences": {
+    "sms_enabled": true,
+    "email_enabled": true,
+    "push_enabled": true
+  },
+  "status": "active",
+  "created_at": "2025-12-28T18:42:29.546Z"
+}

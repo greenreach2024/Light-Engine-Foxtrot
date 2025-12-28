@@ -1,0 +1,58 @@
+{
+  "order_id": "E2E-ORDER-1766947349546",
+  "buyer_id": "TEST-BUYER-E2E",
+  "buyer_name": "The Local Café",
+  "status": "PENDING",
+  "created_at": "2025-12-28T18:42:29.546Z",
+  "sub_orders": [
+    {
+      "sub_order_id": "E2E-ORDER-1766947349546-TEST-FARM-E2E",
+      "farm_id": "TEST-FARM-E2E",
+      "farm_name": "End-to-End Test Farm",
+      "items": [
+        {
+          "sku_id": "E2E-TOMATO-001",
+          "quantity": 5,
+          "unit": "lb",
+          "product_name": "Organic Cherry Tomatoes",
+          "price_per_unit": 8.5,
+          "line_total": "42.50"
+        },
+        {
+          "sku_id": "E2E-LETTUCE-001",
+          "quantity": 10,
+          "unit": "head",
+          "product_name": "Butter Lettuce",
+          "price_per_unit": 3.75,
+          "line_total": "37.50"
+        },
+        {
+          "sku_id": "E2E-EGGS-001",
+          "quantity": 4,
+          "unit": "dozen",
+          "product_name": "Free Range Eggs",
+          "price_per_unit": 7,
+          "line_total": "28.00"
+        }
+      ],
+      "fulfillment_method": "pickup",
+      "pickup_time": "2025-12-30T14:00:00Z",
+      "special_instructions": "Please pack eggs carefully",
+      "status": "COMPLETED",
+      "verification_deadline": "2025-12-29T18:42:29.547Z",
+      "verified_at": "2025-12-28T18:42:29.547Z",
+      "verified_by": "Test Farm Owner",
+      "ready_at": "2025-12-28T18:42:29.558Z",
+      "completed_at": "2025-12-28T18:42:29.558Z",
+      "confirmed_by": "Jane Smith"
+    }
+  ],
+  "payment": {
+    "method": "manual",
+    "subtotal": "108.00",
+    "delivery_fee": "0.00",
+    "platform_fee": "3.24",
+    "total": "111.24",
+    "status": "pending"
+  }
+}

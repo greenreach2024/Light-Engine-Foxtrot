@@ -1,0 +1,203 @@
+{
+  "test_name": "End-to-End Order Flow Test",
+  "timestamp": "2025-12-28T18:42:25.766Z",
+  "duration": "0s",
+  "summary": {
+    "total_steps": 25,
+    "passed": 11,
+    "failed": 0,
+    "success_rate": "44.0%"
+  },
+  "test_data": {
+    "farm": "TEST-FARM-E2E",
+    "buyer": "TEST-BUYER-E2E",
+    "order_items": 3,
+    "order_total": "111.24"
+  },
+  "steps": [
+    {
+      "step": "Setup Test Farm",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.771Z"
+    },
+    {
+      "step": "Setup Test Farm",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.771Z",
+      "message": "Farm created: End-to-End Test Farm",
+      "farm_id": "TEST-FARM-E2E",
+      "products": 3
+    },
+    {
+      "step": "Setup Test Buyer",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.771Z"
+    },
+    {
+      "step": "Setup Test Buyer",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.771Z",
+      "message": "Buyer created: The Local Café",
+      "buyer_id": "TEST-BUYER-E2E"
+    },
+    {
+      "step": "Validate Inventory Availability",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.771Z"
+    },
+    {
+      "step": "Validate Inventory Availability",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.771Z",
+      "message": "All items in stock",
+      "items": 3
+    },
+    {
+      "step": "Reserve Inventory",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.771Z"
+    },
+    {
+      "step": "Reserve Inventory",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.772Z",
+      "message": "Inventory reserved for 24 hours",
+      "reservations": 3
+    },
+    {
+      "step": "Place Order",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.772Z"
+    },
+    {
+      "step": "Place Order",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.772Z",
+      "message": "Order placed: $111.24",
+      "order_id": "E2E-ORDER-1766947345770",
+      "sub_order_id": "E2E-ORDER-1766947345770-TEST-FARM-E2E",
+      "items": 3
+    },
+    {
+      "step": "Send Farm Notification",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.772Z"
+    },
+    {
+      "step": "Send Farm Notification",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.772Z",
+      "message": "Multi-channel notification sent",
+      "channels": [
+        "sms",
+        "email",
+        "push"
+      ],
+      "notification_id": "NOTIF-1766947345772"
+    },
+    {
+      "step": "Farm Verification",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.772Z"
+    },
+    {
+      "step": "Farm Verification",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.772Z",
+      "message": "Order verified by farm",
+      "sub_order_id": "E2E-ORDER-1766947345770-TEST-FARM-E2E",
+      "verified_at": "2025-12-28T18:42:25.772Z"
+    },
+    {
+      "step": "Monitor Deadline Compliance",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.772Z"
+    },
+    {
+      "step": "Monitor Deadline Compliance",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.772Z",
+      "message": "Verified within deadline (0 minutes)",
+      "verified_at": "2025-12-28T18:42:25.772Z",
+      "deadline": "2025-12-29T18:42:25.772Z",
+      "on_time": true
+    },
+    {
+      "step": "Fulfill Order",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.772Z"
+    },
+    {
+      "step": "Fulfill Order",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.783Z",
+      "message": "Order ready for pickup/delivery",
+      "sub_order_id": "E2E-ORDER-1766947345770-TEST-FARM-E2E",
+      "fulfillment_method": "pickup"
+    },
+    {
+      "step": "Buyer Confirms Delivery",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.783Z"
+    },
+    {
+      "step": "Buyer Confirms Delivery",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.783Z",
+      "message": "Delivery confirmed by buyer",
+      "sub_order_id": "E2E-ORDER-1766947345770-TEST-FARM-E2E",
+      "completed_at": "2025-12-28T18:42:25.783Z"
+    },
+    {
+      "step": "Process Payment",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.783Z"
+    },
+    {
+      "step": "Process Payment",
+      "status": "pending_manual_payment",
+      "timestamp": "2025-12-28T18:42:25.783Z",
+      "message": "Payment processing initiated",
+      "payment_method": "manual",
+      "total": "111.24"
+    },
+    {
+      "step": "Validate System Alerts",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.784Z"
+    },
+    {
+      "step": "Validate System Alerts",
+      "status": "pass",
+      "timestamp": "2025-12-28T18:42:25.784Z",
+      "message": "No alerts during test (expected)",
+      "alerts_checked": 14
+    },
+    {
+      "step": "Generate Test Report",
+      "status": "running",
+      "timestamp": "2025-12-28T18:42:25.784Z"
+    }
+  ],
+  "notifications": [
+    {
+      "notification_id": "NOTIF-1766947345772",
+      "type": "new_order",
+      "recipient_type": "farm",
+      "recipient_id": "TEST-FARM-E2E",
+      "recipient_email": "farm-test@urbanyeild.ca",
+      "recipient_phone": "+17093983166",
+      "subject": "New Order Received",
+      "message": "New order E2E-ORDER-1766947345770-TEST-FARM-E2E from The Local Café. Please verify within 24 hours.",
+      "channels": [
+        "sms",
+        "email",
+        "push"
+      ],
+      "status": "sent",
+      "sent_at": "2025-12-28T18:42:25.772Z"
+    }
+  ],
+  "alerts": [],
+  "errors": []
+}
