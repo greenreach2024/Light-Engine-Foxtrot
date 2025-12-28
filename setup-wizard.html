@@ -753,16 +753,68 @@
             if (code.length === 8) {
                 farmData.registrationCode = code;
                 
-                // Verify registration code with Central API
+                // Verify registration code with GreenReach Central
                 const statusDiv = document.getElementById('reg-status');
-                statusDiv.innerHTML = '<div class="loading-spinner"></div>';
+                statusDiv.innerHTML = '<div class="loading-spinner"></div><p style="color: var(--text-secondary); margin-top: 1rem;">Validating with GreenReach Central...</p>';
                 
-                // TODO: Replace with actual API call to greenreach-central
-                setTimeout(() => {
-                    statusDiv.innerHTML = '<div class="success-message">✓ Registration code verified!</div>';
-                    farmData.farmId = 'GR-17350001004';
+                try {
+                    // Call actual GreenReach Central registration API
+                    const response = await fetch('/api/farms/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            registration_code: code,
+                            device_info: {
+                                model: 'Light Engine Foxtrot',
+                                version: '2025.12.28',
+                                setup_wizard: true
+                            },
+                            farm_name: null, // Can be set later in admin
+                            contact_email: null
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.message || 'Registration failed');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Save credentials to farmData
+                    farmData.farmId = data.farm_id;
+                    farmData.farmName = data.farm_name;
+                    farmData.credentials = data.credentials;
+                    farmData.endpoints = data.endpoints;
+                    
+                    // Show success
+                    statusDiv.innerHTML = `
+                        <div class="success-message">
+                            ✓ Registration successful!
+                            <div style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                                Farm ID: ${data.farm_id}<br>
+                                Farm Name: ${data.farm_name}<br>
+                                Plan: ${data.plan || 'starter'}
+                            </div>
+                        </div>
+                    `;
+                    
                     document.getElementById('next-btn').disabled = false;
-                }, 2000);
+                    
+                } catch (error) {
+                    console.error('Registration error:', error);
+                    statusDiv.innerHTML = `
+                        <div class="error-message">
+                            ✗ Registration failed
+                            <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                                ${error.message || 'Please check the code and try again'}
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('next-btn').disabled = true;
+                }
             }
         }
 
@@ -833,21 +885,26 @@
             
             // Save configuration
             try {
-                // Call provisioning endpoint
-                const response = await fetch('/api/setup/complete', {
+                // Save credentials to /config/farm-credentials.json
+                const saveResponse = await fetch('/api/setup/complete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(farmData)
+                    body: JSON.stringify({
+                        ...farmData,
+                        save_credentials: true
+                    })
                 });
                 
-                if (response.ok) {
-                    // Redirect to main dashboard
-                    window.location.href = '/farm-admin.html';
+                if (!saveResponse.ok) {
+                    throw new Error('Failed to save credentials');
                 }
+                
+                // Redirect to main dashboard
+                window.location.href = '/farm-admin.html?setup=complete';
+                
             } catch (error) {
                 console.error('Setup completion failed:', error);
-                // For now, just redirect
-                window.location.href = '/farm-admin.html';
+                alert('Setup failed: ' + error.message + '\n\nPlease contact GreenReach support.');
             }
         }
 

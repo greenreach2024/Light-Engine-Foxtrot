@@ -6284,12 +6284,7 @@ function getFarmIntegrations() {
   };
 }
 
-// Setup wizard routes for first-run configuration
-app.get('/setup/wizard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'setup-wizard.html'));
-});
-
-// Hardware detection endpoint for setup wizard
+// Hardware detection endpoint
 app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
   const devices = {
     lights: [],
@@ -9748,6 +9743,18 @@ import farmSalesReportsRouter from './routes/farm-sales/reports.js';
 import farmSalesQuickBooksRouter from './routes/farm-sales/quickbooks.js';
 import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
 import authRouter from './routes/auth.js';
+import farmsRouter from './routes/farms.js';
+
+/**
+ * GreenReach Central - Farm Registration & Provisioning
+ * Central registration service operated by GreenReach (SaaS provider)
+ * - POST /api/farms/register: Farm edge device registration with code validation
+ * - POST /api/farms/generate-code: Admin generates registration codes
+ * - GET /api/farms/:farmId: Get farm information
+ * - GET /api/farms/list: List all registered farms (admin)
+ * - GET /api/farms/codes/list: List all registration codes (admin)
+ */
+app.use('/api/farms', farmsRouter);
 
 /**
  * Authentication & Device Pairing

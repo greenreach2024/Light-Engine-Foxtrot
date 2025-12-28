@@ -1625,18 +1625,50 @@
     
     // === DEVICE PAIRING & AUTHENTICATION FUNCTIONS ===
     
-    function checkAuthentication() {
-      if (!deviceToken || !farmId) {
-        // Show pairing modal
-        document.getElementById('pairingModal').style.display = 'flex';
-        document.querySelector('.main-container').style.display = 'none';
-        startPairingScanner();
-      } else {
-        // Authenticated - show main UI
-        document.getElementById('pairingModal').style.display = 'none';
-        document.querySelector('.main-container').style.display = 'grid';
-        document.getElementById('farmName').textContent = farmName || `Farm ${farmId}`;
-        document.getElementById('logoutBtn').style.display = 'block';
+    async function checkAuthentication() {
+      // First check if edge device is registered with GreenReach Central
+      try {
+        const response = await fetch('/api/setup/status');
+        if (response.ok) {
+          const status = await response.json();
+          
+          if (!status.registered) {
+            // Edge device not registered - redirect to setup wizard
+            alert('This Light Engine edge device has not been registered.\n\nPlease complete the setup wizard first.');
+            window.location.href = '/setup-wizard.html';
+            return;
+          }
+          
+          // Edge device is registered - farm_id available from credentials file
+          // Now check if THIS TABLET has been paired
+          if (!deviceToken || !farmId) {
+            // Show pairing modal for this specific tablet
+            document.getElementById('pairingModal').style.display = 'flex';
+            document.querySelector('.main-container').style.display = 'none';
+            startPairingScanner();
+          } else {
+            // Both edge device AND tablet are authenticated
+            document.getElementById('pairingModal').style.display = 'none';
+            document.querySelector('.main-container').style.display = 'grid';
+            document.getElementById('farmName').textContent = farmName || `Farm ${farmId}`;
+            document.getElementById('logoutBtn').style.display = 'block';
+          }
+        } else {
+          throw new Error('Unable to verify edge device registration');
+        }
+      } catch (error) {
+        console.error('Authentication check error:', error);
+        // If can't reach setup API, fall back to tablet pairing check
+        if (!deviceToken || !farmId) {
+          document.getElementById('pairingModal').style.display = 'flex';
+          document.querySelector('.main-container').style.display = 'none';
+          startPairingScanner();
+        } else {
+          document.getElementById('pairingModal').style.display = 'none';
+          document.querySelector('.main-container').style.display = 'grid';
+          document.getElementById('farmName').textContent = farmName || `Farm ${farmId}`;
+          document.getElementById('logoutBtn').style.display = 'block';
+        }
       }
     }
     
