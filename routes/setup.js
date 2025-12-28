@@ -16,6 +16,10 @@ const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
 
+// Use local config directory for AWS compatibility
+const CONFIG_DIR = path.join(__dirname, '..', 'config');
+const LICENSE_DIR = path.join(CONFIG_DIR, 'licenses');
+
 // In-memory store of activation codes (in production, this would be a database)
 // Format: { code: { farmId, tier, expiresAt, used: false } }
 const activationCodes = new Map();
@@ -146,31 +150,31 @@ router.post('/activate', async (req, res) => {
     const signature = signLicense(licenseData, privateKeyPath);
     const signedLicense = { ...licenseData, signature };
     
-    // Save license to /etc/lightengine/license.json
-    const licenseDir = '/etc/lightengine';
-    const licensePath = path.join(licenseDir, 'license.json');
+    // Save license to local config directory
+    const licensePath = path.join(LICENSE_DIR, 'license.json');
     
-    // Create directory if it doesn't exist (requires root)
-    if (!fs.existsSync(licenseDir)) {
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(LICENSE_DIR)) {
       try {
-        fs.mkdirSync(licenseDir, { recursive: true, mode: 0o700 });
+        fs.mkdirSync(LICENSE_DIR, { recursive: true, mode: 0o755 });
       } catch (error) {
         console.error('[Setup] Failed to create license directory:', error);
         return res.status(500).json({
-          error: 'Permission denied',
-          message: 'Cannot create /etc/lightengine directory. Run as root.'
+          error: 'Failed to create license directory',
+          message: error.message
         });
       }
     }
     
     // Write license file
     try {
-      fs.writeFileSync(licensePath, JSON.stringify(signedLicense, null, 2), { mode: 0o600 });
+      fs.writeFileSync(licensePath, JSON.stringify(signedLicense, null, 2), { mode: 0o644 });
+      console.log('[Setup] License saved to:', licensePath);
     } catch (error) {
       console.error('[Setup] Failed to write license file:', error);
       return res.status(500).json({
-        error: 'Permission denied',
-        message: 'Cannot write license file. Run as root.'
+        error: 'Failed to write license file',
+        message: error.message
       });
     }
     
@@ -303,7 +307,7 @@ router.post('/generate-code', (req, res) => {
  * Check if device is already activated
  */
 router.get('/status', (req, res) => {
-  const licensePath = '/etc/lightengine/license.json';
+  const licensePath = path.join(LICENSE_DIR, 'license.json');
   const isActivated = fs.existsSync(licensePath);
   
   if (isActivated) {
