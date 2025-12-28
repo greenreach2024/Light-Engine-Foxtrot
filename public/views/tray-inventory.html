@@ -445,6 +445,138 @@
       border: 1px solid rgba(96, 165, 250, 0.4);
     }
 
+    /* Order Pick List - Right Column */
+    .order-picklist-section {
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 20px;
+      padding: 1.5rem;
+      border: 2px solid rgba(251, 146, 60, 0.4);
+      max-height: 100%;
+      overflow-y: auto;
+    }
+
+    .order-list {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .order-card {
+      background: rgba(251, 146, 60, 0.15);
+      border: 2px solid rgba(251, 146, 60, 0.3);
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: all 0.2s ease;
+    }
+
+    .order-card.urgent {
+      border-color: rgba(239, 68, 68, 0.6);
+      background: rgba(239, 68, 68, 0.15);
+    }
+
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .order-id {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #fb923c;
+    }
+
+    .order-card.urgent .order-id {
+      color: #ef4444;
+    }
+
+    .order-deadline {
+      font-size: 0.95rem;
+      color: #94a3b8;
+    }
+
+    .order-card.urgent .order-deadline {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .order-buyer {
+      font-size: 1.1rem;
+      color: #cbd5e1;
+      margin-bottom: 0.75rem;
+    }
+
+    .order-items {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .order-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0.75rem;
+      background: rgba(15, 23, 42, 0.4);
+      border-radius: 8px;
+    }
+
+    .order-item-name {
+      font-size: 1.1rem;
+      color: #f8fafc;
+      font-weight: 500;
+    }
+
+    .order-item-qty {
+      font-size: 1.1rem;
+      color: #60a5fa;
+      font-weight: 700;
+    }
+
+    .order-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .order-action-btn {
+      flex: 1;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .order-action-btn.primary {
+      background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      color: #0f172a;
+    }
+
+    .order-action-btn.primary:active {
+      transform: scale(0.98);
+    }
+
+    .order-action-btn.secondary {
+      background: rgba(148, 163, 184, 0.2);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+
+    .order-action-btn.secondary:active {
+      background: rgba(148, 163, 184, 0.3);
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #64748b;
+      padding: 2rem 1rem;
+      font-size: 1.1rem;
+    }
+
     /* Checklists - Full Width Bottom */
     .checklist-section {
       grid-column: 1 / -1;
@@ -858,6 +990,14 @@
         <h2 class="section-title orange">Harvest Today</h2>
         <div id="harvestList" class="harvest-list">
           <div class="spinner"></div>
+        </div>
+      </section>
+
+      <!-- Order Pick List - Right Column -->
+      <section class="order-picklist-section">
+        <h2 class="section-title orange">Order Pick List</h2>
+        <div id="orderPickList" class="order-list">
+          <div class="empty-state">No pending orders</div>
         </div>
       </section>
 
@@ -1769,6 +1909,9 @@
         // Update checklist count
         updateChecklistCount();
         
+        // Load order pick list
+        loadOrderPickList();
+        
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       }
@@ -1806,6 +1949,77 @@
     function showHarvestDetails(trayId) {
       openScanModal('harvest');
       // Could pre-fill with tray ID
+    }
+
+    // === ORDER PICK LIST FUNCTIONS ===
+    
+    async function loadOrderPickList() {
+      try {
+        // Fetch pending wholesale orders
+        const response = await fetch('/api/wholesale/orders/pending');
+        const data = await response.json();
+        
+        const orders = data.orders || [];
+        populateOrderPickList(orders);
+        
+      } catch (error) {
+        console.error('Error loading order pick list:', error);
+        document.getElementById('orderPickList').innerHTML = `
+          <div class="empty-state">Unable to load orders</div>
+        `;
+      }
+    }
+
+    function populateOrderPickList(orders) {
+      const container = document.getElementById('orderPickList');
+      
+      if (orders.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">No pending orders</div>
+        `;
+        return;
+      }
+
+      // Sort by urgency (deadline)
+      orders.sort((a, b) => {
+        const deadlineA = new Date(a.verification_deadline || a.deadline);
+        const deadlineB = new Date(b.verification_deadline || b.deadline);
+        return deadlineA - deadlineB;
+      });
+
+      container.innerHTML = orders.map(order => {
+        const deadline = new Date(order.verification_deadline || order.deadline);
+        const hoursRemaining = Math.max(0, (deadline - new Date()) / (1000 * 60 * 60));
+        const isUrgent = hoursRemaining < 6;
+        
+        return `
+          <div class="order-card ${isUrgent ? 'urgent' : ''}">
+            <div class="order-header">
+              <div class="order-id">${order.sub_order_id || order.order_id}</div>
+              <div class="order-deadline">
+                ${isUrgent ? '⚠️ ' : ''}${Math.floor(hoursRemaining)}h remaining
+              </div>
+            </div>
+            <div class="order-buyer">${order.buyer_name || 'Buyer'}</div>
+            <div class="order-items">
+              ${(order.items || []).map(item => `
+                <div class="order-item">
+                  <span class="order-item-name">${item.product_name || item.sku_id}</span>
+                  <span class="order-item-qty">${item.quantity} ${item.unit || 'units'}</span>
+                </div>
+              `).join('')}
+            </div>
+            <div class="order-actions">
+              <button class="order-action-btn primary" onclick="openOrderDashboard()">
+                View & Verify
+              </button>
+              <button class="order-action-btn secondary" onclick="openScanModal('harvest')">
+                Start Harvest
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     // Switch Checklist Tab
