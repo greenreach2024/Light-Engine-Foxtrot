@@ -908,6 +908,17 @@
     <div class="top-header">
       <div class="farm-title">Farm Activity Hub</div>
       <div class="status-indicators">
+        <div id="connectionIndicator" class="status-badge" title="API Connection">
+          <div class="status-dot" style="background: #3b82f6;"></div>
+          <span id="connectionBadge" style="
+            background: #3b82f6;
+            color: white;
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+          ">CLOUD</span>
+        </div>
         <div id="offlineIndicator" class="status-badge" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444;">
           <div class="status-dot" style="background: #ef4444;"></div>
           <span>OFFLINE</span>
@@ -1346,6 +1357,80 @@
     let currentQACheckpoint = null;
     let selectedQAResult = null;
     
+    // === EDGE/CLOUD SYNC DETECTION ===
+    
+    // API Endpoint Configuration
+    const EDGE_API = 'http://localhost:8091';  // Local edge device
+    const CLOUD_API = window.location.origin;   // Cloud platform
+    let currentAPI = CLOUD_API;  // Default to cloud
+    let isEdgeAvailable = false;
+    let lastEdgeCheck = 0;
+    const EDGE_CHECK_INTERVAL = 30000;  // Check every 30 seconds
+    
+    // Check if edge device is available
+    async function checkEdgeAvailability() {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);  // 2s timeout
+        
+        const response = await fetch(`${EDGE_API}/api/ping`, {
+          method: 'GET',
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          if (!isEdgeAvailable) {
+            console.log('🟢 Edge device detected:', EDGE_API);
+            isEdgeAvailable = true;
+            currentAPI = EDGE_API;
+            updateConnectionIndicator();
+          }
+          return true;
+        }
+      } catch (error) {
+        if (isEdgeAvailable) {
+          console.log('🔴 Edge device unavailable, falling back to cloud');
+          isEdgeAvailable = false;
+          currentAPI = CLOUD_API;
+          updateConnectionIndicator();
+        }
+      }
+      
+      return false;
+    }
+    
+    // Update connection indicator in UI
+    function updateConnectionIndicator() {
+      const indicator = document.getElementById('connectionIndicator');
+      const badge = document.getElementById('connectionBadge');
+      
+      if (indicator && badge) {
+        if (isEdgeAvailable) {
+          badge.textContent = 'EDGE';
+          badge.style.background = '#10b981';
+          indicator.title = `Connected to local edge device (${EDGE_API})`;
+        } else {
+          badge.textContent = 'CLOUD';
+          badge.style.background = '#3b82f6';
+          indicator.title = `Connected to cloud platform (${CLOUD_API})`;
+        }
+      }
+    }
+    
+    // Periodic edge device check
+    setInterval(async () => {
+      const now = Date.now();
+      if (now - lastEdgeCheck > EDGE_CHECK_INTERVAL) {
+        lastEdgeCheck = now;
+        await checkEdgeAvailability();
+      }
+    }, EDGE_CHECK_INTERVAL);
+    
+    // Initial edge check
+    checkEdgeAvailability();
+    
     // === OFFLINE-FIRST STORAGE SYSTEM ===
     
     // IndexedDB Database Name and Version
@@ -1467,7 +1552,7 @@
               });
               break;
             case 'qa_checkpoint':
-              response = await fetch('/api/qa/checkpoint', {
+              response = await fetch(`${currentAPI}/api/qa/checkpoint`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(action.data)
@@ -1872,7 +1957,7 @@
       }
 
       try {
-        const response = await fetch('/api/quality/checkpoints/record', {
+        const response = await fetch(`${currentAPI}/api/quality/checkpoints/record`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(checkpointData)
@@ -2050,7 +2135,7 @@
       // Humidity commands
       else if (command.includes('humidity')) {
         response = 'Checking humidity levels now.';
-        fetch('/env')
+        fetch(`${currentAPI}/env`)
           .then(res => res.json())
           .then(data => {
             const humidity = data.zones[0]?.sensors?.rh?.current || 'unknown';
@@ -2142,7 +2227,7 @@
     async function loadDashboardData() {
       try {
         // Load temperature
-        const envRes = await fetch('/env');
+        const envRes = await fetch(`${currentAPI}/env`);
         const envData = await envRes.json();
         if (envData.zones && envData.zones[0]) {
           const temp = envData.zones[0].sensors?.tempC?.current || '--';
@@ -2150,7 +2235,7 @@
         }
 
         // Load inventory forecast
-        const forecastRes = await fetch('/api/inventory/forecast');
+        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`);
         const forecastData = await forecastRes.json();
         
         // Count ready to harvest (next 2 days)
@@ -2165,7 +2250,7 @@
         populateHarvestList(readyToHarvest);
 
         // Load current inventory for seedling count
-        const inventoryRes = await fetch('/api/inventory/current');
+        const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`);
         const inventoryData = await inventoryRes.json();
         
         const seedlingCount = inventoryData.inventory?.filter(item => 
@@ -2228,7 +2313,7 @@
     async function loadOrderPickList() {
       try {
         // Fetch pending wholesale orders
-        const response = await fetch('/api/wholesale/orders/pending');
+        const response = await fetch(`${currentAPI}/api/wholesale/orders/pending`);
         const data = await response.json();
         
         const orders = data.orders || [];
@@ -2460,11 +2545,11 @@
       
       try {
         // Fetch current inventory
-        const inventoryRes = await fetch('/api/inventory/current');
+        const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`);
         const inventoryData = await inventoryRes.json();
         
         // Fetch 48-hour forecast
-        const forecastRes = await fetch('/api/inventory/forecast');
+        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`);
         const forecastData = await forecastRes.json();
         
         // Filter for next 48 hours
@@ -2698,7 +2783,7 @@
         }
         
         // Call harvest API (auto-creates batch and lot code)
-        const response = await fetch(`/api/tray-runs/${trayRunId}/harvest`, {
+        const response = await fetch(`${currentAPI}/api/tray-runs/${trayRunId}/harvest`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(harvestData)
@@ -2782,7 +2867,7 @@
       modal.classList.add('active');
       
       try {
-        const response = await fetch('/api/inventory/forecast');
+        const response = await fetch(`${currentAPI}/api/inventory/forecast`);
         const data = await response.json();
         
         // Group by crop and calculate seeds needed
@@ -2875,7 +2960,7 @@
       modal.classList.add('active');
       
       try {
-        const response = await fetch('/api/inventory/forecast');
+        const response = await fetch(`${currentAPI}/api/inventory/forecast`);
         const data = await response.json();
         
         const now = Date.now();
@@ -3088,7 +3173,7 @@
         // Could fetch from API here
 
         // Submit to backend
-        const response = await fetch('/api/qa/checklist-photo', {
+        const response = await fetch(`${currentAPI}/api/qa/checklist-photo`, {
           method: 'POST',
           body: formData
         });
