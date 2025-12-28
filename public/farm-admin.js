@@ -3614,6 +3614,3 @@ async function completeSetup() {
 window.addEventListener('DOMContentLoaded', () => {
     checkFirstTimeSetup();
 });
-
-    // Would generate and download ZIP of all receipts
-}
