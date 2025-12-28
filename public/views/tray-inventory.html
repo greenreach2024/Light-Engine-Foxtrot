@@ -908,6 +908,23 @@
     <div class="top-header">
       <div class="farm-title">Farm Activity Hub</div>
       <div class="status-indicators">
+        <div id="offlineIndicator" class="status-badge" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444;">
+          <div class="status-dot" style="background: #ef4444;"></div>
+          <span>OFFLINE</span>
+          <div id="offlineBadge" style="
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: 0.5rem;
+          ">0</div>
+        </div>
         <div class="status-badge">
           <div class="status-dot"></div>
           <span id="currentTemp">--°C</span>
@@ -1329,6 +1346,221 @@
     let currentQACheckpoint = null;
     let selectedQAResult = null;
     
+    // === OFFLINE-FIRST STORAGE SYSTEM ===
+    
+    // IndexedDB Database Name and Version
+    const DB_NAME = 'ActivityHubOfflineDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'pendingActions';
+    let db = null;
+    let isOnline = navigator.onLine;
+    
+    // Initialize IndexedDB
+    async function initOfflineDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          db = request.result;
+          console.log('✅ Offline DB initialized');
+          resolve(db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          
+          // Create object store for pending actions
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            const store = db.createObjectStore(STORE_NAME, { 
+              keyPath: 'id', 
+              autoIncrement: true 
+            });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+            store.createIndex('type', 'type', { unique: false });
+            store.createIndex('synced', 'synced', { unique: false });
+            console.log('✅ Object store created:', STORE_NAME);
+          }
+        };
+      });
+    }
+    
+    // Queue action for offline sync
+    async function queueOfflineAction(type, data) {
+      if (!db) await initOfflineDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        
+        const action = {
+          type: type,  // 'seed', 'harvest', 'move', 'qa_checkpoint'
+          data: data,
+          timestamp: new Date().toISOString(),
+          synced: false
+        };
+        
+        const request = store.add(action);
+        
+        request.onsuccess = () => {
+          console.log('📦 Queued offline action:', type, request.result);
+          resolve(request.result);
+          
+          // Update UI to show queued count
+          updateOfflineIndicator();
+        };
+        
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    // Get pending actions count
+    async function getPendingActionsCount() {
+      if (!db) return 0;
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const index = store.index('synced');
+        const request = index.count(IDBKeyRange.only(false));
+        
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    // Update offline indicator in UI
+    async function updateOfflineIndicator() {
+      const count = await getPendingActionsCount();
+      const indicator = document.getElementById('offlineIndicator');
+      const badge = document.getElementById('offlineBadge');
+      
+      if (indicator && badge) {
+        if (!isOnline || count > 0) {
+          indicator.style.display = 'flex';
+          badge.textContent = count;
+          indicator.querySelector('span').textContent = 
+            isOnline ? `${count} pending` : 'OFFLINE';
+        } else {
+          indicator.style.display = 'none';
+        }
+      }
+    }
+    
+    // Sync all pending actions
+    async function syncPendingActions() {
+      if (!db || !isOnline) return;
+      
+      const pending = await getAllPendingActions();
+      console.log(`🔄 Syncing ${pending.length} pending actions...`);
+      
+      for (const action of pending) {
+        try {
+          // Send to API based on action type
+          let response;
+          switch (action.type) {
+            case 'harvest':
+              response = await fetch(`/api/tray-runs/${action.data.trayRunId}/harvest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(action.data)
+              });
+              break;
+            case 'qa_checkpoint':
+              response = await fetch('/api/qa/checkpoint', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(action.data)
+              });
+              break;
+            // Add other action types as needed
+          }
+          
+          if (response && response.ok) {
+            // Mark as synced
+            await markActionSynced(action.id);
+            console.log('✅ Synced action:', action.id);
+          } else {
+            console.error('❌ Failed to sync action:', action.id, response?.status);
+          }
+          
+        } catch (error) {
+          console.error('❌ Error syncing action:', action.id, error);
+        }
+      }
+      
+      // Update UI
+      updateOfflineIndicator();
+      
+      // Reload dashboard if any actions were synced
+      if (pending.length > 0) {
+        loadDashboardData();
+      }
+    }
+    
+    // Get all pending actions
+    async function getAllPendingActions() {
+      if (!db) return [];
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const index = store.index('synced');
+        const request = index.getAll(IDBKeyRange.only(false));
+        
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    // Mark action as synced
+    async function markActionSynced(id) {
+      if (!db) return;
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(id);
+        
+        request.onsuccess = () => {
+          const action = request.result;
+          if (action) {
+            action.synced = true;
+            action.syncedAt = new Date().toISOString();
+            store.put(action);
+          }
+          resolve();
+        };
+        
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    // Network status listeners
+    window.addEventListener('online', () => {
+      console.log('🌐 Back online!');
+      isOnline = true;
+      updateOfflineIndicator();
+      syncPendingActions();
+    });
+    
+    window.addEventListener('offline', () => {
+      console.log('📵 Offline mode');
+      isOnline = false;
+      updateOfflineIndicator();
+    });
+    
+    // Initialize offline DB on page load
+    initOfflineDB().then(() => {
+      updateOfflineIndicator();
+      // Sync any pending actions if online
+      if (isOnline) {
+        syncPendingActions();
+      }
+    });
+    
+    // === END OFFLINE SYSTEM ===
+    
     // Checklist Photo QA State
     let checklistPhotoData = {
       itemId: null,
@@ -1627,8 +1859,20 @@
         metrics: metrics
       };
 
+      // If offline, queue the action
+      if (!isOnline) {
+        await queueOfflineAction('qa_checkpoint', checkpointData);
+        
+        document.getElementById('successMessage').textContent = 
+          `QA Checkpoint saved offline - will sync when connection is restored`;
+        
+        document.getElementById('qaStep3').style.display = 'none';
+        document.getElementById('qaSuccess').style.display = 'block';
+        return;
+      }
+
       try {
-        const response = await fetch(`${QA_BACKEND_URL}/api/quality/checkpoints/record`, {
+        const response = await fetch('/api/quality/checkpoints/record', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(checkpointData)
@@ -1646,7 +1890,13 @@
         }
       } catch (error) {
         console.error('Error submitting QA checkpoint:', error);
-        alert('Error submitting checkpoint');
+        
+        // If network error, queue offline
+        await queueOfflineAction('qa_checkpoint', checkpointData);
+        document.getElementById('successMessage').textContent = 
+          `Network error - QA Checkpoint saved offline`;
+        document.getElementById('qaStep3').style.display = 'none';
+        document.getElementById('qaSuccess').style.display = 'block';
       }
     }
 
@@ -2400,7 +2650,7 @@
       }
     }
 
-    // Perform Harvest and Print Label
+    // Perform Harvest and Print Label (with offline support)
     async function performHarvest(trayRunId) {
       try {
         // Show loading state
@@ -2408,15 +2658,50 @@
         scanResult.innerHTML = '<div class="spinner"></div><div style="margin-top: 1rem; color: #94a3b8;">Recording harvest...</div>';
         scanResult.style.display = 'block';
         
+        const harvestData = {
+          trayRunId: trayRunId,
+          harvestedAt: new Date().toISOString(),
+          actualWeight: prompt('Enter harvest weight (kg):', '1.5') || '1.5',
+          note: 'Harvested via Activity Hub scan'
+        };
+        
+        // If offline, queue the action
+        if (!isOnline) {
+          await queueOfflineAction('harvest', harvestData);
+          
+          scanResult.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+              <div style="font-size: 3rem; color: #f97316; margin-bottom: 1rem;">📦</div>
+              <div style="font-size: 1.5rem; font-weight: 700; color: #f97316; margin-bottom: 0.5rem;">
+                Saved Offline
+              </div>
+              <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
+                Harvest will sync when connection is restored
+              </div>
+              <button 
+                onclick="closeScanModal()"
+                style="
+                  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+                  border: none;
+                  border-radius: 12px;
+                  padding: 1rem 2rem;
+                  font-size: 1.3rem;
+                  font-weight: 700;
+                  color: white;
+                  cursor: pointer;
+                  margin-top: 1rem;
+                "
+              >Done</button>
+            </div>
+          `;
+          return;
+        }
+        
         // Call harvest API (auto-creates batch and lot code)
-        const response = await fetch(`${API_BASE}/api/tray-runs/${trayRunId}/harvest`, {
+        const response = await fetch(`/api/tray-runs/${trayRunId}/harvest`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            harvestedAt: new Date().toISOString(),
-            actualWeight: prompt('Enter harvest weight (kg):', '1.5') || '1.5',
-            note: 'Harvested via Activity Hub scan'
-          })
+          body: JSON.stringify(harvestData)
         });
         
         if (!response.ok) {
