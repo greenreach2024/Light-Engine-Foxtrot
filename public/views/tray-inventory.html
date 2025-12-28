@@ -377,6 +377,15 @@
     .action-btn.red:active {
       box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
     }
+    
+    .action-btn.cyan {
+      background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+      box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+    }
+
+    .action-btn.cyan:active {
+      box-shadow: 0 2px 8px rgba(6, 182, 212, 0.5);
+    }
 
     .action-icon {
       font-size: 3rem;
@@ -703,6 +712,125 @@
       color: #94a3b8;
     }
 
+    /* Activity Log Section */
+    .activity-log-section {
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 20px;
+      padding: 1.5rem;
+      border: 2px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .section-title.blue {
+      color: #60a5fa;
+    }
+
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .activity-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 2px solid rgba(59, 130, 246, 0.2);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .activity-icon {
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .activity-details {
+      flex: 1;
+    }
+
+    .activity-action {
+      font-weight: 600;
+      color: #60a5fa;
+      margin-bottom: 0.25rem;
+    }
+
+    .activity-description {
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+
+    .activity-time {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-top: 0.25rem;
+    }
+
+    /* Orientation Warning */
+    .orientation-warning {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0f172a;
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .orientation-content h2 {
+      color: #60a5fa;
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+
+    .orientation-content p {
+      color: #cbd5e1;
+      font-size: 1.2rem;
+    }
+
+    @media (orientation: portrait) and (max-width: 900px) {
+      .orientation-warning {
+        display: flex;
+      }
+      
+      .main-container {
+        display: none;
+      }
+    }
+
+    /* Pull to Refresh Indicator */
+    .pull-to-refresh {
+      position: absolute;
+      top: -60px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid rgba(59, 130, 246, 0.4);
+      border-radius: 12px;
+      color: #60a5fa;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .pull-to-refresh.visible {
+      top: 80px;
+      opacity: 1;
+    }
+
+    .pull-to-refresh.refreshing {
+      top: 80px;
+      opacity: 1;
+    }
+
     /* Modal Styles */
     .modal {
       display: none;
@@ -903,6 +1031,12 @@
   </style>
 </head>
 <body>
+  <!-- Pull to Refresh Indicator -->
+  <div id="pullToRefresh" class="pull-to-refresh">
+    <span class="spinner" style="width: 20px; height: 20px;"></span>
+    <span id="pullToRefreshText">Pull to refresh</span>
+  </div>
+
   <div class="main-container">
     <!-- Top Header -->
     <div class="top-header">
@@ -1024,6 +1158,22 @@
               <div class="action-subtitle">Record Quality Check</div>
             </div>
           </button>
+          
+          <button class="action-btn cyan" onclick="startQuickMove()" id="quickMoveBtn">
+            <span class="action-icon">⚡</span>
+            <div class="action-text">
+              <div>Quick Move</div>
+              <div class="action-subtitle">Fast 2-Scan Move</div>
+            </div>
+          </button>
+          
+          <button class="action-btn" onclick="toggleVoiceMode()" id="voiceBtn" style="opacity: 0.5;">
+            <span class="action-icon">🔊</span>
+            <div class="action-text">
+              <div>Voice Mode</div>
+              <div class="action-subtitle">Audio Feedback</div>
+            </div>
+          </button>
         </div>
       </section>
 
@@ -1043,6 +1193,14 @@
         </div>
       </section>
 
+      <!-- Recent Activity Log - Right Column -->
+      <section class="activity-log-section">
+        <h2 class="section-title blue">Recent Activity</h2>
+        <div id="activityLog" class="activity-list">
+          <div class="spinner"></div>
+        </div>
+      </section>
+
       <!-- Checklists - Full Width Bottom -->
       <section class="checklist-section">
         <h2 class="section-title purple">Farm Checklists</h2>
@@ -1054,6 +1212,16 @@
           <button class="tab-btn" onclick="openChecklistModal('quarterly')">Quarterly</button>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Orientation Warning -->
+  <div id="orientationWarning" class="orientation-warning">
+    <div class="orientation-content">
+      <div style="font-size: 4rem; margin-bottom: 1rem;">🔄</div>
+      <h2>Please Rotate Device</h2>
+      <p>Activity Hub is optimized for landscape mode</p>
+      <p style="font-size: 0.9rem; margin-top: 1rem; opacity: 0.8;">Rotate your tablet horizontally for the best experience</p>
     </div>
   </div>
 
@@ -1370,6 +1538,21 @@
     </div>
   </div>
 
+  <!-- Order Verification Modal -->
+  <div id="orderVerifyModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h2>Verify Order</h2>
+        <button class="close-btn" onclick="closeOrderVerifyModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="orderVerifyContent">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Load QR Code Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -1383,6 +1566,17 @@
     // Batch Harvest State
     let batchHarvestMode = false;
     let batchHarvestTrays = [];
+    
+    // Voice Mode State
+    let voiceEnabled = localStorage.getItem('voiceEnabled') === 'true' || false;
+    
+    // Pull to Refresh State
+    let pullStartY = 0;
+    let pulling = false;
+    
+    // Quick Move State
+    let quickMoveStep = 0;
+    let quickMoveTrayId = null;
     
     // QA State
     let currentQABatch = null;
@@ -1677,6 +1871,355 @@
     });
     
     // === END OFFLINE SYSTEM ===
+    
+    // === TODO #7: RECENT ACTIVITY LOG ===
+    
+    async function loadRecentActivity() {
+      try {
+        const response = await fetch(`${currentAPI}/api/audit/recent?limit=10`);
+        const data = await response.json();
+        
+        const container = document.getElementById('activityLog');
+        const activities = data.activities || [];
+        
+        if (activities.length === 0) {
+          container.innerHTML = '<div class="empty-state">No recent activity</div>';
+          return;
+        }
+        
+        container.innerHTML = activities.map(activity => {
+          const icon = {
+            'seed': '🌱',
+            'harvest': '🌾',
+            'move': '📦',
+            'qa_checkpoint': '✓',
+            'order_verified': '✅'
+          }[activity.action_type] || '•';
+          
+          const time = new Date(activity.timestamp);
+          const timeAgo = getTimeAgo(time);
+          
+          return `
+            <div class="activity-item">
+              <div class="activity-icon">${icon}</div>
+              <div class="activity-details">
+                <div class="activity-action">${activity.action_name || activity.action_type}</div>
+                <div class="activity-description">${activity.description || `Tray ${activity.tray_id || ''}`}</div>
+                <div class="activity-time">${timeAgo} • ${activity.user || 'System'}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (error) {
+        console.error('Error loading activity log:', error);
+        document.getElementById('activityLog').innerHTML = '<div class="empty-state">Unable to load activity</div>';
+      }
+    }
+    
+    function getTimeAgo(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+      if (seconds < 60) return 'Just now';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    }
+    
+    // === TODO #8: VOICE MODE FOR SCANNING ===
+    
+    function speakMessage(message) {
+      if (!voiceEnabled || !window.speechSynthesis) return;
+      
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+    
+    function toggleVoiceMode() {
+      voiceEnabled = !voiceEnabled;
+      localStorage.setItem('voiceEnabled', voiceEnabled);
+      
+      const btn = document.getElementById('voiceBtn');
+      if (btn) {
+        btn.style.opacity = voiceEnabled ? '1' : '0.5';
+      }
+      
+      speakMessage(voiceEnabled ? 'Voice feedback enabled' : 'Voice feedback disabled');
+    }
+    
+    // === TODO #9: SIMPLIFIED TRAY MOVE WORKFLOW (Quick Move) ===
+    
+    function startQuickMove() {
+      quickMoveStep = 0;
+      quickMoveTrayId = null;
+      currentScanMode = 'quickmove';
+      openScanModal('quickmove');
+    }
+    
+    function handleQuickMoveScan(trayId) {
+      if (quickMoveStep === 0) {
+        // First scan: tray ID
+        quickMoveTrayId = trayId;
+        quickMoveStep = 1;
+        
+        document.getElementById('scanResult').innerHTML = `
+          <div style="text-align: center; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 2px solid #10b981; border-radius: 12px;">
+            <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">✓</div>
+            <div style="font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Tray Scanned</div>
+            <div style="color: #cbd5e1; margin-bottom: 1rem;">Tray: ${trayId}</div>
+            <div style="font-size: 1.1rem; color: #60a5fa;">Now scan the position QR code</div>
+          </div>
+        `;
+        
+        speakMessage(`Tray ${trayId} scanned. Now scan position`);
+        
+        // Continue scanning
+        setTimeout(() => {
+          document.getElementById('scanResult').style.display = 'none';
+          document.getElementById('qrReader').style.display = 'block';
+          startQRScanner();
+        }, 2000);
+        
+      } else if (quickMoveStep === 1) {
+        // Second scan: position code
+        submitQuickMove(trayId);
+      }
+    }
+    
+    async function submitQuickMove(positionCode) {
+      try {
+        document.getElementById('scanResult').innerHTML = '<div class="spinner"></div><div style="margin-top: 1rem; color: #94a3b8;">Moving tray...</div>';
+        document.getElementById('scanResult').style.display = 'block';
+        document.getElementById('qrReader').style.display = 'none';
+        
+        const response = await fetch(`${currentAPI}/api/tray-runs/${quickMoveTrayId}/move`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            newPosition: positionCode,
+            timestamp: new Date().toISOString()
+          })
+        });
+        
+        if (response.ok) {
+          document.getElementById('scanResult').innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+              <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
+              <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Move Complete</div>
+              <div style="font-size: 1.1rem; color: #cbd5e1;">Tray ${quickMoveTrayId} → Position ${positionCode}</div>
+              <button onclick="closeScanModal()" class="button button-primary" style="margin-top: 1.5rem;">Done</button>
+            </div>
+          `;
+          
+          speakMessage('Move complete');
+          quickMoveStep = 0;
+          quickMoveTrayId = null;
+        } else {
+          throw new Error('Failed to move tray');
+        }
+      } catch (error) {
+        console.error('Quick move error:', error);
+        document.getElementById('scanResult').innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: #f87171;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">⚠</div>
+            <div style="font-size: 1.3rem;">Move Failed</div>
+            <button onclick="closeScanModal()" class="button button-secondary" style="margin-top: 1.5rem;">Close</button>
+          </div>
+        `;
+      }
+    }
+    
+    // === TODO #10: ORDER VERIFICATION FROM PICK LIST ===
+    
+    async function openOrderVerifyModal(orderId) {
+      document.getElementById('orderVerifyModal').classList.add('active');
+      loadOrderForVerification(orderId);
+    }
+    
+    function closeOrderVerifyModal() {
+      document.getElementById('orderVerifyModal').classList.remove('active');
+    }
+    
+    async function loadOrderForVerification(orderId) {
+      try {
+        const response = await fetch(`${currentAPI}/api/wholesale/orders/${orderId}`);
+        const data = await response.json();
+        const order = data.order;
+        
+        const content = document.getElementById('orderVerifyContent');
+        content.innerHTML = `
+          <div style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid rgba(59, 130, 246, 0.3);">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+              <div>
+                <div style="color: #60a5fa; font-weight: 600; margin-bottom: 0.25rem;">Order ${order.order_id}</div>
+                <div style="color: #cbd5e1;">${order.buyer_name}</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="color: #94a3b8; font-size: 0.9rem;">Deadline</div>
+                <div style="color: #f59e0b; font-weight: 600;">${new Date(order.deadline).toLocaleString()}</div>
+              </div>
+            </div>
+          </div>
+          
+          <h3 style="color: #60a5fa; margin-bottom: 1rem;">Verification Checklist</h3>
+          
+          <div id="verificationItems" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+            ${(order.items || []).map((item, index) => `
+              <div class="verification-item" data-index="${index}" style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; color: #f8fafc; margin-bottom: 0.25rem;">${item.product_name || item.sku_id}</div>
+                    <div style="color: #94a3b8; font-size: 0.9rem;">Required: ${item.quantity} ${item.unit || 'units'}</div>
+                  </div>
+                  <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" onchange="updateVerificationProgress()" style="width: 28px; height: 28px; cursor: pointer; margin-left: 1rem;">
+                    <span style="margin-left: 0.5rem; color: #10b981; font-weight: 600;">Picked</span>
+                  </label>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; margin-bottom: 0.5rem; color: #94a3b8;">Verification Notes</label>
+            <textarea id="verificationNotes" rows="3" placeholder="Any issues or notes..." style="width: 100%; padding: 1rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(52, 211, 153, 0.3); color: #f8fafc; font-size: 1rem; resize: vertical;"></textarea>
+          </div>
+          
+          <button onclick="submitOrderVerification('${orderId}')" class="button button-primary" style="width: 100%;" id="submitVerifyBtn">Submit Verification</button>
+        `;
+      } catch (error) {
+        console.error('Error loading order:', error);
+        document.getElementById('orderVerifyContent').innerHTML = '<div class="empty-state">Failed to load order</div>';
+      }
+    }
+    
+    function updateVerificationProgress() {
+      const items = document.querySelectorAll('#verificationItems input[type="checkbox"]');
+      const checked = Array.from(items).filter(cb => cb.checked).length;
+      const total = items.length;
+      
+      const btn = document.getElementById('submitVerifyBtn');
+      if (checked === total) {
+        btn.textContent = `Submit Verification (${checked}/${total} ✓)`;
+        btn.style.background = 'linear-gradient(135deg, #34d399 0%, #10b981 100%)';
+      } else {
+        btn.textContent = `Submit Verification (${checked}/${total})`;
+        btn.style.background = 'rgba(148, 163, 184, 0.3)';
+      }
+    }
+    
+    async function submitOrderVerification(orderId) {
+      try {
+        const items = document.querySelectorAll('#verificationItems input[type="checkbox"]');
+        const allChecked = Array.from(items).every(cb => cb.checked);
+        
+        if (!allChecked && !confirm('Not all items are marked as picked. Continue?')) {
+          return;
+        }
+        
+        const notes = document.getElementById('verificationNotes').value;
+        
+        const response = await fetch(`${currentAPI}/api/wholesale/orders/${orderId}/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            verified: true,
+            notes: notes,
+            timestamp: new Date().toISOString()
+          })
+        });
+        
+        if (response.ok) {
+          document.getElementById('orderVerifyContent').innerHTML = `
+            <div style="text-align: center; padding: 3rem;">
+              <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">✓</div>
+              <h3 style="color: #10b981; margin-bottom: 1rem;">Order Verified</h3>
+              <p style="color: #cbd5e1;">Order ${orderId} is ready for pickup</p>
+              <button onclick="closeOrderVerifyModal()" class="button button-primary" style="margin-top: 2rem;">Close</button>
+            </div>
+          `;
+          
+          speakMessage('Order verified');
+          
+          // Reload order list
+          setTimeout(() => {
+            loadOrderPickList();
+            closeOrderVerifyModal();
+          }, 2000);
+        } else {
+          alert('Failed to verify order');
+        }
+      } catch (error) {
+        console.error('Verification error:', error);
+        alert('Error submitting verification');
+      }
+    }
+    
+    // === TODO #12: PULL TO REFRESH GESTURE ===
+    
+    function initPullToRefresh() {
+      const container = document.querySelector('.main-container');
+      const indicator = document.getElementById('pullToRefresh');
+      const indicatorText = document.getElementById('pullToRefreshText');
+      
+      let startY = 0;
+      let currentY = 0;
+      let pulling = false;
+      
+      container.addEventListener('touchstart', (e) => {
+        if (container.scrollTop === 0) {
+          startY = e.touches[0].pageY;
+          pulling = true;
+        }
+      }, { passive: true });
+      
+      container.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        
+        currentY = e.touches[0].pageY;
+        const pullDistance = currentY - startY;
+        
+        if (pullDistance > 0 && pullDistance < 100) {
+          indicator.classList.add('visible');
+          indicator.style.top = `${pullDistance + 20}px`;
+          indicatorText.textContent = 'Pull to refresh';
+        } else if (pullDistance >= 100) {
+          indicatorText.textContent = 'Release to refresh';
+        }
+      }, { passive: true });
+      
+      container.addEventListener('touchend', async (e) => {
+        if (!pulling) return;
+        
+        const pullDistance = currentY - startY;
+        
+        if (pullDistance >= 100) {
+          indicator.classList.add('refreshing');
+          indicatorText.textContent = 'Refreshing...';
+          
+          await loadDashboardData();
+          await loadRecentActivity();
+          
+          setTimeout(() => {
+            indicator.classList.remove('visible', 'refreshing');
+            indicator.style.top = '-60px';
+            pulling = false;
+            startY = 0;
+            currentY = 0;
+          }, 1000);
+        } else {
+          indicator.classList.remove('visible');
+          indicator.style.top = '-60px';
+          pulling = false;
+          startY = 0;
+          currentY = 0;
+        }
+      }, { passive: true });
+    }
     
     // Checklist Photo QA State
     let checklistPhotoData = {
@@ -2244,8 +2787,21 @@
       loadDashboardData();
       loadChecklists();
       
+      // Initialize new features
+      loadRecentActivity();
+      initPullToRefresh();
+      
+      // Initialize voice button state
+      const voiceBtn = document.getElementById('voiceBtn');
+      if (voiceBtn) {
+        voiceBtn.style.opacity = voiceEnabled ? '1' : '0.5';
+      }
+      
       // Refresh data every 5 minutes
-      setInterval(loadDashboardData, 300000);
+      setInterval(() => {
+        loadDashboardData();
+        loadRecentActivity();
+      }, 300000);
     });
 
     // Update Clock and Temperature
@@ -2418,8 +2974,8 @@
               `).join('')}
             </div>
             <div class="order-actions">
-              <button class="order-action-btn primary" onclick="openOrderDashboard()">
-                View & Verify
+              <button class="order-action-btn primary" onclick="openOrderVerifyModal('${order.order_id || order.sub_order_id}')">
+                Verify Order
               </button>
               <button class="order-action-btn secondary" onclick="openScanModal('harvest')">
                 Start Harvest
@@ -2720,6 +3276,13 @@
       scannedData = decodedText;
       stopQRScanner();
       
+      // Handle quick move mode
+      if (currentScanMode === 'quickmove') {
+        handleQuickMoveScan(decodedText);
+        speakMessage('Scanned');
+        return;
+      }
+      
       // Handle batch mode for harvest
       if (batchHarvestMode && currentScanMode === 'harvest') {
         // Add to batch
@@ -2738,6 +3301,8 @@
           document.getElementById('scanResult').style.display = 'block';
           document.getElementById('qrReader').style.display = 'none';
           document.getElementById('batchActions').style.display = 'flex';
+          
+          speakMessage(`Tray added. Total ${batchHarvestTrays.length}`);
         } else {
           document.getElementById('scanResult').innerHTML = `
             <div style="text-align: center; padding: 1.5rem; background: rgba(245, 158, 11, 0.1); border: 2px solid #f59e0b; border-radius: 12px;">
@@ -2749,6 +3314,8 @@
           document.getElementById('scanResult').style.display = 'block';
           document.getElementById('qrReader').style.display = 'none';
           document.getElementById('batchActions').style.display = 'flex';
+          
+          speakMessage('Already scanned');
         }
       } else {
         // Normal single-scan mode
@@ -2758,6 +3325,8 @@
         `;
         document.getElementById('scanResult').style.display = 'block';
         document.getElementById('confirmScan').style.display = 'block';
+        
+        speakMessage(`Scanned ${decodedText}`);
       }
     }
 
