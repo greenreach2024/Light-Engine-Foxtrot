@@ -34,7 +34,7 @@ function initLogin() {
     const session = getSession();
     if (session && session.token) {
         console.log(' Active session found, redirecting to dashboard...');
-        window.location.href = '/farm-admin.html';
+        window.location.href = '/LE-farm-admin.html';
         return;
     }
     
@@ -153,7 +153,7 @@ async function handleLogin(e) {
             showAlert('success', 'Login successful! Redirecting...');
             
             setTimeout(() => {
-                window.location.href = '/farm-admin.html';
+                window.location.href = '/LE-farm-admin.html';
             }, 1000);
             
         } else {

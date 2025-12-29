@@ -111,7 +111,7 @@ class WholesaleNotificationService {
           </table>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.appUrl}/wholesale-farm-orders.html?order=${order.id}" class="button">
+            <a href="${this.appUrl}/LE-wholesale-orders.html?order=${order.id}" class="button">
               View & Respond to Order →
             </a>
           </div>
@@ -154,7 +154,7 @@ ${subOrder.items.map(item =>
   `- ${item.product_name}: ${item.quantity} ${item.unit} @ $${item.price_per_unit.toFixed(2)}`
 ).join('\n')}
 
-RESPOND NOW: ${this.appUrl}/wholesale-farm-orders.html?order=${order.id}
+RESPOND NOW: ${this.appUrl}/LE-wholesale-orders.html?order=${order.id}
 
 You can:
 - Accept (confirm fulfillment)
@@ -241,7 +241,7 @@ support@greenreach.ca
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.appUrl}/wholesale.html?view=orders" 
+            <a href="${this.appUrl}/GR-wholesale.html?view=orders" 
                style="display: inline-block; background: #82c341; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Track Your Order →
             </a>
@@ -293,7 +293,7 @@ support@greenreach.ca
           </ul>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.appUrl}/wholesale-order-review.html?order_id=${order.id}" 
+            <a href="${this.appUrl}/LE-wholesale-review.html?order_id=${order.id}" 
                style="display: inline-block; background: #ffc107; color: #333; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Review Modifications →
             </a>
@@ -333,7 +333,7 @@ support@greenreach.ca
           <div style="background: #fff3cd; padding: 20px; border-left: 5px solid #ffc107;">
             <h2 style="color: #856404;">⏰ Verification Deadline Approaching</h2>
             <p>Sub-Order #${subOrder.id} requires your response in <strong>${hoursLeft} hours</strong>.</p>
-            <a href="${this.appUrl}/wholesale-farm-orders.html" 
+            <a href="${this.appUrl}/LE-wholesale-orders.html" 
                style="display: inline-block; background: #c53030; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 10px;">
               Respond Now
             </a>
@@ -406,7 +406,7 @@ support@greenreach.ca
           </ul>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.appUrl}/wholesale.html?view=orders&order_id=${order.id}" 
+            <a href="${this.appUrl}/GR-wholesale.html?view=orders&order_id=${order.id}" 
                style="display: inline-block; background: #82c341; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View Order Status →
             </a>
@@ -544,7 +544,7 @@ support@greenreach.ca
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.appUrl}/wholesale.html" 
+            <a href="${this.appUrl}/GR-wholesale.html" 
                style="display: inline-block; background: #82c341; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Browse Available Farms →
             </a>
@@ -605,7 +605,7 @@ support@greenreach.ca
           <p>We'll notify you as soon as we find an alternative farm or process your partial refund.</p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.appUrl}/wholesale.html?view=orders&order_id=${order.id}" 
+            <a href="${this.appUrl}/GR-wholesale.html?view=orders&order_id=${order.id}" 
                style="display: inline-block; background: #82c341; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
               View Order Status →
             </a>

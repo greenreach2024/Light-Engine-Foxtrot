@@ -155,7 +155,7 @@ async function runOnboarding() {
     console.log(`   Visit: ${farmApiUrl}/wholesale-catalog.html\n`);
     
     console.log('3. Configure Notification Settings:');
-    console.log(`   Visit: ${farmApiUrl}/notification-settings.html\n`);
+    console.log(`   Visit: ${farmApiUrl}/LE-notifications.html\n`);
     
     console.log('4. Review Onboarding Guide:');
     console.log('   Open: FARM_ONBOARDING_GUIDE.md\n');

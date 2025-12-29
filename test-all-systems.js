@@ -75,9 +75,9 @@ async function runTests() {
   console.log('\n CORE ENDPOINTS (Node.js server-foxtrot.js on :8091)');
   console.log('-'.repeat(80));
   
-  await testEndpoint('Central Admin Portal', '/central-admin.html', { critical: true });
+  await testEndpoint('Central Admin Portal', '/GR-central-admin.html', { critical: true });
   await testEndpoint('Farm Dashboard', '/index.html', { critical: true });
-  await testEndpoint('Billing Page UI', '/billing.html', { critical: true });
+  await testEndpoint('Billing Page UI', '/LE-billing.html', { critical: true });
   await testEndpoint('Multi-Farm Registry', '/api/admin/farms', { critical: true });
   await testEndpoint('Farm Detail API', '/api/admin/farms/GR-00001', { critical: true });
   await testEndpoint('Platform Analytics', '/api/admin/analytics/aggregate', { critical: true });

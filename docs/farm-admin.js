@@ -57,7 +57,7 @@ function initLogin() {
         
         saveSession(demoSession);
         console.log(' Demo session created, redirecting to dashboard...');
-        window.location.href = '/farm-admin.html';
+        window.location.href = '/LE-farm-admin.html';
         return;
     }
     
@@ -65,7 +65,7 @@ function initLogin() {
     const session = getSession();
     if (session && session.token) {
         console.log(' Active session found, redirecting to dashboard...');
-        window.location.href = '/farm-admin.html';
+        window.location.href = '/LE-farm-admin.html';
         return;
     }
     
@@ -130,7 +130,7 @@ async function initDashboard() {
     
     if (!session || !session.token) {
         console.warn(' No active session, redirecting to login...');
-        window.location.href = '/farm-admin-login.html';
+        window.location.href = '/LE-login.html';
         return;
     }
     
@@ -211,7 +211,7 @@ async function handleLogin(e) {
             showAlert('success', 'Login successful! Redirecting...');
             
             setTimeout(() => {
-                window.location.href = '/farm-admin.html';
+                window.location.href = '/LE-farm-admin.html';
             }, 1000);
             
         } else {
@@ -508,7 +508,7 @@ function setupNavigation() {
             
             // Handle special redirects
             if (section === 'subscription') {
-                window.location.href = '/billing.html';
+                window.location.href = '/LE-billing.html';
                 return;
             }
             
@@ -557,7 +557,7 @@ function logout() {
     localStorage.removeItem(STORAGE_KEY_SESSION);
     
     // Redirect to login
-    window.location.href = '/farm-admin-login.html';
+    window.location.href = '/LE-login.html';
 }
 
 /**

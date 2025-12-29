@@ -84,11 +84,11 @@ self.addEventListener('notificationclick', (event) => {
   if (event.action === 'open' || !event.action) {
     // Navigate to order details
     if (data.orderId) {
-      targetUrl = `/wholesale-admin.html?order=${data.orderId}`;
+      targetUrl = `/GR-admin.html?order=${data.orderId}`;
     } else if (data.url) {
       targetUrl = data.url;
     } else {
-      targetUrl = '/wholesale-admin.html';
+      targetUrl = '/GR-admin.html';
     }
   }
 

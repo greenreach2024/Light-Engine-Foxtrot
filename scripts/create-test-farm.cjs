@@ -95,8 +95,8 @@ async function createFarm() {
     console.log(`Inventory: ${trayNum} trays, ${crops.length} crops`);
     crops.forEach(c => console.log(`  - ${c.name}`));
     console.log(`\nLogin: ${FARM_CONFIG.adminUser.email} / ${FARM_CONFIG.adminUser.password}`);
-    console.log('\nhttp://localhost:8091/farm-admin.html');
-    console.log('http://localhost:8091/farm-sales.html\n');
+    console.log('\nhttp://localhost:8091/LE-farm-admin.html');
+    console.log('http://localhost:8091/Farmsales-pos.html\n');
     
     db.close();
     process.exit(0);

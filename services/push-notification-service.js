@@ -198,7 +198,7 @@ class PushNotificationService {
       title: 'New Wholesale Order',
       body: `${buyerName} placed order #${orderId} ($${amount}) - ${hoursLeft}hrs to respond`,
       icon: '/images/order-icon.png',
-      url: `${process.env.APP_URL}/wholesale-farm-orders.html?order=${orderId}`,
+      url: `${process.env.APP_URL}/LE-wholesale-orders.html?order=${orderId}`,
       priority: 'high'
     }, {
       type: 'new_order',
@@ -215,7 +215,7 @@ class PushNotificationService {
     return await this.sendToDevices(farmDeviceTokens, {
       title: '⏰ Order Deadline Approaching',
       body: `Order #${orderId} expires in ${hoursLeft} hours! Respond now.`,
-      url: `${process.env.APP_URL}/wholesale-farm-orders.html`,
+      url: `${process.env.APP_URL}/LE-wholesale-orders.html`,
       priority: 'high'
     }, {
       type: 'deadline_reminder',
@@ -232,7 +232,7 @@ class PushNotificationService {
     return await this.sendToDevices(buyerDeviceTokens, {
       title: 'Order Modified',
       body: `${farmName} adjusted quantities for order #${orderId}. Review changes.`,
-      url: `${process.env.APP_URL}/wholesale-order-review.html?order_id=${orderId}`
+      url: `${process.env.APP_URL}/LE-wholesale-review.html?order_id=${orderId}`
     }, {
       type: 'order_modification',
       order_id: orderId.toString(),
@@ -247,7 +247,7 @@ class PushNotificationService {
     return await this.sendToDevices(buyerDeviceTokens, {
       title: 'Order Ready!',
       body: `Your order #${orderId} from ${farmName} is ready for pickup.`,
-      url: `${process.env.APP_URL}/wholesale.html?view=orders`
+      url: `${process.env.APP_URL}/GR-wholesale.html?view=orders`
     }, {
       type: 'pickup_ready',
       order_id: orderId.toString()

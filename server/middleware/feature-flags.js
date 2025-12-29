@@ -60,8 +60,8 @@ const ENDPOINT_FEATURES = {
   
   // Wholesale - ALWAYS ALLOWED (all tiers)
   '/api/wholesale': null, // null = no restriction
-  '/wholesale.html': null,
-  '/wholesale-admin.html': null,
+  '/GR-wholesale.html': null,
+  '/GR-admin.html': null,
 };
 
 /**

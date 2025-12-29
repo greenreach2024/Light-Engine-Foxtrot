@@ -582,11 +582,11 @@ class FarmAssistant {
       { keywords: ['planting', 'schedule', 'calendar', 'plan'], url: '/views/planting-scheduler.html', name: 'Planting Schedule', emoji: '📅' },
       { keywords: ['tray', 'seed', 'seeding'], url: '/views/tray-inventory.html', name: 'Tray Inventory', emoji: '🌱' },
       { keywords: ['dashboard', 'home', 'main', 'summary'], url: '/views/farm-summary.html', name: 'Farm Dashboard', emoji: '🏠' },
-      { keywords: ['wholesale', 'buyer'], url: '/wholesale.html', name: 'Wholesale Portal', emoji: '📦' },
-      { keywords: ['sales', 'pos', 'sell', 'store'], url: '/farm-sales.html', name: 'POS Terminal', emoji: '💰' },
+      { keywords: ['wholesale', 'buyer'], url: '/GR-wholesale.html', name: 'Wholesale Portal', emoji: '📦' },
+      { keywords: ['sales', 'pos', 'sell', 'store'], url: '/Farmsales-pos.html', name: 'POS Terminal', emoji: '💰' },
       { keywords: ['heatmap', 'map', 'temps'], url: '/views/room-heatmap.html', name: 'Temperature Heatmap', emoji: '🗺️' },
       { keywords: ['inventory', 'crops', 'plants'], url: '/views/farm-inventory.html', name: 'Crop Inventory', emoji: '🥬' },
-      { keywords: ['admin', 'settings'], url: '/central-admin.html', name: 'Central Admin', emoji: '⚙️' }
+      { keywords: ['admin', 'settings'], url: '/GR-central-admin.html', name: 'Central Admin', emoji: '⚙️' }
     ];
 
     for (const nav of navPatterns) {

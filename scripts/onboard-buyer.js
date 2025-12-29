@@ -164,7 +164,7 @@ async function runOnboarding() {
     
     console.log('📋 Next Steps for Buyer:\n');
     console.log('1. Access Wholesale Portal:');
-    console.log('   http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com/wholesale.html\n');
+    console.log('   http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com/GR-wholesale.html\n');
     
     console.log('2. First Login:');
     console.log(`   - Use email: ${email}`);
@@ -202,7 +202,7 @@ async function runOnboarding() {
     console.log(`Hi ${contactName},\n`);
     console.log(`Welcome to GreenReach Wholesale! Your buyer account has been created.\n`);
     console.log(`Login Details:`);
-    console.log(`Portal: http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com/wholesale.html`);
+    console.log(`Portal: http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com/GR-wholesale.html`);
     console.log(`Username: ${email}`);
     console.log(`Temporary Password: ${tempPassword}\n`);
     console.log(`⚠️  You'll be prompted to change your password on first login.\n`);

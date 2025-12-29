@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farm Online Store</title>
+  <script src="https://web.squarecdn.com/v1/square.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --primary: #2e7d32;
+      --primary-dark: #1b5e20;
+      --secondary: #ff6f00;
+      --bg: #f5f5f5;
+      --card: #ffffff;
+      --border: #e0e0e0;
+      --text: #212121;
+      --text-light: #757575;
+      --success: #4caf50;
+      --warning: #ff9800;
+      --error: #f44336;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    
+    /* Login Screen */
+    #login-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    }
+    
+    .login-card {
+      background: var(--card);
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 400px;
+    }
+    
+    .login-card h1 {
+      margin-bottom: 0.5rem;
+      color: var(--primary);
+    }
+    
+    .login-card p {
+      color: var(--text-light);
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      width: 100%;
+    }
+    
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+    
+    .btn-secondary {
+      background: var(--secondary);
+      color: white;
+    }
+    
+    .btn-sm {
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+    
+    .alert {
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+    
+    .alert-error {
+      background: #ffebee;
+      color: var(--error);
+      border: 1px solid var(--error);
+    }
+    
+    .alert-success {
+      background: #e8f5e9;
+      color: var(--success);
+      border: 1px solid var(--success);
+    }
+    
+    /* App Layout */
+    #app {
+      display: none;
+      min-height: 100vh;
+    }
+    
+    .header {
+      background: var(--card);
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header h1 {
+      font-size: 1.5rem;
+      color: var(--primary);
+    }
+    
+    .user-info {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    
+    .farm-badge {
+      background: var(--primary);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    
+    .tabs {
+      background: var(--card);
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    
+    .tab {
+      padding: 1rem 2rem;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 1rem;
+      color: var(--text-light);
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+    }
+    
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 500;
+    }
+    
+    .tab:hover {
+      background: var(--bg);
+    }
+    
+    .content {
+      padding: 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    /* Shop Interface */
+    .shop-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2rem;
+    }
+    
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    
+    .product-card {
+      background: var(--card);
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .product-card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      transform: translateY(-2px);
+    }
+    
+    .product-card h3 {
+      margin-bottom: 0.5rem;
+      color: var(--primary);
+    }
+    
+    .price {
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: var(--text);
+      margin: 0.5rem 0;
+    }
+    
+    .stock {
+      font-size: 0.875rem;
+      color: var(--text-light);
+    }
+    
+    /* Cart */
+    .cart {
+      background: var(--card);
+      padding: 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      position: sticky;
+      top: 2rem;
+    }
+    
+    .cart h2 {
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+    
+    .cart-items {
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+    
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .cart-item-name {
+      font-weight: 500;
+    }
+    
+    .cart-item-qty {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .qty-btn {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    
+    .qty-btn:hover {
+      background: var(--bg);
+    }
+    
+    .cart-summary {
+      border-top: 2px solid var(--border);
+      padding-top: 1rem;
+    }
+    
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+    
+    .summary-row.total {
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: var(--primary);
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--border);
+    }
+    
+    /* Subscriptions */
+    .subscription-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .subscription-card h3 {
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+    
+    .subscription-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-left: 0.5rem;
+    }
+    
+    .subscription-badge.active {
+      background: #e8f5e9;
+      color: var(--success);
+    }
+    
+    .subscription-badge.paused {
+      background: #fff3e0;
+      color: var(--warning);
+    }
+    
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: var(--card);
+      padding: 2rem;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    
+    .modal-header h2 {
+      color: var(--primary);
+    }
+    
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 2rem;
+      color: var(--text-light);
+      cursor: pointer;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      line-height: 1;
+    }
+    
+    .modal-close:hover {
+      color: var(--error);
+    }
+    
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem;
+      color: var(--text-light);
+    }
+    
+    .spinner {
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-right: 1rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .shop-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .product-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="login-screen">
+    <div class="login-card">
+      <h1>🌱 Farm Store</h1>
+      <p>Welcome! Please sign in to shop.</p>
+      
+      <div id="login-error" class="alert alert-error hidden"></div>
+      
+      <form id="login-form">
+        <div class="form-group">
+          <label for="customer-email">Email</label>
+          <input type="email" id="customer-email" required placeholder="your@email.com">
+        </div>
+        
+        <div class="form-group">
+          <label for="customer-password">Password</label>
+          <input type="password" id="customer-password" placeholder="••••••••">
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Sign In</button>
+        
+        <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem;">
+          <a href="#" onclick="alert('Contact farm to create an account')" style="color: var(--primary);">Create Account</a>
+        </p>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Main App -->
+  <div id="app">
+    <header class="header">
+      <h1>🌱 Farm Store</h1>
+      <div class="user-info">
+        <span class="farm-badge" id="farm-name">Loading...</span>
+        <span id="customer-name">Customer</span>
+        <button class="btn btn-sm btn-secondary" onclick="logout()">Logout</button>
+      </div>
+    </header>
+    
+    <nav class="tabs">
+      <button class="tab active" data-tab="shop">Shop</button>
+      <button class="tab" data-tab="subscriptions">My Subscriptions</button>
+    </nav>
+    
+    <main class="content">
+      <!-- Shop Tab -->
+      <div id="tab-shop" class="tab-content active">
+        <div class="shop-grid">
+          <div>
+            <h2 style="margin-bottom: 1rem;">🛒 Available Products</h2>
+            <div style="margin-bottom: 1rem; padding: 1rem; background: var(--card); border-radius: 8px; border: 1px solid var(--border);">
+              <p style="color: var(--text-light); font-size: 0.875rem;">
+                💡 Note: Currently, only <strong>Farm Boxes</strong> are available for delivery. Individual items will be available soon!
+              </p>
+            </div>
+            <div id="product-grid" class="product-grid">
+              <div class="loading">
+                <div class="spinner"></div>
+                Loading products...
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <div class="cart">
+              <h2>Your Cart</h2>
+              <div id="cart-items" class="cart-items"></div>
+              
+              <div class="cart-summary">
+                <div class="summary-row">
+                  <span>Subtotal:</span>
+                  <span id="cart-subtotal">$0.00</span>
+                </div>
+                <div class="summary-row">
+                  <span>Tax:</span>
+                  <span id="cart-tax">$0.00</span>
+                </div>
+                <div class="summary-row total">
+                  <span>Total:</span>
+                  <span id="cart-total">$0.00</span>
+                </div>
+              </div>
+              
+              <button class="btn btn-primary" onclick="checkout()" style="width: 100%; margin-top: 1rem;">
+                Checkout
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Subscriptions Tab -->
+      <div id="tab-subscriptions" class="tab-content">
+        <h2 style="margin-bottom: 1rem;">📦 My Subscriptions</h2>
+        
+        <button class="btn btn-primary" onclick="createSubscription()" style="margin-bottom: 1.5rem;">
+          + Create New Subscription
+        </button>
+        
+        <div id="subscriptions-list">
+          <div class="loading">
+            <div class="spinner"></div>
+            Loading subscriptions...
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Checkout Modal -->
+  <div id="checkout-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Complete Order</h2>
+        <button class="modal-close" onclick="closeCheckoutModal()">×</button>
+      </div>
+      
+      <div id="checkout-success" class="alert alert-success hidden"></div>
+      <div id="checkout-error" class="alert alert-error hidden"></div>
+      
+      <form id="checkout-form">
+        <!-- Delivery Selection -->
+        <div class="form-group">
+          <label for="delivery-option">Delivery Option</label>
+          <select id="delivery-option" required>
+            <option value="">Select delivery...</option>
+            <option value="pickup">Farm Pickup</option>
+            <option value="delivery">Home Delivery</option>
+          </select>
+        </div>
+        
+        <div id="delivery-fields" style="display: none;">
+          <div class="form-group">
+            <label for="delivery-date">Preferred Delivery Date</label>
+            <input type="date" id="delivery-date" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="delivery-address">Delivery Address</label>
+            <textarea id="delivery-address" rows="3" placeholder="Street address, City, State, ZIP"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label for="delivery-notes">Delivery Instructions (Optional)</label>
+            <textarea id="delivery-notes" rows="2" placeholder="Gate code, special instructions, etc."></textarea>
+          </div>
+        </div>
+        
+        <!-- Payment Method -->
+        <div class="form-group">
+          <label for="payment-method">Payment Method</label>
+          <select id="payment-method" required>
+            <option value="card">Credit/Debit Card</option>
+            <option value="gift_card">Gift Card</option>
+          </select>
+        </div>
+        
+        <!-- Square Payment Card Container -->
+        <div id="square-card-container" style="display: block; margin-bottom: 1.5rem;">
+          <label style="font-weight: 500; margin-bottom: 0.5rem; display: block;">Card Information</label>
+          <div id="card-container" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: white;"></div>
+          <div id="card-errors" style="color: var(--error); font-size: 0.875rem; margin-top: 0.5rem;"></div>
+        </div>
+        
+        <div id="gift-card-fields" style="display: none;">
+          <div class="form-group">
+            <label for="gift-card-number">Gift Card Number</label>
+            <input type="text" id="gift-card-number" placeholder="Enter gift card number">
+          </div>
+        </div>
+        
+        <div class="summary-row total" style="margin: 1rem 0;">
+          <span>Total Due:</span>
+          <span id="checkout-total">$0.00</span>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Place Order</button>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Subscription Modal -->
+  <div id="subscription-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create Subscription</h2>
+        <button class="modal-close" onclick="closeSubscriptionModal()">×</button>
+      </div>
+      
+      <div id="subscription-success" class="alert alert-success hidden"></div>
+      <div id="subscription-error" class="alert alert-error hidden"></div>
+      
+      <form id="subscription-form">
+        <div class="form-group">
+          <label for="sub-product">Farm Box</label>
+          <select id="sub-product" required>
+            <option value="">Select a farm box...</option>
+            <!-- Will be populated with farm boxes -->
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="sub-frequency">Delivery Frequency</label>
+          <select id="sub-frequency" required>
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Bi-weekly (Every 2 weeks)</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="sub-day">Delivery Day</label>
+          <select id="sub-day" required>
+            <option value="monday">Monday</option>
+            <option value="tuesday">Tuesday</option>
+            <option value="wednesday">Wednesday</option>
+            <option value="thursday">Thursday</option>
+            <option value="friday">Friday</option>
+            <option value="saturday">Saturday</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="sub-start-date">Start Date</label>
+          <input type="date" id="sub-start-date" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="sub-delivery-option">Delivery Option</label>
+          <select id="sub-delivery-option" required>
+            <option value="pickup">Farm Pickup</option>
+            <option value="delivery">Home Delivery</option>
+          </select>
+        </div>
+        
+        <div id="sub-delivery-fields" style="display: none;">
+          <div class="form-group">
+            <label for="sub-delivery-address">Delivery Address</label>
+            <textarea id="sub-delivery-address" rows="3" placeholder="Street address, City, State, ZIP"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label for="sub-delivery-notes">Delivery Instructions</label>
+            <textarea id="sub-delivery-notes" rows="2" placeholder="Gate code, special instructions, etc."></textarea>
+          </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Create Subscription</button>
+      </form>
+    </div>
+  </div>
+  
+  <script>
+    // State
+    let token = null;
+    let farmId = null;
+    let farmName = null;
+    let customerName = null;
+    let customerEmail = null;
+    let cart = [];
+    let inventory = [];
+    let subscriptions = [];
+    
+    // Square Payment State
+    let squarePayments = null;
+    let squareCard = null;
+    
+    // API helper
+    async function api(endpoint, options = {}) {
+      const url = `/api${endpoint}`;
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+      
+      const response = await fetch(url, {
+        ...options,
+        headers: { ...headers, ...options.headers }
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Request failed');
+      }
+      
+      return data;
+    }
+    
+    // Login
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('customer-email').value;
+      const password = document.getElementById('customer-password').value;
+      
+      try {
+        // Get current farm from Light Engine API
+        const response = await fetch('/api/config/app');
+        const config = await response.json();
+        
+        farmId = config.farmId || 'FARM-001';
+        farmName = config.farmName || 'Demo Farm';
+        customerEmail = email;
+        customerName = email.split('@')[0]; // Simple name extraction
+        
+        // For demo, use customer role token
+        const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+        const tokensData = await tokensResponse.json();
+        
+        if (!tokensData.ok) {
+          throw new Error('Failed to authenticate');
+        }
+        
+        // Use customer token (we'll add this role if needed, for now use manager)
+        token = tokensData.tokens[farmId]['customer'] || tokensData.tokens[farmId]['manager'];
+        
+        // Save to localStorage
+        localStorage.setItem('farm_store_token', token);
+        localStorage.setItem('farm_store_email', customerEmail);
+        localStorage.setItem('farm_store_name', customerName);
+        localStorage.setItem('farm_id', farmId);
+        localStorage.setItem('farm_name', farmName);
+        
+        // Show app
+        showApp();
+      } catch (error) {
+        document.getElementById('login-error').textContent = 'Failed to sign in: ' + error.message;
+        document.getElementById('login-error').classList.remove('hidden');
+      }
+    });
+    
+    // Logout
+    function logout() {
+      localStorage.clear();
+      token = null;
+      farmId = null;
+      location.reload();
+    }
+    
+    // Show app
+    function showApp() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('farm-name').textContent = farmName;
+      document.getElementById('customer-name').textContent = customerName;
+      
+      loadInventory();
+      loadSubscriptions();
+    }
+    
+    // Check if already logged in
+    window.addEventListener('DOMContentLoaded', async () => {
+      console.log('[Store] DOMContentLoaded fired');
+      const urlParams = new URLSearchParams(window.location.search);
+      const isDemoMode = urlParams.get('demo') !== '0'; // Demo by default
+      console.log('[Store] URL params:', window.location.search);
+      console.log('[Store] isDemoMode:', isDemoMode);
+      
+      const savedToken = localStorage.getItem('farm_store_token');
+      const savedEmail = localStorage.getItem('farm_store_email');
+      const savedName = localStorage.getItem('farm_store_name');
+      const savedFarmId = localStorage.getItem('farm_id');
+      const savedFarmName = localStorage.getItem('farm_name');
+      
+      console.log('[Store] Saved credentials:', {
+        hasToken: !!savedToken,
+        hasEmail: !!savedEmail,
+        hasName: !!savedName
+      });
+      
+      if (savedToken && savedEmail) {
+        console.log('[Store] Using saved credentials');
+        token = savedToken;
+        customerEmail = savedEmail;
+        customerName = savedName;
+        farmId = savedFarmId;
+        farmName = savedFarmName;
+        showApp();
+      } else if (isDemoMode) {
+        // Auto-login for demo mode
+        console.log('[Demo] Auto-logging in farm store');
+        console.log('[Demo] isDemoMode:', isDemoMode);
+        console.log('[Demo] No saved credentials found, initiating auto-login');
+        try {
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          farmId = config.farmId || 'GR-00001';
+          farmName = config.farmName || 'Demo Farm';
+          customerEmail = 'customer@demo.com';
+          customerName = 'Demo Customer';
+          
+          // Try to get demo tokens (works in dev/demo mode)
+          try {
+            const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+            const tokensData = await tokensResponse.json();
+            
+            if (tokensData.ok && tokensData.tokens && tokensData.tokens[farmId]) {
+              token = tokensData.tokens[farmId]['customer'] || tokensData.tokens[farmId]['manager'];
+            }
+          } catch (tokenError) {
+            console.log('[Demo] Demo tokens not available (production mode), proceeding without token');
+            token = null;
+          }
+          
+          // Save and show app (works with or without token)
+          if (token) {
+            localStorage.setItem('farm_store_token', token);
+          }
+          localStorage.setItem('farm_store_email', customerEmail);
+          localStorage.setItem('farm_store_name', customerName);
+          localStorage.setItem('farm_id', farmId);
+          localStorage.setItem('farm_name', farmName);
+          
+          console.log('[Demo] Auto-logged in as:', customerName);
+          console.log('[Demo] Calling showApp()...');
+          showApp();
+          console.log('[Demo] showApp() completed');
+        } catch (error) {
+          console.error('[Demo] Auto-login failed:', error);
+          console.error('[Demo] Error details:', error.message, error.stack);
+        }
+      }
+    });
+    
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab;
+        
+        // Update tabs
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update content
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+        
+        // Load data for specific tabs
+        if (tabName === 'subscriptions') {
+          loadSubscriptions();
+        }
+      });
+    });
+    
+    // Load inventory (filter to Farm Boxes only for now)
+    async function loadInventory() {
+      try {
+        const data = await api('/farm-sales/inventory');
+        // Filter to only farm boxes when category is implemented
+        // For now, show all available products
+        inventory = data.inventory.filter(p => p.available > 0);
+        
+        // Render product grid
+        const grid = document.getElementById('product-grid');
+        if (inventory.length === 0) {
+          grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-light);">No products available at the moment. Check back soon!</div>';
+        } else {
+          grid.innerHTML = inventory.map(product => `
+            <div class="product-card" onclick="addToCart('${product.sku_id}')">
+              <h3>${product.name}</h3>
+              <div class="price">$${product.retail_price.toFixed(2)}</div>
+              <div class="stock">${product.available} ${product.unit} available</div>
+            </div>
+          `).join('');
+        }
+      } catch (error) {
+        console.error('Failed to load inventory:', error);
+        document.getElementById('product-grid').innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--error);">Failed to load products. Please try again.</div>';
+      }
+    }
+    
+    // Cart functions
+    function addToCart(skuId) {
+      const product = inventory.find(p => p.sku_id === skuId);
+      if (!product) return;
+      
+      const existingItem = cart.find(item => item.sku_id === skuId);
+      if (existingItem) {
+        existingItem.quantity++;
+      } else {
+        cart.push({ ...product, quantity: 1 });
+      }
+      
+      updateCart();
+    }
+    
+    function updateCartQuantity(skuId, delta) {
+      const item = cart.find(i => i.sku_id === skuId);
+      if (!item) return;
+      
+      item.quantity += delta;
+      if (item.quantity <= 0) {
+        cart = cart.filter(i => i.sku_id !== skuId);
+      }
+      
+      updateCart();
+    }
+    
+    function clearCart() {
+      cart = [];
+      updateCart();
+    }
+    
+    function updateCart() {
+      const container = document.getElementById('cart-items');
+      
+      if (cart.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-light); padding: 2rem;">Cart is empty</div>';
+      } else {
+        container.innerHTML = cart.map(item => `
+          <div class="cart-item">
+            <div>
+              <div class="cart-item-name">${item.name}</div>
+              <div style="font-size: 0.875rem; color: var(--text-light);">$${item.retail_price.toFixed(2)}/${item.unit}</div>
+            </div>
+            <div class="cart-item-qty">
+              <button class="qty-btn" onclick="updateCartQuantity('${item.sku_id}', -1)">−</button>
+              <span>${item.quantity}</span>
+              <button class="qty-btn" onclick="updateCartQuantity('${item.sku_id}', 1)">+</button>
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      // Calculate totals
+      const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
+      const taxableSubtotal = cart.reduce((sum, item) => {
+        return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
+      }, 0);
+      const tax = taxableSubtotal * 0.08;
+      const total = subtotal + tax;
+      
+      document.getElementById('cart-subtotal').textContent = `$${subtotal.toFixed(2)}`;
+      document.getElementById('cart-tax').textContent = `$${tax.toFixed(2)}`;
+      document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
+    }
+    
+    // Checkout
+    function checkout() {
+      if (cart.length === 0) {
+        alert('Your cart is empty');
+        return;
+      }
+      
+      const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
+      const taxableSubtotal = cart.reduce((sum, item) => {
+        return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
+      }, 0);
+      const tax = taxableSubtotal * 0.08;
+      const total = subtotal + tax;
+      
+      document.getElementById('checkout-total').textContent = `$${total.toFixed(2)}`;
+      document.getElementById('checkout-modal').classList.add('active');
+      
+      // Set minimum delivery date to tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('delivery-date').min = tomorrow.toISOString().split('T')[0];
+    }
+    
+    function closeCheckoutModal() {
+      document.getElementById('checkout-modal').classList.remove('active');
+      document.getElementById('checkout-success').classList.add('hidden');
+      document.getElementById('checkout-error').classList.add('hidden');
+    }
+    
+    // Delivery option change
+    document.getElementById('delivery-option').addEventListener('change', (e) => {
+      const deliveryFields = document.getElementById('delivery-fields');
+      if (e.target.value === 'delivery') {
+        deliveryFields.style.display = 'block';
+        document.getElementById('delivery-address').required = true;
+      } else {
+        deliveryFields.style.display = 'none';
+        document.getElementById('delivery-address').required = false;
+      }
+    });
+    
+    // Payment method change
+    document.getElementById('payment-method').addEventListener('change', async (e) => {
+      const giftCardFields = document.getElementById('gift-card-fields');
+      const squareContainer = document.getElementById('square-card-container');
+      
+      if (e.target.value === 'gift_card') {
+        giftCardFields.style.display = 'block';
+        squareContainer.style.display = 'none';
+        document.getElementById('gift-card-number').required = true;
+      } else if (e.target.value === 'card') {
+        giftCardFields.style.display = 'none';
+        squareContainer.style.display = 'block';
+        document.getElementById('gift-card-number').required = false;
+        // Initialize Square card component if not already initialized
+        await initializeSquarePayments();
+      } else {
+        giftCardFields.style.display = 'none';
+        squareContainer.style.display = 'block';
+        document.getElementById('gift-card-number').required = false;
+      }
+    });
+    
+    /**
+     * Initialize Square Web Payments SDK
+     */
+    async function initializeSquarePayments() {
+      if (squareCard) {
+        return; // Already initialized
+      }
+      
+      try {
+        // Get Square credentials from farm configuration
+        const response = await api('/farm/square/status');
+        
+        if (!response.ok || !response.connected) {
+          document.getElementById('card-errors').textContent = 
+            'Square payment processing not configured. Please contact farm administrator.';
+          return;
+        }
+        
+        const { applicationId, locationId } = response.data;
+        
+        // Initialize Square Payments
+        if (!window.Square) {
+          throw new Error('Square SDK not loaded');
+        }
+        
+        squarePayments = window.Square.payments(applicationId, locationId);
+        squareCard = await squarePayments.card();
+        await squareCard.attach('#card-container');
+        
+        console.log('[square] Card component initialized');
+      } catch (error) {
+        console.error('[square] Initialization error:', error);
+        document.getElementById('card-errors').textContent = 
+          `Failed to initialize payment form: ${error.message}`;
+      }
+    }
+    
+    // Initialize Square card component on page load (since card is default payment method)
+    window.addEventListener('DOMContentLoaded', () => {
+      // Delay initialization slightly to ensure API is ready
+      setTimeout(() => {
+        initializeSquarePayments();
+      }, 500);
+    });
+      }
+    });
+    
+    // Submit checkout
+    document.getElementById('checkout-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const deliveryOption = document.getElementById('delivery-option').value;
+      const deliveryDate = document.getElementById('delivery-date').value;
+      const deliveryAddress = document.getElementById('delivery-address').value;
+      const deliveryNotes = document.getElementById('delivery-notes').value;
+      const paymentMethod = document.getElementById('payment-method').value;
+      const giftCardNumber = document.getElementById('gift-card-number').value;
+      
+      const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
+      const taxableSubtotal = cart.reduce((sum, item) => {
+        return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
+      }, 0);
+      const tax = taxableSubtotal * 0.08;
+      const total = subtotal + tax;
+      
+      if (paymentMethod === 'gift_card' && !giftCardNumber) {
+        document.getElementById('checkout-error').textContent = 'Gift card number required';
+        document.getElementById('checkout-error').classList.remove('hidden');
+        return;
+      }
+      
+      // Handle card payment tokenization
+      let cardToken = null;
+      if (paymentMethod === 'card') {
+        if (!squareCard) {
+          document.getElementById('checkout-error').textContent = 'Payment form not initialized';
+          document.getElementById('checkout-error').classList.remove('hidden');
+          return;
+        }
+        
+        try {
+          const result = await squareCard.tokenize();
+          if (result.status === 'OK') {
+            cardToken = result.token;
+          } else {
+            let errorMessage = 'Card validation failed';
+            if (result.errors) {
+              errorMessage = result.errors.map(error => error.message).join(', ');
+            }
+            document.getElementById('checkout-error').textContent = errorMessage;
+            document.getElementById('checkout-error').classList.remove('hidden');
+            return;
+          }
+        } catch (error) {
+          document.getElementById('checkout-error').textContent = `Card tokenization error: ${error.message}`;
+          document.getElementById('checkout-error').classList.remove('hidden');
+          return;
+        }
+      }
+      
+      try {
+        const result = await api('/farm-sales/pos/checkout', {
+          method: 'POST',
+          body: JSON.stringify({
+            customer: {
+              name: customerName,
+              email: customerEmail,
+              gift_card: giftCardNumber || null
+            },
+            items: cart.map(item => ({
+              sku_id: item.sku_id,
+              quantity: item.quantity
+            })),
+            payment: {
+              method: paymentMethod,
+              card_token: cardToken
+            },
+            delivery: {
+              option: deliveryOption,
+              date: deliveryDate,
+              address: deliveryAddress || null,
+              notes: deliveryNotes || null
+            }
+          })
+        });
+        
+        document.getElementById('checkout-success').textContent = 
+          `✓ Order placed successfully! Order ID: ${result.receipt.order_id}`;
+        document.getElementById('checkout-success').classList.remove('hidden');
+        document.getElementById('checkout-error').classList.add('hidden');
+        
+        // Clear cart
+        cart = [];
+        updateCart();
+        
+        // Reload inventory
+        loadInventory();
+        
+        // Close modal after delay
+        setTimeout(() => {
+          closeCheckoutModal();
+        }, 2000);
+      } catch (error) {
+        document.getElementById('checkout-error').textContent = error.message;
+        document.getElementById('checkout-error').classList.remove('hidden');
+        document.getElementById('checkout-success').classList.add('hidden');
+      }
+    });
+    
+    // Subscriptions
+    async function loadSubscriptions() {
+      try {
+        // TODO: Implement subscription loading from backend
+        const subscriptionsContainer = document.getElementById('subscriptions-list');
+        subscriptionsContainer.innerHTML = '<div style="text-align: center; color: var(--text-light); padding: 3rem;">No active subscriptions. Create your first subscription to get regular deliveries!</div>';
+      } catch (error) {
+        console.error('Failed to load subscriptions:', error);
+      }
+    }
+    
+    function createSubscription() {
+      // Populate farm box options
+      const farmBoxes = inventory.filter(p => p.category === 'farm_box' || p.name.toLowerCase().includes('box'));
+      const select = document.getElementById('sub-product');
+      
+      if (farmBoxes.length === 0) {
+        alert('No farm boxes available yet. Please check back soon!');
+        return;
+      }
+      
+      select.innerHTML = '<option value="">Select a farm box...</option>' +
+        farmBoxes.map(box => `<option value="${box.sku_id}">${box.name} - $${box.retail_price.toFixed(2)}</option>`).join('');
+      
+      // Set minimum start date to tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('sub-start-date').min = tomorrow.toISOString().split('T')[0];
+      
+      document.getElementById('subscription-modal').classList.add('active');
+    }
+    
+    function closeSubscriptionModal() {
+      document.getElementById('subscription-modal').classList.remove('active');
+      document.getElementById('subscription-success').classList.add('hidden');
+      document.getElementById('subscription-error').classList.add('hidden');
+    }
+    
+    // Subscription delivery option change
+    document.getElementById('sub-delivery-option').addEventListener('change', (e) => {
+      const deliveryFields = document.getElementById('sub-delivery-fields');
+      if (e.target.value === 'delivery') {
+        deliveryFields.style.display = 'block';
+        document.getElementById('sub-delivery-address').required = true;
+      } else {
+        deliveryFields.style.display = 'none';
+        document.getElementById('sub-delivery-address').required = false;
+      }
+    });
+    
+    // Submit subscription
+    document.getElementById('subscription-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const productSku = document.getElementById('sub-product').value;
+      const frequency = document.getElementById('sub-frequency').value;
+      const day = document.getElementById('sub-day').value;
+      const startDate = document.getElementById('sub-start-date').value;
+      const deliveryOption = document.getElementById('sub-delivery-option').value;
+      const deliveryAddress = document.getElementById('sub-delivery-address').value;
+      const deliveryNotes = document.getElementById('sub-delivery-notes').value;
+      
+      try {
+        // TODO: Implement subscription creation backend endpoint
+        alert('Subscription feature coming soon! Your preferences have been saved.');
+        closeSubscriptionModal();
+      } catch (error) {
+        document.getElementById('subscription-error').textContent = error.message;
+        document.getElementById('subscription-error').classList.remove('hidden');
+        document.getElementById('subscription-success').classList.add('hidden');
+      }
+    });
+  </script>
+  <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
+  <script src="/js/farm-assistant.js"></script>
+</body>
+</html>

@@ -443,7 +443,7 @@ router.post('/complete', async (req, res) => {
             message: 'Setup complete - credentials saved',
             farm_id: farmId,
             farm_name: farmName,
-            next_url: '/farm-admin.html'
+            next_url: '/LE-farm-admin.html'
         });
         
     } catch (error) {
@@ -477,7 +477,7 @@ router.get('/status', async (req, res) => {
             res.json({
                 registered: false,
                 message: 'Edge device not registered - run setup wizard',
-                setup_url: '/farm-admin.html#settings'
+                setup_url: '/LE-farm-admin.html#settings'
             });
         }
         

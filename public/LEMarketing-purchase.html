@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Light Engine - Farm Management Solutions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #1d1d1f;
+            background: #f8f9fb;
+        }
+
+        header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 20px 40px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        nav {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #10b981;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: #6e6e73;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #10b981;
+        }
+
+        .hero {
+            background: #fafbfc;
+            color: #1d1d1f;
+            padding: 80px 20px;
+            text-align: center;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .hero-intro {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #059669;
+            margin-bottom: 15px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+            color: #1d1d1f;
+        }
+
+        .hero p {
+            font-size: 1.5rem;
+            font-weight: 400;
+            max-width: 700px;
+            margin: 0 auto 40px;
+            color: #6e6e73;
+            line-height: 1.4;
+        }
+
+        .test-pricing-note {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            border-radius: 12px;
+            padding: 16px 24px;
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #92400e;
+            font-weight: 600;
+        }
+
+        .products-section {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 80px 20px;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            color: #1d1d1f;
+            font-weight: 700;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            font-size: 1.15rem;
+            color: #6e6e73;
+            max-width: 800px;
+            margin: 0 auto 60px;
+            line-height: 1.7;
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+            gap: 40px;
+            margin-bottom: 80px;
+        }
+
+        .product-card {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .product-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+
+        .product-card.featured {
+            border-color: #10b981;
+            box-shadow: 0 4px 30px rgba(16, 185, 129, 0.3);
+        }
+
+        .product-image {
+            width: 100%;
+            height: 320px;
+            object-fit: cover;
+            background: #fafbfc;
+            padding: 40px;
+        }
+
+        .product-content {
+            padding: 40px;
+        }
+
+        .product-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-edge {
+            background: rgba(16, 185, 129, 0.15);
+            color: #059669;
+        }
+
+        .badge-cloud {
+            background: rgba(59, 130, 246, 0.15);
+            color: #2563eb;
+        }
+
+        .product-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #1d1d1f;
+        }
+
+        .product-subtitle {
+            font-size: 1.1rem;
+            color: #6e6e73;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .product-price {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 8px;
+        }
+
+        .price-note {
+            font-size: 0.9rem;
+            color: #6e6e73;
+            margin-bottom: 24px;
+        }
+
+        .features-list {
+            list-style: none;
+            margin-bottom: 32px;
+            padding-left: 0;
+        }
+
+        .features-list li {
+            padding: 10px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            color: #1d1d1f;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .check-icon {
+            color: #10b981;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .btn-purchase {
+            width: 100%;
+            background: #10b981;
+            color: white;
+            padding: 18px 32px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .btn-purchase:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-learn-more {
+            width: 100%;
+            background: transparent;
+            color: #10b981;
+            padding: 14px 32px;
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+        }
+
+        .btn-learn-more:hover {
+            background: #10b981;
+            color: white;
+        }
+
+        .comparison-section {
+            max-width: 1200px;
+            margin: 0 auto 80px;
+            padding: 0 20px;
+        }
+
+        .comparison-table {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background: #fafbfc;
+            font-weight: 600;
+            color: #1d1d1f;
+            font-size: 0.95rem;
+        }
+
+        td {
+            color: #6e6e73;
+        }
+
+        tbody tr:hover {
+            background: #fafbfc;
+        }
+
+        .check {
+            color: #10b981;
+            font-size: 1.3rem;
+        }
+
+        .cross {
+            color: #ef4444;
+            font-size: 1.3rem;
+        }
+
+        .info-section {
+            background: white;
+            border-radius: 20px;
+            padding: 60px 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            max-width: 1200px;
+            margin: 0 auto 80px;
+        }
+
+        .info-section h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 30px;
+            text-align: center;
+            color: #1d1d1f;
+            letter-spacing: -0.5px;
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 40px;
+            margin-top: 40px;
+        }
+
+        .step {
+            text-align: center;
+        }
+
+        .step-number {
+            display: inline-block;
+            width: 60px;
+            height: 60px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            font-size: 1.8rem;
+            font-weight: 700;
+            line-height: 60px;
+            margin-bottom: 20px;
+        }
+
+        .step h3 {
+            font-size: 1.3rem;
+            margin-bottom: 10px;
+            color: #1d1d1f;
+            font-weight: 700;
+        }
+
+        .step p {
+            color: #6e6e73;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        footer {
+            background: #1e293b;
+            color: white;
+            padding: 60px 20px 40px;
+        }
+
+        .footer-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 48px;
+            margin-bottom: 40px;
+        }
+
+        .footer-column h4 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .footer-column ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer-column li {
+            margin-bottom: 12px;
+        }
+
+        .footer-column a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .footer-column a:hover {
+            color: #10b981;
+        }
+
+        .footer-bottom {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+
+        .footer-bottom a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+        }
+
+        .footer-bottom a:hover {
+            color: #10b981;
+        }
+
+        footer p {
+            opacity: 0.8;
+            font-size: 0.9rem;
+            line-height: 1.8;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1.2rem;
+            }
+
+            .products-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .product-card.featured::before {
+                top: 10px;
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/LEMarketing-landing.html" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/LEMarketing-landing.html">Home</a>
+                <a href="/LEMarketing-edge.html">Edge Device</a>
+                <a href="/LEMarketing-cloud.html">Cloud Service</a>
+            </div>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <p class="hero-intro">Light Engine Solutions</p>
+        <h1>Choose Your Platform</h1>
+        <p>Professional farm management solutions designed for modern growers</p>
+        <div class="test-pricing-note">
+            ⚠️ TEST PRICING: All products $1 for development testing
+        </div>
+    </section>
+
+    <section class="products-section">
+        <h2 class="section-title">Two ways to farm smarter</h2>
+        <p class="section-subtitle">Choose the solution that fits your operation — both include comprehensive management and sales features</p>
+
+        <div class="products-grid">
+            <!-- Edge Device -->
+            <div class="product-card featured">
+                <img src="images/edge-device.png" alt="Light Engine Edge Device" class="product-image">
+                <div class="product-content">
+                    <span class="product-badge badge-edge">Complete Automation</span>
+                    <h2 class="product-title">The Edge</h2>
+                    <p class="product-subtitle">Complete on-premises control with integrated environmental automation and inventory management</p>
+                    
+                    <div class="product-price">$1</div>
+                    <p class="price-note">One-time hardware purchase (test pricing)</p>
+
+                    <ul class="features-list">
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Automated lighting control (DMX512)</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Climate & HVAC automation</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Real-time sensor monitoring</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Recipe-based growing programs</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Works offline - local control</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>10.1" touchscreen interface</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>All inventory & sales features included</span>
+                        </li>
+                    </ul>
+
+                    <button class="btn-purchase" onclick="purchaseProduct('edge')">Purchase Edge Device</button>
+                    <a href="/LEMarketing-edge.html" class="btn-learn-more">Learn More →</a>
+                </div>
+            </div>
+
+            <!-- Cloud Service -->
+            <div class="product-card">
+                <img src="images/cloud.png" alt="Light Engine Cloud Service" class="product-image">
+                <div class="product-content">
+                    <span class="product-badge badge-cloud">Cloud Platform</span>
+                    <h2 class="product-title">The Cloud</h2>
+                    <p class="product-subtitle">Manage your farm operations from anywhere with cloud-based inventory and sales management</p>
+                    
+                    <div class="product-price">$1<span style="font-size: 1.5rem; font-weight: 500;">/mo</span></div>
+                    <p class="price-note">Monthly subscription (test pricing)</p>
+
+                    <ul class="features-list">
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Complete inventory management</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Point of Sale (POS) system</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Online store integration</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>GreenReach wholesale marketplace</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>AI-assisted pricing & demand analysis</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Access from any device</span>
+                        </li>
+                        <li>
+                            <span class="check-icon">✓</span>
+                            <span>Automatic backups included</span>
+                        </li>
+                    </ul>
+
+                    <button class="btn-purchase" onclick="purchaseProduct('cloud')">Start Cloud Plan</button>
+                    <a href="/LEMarketing-cloud.html" class="btn-learn-more">Learn More →</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h2>How It Works</h2>
+            <div class="steps-grid">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Choose Your Solution</h3>
+                    <p>Select Edge for complete automation or Cloud for inventory & sales management</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Complete Purchase</h3>
+                    <p>Secure checkout and receive your registration code via email</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Setup & Activate</h3>
+                    <p>Run the setup wizard with your code to activate your system</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>Start Growing</h3>
+                    <p>Begin managing your farm with full platform access immediately</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="comparison-section">
+            <h2 class="section-title">Feature Comparison</h2>
+            <div class="comparison-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>Cloud</th>
+                            <th>Edge</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Inventory Management</strong></td>
+                            <td><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Point of Sale (POS)</strong></td>
+                            <td><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Online Store</strong></td>
+                            <td><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Wholesale Marketplace</strong></td>
+                            <td><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>AI-Assisted Pricing</strong></td>
+                            <td><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Automated Lighting (DMX512)</strong></td>
+                            <td><span class="cross">✗</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Climate Automation</strong></td>
+                            <td><span class="cross">✗</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Sensor Monitoring</strong></td>
+                            <td><span class="cross">✗</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Offline Operation</strong></td>
+                            <td><span class="cross">✗</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Touchscreen Interface</strong></td>
+                            <td><span class="cross">✗</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-column">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="/LEMarketing-cloud.html">Cloud Solution</a></li>
+                    <li><a href="/LEMarketing-edge.html">Edge Device</a></li>
+                    <li><a href="/LEMarketing-downloads.html">Downloads</a></li>
+                    <li><a href="/LEMarketing-purchase.html">Pricing</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="/docs/quickstart.html">Quick Start Guide</a></li>
+                    <li><a href="/docs/first-run-setup.html">First Run Guide</a></li>
+                    <li><a href="/docs/index.html">Documentation</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Company</h4>
+                <ul>
+                    <li><a href="/contact">Contact</a></li>
+                    <li><a href="/LEMarketing-landing.html">About</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="mailto:support@greenreach.io">Email Support</a></li>
+                    <li><a href="/status">System Status</a></li>
+                    <li><a href="/security">Security</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 Light Engine. Powered by GreenReach. All rights reserved. | <a href="/privacy">Privacy</a> | <a href="/terms">Terms</a></p>
+            <p style="margin-top: 10px;">Software & Hardware by Light Engine | Monitoring & Wholesale by GreenReach</p>
+        </div>
+    </footer>
+
+    <!-- Square Web Payments SDK -->
+    <script src="https://web.squarecdn.com/v1/square.js"></script>
+    
+    <!-- Purchase Form Modal -->
+    <div id="purchaseModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 20px; padding: 40px; max-width: 500px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="font-size: 1.8rem; color: #1d1d1f; margin: 0;">Complete Purchase</h2>
+                <button onclick="closePurchaseModal()" style="background: none; border: none; font-size: 2rem; color: #6e6e73; cursor: pointer; padding: 0; width: 32px; height: 32px;">&times;</button>
+            </div>
+            
+            <form id="purchaseForm" onsubmit="handlePurchase(event)">
+                <input type="hidden" id="selectedPlan" name="plan">
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #1d1d1f; font-weight: 600; margin-bottom: 8px;">Farm Name</label>
+                    <input type="text" id="farmName" name="farm_name" required 
+                           style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem;"
+                           placeholder="e.g., Green Valley Farms">
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #1d1d1f; font-weight: 600; margin-bottom: 8px;">Contact Name</label>
+                    <input type="text" id="contactName" name="contact_name" required 
+                           style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem;"
+                           placeholder="Your full name">
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #1d1d1f; font-weight: 600; margin-bottom: 8px;">Email</label>
+                    <input type="email" id="email" name="email" required 
+                           style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem;"
+                           placeholder="your@email.com">
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #1d1d1f; font-weight: 600; margin-bottom: 8px;">Phone (optional)</label>
+                    <input type="tel" id="phone" name="phone" 
+                           style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem;"
+                           placeholder="555-123-4567">
+                </div>
+                
+                <div id="selectedProductInfo" style="background: #f8f9fb; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong style="color: #1d1d1f;">Product:</strong>
+                        <span id="productName" style="color: #6e6e73;"></span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <strong style="color: #1d1d1f;">Price:</strong>
+                        <span id="productPrice" style="color: #10b981; font-weight: 700;"></span>
+                    </div>
+                </div>
+                
+                <button type="submit" id="purchaseButton" class="btn-purchase" style="margin: 0;">
+                    Continue to Payment
+                </button>
+                
+                <p style="text-align: center; color: #6e6e73; font-size: 0.85rem; margin-top: 16px;">
+                    🔒 Secure payment powered by Square
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentPlan = null;
+
+        function purchaseProduct(plan) {
+            currentPlan = plan;
+            
+            // Set product info in modal
+            const productInfo = {
+                cloud: {
+                    name: 'Light Engine Cloud',
+                    price: '$299/month'
+                },
+                edge: {
+                    name: 'Light Engine Edge Device',
+                    price: '$999 one-time'
+                }
+            };
+            
+            document.getElementById('selectedPlan').value = plan;
+            document.getElementById('productName').textContent = productInfo[plan].name;
+            document.getElementById('productPrice').textContent = productInfo[plan].price;
+            
+            // Show modal
+            const modal = document.getElementById('purchaseModal');
+            modal.style.display = 'flex';
+        }
+
+        function closePurchaseModal() {
+            const modal = document.getElementById('purchaseModal');
+            modal.style.display = 'none';
+            document.getElementById('purchaseForm').reset();
+        }
+
+        async function handlePurchase(event) {
+            event.preventDefault();
+            
+            const button = document.getElementById('purchaseButton');
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Processing...';
+            
+            try {
+                // Get form data
+                const formData = {
+                    plan: document.getElementById('selectedPlan').value,
+                    email: document.getElementById('email').value,
+                    farm_name: document.getElementById('farmName').value,
+                    contact_name: document.getElementById('contactName').value,
+                    phone: document.getElementById('phone').value
+                };
+                
+                console.log('Creating checkout session:', formData);
+                
+                // Create Square payment link
+                const response = await fetch('/api/farms/create-checkout-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to create checkout session');
+                }
+                
+                const { sessionId, url } = await response.json();
+                
+                console.log('Checkout session created:', sessionId);
+                
+                // Redirect to Square Checkout
+                if (url) {
+                    window.location.href = url;
+                } else {
+                    throw new Error('No payment URL returned');
+                }
+                
+            } catch (error) {
+                console.error('Purchase error:', error);
+                alert(`❌ Purchase failed: ${error.message}\n\nPlease try again or contact support.`);
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        // Check for product parameter in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const product = urlParams.get('product');
+        if (product) {
+            setTimeout(() => {
+                const cards = document.querySelectorAll('.product-card');
+                if (product === 'edge' && cards[0]) {
+                    cards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else if (product === 'cloud' && cards[1]) {
+                    cards[1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 500);
+        }
+
+        // Close modal on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closePurchaseModal();
+            }
+        });
+
+        // Close modal on background click
+        document.getElementById('purchaseModal').addEventListener('click', (e) => {
+            if (e.target.id === 'purchaseModal') {
+                closePurchaseModal();
+            }
+        });
+    </script>
+</body>
+</html>

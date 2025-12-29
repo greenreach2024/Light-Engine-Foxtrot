@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Light Engine - Installers for All Platforms</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0f1e; --surface: #111827; --surface-2: #1a2332;
+            --text-primary: #e5e7eb; --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6; --accent-blue-light: #60a5fa;
+            --accent-green: #10b981; --accent-green-light: #6ee7b7;
+            --border: #2d3748; --warning: #f59e0b;
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.6; }
+        header { background: rgba(10, 15, 30, 0.8); backdrop-filter: blur(20px); border-bottom: 2px solid var(--accent-blue); padding: 20px 40px; position: sticky; top: 0; z-index: 100; }
+        nav { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 24px; font-weight: 600; color: var(--accent-blue-light); text-decoration: none; }
+        .nav-links { display: flex; gap: 24px; }
+        .nav-links a { color: var(--text-secondary); text-decoration: none; transition: color 0.3s; }
+        .nav-links a:hover { color: var(--accent-blue-light); }
+        .container { max-width: 1200px; margin: 0 auto; padding: 60px 40px; }
+        h1 { font-size: 48px; margin-bottom: 16px; background: linear-gradient(135deg, var(--accent-blue-light), var(--accent-green-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { font-size: 20px; color: var(--text-secondary); margin-bottom: 40px; }
+        .platform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 32px; margin-top: 40px; }
+        .platform-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 32px; transition: all 0.3s; }
+        .platform-card:hover { border-color: var(--accent-blue); box-shadow: var(--glow-blue); }
+        .platform-name { font-size: 28px; font-weight: 600; color: var(--accent-blue-light); margin-bottom: 12px; }
+        .platform-scope { display: inline-block; background: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent-green); border-radius: 6px; padding: 4px 12px; font-size: 12px; color: var(--accent-green-light); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
+        .platform-description { color: var(--text-secondary); margin-bottom: 24px; line-height: 1.7; }
+        .features-list { list-style: none; margin-bottom: 24px; }
+        .features-list li { padding: 8px 0 8px 24px; position: relative; color: var(--text-secondary); }
+        .features-list li:before { content: "✓"; position: absolute; left: 0; color: var(--accent-green-light); font-weight: 600; }
+        .download-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+        .btn-download { display: inline-block; background: linear-gradient(135deg, var(--accent-blue), var(--accent-blue-light)); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; margin: 8px 8px 8px 0; }
+        .btn-download:hover { box-shadow: var(--glow-blue); transform: translateY(-2px); }
+        .btn-download.primary { background: linear-gradient(135deg, var(--accent-green), var(--accent-green-light)); }
+        .btn-secondary { display: inline-block; background: transparent; border: 2px solid var(--border); color: var(--text-secondary); padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; margin: 8px 8px 8px 0; }
+        .btn-secondary:hover { border-color: var(--accent-blue); color: var(--accent-blue-light); }
+        .version-info { display: flex; gap: 32px; margin-top: 16px; font-size: 14px; color: var(--text-secondary); }
+        .version-label { font-weight: 600; color: var(--accent-blue-light); }
+        .code-block { background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: 'Monaco', 'Courier New', monospace; font-size: 14px; color: var(--accent-green-light); margin: 16px 0; cursor: pointer; }
+        .code-block:hover { border-color: var(--accent-blue); }
+        .alert { background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--warning); border-radius: 8px; padding: 16px; margin: 24px 0; color: var(--warning); }
+        .alert-title { font-weight: 600; margin-bottom: 8px; }
+        footer { background: var(--surface); border-top: 1px solid var(--border); padding: 40px; text-align: center; color: var(--text-secondary); margin-top: 80px; }
+        footer a { color: var(--accent-blue-light); text-decoration: none; }
+        @media (max-width: 768px) { .platform-grid { grid-template-columns: 1fr; } h1 { font-size: 36px; } }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">Light Engine</a>
+            <div class="nav-links">
+                <a href="/docs/index.html">Quick Start Guides</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <h1>Download Light Engine</h1>
+        <p class="subtitle">Symcod ships pre-installed and ready to use. Desktop and mobile apps are single-click installers—no command line needed.</p>
+
+        <div class="platform-grid">
+            <!-- Symcod Edge Device (Full System) -->
+            <div class="platform-card">
+                <h2 class="platform-name">Symcod W101M</h2>
+                <span class="platform-scope">Full Farm Management</span>
+                <p class="platform-description">
+                    Complete Light Engine system on dedicated touchscreen hardware. Includes inventory, tray tracking, POS, wholesale orders, lighting control, and automation.
+                </p>
+                
+                <ul class="features-list">
+                    <li>10.1" touchscreen interface</li>
+                    <li>Tray tracking with QR labels</li>
+                    <li>Farm store POS system</li>
+                    <li>Wholesale order management</li>
+                    <li>Lighting automation control</li>
+                    <li>Complete farm dashboard</li>
+                </ul>
+
+                <div class="version-info">
+                    <div><span class="version-label">Hardware:</span> Symcod W101M</div>
+                    <div><span class="version-label">Install Time:</span> 30 minutes</div>
+                </div>
+
+                <div class="download-section">
+                    <p style="color: var(--text-secondary); margin-bottom: 12px;">
+                        Ships fully imaged and configured. Power on, connect to your network, sign in, and youre ready to go—no terminal or bash commands.
+                    </p>
+                    <a href="mailto:support@greenreach.io?subject=Symcod%20W101M%20Shipment" class="btn-download primary">Request Symcod shipment</a>
+                    <a href="/docs/edge-deployment.html" class="btn-secondary">Setup checklist</a>
+                </div>
+            </div>
+
+            <!-- Windows Desktop (Inventory Only) -->
+            <div class="platform-card">
+                <h2 class="platform-name">Windows Desktop</h2>
+                <span class="platform-scope">Inventory & Sales Only</span>
+                <p class="platform-description">
+                    Desktop app for Windows computers. Connects to your Symcod device on local network. Perfect for office computers to manage inventory and sales.
+                </p>
+                
+                <ul class="features-list">
+                    <li>Inventory management</li>
+                    <li>Sales and POS functions</li>
+                    <li>Harvest recording</li>
+                    <li>Product catalog</li>
+                    <li>Connects to Symcod device</li>
+                    <li>Offline-capable</li>
+                </ul>
+
+                <div class="version-info">
+                    <div><span class="version-label">Version:</span> 1.0.0</div>
+                    <div><span class="version-label">Size:</span> ~150 MB</div>
+                    <div><span class="version-label">Requires:</span> Windows 10+</div>
+                </div>
+
+                <div class="download-section">
+                    <p style="color: var(--text-secondary); margin-bottom: 12px;">One-click installer. No command line required.</p>
+                    <a href="https://install.greenreach.io/downloads/Light-Engine-Setup-1.0.0.exe" class="btn-download primary">
+                        Download for Windows
+                    </a>
+                </div>
+            </div>
+
+            <!-- macOS Desktop (Inventory Only) -->
+            <div class="platform-card">
+                <h2 class="platform-name">macOS Desktop</h2>
+                <span class="platform-scope">Inventory & Sales Only</span>
+                <p class="platform-description">
+                    Desktop app for Mac computers. Connects to your Symcod device on local network. Perfect for office computers to manage inventory and sales.
+                </p>
+                
+                <ul class="features-list">
+                    <li>Inventory management</li>
+                    <li>Sales and POS functions</li>
+                    <li>Harvest recording</li>
+                    <li>Product catalog</li>
+                    <li>Connects to Symcod device</li>
+                    <li>Offline-capable</li>
+                </ul>
+
+                <div class="version-info">
+                    <div><span class="version-label">Version:</span> 1.0.0</div>
+                    <div><span class="version-label">Size:</span> ~150 MB</div>
+                    <div><span class="version-label">Requires:</span> macOS 12+</div>
+                </div>
+
+                <div class="download-section">
+                    <p style="color: var(--text-secondary); margin-bottom: 12px;">One-click installer. No command line required.</p>
+                    <a href="https://install.greenreach.io/downloads/Light-Engine-1.0.0.dmg" class="btn-download primary">
+                        Download for macOS
+                    </a>
+                </div>
+            </div>
+
+            <!-- iOS Mobile (Inventory Only) -->
+            <div class="platform-card">
+                <h2 class="platform-name">iOS Mobile</h2>
+                <span class="platform-scope">Inventory & Sales Only</span>
+                <p class="platform-description">
+                    Mobile app for iPhone and iPad. Scan QR codes, record harvests, and manage sales on the go. Connects to your Symcod device.
+                </p>
+                
+                <ul class="features-list">
+                    <li>QR code scanning</li>
+                    <li>Harvest recording</li>
+                    <li>Inventory lookups</li>
+                    <li>Mobile POS</li>
+                    <li>Photo uploads</li>
+                    <li>Works on WiFi/cellular</li>
+                </ul>
+
+                <div class="version-info">
+                    <div><span class="version-label">Version:</span> 1.0.0</div>
+                    <div><span class="version-label">Size:</span> ~45 MB</div>
+                    <div><span class="version-label">Requires:</span> iOS 13+</div>
+                </div>
+
+                <div class="download-section">
+                    <p style="color: var(--text-secondary); margin-bottom: 12px;">Install via TestFlight—no local build or bash required.</p>
+                    <a href="https://install.greenreach.io/downloads/Light-Engine-1.0.0.ipa" class="btn-download primary">
+                        Download for iOS (TestFlight)
+                    </a>
+                    <a href="/mobile-app/README.md" class="btn-secondary">Mobile App Guide</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GreenReach. All rights reserved. | 
+           <a href="mailto:support@greenreach.io">Support</a>
+        </p>
+    </footer>
+</body>
+</html>

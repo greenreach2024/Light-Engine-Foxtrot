@@ -135,7 +135,7 @@ function exportToCSV(tabName) {
  * Manage billing for admin view
  */
 function manageBilling() {
-    window.location.href = '/billing.html';
+    window.location.href = '/LE-billing.html';
 }
 
 // Auto-refresh metrics every 30 seconds

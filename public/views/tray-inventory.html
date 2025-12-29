@@ -1635,7 +1635,7 @@
           if (!status.registered) {
             // Edge device not registered - redirect to setup wizard
             alert('This Light Engine edge device has not been registered.\n\nPlease complete the setup wizard first.');
-            window.location.href = '/setup-wizard.html';
+            window.location.href = '/LE-setup-wizard.html';
             return;
           }
           
@@ -2511,7 +2511,7 @@
 
     function openOrderDashboard() {
       // Open wholesale order dashboard in new tab
-      window.open('/wholesale-farm-orders.html', '_blank');
+      window.open('/LE-wholesale-orders.html', '_blank');
     }
 
     function openQACheckpoint() {

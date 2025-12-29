@@ -9423,6 +9423,15 @@ app.use('/api', licenseRouter);
 app.use('/api/health', healthRouter);
 
 /**
+ * Farm Purchase & Onboarding Routes
+ * - POST /api/farms/create-checkout-session: Create Square payment link
+ * - POST /api/farms/purchase: Complete purchase and create account
+ * - GET /api/farms/verify-session/:session_id: Verify checkout and order
+ */
+const purchaseRouter = require('./routes/purchase');
+app.use('/api/farms', purchaseRouter);
+
+/**
  * mDNS Discovery Routes
  * - GET /api/mdns/discover: Start discovery and return list
  * - GET /api/mdns/services: Get all discovered services

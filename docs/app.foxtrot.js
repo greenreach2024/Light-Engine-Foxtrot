@@ -69,7 +69,7 @@ const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API
 
 // Billing management helper
 function manageBilling() {
-  window.location.href = '/billing.html';
+  window.location.href = '/LE-billing.html';
 }
 
 // Fallbacks for device pick state if not defined elsewhere

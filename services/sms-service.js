@@ -87,7 +87,7 @@ class SMSService {
    * Send urgent order notification to farm
    */
   async notifyFarmNewOrder(phone, orderId, amount, hoursLeft) {
-    const message = `GreenReach Order #${orderId}\n${hoursLeft}hrs to respond\n$${amount} total\nView: ${process.env.APP_URL}/wholesale-farm-orders.html`;
+    const message = `GreenReach Order #${orderId}\n${hoursLeft}hrs to respond\n$${amount} total\nView: ${process.env.APP_URL}/LE-wholesale-orders.html`;
     return await this.send(phone, message);
   }
 
@@ -95,7 +95,7 @@ class SMSService {
    * Send deadline reminder to farm
    */
   async notifyFarmDeadline(phone, orderId, hoursLeft) {
-    const message = `URGENT: Order #${orderId} expires in ${hoursLeft}hrs!\nRespond now: ${process.env.APP_URL}/wholesale-farm-orders.html`;
+    const message = `URGENT: Order #${orderId} expires in ${hoursLeft}hrs!\nRespond now: ${process.env.APP_URL}/LE-wholesale-orders.html`;
     return await this.send(phone, message);
   }
 
@@ -103,7 +103,7 @@ class SMSService {
    * Send modification notification to buyer
    */
   async notifyBuyerModification(phone, orderId, farmName) {
-    const message = `${farmName} modified Order #${orderId}. Review changes: ${process.env.APP_URL}/wholesale-order-review.html?order_id=${orderId}`;
+    const message = `${farmName} modified Order #${orderId}. Review changes: ${process.env.APP_URL}/LE-wholesale-review.html?order_id=${orderId}`;
     return await this.send(phone, message);
   }
 
@@ -111,7 +111,7 @@ class SMSService {
    * Send pickup ready notification
    */
   async notifyPickupReady(phone, orderId, farmName) {
-    const message = `Order #${orderId} from ${farmName} is ready for pickup! View details: ${process.env.APP_URL}/wholesale.html?view=orders`;
+    const message = `Order #${orderId} from ${farmName} is ready for pickup! View details: ${process.env.APP_URL}/GR-wholesale.html?view=orders`;
     return await this.send(phone, message);
   }
 }

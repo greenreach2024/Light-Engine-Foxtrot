@@ -10,9 +10,9 @@ const CACHE_NAME = `light-engine-${CACHE_VERSION}`;
 const STATIC_CACHE = [
   '/',
   '/index.html',
-  '/dashboard.html',
+  '/LE-dashboard.html',
   '/inventory.html',
-  '/wholesale.html',
+  '/GR-wholesale.html',
   '/manifest.json',
   '/css/main.css',
   '/js/app.js',
@@ -125,7 +125,7 @@ async function cacheFirstStrategy(request) {
     console.error('[Service Worker] Fetch failed:', error);
     
     // Return offline page if available
-    const offlinePage = await cache.match('/offline.html');
+    const offlinePage = await cache.match('/LE-offline.html');
     if (offlinePage) {
       return offlinePage;
     }
