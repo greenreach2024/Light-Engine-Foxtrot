@@ -9423,13 +9423,11 @@ app.use('/api', licenseRouter);
 app.use('/api/health', healthRouter);
 
 /**
- * Farm Purchase & Onboarding Routes
+ * Farm Purchase & Onboarding Routes (Removed - now using ES module import below at line ~9757)
  * - POST /api/farms/create-checkout-session: Create Square payment link
  * - POST /api/farms/purchase: Complete purchase and create account
  * - GET /api/farms/verify-session/:session_id: Verify checkout and order
  */
-const purchaseRouter = require('./routes/purchase');
-app.use('/api/farms', purchaseRouter);
 
 /**
  * mDNS Discovery Routes
