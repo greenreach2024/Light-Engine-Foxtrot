@@ -53,7 +53,6 @@
           ]
         }
       ],
-      "icon": "build/icon.ico",
       "publisherName": "GreenReach Inc.",
       "verifyUpdateCodeSignature": false
     },
@@ -64,10 +63,6 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Light Engine",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeader": "build/installerHeader.bmp",
-      "installerSidebar": "build/installerSidebar.bmp",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false
     },
@@ -82,11 +77,8 @@
         }
       ],
       "category": "public.app-category.business",
-      "icon": "build/icon.icns",
       "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "gatekeeperAssess": false
     },
     "dmg": {
       "contents": [
@@ -101,8 +93,7 @@
           "path": "/Applications"
         }
       ],
-      "title": "Light Engine Installer",
-      "background": "build/dmgBackground.png"
+      "title": "Light Engine Installer"
     },
     "linux": {
       "target": [
@@ -114,14 +105,13 @@
     }
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "sqlite3": "^5.1.7",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1",
-    "cross-env": "^7.0.3"
+    "electron-builder": "^24.9.1"
   },
   "engines": {
     "node": ">=18.0.0"

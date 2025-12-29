@@ -207,15 +207,32 @@ router.post('/create-checkout-session', async (req, res) => {
 
     console.log('[Checkout] Creating session for:', { plan, email, farm_name });
 
-    // Define pricing
+    // Validate required fields
+    if (!email || !farm_name || !contact_name || !plan) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Check Square location ID
+    if (!process.env.SQUARE_LOCATION_ID) {
+      console.error('[Checkout] SQUARE_LOCATION_ID not configured');
+      return res.status(500).json({ error: 'Payment system not configured. Please contact support.' });
+    }
+
+    // Define pricing (TEST MODE: $1/month)
     const prices = {
       cloud: {
-        amount: 29900, // $299/month in cents
+        amount: 100, // $1/month in cents (TEST MODE)
         name: 'Light Engine Cloud',
         description: 'Cloud-based farm management system'
       },
       edge: {
-        amount: 99900, // $999 one-time in cents
+        amount: 100, // $1/month in cents (TEST MODE)
         name: 'Light Engine Edge Device',
         description: 'Complete hardware + software system'
       }
@@ -228,6 +245,13 @@ router.post('/create-checkout-session', async (req, res) => {
 
     // Create Square payment link
     const idempotencyKey = crypto.randomUUID();
+    
+    console.log('[Checkout] Creating payment link with:', {
+      locationId: process.env.SQUARE_LOCATION_ID,
+      amount: selectedPrice.amount,
+      email: email
+    });
+
     const response = await squareClient.checkoutApi.createPaymentLink({
       idempotencyKey,
       order: {
@@ -259,6 +283,8 @@ router.post('/create-checkout-session', async (req, res) => {
 
     const paymentLink = response.result.paymentLink;
 
+    console.log('[Checkout] Payment link created successfully:', paymentLink.id);
+
     res.json({ 
       sessionId: paymentLink.id,
       url: paymentLink.url,
@@ -267,9 +293,20 @@ router.post('/create-checkout-session', async (req, res) => {
 
   } catch (error) {
     console.error('[Checkout] Error:', error);
+    console.error('[Checkout] Error details:', error.errors || error.message);
+    
+    // Extract meaningful error message from Square API
+    let errorMessage = 'Checkout session creation failed';
+    if (error.errors && error.errors.length > 0) {
+      const squareError = error.errors[0];
+      errorMessage = squareError.detail || squareError.code || errorMessage;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     res.status(500).json({ 
-      error: 'Checkout session creation failed',
-      details: error.message 
+      error: errorMessage,
+      details: error.errors || error.message 
     });
   }
 });

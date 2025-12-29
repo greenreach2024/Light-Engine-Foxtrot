@@ -1,16 +1,15 @@
 /**
  * Farm Sales - QuickBooks Integration
- * Sync invoices and payments with QuickBooks Online (PLACEHOLDER)
+ * Sync invoices and payments with QuickBooks Online
  * 
  * SETUP REQUIRED:
  * 1. Create QuickBooks developer account at developer.intuit.com
  * 2. Create app and obtain Client ID and Client Secret
  * 3. Set environment variables:
- *    - QB_CLIENT_ID: QuickBooks app client ID
- *    - QB_CLIENT_SECRET: QuickBooks app client secret
- *    - QB_REDIRECT_URI: OAuth callback URL (e.g., http://localhost:8091/api/farm-sales/quickbooks/callback)
- * 4. Install QuickBooks SDK: npm install node-quickbooks
- * 5. Configure scopes: com.intuit.quickbooks.accounting
+ *    - QUICKBOOKS_CLIENT_ID: QuickBooks app client ID
+ *    - QUICKBOOKS_CLIENT_SECRET: QuickBooks app client secret
+ *    - QUICKBOOKS_REDIRECT_URI: OAuth callback URL (e.g., http://localhost:8091/api/farm-sales/quickbooks/callback)
+ *    - QUICKBOOKS_ENVIRONMENT: 'sandbox' or 'production'
  * 
  * MULTI-TENANT ARCHITECTURE:
  * - Each farm has separate QuickBooks connection
@@ -21,6 +20,21 @@
 import express from 'express';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
 import { farmStores } from '../../lib/farm-store.js';
+import { 
+  generateAuthUrl, 
+  exchangeCodeForToken, 
+  refreshAccessToken,
+  revokeToken,
+  getUserInfo,
+  isTokenExpired
+} from '../../services/quickbooks-oauth.js';
+import {
+  syncCustomer,
+  syncProduct,
+  syncInvoice,
+  syncPayment,
+  batchSyncOrders
+} from '../../services/quickbooks-sync.js';
 
 const router = express.Router();
 
@@ -57,33 +71,40 @@ router.use(farmAuthMiddleware);
 router.get('/auth', (req, res) => {
   const farmId = req.farm_id;
 
-  // Check if QuickBooks credentials are configured
-  if (!process.env.QB_CLIENT_ID || !process.env.QB_CLIENT_SECRET) {
-    return res.status(501).json({
+  try {
+    // Check if QuickBooks credentials are configured
+    if (!process.env.QUICKBOOKS_CLIENT_ID || !process.env.QUICKBOOKS_CLIENT_SECRET) {
+      return res.status(501).json({
+        ok: false,
+        error: 'quickbooks_not_configured',
+        message: 'QuickBooks integration requires QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET environment variables',
+        setup_guide: 'See routes/farm-sales/quickbooks.js header for setup instructions'
+      });
+    }
+
+    // Generate authorization URL with state
+    const { authUrl, state } = generateAuthUrl(farmId);
+    
+    // Store state for CSRF validation
+    if (!farmStores.qbStates) {
+      farmStores.qbStates = {};
+    }
+    farmStores.qbStates[farmId] = state;
+
+    res.json({
+      ok: true,
+      auth_url: authUrl,
+      instructions: 'Redirect user to auth_url to begin OAuth flow'
+    });
+    
+  } catch (error) {
+    console.error('[QuickBooks] Auth URL generation failed:', error);
+    res.status(500).json({
       ok: false,
-      error: 'quickbooks_not_configured',
-      message: 'QuickBooks integration requires QB_CLIENT_ID and QB_CLIENT_SECRET environment variables',
-      setup_guide: 'See routes/farm-sales/quickbooks.js header for setup instructions'
+      error: 'auth_failed',
+      message: error.message
     });
   }
-
-  // TODO: Generate state parameter with farm_id for security
-  const state = Buffer.from(JSON.stringify({ farm_id: farmId, timestamp: Date.now() })).toString('base64');
-
-  // TODO: Build QuickBooks authorization URL
-  const authUrl = `https://appcenter.intuit.com/connect/oauth2?` +
-    `client_id=${process.env.QB_CLIENT_ID}&` +
-    `redirect_uri=${encodeURIComponent(process.env.QB_REDIRECT_URI || 'http://localhost:8091/api/farm-sales/quickbooks/callback')}&` +
-    `response_type=code&` +
-    `scope=com.intuit.quickbooks.accounting&` +
-    `state=${state}`;
-
-  res.json({
-    ok: true,
-    message: 'QuickBooks OAuth placeholder - implementation pending',
-    auth_url: authUrl,
-    instructions: 'Redirect user to auth_url to begin OAuth flow'
-  });
 });
 
 /**
@@ -103,34 +124,245 @@ router.get('/callback', async (req, res) => {
   }
 
   try {
-    // Decode state to get farm_id
-    const stateData = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
-    const farmId = stateData.farm_id;
-
-    // TODO: Exchange code for tokens
-    // const tokenResponse = await exchangeCodeForTokens(code);
+    // Validate state and extract farm_id
+    const [farmId, expectedState] = state.split(':');
+    const storedState = farmStores.qbStates?.[farmId];
     
-    // PLACEHOLDER: Store tokens (in production, encrypt sensitive data)
-    farmStores.qbTokens.setForFarm(farmId, {
-      access_token: 'PLACEHOLDER_ACCESS_TOKEN',
-      refresh_token: 'PLACEHOLDER_REFRESH_TOKEN',
-      realm_id: realmId, // QuickBooks company ID
-      expires_at: Date.now() + 3600 * 1000, // 1 hour
-      created_at: new Date().toISOString()
-    });
-
+    if (storedState !== expectedState) {
+      return res.status(400).json({
+        ok: false,
+        error: 'invalid_state',
+        message: 'State parameter validation failed (CSRF protection)'
+      });
+    }
+    
+    // Clean up state
+    delete farmStores.qbStates[farmId];
+    
+    // Exchange code for tokens
+    const tokenData = await exchangeCodeForToken(code);
+    tokenData.realm_id = realmId;
+    
+    // Store tokens for this farm
+    farmStores.qbTokens.setForFarm(farmId, tokenData);
+    
+    // Get user info for confirmation
+    const userInfo = await getUserInfo(tokenData.access_token);
+    
     res.json({
       ok: true,
-      message: 'QuickBooks connected successfully (placeholder)',
-      farm_id: farmId,
-      realm_id: realmId
+      message: 'QuickBooks connected successfully',
+      company_id: realmId,
+      user_email: userInfo.email,
+      connected_at: new Date().toISOString()
     });
-
+    
   } catch (error) {
-    console.error('[quickbooks] OAuth callback failed:', error);
+    console.error('[QuickBooks] OAuth callback failed:', error);
     res.status(500).json({
       ok: false,
-      error: 'oauth_failed',
+      error: 'callback_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/quickbooks/status
+ * Check QuickBooks connection status for this farm
+ */
+router.get('/status', async (req, res) => {
+  const farmId = req.farm_id;
+  
+  try {
+    const tokenData = farmStores.qbTokens.getAllForFarm(farmId);
+    
+    if (!tokenData) {
+      return res.json({
+        ok: true,
+        connected: false,
+        message: 'QuickBooks not connected'
+      });
+    }
+    
+    // Check if token is expired
+    const expired = isTokenExpired(tokenData);
+    
+    if (expired) {
+      // Attempt to refresh
+      try {
+        const newTokenData = await refreshAccessToken(tokenData.refresh_token);
+        newTokenData.realm_id = tokenData.realm_id;
+        farmStores.qbTokens.setForFarm(farmId, newTokenData);
+        
+        return res.json({
+          ok: true,
+          connected: true,
+          company_id: tokenData.realm_id,
+          token_refreshed: true
+        });
+        
+      } catch (refreshError) {
+        return res.json({
+          ok: true,
+          connected: false,
+          expired: true,
+          message: 'Token expired and refresh failed - reconnection required'
+        });
+      }
+    }
+    
+    res.json({
+      ok: true,
+      connected: true,
+      company_id: tokenData.realm_id,
+      connected_at: tokenData.created_at
+    });
+    
+  } catch (error) {
+    console.error('[QuickBooks] Status check failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'status_check_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/farm-sales/quickbooks/disconnect
+ * Disconnect QuickBooks integration (revoke tokens)
+ */
+router.post('/disconnect', async (req, res) => {
+  const farmId = req.farm_id;
+  
+  try {
+    const tokenData = farmStores.qbTokens.getAllForFarm(farmId);
+    
+    if (tokenData?.access_token) {
+      await revokeToken(tokenData.access_token);
+    }
+    
+    farmStores.qbTokens.deleteForFarm(farmId);
+    
+    res.json({
+      ok: true,
+      message: 'QuickBooks disconnected successfully'
+    });
+    
+  } catch (error) {
+    console.error('[QuickBooks] Disconnect failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'disconnect_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/farm-sales/quickbooks/sync/customer
+ * Sync a customer to QuickBooks
+ */
+router.post('/sync/customer', async (req, res) => {
+  const farmId = req.farm_id;
+  const { customer_id } = req.body;
+  
+  try {
+    const tokenData = farmStores.qbTokens.getAllForFarm(farmId);
+    
+    if (!tokenData) {
+      return res.status(400).json({
+        ok: false,
+        error: 'not_connected',
+        message: 'QuickBooks not connected'
+      });
+    }
+    
+    // Get customer data
+    const customer = farmStores.customers.getAllForFarm(farmId)
+      .find(c => c.id === customer_id);
+    
+    if (!customer) {
+      return res.status(404).json({
+        ok: false,
+        error: 'customer_not_found'
+      });
+    }
+    
+    const result = await syncCustomer(customer, tokenData);
+    
+    if (result.success) {
+      res.json({
+        ok: true,
+        ...result
+      });
+    } else {
+      res.status(500).json({
+        ok: false,
+        ...result
+      });
+    }
+    
+  } catch (error) {
+    console.error('[QuickBooks] Customer sync failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'sync_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/farm-sales/quickbooks/sync/orders
+ * Batch sync orders to QuickBooks
+ */
+router.post('/sync/orders', async (req, res) => {
+  const farmId = req.farm_id;
+  const { start_date, end_date } = req.body;
+  
+  try {
+    const tokenData = farmStores.qbTokens.getAllForFarm(farmId);
+    
+    if (!tokenData) {
+      return res.status(400).json({
+        ok: false,
+        error: 'not_connected',
+        message: 'QuickBooks not connected'
+      });
+    }
+    
+    // Get orders in date range
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+    
+    const orders = farmStores.orders.getAllForFarm(farmId)
+      .filter(o => {
+        const orderDate = new Date(o.timestamps.created_at);
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+    
+    if (orders.length === 0) {
+      return res.json({
+        ok: true,
+        message: 'No orders to sync',
+        total: 0
+      });
+    }
+    
+    const result = await batchSyncOrders(orders, tokenData);
+    
+    res.json({
+      ok: true,
+      ...result
+    });
+    
+  } catch (error) {
+    console.error('[QuickBooks] Orders sync failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'sync_failed',
       message: error.message
     });
   }

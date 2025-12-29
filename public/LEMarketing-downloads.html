@@ -121,7 +121,7 @@
 
                 <div class="download-section">
                     <p style="color: var(--text-secondary); margin-bottom: 12px;">One-click installer. No command line required.</p>
-                    <a href="https://install.greenreach.io/downloads/Light-Engine-Setup-1.0.0.exe" class="btn-download primary">
+                    <a href="https://d2snu3hwbju8pt.cloudfront.net/downloads/Light-Engine-Setup-1.0.0.exe" class="btn-download primary">
                         Download for Windows
                     </a>
                 </div>
@@ -146,15 +146,50 @@
 
                 <div class="version-info">
                     <div><span class="version-label">Version:</span> 1.0.0</div>
-                    <div><span class="version-label">Size:</span> ~150 MB</div>
+                    <div><span class="version-label">Size:</span> 90-95 MB</div>
                     <div><span class="version-label">Requires:</span> macOS 12+</div>
                 </div>
 
                 <div class="download-section">
-                    <p style="color: var(--text-secondary); margin-bottom: 12px;">One-click installer. No command line required.</p>
-                    <a href="https://install.greenreach.io/downloads/Light-Engine-1.0.0.dmg" class="btn-download primary">
-                        Download for macOS
+                    <p style="color: var(--text-secondary); margin-bottom: 12px;">Universal installer for Intel and Apple Silicon Macs. One-click install, no command line required.</p>
+                    <a href="https://d2snu3hwbju8pt.cloudfront.net/downloads/Light-Engine-1.0.0-arm64.dmg" class="btn-download primary">
+                        Download for Apple Silicon (M1/M2/M3)
                     </a>
+                    <a href="https://d2snu3hwbju8pt.cloudfront.net/downloads/Light-Engine-1.0.0.dmg" class="btn-download">
+                        Download for Intel Mac
+                    </a>
+                    
+                    <div class="alert" style="margin-top: 20px;">
+                        <div class="alert-title">� Installation Instructions</div>
+                        
+                        <p style="margin-bottom: 12px; font-weight: 600;">Step 1: Install</p>
+                        <ol style="margin-left: 20px; margin-bottom: 16px; line-height: 1.7;">
+                            <li>Double-click the downloaded DMG file</li>
+                            <li>Drag "Light Engine.app" to the Applications folder icon</li>
+                            <li>If you see a permission error, open Terminal and run:
+                                <div class="code-block" onclick="navigator.clipboard.writeText('sudo chown -R $(whoami):staff \&quot;/Applications/Light Engine.app\&quot;')" style="margin-top: 8px; cursor: pointer;" title="Click to copy">
+                                    sudo chown -R $(whoami):staff "/Applications/Light Engine.app"
+                                </div>
+                            </li>
+                            <li>Eject the DMG</li>
+                        </ol>
+                        
+                        <p style="margin-bottom: 12px; font-weight: 600;">Step 2: Security Bypass</p>
+                        <p style="margin-bottom: 8px; line-height: 1.6;">This app is not signed with an Apple Developer certificate. Choose one method:</p>
+                        
+                        <p style="margin-top: 12px; font-weight: 600;">Option A: Right-Click (Easiest)</p>
+                        <ol style="margin-left: 20px; margin-bottom: 12px; line-height: 1.7;">
+                            <li>Right-click "Light Engine" in Applications</li>
+                            <li>Select "Open"</li>
+                            <li>Click "Open" in the security dialog</li>
+                        </ol>
+                        
+                        <p style="margin-bottom: 8px; font-weight: 600;">Option B: Terminal Command</p>
+                        <div class="code-block" onclick="navigator.clipboard.writeText('sudo xattr -cr \&quot;/Applications/Light Engine.app\&quot;')" style="margin-top: 8px; cursor: pointer;" title="Click to copy">
+                            sudo xattr -cr "/Applications/Light Engine.app"
+                        </div>
+                        <p style="font-size: 12px; margin-top: 8px; opacity: 0.8;">Click to copy • Then double-click the app • Requires admin password</p>
+                    </div>
                 </div>
             </div>
 
@@ -183,7 +218,7 @@
 
                 <div class="download-section">
                     <p style="color: var(--text-secondary); margin-bottom: 12px;">Install via TestFlight—no local build or bash required.</p>
-                    <a href="https://install.greenreach.io/downloads/Light-Engine-1.0.0.ipa" class="btn-download primary">
+                    <a href="https://d2snu3hwbju8pt.cloudfront.net/downloads/Light-Engine-1.0.0.ipa" class="btn-download primary">
                         Download for iOS (TestFlight)
                     </a>
                     <a href="/mobile-app/README.md" class="btn-secondary">Mobile App Guide</a>

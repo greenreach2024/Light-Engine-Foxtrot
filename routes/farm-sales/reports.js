@@ -6,6 +6,7 @@
 import express from 'express';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
 import { farmStores } from '../../lib/farm-store.js';
+import { generateInventoryPDF, generateSalesPDF } from '../../services/pdf-generator.js';
 
 const router = express.Router();
 
@@ -461,6 +462,475 @@ router.get('/dashboard', async (req, res) => {
     res.status(500).json({
       ok: false,
       error: 'report_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/reports/sales-export
+ * Export sales transactions as CSV for accounting/tax purposes
+ * 
+ * Query params:
+ * - start_date: Start date (YYYY-MM-DD, required)
+ * - end_date: End date (YYYY-MM-DD, required)
+ * - channel: Filter by channel (pos, delivery, wholesale, all)
+ * - level: 'summary' | 'detail' (default: summary)
+ *   - summary: One row per order
+ *   - detail: One row per line item
+ */
+router.get('/sales-export', (req, res) => {
+  try {
+    const { start_date, end_date, channel, level = 'summary' } = req.query;
+    const farmId = req.farm_id;
+
+    // Validate required params
+    if (!start_date || !end_date) {
+      return res.status(400).json({
+        ok: false,
+        error: 'missing_dates',
+        message: 'start_date and end_date are required (YYYY-MM-DD)'
+      });
+    }
+
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+
+    // Get orders in date range
+    let orders = farmStores.orders.getAllForFarm(farmId)
+      .filter(o => {
+        const orderDate = new Date(o.timestamps.created_at);
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+
+    // Filter by channel if specified and not 'all'
+    if (channel && channel !== 'all') {
+      orders = orders.filter(o => o.channel === channel);
+    }
+
+    // Sort by date
+    orders.sort((a, b) => 
+      new Date(a.timestamps.created_at) - new Date(b.timestamps.created_at)
+    );
+
+    let csv;
+    if (level === 'detail') {
+      // Line item detail export
+      const headers = [
+        'Order ID', 'Date', 'Time', 'Channel', 'Customer Name', 'Customer Email',
+        'Line #', 'SKU', 'Product Name', 'Quantity', 'Unit', 'Unit Price', 'Line Total',
+        'Order Subtotal', 'Tax', 'Tip', 'Order Total', 'Payment Method', 'Status'
+      ];
+
+      const rows = [];
+      orders.forEach(order => {
+        const orderDate = new Date(order.timestamps.created_at);
+        const date = orderDate.toISOString().split('T')[0];
+        const time = orderDate.toTimeString().split(' ')[0];
+        
+        const customerName = order.customer?.name || order.customer_name || 'Walk-up';
+        const customerEmail = order.customer?.email || '';
+        const subtotal = order.payment?.subtotal || order.payment?.amount || 0;
+        const tax = order.payment?.tax || 0;
+        const tip = order.payment?.tip || 0;
+        const total = order.payment?.amount || 0;
+        const paymentMethod = order.payment?.method || 'unknown';
+
+        if (order.items && order.items.length > 0) {
+          order.items.forEach((item, idx) => {
+            rows.push([
+              order.order_id,
+              date,
+              time,
+              order.channel,
+              customerName,
+              customerEmail,
+              idx + 1,
+              item.sku_id,
+              item.name,
+              item.quantity,
+              item.unit,
+              `$${(item.unit_price || 0).toFixed(2)}`,
+              `$${(item.line_total || item.quantity * item.unit_price || 0).toFixed(2)}`,
+              `$${subtotal.toFixed(2)}`,
+              `$${tax.toFixed(2)}`,
+              `$${tip.toFixed(2)}`,
+              `$${total.toFixed(2)}`,
+              paymentMethod,
+              order.status
+            ]);
+          });
+        } else {
+          // Order with no items
+          rows.push([
+            order.order_id, date, time, order.channel, customerName, customerEmail,
+            1, '', 'No items', 0, '', '', '',
+            `$${subtotal.toFixed(2)}`, `$${tax.toFixed(2)}`, `$${tip.toFixed(2)}`,
+            `$${total.toFixed(2)}`, paymentMethod, order.status
+          ]);
+        }
+      });
+
+      // Add totals row
+      const totalRevenue = orders.reduce((sum, o) => sum + (o.payment?.amount || 0), 0);
+      const totalTax = orders.reduce((sum, o) => sum + (o.payment?.tax || 0), 0);
+      const totalTips = orders.reduce((sum, o) => sum + (o.payment?.tip || 0), 0);
+      
+      rows.push([
+        'TOTALS', '', '', '', '', '', '', '', '', '', '', '', '',
+        '', `$${totalTax.toFixed(2)}`, `$${totalTips.toFixed(2)}`,
+        `$${totalRevenue.toFixed(2)}`, '', ''
+      ]);
+
+      csv = [
+        headers.map(h => `"${h}"`).join(','),
+        ...rows.map(row => 
+          row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+        )
+      ].join('\n');
+
+    } else {
+      // Summary level export
+      const headers = [
+        'Order ID', 'Date', 'Time', 'Channel', 'Customer Name', 'Customer Email',
+        'Subtotal', 'Tax', 'Tip', 'Total', 'Payment Method', 'Status'
+      ];
+
+      const rows = orders.map(order => {
+        const orderDate = new Date(order.timestamps.created_at);
+        const date = orderDate.toISOString().split('T')[0];
+        const time = orderDate.toTimeString().split(' ')[0];
+        
+        const subtotal = order.payment?.subtotal || order.payment?.amount || 0;
+        const tax = order.payment?.tax || 0;
+        const tip = order.payment?.tip || 0;
+        const total = order.payment?.amount || 0;
+
+        return [
+          order.order_id,
+          date,
+          time,
+          order.channel,
+          order.customer?.name || order.customer_name || 'Walk-up',
+          order.customer?.email || '',
+          `$${subtotal.toFixed(2)}`,
+          `$${tax.toFixed(2)}`,
+          `$${tip.toFixed(2)}`,
+          `$${total.toFixed(2)}`,
+          order.payment?.method || 'unknown',
+          order.status
+        ];
+      });
+
+      // Add totals row
+      const totalSubtotal = orders.reduce((sum, o) => sum + (o.payment?.subtotal || o.payment?.amount || 0), 0);
+      const totalTax = orders.reduce((sum, o) => sum + (o.payment?.tax || 0), 0);
+      const totalTips = orders.reduce((sum, o) => sum + (o.payment?.tip || 0), 0);
+      const totalRevenue = orders.reduce((sum, o) => sum + (o.payment?.amount || 0), 0);
+
+      rows.push([
+        'TOTALS', '', '', '', '', '',
+        `$${totalSubtotal.toFixed(2)}`,
+        `$${totalTax.toFixed(2)}`,
+        `$${totalTips.toFixed(2)}`,
+        `$${totalRevenue.toFixed(2)}`,
+        '', ''
+      ]);
+
+      csv = [
+        headers.map(h => `"${h}"`).join(','),
+        ...rows.map(row => 
+          row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+        )
+      ].join('\n');
+    }
+
+    // Set headers for CSV download
+    const filename = `sales-${level}-${start_date}-to-${end_date}-${farmId}.csv`;
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+
+    console.log(`[farm-sales] Sales export: ${farmId}, ${orders.length} orders, ${level} level`);
+
+  } catch (error) {
+    console.error('[farm-sales] Sales export failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'export_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/reports/quickbooks-daily-summary
+ * Generate QuickBooks-compatible daily sales summary CSV
+ * Format: Chart of Accounts with debit/credit entries
+ * 
+ * Query params:
+ * - date: Date to export (YYYY-MM-DD, required)
+ */
+router.get('/quickbooks-daily-summary', (req, res) => {
+  try {
+    const { date } = req.query;
+    const farmId = req.farm_id;
+
+    // Validate required param
+    if (!date) {
+      return res.status(400).json({
+        ok: false,
+        error: 'missing_date',
+        message: 'date parameter is required (YYYY-MM-DD)'
+      });
+    }
+
+    // Get orders for the specified date
+    const orders = farmStores.orders.getAllForFarm(farmId)
+      .filter(o => o.timestamps.created_at.startsWith(date));
+
+    if (orders.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'no_orders',
+        message: `No orders found for ${date}`
+      });
+    }
+
+    // Calculate totals by channel
+    const posSales = orders
+      .filter(o => o.channel === 'pos')
+      .reduce((sum, o) => sum + (o.payment?.amount || 0), 0);
+    
+    const deliverySales = orders
+      .filter(o => o.channel === 'delivery' || o.channel === 'd2c')
+      .reduce((sum, o) => sum + (o.payment?.amount || 0), 0);
+    
+    const wholesaleSales = orders
+      .filter(o => o.channel === 'wholesale' || o.channel === 'b2b')
+      .reduce((sum, o) => sum + (o.payment?.amount || 0), 0);
+    
+    // Calculate tax collected
+    const taxCollected = orders
+      .reduce((sum, o) => sum + (o.payment?.tax || 0), 0);
+    
+    // Calculate tips
+    const tips = orders
+      .reduce((sum, o) => sum + (o.payment?.tip || 0), 0);
+    
+    // Payment method breakdown
+    const cashTotal = orders
+      .filter(o => o.payment?.method === 'cash')
+      .reduce((sum, o) => sum + (o.payment?.amount || 0), 0);
+    
+    const cardTotal = orders
+      .filter(o => o.payment?.method === 'card' || o.payment?.method === 'square')
+      .reduce((sum, o) => sum + (o.payment?.amount || 0), 0);
+
+    // Calculate merchant fees (estimate 2.9% + $0.30 per card transaction)
+    const cardTransactions = orders.filter(o => o.payment?.method === 'card' || o.payment?.method === 'square').length;
+    const merchantFees = (cardTotal * 0.029) + (cardTransactions * 0.30);
+
+    // Generate QuickBooks-compatible CSV
+    const headers = ['Date', 'Account', 'Debit', 'Credit', 'Memo', 'Customer'];
+    const rows = [];
+
+    // Revenue entries (credits)
+    if (posSales > 0) {
+      rows.push([date, 'Farm Store Sales', '', posSales.toFixed(2), 'POS Sales Summary', 'Multiple Customers']);
+    }
+    if (deliverySales > 0) {
+      rows.push([date, 'Direct-to-Consumer Sales', '', deliverySales.toFixed(2), 'Delivery Sales Summary', 'Multiple Customers']);
+    }
+    if (wholesaleSales > 0) {
+      rows.push([date, 'Wholesale Revenue', '', wholesaleSales.toFixed(2), 'Wholesale Sales Summary', 'Multiple Customers']);
+    }
+    if (tips > 0) {
+      rows.push([date, 'Tips Income', '', tips.toFixed(2), 'Tips Received', '']);
+    }
+
+    // Tax liability (credit)
+    if (taxCollected > 0) {
+      rows.push([date, 'Sales Tax Payable', '', taxCollected.toFixed(2), 'Sales Tax Collected', '']);
+    }
+
+    // Asset entries (debits) - money received
+    if (cashTotal > 0) {
+      rows.push([date, 'Cash', cashTotal.toFixed(2), '', 'Cash Receipts', '']);
+    }
+    if (cardTotal > 0) {
+      rows.push([date, 'Square Account', cardTotal.toFixed(2), '', 'Card Receipts', '']);
+    }
+
+    // Expense entry (debit) - merchant fees
+    if (merchantFees > 0) {
+      rows.push([date, 'Merchant Processing Fees', merchantFees.toFixed(2), '', 'Square Fees', '']);
+    }
+
+    // Convert to CSV
+    const csv = [
+      headers.map(h => `"${h}"`).join(','),
+      ...rows.map(row => 
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      )
+    ].join('\n');
+
+    // Set headers for CSV download
+    const filename = `quickbooks-daily-${date}-${farmId}.csv`;
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+
+    console.log(`[farm-sales] QuickBooks export: ${farmId}, ${date}, ${orders.length} orders`);
+    console.log(`  Revenue: $${(posSales + deliverySales + wholesaleSales).toFixed(2)}, Tax: $${taxCollected.toFixed(2)}`);
+
+  } catch (error) {
+    console.error('[farm-sales] QuickBooks export failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'export_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/reports/inventory-pdf
+ * Export inventory report as PDF
+ * 
+ * Query params:
+ * - category: Filter by category (optional)
+ * - available_only: true | false (default: false)
+ * - include_valuation: true | false (default: true)
+ */
+router.get('/inventory-pdf', async (req, res) => {
+  try {
+    const { category, available_only, include_valuation = 'true' } = req.query;
+    const farmId = req.farm_id;
+    
+    // Get farm config for name
+    const farmConfig = farmStores.config.getAllForFarm(farmId)?.[0];
+    const farmName = farmConfig?.farm_name || farmId;
+    
+    // Get inventory
+    let inventory = farmStores.inventory.getAllForFarm(farmId);
+    
+    // Apply filters
+    if (category) {
+      inventory = inventory.filter(i => i.category === category);
+    }
+    
+    if (available_only === 'true') {
+      inventory = inventory.filter(i => i.available > 0);
+    }
+    
+    // Sort by category then name
+    inventory.sort((a, b) => {
+      if (a.category !== b.category) {
+        return (a.category || '').localeCompare(b.category || '');
+      }
+      return (a.product_name || '').localeCompare(b.product_name || '');
+    });
+    
+    // Generate PDF
+    const pdfBuffer = await generateInventoryPDF({
+      farmId,
+      farmName,
+      items: inventory,
+      category: category || null,
+      includeValuation: include_valuation === 'true'
+    });
+    
+    // Set response headers
+    const filename = `inventory-${farmId}-${new Date().toISOString().split('T')[0]}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
+    
+  } catch (error) {
+    console.error('[farm-sales] Inventory PDF export failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'pdf_export_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/reports/sales-pdf
+ * Export sales report as PDF
+ * 
+ * Query params:
+ * - start_date: Start date (YYYY-MM-DD, required)
+ * - end_date: End date (YYYY-MM-DD, required)
+ * - channel: Filter by channel (optional)
+ */
+router.get('/sales-pdf', async (req, res) => {
+  try {
+    const { start_date, end_date, channel } = req.query;
+    const farmId = req.farm_id;
+    
+    // Validate required params
+    if (!start_date || !end_date) {
+      return res.status(400).json({
+        ok: false,
+        error: 'missing_dates',
+        message: 'start_date and end_date are required (YYYY-MM-DD)'
+      });
+    }
+    
+    // Get farm config for name
+    const farmConfig = farmStores.config.getAllForFarm(farmId)?.[0];
+    const farmName = farmConfig?.farm_name || farmId;
+    
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+    
+    // Get orders in date range
+    let orders = farmStores.orders.getAllForFarm(farmId)
+      .filter(o => {
+        const orderDate = new Date(o.timestamps.created_at);
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+    
+    // Filter by channel if specified
+    if (channel && channel !== 'all') {
+      orders = orders.filter(o => o.channel === channel);
+    }
+    
+    // Sort by date
+    orders.sort((a, b) => 
+      new Date(a.timestamps.created_at) - new Date(b.timestamps.created_at)
+    );
+    
+    // Generate PDF
+    const pdfBuffer = await generateSalesPDF({
+      farmId,
+      farmName,
+      orders,
+      startDate: start_date,
+      endDate: end_date,
+      channel: channel || 'all'
+    });
+    
+    // Set response headers
+    const filename = `sales-${farmId}-${start_date}-to-${end_date}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
+    
+  } catch (error) {
+    console.error('[farm-sales] Sales PDF export failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'pdf_export_failed',
       message: error.message
     });
   }

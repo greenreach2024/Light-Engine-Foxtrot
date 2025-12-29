@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Light Engine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 450px;
+            width: 100%;
+            padding: 48px 40px;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .logo-section {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        
+        .tagline {
+            font-size: 14px;
+            color: #718096;
+        }
+        
+        h1 {
+            font-size: 24px;
+            color: #2d3748;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            color: #718096;
+            margin-bottom: 32px;
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+        }
+        
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        input::placeholder {
+            color: #cbd5e0;
+        }
+        
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 8px;
+        }
+        
+        .btn-login:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-login:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .alert.success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+            display: block;
+        }
+        
+        .alert.error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #fc8181;
+            display: block;
+        }
+        
+        .help-links {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .help-links a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .help-links a:hover {
+            text-decoration: underline;
+        }
+        
+        .new-account-notice {
+            background: #e6fffa;
+            border: 1px solid #81e6d9;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            color: #234e52;
+        }
+        
+        .new-account-notice strong {
+            display: block;
+            margin-bottom: 4px;
+            color: #234e52;
+        }
+        
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 32px 24px;
+            }
+            
+            h1 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo-section">
+            <div class="logo">Light Engine</div>
+            <div class="tagline">Smart Grow Room Management</div>
+        </div>
+        
+        <h1>Welcome Back</h1>
+        <p class="subtitle">Sign in to access your farm dashboard</p>
+        
+        <!-- New account notice (shown if redirected from purchase) -->
+        <div id="newAccountNotice" class="new-account-notice" style="display: none;">
+            <strong>🎉 Account Created!</strong>
+            Check your email for login credentials. They should arrive within 2-3 minutes.
+        </div>
+        
+        <!-- Alert messages -->
+        <div id="alertMessage" class="alert"></div>
+        
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    placeholder="your@email.com" 
+                    required 
+                    autocomplete="email"
+                >
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    placeholder="Enter your password" 
+                    required 
+                    autocomplete="current-password"
+                >
+            </div>
+            
+            <button type="submit" class="btn-login" id="loginButton">
+                Sign In
+            </button>
+        </form>
+        
+        <div class="help-links">
+            <a href="mailto:support@greenreach.io?subject=Login%20Help">Need help signing in?</a>
+            <span style="color: #cbd5e0; margin: 0 8px;">•</span>
+            <a href="/LEMarketing-purchase.html">Purchase a Plan</a>
+        </div>
+    </div>
+    
+    <script>
+        // Check if redirected from successful purchase
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('new') === 'true') {
+            document.getElementById('newAccountNotice').style.display = 'block';
+        }
+        
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const button = document.getElementById('loginButton');
+            const alertDiv = document.getElementById('alertMessage');
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Disable button
+            button.disabled = true;
+            button.textContent = 'Signing in...';
+            alertDiv.style.display = 'none';
+            
+            try {
+                // Call backend authentication API
+                const response = await fetch('http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Login failed');
+                }
+                
+                // Store token
+                localStorage.setItem('auth_token', data.token);
+                localStorage.setItem('farm_id', data.farm_id);
+                
+                // Show success and redirect
+                alertDiv.className = 'alert success';
+                alertDiv.textContent = 'Login successful! Redirecting...';
+                alertDiv.style.display = 'block';
+                
+                setTimeout(() => {
+                    window.location.href = '/farm-admin.html';
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                alertDiv.className = 'alert error';
+                alertDiv.textContent = error.message || 'Login failed. Please check your credentials.';
+                alertDiv.style.display = 'block';
+                
+                button.disabled = false;
+                button.textContent = 'Sign In';
+            }
+        }
+    </script>
+</body>
+</html>

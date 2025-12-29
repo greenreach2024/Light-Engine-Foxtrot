@@ -444,4 +444,124 @@ router.get('/categories/list', (req, res) => {
   });
 });
 
+/**
+ * GET /api/farm-sales/inventory/export
+ * Export inventory as CSV for accounting reconciliation
+ * 
+ * Query params:
+ * - category: Filter by category
+ * - available_only: Only show items with quantity > 0
+ * - include_valuation: Include retail/wholesale values (default: true)
+ */
+router.get('/export', (req, res) => {
+  try {
+    const { category, available_only, include_valuation = 'true' } = req.query;
+    const farmId = req.farm_id;
+    
+    let products = farmStores.inventory.getAllForFarm(farmId);
+
+    // Apply filters
+    if (category) {
+      products = products.filter(p => p.category === category);
+    }
+    if (available_only === 'true') {
+      products = products.filter(p => p.available > 0);
+    }
+
+    // Sort by category then name
+    products.sort((a, b) => {
+      if (a.category !== b.category) {
+        return a.category.localeCompare(b.category);
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    // Generate CSV
+    const headers = include_valuation === 'true'
+      ? ['SKU ID', 'Product Name', 'Category', 'Unit', 'Available Qty', 'Reserved Qty', 'Total Qty', 'Retail Price', 'Wholesale Price', 'Total Retail Value', 'Total Wholesale Value', 'Last Updated']
+      : ['SKU ID', 'Product Name', 'Category', 'Unit', 'Available Qty', 'Reserved Qty', 'Total Qty', 'Last Updated'];
+
+    const rows = products.map(item => {
+      const baseRow = [
+        item.sku_id,
+        item.name,
+        item.category,
+        item.unit,
+        item.available,
+        item.reserved || 0,
+        item.quantity
+      ];
+
+      if (include_valuation === 'true') {
+        const retailPrice = item.retail_price || item.unit_price || 0;
+        const wholesalePrice = item.wholesale_price || item.unit_price || 0;
+        return [
+          ...baseRow,
+          `$${retailPrice.toFixed(2)}`,
+          `$${wholesalePrice.toFixed(2)}`,
+          `$${(item.available * retailPrice).toFixed(2)}`,
+          `$${(item.available * wholesalePrice).toFixed(2)}`,
+          new Date(item.last_updated || item.updated_at || Date.now()).toLocaleString()
+        ];
+      } else {
+        return [
+          ...baseRow,
+          new Date(item.last_updated || item.updated_at || Date.now()).toLocaleString()
+        ];
+      }
+    });
+
+    // Calculate totals
+    const totalUnits = products.reduce((sum, i) => sum + i.available, 0);
+    const totalReserved = products.reduce((sum, i) => sum + (i.reserved || 0), 0);
+    const totalQuantity = products.reduce((sum, i) => sum + i.quantity, 0);
+
+    if (include_valuation === 'true') {
+      const totalRetailValue = products.reduce((sum, i) => 
+        sum + (i.available * (i.retail_price || i.unit_price || 0)), 0
+      );
+      const totalWholesaleValue = products.reduce((sum, i) => 
+        sum + (i.available * (i.wholesale_price || i.unit_price || 0)), 0
+      );
+
+      rows.push([
+        'TOTALS', '', '', '', totalUnits, totalReserved, totalQuantity, '', '', 
+        `$${totalRetailValue.toFixed(2)}`, 
+        `$${totalWholesaleValue.toFixed(2)}`, 
+        ''
+      ]);
+    } else {
+      rows.push([
+        'TOTALS', '', '', '', totalUnits, totalReserved, totalQuantity, ''
+      ]);
+    }
+
+    // Convert to CSV format (properly escape quotes)
+    const csv = [
+      headers.map(h => `"${h}"`).join(','),
+      ...rows.map(row => 
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      )
+    ].join('\n');
+
+    // Set headers for CSV download
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `inventory-${farmId}-${timestamp}.csv`;
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+
+    console.log(`[farm-sales] Inventory CSV exported: ${farmId}, ${products.length} items`);
+
+  } catch (error) {
+    console.error('[farm-sales] Inventory export failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'export_failed',
+      message: error.message
+    });
+  }
+});
+
 export default router;

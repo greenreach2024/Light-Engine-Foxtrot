@@ -77,6 +77,10 @@ function createWindow() {
  * Create system tray icon and menu
  */
 function createTray() {
+  // Skip tray icon - not critical for functionality
+  console.log('[Desktop] Tray icon disabled (optional feature)');
+  return;
+  
   const iconPath = path.join(__dirname, 'icon.png');
   tray = new Tray(iconPath);
   
@@ -130,57 +134,30 @@ function createTray() {
  */
 function startServer() {
   return new Promise((resolve, reject) => {
-    const serverScript = path.join(__dirname, 'server.js');
-    
     console.log('[Desktop] Starting server...');
-    console.log('[Desktop] Server script:', serverScript);
     
-    // Environment variables for inventory-only mode
-    const env = {
-      ...process.env,
-      PORT: PORT.toString(),
-      NODE_ENV: isDev ? 'development' : 'production',
-      DEPLOYMENT_MODE: 'inventory-only',
-      DATABASE_URL: `sqlite:${path.join(app.getPath('userData'), 'lightengine.db')}`,
-      DEMO_MODE: isDev ? 'true' : 'false'
-    };
+    // Set environment variables for inventory-only mode
+    process.env.PORT = PORT.toString();
+    process.env.NODE_ENV = isDev ? 'development' : 'production';
+    process.env.DEPLOYMENT_MODE = 'inventory-only';
+    process.env.DATABASE_URL = `sqlite:${path.join(app.getPath('userData'), 'lightengine.db')}`;
+    process.env.DEMO_MODE = isDev ? 'true' : 'false';
     
-    // Spawn server process
-    serverProcess = spawn('node', [serverScript], {
-      env,
-      cwd: __dirname,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-    
-    serverProcess.stdout.on('data', (data) => {
-      console.log('[Server]', data.toString().trim());
-      if (data.toString().includes('Listening on port')) {
+    try {
+      // Require server directly (works in packaged app)
+      const serverScript = path.join(__dirname, 'server.js');
+      console.log('[Desktop] Loading server from:', serverScript);
+      require(serverScript);
+      
+      // Server starts immediately, wait a moment then resolve
+      setTimeout(() => {
+        console.log('[Desktop] Server should be running on port', PORT);
         resolve();
-      }
-    });
-    
-    serverProcess.stderr.on('data', (data) => {
-      console.error('[Server Error]', data.toString().trim());
-    });
-    
-    serverProcess.on('error', (error) => {
+      }, 1000);
+    } catch (error) {
       console.error('[Desktop] Failed to start server:', error);
       reject(error);
-    });
-    
-    serverProcess.on('exit', (code) => {
-      console.log('[Desktop] Server exited with code:', code);
-      if (code !== 0 && !app.isQuitting) {
-        showServerError();
-      }
-    });
-    
-    // Timeout after 10 seconds
-    setTimeout(() => {
-      if (serverProcess && serverProcess.exitCode === null) {
-        resolve(); // Assume server started
-      }
-    }, 10000);
+    }
   });
 }
 
@@ -188,11 +165,8 @@ function startServer() {
  * Stop the Express server
  */
 function stopServer() {
-  if (serverProcess) {
-    console.log('[Desktop] Stopping server...');
-    serverProcess.kill('SIGTERM');
-    serverProcess = null;
-  }
+  // Server runs in same process, will stop when app quits
+  console.log('[Desktop] Server will stop with app...');
 }
 
 /**

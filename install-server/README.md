@@ -1,13 +1,19 @@
 # Light Engine Installation Server
 
-Simple HTTP server that serves installation scripts, binaries, checksums, and public keys for edge device deployment.
+**⚠️ DEPRECATED:** This server is no longer used. All installers are now hosted on AWS S3 + CloudFront for better performance and reliability.
 
-## Overview
+**See:** [AWS_INSTALLER_HOSTING_SETUP.md](../AWS_INSTALLER_HOSTING_SETUP.md) for current deployment process.
 
-This server powers the one-line installer:
+---
+
+## Legacy Overview (Historical Reference)
+
+This server previously powered the one-line installer:
 ```bash
 curl -sSL https://install.greenreach.io | bash
 ```
+
+**Current Hosting:** AWS S3 bucket `light-engine-installers` with CloudFront CDN
 
 ## Endpoints
 

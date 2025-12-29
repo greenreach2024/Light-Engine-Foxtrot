@@ -35,6 +35,21 @@ venv/
 firmware/
 logs/
 *.log
+desktop-app/
+backups/
+dist/
+docs/
+greenreach-central/
+public/
+frontend/
+hq-app/
+edge-app/
+esp32/
+examples/
+data/
+data.aws-backup/
+lib.aws-backup/
+server.aws-backup/
 
 # Database files (if any)
 *.db

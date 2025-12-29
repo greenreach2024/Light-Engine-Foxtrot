@@ -9751,6 +9751,7 @@ import farmSalesFulfillmentRouter from './routes/farm-sales/fulfillment.js';
 import farmSalesReportsRouter from './routes/farm-sales/reports.js';
 import farmSalesQuickBooksRouter from './routes/farm-sales/quickbooks.js';
 import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
+import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
 import authRouter from './routes/auth.js';
 import farmsRouter from './routes/farms.js';
 
@@ -9932,7 +9933,26 @@ app.use('/api/farm-sales/lots', farmSalesLotTrackingRouter);
  */
 app.use('/api/farm-sales/donations', farmSalesDonationsRouter);
 
-console.log(' Farm sales terminal initialized - POS, D2C, B2B, food security programs, and lot traceability enabled');
+/**
+ * Farm Sales: AI Agent Assistant
+ * Intelligent assistant with action capabilities using OpenAI function calling
+ * - POST /api/farm-sales/ai-agent/chat: Send command, get parsed intent & execute action
+ * - GET /api/farm-sales/ai-agent/capabilities: List available AI agent capabilities
+ * - GET /api/farm-sales/ai-agent/status: Check AI agent status and configuration
+ * - POST /api/farm-sales/ai-agent/feedback: Submit feedback about AI responses
+ * 
+ * Capabilities:
+ * - Lighting control (turn on/off, set brightness, get status)
+ * - Environment monitoring (temperature, humidity, sensor readings)
+ * - Inventory management (list products, low stock alerts, update stock)
+ * - Order management (list orders, order details, recent orders)
+ * - Automation control (list rules, enable/disable rules)
+ * - Reports generation (sales reports, inventory reports)
+ * - System health checks (status, health check)
+ */
+app.use('/api/farm-sales/ai-agent', farmSalesAIAgentRouter);
+
+console.log(' Farm sales terminal initialized - POS, D2C, B2B, food security programs, lot traceability, and AI agent enabled');
 
 /**
  * ML Predictive Forecasting Endpoint
