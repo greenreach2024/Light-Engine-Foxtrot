@@ -40,7 +40,6 @@ backups/
 dist/
 docs/
 greenreach-central/
-public/
 frontend/
 hq-app/
 edge-app/

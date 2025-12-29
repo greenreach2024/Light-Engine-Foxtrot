@@ -1,4 +1,10 @@
-import 'dotenv/config';
+// Load .env if available, but don't crash if the package isn't present in production bundles
+try {
+  await import('dotenv/config');
+} catch (err) {
+  console.warn('[startup] dotenv/config not loaded:', err?.message || err);
+}
+
 import express from "express";
 import expressWs from 'express-ws';
 import helmet from 'helmet';
