@@ -9754,6 +9754,24 @@ import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
 import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
 import authRouter from './routes/auth.js';
 import farmsRouter from './routes/farms.js';
+import purchaseRouter from './routes/purchase.js';
+import pg from 'pg';
+
+// Initialize PostgreSQL pool for purchase flow
+const dbPool = new pg.Pool({
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+});
+
+// Store database pool in app.locals for routes
+app.locals.db = dbPool;
 
 /**
  * GreenReach Central - Farm Registration & Provisioning
@@ -9765,6 +9783,15 @@ import farmsRouter from './routes/farms.js';
  * - GET /api/farms/codes/list: List all registration codes (admin)
  */
 app.use('/api/farms', farmsRouter);
+
+/**
+ * Purchase & Onboarding Flow
+ * Square payment processing, account creation, and welcome emails
+ * - POST /api/farms/purchase: Complete purchase and create account
+ * - POST /api/farms/create-checkout-session: Create Square payment link
+ * - GET /api/farms/verify-session/:session_id: Verify payment and create account
+ */
+app.use('/api/farms', purchaseRouter);
 
 /**
  * Authentication & Device Pairing

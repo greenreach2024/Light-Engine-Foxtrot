@@ -3,10 +3,12 @@
  * Handles Square payment → Account creation → Welcome email
  */
 
-const express = require('express');
+import express from 'express';
+import crypto from 'crypto';
+import { Client, Environment } from 'square';
+import bcrypt from 'bcryptjs';
+
 const router = express.Router();
-const crypto = require('crypto');
-const { Client, Environment } = require('square');
 
 // Initialize Square client
 const squareClient = new Client({
@@ -128,7 +130,6 @@ router.post('/purchase', async (req, res) => {
     // Step 6: Create admin user account
     console.log('[Purchase] Creating admin user...');
     
-    const bcrypt = require('bcryptjs');
     const password_hash = await bcrypt.hash(temp_password, 10);
     
     await db.query(`
@@ -458,4 +459,4 @@ Documentation: ${login_url.replace('LE-login.html', 'docs/index.html')}
   };
 }
 
-module.exports = router;
+export default router;
