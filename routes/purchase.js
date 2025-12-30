@@ -406,6 +406,41 @@ router.get('/verify-session/:session_id', async (req, res) => {
 
       // Create account directly here instead of forwarding
       try {
+        const db = req.app.locals.db;
+        
+        // Check if this payment has already been processed
+        const existingFarmResult = await db.query(
+          'SELECT farm_id, name, email FROM farms WHERE square_payment_id = $1',
+          [payment_intent_id]
+        );
+        
+        if (existingFarmResult.rows.length > 0) {
+          const existingFarm = existingFarmResult.rows[0];
+          console.log('[Verify] Payment already processed for farm:', existingFarm.farm_id);
+          return res.json({
+            success: true,
+            farm_id: existingFarm.farm_id,
+            farm_name: existingFarm.name,
+            email: existingFarm.email,
+            message: 'Account already created'
+          });
+        }
+        
+        // Check if email already exists (to prevent duplicate emails)
+        const existingEmailResult = await db.query(
+          'SELECT email FROM users WHERE email = $1',
+          [email]
+        );
+        
+        if (existingEmailResult.rows.length > 0) {
+          console.log('[Verify] Email already exists:', email);
+          return res.status(409).json({
+            success: false,
+            error: 'Email already registered',
+            message: 'An account with this email already exists. Please use a different email or contact support.'
+          });
+        }
+        
         // Generate unique farm ID
         const timestamp = Date.now().toString(36).toUpperCase();
         const random = crypto.randomBytes(2).toString('hex').toUpperCase();
@@ -423,8 +458,6 @@ router.get('/verify-session/:session_id', async (req, res) => {
         
         // Create farm record in database
         console.log('[Verify] Creating farm record...');
-        
-        const db = req.app.locals.db;
         
         await db.query(`
           INSERT INTO farms (
