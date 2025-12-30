@@ -266,14 +266,13 @@ router.post('/create-checkout-session', async (req, res) => {
           basePriceMoney: {
             amount: BigInt(selectedPrice.amount),
             currency: 'CAD'
-          },
-          note: selectedPrice.description
+          }
         }],
         metadata: {
-          farm_name,
-          contact_name,
-          plan,
-          email
+          farm_name: String(farm_name),
+          contact_name: String(contact_name),
+          plan: String(plan),
+          email: String(email)
         }
       },
       checkoutOptions: {
