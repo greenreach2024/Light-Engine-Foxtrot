@@ -9759,6 +9759,7 @@ import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
 import authRouter from './routes/auth.js';
 import farmsRouter from './routes/farms.js';
 import purchaseRouter from './routes/purchase.js';
+import setupWizardRouter from './routes/setup-wizard.js';
 import pg from 'pg';
 
 // Initialize PostgreSQL pool for purchase flow
@@ -9805,6 +9806,18 @@ app.use('/api/farms', purchaseRouter);
  * - GET /api/ping: Health check for edge device availability
  */
 app.use('/api/auth', authRouter);
+
+/**
+ * Setup Wizard Routes (First-Time Farm Setup)
+ * Handles post-purchase farm configuration: profile, rooms, zones
+ * - GET /api/setup-wizard/status: Check if setup is complete
+ * - POST /api/setup-wizard/farm-profile: Update farm profile (timezone, hours, certifications)
+ * - POST /api/setup-wizard/rooms: Create grow rooms
+ * - GET /api/setup-wizard/rooms: Get all rooms
+ * - POST /api/setup-wizard/zones: Configure zones within a room
+ * - POST /api/setup-wizard/complete: Mark setup as complete
+ */
+app.use('/api/setup-wizard', setupWizardRouter);
 
 /**
  * Farm Sales: Customer Management
