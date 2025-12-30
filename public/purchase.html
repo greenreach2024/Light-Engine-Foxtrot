@@ -730,13 +730,66 @@
     </footer>
 
     <script>
-        function purchaseProduct(plan) {
+        async function purchaseProduct(plan) {
             const productNames = {
                 cloud: 'Light Engine Cloud',
                 edge: 'Light Engine Edge'
             };
-            
-            alert(`✅ Purchase Simulated!\n\nProduct: ${productNames[plan]}\n\nIn production, this would:\n• Process payment\n• Send hardware/credentials\n• Email setup instructions\n\nFor Cloud: Check email for login credentials\nFor Edge: Device ships with built-in setup wizard\n\nThank you for choosing Light Engine!`);
+
+            // Prompt for customer information
+            const farmName = prompt('Enter your farm name:');
+            if (!farmName) return;
+
+            const contactName = prompt('Enter your name:');
+            if (!contactName) return;
+
+            const email = prompt('Enter your email address:');
+            if (!email || !email.includes('@')) {
+                alert('Please enter a valid email address');
+                return;
+            }
+
+            try {
+                // Show loading state
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = 'Creating checkout session...';
+                button.disabled = true;
+
+                // Create checkout session
+                const response = await fetch('/api/farms/create-checkout-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        plan,
+                        email,
+                        farm_name: farmName,
+                        contact_name: contactName
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to create checkout session');
+                }
+
+                // Redirect to Square payment page
+                console.log('Redirecting to Square checkout:', data.url);
+                window.location.href = data.url;
+
+            } catch (error) {
+                console.error('Purchase error:', error);
+                alert(`Error: ${error.message}\n\nPlease try again or contact support.`);
+                
+                // Restore button state
+                if (event && event.target) {
+                    event.target.textContent = originalText;
+                    event.target.disabled = false;
+                }
+            }
         }
 
         // Check for product parameter in URL
