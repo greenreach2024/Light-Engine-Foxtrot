@@ -13400,89 +13400,131 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
     });
   }
   
-  // PRODUCTION MODE: Normal authentication flow
+  // PRODUCTION MODE: PostgreSQL-backed authentication
   if (!farmId || !email || !password) {
     return res.status(400).json({
       status: 'error',
       message: 'Farm ID, email, and password are required'
     });
   }
-  
-  // Load farm registry
-  const registry = loadFarmRegistry();
-  const farmConfig = registry.farms.find(f => f.farmId === farmId);
-  
-  if (!farmConfig) {
-    return res.status(404).json({
+
+  const pool = req.app.locals?.db;
+  if (!pool) {
+    return res.status(500).json({
       status: 'error',
-      message: 'Farm not found'
+      message: 'Database not configured'
     });
   }
-  
-  if (!farmConfig.enabled) {
-    return res.status(403).json({
+
+  try {
+    const farmResult = await pool.query(
+      'SELECT farm_id, name, status FROM farms WHERE farm_id = $1 LIMIT 1',
+      [farmId]
+    );
+
+    if (farmResult.rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Farm not found'
+      });
+    }
+
+    const farm = farmResult.rows[0];
+    if (farm.status && farm.status !== 'active') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'This farm is currently disabled. Contact support.'
+      });
+    }
+
+    const userResult = await pool.query(
+      `SELECT user_id, email, password_hash, role, is_active, email_verified, last_login
+       FROM users
+       WHERE farm_id = $1 AND lower(email) = lower($2)
+       LIMIT 1`,
+      [farmId, email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    if (user.is_active === false) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Account is disabled. Contact support.'
+      });
+    }
+
+    if (!user.password_hash) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Account not initialized with a password'
+      });
+    }
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+      });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    if (!global.farmAdminSessions) {
+      global.farmAdminSessions = new Map();
+    }
+
+    const session = {
+      token,
+      farmId: farm.farm_id,
+      email: user.email,
+      role: user.role || 'admin',
+      createdAt: new Date(),
+      expiresAt: sessionExpiry
+    };
+
+    global.farmAdminSessions.set(token, session);
+
+    await pool.query('UPDATE users SET last_login = NOW() WHERE user_id = $1', [user.user_id]);
+
+    const subscription = {
+      plan: 'Professional',
+      status: 'active',
+      price: 14900,
+      renewsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    };
+
+    const firstLogin = !user.last_login;
+
+    console.log(`[farm-auth] Login successful for ${user.email} at ${farm.farm_id}`);
+
+    return res.json({
+      status: 'success',
+      token,
+      farmId: farm.farm_id,
+      farmName: farm.name,
+      email: user.email,
+      role: user.role || 'admin',
+      subscription,
+      expiresAt: sessionExpiry.toISOString(),
+      firstLogin: Boolean(firstLogin)
+    });
+  } catch (err) {
+    console.error('[farm-auth] Login error:', err?.message || err, err?.stack || '');
+    return res.status(500).json({
       status: 'error',
-      message: 'This farm is currently disabled. Contact GreenReach support.'
+      message: `Authentication failed: ${err?.message || 'unknown'}`
     });
   }
-  
-  // In production, verify against database with proper password hashing
-  // For demo/sandbox, use simple validation
-  const validCredentials = [
-    { email: 'admin@demo-farm.com', password: 'demo123', role: 'admin' },
-    { email: 'admin@sandbox.greenreach.local', password: 'demo123', role: 'admin' },
-    { email: `admin@${farmId.toLowerCase()}.com`, password: 'demo123', role: 'admin' }
-  ];
-  
-  const user = validCredentials.find(c => c.email === email && c.password === password);
-  
-  if (!user) {
-    return res.status(401).json({
-      status: 'error',
-      message: 'Invalid email or password'
-    });
-  }
-  
-  // Generate session token (in production, use JWT or secure session management)
-  const token = crypto.randomBytes(32).toString('hex');
-  const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-  
-  // Store session (in-memory for demo, use Redis/database in production)
-  if (!global.farmAdminSessions) {
-    global.farmAdminSessions = new Map();
-  }
-  
-  const session = {
-    token,
-    farmId,
-    email,
-    role: user.role,
-    createdAt: new Date(),
-    expiresAt: sessionExpiry
-  };
-  
-  global.farmAdminSessions.set(token, session);
-  
-  // Get subscription status (mock for now)
-  const subscription = {
-    plan: 'Professional',
-    status: 'active',
-    price: 14900, // cents
-    renewsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-  };
-  
-  console.log(`[farm-auth]  Login successful for ${email} at ${farmId}`);
-  
-  res.json({
-    status: 'success',
-    token,
-    farmId: farmConfig.farmId,
-    farmName: farmConfig.name,
-    email,
-    role: user.role,
-    subscription,
-    expiresAt: sessionExpiry.toISOString()
-  });
 }));
 
 /**
@@ -15850,94 +15892,100 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 // IFTTT Service endpoints for device discovery
-app.get('/ifttt/v1/user/info', (req, res) => {
-  // IFTTT service authentication endpoint
-  res.json({
-    data: {
-      name: "Light Engine Charlie",
-      id: "light_engine_charlie_user"
-    }
-  });
-});
-
-app.post('/ifttt/v1/test/setup', (req, res) => {
-  // IFTTT service test setup
-  res.json({
-    data: {
-      samples: {
-        triggers: {
-          "environmental_threshold": {
-            "temperature": 85,
-            "humidity": 75,
-            "device_id": "grow-light-001"
-          }
-        },
-        actions: {
-          "control_spectrum": {
-            "device_id": "grow-light-001",
-            "spectrum": "flowering",
-            "intensity": 80
-          }
-        }
-      }
-    }
-  });
-});
-
-// Config endpoint to surface runtime flags
-app.get('/config', (req, res) => {
-  res.json({ 
-    singleServer: true, 
-    controller: getController(), 
-    forwarder: getForwarder(),
-    envSource: ENV_SOURCE, 
-    cloudEndpointUrl: CLOUD_ENDPOINT_URL || null,
-    iftttEnabled: true,
-    webhookEndpoint: `${req.protocol}://${req.get('host')}/webhooks/ifttt/`,
-    grow3Configured: !!process.env.CTRL
-  });
-});
-
-app.options('/forwarder/target', (req, res) => { setCors(req, res); res.status(204).end(); });
-app.get('/forwarder/target', (req, res) => {
-  setCors(req, res);
-  res.json({ url: getForwarder(), effective: getNetworkBridgeUrl() });
-});
-app.post('/forwarder/target', (req, res) => {
+app.get('/ifttt/v1/user/info', async (req, res) => {
   try {
     setCors(req, res);
-    const { url } = req.body || {};
-    if (!url) {
-      setForwarder(null);
-      return res.json({ ok: true, url: null, effective: getNetworkBridgeUrl() });
-    }
-    if (typeof url !== 'string' || !isHttpUrl(url)) {
-      return res.status(400).json({ ok: false, error: 'Valid http(s) url required' });
-    }
-    setForwarder(url);
-    res.json({ ok: true, url: getForwarder(), effective: getNetworkBridgeUrl() });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+    const { farmId, email, password } = req.query;
 
-// Allow runtime GET/POST of controller target. CORS-enabled for convenience.
-app.options('/controller', (req, res) => { setCors(req, res); res.status(204).end(); });
-app.get('/controller', (req, res) => {
-  setCors(req, res);
-  res.json({ url: getController() });
-});
-app.post('/controller', (req, res) => {
-  try {
-    setCors(req, res);
-    const { url } = req.body || {};
-    if (!url || typeof url !== 'string' || !isHttpUrl(url)) {
-      return res.status(400).json({ ok: false, error: 'Valid http(s) url required' });
+    if (!farmId || !email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Farm ID, email, and password are required'
+      });
     }
-    setController(url.trim());
-    res.json({ ok: true, url: getController() });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+
+    const pool = req.app.locals?.db;
+    if (!pool) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Database not configured'
+      });
+    }
+
+    const farmResult = await pool.query(
+      'SELECT farm_id, name, status FROM farms WHERE farm_id = $1 LIMIT 1',
+      [farmId]
+    );
+
+    if (farmResult.rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Farm not found'
+      });
+    }
+
+    const farm = farmResult.rows[0];
+    if (farm.status && farm.status !== 'active') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'This farm is currently disabled. Contact support.'
+      });
+    }
+
+    const userResult = await pool.query(
+      `SELECT user_id, email, password_hash, role, is_active, email_verified, last_login
+       FROM users
+       WHERE farm_id = $1 AND lower(email) = lower($2)
+       LIMIT 1`,
+      [farmId, email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    if (user.is_active === false) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Account is disabled. Contact support.'
+      });
+    }
+
+    if (!user.password_hash) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Account not initialized with a password'
+      });
+    }
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+      });
+    }
+
+    await pool.query('UPDATE users SET last_login = NOW() WHERE user_id = $1', [user.user_id]);
+
+    return res.json({
+      status: 'success',
+      farmId: farm.farm_id,
+      farmName: farm.name,
+      email: user.email,
+      role: user.role || 'admin'
+    });
+  } catch (err) {
+    console.error('[ifttt] user info error:', err?.message || err, err?.stack || '');
+    return res.status(500).json({
+      status: 'error',
+      message: 'IFTTT user verification failed'
+    });
   }
 });
 
