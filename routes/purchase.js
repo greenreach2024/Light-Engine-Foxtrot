@@ -262,7 +262,7 @@ router.post('/create-checkout-session', async (req, res) => {
           quantity: '1',
           basePriceMoney: {
             amount: BigInt(selectedPrice.amount),
-            currency: 'USD'
+            currency: 'CAD'
           },
           note: selectedPrice.description
         }],
