@@ -339,13 +339,19 @@ router.get('/verify-session/:session_id', async (req, res) => {
 
     console.log('[Verify] Order state:', order.state);
     console.log('[Verify] Order tenders:', order.tenders?.length || 0);
+    console.log('[Verify] Order tenders details:', JSON.stringify(order.tenders || []));
+    console.log('[Verify] Payment link status:', paymentLink.status);
 
-    // In sandbox, order might be OPEN with completed test payment
-    // Check if order has completed payment tender
-    const hasCompletedPayment = order.tenders?.some(t => t.cardDetails || t.type === 'CARD');
+    // Check multiple conditions for payment completion
+    // 1. Order is COMPLETED
+    // 2. Order has any tenders (sandbox test payments)
+    // 3. Payment link shows as paid
+    const hasAnyTenders = order.tenders && order.tenders.length > 0;
+    const isPaymentLinkCompleted = ['PAID', 'COMPLETED'].includes(paymentLink.status);
     
-    if (order.state === 'COMPLETED' || (order.state === 'OPEN' && hasCompletedPayment)) {
-      console.log('[Verify] Payment verified, creating account');
+    if (order.state === 'COMPLETED' || hasAnyTenders || isPaymentLinkCompleted) {
+      console.log('[Verify] Payment verified - State:', order.state, 'HasTenders:', hasAnyTenders, 'LinkStatus:', paymentLink.status);
+      console.log('[Verify] Creating account');
 
       // Extract metadata
       const { farm_name, contact_name, plan, email } = order.metadata || {};
