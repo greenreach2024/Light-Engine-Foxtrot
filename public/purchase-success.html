@@ -256,7 +256,7 @@
         }
 
         if (!sessionId) {
-            showError('No session ID found. Please contact support if payment was charged.');
+            showError('No payment session found. This page should only be accessed after completing payment on Square. Please return to the purchase page to start a new order.');
         } else {
             verifyPayment(sessionId);
         }
@@ -276,7 +276,9 @@
                         document.getElementById('success').classList.remove('hidden');
                     }, 1500); // Small delay for better UX
                 } else {
-                    showError(data.message || 'Payment verification failed');
+                    // Show specific error message from server
+                    const errorMsg = data.message || data.error || 'Payment verification failed';
+                    showError(errorMsg + (data.status ? ` (Status: ${data.status})` : ''));
                 }
             } catch (error) {
                 console.error('Verification error:', error);
