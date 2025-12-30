@@ -7,6 +7,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { Client, Environment } from 'square';
 import bcrypt from 'bcryptjs';
+import nodemailer from 'nodemailer';
 
 const router = express.Router();
 
@@ -16,8 +17,25 @@ const squareClient = new Client({
   environment: process.env.SQUARE_ENVIRONMENT === 'production' ? Environment.Production : Environment.Sandbox
 });
 
-// Email service (uses existing email infrastructure)
+// Email service configuration
 const emailService = process.env.EMAIL_SERVICE || 'mock';
+
+// Initialize nodemailer transporter for SendGrid
+let emailTransporter = null;
+if (process.env.SENDGRID_API_KEY) {
+  emailTransporter = nodemailer.createTransport({
+    host: 'smtp.sendgrid.net',
+    port: 587,
+    secure: false,
+    auth: {
+      user: 'apikey',
+      pass: process.env.SENDGRID_API_KEY
+    }
+  });
+  console.log('[Email] SendGrid SMTP configured');
+} else {
+  console.log('[Email] No SENDGRID_API_KEY found, using mock mode');
+}
 
 /**
  * POST /api/farms/purchase
@@ -161,13 +179,24 @@ router.post('/purchase', async (req, res) => {
     });
 
     // Use existing email service or mock
-    if (emailService === 'mock') {
-      console.log('[Purchase] MOCK EMAIL - Would send to:', email);
-      console.log('[Purchase] Login URL:', welcomeEmail.login_url);
-      console.log('[Purchase] Temp password:', temp_password);
+    if (emailTransporter) {
+      try {
+        await emailTransporter.sendMail({
+          from: process.env.EMAIL_FROM || 'noreply@greenreach.ca',
+          to: email,
+          subject: welcomeEmail.subject,
+          html: welcomeEmail.html
+        });
+        console.log('[Purchase] Welcome email sent to:', email);
+      } catch (emailError) {
+        console.error('[Purchase] Failed to send email:', emailError.message);
+        // Don't fail the purchase if email fails
+      }
     } else {
-      // TODO: Integrate with actual email service (SendGrid, AWS SES, etc.)
-      console.log('[Purchase] Email sent to:', email);
+      console.log('[Purchase] MOCK EMAIL - Would send to:', email);
+      console.log('[Purchase] Farm ID:', farm_id);
+      console.log('[Purchase] Temp password:', temp_password);
+      console.log('[Purchase] Login URL:', `${req.protocol}://${req.get('host')}/login.html`);
     }
 
     // Step 8: Return success response
@@ -450,11 +479,36 @@ router.get('/verify-session/:session_id', async (req, res) => {
         
         console.log('[Verify] Admin user created');
 
-        // Send welcome email (if email service configured)
-        if (emailService !== 'mock') {
-          const login_url = `${req.protocol}://${req.get('host')}/login.html`;
-          // Email logic would go here
-          console.log('[Verify] Email sent to:', email);
+        // Send welcome email
+        const login_url = `${req.protocol}://${req.get('host')}/login.html`;
+        const welcomeEmail = generateWelcomeEmail({
+          farm_name,
+          contact_name,
+          email,
+          temp_password,
+          farm_id,
+          plan,
+          login_url
+        });
+
+        if (emailTransporter) {
+          try {
+            await emailTransporter.sendMail({
+              from: process.env.EMAIL_FROM || 'noreply@greenreach.ca',
+              to: email,
+              subject: welcomeEmail.subject,
+              html: welcomeEmail.html
+            });
+            console.log('[Verify] Welcome email sent to:', email);
+          } catch (emailError) {
+            console.error('[Verify] Failed to send email:', emailError.message);
+            // Don't fail account creation if email fails
+          }
+        } else {
+          console.log('[Verify] MOCK EMAIL - Would send to:', email);
+          console.log('[Verify] Farm ID:', farm_id);
+          console.log('[Verify] Temp password:', temp_password);
+          console.log('[Verify] Login URL:', login_url);
         }
 
         console.log('[Verify] Account creation completed successfully');
