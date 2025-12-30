@@ -339,7 +339,11 @@ router.get('/verify-session/:session_id', async (req, res) => {
 
     console.log('[Verify] Order state:', order.state);
     console.log('[Verify] Order tenders:', order.tenders?.length || 0);
-    console.log('[Verify] Order tenders details:', JSON.stringify(order.tenders || []));
+    // Don't stringify tenders - they contain BigInt values that can't be serialized
+    if (order.tenders && order.tenders.length > 0) {
+      console.log('[Verify] First tender type:', order.tenders[0].type);
+      console.log('[Verify] First tender amount:', order.tenders[0].amountMoney?.amount?.toString());
+    }
     console.log('[Verify] Payment link status:', paymentLink.status);
 
     // Check multiple conditions for payment completion
