@@ -471,6 +471,213 @@
                 right: 10px;
             }
         }
+
+        /* Purchase Modal/Wizard Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .purchase-modal {
+            background: white;
+            border-radius: 20px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 32px 40px 24px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .modal-close {
+            float: right;
+            font-size: 28px;
+            font-weight: 300;
+            color: #6e6e73;
+            cursor: pointer;
+            border: none;
+            background: none;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            text-align: center;
+        }
+
+        .modal-close:hover {
+            color: #1d1d1f;
+        }
+
+        .modal-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .modal-subtitle {
+            font-size: 1rem;
+            color: #6e6e73;
+        }
+
+        .modal-body {
+            padding: 32px 40px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+
+        .form-help {
+            font-size: 0.85rem;
+            color: #6e6e73;
+            margin-top: 6px;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .modal-footer {
+            padding: 24px 40px 32px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-modal {
+            flex: 1;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+        }
+
+        .btn-modal-cancel {
+            background: #f3f4f6;
+            color: #1d1d1f;
+        }
+
+        .btn-modal-cancel:hover {
+            background: #e5e7eb;
+        }
+
+        .btn-modal-submit {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-modal-submit:hover {
+            background: #059669;
+        }
+
+        .btn-modal-submit:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .plan-summary {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .plan-summary-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #6e6e73;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .plan-summary-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin-bottom: 4px;
+        }
+
+        .plan-summary-price {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #10b981;
+        }
+
+        .plan-summary-note {
+            font-size: 0.85rem;
+            color: #6e6e73;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -729,33 +936,155 @@
         </div>
     </footer>
 
+    <!-- Purchase Modal -->
+    <div id="purchaseModal" class="modal-overlay">
+        <div class="purchase-modal">
+            <div class="modal-header">
+                <h2>Complete Your Purchase</h2>
+                <button class="modal-close" onclick="closePurchaseModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="plan-summary">
+                    <h3 id="modalPlanName">Light Engine Cloud</h3>
+                    <p id="modalPlanDescription">Cloud-based monitoring and control platform</p>
+                </div>
+
+                <div class="error-message" id="modalError"></div>
+
+                <form id="purchaseForm" onsubmit="handlePurchaseSubmit(event)">
+                    <div class="form-group">
+                        <label for="modalFarmName" class="form-label">
+                            Farm Name <span style="color: #dc2626;">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="modalFarmName" 
+                            class="form-input" 
+                            placeholder="e.g., Green Valley Farms"
+                            required
+                            minlength="2"
+                            maxlength="100"
+                        >
+                        <p class="form-help">The name of your farming operation</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalContactName" class="form-label">
+                            Your Name <span style="color: #dc2626;">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="modalContactName" 
+                            class="form-input" 
+                            placeholder="e.g., John Smith"
+                            required
+                            minlength="2"
+                            maxlength="100"
+                        >
+                        <p class="form-help">Primary contact person</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalEmail" class="form-label">
+                            Email Address <span style="color: #dc2626;">*</span>
+                        </label>
+                        <input 
+                            type="email" 
+                            id="modalEmail" 
+                            class="form-input" 
+                            placeholder="e.g., john@greenvalleyfarms.com"
+                            required
+                        >
+                        <p class="form-help">We'll send your account details and invoice here</p>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal btn-modal-cancel" onclick="closePurchaseModal()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn-modal btn-modal-submit" id="modalSubmitBtn">
+                            Continue to Payment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
-        async function purchaseProduct(plan) {
-            const productNames = {
-                cloud: 'Light Engine Cloud',
-                edge: 'Light Engine Edge'
-            };
+        let currentPlan = '';
 
-            // Prompt for customer information
-            const farmName = prompt('Enter your farm name:');
-            if (!farmName) return;
-
-            const contactName = prompt('Enter your name:');
-            if (!contactName) return;
-
-            const email = prompt('Enter your email address:');
-            if (!email || !email.includes('@')) {
-                alert('Please enter a valid email address');
-                return;
+        const planDetails = {
+            cloud: {
+                name: 'Light Engine Cloud',
+                description: 'Cloud-based monitoring and control platform with unlimited devices and real-time analytics'
+            },
+            edge: {
+                name: 'Light Engine Edge',
+                description: 'Standalone edge device with touchscreen interface for offline operation and local control'
             }
+        };
 
+        function openPurchaseModal(plan) {
+            currentPlan = plan;
+            const modal = document.getElementById('purchaseModal');
+            const planName = document.getElementById('modalPlanName');
+            const planDesc = document.getElementById('modalPlanDescription');
+            
+            // Update modal content
+            planName.textContent = planDetails[plan].name;
+            planDesc.textContent = planDetails[plan].description;
+            
+            // Clear form
+            document.getElementById('purchaseForm').reset();
+            document.getElementById('modalError').classList.remove('show');
+            document.getElementById('modalError').textContent = '';
+            
+            // Show modal
+            modal.style.display = 'flex';
+            setTimeout(() => modal.classList.add('show'), 10);
+            
+            // Focus first input
+            document.getElementById('modalFarmName').focus();
+        }
+
+        function closePurchaseModal() {
+            const modal = document.getElementById('purchaseModal');
+            modal.classList.remove('show');
+            setTimeout(() => modal.style.display = 'none', 300);
+        }
+
+        function showModalError(message) {
+            const errorEl = document.getElementById('modalError');
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+            errorEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        async function handlePurchaseSubmit(event) {
+            event.preventDefault();
+            
+            const submitBtn = document.getElementById('modalSubmitBtn');
+            const originalText = submitBtn.textContent;
+            
             try {
-                // Show loading state
-                const button = event.target;
-                const originalText = button.textContent;
-                button.textContent = 'Creating checkout session...';
-                button.disabled = true;
-
+                // Disable button and show loading
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Creating checkout session...';
+                
+                // Get form values
+                const farmName = document.getElementById('modalFarmName').value.trim();
+                const contactName = document.getElementById('modalContactName').value.trim();
+                const email = document.getElementById('modalEmail').value.trim();
+                
+                // Validate
+                if (!farmName || !contactName || !email) {
+                    showModalError('Please fill in all required fields');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+                
                 // Create checkout session
                 const response = await fetch('/api/farms/create-checkout-session', {
                     method: 'POST',
@@ -763,33 +1092,55 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        plan,
-                        email,
+                        plan: currentPlan,
                         farm_name: farmName,
-                        contact_name: contactName
+                        contact_name: contactName,
+                        email: email
                     })
                 });
-
+                
                 const data = await response.json();
-
+                
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to create checkout session');
+                    throw new Error(data.message || 'Failed to create checkout session');
                 }
-
-                // Redirect to Square payment page
-                console.log('Redirecting to Square checkout:', data.url);
+                
+                if (!data.url) {
+                    throw new Error('No payment URL received from server');
+                }
+                
+                // Store session info for verification
+                localStorage.setItem('pendingPurchase', JSON.stringify({
+                    sessionId: data.sessionId,
+                    plan: currentPlan,
+                    farmName: farmName,
+                    email: email
+                }));
+                
+                // Redirect to Square payment
                 window.location.href = data.url;
-
+                
             } catch (error) {
                 console.error('Purchase error:', error);
-                alert(`Error: ${error.message}\n\nPlease try again or contact support.`);
-                
-                // Restore button state
-                if (event && event.target) {
-                    event.target.textContent = originalText;
-                    event.target.disabled = false;
-                }
+                showModalError(error.message || 'Failed to create checkout session. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
             }
+        }
+
+        // Close modal on outside click
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('purchaseModal');
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closePurchaseModal();
+                }
+            });
+        });
+
+        async function purchaseProduct(plan) {
+            // Open the modal with the selected plan
+            openPurchaseModal(plan);
         }
 
         // Check for product parameter in URL
