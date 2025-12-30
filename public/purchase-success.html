@@ -237,12 +237,26 @@
     </div>
 
     <script>
-        // Get session ID from URL
+        // Get session ID from URL or localStorage
         const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('session_id');
+        let sessionId = urlParams.get('session_id');
+        
+        // If not in URL, try to get from localStorage (Square doesn't append it to redirect)
+        if (!sessionId) {
+            const pendingPurchase = localStorage.getItem('pendingPurchase');
+            if (pendingPurchase) {
+                try {
+                    const purchase = JSON.parse(pendingPurchase);
+                    sessionId = purchase.sessionId;
+                    console.log('Retrieved session ID from localStorage:', sessionId);
+                } catch (e) {
+                    console.error('Failed to parse pendingPurchase from localStorage:', e);
+                }
+            }
+        }
 
         if (!sessionId) {
-            showError('No session ID found');
+            showError('No session ID found. Please contact support if payment was charged.');
         } else {
             verifyPayment(sessionId);
         }
@@ -253,6 +267,9 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
+                    // Clear pending purchase from localStorage
+                    localStorage.removeItem('pendingPurchase');
+                    
                     // Account created successfully
                     setTimeout(() => {
                         document.getElementById('loading').classList.add('hidden');
