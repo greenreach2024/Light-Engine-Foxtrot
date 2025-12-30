@@ -994,8 +994,9 @@
                             class="form-input" 
                             placeholder="e.g., john@greenvalleyfarms.com"
                             required
+                            pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
                         >
-                        <p class="form-help">We'll send your account details and invoice here</p>
+                        <p class="form-help">Use a real email address - we'll send your login credentials here. Avoid generic test emails like test@example.com</p>
                     </div>
 
                     <div class="modal-footer">
@@ -1085,6 +1086,16 @@
                     return;
                 }
                 
+                // Block common test email domains that Square rejects
+                const testEmailDomains = ['example.com', 'test.com', 'localhost', 'invalid'];
+                const emailDomain = email.split('@')[1]?.toLowerCase();
+                if (testEmailDomains.includes(emailDomain)) {
+                    showModalError('Please use a real email address. Test emails like "test@example.com" are not accepted by our payment processor.');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+                
                 // Create checkout session
                 const response = await fetch('/api/farms/create-checkout-session', {
                     method: 'POST',
@@ -1102,7 +1113,11 @@
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    throw new Error(data.message || 'Failed to create checkout session');
+                    // Handle specific error from Square
+                    if (data.error && data.error.includes('Invalid email')) {
+                        throw new Error('Invalid email address. Please use a real email like yourname@yourdomain.com');
+                    }
+                    throw new Error(data.error || data.message || 'Failed to create checkout session');
                 }
                 
                 if (!data.url) {
