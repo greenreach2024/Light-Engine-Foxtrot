@@ -94,6 +94,56 @@ router.post('/validate-device-token', async (req, res) => {
 });
 
 /**
+ * POST /api/auth/login
+ * Authenticate user with farm ID, email, and password
+ * 
+ * Body: { farm_id, email, password }
+ * Returns: { success: true, token, role, farm_id, email }
+ */
+router.post('/login', async (req, res) => {
+  try {
+    const { farm_id, email, password } = req.body;
+
+    if (!farm_id || !email || !password) {
+      return res.status(400).json({ error: 'farm_id, email, and password are required' });
+    }
+
+    // Demo credentials for testing
+    const isDemoLogin = farm_id === 'demo-farm-001' && 
+                       email === 'admin@demo.farm' && 
+                       password === 'demo123';
+
+    // TODO: Add real database authentication here
+    // For now, accept demo credentials only
+    if (!isDemoLogin) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate JWT token for successful login
+    const token = generateFarmToken({
+      farm_id,
+      user_id: 'demo-user-001',
+      role: FARM_ROLES.ADMIN,
+      name: 'Demo Admin',
+      email
+    });
+
+    res.json({
+      success: true,
+      token,
+      farm_id,
+      email,
+      role: FARM_ROLES.ADMIN,
+      expires_in: '24h'
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+/**
  * GET /api/ping
  * Health check endpoint for edge device availability
  * Returns 200 OK if service is running
