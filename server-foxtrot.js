@@ -13365,6 +13365,113 @@ app.get('/api/admin/farms/:farmId', createDemoModeHandler(), asyncHandler(async 
 }));
 
 /**
+ * GET /api/admin/farms/db
+ * List all farms from database (for admin management)
+ */
+app.get('/api/admin/farms/db', asyncHandler(async (req, res) => {
+  console.log('[admin] GET /api/admin/farms/db called');
+  
+  try {
+    const result = await dbPool.query(`
+      SELECT 
+        farm_id as "farmId",
+        name,
+        email,
+        plan_type as "planType",
+        status,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM farms
+      ORDER BY created_at DESC
+    `);
+    
+    res.json({
+      status: 'success',
+      farms: result.rows,
+      total: result.rows.length
+    });
+  } catch (error) {
+    console.error('[admin] Failed to fetch farms from database:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch farms',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * DELETE /api/admin/farms/:email
+ * Delete all farms and users associated with an email address
+ * For testing and cleanup purposes
+ */
+app.delete('/api/admin/farms/:email', asyncHandler(async (req, res) => {
+  console.log(`[admin] DELETE /api/admin/farms/${req.params.email} called`);
+  const { email } = req.params;
+  
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ 
+      status: 'error', 
+      message: 'Valid email address required' 
+    });
+  }
+  
+  try {
+    // Find all farms and users with this email
+    const farmsResult = await dbPool.query(
+      'SELECT farm_id, name FROM farms WHERE email = $1',
+      [email]
+    );
+    
+    const usersResult = await dbPool.query(
+      'SELECT user_id FROM users WHERE email = $1',
+      [email]
+    );
+    
+    console.log(`[admin] Found ${farmsResult.rows.length} farms and ${usersResult.rows.length} users for ${email}`);
+    
+    if (farmsResult.rows.length === 0 && usersResult.rows.length === 0) {
+      return res.json({
+        status: 'success',
+        message: 'No farms or users found with this email',
+        deleted: { farms: 0, users: 0 }
+      });
+    }
+    
+    // Delete users first (foreign key constraint)
+    if (usersResult.rows.length > 0) {
+      await dbPool.query('DELETE FROM users WHERE email = $1', [email]);
+      console.log(`[admin] Deleted ${usersResult.rows.length} users`);
+    }
+    
+    // Delete farms
+    if (farmsResult.rows.length > 0) {
+      await dbPool.query('DELETE FROM farms WHERE email = $1', [email]);
+      console.log(`[admin] Deleted ${farmsResult.rows.length} farms`);
+    }
+    
+    res.json({
+      status: 'success',
+      message: `Successfully deleted ${farmsResult.rows.length} farm(s) and ${usersResult.rows.length} user(s)`,
+      deleted: {
+        farms: farmsResult.rows.length,
+        users: usersResult.rows.length
+      },
+      farmIds: farmsResult.rows.map(f => f.farm_id),
+      farmNames: farmsResult.rows.map(f => f.name)
+    });
+    
+  } catch (error) {
+    console.error('[admin] Farm deletion failed:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete farms',
+      error: error.message
+    });
+  }
+}));
+
+/**
  * GET /api/admin/analytics/aggregate
  * Returns platform-wide aggregated metrics
  */

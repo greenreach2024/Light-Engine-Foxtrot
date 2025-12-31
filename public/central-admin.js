@@ -602,7 +602,7 @@ function renderFarmsTable(farms) {
     const tbody = document.getElementById('farms-tbody');
     
     if (farms.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" class="loading">No farms found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="loading">No farms found</td></tr>';
         return;
     }
     
@@ -612,10 +612,16 @@ function renderFarmsTable(farms) {
             ? new Date(farm.lastHeartbeat).toLocaleString()
             : 'Never';
         
+        // Show email if available
+        const email = farm.email || '';
+        
         return `
         <tr>
             <td><code>${farm.farmId}</code></td>
-            <td><strong>${farm.name}</strong></td>
+            <td>
+                <strong>${farm.name}</strong>
+                ${email ? `<br><small style="color: var(--text-muted)">${email}</small>` : ''}
+            </td>
             <td><span class="badge badge-${getStatusBadgeClass(farm.status)}">${farm.status}</span></td>
             <td>${farm.rooms || 0}</td>
             <td>${farm.zones || 0}</td>
@@ -626,10 +632,43 @@ function renderFarmsTable(farms) {
             <td>${lastUpdate}</td>
             <td>
                 <button class="btn" onclick="drillToFarm('${farm.farmId}')">View</button>
+                ${email ? `<button class="btn" style="background: var(--accent-red); margin-left: 5px;" onclick="deleteFarm('${email}', '${farm.name}')">Delete</button>` : ''}
             </td>
         </tr>
         `;
     }).join('');
+}
+
+/**
+ * Delete all farms and users for an email address
+ */
+async function deleteFarm(email, farmName) {
+    if (!confirm(`⚠️ Delete ALL farms and users for ${email}?\n\nFarm: ${farmName}\n\nThis action cannot be undone!`)) {
+        return;
+    }
+    
+    if (!confirm(`Are you absolutely sure? Type the email to confirm deletion:\n\n${email}`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/farms/${encodeURIComponent(email)}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.status === 'success') {
+            alert(`✅ Successfully deleted:\n\n${data.deleted.farms} farm(s)\n${data.deleted.users} user(s)\n\nFarm IDs: ${data.farmIds.join(', ')}`);
+            // Reload farms list
+            await loadFarms();
+        } else {
+            alert(`❌ Error: ${data.message || 'Failed to delete farms'}`);
+        }
+    } catch (error) {
+        console.error('Delete farm error:', error);
+        alert(`❌ Network error: ${error.message}`);
+    }
 }
 
 /**
