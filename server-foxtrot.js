@@ -6437,17 +6437,43 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
   try {
     // Check if using PostgreSQL (Cloud plan) or NeDB (Edge device)
     if (dbPool) {
-      // For Cloud plan: check if rooms exist (indicates setup complete)
-      // This is a simple implementation - setupWizardRouter has more detailed status
-      const result = await dbPool.query(
-        'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
-        [req.query.farmId || 'unknown']
+      // For Cloud plan: check farm status and if rooms exist
+      // Get farmId from query or authenticated session
+      const farmId = req.query.farmId || req.session?.farmId || req.user?.farmId;
+      
+      if (!farmId) {
+        // No farmId available, check if any setup config exists
+        return res.json({
+          completed: false,
+          message: 'No farm ID provided'
+        });
+      }
+      
+      // Check if farm exists and is active
+      const farmResult = await dbPool.query(
+        'SELECT status FROM farms WHERE farm_id = $1',
+        [farmId]
       );
-      const hasRooms = parseInt(result.rows[0]?.count) > 0;
+      
+      const farm = farmResult.rows[0];
+      const isActive = farm && farm.status === 'active';
+      
+      // Also check if rooms exist (more thorough)
+      const roomResult = await dbPool.query(
+        'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
+        [farmId]
+      );
+      const hasRooms = parseInt(roomResult.rows[0]?.count) > 0;
+      
+      // Setup is complete if farm is active OR has rooms
+      const completed = isActive || hasRooms;
       
       res.json({
-        completed: hasRooms,
-        message: hasRooms ? 'Setup completed' : 'Setup not completed'
+        completed,
+        farmId,
+        hasRooms,
+        isActive,
+        message: completed ? 'Setup completed' : 'Setup not completed'
       });
     } else {
       // For Edge device: use NeDB
