@@ -519,32 +519,111 @@
                 </div>
             </div>
 
-            <!-- Step 4: Hardware Detection -->
+            <!-- Step 4: Cloud Features (Cloud only) / Hardware Detection (Edge only) -->
             <div class="wizard-step" id="step-4">
-                <h1 class="step-title">Hardware Detection</h1>
-                <p class="step-description">
-                    Scanning for connected devices...
-                </p>
-                <div id="hardware-status">
-                    <div class="loading-spinner"></div>
+                <div id="cloud-features" style="display: none;">
+                    <h1 class="step-title">Welcome to Your Cloud Farm! ☁️</h1>
+                    <p class="step-description">
+                        Your GreenReach cloud platform includes powerful features to help manage and grow your farm business
+                    </p>
+                    
+                    <div style="display: grid; gap: 2rem; margin-top: 2rem;">
+                        <!-- AI Assistant -->
+                        <div class="status-card">
+                            <div style="display: flex; align-items: start; gap: 1.5rem;">
+                                <div style="font-size: 3rem;">🤖</div>
+                                <div>
+                                    <h3 style="color: var(--accent-blue); font-size: 1.8rem; margin-bottom: 0.5rem;">AI Assistant</h3>
+                                    <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
+                                        Get instant help with growing questions, pest identification, and farm optimization. 
+                                        Ask questions in natural language and receive expert guidance powered by AI.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Crop Pricing -->
+                        <div class="status-card">
+                            <div style="display: flex; align-items: start; gap: 1.5rem;">
+                                <div style="font-size: 3rem;">💰</div>
+                                <div>
+                                    <h3 style="color: var(--accent-green); font-size: 1.8rem; margin-bottom: 0.5rem;">Smart Crop Pricing</h3>
+                                    <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
+                                        Track market prices, set your own pricing, and analyze profitability. 
+                                        Compare your prices with regional averages to stay competitive.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Activity Hub -->
+                        <div class="status-card">
+                            <div style="display: flex; align-items: start; gap: 1.5rem;">
+                                <div style="font-size: 3rem;">📱</div>
+                                <div>
+                                    <h3 style="color: var(--accent-yellow); font-size: 1.8rem; margin-bottom: 0.5rem;">Activity Hub - Mobile App</h3>
+                                    <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
+                                        Download the Activity Hub mobile app to manage your farm on the go. 
+                                        Track tasks, log activities, monitor conditions, and receive alerts anywhere.
+                                    </p>
+                                    <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                                        <a href="https://apps.apple.com/ca/app/greenreach-farms/id6738987013" target="_blank" style="text-decoration: none;">
+                                            <div class="touch-button" style="padding: 1rem 2rem; font-size: 1rem; min-height: auto;">
+                                                <span>📱 iOS App Store</span>
+                                            </div>
+                                        </a>
+                                        <a href="https://play.google.com/store/apps" target="_blank" style="text-decoration: none;">
+                                            <div class="touch-button" style="padding: 1rem 2rem; font-size: 1rem; min-height: auto;">
+                                                <span>🤖 Google Play</span>
+                                            </div>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dashboard Tour -->
+                        <div class="status-card">
+                            <div style="display: flex; align-items: start; gap: 1.5rem;">
+                                <div style="font-size: 3rem;">🎯</div>
+                                <div>
+                                    <h3 style="color: var(--accent-blue); font-size: 1.8rem; margin-bottom: 0.5rem;">Quick Start</h3>
+                                    <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
+                                        Access your dashboard to create rooms, add crops, set up automation rules, 
+                                        and start tracking your farm's progress. Everything you need is just a click away!
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="hardware-results" style="display: none;">
-                    <div class="status-card">
-                        <div class="status-row">
-                            <span class="status-label">Lights:</span>
-                            <span class="status-value" id="lights-count">0</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="status-label">Fans:</span>
-                            <span class="status-value" id="fans-count">0</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="status-label">Sensors:</span>
-                            <span class="status-value" id="sensors-count">0</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="status-label">Other Devices:</span>
-                            <span class="status-value" id="other-count">0</span>
+
+                <div id="hardware-detection" style="display: none;">
+                    <h1 class="step-title">Hardware Detection</h1>
+                    <p class="step-description">
+                        Scanning for connected devices...
+                    </p>
+                    <div id="hardware-status">
+                        <div class="loading-spinner"></div>
+                    </div>
+                    <div id="hardware-results" style="display: none;">
+                        <div class="status-card">
+                            <div class="status-row">
+                                <span class="status-label">Lights:</span>
+                                <span class="status-value" id="lights-count">0</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">Fans:</span>
+                                <span class="status-value" id="fans-count">0</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">Sensors:</span>
+                                <span class="status-value" id="sensors-count">0</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">Other Devices:</span>
+                                <span class="status-value" id="other-count">0</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -683,6 +762,17 @@
             } else {
                 document.getElementById('next-btn').style.display = 'block';
             }
+
+            // Show/hide appropriate content for step 4 based on plan type
+            if (currentStep === 4) {
+                if (isCloudAccount) {
+                    document.getElementById('cloud-features').style.display = 'block';
+                    document.getElementById('hardware-detection').style.display = 'none';
+                } else {
+                    document.getElementById('cloud-features').style.display = 'none';
+                    document.getElementById('hardware-detection').style.display = 'block';
+                }
+            }
         }
 
         function nextStep() {
@@ -695,7 +785,8 @@
                 updateUI();
 
                 // Trigger step-specific actions
-                if (currentStep === 3) {
+                if (currentStep === 4 && !isCloudAccount) {
+                    // Only detect hardware for edge devices
                     detectHardware();
                 }
             }
