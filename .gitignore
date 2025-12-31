@@ -79,3 +79,5 @@ firmware/**/.piolibdeps/
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+desktop-app/dist/*.dmg
+desktop-app/dist/mac*/
