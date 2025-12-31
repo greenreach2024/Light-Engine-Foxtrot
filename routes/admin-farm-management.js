@@ -34,6 +34,134 @@ function requireAdmin(req, res, next) {
 }
 
 /**
+ * POST /api/admin/auth/login
+ * Admin login with email and password
+ * Demo: Uses farm admin credentials for testing
+ */
+router.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password, mfa_code } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+    
+    const db = await initDatabase();
+    
+    // For demo: Allow any user with role='admin' to login to GreenReach Central
+    const user = await db.get(
+      'SELECT * FROM users WHERE email = ? AND role = "admin" LIMIT 1',
+      [email]
+    );
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    // Verify password
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    // Check if user is disabled
+    if (user.status === 'disabled') {
+      return res.status(403).json({ error: 'Account disabled' });
+    }
+    
+    // Generate admin JWT token (4 hour expiry)
+    const token = jwt.sign(
+      { 
+        admin_id: user.id,
+        user_id: user.id,
+        email: user.email,
+        role: 'admin',
+        farm_id: user.farm_id
+      },
+      getJwtSecret(),
+      { expiresIn: '4h' }
+    );
+    
+    // Update last login
+    await db.run(
+      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
+      [user.id]
+    );
+    
+    // Log successful login (if audit table exists)
+    try {
+      await db.run(
+        `INSERT INTO admin_audit_log (admin_id, action, resource_type, resource_id, metadata, ip_address)
+         VALUES (?, 'LOGIN_SUCCESS', 'admin', ?, ?, ?)`,
+        [user.id, user.id, JSON.stringify({ email }), req.ip]
+      );
+    } catch (auditError) {
+      console.warn('Audit log not available:', auditError.message);
+    }
+    
+    res.json({ 
+      success: true, 
+      token,
+      admin: {
+        id: user.id,
+        email: user.email,
+        name: user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email,
+        farm_id: user.farm_id
+      }
+    });
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+/**
+ * GET /api/admin/auth/verify
+ * Verify current admin session is valid
+ */
+router.get('/auth/verify', requireAdmin, async (req, res) => {
+  try {
+    res.json({ 
+      success: true, 
+      admin: {
+        id: req.admin.admin_id || req.admin.user_id,
+        email: req.admin.email,
+        role: req.admin.role
+      }
+    });
+  } catch (error) {
+    console.error('Session verification error:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+/**
+ * POST /api/admin/auth/logout
+ * Logout admin session
+ */
+router.post('/auth/logout', requireAdmin, async (req, res) => {
+  try {
+    const db = await initDatabase();
+    
+    // Log logout (if audit table exists)
+    try {
+      await db.run(
+        `INSERT INTO admin_audit_log (admin_id, action, resource_type, resource_id, metadata, ip_address)
+         VALUES (?, 'LOGOUT', 'admin', ?, ?, ?)`,
+        [req.admin.admin_id || req.admin.user_id, req.admin.admin_id || req.admin.user_id, JSON.stringify({ email: req.admin.email }), req.ip]
+      );
+    } catch (auditError) {
+      console.warn('Audit log not available:', auditError.message);
+    }
+    
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+/**
  * GET /api/admin/farms
  * List all registered farms
  */
