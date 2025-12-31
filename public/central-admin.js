@@ -3,14 +3,38 @@
  * Enterprise-grade farm management and monitoring system
  */
 
+// Debug logger
+const debugContent = document.getElementById('debug-content');
+window.log = function(msg, color = '#0f0') {
+    console.log(msg);
+    if (debugContent) {
+        const line = document.createElement('div');
+        line.style.color = color;
+        line.style.marginBottom = '3px';
+        line.style.wordBreak = 'break-all';
+        line.style.fontSize = '11px';
+        line.style.lineHeight = '1.4';
+        const timestamp = new Date().toISOString().substr(11, 12);
+        line.textContent = `[${timestamp}] ${msg}`;
+        debugContent.appendChild(line);
+        debugContent.scrollTop = debugContent.scrollHeight;
+    }
+};
+
+log('🟢 Dashboard page loaded', '#0f0');
+log('URL: ' + window.location.href, '#fff');
+
 // Authentication check - redirect to login if not authenticated
 function checkAuth() {
     const token = localStorage.getItem('admin_token');
+    log('checkAuth() called', '#fff');
+    log('Token exists: ' + !!token, token ? '#0f0' : '#f00');
     if (!token) {
-        console.warn('No admin token found, redirecting to login');
+        log('❌ NO TOKEN - Redirecting to login', '#f00');
         window.location.href = '/GR-central-admin-login.html';
         return null;
     }
+    log('✓ Token found (length: ' + token.length + ')', '#0f0');
     return token;
 }
 
@@ -20,13 +44,12 @@ async function verifySession() {
     if (!token) return false;
     
     try {
-        console.log('═══════════════════════════════════════════════');
-        console.log('[VERIFY SESSION] Starting verification...');
-        console.log('[VERIFY SESSION] Token exists:', !!token);
-        console.log('[VERIFY SESSION] Token length:', token.length);
-        console.log('[VERIFY SESSION] Token preview:', token.substring(0, 50) + '...');
-        console.log('[VERIFY SESSION] API_BASE:', API_BASE);
-        console.log('[VERIFY SESSION] Calling:', `${API_BASE}/api/admin/auth/verify`);
+        log('═══════════════════════════════════════', '#ff0');
+        log('🔑 VERIFY SESSION STARTED', '#ff0');
+        log('Token length: ' + token.length, '#fff');
+        log('Token preview: ' + token.substring(0, 50) + '...', '#888');
+        log('API_BASE: ' + API_BASE, '#fff');
+        log('Calling: ' + API_BASE + '/api/admin/auth/verify', '#fff');
         
         const response = await fetch(`${API_BASE}/api/admin/auth/verify`, {
             headers: {
@@ -34,41 +57,43 @@ async function verifySession() {
             }
         });
         
-        console.log('[VERIFY SESSION] Response received');
-        console.log('[VERIFY SESSION] Status:', response.status);
-        console.log('[VERIFY SESSION] Status text:', response.statusText);
-        console.log('[VERIFY SESSION] OK:', response.ok);
+        log('Response received', '#fff');
+        log('Status: ' + response.status, response.ok ? '#0f0' : '#f00');
+        log('OK: ' + response.ok, response.ok ? '#0f0' : '#f00');
         
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            console.error('[VERIFY SESSION] ❌ FAILED');
-            console.error('[VERIFY SESSION] Status:', response.status);
-            console.error('[VERIFY SESSION] Error data:', errorData);
-            console.log('[VERIFY SESSION] Clearing localStorage and redirecting to login...');
+            log('❌ VERIFICATION FAILED!', '#f00');
+            log('Error: ' + JSON.stringify(errorData), '#f00');
+            log('Clearing localStorage...', '#f00');
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_email');
             localStorage.removeItem('admin_name');
-            console.log('[VERIFY SESSION] Redirecting to:', '/GR-central-admin-login.html');
-            window.location.href = '/GR-central-admin-login.html';
+            log('Redirecting to login in 3 seconds...', '#ff0');
+            setTimeout(() => {
+                log('→ Redirecting NOW', '#f00');
+                window.location.href = '/GR-central-admin-login.html';
+            }, 3000);
             return false;
         }
         
         const data = await response.json();
-        console.log('[VERIFY SESSION] ✅ SUCCESS');
-        console.log('[VERIFY SESSION] Response data:', data);
-        console.log('═══════════════════════════════════════════════');
+        log('✅ VERIFICATION SUCCESS!', '#0f0');
+        log('Data: ' + JSON.stringify(data), '#0f0');
+        log('═══════════════════════════════════════', '#ff0');
         return true;
     } catch (error) {
-        console.error('═══════════════════════════════════════════════');
-        console.error('[VERIFY SESSION ERROR] Caught exception:', error);
-        console.error('[VERIFY SESSION ERROR] Error type:', error.constructor.name);
-        console.error('[VERIFY SESSION ERROR] Error message:', error.message);
-        console.error('[VERIFY SESSION ERROR] Error stack:', error.stack);
-        console.log('[VERIFY SESSION ERROR] Clearing localStorage and redirecting...');
+        log('═══════════════════════════════════════', '#f00');
+        log('❌ EXCEPTION in verifySession()', '#f00');
+        log('Error: ' + error.message, '#f00');
+        log('Stack: ' + error.stack, '#888');
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_email');
         localStorage.removeItem('admin_name');
-        window.location.href = '/GR-central-admin-login.html';
+        log('Redirecting to login in 3 seconds...', '#ff0');
+        setTimeout(() => {
+            window.location.href = '/GR-central-admin-login.html';
+        }, 3000);
         return false;
     }
 }
