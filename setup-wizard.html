@@ -631,13 +631,18 @@
     </div>
 
     <script>
+        // Check if this is a cloud account from login
+        const planType = localStorage.getItem('plan_type') || 'edge';
+        const farmId = localStorage.getItem('farm_id');
+        const isCloudAccount = planType === 'cloud';
+        
         let currentStep = 0;
         const totalSteps = 6;
         let activeInput = null;
         let farmData = {
             network: null,
-            registrationCode: null,
-            farmId: null,
+            registrationCode: isCloudAccount ? 'CLOUD-AUTO-SKIP' : null,
+            farmId: farmId,
             hardware: {}
         };
 
@@ -677,6 +682,10 @@
         function nextStep() {
             if (currentStep < totalSteps - 1) {
                 currentStep++;
+                // Skip activation code step (step 2) for cloud accounts
+                if (currentStep === 2 && isCloudAccount) {
+                    currentStep++; // Skip to step 3
+                }
                 updateUI();
 
                 // Trigger step-specific actions
@@ -689,6 +698,10 @@
         function previousStep() {
             if (currentStep > 0) {
                 currentStep--;
+                // Skip activation code step (step 2) for cloud accounts
+                if (currentStep === 2 && isCloudAccount) {
+                    currentStep--; // Skip to step 1
+                }
                 updateUI();
             }
         }

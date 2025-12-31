@@ -345,6 +345,7 @@
           localStorage.setItem('auth_token', data.token);
           localStorage.setItem('farm_id', data.farmId);
           localStorage.setItem('farm_name', data.farmName || '');
+          localStorage.setItem('plan_type', data.planType || 'cloud');
           
           // Check if this is first-time login
           if (data.firstLogin) {

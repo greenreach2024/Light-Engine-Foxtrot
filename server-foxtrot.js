@@ -13580,6 +13580,7 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
       farmName: farm.name,
       email: user.email,
       role: user.role || 'admin',
+      planType: farm.plan_type || 'cloud',
       subscription,
       expiresAt: sessionExpiry.toISOString(),
       firstLogin: Boolean(firstLogin)
