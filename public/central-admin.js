@@ -98,8 +98,7 @@ async function authenticatedFetch(url, options = {}) {
     }
 }
 
-// Use window.location.origin for admin API (port 8091)
-const API_BASE = window.location.origin;
+// Global variables
 let currentFarmId = null;
 let farmsData = [];
 let roomsData = [];
