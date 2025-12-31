@@ -575,18 +575,29 @@
         console.log('[loadInventory] Endpoint 2:', `${API_BASE}/api/inventory/forecast`);
         console.log('[loadInventory] Endpoint 3:', `${API_BASE}/data/groups.json`);
         
+        // Fetch with timeout and better error handling
+        const fetchWithTimeout = (url, timeout = 5000) => {
+          return Promise.race([
+            fetch(url),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Request timeout')), timeout)
+            )
+          ]);
+        };
+        
         const [currentResp, forecastResp, groupsResp] = await Promise.all([
-          fetch(`${API_BASE}/api/inventory/current`).catch(err => {
-            console.error('[loadInventory] Fetch error (current):', err);
-            throw err;
+          fetchWithTimeout(`${API_BASE}/api/inventory/current`).catch(err => {
+            console.error('[loadInventory] Fetch error (current):', err.message || err);
+            // Return mock response
+            return { ok: false, status: 0, error: err.message };
           }),
-          fetch(`${API_BASE}/api/inventory/forecast`).catch(err => {
-            console.error('[loadInventory] Fetch error (forecast):', err);
-            throw err;
+          fetchWithTimeout(`${API_BASE}/api/inventory/forecast`).catch(err => {
+            console.error('[loadInventory] Fetch error (forecast):', err.message || err);
+            return { ok: false, status: 0, error: err.message };
           }),
-          fetch(`${API_BASE}/data/groups.json`).catch(err => {
-            console.error('[loadInventory] Fetch error (groups):', err);
-            throw err;
+          fetchWithTimeout(`${API_BASE}/data/groups.json`).catch(err => {
+            console.error('[loadInventory] Fetch error (groups):', err.message || err);
+            return { ok: false, status: 0, error: err.message };
           })
         ]);
 
@@ -596,8 +607,16 @@
           groups: groupsResp.status
         });
 
+        // If all requests failed, show helpful error
+        if (!currentResp.ok && !forecastResp.ok && !groupsResp.ok) {
+          console.error('[loadInventory] All fetch requests failed');
+          hideLoading();
+          showError('Unable to connect to server. Please check your connection and try again.');
+          return;
+        }
+
         if (!currentResp.ok || !forecastResp.ok || !groupsResp.ok) {
-          throw new Error('Failed to load inventory data');
+          throw new Error('Failed to load some inventory data');
         }
 
         const currentData = await currentResp.json();
