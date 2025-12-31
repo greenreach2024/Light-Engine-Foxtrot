@@ -599,7 +599,7 @@
             <!-- Admin User Info -->
             <div style="padding: 10px 20px; border-bottom: 1px solid #2d3748; font-size: 0.85rem;">
                 <div id="admin-user-info" style="color: #a0aec0; margin-bottom: 8px;"></div>
-                <button class="btn btn-sm" onclick="logout()" style="width: 100%; background: #ef4444; color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem;">🚪 Logout</button>
+                <button class="btn btn-sm" onclick="logout()" style="width: 100%; background: #ef4444; color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem;">Logout</button>
             </div>
             
             <!-- Breadcrumb Navigation -->
@@ -1899,6 +1899,134 @@
                 </div>
             </div>
 
+            <!-- Farm Management View -->
+            <div id="farm-management-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); showView('overview')">Overview</a>
+                    <span>/</span>
+                    <span>Farm Management</span>
+                </div>
+
+                <div class="header">
+                    <h1>Light Engine Farm Management</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Manage all Light Engine farms, users, passwords, and credentials</p>
+                </div>
+
+                <!-- Farm Management KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Farms</div>
+                        <div class="kpi-value" id="farm-mgmt-total">0</div>
+                        <div class="kpi-change neutral"><span id="farm-mgmt-active">0 active</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Users</div>
+                        <div class="kpi-value" id="farm-mgmt-users">0</div>
+                        <div class="kpi-change neutral"><span id="farm-mgmt-admins">0 admins</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Suspended Accounts</div>
+                        <div class="kpi-value" id="farm-mgmt-suspended">0</div>
+                        <div class="kpi-change danger" id="farm-mgmt-suspended-change">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Password Resets (30d)</div>
+                        <div class="kpi-value" id="farm-mgmt-resets">0</div>
+                        <div class="kpi-change neutral" id="farm-mgmt-resets-change">--</div>
+                    </div>
+                </div>
+
+                <!-- Farm List -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">All Light Engine Farms</div>
+                        <div class="filter-bar">
+                            <input type="text" id="farm-search" placeholder="Search farms..." style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); width: 250px;" onkeyup="filterFarmManagement()">
+                            <select id="farm-status-filter" onchange="filterFarmManagement()">
+                                <option value="">All Status</option>
+                                <option value="active">Active</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="pending">Pending</option>
+                            </select>
+                            <select id="farm-tier-filter" onchange="filterFarmManagement()">
+                                <option value="">All Tiers</option>
+                                <option value="starter">Starter</option>
+                                <option value="professional">Professional</option>
+                                <option value="enterprise">Enterprise</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table id="farm-management-table">
+                                <thead>
+                                    <tr>
+                                        <th>Farm ID</th>
+                                        <th>Name</th>
+                                        <th>Contact Email</th>
+                                        <th>Status</th>
+                                        <th>Tier</th>
+                                        <th>Users</th>
+                                        <th>Registered</th>
+                                        <th>Last Login</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="farm-management-tbody">
+                                    <tr>
+                                        <td colspan="9" class="loading">Loading farms...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Management -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">All Farm Users</div>
+                        <div class="filter-bar">
+                            <input type="text" id="user-search" placeholder="Search users..." style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); width: 250px;" onkeyup="filterUserManagement()">
+                            <select id="user-role-filter" onchange="filterUserManagement()">
+                                <option value="">All Roles</option>
+                                <option value="admin">Admin</option>
+                                <option value="manager">Manager</option>
+                                <option value="user">User</option>
+                                <option value="viewer">Viewer</option>
+                            </select>
+                            <select id="user-farm-filter" onchange="filterUserManagement()">
+                                <option value="">All Farms</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table id="user-management-table">
+                                <thead>
+                                    <tr>
+                                        <th>User ID</th>
+                                        <th>Email</th>
+                                        <th>Name</th>
+                                        <th>Farm</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>Last Login</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="user-management-tbody">
+                                    <tr>
+                                        <td colspan="9" class="loading">Loading users...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Network Dashboard View -->
             <div id="network-view" class="view" style="display: none;">
                 <div class="breadcrumb">
@@ -2847,8 +2975,8 @@
                         <td><span class="badge badge-${getGrowerStatusColor(grower.status)}">${grower.status.toUpperCase()}</span></td>
                         <td>${new Date(grower.joined_date).toLocaleDateString()}</td>
                         <td>
-                            <button onclick="viewGrowerDetails('${grower.grower_id}')" class="btn-icon" title="View Details">👁️</button>
-                            <button onclick="updateGrowerStatus('${grower.grower_id}', '${grower.status}')" class="btn-icon" title="Update Status">✏️</button>
+                            <button onclick="viewGrowerDetails('${grower.grower_id}')" class="btn-icon" title="View Details">View</button>
+                            <button onclick="updateGrowerStatus('${grower.grower_id}', '${grower.status}')" class="btn-icon" title="Update Status">Edit</button>
                         </td>
                     </tr>
                 `).join('');
@@ -2886,8 +3014,8 @@
                         <td>${farm.certifications.map(c => `<span class="badge badge-success">${c}</span>`).join(' ') || 'None'}</td>
                         <td>${new Date(farm.assigned_date).toLocaleDateString()}</td>
                         <td>
-                            <button onclick="viewFarmDetails('${farm.farm_id}')" class="btn-icon" title="View Details">👁️</button>
-                            <button onclick="unassignFarm('${farm.farm_id}')" class="btn-icon" title="Unassign">🗑️</button>
+                            <button onclick="viewFarmDetails('${farm.farm_id}')" class="btn-icon" title="View Details">View</button>
+                            <button onclick="unassignFarm('${farm.farm_id}')" class="btn-icon" title="Unassign">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -2919,8 +3047,8 @@
                         <td>${new Date(contract.end_date).toLocaleDateString()}</td>
                         <td>$${contract.value ? contract.value.toLocaleString() : 'N/A'}</td>
                         <td>
-                            <button onclick="viewContractDetails('${contract.contract_id}')" class="btn-icon" title="View Details">👁️</button>
-                            ${contract.status === 'draft' ? `<button onclick="signContract('${contract.contract_id}')" class="btn-icon" title="Sign">✍️</button>` : ''}
+                            <button onclick="viewContractDetails('${contract.contract_id}')" class="btn-icon" title="View Details">View</button>
+                            ${contract.status === 'draft' ? `<button onclick="signContract('${contract.contract_id}')" class="btn-icon" title="Sign">Sign</button>` : ''}
                         </td>
                     </tr>
                 `).join('');
@@ -3170,6 +3298,429 @@
                 console.log('Revoke invitation:', invitationId);
                 alert(`Revoke invitation: ${invitationId}`);
             }
+        }
+
+        // Load network dashboard when view becomes active
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if network view exists
+            const networkView = document.getElementById('network-view');
+            if (networkView) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.attributeName === 'style') {
+                            if (networkView.style.display !== 'none') {
+                                loadNetworkDashboard();
+                            }
+                        }
+                    });
+                });
+                observer.observe(networkView, { attributes: true });
+            }
+            
+            // Check if farm management view exists
+            const farmMgmtView = document.getElementById('farm-management-view');
+            if (farmMgmtView) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.attributeName === 'style') {
+                            if (farmMgmtView.style.display !== 'none') {
+                                loadFarmManagement();
+                            }
+                        }
+                    });
+                });
+                observer.observe(farmMgmtView, { attributes: true });
+            }
+        });
+
+        // ============================================================================
+        // FARM MANAGEMENT FUNCTIONS
+        // ============================================================================
+
+        const FARM_API_URL = window.location.origin;
+        let allManagedFarms = [];
+        let allManagedUsers = [];
+
+        /**
+         * Load farm management dashboard
+         */
+        async function loadFarmManagement() {
+            try {
+                // Load farms
+                const farmsResponse = await fetch(`${FARM_API_URL}/api/admin/farms`);
+                const farmsData = await farmsResponse.json();
+                allManagedFarms = farmsData.farms || [];
+                
+                // Load users
+                const usersResponse = await fetch(`${FARM_API_URL}/api/admin/users`);
+                const usersData = await usersResponse.json();
+                allManagedUsers = usersData.users || [];
+                
+                // Update KPIs
+                updateFarmManagementKPIs();
+                
+                // Render tables
+                renderFarmManagementTable();
+                renderUserManagementTable();
+                
+                // Populate filters
+                populateFarmFilters();
+                
+            } catch (error) {
+                console.error('Error loading farm management:', error);
+            }
+        }
+
+        /**
+         * Update farm management KPIs
+         */
+        function updateFarmManagementKPIs() {
+            const activeFarms = allManagedFarms.filter(f => f.status === 'active').length;
+            const suspendedFarms = allManagedFarms.filter(f => f.status === 'suspended').length;
+            const adminUsers = allManagedUsers.filter(u => u.role === 'admin').length;
+            
+            document.getElementById('farm-mgmt-total').textContent = allManagedFarms.length;
+            document.getElementById('farm-mgmt-active').textContent = `${activeFarms} active`;
+            document.getElementById('farm-mgmt-users').textContent = allManagedUsers.length;
+            document.getElementById('farm-mgmt-admins').textContent = `${adminUsers} admins`;
+            document.getElementById('farm-mgmt-suspended').textContent = suspendedFarms;
+        }
+
+        /**
+         * Render farm management table
+         */
+        function renderFarmManagementTable() {
+            const tbody = document.getElementById('farm-management-tbody');
+            
+            if (allManagedFarms.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text-secondary);">No farms found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = allManagedFarms.map(farm => `
+                <tr>
+                    <td><strong>${farm.farm_id}</strong></td>
+                    <td>${farm.name}</td>
+                    <td>${farm.email || 'N/A'}</td>
+                    <td><span class="badge badge-${getStatusBadgeColor(farm.status)}">${farm.status.toUpperCase()}</span></td>
+                    <td><span class="badge badge-info">${farm.tier || 'starter'}</span></td>
+                    <td>${farm.user_count || 0}</td>
+                    <td>${farm.created_at ? new Date(farm.created_at).toLocaleDateString() : 'N/A'}</td>
+                    <td>${farm.last_login ? new Date(farm.last_login).toLocaleString() : 'Never'}</td>
+                    <td>
+                        <button onclick="viewFarmDetails('${farm.farm_id}')" class="btn-icon" title="View Details">View</button>
+                        <button onclick="impersonateFarm('${farm.farm_id}')" class="btn-icon" title="Impersonate">Login</button>
+                        <button onclick="resetFarmCredentials('${farm.farm_id}')" class="btn-icon" title="Reset Credentials">Reset</button>
+                        <button onclick="toggleFarmStatus('${farm.farm_id}', '${farm.status}')" class="btn-icon" title="${farm.status === 'active' ? 'Suspend' : 'Activate'}">${farm.status === 'active' ? 'Suspend' : 'Activate'}</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        /**
+         * Render user management table
+         */
+        function renderUserManagementTable() {
+            const tbody = document.getElementById('user-management-tbody');
+            
+            if (allManagedUsers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text-secondary);">No users found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = allManagedUsers.map(user => `
+                <tr>
+                    <td><strong>${user.user_id}</strong></td>
+                    <td>${user.email}</td>
+                    <td>${user.first_name || ''} ${user.last_name || ''}</td>
+                    <td><span class="badge badge-secondary">${user.farm_name || user.farm_id}</span></td>
+                    <td><span class="badge badge-${getRoleBadgeColor(user.role)}">${user.role.toUpperCase()}</span></td>
+                    <td><span class="badge badge-${user.status === 'active' ? 'success' : 'danger'}">${user.status || 'active'}</span></td>
+                    <td>${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</td>
+                    <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
+                    <td>
+                        <button onclick="resetUserPassword('${user.user_id}', '${user.email}')" class="btn-icon" title="Reset Password">Reset</button>
+                        <button onclick="toggleUserStatus('${user.user_id}', '${user.status || 'active'}')" class="btn-icon" title="${user.status === 'active' ? 'Disable' : 'Enable'}">${user.status === 'active' ? 'Disable' : 'Enable'}</button>
+                        <button onclick="editUserRole('${user.user_id}', '${user.role}')" class="btn-icon" title="Change Role">Role</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        /**
+         * Populate farm filters
+         */
+        function populateFarmFilters() {
+            const userFarmFilter = document.getElementById('user-farm-filter');
+            if (userFarmFilter) {
+                const uniqueFarms = [...new Set(allManagedUsers.map(u => u.farm_name || u.farm_id))];
+                userFarmFilter.innerHTML = '<option value="">All Farms</option>' +
+                    uniqueFarms.map(farm => `<option value="${farm}">${farm}</option>`).join('');
+            }
+        }
+
+        /**
+         * Filter farm management table
+         */
+        function filterFarmManagement() {
+            const searchTerm = document.getElementById('farm-search').value.toLowerCase();
+            const statusFilter = document.getElementById('farm-status-filter').value;
+            const tierFilter = document.getElementById('farm-tier-filter').value;
+            
+            const filtered = allManagedFarms.filter(farm => {
+                const matchesSearch = !searchTerm || 
+                    farm.farm_id.toLowerCase().includes(searchTerm) ||
+                    farm.name.toLowerCase().includes(searchTerm) ||
+                    (farm.email && farm.email.toLowerCase().includes(searchTerm));
+                const matchesStatus = !statusFilter || farm.status === statusFilter;
+                const matchesTier = !tierFilter || farm.tier === tierFilter;
+                
+                return matchesSearch && matchesStatus && matchesTier;
+            });
+            
+            allManagedFarms = filtered;
+            renderFarmManagementTable();
+            allManagedFarms = farmsData.farms || []; // Restore original
+        }
+
+        /**
+         * Filter user management table
+         */
+        function filterUserManagement() {
+            const searchTerm = document.getElementById('user-search').value.toLowerCase();
+            const roleFilter = document.getElementById('user-role-filter').value;
+            const farmFilter = document.getElementById('user-farm-filter').value;
+            
+            const filtered = allManagedUsers.filter(user => {
+                const matchesSearch = !searchTerm || 
+                    user.email.toLowerCase().includes(searchTerm) ||
+                    (user.first_name && user.first_name.toLowerCase().includes(searchTerm)) ||
+                    (user.last_name && user.last_name.toLowerCase().includes(searchTerm));
+                const matchesRole = !roleFilter || user.role === roleFilter;
+                const matchesFarm = !farmFilter || user.farm_name === farmFilter || user.farm_id === farmFilter;
+                
+                return matchesSearch && matchesRole && matchesFarm;
+            });
+            
+            allManagedUsers = filtered;
+            renderUserManagementTable();
+            allManagedUsers = usersData.users || []; // Restore original
+        }
+
+        /**
+         * Reset farm credentials (password, API keys)
+         */
+        async function resetFarmCredentials(farmId) {
+            if (!confirm(`Reset all credentials for farm ${farmId}?\n\nThis will:\n- Generate new admin password\n- Regenerate API keys\n- Email new credentials to farm contact\n\nThis action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${FARM_API_URL}/api/admin/farms/${farmId}/reset-credentials`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Credentials reset successfully!\n\nNew credentials sent to: ${data.email}\nTemporary Password: ${data.temp_password}\n\nFarm admin must change password on first login.`);
+                    loadFarmManagement();
+                } else {
+                    alert(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('Error resetting credentials:', error);
+                alert('Failed to reset credentials. Please try again.');
+            }
+        }
+
+        /**
+         * Reset user password
+         */
+        async function resetUserPassword(userId, email) {
+            if (!confirm(`Reset password for user: ${email}?\n\nA temporary password will be emailed to the user.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${FARM_API_URL}/api/admin/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Password reset email sent to: ${email}\n\nTemporary Password: ${data.temp_password}`);
+                } else {
+                    alert(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('Error resetting password:', error);
+                alert('Failed to reset password. Please try again.');
+            }
+        }
+
+        /**
+         * Toggle farm status (active/suspended)
+         */
+        async function toggleFarmStatus(farmId, currentStatus) {
+            const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+            const action = newStatus === 'suspended' ? 'suspend' : 'activate';
+            
+            if (!confirm(`${action.toUpperCase()} farm ${farmId}?\n\n${newStatus === 'suspended' ? 'Users will be unable to log in.' : 'Users will regain access.'}`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${FARM_API_URL}/api/admin/farms/${farmId}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Farm ${action}d successfully.`);
+                    loadFarmManagement();
+                } else {
+                    alert(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('Error toggling farm status:', error);
+                alert('Failed to update farm status. Please try again.');
+            }
+        }
+
+        /**
+         * Toggle user status (active/disabled)
+         */
+        async function toggleUserStatus(userId, currentStatus) {
+            const newStatus = currentStatus === 'active' ? 'disabled' : 'active';
+            const action = newStatus === 'disabled' ? 'disable' : 'enable';
+            
+            if (!confirm(`${action.toUpperCase()} this user?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${FARM_API_URL}/api/admin/users/${userId}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`User ${action}d successfully.`);
+                    loadFarmManagement();
+                } else {
+                    alert(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('Error toggling user status:', error);
+                alert('Failed to update user status. Please try again.');
+            }
+        }
+
+        /**
+         * Edit user role
+         */
+        async function editUserRole(userId, currentRole) {
+            const newRole = prompt(`Change user role from "${currentRole}" to:\n\nOptions: admin, manager, user, viewer`, currentRole);
+            
+            if (!newRole || newRole === currentRole) {
+                return;
+            }
+            
+            const validRoles = ['admin', 'manager', 'user', 'viewer'];
+            if (!validRoles.includes(newRole.toLowerCase())) {
+                alert('Invalid role. Must be: admin, manager, user, or viewer');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${FARM_API_URL}/api/admin/users/${userId}/role`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: newRole.toLowerCase() })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`User role updated to: ${newRole}`);
+                    loadFarmManagement();
+                } else {
+                    alert(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('Error updating user role:', error);
+                alert('Failed to update user role. Please try again.');
+            }
+        }
+
+        /**
+         * Impersonate farm (for support)
+         */
+        async function impersonateFarm(farmId) {
+            if (!confirm(`Impersonate farm ${farmId}?\n\nYou will be logged in as this farm's admin for support purposes.\n\nAll actions will be logged.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${FARM_API_URL}/api/admin/impersonate/${farmId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Store impersonation token
+                    localStorage.setItem('impersonation_token', data.token);
+                    localStorage.setItem('impersonation_farm', farmId);
+                    
+                    // Open farm admin in new window
+                    window.open(`/farm-admin.html?impersonate=${farmId}`, '_blank');
+                    
+                    alert(`Impersonation active for farm: ${farmId}\n\nExpires in: 1 hour`);
+                } else {
+                    alert(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                console.error('Error impersonating farm:', error);
+                alert('Failed to impersonate farm. Please try again.');
+            }
+        }
+
+        /**
+         * Get badge color for status
+         */
+        function getStatusBadgeColor(status) {
+            const colors = {
+                'active': 'success',
+                'suspended': 'danger',
+                'pending': 'warning',
+                'inactive': 'secondary'
+            };
+            return colors[status] || 'secondary';
+        }
+
+        /**
+         * Get badge color for role
+         */
+        function getRoleBadgeColor(role) {
+            const colors = {
+                'admin': 'danger',
+                'manager': 'warning',
+                'user': 'info',
+                'viewer': 'secondary'
+            };
+            return colors[role] || 'secondary';
         }
 
         // Load network dashboard when view becomes active

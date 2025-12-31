@@ -106,6 +106,7 @@ import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
 import emailRouter from './server/routes/email-routes.js';
+import adminFarmManagementRouter from './routes/admin-farm-management.js';
 import { router as migrationRouter, initDb as initMigrationDb } from './routes/migration.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
@@ -9887,6 +9888,20 @@ app.use('/api/auth', authRouter);
  * - POST /api/email/verify-connection: Test email service connection
  */
 app.use('/api/email', emailRouter);
+
+/**
+ * Admin Farm Management
+ * GreenReach Central admin controls for managing all Light Engine farms
+ * - GET /api/admin/farms: List all farms
+ * - GET /api/admin/users: List all users across farms
+ * - POST /api/admin/farms/:farmId/reset-credentials: Reset farm credentials
+ * - POST /api/admin/users/:userId/reset-password: Reset user password
+ * - PATCH /api/admin/farms/:farmId/status: Suspend/activate farm
+ * - PATCH /api/admin/users/:userId/status: Enable/disable user
+ * - PATCH /api/admin/users/:userId/role: Change user role
+ * - POST /api/admin/impersonate/:farmId: Generate impersonation token
+ */
+app.use('/api/admin', adminFarmManagementRouter);
 
 /**
  * Setup Wizard Routes (First-Time Farm Setup)
