@@ -356,6 +356,28 @@ router.get('/farms', requireAdmin, async (req, res) => {
   try {
     const db = await initDatabase();
     
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, returning sample farm data');
+      
+      // Return sample/mock farms for NeDB mode
+      const sampleFarms = [
+        {
+          farm_id: 'greenreach-hq',
+          name: 'GreenReach HQ Demo Farm',
+          email: 'admin@greenreach.com',
+          status: 'active',
+          tier: 'enterprise',
+          created_at: new Date().toISOString(),
+          last_login: new Date().toISOString(),
+          user_count: 1
+        }
+      ];
+      
+      return res.json({ success: true, farms: sampleFarms, mode: 'demo' });
+    }
+    
+    // PostgreSQL mode: Query actual database
     const farms = await db.all(`
       SELECT 
         f.farm_id,
@@ -372,7 +394,7 @@ router.get('/farms', requireAdmin, async (req, res) => {
       ORDER BY f.created_at DESC
     `);
     
-    res.json({ success: true, farms });
+    res.json({ success: true, farms, mode: 'database' });
   } catch (error) {
     console.error('Error listing farms:', error);
     res.status(500).json({ error: 'Failed to list farms' });
@@ -387,6 +409,30 @@ router.get('/users', requireAdmin, async (req, res) => {
   try {
     const db = await initDatabase();
     
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, returning sample user data');
+      
+      // Return sample/mock users for NeDB mode
+      const sampleUsers = [
+        {
+          user_id: 1,
+          email: 'admin@greenreach.com',
+          first_name: 'System',
+          last_name: 'Administrator',
+          role: 'admin',
+          status: 'active',
+          last_login: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          farm_id: 'greenreach-hq',
+          farm_name: 'GreenReach HQ Demo Farm'
+        }
+      ];
+      
+      return res.json({ success: true, users: sampleUsers, mode: 'demo' });
+    }
+    
+    // PostgreSQL mode: Query actual database
     const users = await db.all(`
       SELECT 
         u.id as user_id,
@@ -404,7 +450,7 @@ router.get('/users', requireAdmin, async (req, res) => {
       ORDER BY u.created_at DESC
     `);
     
-    res.json({ success: true, users });
+    res.json({ success: true, users, mode: 'database' });
   } catch (error) {
     console.error('Error listing users:', error);
     res.status(500).json({ error: 'Failed to list users' });
