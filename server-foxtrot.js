@@ -6383,11 +6383,21 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
     };
 
     // Store in database
-    await db.update(
-      { key: 'setup_config' },
-      { ...setupConfig, key: 'setup_config' },
-      { upsert: true }
-    );
+    // Check if using PostgreSQL (Cloud plan) or NeDB (Edge device)
+    if (dbPool) {
+      // For Cloud plan: mark farm as setup complete in PostgreSQL
+      await dbPool.query(
+        'UPDATE farms SET status = $1, updated_at = NOW() WHERE farm_id = $2',
+        ['active', farmId]
+      );
+    } else {
+      // For Edge device: use NeDB
+      await db.update(
+        { key: 'setup_config' },
+        { ...setupConfig, key: 'setup_config' },
+        { upsert: true }
+      );
+    }
 
     // If connected to GreenReach Central, sync certifications
     if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY) {
@@ -6425,24 +6435,40 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
 // Get setup status endpoint
 app.get('/api/setup/status', asyncHandler(async (req, res) => {
   try {
-    // Retrieve setup configuration from database
-    const setupConfig = await db.findOne({ key: 'setup_config' });
-    
-    if (setupConfig && setupConfig.completed) {
+    // Check if using PostgreSQL (Cloud plan) or NeDB (Edge device)
+    if (dbPool) {
+      // For Cloud plan: check if rooms exist (indicates setup complete)
+      // This is a simple implementation - setupWizardRouter has more detailed status
+      const result = await dbPool.query(
+        'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
+        [req.query.farmId || 'unknown']
+      );
+      const hasRooms = parseInt(result.rows[0]?.count) > 0;
+      
       res.json({
-        completed: true,
-        completedAt: setupConfig.completedAt,
-        farmId: setupConfig.farmId,
-        registrationCode: setupConfig.registrationCode,
-        network: setupConfig.network,
-        hardwareDetected: setupConfig.hardwareDetected,
-        certifications: setupConfig.certifications || { certifications: [], practices: [], attributes: [] }
+        completed: hasRooms,
+        message: hasRooms ? 'Setup completed' : 'Setup not completed'
       });
     } else {
-      res.json({
-        completed: false,
-        message: 'Setup not completed'
-      });
+      // For Edge device: use NeDB
+      const setupConfig = await db.findOne({ key: 'setup_config' });
+      
+      if (setupConfig && setupConfig.completed) {
+        res.json({
+          completed: true,
+          completedAt: setupConfig.completedAt,
+          farmId: setupConfig.farmId,
+          registrationCode: setupConfig.registrationCode,
+          network: setupConfig.network,
+          hardwareDetected: setupConfig.hardwareDetected,
+          certifications: setupConfig.certifications || { certifications: [], practices: [], attributes: [] }
+        });
+      } else {
+        res.json({
+          completed: false,
+          message: 'Setup not completed'
+        });
+      }
     }
   } catch (error) {
     console.error('[setup-wizard] Error getting setup status:', error);
