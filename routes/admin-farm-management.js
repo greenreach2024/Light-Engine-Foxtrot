@@ -200,6 +200,40 @@ router.post('/auth/login', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/auth/health
+ * Check if JWT secret is accessible
+ */
+router.get('/auth/health', async (req, res) => {
+  try {
+    console.log('[AUTH HEALTH] Checking JWT secret availability...');
+    const jwtSecret = await getJwtSecret();
+    console.log('[AUTH HEALTH] JWT secret obtained, length:', jwtSecret.length);
+    console.log('[AUTH HEALTH] JWT secret preview:', jwtSecret.substring(0, 10) + '...');
+    
+    // Try to sign and verify a test token
+    const testPayload = { test: true, timestamp: Date.now() };
+    const testToken = jwt.sign(testPayload, jwtSecret, { expiresIn: '1m' });
+    const testDecoded = jwt.verify(testToken, jwtSecret);
+    
+    console.log('[AUTH HEALTH] ✅ JWT signing and verification working');
+    res.json({ 
+      success: true, 
+      message: 'JWT authentication system operational',
+      jwtSecretLength: jwtSecret.length,
+      testTokenLength: testToken.length,
+      testVerified: !!testDecoded
+    });
+  } catch (error) {
+    console.error('[AUTH HEALTH ERROR]:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+/**
  * GET /api/admin/auth/debug
  * Debug endpoint to check auth status and JWT configuration
  */
@@ -245,20 +279,46 @@ router.get('/auth/debug', async (req, res) => {
  * GET /api/admin/auth/verify
  * Verify current admin session is valid
  */
-router.get('/auth/verify', requireAdmin, async (req, res) => {
+router.get('/auth/verify', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  console.log('[AUTH VERIFY] ===== VERIFY REQUEST =====');
+  console.log('[AUTH VERIFY] Has auth header:', !!authHeader);
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.warn('[AUTH VERIFY] ❌ Missing or invalid Authorization header');
+    return res.status(401).json({ error: 'Admin authentication required' });
+  }
+  
   try {
-    console.log('[AUTH VERIFY] Token verified successfully for:', req.admin.email);
+    const token = authHeader.split(' ')[1];
+    console.log('[AUTH VERIFY] Token extracted, length:', token.length);
+    
+    const jwtSecret = await getJwtSecret();
+    console.log('[AUTH VERIFY] JWT Secret obtained, length:', jwtSecret.length);
+    
+    const decoded = jwt.verify(token, jwtSecret);
+    console.log('[AUTH VERIFY] ✅ Token decoded successfully');
+    console.log('[AUTH VERIFY] Email:', decoded.email, 'Role:', decoded.role);
+    
+    if (decoded.role !== 'admin') {
+      console.warn('[AUTH VERIFY] ❌ User does not have admin role:', decoded.role);
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    console.log('[AUTH VERIFY] ✅ Verification successful!');
     res.json({ 
       success: true, 
       admin: {
-        id: req.admin.admin_id || req.admin.user_id,
-        email: req.admin.email,
-        role: req.admin.role
+        id: decoded.admin_id || decoded.user_id,
+        email: decoded.email,
+        role: decoded.role
       }
     });
   } catch (error) {
-    console.error('[AUTH VERIFY ERROR]:', error);
-    res.status(500).json({ error: 'Verification failed' });
+    console.error('[AUTH VERIFY ERROR]:', error.message);
+    console.error('[AUTH VERIFY ERROR] Stack:', error.stack);
+    res.status(401).json({ error: 'Invalid or expired admin token', details: error.message });
   }
 });
 
