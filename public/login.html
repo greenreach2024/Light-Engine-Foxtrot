@@ -302,8 +302,8 @@
                     throw new Error(data.message || data.error || 'Login failed');
                 }
                 
-                // Store token and farm info
-                localStorage.setItem('auth_token', data.token);
+                // Store token and farm info (must match auth-guard.js token key)
+                localStorage.setItem('farm_auth_token', data.token);
                 localStorage.setItem('farm_id', data.farmId);
                 localStorage.setItem('farm_name', data.farmName || '');
                 localStorage.setItem('user_email', email);
