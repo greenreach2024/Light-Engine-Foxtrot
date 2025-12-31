@@ -57,10 +57,45 @@ async function createAdminUser() {
       process.exit(1);
     }
 
-    // Get admin details from user
-    const email = await question('Email address: ');
+    // Get admin details from command line or prompt
+    let email, fullName, password;
+    
+    if (process.argv.length >= 5) {
+      // Command line arguments: node script.js email fullName password
+      email = process.argv[2];
+      fullName = process.argv[3];
+      password = process.argv[4];
+      console.log(`Creating admin user: ${email}`);
+    } else {
+      // Interactive mode
+      email = await question('Email address: ');
+      if (!email || !email.includes('@')) {
+        console.error('❌ Invalid email address');
+        process.exit(1);
+      }
+      
+      fullName = await question('Full name: ');
+      password = await question('Password (minimum 8 characters): ');
+      
+      if (password.length < 8) {
+        console.error('❌ Password must be at least 8 characters');
+        process.exit(1);
+      }
+
+      const passwordConfirm = await question('Confirm password: ');
+      if (password !== passwordConfirm) {
+        console.error('❌ Passwords do not match');
+        process.exit(1);
+      }
+    }
+    
     if (!email || !email.includes('@')) {
       console.error('❌ Invalid email address');
+      process.exit(1);
+    }
+    
+    if (password.length < 8) {
+      console.error('❌ Password must be at least 8 characters');
       process.exit(1);
     }
 
@@ -72,21 +107,6 @@ async function createAdminUser() {
 
     if (existingUser.rows.length > 0) {
       console.error(`❌ User with email ${email} already exists`);
-      process.exit(1);
-    }
-
-    const fullName = await question('Full name: ');
-    const password = await question('Password (minimum 8 characters): ');
-
-    if (password.length < 8) {
-      console.error('❌ Password must be at least 8 characters');
-      process.exit(1);
-    }
-
-    const passwordConfirm = await question('Confirm password: ');
-
-    if (password !== passwordConfirm) {
-      console.error('❌ Passwords do not match');
       process.exit(1);
     }
 
