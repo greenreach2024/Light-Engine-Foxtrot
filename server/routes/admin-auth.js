@@ -290,7 +290,7 @@ async function incrementFailedAttempts(db, adminUserId, currentAttempts) {
     'LOGIN_FAILED',
     'session',
     JSON.stringify({ attempts: newAttempts, locked: !!lockUntil }),
-    'failure'
+    false
   ]);
 }
 
