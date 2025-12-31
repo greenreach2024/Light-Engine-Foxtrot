@@ -187,10 +187,12 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Login error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', error.message);
     return res.status(500).json({
       success: false,
       error: 'Server error',
-      message: 'An error occurred during login'
+      message: process.env.NODE_ENV === 'production' ? 'An error occurred during login' : error.message
     });
   }
 });
