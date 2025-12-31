@@ -5,14 +5,32 @@
 
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { getJwtSecret } from '../utils/secrets-manager.js';
 
-const JWT_SECRET = process.env.ADMIN_JWT_SECRET || crypto.randomBytes(32).toString('hex');
+// Use JWT_SECRET (not ADMIN_JWT_SECRET) - matches environment config
+let JWT_SECRET = null;
+
+// Initialize JWT_SECRET asynchronously
+async function initJwtSecret() {
+  if (!JWT_SECRET) {
+    try {
+      JWT_SECRET = await getJwtSecret();
+      console.log('[Admin Auth] JWT_SECRET loaded successfully');
+    } catch (error) {
+      console.error('[Admin Auth] Failed to load JWT_SECRET:', error.message);
+      JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+    }
+  }
+  return JWT_SECRET;
+}
+
 const JWT_EXPIRY = '12h'; // 12 hour sessions
 
 /**
  * Generate admin JWT token
  */
-export function generateAdminToken(admin) {
+export async function generateAdminToken(admin) {
+  const secret = await initJwtSecret();
   return jwt.sign(
     {
       adminId: admin.id,
@@ -20,7 +38,7 @@ export function generateAdminToken(admin) {
       role: admin.permissions ? 'super_admin' : 'admin', // Derive from permissions
       name: admin.name
     },
-    JWT_SECRET,
+    secret,
     { expiresIn: JWT_EXPIRY }
   );
 }
@@ -28,9 +46,10 @@ export function generateAdminToken(admin) {
 /**
  * Verify admin JWT token
  */
-export function verifyAdminToken(token) {
+export async function verifyAdminToken(token) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    const secret = await initJwtSecret();
+    return jwt.verify(token, secret);
   } catch (error) {
     return null;
   }
@@ -45,7 +64,7 @@ export function hashToken(token) {
 
 /**
  * Admin authentication middleware
- * Validates JWT and checks session in database
+ * Validates JWT (with database session validation if DB enabled)
  */
 export async function adminAuthMiddleware(req, res, next) {
   try {
@@ -62,7 +81,7 @@ export async function adminAuthMiddleware(req, res, next) {
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
     
     // Verify JWT
-    const decoded = verifyAdminToken(token);
+    const decoded = await verifyAdminToken(token);
     if (!decoded) {
       return res.status(401).json({
         success: false,
@@ -71,59 +90,72 @@ export async function adminAuthMiddleware(req, res, next) {
       });
     }
 
-    // Check if session exists and is valid
-    const tokenHash = hashToken(token);
-    const sessionQuery = `
-      SELECT 
-        s.id as session_id,
-        s.admin_id,
-        s.expires_at,
-        u.email,
-        u.name,
-        u.active
-      FROM admin_sessions s
-      JOIN admin_users u ON s.admin_id = u.id
-      WHERE s.token_hash = $1
-    `;
-
-    const { rows } = await req.db.query(sessionQuery, [tokenHash]);
+    // Check if database is available
+    const dbEnabled = String(process.env.DB_ENABLED || 'false').toLowerCase() === 'true';
     
-    if (rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid session',
-        message: 'Session not found'
-      });
+    if (dbEnabled && req.db) {
+      // Database mode: Validate session exists and is not expired
+      const tokenHash = hashToken(token);
+      const sessionQuery = `
+        SELECT 
+          s.id as session_id,
+          s.admin_id,
+          s.expires_at,
+          u.email,
+          u.name,
+          u.active
+        FROM admin_sessions s
+        JOIN admin_users u ON s.admin_id = u.id
+        WHERE s.token_hash = $1
+      `;
+
+      const { rows } = await req.db.query(sessionQuery, [tokenHash]);
+      
+      if (rows.length === 0) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid session',
+          message: 'Session not found'
+        });
+      }
+
+      const session = rows[0];
+
+      // Check if session is expired
+      if (new Date(session.expires_at) < new Date()) {
+        return res.status(401).json({
+          success: false,
+          error: 'Session expired',
+          message: 'Your session has expired. Please login again.'
+        });
+      }
+
+      // Check if account is active
+      if (!session.active) {
+        return res.status(401).json({
+          success: false,
+          error: 'Account disabled',
+          message: 'Your account has been disabled'
+        });
+      }
+
+      // Attach admin info from database
+      req.admin = {
+        id: session.admin_id,
+        email: session.email,
+        name: session.name,
+        role: 'admin',
+        session_id: session.session_id
+      };
+    } else {
+      // JWT-only mode (no database): Trust the JWT token payload
+      req.admin = {
+        id: decoded.adminId,
+        email: decoded.email,
+        name: decoded.name,
+        role: decoded.role || 'admin'
+      };
     }
-
-    const session = rows[0];
-
-    // Check if session is expired
-    if (new Date(session.expires_at) < new Date()) {
-      return res.status(401).json({
-        success: false,
-        error: 'Session expired',
-        message: 'Your session has expired. Please login again.'
-      });
-    }
-
-    // Check if account is active
-    if (!session.active) {
-      return res.status(401).json({
-        success: false,
-        error: 'Account disabled',
-        message: 'Your account has been disabled'
-      });
-    }
-
-    // Attach admin info to request
-    req.admin = {
-      id: session.admin_id,
-      email: session.email,
-      name: session.name,
-      role: 'admin', // Can enhance this based on permissions later
-      session_id: session.session_id
-    };
 
     next();
   } catch (error) {

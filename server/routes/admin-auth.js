@@ -29,150 +29,180 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Get admin user
-    const userQuery = `
-      SELECT 
-        id,
-        email,
-        password_hash,
-        name,
-        active,
-        mfa_enabled,
-        mfa_secret,
-        failed_attempts,
-        locked_until
-      FROM admin_users
-      WHERE email = $1
-    `;
+    const dbEnabled = String(process.env.DB_ENABLED || 'false').toLowerCase() === 'true';
 
-    const { rows } = await req.db.query(userQuery, [email.toLowerCase()]);
+    // Define fallback admin credentials for non-database mode
+    const FALLBACK_ADMIN = {
+      id: 1,
+      email: 'admin@greenreach.com',
+      password: 'Admin2025!', // Plain text for comparison
+      name: 'GreenReach Admin',
+      active: true,
+      mfa_enabled: false
+    };
 
-    if (rows.length === 0) {
-      // Don't reveal if user exists
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication failed',
-        message: 'Invalid email or password'
-      });
-    }
+    let user = null;
 
-    const user = rows[0];
+    if (dbEnabled && req.db) {
+      // Database mode: Query admin_users table
+      const userQuery = `
+        SELECT 
+          id,
+          email,
+          password_hash,
+          name,
+          active,
+          mfa_enabled,
+          mfa_secret,
+          failed_attempts,
+          locked_until
+        FROM admin_users
+        WHERE email = $1
+      `;
 
-    // Check if account is locked
-    if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      const minutesRemaining = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
-      return res.status(423).json({
-        success: false,
-        error: 'Account locked',
-        message: `Too many failed attempts. Try again in ${minutesRemaining} minutes.`
-      });
-    }
+      const { rows } = await req.db.query(userQuery, [email.toLowerCase()]);
 
-    // Check if account is active
-    if (!user.active) {
-      return res.status(403).json({
-        success: false,
-        error: 'Account disabled',
-        message: 'Your account has been disabled. Contact support.'
-      });
-    }
-
-    // Verify password
-    const passwordMatch = await bcrypt.compare(password, user.password_hash);
-    
-    if (!passwordMatch) {
-      // Increment failed attempts
-      await incrementFailedAttempts(req.db, user.id, user.failed_attempts);
-      
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication failed',
-        message: 'Invalid email or password'
-      });
-    }
-
-    // Check 2FA if enabled
-    if (user.mfa_enabled) {
-      if (!mfa_code) {
+      if (rows.length === 0) {
+        // Don't reveal if user exists
         return res.status(401).json({
           success: false,
-          error: '2FA required',
-          message: 'Two-factor authentication code is required',
-          requires_2fa: true
+          error: 'Authentication failed',
+          message: 'Invalid email or password'
         });
       }
 
-      // Verify 2FA code (simplified - in production use speakeasy or similar)
-      const valid2FA = verify2FACode(user.mfa_secret, mfa_code);
-      if (!valid2FA) {
+      user = rows[0];
+
+      // Check if account is locked
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        const minutesRemaining = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+        return res.status(423).json({
+          success: false,
+          error: 'Account locked',
+          message: `Too many failed attempts. Try again in ${minutesRemaining} minutes.`
+        });
+      }
+
+      // Check if account is active
+      if (!user.active) {
+        return res.status(403).json({
+          success: false,
+          error: 'Account disabled',
+          message: 'Your account has been disabled. Contact support.'
+        });
+      }
+
+      // Verify password
+      const passwordMatch = await bcrypt.compare(password, user.password_hash);
+      
+      if (!passwordMatch) {
+        // Increment failed attempts
         await incrementFailedAttempts(req.db, user.id, user.failed_attempts);
         
         return res.status(401).json({
           success: false,
-          error: 'Invalid 2FA code',
-          message: 'The two-factor code is incorrect'
+          error: 'Authentication failed',
+          message: 'Invalid email or password'
         });
       }
+
+      // Check 2FA if enabled
+      if (user.mfa_enabled) {
+        if (!mfa_code) {
+          return res.status(401).json({
+            success: false,
+            error: '2FA required',
+            message: 'Two-factor authentication code is required',
+            requires_2fa: true
+          });
+        }
+
+        // Verify 2FA code (simplified - in production use speakeasy or similar)
+        const valid2FA = verify2FACode(user.mfa_secret, mfa_code);
+        if (!valid2FA) {
+          await incrementFailedAttempts(req.db, user.id, user.failed_attempts);
+          
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid 2FA code',
+            message: 'The two-factor code is incorrect'
+          });
+        }
+      }
+    } else {
+      // Fallback mode (no database): Use hardcoded credentials
+      if (email.toLowerCase() !== FALLBACK_ADMIN.email.toLowerCase() || password !== FALLBACK_ADMIN.password) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication failed',
+          message: 'Invalid email or password'
+        });
+      }
+
+      // Use fallback admin user
+      user = FALLBACK_ADMIN;
     }
 
     // Generate token
-    const token = generateAdminToken({
+    const token = await generateAdminToken({
       id: user.id,
       email: user.email,
       name: user.name,
       permissions: user.permissions
     });
 
-    // Create session
-    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12 hours
-    const tokenHash = hashToken(token);
+    if (dbEnabled && req.db) {
+      // Create session in database
+      const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12 hours
+      const tokenHash = hashToken(token);
 
-    await req.db.query(`
-      INSERT INTO admin_sessions (
-        admin_id,
-        token_hash,
-        ip_address,
-        user_agent,
-        expires_at
-      ) VALUES ($1, $2, $3, $4, $5)
-    `, [
-      user.id,
-      tokenHash,
-      req.ip,
-      req.headers['user-agent'],
-      expiresAt
-    ]);
+      await req.db.query(`
+        INSERT INTO admin_sessions (
+          admin_id,
+          token_hash,
+          ip_address,
+          user_agent,
+          expires_at
+        ) VALUES ($1, $2, $3, $4, $5)
+      `, [
+        user.id,
+        tokenHash,
+        req.ip,
+        req.headers['user-agent'],
+        expiresAt
+      ]);
 
-    // Reset failed attempts and update last login
-    await req.db.query(`
-      UPDATE admin_users
-      SET 
-        failed_attempts = 0,
-        locked_until = NULL,
-        last_login = NOW()
-      WHERE id = $1
-    `, [user.id]);
+      // Reset failed attempts and update last login
+      await req.db.query(`
+        UPDATE admin_users
+        SET 
+          failed_attempts = 0,
+          locked_until = NULL,
+          last_login = NOW()
+        WHERE id = $1
+      `, [user.id]);
 
-    // Log successful login
-    await req.db.query(`
-      INSERT INTO admin_audit_log (
-        admin_id,
-        action,
-        resource_type,
-        details,
-        ip_address,
-        user_agent,
-        success
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [
-      user.id,
-      'LOGIN_SUCCESS',
-      'session',
-      JSON.stringify({ email: user.email }),
-      req.ip,
-      req.headers['user-agent'],
-      true
-    ]);
+      // Log successful login
+      await req.db.query(`
+        INSERT INTO admin_audit_log (
+          admin_id,
+          action,
+          resource_type,
+          details,
+          ip_address,
+          user_agent,
+          success
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        user.id,
+        'LOGIN_SUCCESS',
+        'session',
+        JSON.stringify({ email: user.email }),
+        req.ip,
+        req.headers['user-agent'],
+        true
+      ]);
+    }
 
     return res.json({
       success: true,
