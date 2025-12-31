@@ -15,10 +15,10 @@ const JWT_EXPIRY = '12h'; // 12 hour sessions
 export function generateAdminToken(admin) {
   return jwt.sign(
     {
-      admin_user_id: admin.admin_user_id,
+      adminId: admin.id,
       email: admin.email,
-      role: admin.role,
-      name: admin.full_name
+      role: admin.permissions ? 'super_admin' : 'admin', // Derive from permissions
+      name: admin.name
     },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRY }
@@ -75,16 +75,14 @@ export async function adminAuthMiddleware(req, res, next) {
     const tokenHash = hashToken(token);
     const sessionQuery = `
       SELECT 
-        s.session_id,
-        s.admin_user_id,
+        s.id as session_id,
+        s.admin_id,
         s.expires_at,
-        s.revoked_at,
         u.email,
-        u.full_name,
-        u.role,
-        u.is_active
+        u.name,
+        u.active
       FROM admin_sessions s
-      JOIN admin_users u ON s.admin_user_id = u.admin_user_id
+      JOIN admin_users u ON s.admin_id = u.id
       WHERE s.token_hash = $1
     `;
 
@@ -100,15 +98,6 @@ export async function adminAuthMiddleware(req, res, next) {
 
     const session = rows[0];
 
-    // Check if session is revoked
-    if (session.revoked_at) {
-      return res.status(401).json({
-        success: false,
-        error: 'Session revoked',
-        message: 'This session has been logged out'
-      });
-    }
-
     // Check if session is expired
     if (new Date(session.expires_at) < new Date()) {
       return res.status(401).json({
@@ -123,16 +112,21 @@ export async function adminAuthMiddleware(req, res, next) {
       return res.status(403).json({
         success: false,
         error: 'Account disabled',
+    // Check if account is active
+    if (!session.active) {
+      return res.status(401).json({
+        success: false,
+        error: 'Account disabled',
         message: 'Your account has been disabled'
       });
     }
 
     // Attach admin info to request
     req.admin = {
-      admin_user_id: session.admin_user_id,
+      id: session.admin_id,
       email: session.email,
-      name: session.full_name,
-      role: session.role,
+      name: session.name,
+      role: 'admin', // Can enhance this based on permissions later
       session_id: session.session_id
     };
 
