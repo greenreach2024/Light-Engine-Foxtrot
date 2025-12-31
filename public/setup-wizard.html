@@ -712,6 +712,10 @@
         const farmId = localStorage.getItem('farm_id');
         const isCloudAccount = planType === 'cloud';
         
+        console.log('[Setup Wizard] planType from localStorage:', planType);
+        console.log('[Setup Wizard] farmId from localStorage:', farmId);
+        console.log('[Setup Wizard] isCloudAccount:', isCloudAccount);
+        
         let currentStep = 0;
         const totalSteps = 6;
         let activeInput = null;
@@ -774,8 +778,10 @@
         function nextStep() {
             if (currentStep < totalSteps - 1) {
                 currentStep++;
+                console.log('[Setup Wizard] Moving to step:', currentStep);
                 // Skip activation code step (step 2) for cloud accounts
                 if (currentStep === 2 && isCloudAccount) {
+                    console.log('[Setup Wizard] Skipping activation code step for cloud account');
                     currentStep++; // Skip to step 3
                 }
                 updateUI();
