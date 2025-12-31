@@ -3,38 +3,15 @@
  * Enterprise-grade farm management and monitoring system
  */
 
-// Debug logger
-const debugContent = document.getElementById('debug-content');
-window.log = function(msg, color = '#0f0') {
-    console.log(msg);
-    if (debugContent) {
-        const line = document.createElement('div');
-        line.style.color = color;
-        line.style.marginBottom = '3px';
-        line.style.wordBreak = 'break-all';
-        line.style.fontSize = '11px';
-        line.style.lineHeight = '1.4';
-        const timestamp = new Date().toISOString().substr(11, 12);
-        line.textContent = `[${timestamp}] ${msg}`;
-        debugContent.appendChild(line);
-        debugContent.scrollTop = debugContent.scrollHeight;
-    }
-};
-
-log('🟢 Dashboard page loaded', '#0f0');
-log('URL: ' + window.location.href, '#fff');
+const API_BASE = window.location.origin;
 
 // Authentication check - redirect to login if not authenticated
 function checkAuth() {
     const token = localStorage.getItem('admin_token');
-    log('checkAuth() called', '#fff');
-    log('Token exists: ' + !!token, token ? '#0f0' : '#f00');
     if (!token) {
-        log('❌ NO TOKEN - Redirecting to login', '#f00');
         window.location.href = '/GR-central-admin-login.html';
         return null;
     }
-    log('✓ Token found (length: ' + token.length + ')', '#0f0');
     return token;
 }
 
@@ -44,56 +21,27 @@ async function verifySession() {
     if (!token) return false;
     
     try {
-        log('═══════════════════════════════════════', '#ff0');
-        log('🔑 VERIFY SESSION STARTED', '#ff0');
-        log('Token length: ' + token.length, '#fff');
-        log('Token preview: ' + token.substring(0, 50) + '...', '#888');
-        log('API_BASE: ' + API_BASE, '#fff');
-        log('Calling: ' + API_BASE + '/api/admin/auth/verify', '#fff');
-        
         const response = await fetch(`${API_BASE}/api/admin/auth/verify`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
         
-        log('Response received', '#fff');
-        log('Status: ' + response.status, response.ok ? '#0f0' : '#f00');
-        log('OK: ' + response.ok, response.ok ? '#0f0' : '#f00');
-        
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            log('❌ VERIFICATION FAILED!', '#f00');
-            log('Error: ' + JSON.stringify(errorData), '#f00');
-            log('Clearing localStorage...', '#f00');
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_email');
             localStorage.removeItem('admin_name');
-            log('Redirecting to login in 3 seconds...', '#ff0');
-            setTimeout(() => {
-                log('→ Redirecting NOW', '#f00');
-                window.location.href = '/GR-central-admin-login.html';
-            }, 3000);
+            window.location.href = '/GR-central-admin-login.html';
             return false;
         }
         
-        const data = await response.json();
-        log('✅ VERIFICATION SUCCESS!', '#0f0');
-        log('Data: ' + JSON.stringify(data), '#0f0');
-        log('═══════════════════════════════════════', '#ff0');
         return true;
     } catch (error) {
-        log('═══════════════════════════════════════', '#f00');
-        log('❌ EXCEPTION in verifySession()', '#f00');
-        log('Error: ' + error.message, '#f00');
-        log('Stack: ' + error.stack, '#888');
+        console.error('Verification error:', error);
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_email');
         localStorage.removeItem('admin_name');
-        log('Redirecting to login in 3 seconds...', '#ff0');
-        setTimeout(() => {
-            window.location.href = '/GR-central-admin-login.html';
-        }, 3000);
+        window.location.href = '/GR-central-admin-login.html';
         return false;
     }
 }

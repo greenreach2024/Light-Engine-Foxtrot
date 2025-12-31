@@ -186,12 +186,6 @@
         </div>
 
         <div id="alert" class="alert"></div>
-        
-        <!-- Debug log panel -->
-        <div id="debug-log" style="position: fixed; top: 10px; right: 10px; width: 450px; max-height: 90vh; overflow-y: auto; background: #000; color: #0f0; font-family: 'Courier New', monospace; font-size: 10px; padding: 15px; border: 3px solid #0f0; border-radius: 8px; z-index: 99999; box-shadow: 0 0 20px rgba(0,255,0,0.5);">
-            <div style="color: #ff0; margin-bottom: 10px; font-weight: bold; font-size: 14px; border-bottom: 1px solid #0f0; padding-bottom: 5px;">🔍 DEBUG LOG - DO NOT CLOSE</div>
-            <div id="debug-content"></div>
-        </div>
 
         <form id="login-form">
             <div class="form-group">
@@ -248,37 +242,9 @@
         const alertDiv = document.getElementById('alert');
         const loginButton = document.getElementById('login-button');
         const debugLogEl = document.getElementById('debug-log');
-        const debugContent = document.getElementById('debug-content');
-        
-        // Debug logger that writes to screen AND console
-        window.log = function(msg, color = '#0f0') {
-            console.log(msg);
-            const line = document.createElement('div');
-            line.style.color = color;
-            line.style.marginBottom = '3px';
-            line.style.wordBreak = 'break-all';
-            line.style.fontSize = '11px';
-            line.style.lineHeight = '1.4';
-            const timestamp = new Date().toISOString().substr(11, 12);
-            line.textContent = `[${timestamp}] ${msg}`;
-            debugContent.appendChild(line);
-            debugContent.scrollTop = debugContent.scrollHeight;
-        };
-        
-        // Show debug panel
-        log('🟢 Debug panel active', '#0f0');
-        log('Page: ' + window.location.href, '#fff');
-        log('localStorage.admin_token exists: ' + !!localStorage.getItem('admin_token'), '#fff');
-
         // Check if already logged in
         if (localStorage.getItem('admin_token')) {
-            log('⚠️ FOUND EXISTING TOKEN - Auto-redirecting...', '#ff0');
-            setTimeout(() => {
-                log('→ Redirecting to dashboard now', '#ff0');
-                window.location.href = '/GR-central-admin.html';
-            }, 1000);
-        } else {
-            log('✓ No existing token - ready for login', '#0f0');
+            window.location.href = '/GR-central-admin.html';
         }
 
         form.addEventListener('submit', async (e) => {
@@ -294,12 +260,6 @@
             hideAlert();
 
             try {
-                log('═══════════════════════════════════════', '#ff0');
-                log('🔐 LOGIN ATTEMPT STARTED', '#ff0');
-                log('Email: ' + email, '#fff');
-                log('Password length: ' + password.length, '#fff');
-                log('Target: ' + API_BASE + '/api/admin/auth/login', '#fff');
-                
                 const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
                     method: 'POST',
                     headers: {
@@ -307,38 +267,19 @@
                     },
                     body: JSON.stringify({ email, password, mfa_code })
                 });
-
-                log('Response status: ' + response.status, response.ok ? '#0f0' : '#f00');
-                log('Response OK: ' + response.ok, response.ok ? '#0f0' : '#f00');
                 
                 const data = await response.json();
-                log('Response data received', '#fff');
-                log(JSON.stringify(data, null, 2), '#fff');
 
                 if (response.ok && data.success) {
-                    log('✅ LOGIN SUCCESS!', '#0f0');
-                    log('Token length: ' + data.token.length, '#0f0');
-                    log('Token: ' + data.token.substring(0, 60) + '...', '#888');
-                    
                     // Store token
-                    log('💾 Storing token in localStorage...', '#0f0');
                     localStorage.setItem('admin_token', data.token);
                     localStorage.setItem('admin_email', data.admin.email);
                     localStorage.setItem('admin_name', data.admin.name);
                     
-                    log('✓ Token stored successfully', '#0f0');
-                    log('✓ Verify: ' + localStorage.getItem('admin_token').substring(0, 30) + '...', '#888');
-                    log('═══════════════════════════════════════', '#ff0');
-                    log('⏳ REDIRECTING IN 5 SECONDS...', '#ff0');
-                    log('(You can see this log before redirect)', '#ff0');
-                    
                     showAlert('Login successful! Redirecting...', 'success');
                     
-                    // Redirect after 5 seconds so you can read the log
-                    setTimeout(() => {
-                        log('🚀 REDIRECT NOW → /GR-central-admin.html', '#ff0');
-                        window.location.href = '/GR-central-admin.html';
-                    }, 5000);
+                    // Redirect
+                    window.location.href = '/GR-central-admin.html';
                 } else {
                     // Handle specific error cases
                     let errorMessage = data.error || data.message || 'Login failed';
