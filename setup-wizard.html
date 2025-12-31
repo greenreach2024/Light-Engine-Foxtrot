@@ -368,6 +368,7 @@
                 <div class="step-dot" id="dot-2"></div>
                 <div class="step-dot" id="dot-3"></div>
                 <div class="step-dot" id="dot-4"></div>
+                <div class="step-dot" id="dot-5"></div>
             </div>
         </div>
 
@@ -658,6 +659,11 @@
             // Update step indicators
             for (let i = 0; i < totalSteps; i++) {
                 const dot = document.getElementById(`dot-${i}`);
+                // Hide step 2 (registration) indicator for cloud accounts
+                if (i === 2 && isCloudAccount) {
+                    dot.style.display = 'none';
+                    continue;
+                }
                 if (i < currentStep) {
                     dot.classList.add('completed');
                     dot.classList.remove('active');
