@@ -9871,9 +9871,22 @@ app.use('/api/farms', purchaseRouter);
  * JWT token generation and validation for Activity Hub tablets
  * - POST /api/auth/generate-device-token: Generate pairing token for tablet
  * - POST /api/auth/validate-device-token: Validate scanned QR code token
+ * - POST /api/auth/login: Authenticate user with credentials
  * - GET /api/ping: Health check for edge device availability
  */
 app.use('/api/auth', authRouter);
+
+/**
+ * Email Service Routes
+ * Send transactional emails: order confirmations, recall notifications
+ * - POST /api/email/test: Send test email
+ * - POST /api/email/order-confirmation: Send order confirmation
+ * - POST /api/email/recall-notification: Send recall notice
+ * - GET /api/email/config: Get email configuration
+ * - POST /api/email/verify-connection: Test email service connection
+ */
+import emailRouter from './server/routes/email-routes.js';
+app.use('/api/email', emailRouter);
 
 /**
  * Setup Wizard Routes (First-Time Farm Setup)
