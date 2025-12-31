@@ -610,6 +610,65 @@ router.post('/users/:userId/reset-password', requireAdmin, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/farms/lookup-by-email
+ * Look up farm by email address (for password recovery/resend credentials)
+ */
+router.post('/farms/lookup-by-email', requireAdmin, async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    const db = await initDatabase();
+    
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available for email lookup');
+      return res.status(503).json({ 
+        error: 'Database not available',
+        message: 'PostgreSQL database required for this operation'
+      });
+    }
+    
+    // Look up user by email
+    const userResult = await db.query(
+      `SELECT u.*, f.name as farm_name, f.farm_id, f.api_key, f.status as farm_status
+       FROM users u
+       JOIN farms f ON u.farm_id = f.farm_id
+       WHERE u.email = $1`,
+      [email.toLowerCase()]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Not found',
+        message: 'No account found with this email address'
+      });
+    }
+    
+    const user = userResult.rows[0];
+    
+    res.json({
+      success: true,
+      found: true,
+      farm_id: user.farm_id,
+      farm_name: user.farm_name,
+      farm_status: user.farm_status,
+      user_name: user.name,
+      user_role: user.role,
+      user_status: user.is_active ? 'active' : 'inactive',
+      created_at: user.created_at
+    });
+    
+  } catch (error) {
+    console.error('Error looking up farm by email:', error);
+    res.status(500).json({ error: 'Failed to look up farm' });
+  }
+});
+
+/**
  * PATCH /api/admin/farms/:farmId/status
  * Toggle farm status (active/suspended)
  */
