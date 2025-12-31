@@ -65,6 +65,7 @@ import path from "path";
 import { fileURLToPath } from 'url';
 import Datastore from 'nedb-promises';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import net from 'node:net';
 import mqtt from 'mqtt';
 import AutomationRulesEngine from './lib/automation-engine.js';
