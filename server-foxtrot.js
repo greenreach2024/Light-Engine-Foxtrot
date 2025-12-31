@@ -105,6 +105,7 @@ import wholesaleOrdersRouter from './routes/wholesale-orders.js';
 import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
+import emailRouter from './server/routes/email-routes.js';
 import { router as migrationRouter, initDb as initMigrationDb } from './routes/migration.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
@@ -9885,7 +9886,6 @@ app.use('/api/auth', authRouter);
  * - GET /api/email/config: Get email configuration
  * - POST /api/email/verify-connection: Test email service connection
  */
-import emailRouter from './server/routes/email-routes.js';
 app.use('/api/email', emailRouter);
 
 /**
