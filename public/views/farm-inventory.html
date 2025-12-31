@@ -565,14 +565,29 @@
 
     async function loadInventory() {
       console.log('[loadInventory] Starting...');
+      console.log('[loadInventory] API_BASE:', API_BASE);
+      console.log('[loadInventory] window.location:', window.location.href);
       showLoading();
 
       try {
         console.log('[loadInventory] Fetching data from:', API_BASE);
+        console.log('[loadInventory] Endpoint 1:', `${API_BASE}/api/inventory/current`);
+        console.log('[loadInventory] Endpoint 2:', `${API_BASE}/api/inventory/forecast`);
+        console.log('[loadInventory] Endpoint 3:', `${API_BASE}/data/groups.json`);
+        
         const [currentResp, forecastResp, groupsResp] = await Promise.all([
-          fetch(`${API_BASE}/api/inventory/current`),
-          fetch(`${API_BASE}/api/inventory/forecast`),
-          fetch(`${API_BASE}/data/groups.json`)
+          fetch(`${API_BASE}/api/inventory/current`).catch(err => {
+            console.error('[loadInventory] Fetch error (current):', err);
+            throw err;
+          }),
+          fetch(`${API_BASE}/api/inventory/forecast`).catch(err => {
+            console.error('[loadInventory] Fetch error (forecast):', err);
+            throw err;
+          }),
+          fetch(`${API_BASE}/data/groups.json`).catch(err => {
+            console.error('[loadInventory] Fetch error (groups):', err);
+            throw err;
+          })
         ]);
 
         console.log('[loadInventory] Response status:', {
