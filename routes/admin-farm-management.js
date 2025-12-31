@@ -11,7 +11,7 @@ const router = express.Router();
  * Admin authentication middleware
  * Verifies JWT token has admin role
  */
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
   const authHeader = req.headers.authorization;
   
   console.log('[REQUIRE ADMIN] Checking auth header:', authHeader ? 'Present' : 'Missing');
@@ -23,7 +23,8 @@ function requireAdmin(req, res, next) {
   
   try {
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, getJwtSecret());
+    const jwtSecret = await getJwtSecret();
+    const decoded = jwt.verify(token, jwtSecret);
     
     console.log('[REQUIRE ADMIN] Token decoded for:', decoded.email, 'role:', decoded.role);
     
@@ -68,6 +69,7 @@ router.post('/auth/login', async (req, res) => {
     if (email === FALLBACK_ADMIN.email && password === FALLBACK_ADMIN.password) {
       console.log('[AUTH LOGIN] Using fallback admin credentials');
       
+      const jwtSecret = await getJwtSecret();
       const token = jwt.sign(
         { 
           admin_id: FALLBACK_ADMIN.id,
@@ -76,7 +78,7 @@ router.post('/auth/login', async (req, res) => {
           role: 'admin',
           farm_id: FALLBACK_ADMIN.farm_id
         },
-        getJwtSecret(),
+        jwtSecret,
         { expiresIn: '4h' }
       );
       
@@ -128,6 +130,7 @@ router.post('/auth/login', async (req, res) => {
     console.log('[AUTH LOGIN] Database authentication successful for:', email);
     
     // Generate admin JWT token (4 hour expiry)
+    const jwtSecret = await getJwtSecret();
     const token = jwt.sign(
       { 
         admin_id: user.id,
@@ -136,7 +139,7 @@ router.post('/auth/login', async (req, res) => {
         role: 'admin',
         farm_id: user.farm_id
       },
-      getJwtSecret(),
+      jwtSecret,
       { expiresIn: '4h' }
     );
     
