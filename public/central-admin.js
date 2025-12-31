@@ -20,30 +20,51 @@ async function verifySession() {
     if (!token) return false;
     
     try {
-        console.log('[VERIFY SESSION] Calling /api/admin/auth/verify...');
+        console.log('═══════════════════════════════════════════════');
+        console.log('[VERIFY SESSION] Starting verification...');
+        console.log('[VERIFY SESSION] Token exists:', !!token);
+        console.log('[VERIFY SESSION] Token length:', token.length);
+        console.log('[VERIFY SESSION] Token preview:', token.substring(0, 50) + '...');
+        console.log('[VERIFY SESSION] API_BASE:', API_BASE);
+        console.log('[VERIFY SESSION] Calling:', `${API_BASE}/api/admin/auth/verify`);
+        
         const response = await fetch(`${API_BASE}/api/admin/auth/verify`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
         
-        console.log('[VERIFY SESSION] Response status:', response.status);
+        console.log('[VERIFY SESSION] Response received');
+        console.log('[VERIFY SESSION] Status:', response.status);
+        console.log('[VERIFY SESSION] Status text:', response.statusText);
+        console.log('[VERIFY SESSION] OK:', response.ok);
         
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            console.warn('[VERIFY SESSION] Failed:', response.status, errorData);
+            console.error('[VERIFY SESSION] ❌ FAILED');
+            console.error('[VERIFY SESSION] Status:', response.status);
+            console.error('[VERIFY SESSION] Error data:', errorData);
+            console.log('[VERIFY SESSION] Clearing localStorage and redirecting to login...');
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_email');
             localStorage.removeItem('admin_name');
+            console.log('[VERIFY SESSION] Redirecting to:', '/GR-central-admin-login.html');
             window.location.href = '/GR-central-admin-login.html';
             return false;
         }
         
         const data = await response.json();
-        console.log('[VERIFY SESSION] Success:', data);
+        console.log('[VERIFY SESSION] ✅ SUCCESS');
+        console.log('[VERIFY SESSION] Response data:', data);
+        console.log('═══════════════════════════════════════════════');
         return true;
     } catch (error) {
-        console.error('[VERIFY SESSION ERROR]:', error);
+        console.error('═══════════════════════════════════════════════');
+        console.error('[VERIFY SESSION ERROR] Caught exception:', error);
+        console.error('[VERIFY SESSION ERROR] Error type:', error.constructor.name);
+        console.error('[VERIFY SESSION ERROR] Error message:', error.message);
+        console.error('[VERIFY SESSION ERROR] Error stack:', error.stack);
+        console.log('[VERIFY SESSION ERROR] Clearing localStorage and redirecting...');
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_email');
         localStorage.removeItem('admin_name');

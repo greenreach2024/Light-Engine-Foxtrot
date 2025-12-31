@@ -260,9 +260,14 @@
             hideAlert();
 
             try {
+                console.log('═══════════════════════════════════════════════');
                 console.log('[LOGIN] ===== ATTEMPTING LOGIN =====');
+                console.log('[LOGIN] Timestamp:', new Date().toISOString());
                 console.log('[LOGIN] Email:', email);
+                console.log('[LOGIN] Password length:', password.length);
                 console.log('[LOGIN] API_BASE:', API_BASE);
+                console.log('[LOGIN] Target URL:', `${API_BASE}/api/admin/auth/login`);
+                
                 const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
                     method: 'POST',
                     headers: {
@@ -271,25 +276,35 @@
                     body: JSON.stringify({ email, password, mfa_code })
                 });
 
-                console.log('[LOGIN] Response status:', response.status);
+                console.log('[LOGIN] Response received');
+                console.log('[LOGIN] Status:', response.status);
+                console.log('[LOGIN] Status text:', response.statusText);
+                console.log('[LOGIN] OK:', response.ok);
+                
                 const data = await response.json();
-                console.log('[LOGIN] Response data:', data);
+                console.log('[LOGIN] Response data:', JSON.stringify(data, null, 2));
 
                 if (response.ok && data.success) {
+                    console.log('[LOGIN] ✅ Login successful!');
+                    console.log('[LOGIN] Token received, length:', data.token.length);
+                    console.log('[LOGIN] Token preview:', data.token.substring(0, 50) + '...');
+                    console.log('[LOGIN] Admin info:', data.admin);
+                    
                     // Store token
-                    console.log('[LOGIN] ✅ Login successful! Storing token...');
+                    console.log('[LOGIN] Storing in localStorage...');
                     localStorage.setItem('admin_token', data.token);
                     localStorage.setItem('admin_email', data.admin.email);
                     localStorage.setItem('admin_name', data.admin.name);
-                    console.log('[LOGIN] Token stored. Token length:', data.token.length);
-                    console.log('[LOGIN] Token preview:', data.token.substring(0, 50) + '...');
-                    console.log('[LOGIN] Stored in localStorage - admin_token exists:', !!localStorage.getItem('admin_token'));
+                    
+                    console.log('[LOGIN] Verification - token stored:', !!localStorage.getItem('admin_token'));
+                    console.log('[LOGIN] Verification - token length:', localStorage.getItem('admin_token').length);
+                    console.log('═══════════════════════════════════════════════');
                     
                     showAlert('Login successful! Redirecting...', 'success');
                     
                     // Redirect after short delay
                     setTimeout(() => {
-                        console.log('[LOGIN] Redirecting to dashboard...');
+                        console.log('[LOGIN] Redirecting to dashboard in 3...2...1...');
                         window.location.href = '/GR-central-admin.html';
                     }, 1000);
                 } else {
