@@ -2272,6 +2272,157 @@
                         </div>
                     </div>
 
+                    <!-- Farm Configuration -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">Farm Configuration</h2>
+                        
+                        <!-- Network Settings -->
+                        <div style="margin-bottom: 25px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: var(--accent-blue);">Network Settings</h3>
+                            <div style="display: grid; gap: 15px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Farm Network Name (SSID)</label>
+                                    <input type="text" id="farm-ssid" placeholder="FarmNetwork-Main" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <small style="color: var(--text-muted);">Wi-Fi network for farm devices</small>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Local Server IP</label>
+                                    <input type="text" id="local-server-ip" placeholder="192.168.1.100" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <small style="color: var(--text-muted);">IP address of your local controller</small>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Port Configuration</label>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                        <input type="number" id="http-port" placeholder="8080" value="8080" style="padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <input type="number" id="ws-port" placeholder="8081" value="8081" style="padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <small style="color: var(--text-muted);">HTTP and WebSocket ports</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- API Keys -->
+                        <div style="margin-bottom: 25px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: var(--accent-blue);">API Keys</h3>
+                            <div style="display: grid; gap: 15px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Primary API Key</label>
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="password" id="primary-api-key" value="sk_live_xxxxxxxxxx" style="flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" readonly>
+                                        <button class="btn-secondary" onclick="toggleApiKeyVisibility('primary-api-key')" style="padding: 10px 16px;">Show</button>
+                                        <button class="btn-secondary" onclick="regenerateApiKey('primary')" style="padding: 10px 16px;">Regenerate</button>
+                                    </div>
+                                    <small style="color: var(--text-muted);">Full access to all API endpoints</small>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Read-Only API Key</label>
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="password" id="readonly-api-key" value="sk_read_xxxxxxxxxx" style="flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" readonly>
+                                        <button class="btn-secondary" onclick="toggleApiKeyVisibility('readonly-api-key')" style="padding: 10px 16px;">Show</button>
+                                        <button class="btn-secondary" onclick="regenerateApiKey('readonly')" style="padding: 10px 16px;">Regenerate</button>
+                                    </div>
+                                    <small style="color: var(--text-muted);">Read-only access for monitoring tools</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Device Registration -->
+                        <div style="margin-bottom: 25px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: var(--accent-blue);">Device Registration</h3>
+                            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <span style="font-weight: 500;">Registered Devices</span>
+                                    <span id="device-count" style="color: var(--accent-green);">3 active</span>
+                                </div>
+                                <div id="device-list" style="display: grid; gap: 8px; font-size: 13px;">
+                                    <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-card); border-radius: 4px;">
+                                        <span>Activity Hub Tablet</span>
+                                        <span style="color: var(--accent-green);">Online</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-card); border-radius: 4px;">
+                                        <span>Mobile Scanner #1</span>
+                                        <span style="color: var(--accent-green);">Online</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-card); border-radius: 4px;">
+                                        <span>POS Terminal</span>
+                                        <span style="color: var(--text-muted);">Offline</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn-primary" onclick="registerNewDevice()">Register New Device</button>
+                        </div>
+
+                        <!-- Integration Settings -->
+                        <div style="margin-bottom: 25px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: var(--accent-blue);">Integration Settings</h3>
+                            <div style="display: grid; gap: 15px;">
+                                <div>
+                                    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                        <input type="checkbox" id="enable-square" checked>
+                                        <span style="font-weight: 500;">Square Payment Integration</span>
+                                    </label>
+                                    <div style="margin-left: 24px;">
+                                        <input type="text" id="square-location-id" value="TC4Z3ZEBKRXRH" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 12px; margin-bottom: 5px;" placeholder="Square Location ID">
+                                        <small style="color: var(--text-muted);">Location ID from Square Dashboard</small>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                        <input type="checkbox" id="enable-email" checked>
+                                        <span style="font-weight: 500;">Email Notifications (AWS SES)</span>
+                                    </label>
+                                    <div style="margin-left: 24px;">
+                                        <input type="email" id="sender-email" value="noreply@lightengine.farm" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 12px; margin-bottom: 5px;" placeholder="Sender Email">
+                                        <small style="color: var(--text-muted);">Verified sender email address</small>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="enable-greenreach">
+                                        <span style="font-weight: 500;">GreenReach Central Monitoring</span>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="enable-webhooks">
+                                        <span style="font-weight: 500;">Custom Webhooks</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notification Preferences -->
+                        <div>
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: var(--accent-blue);">Notification Preferences</h3>
+                            <div style="display: grid; gap: 12px;">
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="notify-order" checked>
+                                    <span>Order confirmations</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="notify-harvest" checked>
+                                    <span>Harvest readiness alerts</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="notify-system" checked>
+                                    <span>System health warnings</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="notify-recall" checked>
+                                    <span>Product recall notifications</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="notify-daily">
+                                    <span>Daily summary reports</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--border);">
+                            <button class="btn-primary" onclick="saveFarmConfiguration()">Save Configuration</button>
+                        </div>
+                    </div>
+
                     <!-- System Configuration -->
                     <div class="card">
                         <h2 style="margin-bottom: 20px;">System Configuration</h2>
@@ -3911,5 +4062,142 @@
 
   <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
   <script src="/js/farm-assistant.js"></script>
+  
+  <script>
+    // Farm Configuration Functions
+    function toggleApiKeyVisibility(inputId) {
+      const input = document.getElementById(inputId);
+      const button = event.target;
+      if (input.type === 'password') {
+        input.type = 'text';
+        button.textContent = 'Hide';
+      } else {
+        input.type = 'password';
+        button.textContent = 'Show';
+      }
+    }
+
+    function regenerateApiKey(type) {
+      if (!confirm(`Are you sure you want to regenerate the ${type} API key? This will invalidate the current key.`)) {
+        return;
+      }
+      
+      // Generate new API key
+      const newKey = `sk_${type === 'readonly' ? 'read' : 'live'}_${Math.random().toString(36).substr(2, 16)}`;
+      const inputId = type === 'readonly' ? 'readonly-api-key' : 'primary-api-key';
+      document.getElementById(inputId).value = newKey;
+      
+      alert(`New ${type} API key generated. Make sure to save your configuration.`);
+    }
+
+    function registerNewDevice() {
+      const deviceName = prompt('Enter device name (e.g., "Tablet #2", "Scanner #3"):');
+      if (!deviceName) return;
+      
+      // Add device to list
+      const deviceList = document.getElementById('device-list');
+      const newDevice = document.createElement('div');
+      newDevice.style.cssText = 'display: flex; justify-content: space-between; padding: 8px; background: var(--bg-card); border-radius: 4px;';
+      newDevice.innerHTML = `
+        <span>${deviceName}</span>
+        <span style="color: var(--text-muted);">Pending</span>
+      `;
+      deviceList.appendChild(newDevice);
+      
+      // Update device count
+      const count = deviceList.children.length;
+      document.getElementById('device-count').textContent = `${count} active`;
+      
+      alert(`Device "${deviceName}" registered. Use the QR code pairing to connect it.`);
+    }
+
+    function saveFarmConfiguration() {
+      const config = {
+        network: {
+          ssid: document.getElementById('farm-ssid').value,
+          serverIp: document.getElementById('local-server-ip').value,
+          httpPort: document.getElementById('http-port').value,
+          wsPort: document.getElementById('ws-port').value
+        },
+        apiKeys: {
+          primary: document.getElementById('primary-api-key').value,
+          readonly: document.getElementById('readonly-api-key').value
+        },
+        integrations: {
+          square: document.getElementById('enable-square').checked,
+          squareLocationId: document.getElementById('square-location-id').value,
+          email: document.getElementById('enable-email').checked,
+          senderEmail: document.getElementById('sender-email').value,
+          greenreach: document.getElementById('enable-greenreach').checked,
+          webhooks: document.getElementById('enable-webhooks').checked
+        },
+        notifications: {
+          orders: document.getElementById('notify-order').checked,
+          harvest: document.getElementById('notify-harvest').checked,
+          system: document.getElementById('notify-system').checked,
+          recall: document.getElementById('notify-recall').checked,
+          daily: document.getElementById('notify-daily').checked
+        }
+      };
+      
+      // Save to server
+      fetch('/api/farm/configuration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('Farm configuration saved successfully!');
+        } else {
+          alert('Error saving configuration: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(err => {
+        console.error('Save configuration error:', err);
+        alert('Failed to save configuration. Check console for details.');
+      });
+    }
+
+    // Load existing configuration on page load
+    async function loadFarmConfiguration() {
+      try {
+        const response = await fetch('/api/farm/configuration');
+        const config = await response.json();
+        
+        if (config.network) {
+          document.getElementById('farm-ssid').value = config.network.ssid || '';
+          document.getElementById('local-server-ip').value = config.network.serverIp || '';
+          document.getElementById('http-port').value = config.network.httpPort || '8080';
+          document.getElementById('ws-port').value = config.network.wsPort || '8081';
+        }
+        
+        if (config.integrations) {
+          document.getElementById('enable-square').checked = config.integrations.square !== false;
+          document.getElementById('square-location-id').value = config.integrations.squareLocationId || '';
+          document.getElementById('enable-email').checked = config.integrations.email !== false;
+          document.getElementById('sender-email').value = config.integrations.senderEmail || '';
+          document.getElementById('enable-greenreach').checked = config.integrations.greenreach || false;
+          document.getElementById('enable-webhooks').checked = config.integrations.webhooks || false;
+        }
+        
+        if (config.notifications) {
+          document.getElementById('notify-order').checked = config.notifications.orders !== false;
+          document.getElementById('notify-harvest').checked = config.notifications.harvest !== false;
+          document.getElementById('notify-system').checked = config.notifications.system !== false;
+          document.getElementById('notify-recall').checked = config.notifications.recall !== false;
+          document.getElementById('notify-daily').checked = config.notifications.daily || false;
+        }
+      } catch (err) {
+        console.error('Load configuration error:', err);
+      }
+    }
+    
+    // Load configuration when Settings view is active
+    if (document.getElementById('farm-ssid')) {
+      loadFarmConfiguration();
+    }
+  </script>
 </body>
 </html>
