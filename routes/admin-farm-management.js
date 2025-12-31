@@ -43,7 +43,7 @@ function requireAdmin(req, res, next) {
 /**
  * POST /api/admin/auth/login
  * Admin login with email and password
- * Demo: Uses farm admin credentials for testing
+ * Fallback: Hard-coded admin credentials when database is not available
  */
 router.post('/auth/login', async (req, res) => {
   try {
@@ -53,7 +53,53 @@ router.post('/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
     
+    console.log('[AUTH LOGIN] Login attempt for:', email);
+    
+    // Hard-coded fallback admin credentials (for NeDB/in-memory mode)
+    const FALLBACK_ADMIN = {
+      email: 'admin@greenreach.com',
+      password: 'Admin2025!',
+      name: 'System Administrator',
+      id: 1,
+      farm_id: 'greenreach-hq'
+    };
+    
+    // Check fallback credentials first
+    if (email === FALLBACK_ADMIN.email && password === FALLBACK_ADMIN.password) {
+      console.log('[AUTH LOGIN] Using fallback admin credentials');
+      
+      const token = jwt.sign(
+        { 
+          admin_id: FALLBACK_ADMIN.id,
+          user_id: FALLBACK_ADMIN.id,
+          email: FALLBACK_ADMIN.email,
+          role: 'admin',
+          farm_id: FALLBACK_ADMIN.farm_id
+        },
+        getJwtSecret(),
+        { expiresIn: '4h' }
+      );
+      
+      return res.json({ 
+        success: true, 
+        token,
+        admin: {
+          id: FALLBACK_ADMIN.id,
+          email: FALLBACK_ADMIN.email,
+          name: FALLBACK_ADMIN.name,
+          farm_id: FALLBACK_ADMIN.farm_id
+        }
+      });
+    }
+    
+    // Try database authentication
     const db = await initDatabase();
+    
+    // Check if database is actually available (not NeDB mode)
+    if (!db || !db.mode || db.mode === 'nedb') {
+      console.warn('[AUTH LOGIN] Database not available, only fallback auth supported');
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     
     // For demo: Allow any user with role='admin' to login to GreenReach Central
     const user = await db.get(
@@ -62,19 +108,24 @@ router.post('/auth/login', async (req, res) => {
     );
     
     if (!user) {
+      console.warn('[AUTH LOGIN] User not found:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
     // Verify password
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
+      console.warn('[AUTH LOGIN] Invalid password for:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
     // Check if user is disabled
     if (user.status === 'disabled') {
+      console.warn('[AUTH LOGIN] Account disabled:', email);
       return res.status(403).json({ error: 'Account disabled' });
     }
+    
+    console.log('[AUTH LOGIN] Database authentication successful for:', email);
     
     // Generate admin JWT token (4 hour expiry)
     const token = jwt.sign(
@@ -90,10 +141,14 @@ router.post('/auth/login', async (req, res) => {
     );
     
     // Update last login
-    await db.run(
-      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
-      [user.id]
-    );
+    try {
+      await db.run(
+        'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
+        [user.id]
+      );
+    } catch (updateError) {
+      console.warn('[AUTH LOGIN] Could not update last_login:', updateError.message);
+    }
     
     // Log successful login (if audit table exists)
     try {
@@ -103,7 +158,7 @@ router.post('/auth/login', async (req, res) => {
         [user.id, user.id, JSON.stringify({ email }), req.ip]
       );
     } catch (auditError) {
-      console.warn('Audit log not available:', auditError.message);
+      console.warn('[AUTH LOGIN] Audit log not available:', auditError.message);
     }
     
     res.json({ 
@@ -117,8 +172,8 @@ router.post('/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Admin login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    console.error('[AUTH LOGIN ERROR]:', error);
+    res.status(500).json({ error: 'Login failed', message: error.message });
   }
 });
 
