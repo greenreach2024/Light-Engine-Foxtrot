@@ -107,11 +107,6 @@ export async function adminAuthMiddleware(req, res, next) {
       });
     }
 
-    // Check if user is active
-    if (!session.is_active) {
-      return res.status(403).json({
-        success: false,
-        error: 'Account disabled',
     // Check if account is active
     if (!session.active) {
       return res.status(401).json({
