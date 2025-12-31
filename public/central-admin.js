@@ -3,6 +3,97 @@
  * Enterprise-grade farm management and monitoring system
  */
 
+// Authentication check - redirect to login if not authenticated
+function checkAuth() {
+    const token = localStorage.getItem('admin_token');
+    if (!token) {
+        console.warn('No admin token found, redirecting to login');
+        window.location.href = '/GR-central-admin-login.html';
+        return null;
+    }
+    return token;
+}
+
+// Verify token is still valid on page load
+async function verifySession() {
+    const token = checkAuth();
+    if (!token) return false;
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/auth/verify`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            console.warn('Session verification failed, redirecting to login');
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_email');
+            localStorage.removeItem('admin_name');
+            window.location.href = '/GR-central-admin-login.html';
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Session verification error:', error);
+        return false;
+    }
+}
+
+// Logout function
+async function logout() {
+    const token = localStorage.getItem('admin_token');
+    if (token) {
+        try {
+            await fetch(`${API_BASE}/api/admin/auth/logout`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    }
+    
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_email');
+    localStorage.removeItem('admin_name');
+    window.location.href = '/GR-central-admin-login.html';
+}
+
+// Make authenticated API request
+async function authenticatedFetch(url, options = {}) {
+    const token = checkAuth();
+    if (!token) return null;
+    
+    const headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+    };
+    
+    try {
+        const response = await fetch(url, { ...options, headers });
+        
+        // Handle 401 Unauthorized - session expired
+        if (response.status === 401) {
+            console.warn('Authentication failed, redirecting to login');
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_email');
+            localStorage.removeItem('admin_name');
+            window.location.href = '/GR-central-admin-login.html';
+            return null;
+        }
+        
+        return response;
+    } catch (error) {
+        console.error('Authenticated fetch error:', error);
+        throw error;
+    }
+}
+
 // Use window.location.origin for admin API (port 8091)
 const API_BASE = window.location.origin;
 let currentFarmId = null;
@@ -26,6 +117,24 @@ let navigationContext = {
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Initializing Central Operations...');
+    
+    // Verify authentication first
+    const isAuthenticated = await verifySession();
+    if (!isAuthenticated) {
+        return; // Will redirect to login
+    }
+    
+    // Display logged-in user info in sidebar
+    const adminName = localStorage.getItem('admin_name');
+    const adminEmail = localStorage.getItem('admin_email');
+    const userInfoEl = document.getElementById('admin-user-info');
+    if (userInfoEl && (adminName || adminEmail)) {
+        userInfoEl.innerHTML = `
+            <div style="font-weight: 500; color: #e5e7eb;">${adminName || 'Admin'}</div>
+            <div style="font-size: 0.75rem; color: #9ca3af;">${adminEmail || ''}</div>
+        `;
+        console.log(`Logged in as: ${adminName || adminEmail}`);
+    }
     
     // Parse URL parameters to restore navigation context
     parseNavigationFromURL();
@@ -384,7 +493,7 @@ async function traceAnomaly(anomalyId, context) {
     
     if (!anomalyContext) {
         try {
-            const response = await fetch(`${API_BASE}/api/admin/anomalies/${anomalyId}/context`);
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/anomalies/${anomalyId}/context`);
             if (response.ok) {
                 anomalyContext = await response.json();
             } else {
@@ -469,7 +578,7 @@ async function loadDashboardData() {
 async function loadKPIs() {
     try {
         // Fetch from aggregation API endpoint
-        const response = await fetch(`${API_BASE}/api/admin/analytics/aggregate`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/aggregate`);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
@@ -536,7 +645,7 @@ async function loadFarms(page = 1) {
             ...(search && { search })
         });
         
-        const response = await fetch(`${API_BASE}/api/admin/farms?${params}`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms?${params}`);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
@@ -652,7 +761,7 @@ async function deleteFarm(email, farmName) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/api/admin/farms/${encodeURIComponent(email)}`, {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${encodeURIComponent(email)}`, {
             method: 'DELETE'
         });
         
@@ -735,7 +844,7 @@ async function viewFarmDetail(farmId) {
     
     try {
         // Fetch detailed farm data from API
-        const response = await fetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
         if (!response.ok) {
             console.error('Failed to load farm details:', response.status);
             alert('Unable to load farm details. Please try again.');
@@ -2055,8 +2164,8 @@ async function loadRoomsView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading room data...</td></tr>';
     
     try {
-        const farmsRes = await fetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes.ok) throw new Error('Failed to load farms');
+        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
         const farmsData = await farmsRes.json();
         
         let rooms = [];
@@ -2114,8 +2223,8 @@ async function loadZonesView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading zone data...</td></tr>';
     
     try {
-        const farmsRes = await fetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes.ok) throw new Error('Failed to load farms');
+        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
         const farmsData = await farmsRes.json();
         
         let zones = [];
@@ -2175,8 +2284,8 @@ async function loadAllDevicesView() {
     tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading device inventory...</td></tr>';
     
     try {
-        const farmsRes = await fetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes.ok) throw new Error('Failed to load farms');
+        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
         const farmsData = await farmsRes.json();
         
         let allDevices = [];

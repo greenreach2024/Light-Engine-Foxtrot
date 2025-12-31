@@ -85,6 +85,8 @@ import { validateLicense } from './lib/license-manager.js';
 import { autoEnforceFeatures, requireFeature } from './server/middleware/feature-flags.js';
 import healthRouter from './routes/health.js';
 import adminHealthRouter from './routes/admin-health.js';
+import adminAuthRouter from './server/routes/admin-auth.js';
+import { adminAuthMiddleware } from './server/middleware/admin-auth.js';
 import licenseRouter from './routes/license.js';
 import wholesaleSyncRouter from './routes/wholesale-sync.js';
 import wholesaleReservationsRouter, { cleanupExpiredReservations } from './routes/wholesale-reservations.js';
@@ -9545,6 +9547,14 @@ app.use('/api/printer', printerRouter);
 app.use('/api/setup', setupRouter);
 
 /**
+ * GreenReach Admin - Authentication Routes
+ * - POST /api/admin/auth/login: Admin login with email/password/2FA
+ * - GET /api/admin/auth/verify: Verify current session token
+ * - POST /api/admin/auth/logout: Logout and revoke session
+ */
+app.use('/api/admin/auth', adminAuthRouter);
+
+/**
  * GreenReach Admin - Federated Health Monitoring Routes
  * - /api/admin/health/fleet: Aggregate health data from all registered farms
  * - /api/admin/health/farms: List all registered farms
@@ -13120,8 +13130,9 @@ async function fetchFarmData(url, timeout = 5000) {
 /**
  * GET /api/admin/farms
  * Returns list of all farms with aggregated metrics
+ * PROTECTED: Requires admin authentication
  */
-app.get('/api/admin/farms', asyncHandler(async (req, res) => {
+app.get('/api/admin/farms', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log('[admin] GET /api/admin/farms called');
   const { page = 1, limit = 50, status, region, search } = req.query;
   const pageNum = parseInt(page);
@@ -13297,8 +13308,9 @@ app.get('/api/admin/farms', asyncHandler(async (req, res) => {
 /**
  * GET /api/admin/farms/:farmId
  * Returns detailed data for a specific farm
+ * PROTECTED: Requires admin authentication
  */
-app.get('/api/admin/farms/:farmId', createDemoModeHandler(), asyncHandler(async (req, res) => {
+app.get('/api/admin/farms/:farmId', adminAuthMiddleware, createDemoModeHandler(), asyncHandler(async (req, res) => {
   console.log(`[admin] GET /api/admin/farms/${req.params.farmId} called`);
   const { farmId } = req.params;
   
@@ -13367,8 +13379,9 @@ app.get('/api/admin/farms/:farmId', createDemoModeHandler(), asyncHandler(async 
 /**
  * GET /api/admin/farms/db
  * List all farms from database (for admin management)
+ * PROTECTED: Requires admin authentication
  */
-app.get('/api/admin/farms/db', asyncHandler(async (req, res) => {
+app.get('/api/admin/farms/db', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log('[admin] GET /api/admin/farms/db called');
   
   try {
@@ -13404,8 +13417,9 @@ app.get('/api/admin/farms/db', asyncHandler(async (req, res) => {
  * DELETE /api/admin/farms/:email
  * Delete all farms and users associated with an email address
  * For testing and cleanup purposes
+ * PROTECTED: Requires admin authentication
  */
-app.delete('/api/admin/farms/:email', asyncHandler(async (req, res) => {
+app.delete('/api/admin/farms/:email', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log(`[admin] DELETE /api/admin/farms/${req.params.email} called`);
   const { email } = req.params;
   
@@ -13474,8 +13488,9 @@ app.delete('/api/admin/farms/:email', asyncHandler(async (req, res) => {
 /**
  * GET /api/admin/analytics/aggregate
  * Returns platform-wide aggregated metrics
+ * PROTECTED: Requires admin authentication
  */
-app.get('/api/admin/analytics/aggregate', asyncHandler(async (req, res) => {
+app.get('/api/admin/analytics/aggregate', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log('[admin] GET /api/admin/analytics/aggregate called');
   const registry = loadFarmRegistry();
   const enabledFarms = registry.farms.filter(f => f.enabled);
