@@ -38,22 +38,16 @@
     const token = localStorage.getItem('farm_auth_token');
     if (!token) return false;
     
-    try {
-      // Decode JWT (basic validation, server will do full validation)
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const exp = payload.exp * 1000; // Convert to milliseconds
-      
-      // Check if token is expired
-      if (Date.now() >= exp) {
-        localStorage.removeItem('farm_auth_token');
-        return false;
-      }
-      
+    // Token is a hex string from server (not JWT), just check it exists
+    // Server will validate on API calls
+    // Basic check: should be 64 hex characters (32 bytes)
+    if (token.length === 64 && /^[0-9a-f]+$/i.test(token)) {
       return true;
-    } catch (e) {
-      localStorage.removeItem('farm_auth_token');
-      return false;
     }
+    
+    // If token format is invalid, remove it
+    localStorage.removeItem('farm_auth_token');
+    return false;
   }
 
   // Redirect to login page
