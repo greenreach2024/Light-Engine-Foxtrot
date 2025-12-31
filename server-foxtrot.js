@@ -9552,6 +9552,11 @@ app.use('/api/setup', setupRouter);
  * - GET /api/admin/auth/verify: Verify current session token
  * - POST /api/admin/auth/logout: Logout and revoke session
  */
+// Middleware to attach database pool to all admin routes
+app.use('/api/admin/*', (req, res, next) => {
+  req.db = app.locals.db;
+  next();
+});
 app.use('/api/admin/auth', adminAuthRouter);
 
 /**
