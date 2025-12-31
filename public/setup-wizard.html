@@ -440,8 +440,61 @@
                 <div id="reg-status"></div>
             </div>
 
-            <!-- Step 3: Certifications & Differentiators -->
+            <!-- Step 3: Desktop Download (Cloud) / Certifications (Edge) -->
             <div class="wizard-step" id="step-3">
+                <!-- Cloud: Desktop App Download -->
+                <div id="cloud-download" style="display: none;">
+                    <h1 class="step-title">Desktop Application Available</h1>
+                    <p class="step-description">
+                        Get the Light Engine desktop app to manage your farm offline
+                    </p>
+                    
+                    <div style="display: grid; gap: 2rem; margin-top: 2rem; max-width: 600px; margin-left: auto; margin-right: auto;">
+                        <!-- Desktop App Info -->
+                        <div class="status-card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);">
+                            <div style="text-align: center;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">💻</div>
+                                <h3 style="color: var(--accent-blue); font-size: 1.8rem; margin-bottom: 1rem;">Desktop Application</h3>
+                                <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1.5rem;">
+                                    Download the Light Engine desktop app for:
+                                </p>
+                                <div style="text-align: left; max-width: 400px; margin: 0 auto; font-size: 1.2rem; color: var(--text-secondary); line-height: 2;">
+                                    • Offline inventory management<br>
+                                    • Faster performance<br>
+                                    • System tray integration<br>
+                                    • Auto-start on computer boot
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Download Options -->
+                        <div class="status-card">
+                            <h3 style="color: var(--accent-green); font-size: 1.6rem; margin-bottom: 1rem; text-align: center;">Available For</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div style="text-align: center; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
+                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🍎</div>
+                                    <div style="font-size: 1.1rem; color: var(--text-secondary);">macOS</div>
+                                </div>
+                                <div style="text-align: center; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
+                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🪟</div>
+                                    <div style="font-size: 1.1rem; color: var(--text-secondary);">Windows</div>
+                                </div>
+                            </div>
+                            <p style="font-size: 1.1rem; color: var(--text-secondary); text-align: center;">
+                                Download links will be available in your dashboard after setup
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 2rem; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 12px;">
+                        <p style="font-size: 1.2rem; color: var(--text-secondary);">
+                            Click "Next" to continue with the web-based setup. You can download the desktop app anytime from your dashboard.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Edge: Certifications -->
+                <div id="edge-certifications" style="display: none;">
                 <h1 class="step-title">Farm Certifications</h1>
                 <p class="step-description">
                     Help buyers find your farm by sharing certifications and practices.
@@ -513,6 +566,7 @@
                         <input type="checkbox" id="attr-sustainable" name="attributes" value="Sustainable" style="width: 32px; height: 32px; margin-right: 1rem;">
                         <span style="font-size: 1.2rem;">Sustainable Practices</span>
                     </label>
+                </div>
                 </div>
             </div>
 
@@ -761,6 +815,17 @@
                 document.getElementById('next-btn').style.display = 'none';
             } else {
                 document.getElementById('next-btn').style.display = 'block';
+            }
+
+            // Show/hide appropriate content for step 3 based on plan type
+            if (currentStep === 3) {
+                if (isCloudAccount) {
+                    document.getElementById('cloud-download').style.display = 'block';
+                    document.getElementById('edge-certifications').style.display = 'none';
+                } else {
+                    document.getElementById('cloud-download').style.display = 'none';
+                    document.getElementById('edge-certifications').style.display = 'block';
+                }
             }
 
             // Show/hide appropriate content for step 4 based on plan type
