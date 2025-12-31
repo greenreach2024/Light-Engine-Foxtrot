@@ -375,7 +375,7 @@
         <div class="wizard-content">
             <!-- Step 0: Welcome -->
             <div class="wizard-step active" id="step-0">
-                <h1 class="step-title">Welcome to GreenReach! 👋</h1>
+                <h1 class="step-title">Welcome to GreenReach!</h1>
                 <p class="step-description">
                     Let's get your vertical farm set up in just a few steps.
                     This wizard will guide you through network configuration,
@@ -383,7 +383,6 @@
                 </p>
                 <div class="button-grid">
                     <button class="touch-button primary" onclick="nextStep()">
-                        <span class="button-icon">🚀</span>
                         <span>Start Setup</span>
                     </button>
                 </div>
@@ -397,11 +396,9 @@
                 </p>
                 <div class="button-grid">
                     <button class="touch-button success" onclick="selectNetwork('ethernet')">
-                        <span class="button-icon">🔌</span>
                         <span>Ethernet (Recommended)</span>
                     </button>
                     <button class="touch-button" onclick="selectNetwork('wifi')">
-                        <span class="button-icon">📡</span>
                         <span>WiFi</span>
                     </button>
                 </div>
@@ -474,7 +471,7 @@
                     <h3 style="color: var(--accent-green); margin-bottom: 1rem;">Growing Practices</h3>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="practice-pesticide-free" name="practices" value="Pesticide Free" style="width: 32px; height: 32px; margin-right: 1rem;">
-                        <span style="font-size: 1.2rem;">✅ Pesticide Free</span>
+                        <span style="font-size: 1.2rem;">Pesticide Free</span>
                     </label>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="practice-non-gmo" name="practices" value="Non-GMO" style="width: 32px; height: 32px; margin-right: 1rem;">
@@ -510,11 +507,11 @@
                     </label>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="attr-family-farm" name="attributes" value="Family Farm" style="width: 32px; height: 32px; margin-right: 1rem;">
-                        <span style="font-size: 1.2rem;">🏡 Family Farm</span>
+                        <span style="font-size: 1.2rem;">Family Farm</span>
                     </label>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="attr-sustainable" name="attributes" value="Sustainable" style="width: 32px; height: 32px; margin-right: 1rem;">
-                        <span style="font-size: 1.2rem;">♻️ Sustainable Practices</span>
+                        <span style="font-size: 1.2rem;">Sustainable Practices</span>
                     </label>
                 </div>
             </div>
@@ -522,7 +519,7 @@
             <!-- Step 4: Cloud Features (Cloud only) / Hardware Detection (Edge only) -->
             <div class="wizard-step" id="step-4">
                 <div id="cloud-features" style="display: none;">
-                    <h1 class="step-title">Welcome to Your Cloud Farm! ☁️</h1>
+                    <h1 class="step-title">Welcome to Your Cloud Farm!</h1>
                     <p class="step-description">
                         Your GreenReach cloud platform includes powerful features to help manage and grow your farm business
                     </p>
@@ -531,7 +528,7 @@
                         <!-- AI Assistant -->
                         <div class="status-card">
                             <div style="display: flex; align-items: start; gap: 1.5rem;">
-                                <div style="font-size: 3rem;">🤖</div>
+                                <div style="font-size: 3rem; font-weight: bold; color: var(--accent-blue);">AI</div>
                                 <div>
                                     <h3 style="color: var(--accent-blue); font-size: 1.8rem; margin-bottom: 0.5rem;">AI Assistant</h3>
                                     <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
@@ -545,7 +542,7 @@
                         <!-- Crop Pricing -->
                         <div class="status-card">
                             <div style="display: flex; align-items: start; gap: 1.5rem;">
-                                <div style="font-size: 3rem;">💰</div>
+                                <div style="font-size: 3rem; font-weight: bold; color: var(--accent-green);">$</div>
                                 <div>
                                     <h3 style="color: var(--accent-green); font-size: 1.8rem; margin-bottom: 0.5rem;">Smart Crop Pricing</h3>
                                     <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
@@ -559,7 +556,7 @@
                         <!-- Activity Hub -->
                         <div class="status-card">
                             <div style="display: flex; align-items: start; gap: 1.5rem;">
-                                <div style="font-size: 3rem;">📱</div>
+                                <div style="font-size: 2.5rem; font-weight: bold; color: var(--accent-yellow);">APP</div>
                                 <div>
                                     <h3 style="color: var(--accent-yellow); font-size: 1.8rem; margin-bottom: 0.5rem;">Activity Hub - Mobile App</h3>
                                     <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
@@ -569,12 +566,12 @@
                                     <div style="display: flex; gap: 1rem; margin-top: 1rem;">
                                         <a href="https://apps.apple.com/ca/app/greenreach-farms/id6738987013" target="_blank" style="text-decoration: none;">
                                             <div class="touch-button" style="padding: 1rem 2rem; font-size: 1rem; min-height: auto;">
-                                                <span>📱 iOS App Store</span>
+                                                <span>iOS App Store</span>
                                             </div>
                                         </a>
                                         <a href="https://play.google.com/store/apps" target="_blank" style="text-decoration: none;">
                                             <div class="touch-button" style="padding: 1rem 2rem; font-size: 1rem; min-height: auto;">
-                                                <span>🤖 Google Play</span>
+                                                <span>Google Play</span>
                                             </div>
                                         </a>
                                     </div>
@@ -585,7 +582,7 @@
                         <!-- Dashboard Tour -->
                         <div class="status-card">
                             <div style="display: flex; align-items: start; gap: 1.5rem;">
-                                <div style="font-size: 3rem;">🎯</div>
+                                <div style="font-size: 3rem; font-weight: bold; color: var(--accent-blue);">+</div>
                                 <div>
                                     <h3 style="color: var(--accent-blue); font-size: 1.8rem; margin-bottom: 0.5rem;">Quick Start</h3>
                                     <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
@@ -631,7 +628,7 @@
 
             <!-- Step 5: Complete -->
             <div class="wizard-step" id="step-5">
-                <h1 class="step-title">Setup Complete! 🎉</h1>
+                <h1 class="step-title">Setup Complete!</h1>
                 <p class="step-description">
                     Your GreenReach farm is ready to go!
                 </p>
@@ -643,7 +640,6 @@
                 </div>
                 <div class="button-grid">
                     <button class="touch-button primary" onclick="completeSetup()">
-                        <span class="button-icon">🌱</span>
                         <span>Go to Dashboard</span>
                     </button>
                 </div>
