@@ -402,6 +402,63 @@ router.get('/farms', requireAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/farms/:farmId
+ * Get detailed information about a specific farm
+ */
+router.get('/farms/:farmId', requireAdmin, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const db = await initDatabase();
+    
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, returning sample farm detail');
+      
+      // Return sample farm detail for NeDB mode
+      const sampleFarm = {
+        farm_id: farmId,
+        name: farmId === 'greenreach-hq' ? 'GreenReach HQ Demo Farm' : 'Demo Farm',
+        email: 'admin@greenreach.com',
+        status: 'active',
+        tier: 'enterprise',
+        created_at: new Date().toISOString(),
+        last_heartbeat: new Date().toISOString(),
+        address: '123 Farm Lane',
+        city: 'Portland',
+        state: 'OR',
+        country: 'USA',
+        phone: '+1-555-0100',
+        total_rooms: 1,
+        total_devices: 0,
+        user_count: 1
+      };
+      
+      return res.json(sampleFarm);
+    }
+    
+    // PostgreSQL mode: Query actual database
+    const farm = await db.get(`
+      SELECT 
+        f.*,
+        COUNT(DISTINCT u.id) as user_count
+      FROM farms f
+      LEFT JOIN users u ON f.farm_id = u.farm_id
+      WHERE f.farm_id = ?
+      GROUP BY f.farm_id
+    `, [farmId]);
+    
+    if (!farm) {
+      return res.status(404).json({ error: 'Farm not found' });
+    }
+    
+    res.json(farm);
+  } catch (error) {
+    console.error('Error getting farm details:', error);
+    res.status(500).json({ error: 'Failed to get farm details' });
+  }
+});
+
+/**
  * GET /api/admin/users
  * List all users across all farms
  */
