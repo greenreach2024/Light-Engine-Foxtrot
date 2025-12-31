@@ -14,7 +14,10 @@ const router = express.Router();
 function requireAdmin(req, res, next) {
   const authHeader = req.headers.authorization;
   
+  console.log('[REQUIRE ADMIN] Checking auth header:', authHeader ? 'Present' : 'Missing');
+  
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.warn('[REQUIRE ADMIN] Missing or invalid Authorization header');
     return res.status(401).json({ error: 'Admin authentication required' });
   }
   
@@ -22,13 +25,17 @@ function requireAdmin(req, res, next) {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, getJwtSecret());
     
+    console.log('[REQUIRE ADMIN] Token decoded for:', decoded.email, 'role:', decoded.role);
+    
     if (decoded.role !== 'admin') {
+      console.warn('[REQUIRE ADMIN] User does not have admin role:', decoded.role);
       return res.status(403).json({ error: 'Admin access required' });
     }
     
     req.admin = decoded;
     next();
   } catch (error) {
+    console.error('[REQUIRE ADMIN ERROR] Token verification failed:', error.message);
     return res.status(401).json({ error: 'Invalid or expired admin token' });
   }
 }
@@ -121,6 +128,7 @@ router.post('/auth/login', async (req, res) => {
  */
 router.get('/auth/verify', requireAdmin, async (req, res) => {
   try {
+    console.log('[AUTH VERIFY] Token verified successfully for:', req.admin.email);
     res.json({ 
       success: true, 
       admin: {
@@ -130,7 +138,7 @@ router.get('/auth/verify', requireAdmin, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Session verification error:', error);
+    console.error('[AUTH VERIFY ERROR]:', error);
     res.status(500).json({ error: 'Verification failed' });
   }
 });
