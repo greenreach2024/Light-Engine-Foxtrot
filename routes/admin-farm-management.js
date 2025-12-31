@@ -14,19 +14,26 @@ const router = express.Router();
 async function requireAdmin(req, res, next) {
   const authHeader = req.headers.authorization;
   
-  console.log('[REQUIRE ADMIN] Checking auth header:', authHeader ? 'Present' : 'Missing');
+  console.log('[REQUIRE ADMIN] ===== AUTH CHECK =====');
+  console.log('[REQUIRE ADMIN] Has auth header:', !!authHeader);
+  console.log('[REQUIRE ADMIN] Auth header preview:', authHeader ? authHeader.substring(0, 20) + '...' : 'none');
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.warn('[REQUIRE ADMIN] Missing or invalid Authorization header');
+    console.warn('[REQUIRE ADMIN] ❌ Missing or invalid Authorization header');
     return res.status(401).json({ error: 'Admin authentication required' });
   }
   
   try {
     const token = authHeader.split(' ')[1];
-    const jwtSecret = await getJwtSecret();
-    const decoded = jwt.verify(token, jwtSecret);
+    console.log('[REQUIRE ADMIN] Token extracted, length:', token.length);
+    console.log('[REQUIRE ADMIN] Token preview:', token.substring(0, 50) + '...');
     
-    console.log('[REQUIRE ADMIN] Token decoded for:', decoded.email, 'role:', decoded.role);
+    const jwtSecret = await getJwtSecret();
+    console.log('[REQUIRE ADMIN] JWT Secret obtained, length:', jwtSecret.length);
+    
+    const decoded = jwt.verify(token, jwtSecret);
+    console.log('[REQUIRE ADMIN] ✅ Token decoded successfully');
+    console.log('[REQUIRE ADMIN] Email:', decoded.email, 'Role:', decoded.role);
     
     if (decoded.role !== 'admin') {
       console.warn('[REQUIRE ADMIN] User does not have admin role:', decoded.role);
@@ -51,10 +58,14 @@ router.post('/auth/login', async (req, res) => {
     const { email, password, mfa_code } = req.body;
     
     if (!email || !password) {
+      console.error('[AUTH LOGIN] ❌ Missing email or password');
       return res.status(400).json({ error: 'Email and password required' });
     }
     
-    console.log('[AUTH LOGIN] Login attempt for:', email);
+    console.log('[AUTH LOGIN] ===== LOGIN ATTEMPT =====');
+    console.log('[AUTH LOGIN] Email:', email);
+    console.log('[AUTH LOGIN] Has password:', !!password);
+    console.log('[AUTH LOGIN] Password length:', password.length);
     
     // Hard-coded fallback admin credentials (for NeDB/in-memory mode)
     const FALLBACK_ADMIN = {
@@ -66,10 +77,15 @@ router.post('/auth/login', async (req, res) => {
     };
     
     // Check fallback credentials first
+    console.log('[AUTH LOGIN] Checking fallback credentials...');
+    console.log('[AUTH LOGIN] Email match:', email === FALLBACK_ADMIN.email);
+    console.log('[AUTH LOGIN] Password match:', password === FALLBACK_ADMIN.password);
+    
     if (email === FALLBACK_ADMIN.email && password === FALLBACK_ADMIN.password) {
-      console.log('[AUTH LOGIN] Using fallback admin credentials');
+      console.log('[AUTH LOGIN] ✅ Using fallback admin credentials');
       
       const jwtSecret = await getJwtSecret();
+      console.log('[AUTH LOGIN] JWT Secret obtained, length:', jwtSecret.length);
       const token = jwt.sign(
         { 
           admin_id: FALLBACK_ADMIN.id,
@@ -81,6 +97,9 @@ router.post('/auth/login', async (req, res) => {
         jwtSecret,
         { expiresIn: '4h' }
       );
+      
+      console.log('[AUTH LOGIN] ✅ Token generated, length:', token.length);
+      console.log('[AUTH LOGIN] Token preview:', token.substring(0, 50) + '...');
       
       return res.json({ 
         success: true, 
@@ -177,6 +196,48 @@ router.post('/auth/login', async (req, res) => {
   } catch (error) {
     console.error('[AUTH LOGIN ERROR]:', error);
     res.status(500).json({ error: 'Login failed', message: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/auth/debug
+ * Debug endpoint to check auth status and JWT configuration
+ */
+router.get('/auth/debug', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const jwtSecret = await getJwtSecret();
+    
+    const debug = {
+      timestamp: new Date().toISOString(),
+      hasAuthHeader: !!authHeader,
+      authHeaderPreview: authHeader ? authHeader.substring(0, 30) + '...' : null,
+      jwtSecretLength: jwtSecret.length,
+      jwtSecretPreview: jwtSecret.substring(0, 10) + '...',
+      fallbackAdmin: {
+        email: 'admin@greenreach.com',
+        exists: true
+      }
+    };
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      debug.tokenLength = token.length;
+      debug.tokenPreview = token.substring(0, 50) + '...';
+      
+      try {
+        const decoded = jwt.verify(token, jwtSecret);
+        debug.tokenValid = true;
+        debug.tokenPayload = decoded;
+      } catch (verifyError) {
+        debug.tokenValid = false;
+        debug.tokenError = verifyError.message;
+      }
+    }
+    
+    res.json({ success: true, debug });
+  } catch (error) {
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 

@@ -260,6 +260,9 @@
             hideAlert();
 
             try {
+                console.log('[LOGIN] ===== ATTEMPTING LOGIN =====');
+                console.log('[LOGIN] Email:', email);
+                console.log('[LOGIN] API_BASE:', API_BASE);
                 const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
                     method: 'POST',
                     headers: {
@@ -268,18 +271,25 @@
                     body: JSON.stringify({ email, password, mfa_code })
                 });
 
+                console.log('[LOGIN] Response status:', response.status);
                 const data = await response.json();
+                console.log('[LOGIN] Response data:', data);
 
                 if (response.ok && data.success) {
                     // Store token
+                    console.log('[LOGIN] ✅ Login successful! Storing token...');
                     localStorage.setItem('admin_token', data.token);
                     localStorage.setItem('admin_email', data.admin.email);
                     localStorage.setItem('admin_name', data.admin.name);
+                    console.log('[LOGIN] Token stored. Token length:', data.token.length);
+                    console.log('[LOGIN] Token preview:', data.token.substring(0, 50) + '...');
+                    console.log('[LOGIN] Stored in localStorage - admin_token exists:', !!localStorage.getItem('admin_token'));
                     
                     showAlert('Login successful! Redirecting...', 'success');
                     
                     // Redirect after short delay
                     setTimeout(() => {
+                        console.log('[LOGIN] Redirecting to dashboard...');
                         window.location.href = '/GR-central-admin.html';
                     }, 1000);
                 } else {
