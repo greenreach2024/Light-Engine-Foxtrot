@@ -176,3 +176,138 @@ class ScanEvent(Base):
     tray_run_id = Column(String(36), nullable=True)
     location_id = Column(String(36), nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ============================================================================
+# SALES & RETAIL MODELS
+# ============================================================================
+
+class ProductSKU(Base, TimestampMixin):
+    """Product SKU for retail sales"""
+    __tablename__ = "product_skus"
+
+    sku_id = UUIDColumn(primary_key=True)
+    name = Column(String(200), nullable=False)
+    category = Column(String(100), nullable=False)
+    variety = Column(String(100), nullable=True)
+    retail_price = Column(Float, nullable=False)
+    wholesale_price = Column(Float, nullable=True)
+    unit = Column(String(20), nullable=False)  # lb, oz, bunch, head, each
+    is_taxable = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    
+    # Link to tray runs for traceability
+    tray_run_id = Column(String(36), ForeignKey("tray_runs.tray_run_id"), nullable=True)
+    lot_code = Column(String(100), nullable=True)
+    harvest_date = Column(Date, nullable=True)
+    
+    # Inventory tracking
+    quantity_available = Column(Integer, nullable=False, default=0)
+    quantity_reserved = Column(Integer, nullable=False, default=0)
+    
+    orders = relationship("SalesOrderItem", back_populates="product")
+
+
+class SalesCustomer(Base, TimestampMixin):
+    """Customer for retail sales"""
+    __tablename__ = "sales_customers"
+
+    customer_id = UUIDColumn(primary_key=True)
+    name = Column(String(200), nullable=False)
+    email = Column(String(200), nullable=True)
+    phone = Column(String(50), nullable=True)
+    
+    # Loyalty and gift cards
+    loyalty_points = Column(Integer, nullable=False, default=0)
+    gift_card_balance = Column(Float, nullable=False, default=0.0)
+    
+    orders = relationship("SalesOrder", back_populates="customer")
+
+
+class SalesOrder(Base, TimestampMixin):
+    """Sales order (POS, online, wholesale)"""
+    __tablename__ = "sales_orders"
+
+    order_id = UUIDColumn(primary_key=True)
+    order_number = Column(String(50), nullable=False, unique=True)
+    
+    # Customer
+    customer_id = Column(String(36), ForeignKey("sales_customers.customer_id"), nullable=True)
+    
+    # Order details
+    channel = Column(String(20), nullable=False)  # pos, online, wholesale, donation
+    status = Column(String(20), nullable=False, default="pending")  # pending, completed, cancelled, refunded
+    
+    # Pricing
+    subtotal = Column(Float, nullable=False)
+    tax = Column(Float, nullable=False, default=0.0)
+    discount = Column(Float, nullable=False, default=0.0)
+    subsidy = Column(Float, nullable=False, default=0.0)  # For donation programs
+    total = Column(Float, nullable=False)
+    
+    # Payment
+    payment_method = Column(String(20), nullable=False)  # cash, card, gift_card, check, account
+    payment_status = Column(String(20), nullable=False, default="pending")
+    payment_transaction_id = Column(String(100), nullable=True)
+    
+    # Staff
+    cashier_name = Column(String(200), nullable=True)
+    cashier_employee_id = Column(String(50), nullable=True)
+    
+    # Timestamps
+    completed_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    refunded_at = Column(DateTime, nullable=True)
+    
+    # Notes
+    notes = Column(String(1000), nullable=True)
+    refund_reason = Column(String(500), nullable=True)
+    
+    customer = relationship("SalesCustomer", back_populates="orders")
+    items = relationship("SalesOrderItem", back_populates="order")
+
+
+class SalesOrderItem(Base, TimestampMixin):
+    """Item in a sales order"""
+    __tablename__ = "sales_order_items"
+
+    item_id = UUIDColumn(primary_key=True)
+    order_id = Column(String(36), ForeignKey("sales_orders.order_id"), nullable=False)
+    sku_id = Column(String(36), ForeignKey("product_skus.sku_id"), nullable=False)
+    
+    quantity = Column(Integer, nullable=False)
+    unit_price = Column(Float, nullable=False)
+    line_total = Column(Float, nullable=False)
+    
+    # Traceability
+    lot_code = Column(String(100), nullable=True)
+    
+    order = relationship("SalesOrder", back_populates="items")
+    product = relationship("ProductSKU", back_populates="orders")
+
+
+class DonationProgram(Base, TimestampMixin):
+    """Food assistance/donation program"""
+    __tablename__ = "donation_programs"
+
+    program_id = UUIDColumn(primary_key=True)
+    name = Column(String(200), nullable=False)
+    program_type = Column(String(50), nullable=False)  # snap, wic, senior, food_bank, community
+    status = Column(String(20), nullable=False, default="active")  # active, inactive, pending
+    
+    # Subsidy
+    subsidy_percent = Column(Float, nullable=False)  # 0-100
+    
+    # Grant details
+    grant_provider = Column(String(200), nullable=False)
+    grant_number = Column(String(100), nullable=False)
+    grant_total_budget = Column(Float, nullable=False)
+    grant_spent_to_date = Column(Float, nullable=False, default=0.0)
+    
+    # Eligibility
+    verification_required = Column(Boolean, nullable=False, default=True)
+    eligible_products = Column(String(2000), nullable=True)  # JSON list of SKU IDs or "all"
+    
+    # Dates
+    active_since = Column(Date, nullable=False)
+    expires_at = Column(Date, nullable=True)
