@@ -473,6 +473,8 @@ function setupNavigation() {
                     loadPaymentMethods();
                 } else if (section === 'settings') {
                     loadSettings();
+                } else if (section === 'users') {
+                    loadUsers();
                 }
             }
         });
@@ -3970,3 +3972,399 @@ async function useCurrentLocation() {
         }
     );
 }
+
+// === USER MANAGEMENT ===
+
+/**
+ * Load users and populate the users table
+ */
+async function loadUsers() {
+    try {
+        // Demo data - in production would fetch from API
+        const users = [
+            {
+                id: 1,
+                name: 'Green Admin',
+                email: 'info@greereachfarms.com',
+                role: 'admin',
+                status: 'active',
+                lastLogin: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+            },
+            {
+                id: 2,
+                name: 'Farm Manager',
+                email: 'manager@greereachfarms.com',
+                role: 'manager',
+                status: 'active',
+                lastLogin: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
+            },
+            {
+                id: 3,
+                name: 'Operator User',
+                email: 'operator@greereachfarms.com',
+                role: 'operator',
+                status: 'active',
+                lastLogin: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+            }
+        ];
+
+        // Store for filtering
+        window.allUsers = users;
+        
+        renderUsersTable(users);
+        loadAccessLog();
+    } catch (error) {
+        console.error('Error loading users:', error);
+        showToast('Error loading users', 'error');
+    }
+}
+
+/**
+ * Render users table
+ */
+function renderUsersTable(users) {
+    const tbody = document.querySelector('#users-table tbody');
+    
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No users found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = users.map(user => {
+        const roleColors = {
+            admin: 'var(--accent-red)',
+            manager: 'var(--accent-blue)',
+            operator: 'var(--accent-green)',
+            viewer: 'var(--text-muted)'
+        };
+        
+        const statusColors = {
+            active: 'var(--accent-green)',
+            suspended: 'var(--accent-yellow)',
+            inactive: 'var(--text-muted)'
+        };
+        
+        const lastLogin = new Date(user.lastLogin);
+        const timeSince = formatTimeSince(lastLogin);
+        
+        return `
+            <tr>
+                <td style="font-weight: 500;">${escapeHtml(user.name)}</td>
+                <td>${escapeHtml(user.email)}</td>
+                <td>
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: rgba(${roleColors[user.role]}, 0.1); color: ${roleColors[user.role]}; border: 1px solid ${roleColors[user.role]};">
+                        ${user.role}
+                    </span>
+                </td>
+                <td>
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; color: ${statusColors[user.status]};">
+                        ● ${user.status}
+                    </span>
+                </td>
+                <td style="color: var(--text-secondary);">${timeSince}</td>
+                <td>
+                    <button class="btn btn-sm" onclick="openEditUserModal(${user.id})" style="padding: 6px 12px; font-size: 13px;">Edit</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Filter users by role and search
+ */
+function filterUsers() {
+    const roleFilter = document.getElementById('role-filter').value;
+    const searchTerm = document.getElementById('user-search').value.toLowerCase();
+    
+    let filtered = window.allUsers || [];
+    
+    // Filter by role
+    if (roleFilter !== 'all') {
+        filtered = filtered.filter(u => u.role === roleFilter);
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+        filtered = filtered.filter(u => 
+            u.name.toLowerCase().includes(searchTerm) ||
+            u.email.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    renderUsersTable(filtered);
+}
+
+/**
+ * Open invite user modal
+ */
+function openInviteUserModal() {
+    document.getElementById('inviteUserModal').style.display = 'flex';
+    document.getElementById('invite-user-form').reset();
+}
+
+/**
+ * Close invite user modal
+ */
+function closeInviteUserModal() {
+    document.getElementById('inviteUserModal').style.display = 'none';
+}
+
+/**
+ * Send user invitation
+ */
+async function sendUserInvitation(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('invite-email').value;
+    const firstName = document.getElementById('invite-first-name').value;
+    const lastName = document.getElementById('invite-last-name').value;
+    const role = document.getElementById('invite-role').value;
+    const message = document.getElementById('invite-message').value;
+    
+    try {
+        // In production, would call API
+        // const response = await fetch('/api/users/invite', {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //         'X-Farm-ID': localStorage.getItem('farm_id')
+        //     },
+        //     body: JSON.stringify({ email, firstName, lastName, role, message })
+        // });
+        
+        showToast(`Invitation sent to ${email}`, 'success');
+        closeInviteUserModal();
+        
+        // Add to pending invitations table
+        addPendingInvitation({
+            email,
+            role,
+            invitedBy: currentSession?.email || 'admin@greereachfarms.com',
+            sent: new Date().toISOString(),
+            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        });
+        
+    } catch (error) {
+        console.error('Error sending invitation:', error);
+        showToast('Error sending invitation', 'error');
+    }
+}
+
+/**
+ * Add pending invitation to table
+ */
+function addPendingInvitation(invitation) {
+    const tbody = document.querySelector('#invitations-table tbody');
+    
+    // Remove "no invitations" message if present
+    if (tbody.querySelector('td[colspan]')) {
+        tbody.innerHTML = '';
+    }
+    
+    const sent = formatTimeSince(new Date(invitation.sent));
+    const expires = new Date(invitation.expires).toLocaleDateString();
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td>${escapeHtml(invitation.email)}</td>
+        <td style="text-transform: capitalize;">${invitation.role}</td>
+        <td>${escapeHtml(invitation.invitedBy)}</td>
+        <td>${sent}</td>
+        <td>${expires}</td>
+        <td>
+            <button class="btn btn-sm" onclick="resendInvitation('${invitation.email}')" style="padding: 4px 8px; font-size: 12px;">Resend</button>
+            <button class="btn btn-sm" onclick="cancelInvitation('${invitation.email}')" style="padding: 4px 8px; font-size: 12px; background: var(--accent-red);">Cancel</button>
+        </td>
+    `;
+    
+    tbody.appendChild(row);
+}
+
+/**
+ * Open edit user modal
+ */
+function openEditUserModal(userId) {
+    const user = window.allUsers.find(u => u.id === userId);
+    if (!user) return;
+    
+    document.getElementById('edit-user-id').value = user.id;
+    document.getElementById('edit-user-name').value = user.name;
+    document.getElementById('edit-user-email').value = user.email;
+    document.getElementById('edit-user-role').value = user.role;
+    document.getElementById('edit-user-status').value = user.status;
+    
+    document.getElementById('editUserModal').style.display = 'flex';
+}
+
+/**
+ * Close edit user modal
+ */
+function closeEditUserModal() {
+    document.getElementById('editUserModal').style.display = 'none';
+}
+
+/**
+ * Save user changes
+ */
+async function saveUserChanges(event) {
+    event.preventDefault();
+    
+    const userId = parseInt(document.getElementById('edit-user-id').value);
+    const role = document.getElementById('edit-user-role').value;
+    const status = document.getElementById('edit-user-status').value;
+    
+    try {
+        // In production, would call API
+        // const response = await fetch(`/api/users/${userId}`, {
+        //     method: 'PATCH',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //         'X-Farm-ID': localStorage.getItem('farm_id')
+        //     },
+        //     body: JSON.stringify({ role, status })
+        // });
+        
+        // Update local data
+        const user = window.allUsers.find(u => u.id === userId);
+        if (user) {
+            user.role = role;
+            user.status = status;
+        }
+        
+        showToast('User updated successfully', 'success');
+        closeEditUserModal();
+        renderUsersTable(window.allUsers);
+        
+    } catch (error) {
+        console.error('Error updating user:', error);
+        showToast('Error updating user', 'error');
+    }
+}
+
+/**
+ * Remove user
+ */
+async function removeUser() {
+    const userId = parseInt(document.getElementById('edit-user-id').value);
+    const user = window.allUsers.find(u => u.id === userId);
+    
+    if (!confirm(`Are you sure you want to remove ${user.name}? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        // In production, would call API
+        // await fetch(`/api/users/${userId}`, {
+        //     method: 'DELETE',
+        //     headers: { 'X-Farm-ID': localStorage.getItem('farm_id') }
+        // });
+        
+        window.allUsers = window.allUsers.filter(u => u.id !== userId);
+        
+        showToast('User removed successfully', 'success');
+        closeEditUserModal();
+        renderUsersTable(window.allUsers);
+        
+    } catch (error) {
+        console.error('Error removing user:', error);
+        showToast('Error removing user', 'error');
+    }
+}
+
+/**
+ * Resend invitation
+ */
+function resendInvitation(email) {
+    showToast(`Invitation resent to ${email}`, 'success');
+}
+
+/**
+ * Cancel invitation
+ */
+function cancelInvitation(email) {
+    if (!confirm(`Cancel invitation for ${email}?`)) return;
+    
+    const tbody = document.querySelector('#invitations-table tbody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+        if (row.cells[0].textContent === email) {
+            row.remove();
+        }
+    });
+    
+    // If no more rows, show "no invitations" message
+    if (tbody.children.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px;">No pending invitations</td></tr>';
+    }
+    
+    showToast('Invitation cancelled', 'info');
+}
+
+/**
+ * Load access activity log
+ */
+function loadAccessLog() {
+    const tbody = document.querySelector('#access-log-table tbody');
+    
+    // Demo data
+    const activities = [
+        { time: Date.now() - 15 * 60 * 1000, user: 'info@greereachfarms.com', action: 'Login', ip: '192.168.1.100', status: 'success' },
+        { time: Date.now() - 45 * 60 * 1000, user: 'manager@greereachfarms.com', action: 'Updated pricing', ip: '192.168.1.101', status: 'success' },
+        { time: Date.now() - 2 * 60 * 60 * 1000, user: 'operator@greereachfarms.com', action: 'Login', ip: '192.168.1.102', status: 'success' },
+        { time: Date.now() - 3 * 60 * 60 * 1000, user: 'unknown@example.com', action: 'Login attempt', ip: '203.0.113.42', status: 'failed' },
+        { time: Date.now() - 5 * 60 * 60 * 1000, user: 'info@greereachfarms.com', action: 'Changed user role', ip: '192.168.1.100', status: 'success' }
+    ];
+    
+    tbody.innerHTML = activities.map(activity => {
+        const statusColor = activity.status === 'success' ? 'var(--accent-green)' : 'var(--accent-red)';
+        
+        return `
+            <tr>
+                <td style="color: var(--text-secondary);">${formatTimeSince(new Date(activity.time))}</td>
+                <td>${escapeHtml(activity.user)}</td>
+                <td>${escapeHtml(activity.action)}</td>
+                <td style="font-family: monospace; font-size: 13px; color: var(--text-muted);">${activity.ip}</td>
+                <td>
+                    <span style="color: ${statusColor}; font-weight: 500; text-transform: capitalize;">
+                        ${activity.status}
+                    </span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Format time since
+ */
+function formatTimeSince(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    const intervals = {
+        year: 31536000,
+        month: 2592000,
+        week: 604800,
+        day: 86400,
+        hour: 3600,
+        minute: 60
+    };
+    
+    for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+        const interval = Math.floor(seconds / secondsInUnit);
+        if (interval >= 1) {
+            return interval === 1 ? `1 ${unit} ago` : `${interval} ${unit}s ago`;
+        }
+    }
+    
+    return 'just now';
+}
+
+// Setup user search
+document.addEventListener('DOMContentLoaded', () => {
+    const userSearch = document.getElementById('user-search');
+    if (userSearch) {
+        userSearch.addEventListener('input', filterUsers);
+    }
+});
