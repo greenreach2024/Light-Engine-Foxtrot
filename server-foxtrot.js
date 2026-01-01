@@ -19090,6 +19090,12 @@ const traysDB = Datastore.create({
   timestampData: true
 });
 
+const trayFormatsDB = Datastore.create({
+  filename: './data/tray-formats.db',
+  autoload: true,
+  timestampData: true
+});
+
 const trayPlacementsDB = Datastore.create({
   filename: './data/tray-placements.db',
   autoload: true,
