@@ -687,12 +687,7 @@
     <h1>🌱 Fresh Farm Produce</h1>
     <p>Local, Sustainable, Delicious</p>
     <div class="farm-selector">
-      <select id="farm-select" onchange="selectFarm(this.value)">
-        <option value="">Select a farm...</option>
-        <option value="FARM-001">Sunrise Acres</option>
-        <option value="FARM-002">Green Valley Farm</option>
-        <option value="FARM-003">Urban Harvest Co</option>
-      </select>
+      <h2 id="farm-name" style="margin: 0; font-size: 1.5rem;">Loading...</h2>
     </div>
   </section>
   
@@ -881,24 +876,28 @@
       produce: '🍅'
     };
     
-    // Select farm
-    function selectFarm(farmId) {
-      if (!farmId) return;
-      
-      selectedFarm = farmId;
-      localStorage.setItem('selected_farm', farmId);
-      
-      loadInventory();
-      loadSubscriptionPlans();
+    // Initialize farm from config
+    async function initializeFarm() {
+      try {
+        const response = await fetch('/api/config/app');
+        const config = await response.json();
+        
+        selectedFarm = config.farmId || 'FARM-001';
+        const farmName = config.farmName || 'Demo Farm';
+        
+        document.getElementById('farm-name').textContent = farmName;
+        
+        loadInventory();
+        loadSubscriptionPlans();
+      } catch (error) {
+        console.error('Failed to load farm config:', error);
+        document.getElementById('farm-name').textContent = 'Error loading farm';
+      }
     }
     
-    // Check for saved farm selection
+    // Initialize on page load
     window.addEventListener('DOMContentLoaded', () => {
-      const savedFarm = localStorage.getItem('selected_farm');
-      if (savedFarm) {
-        document.getElementById('farm-select').value = savedFarm;
-        selectFarm(savedFarm);
-      }
+      initializeFarm();
       
       // Set minimum date for delivery (tomorrow)
       const tomorrow = new Date();
