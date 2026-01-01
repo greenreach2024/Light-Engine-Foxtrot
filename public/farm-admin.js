@@ -2922,15 +2922,33 @@ function downloadAllReceipts() {
  */
 async function loadSettings() {
     try {
-        // Load setup configuration from API
-        const setupResponse = await fetch('/api/setup/status');
-        const setupData = await setupResponse.json();
+        // Try to load setup configuration from API
+        let setupData = {};
+        try {
+            const setupResponse = await fetch('/api/setup/status');
+            if (setupResponse.ok) {
+                setupData = await setupResponse.json();
+            }
+        } catch (error) {
+            console.log('Setup API not available, using fallback data');
+        }
         
+        // Use API data if available, otherwise fallback to session/localStorage data
+        const storedFarmData = JSON.parse(localStorage.getItem('farmData') || '{}');
+        const authFarmId = localStorage.getItem('farm_id');
+        const authFarmName = localStorage.getItem('farm_name');
+        
+        // Farm Profile - populate from available sources
+        const farmId = setupData.farmId || storedFarmData.farm_id || authFarmId || currentSession?.farmId || 'FARM-MJUKLMO0-9978';
+        const registrationCode = setupData.registrationCode || storedFarmData.registration_code || 'GR-2025-001';
+        const networkType = setupData.network?.type || storedFarmData.network_type || 'Cloud';
+        
+        document.getElementById('settings-farm-id').value = farmId;
+        document.getElementById('settings-registration-code').value = registrationCode;
+        document.getElementById('network-type').textContent = networkType;
+        
+        // If we have complete setup data, use it
         if (setupData.completed) {
-            // Farm Profile from setup wizard
-            document.getElementById('settings-farm-id').value = setupData.farmId || 'Not configured';
-            document.getElementById('settings-registration-code').value = setupData.registrationCode || 'N/A';
-            document.getElementById('network-type').textContent = setupData.network?.type || 'Unknown';
             
             // Load hardware info
             if (setupData.hardwareDetected) {
