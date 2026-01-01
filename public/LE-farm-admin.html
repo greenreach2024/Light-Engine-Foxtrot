@@ -2460,24 +2460,32 @@
                     <div class="card">
                         <h2 style="margin-bottom: 8px;">Farm Operations Defaults</h2>
                         <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">
-                            Set default pricing and inventory thresholds for new products
+                            Set default wholesale discount tiers and inventory thresholds for new crops
                         </p>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default Wholesale Markup (%)</label>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default WS1 Discount (%)</label>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="number" id="default-wholesale-markup" value="40" min="0" max="100" step="5" style="width: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                    <span style="color: var(--text-secondary); font-size: 14px;">Standard range: 20-50%</span>
+                                    <input type="number" id="default-ws1-discount" value="15" min="0" max="50" step="5" style="width: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <span style="color: var(--text-secondary); font-size: 14px;">Typical: 10-20% off retail</span>
                                 </div>
-                                <small style="color: var(--text-muted);">Applied automatically to new products when setting wholesale pricing</small>
+                                <small style="color: var(--text-muted);">First wholesale tier discount from retail price</small>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default Retail Markup (%)</label>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default WS2 Discount (%)</label>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="number" id="default-retail-markup" value="100" min="0" max="300" step="10" style="width: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                    <span style="color: var(--text-secondary); font-size: 14px;">Standard range: 80-150%</span>
+                                    <input type="number" id="default-ws2-discount" value="25" min="0" max="50" step="5" style="width: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <span style="color: var(--text-secondary); font-size: 14px;">Typical: 20-30% off retail</span>
                                 </div>
-                                <small style="color: var(--text-muted);">Applied automatically to new products when setting retail pricing</small>
+                                <small style="color: var(--text-muted);">Second wholesale tier discount from retail price</small>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default WS3 Discount (%)</label>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="number" id="default-ws3-discount" value="35" min="0" max="60" step="5" style="width: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <span style="color: var(--text-secondary); font-size: 14px;">Typical: 30-40% off retail</span>
+                                </div>
+                                <small style="color: var(--text-muted);">Third wholesale tier discount from retail price</small>
                             </div>
                             <div>
                                 <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Low Stock Threshold (units)</label>

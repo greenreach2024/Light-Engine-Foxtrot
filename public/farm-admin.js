@@ -3037,8 +3037,9 @@ async function loadSettings() {
         document.getElementById('session-timeout').value = settings.sessionTimeout || 30;
         
         // Farm Operations Defaults
-        document.getElementById('default-wholesale-markup').value = settings.wholesaleMarkup || 40;
-        document.getElementById('default-retail-markup').value = settings.retailMarkup || 100;
+        document.getElementById('default-ws1-discount').value = settings.defaultWS1Discount || 15;
+        document.getElementById('default-ws2-discount').value = settings.defaultWS2Discount || 25;
+        document.getElementById('default-ws3-discount').value = settings.defaultWS3Discount || 35;
         document.getElementById('low-stock-threshold').value = settings.lowStockThreshold || 10;
         
         // API & Webhooks
@@ -3145,8 +3146,9 @@ async function saveSettings() {
             passwordExpiry: document.getElementById('password-expiry').checked,
             sessionTimeout: document.getElementById('session-timeout').value,
             
-            // Farm Operations Defaults
-            wholesaleMarkup: document.getElementById('default-wholesale-markup').value,
+            defaultWS1Discount: document.getElementById('default-ws1-discount').value,
+            defaultWS2Discount: document.getElementById('default-ws2-discount').value,
+            defaultWS3Discount: document.getElementById('default-ws3-discountmarkup').value,
             retailMarkup: document.getElementById('default-retail-markup').value,
             lowStockThreshold: document.getElementById('low-stock-threshold').value,
             
@@ -3184,22 +3186,28 @@ async function saveSettings() {
 }
 
 /**
- * Save operation defaults (pricing markup and inventory thresholds)
+ * Save operation defaults (wholesale discounts and inventory thresholds)
  */
 async function saveOperationDefaults() {
     try {
-        const wholesaleMarkup = document.getElementById('default-wholesale-markup').value;
-        const retailMarkup = document.getElementById('default-retail-markup').value;
+        const ws1Discount = document.getElementById('default-ws1-discount').value;
+        const ws2Discount = document.getElementById('default-ws2-discount').value;
+        const ws3Discount = document.getElementById('default-ws3-discount').value;
         const lowStockThreshold = document.getElementById('low-stock-threshold').value;
         
         // Validate inputs
-        if (wholesaleMarkup < 0 || wholesaleMarkup > 100) {
-            showToast('Wholesale markup must be between 0% and 100%', 'error');
+        if (ws1Discount < 0 || ws1Discount > 50) {
+            showToast('WS1 discount must be between 0% and 50%', 'error');
             return;
         }
         
-        if (retailMarkup < 0 || retailMarkup > 300) {
-            showToast('Retail markup must be between 0% and 300%', 'error');
+        if (ws2Discount < 0 || ws2Discount > 50) {
+            showToast('WS2 discount must be between 0% and 50%', 'error');
+            return;
+        }
+        
+        if (ws3Discount < 0 || ws3Discount > 60) {
+            showToast('WS3 discount must be between 0% and 60%', 'error');
             return;
         }
         
@@ -3212,8 +3220,9 @@ async function saveOperationDefaults() {
         const settings = JSON.parse(localStorage.getItem('farmSettings') || '{}');
         
         // Update operation defaults
-        settings.wholesaleMarkup = wholesaleMarkup;
-        settings.retailMarkup = retailMarkup;
+        settings.defaultWS1Discount = ws1Discount;
+        settings.defaultWS2Discount = ws2Discount;
+        settings.defaultWS3Discount = ws3Discount;
         settings.lowStockThreshold = lowStockThreshold;
         settings.lastUpdated = new Date().toISOString();
         
@@ -3228,8 +3237,9 @@ async function saveOperationDefaults() {
         //         'X-Farm-ID': localStorage.getItem('farm_id') || 'demo-farm'
         //     },
         //     body: JSON.stringify({
-        //         wholesaleMarkup,
-        //         retailMarkup,
+        //         ws1Discount,
+        //         ws2Discount,
+        //         ws3Discount,
         //         lowStockThreshold
         //     })
         // });
