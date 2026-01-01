@@ -98,6 +98,8 @@ import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
 import wholesaleWebhooksRouter from './routes/wholesale/webhooks.js';
 import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-webhooks.js';
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
+import { extractTenantId } from './server/middleware/multi-tenant.js';
+import { generateFarmSlug } from './lib/slug-generator.js';
 import wholesaleSquareOAuthRouter from './routes/wholesale/square-oauth.js';
 import wholesaleSLAPoliciesRouter from './routes/wholesale/sla-policies.js';
 import wholesaleNetworkRouter from './routes/wholesale/network.js';
@@ -14969,11 +14971,43 @@ app.get('/api/losses/current', async (req, res) => {
 });
 
 // Farm configuration endpoint - MUST be before proxy middleware
-app.get('/api/config/app', (req, res) => {
+app.get('/api/config/app', async (req, res) => {
   try {
     setCors(req, res);
     
-    // Try to load farm configuration from farm.json
+    // Extract tenant/farm from subdomain (multi-tenant support)
+    const subdomain = extractTenantId(req);
+    console.log('[API] /api/config/app - subdomain:', subdomain);
+    
+    // If subdomain is not 'default', look up farm by slug in database
+    if (subdomain && subdomain !== 'default' && pool) {
+      try {
+        const result = await pool.query(
+          'SELECT farm_id, name, farm_slug, email FROM farms WHERE farm_slug = $1',
+          [subdomain]
+        );
+        
+        if (result.rows && result.rows.length > 0) {
+          const farm = result.rows[0];
+          const config = {
+            ok: true,
+            farmId: farm.farm_id,
+            farmName: farm.name,
+            farmSlug: farm.farm_slug,
+            storeUrl: `https://${farm.farm_slug}.greenreachgreens.com`,
+            region: 'Pacific Northwest',
+            status: 'online'
+          };
+          console.log('[API] /api/config/app returning (from DB):', config);
+          return res.json(config);
+        }
+      } catch (dbError) {
+        console.error('[API] Database lookup failed for subdomain:', subdomain, dbError.message);
+        // Fall through to file-based config
+      }
+    }
+    
+    // Fallback: Try to load farm configuration from farm.json
     let farmData = null;
     try {
       farmData = readJSONSafe(FARM_PATH, null);
@@ -14986,11 +15020,13 @@ app.get('/api/config/app', (req, res) => {
       ok: true,
       farmId: (farmData && farmData.farmId) ? farmData.farmId : 'light-engine-demo',
       farmName: (farmData && farmData.name) ? farmData.name : 'GreenReach Demo Farm',
+      farmSlug: subdomain !== 'default' ? subdomain : 'demo',
+      storeUrl: subdomain !== 'default' ? `https://${subdomain}.greenreachgreens.com` : null,
       region: (farmData && farmData.region) ? farmData.region : 'Pacific Northwest',
       status: (farmData && farmData.status) ? farmData.status : 'online'
     };
     
-    console.log('[API] /api/config/app returning:', config);
+    console.log('[API] /api/config/app returning (from file):', config);
     res.json(config);
   } catch (e) {
     console.error('[API] Error in /api/config/app:', e);
@@ -14999,6 +15035,7 @@ app.get('/api/config/app', (req, res) => {
       ok: true,
       farmId: 'light-engine-demo',
       farmName: 'GreenReach Demo Farm',
+      farmSlug: 'demo',
       region: 'Pacific Northwest',
       status: 'online'
     });
