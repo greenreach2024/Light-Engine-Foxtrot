@@ -3040,7 +3040,6 @@ async function loadSettings() {
         document.getElementById('default-wholesale-markup').value = settings.wholesaleMarkup || 40;
         document.getElementById('default-retail-markup').value = settings.retailMarkup || 100;
         document.getElementById('low-stock-threshold').value = settings.lowStockThreshold || 10;
-        document.getElementById('auto-harvest-alerts').checked = settings.autoHarvestAlerts !== false;
         
         // API & Webhooks
         document.getElementById('webhook-url').value = settings.webhookUrl || '';
@@ -3150,7 +3149,6 @@ async function saveSettings() {
             wholesaleMarkup: document.getElementById('default-wholesale-markup').value,
             retailMarkup: document.getElementById('default-retail-markup').value,
             lowStockThreshold: document.getElementById('low-stock-threshold').value,
-            autoHarvestAlerts: document.getElementById('auto-harvest-alerts').checked,
             
             // API & Webhooks
             webhookUrl: document.getElementById('webhook-url').value,
@@ -3182,6 +3180,64 @@ async function saveSettings() {
     } catch (error) {
         console.error('Error saving settings:', error);
         showToast('Error saving settings', 'error');
+    }
+}
+
+/**
+ * Save operation defaults (pricing markup and inventory thresholds)
+ */
+async function saveOperationDefaults() {
+    try {
+        const wholesaleMarkup = document.getElementById('default-wholesale-markup').value;
+        const retailMarkup = document.getElementById('default-retail-markup').value;
+        const lowStockThreshold = document.getElementById('low-stock-threshold').value;
+        
+        // Validate inputs
+        if (wholesaleMarkup < 0 || wholesaleMarkup > 100) {
+            showToast('Wholesale markup must be between 0% and 100%', 'error');
+            return;
+        }
+        
+        if (retailMarkup < 0 || retailMarkup > 300) {
+            showToast('Retail markup must be between 0% and 300%', 'error');
+            return;
+        }
+        
+        if (lowStockThreshold < 0) {
+            showToast('Low stock threshold must be 0 or greater', 'error');
+            return;
+        }
+        
+        // Get existing settings
+        const settings = JSON.parse(localStorage.getItem('farmSettings') || '{}');
+        
+        // Update operation defaults
+        settings.wholesaleMarkup = wholesaleMarkup;
+        settings.retailMarkup = retailMarkup;
+        settings.lowStockThreshold = lowStockThreshold;
+        settings.lastUpdated = new Date().toISOString();
+        
+        // Save to localStorage
+        localStorage.setItem('farmSettings', JSON.stringify(settings));
+        
+        // In production, would also save to API
+        // await fetch('/api/farm/settings/defaults', {
+        //     method: 'POST',
+        //     headers: { 
+        //         'Content-Type': 'application/json',
+        //         'X-Farm-ID': localStorage.getItem('farm_id') || 'demo-farm'
+        //     },
+        //     body: JSON.stringify({
+        //         wholesaleMarkup,
+        //         retailMarkup,
+        //         lowStockThreshold
+        //     })
+        // });
+        
+        showToast('Operation defaults saved successfully', 'success');
+    } catch (error) {
+        console.error('Error saving operation defaults:', error);
+        showToast('Error saving operation defaults', 'error');
     }
 }
 
