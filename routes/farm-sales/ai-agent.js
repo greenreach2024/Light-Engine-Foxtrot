@@ -111,9 +111,9 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
 
 /**
  * GET /api/farm-sales/ai-agent/capabilities
- * List all available AI agent capabilities
+ * List all available AI agent capabilities (public endpoint)
  */
-router.get('/capabilities', farmAuthMiddleware, (req, res) => {
+router.get('/capabilities', (req, res) => {
   res.json({
     capabilities: SYSTEM_CAPABILITIES,
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -123,9 +123,9 @@ router.get('/capabilities', farmAuthMiddleware, (req, res) => {
 
 /**
  * GET /api/farm-sales/ai-agent/status
- * Check AI agent status and configuration
+ * Check AI agent status and configuration (public endpoint)
  */
-router.get('/status', farmAuthMiddleware, (req, res) => {
+router.get('/status', (req, res) => {
   const apiKeyConfigured = !!process.env.OPENAI_API_KEY;
   
   res.json({
@@ -135,7 +135,8 @@ router.get('/status', farmAuthMiddleware, (req, res) => {
     rate_limit: {
       max_requests: RATE_LIMIT_MAX,
       window_seconds: RATE_LIMIT_WINDOW / 1000
-    }
+    },
+    email_configured: !!process.env.EMAIL_PROVIDER && (process.env.EMAIL_PROVIDER === 'ses' || !!process.env.SENDGRID_API_KEY)
   });
 });
 
