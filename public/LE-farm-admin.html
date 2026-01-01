@@ -2105,6 +2105,275 @@
                 </div>
             </div>
 
+            <!-- Quality Control Section -->
+            <div id="section-quality" class="content-section" style="display: none;">
+                <div class="header">
+                    <h1>Quality Control</h1>
+                    <div class="header-actions">
+                        <button class="btn" onclick="openQualityTestModal()">+ New Quality Test</button>
+                        <button class="btn" onclick="exportQualityReport()">Export Report</button>
+                    </div>
+                </div>
+
+                <!-- Quality Metrics Overview -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                    <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%); border-left: 4px solid var(--accent-green);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Pass Rate (30 Days)</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-green);" id="quality-pass-rate">98.5%</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">+2.1% vs last month</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%); border-left: 4px solid var(--accent-blue);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Tests Completed</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-blue);" id="tests-completed">247</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">This month</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%); border-left: 4px solid var(--accent-yellow);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Pending Review</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-yellow);" id="pending-review">3</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Requires attention</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%); border-left: 4px solid var(--accent-red);">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Failed Tests</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: var(--accent-red);" id="failed-tests">4</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Last 30 days</div>
+                    </div>
+                </div>
+
+                <!-- Test Categories -->
+                <div class="card">
+                    <h2 style="margin-bottom: 20px;">Quality Test Categories</h2>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                        <!-- Visual Inspection -->
+                        <div style="padding: 20px; border: 2px solid var(--accent-green); border-radius: 8px; background: rgba(16, 185, 129, 0.05); cursor: pointer;" onclick="showCategoryTests('visual')">
+                            <h3 style="color: var(--accent-green); margin-bottom: 12px; font-size: 16px;">Visual Inspection</h3>
+                            <ul style="list-style: none; padding: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.8;">
+                                <li style="padding: 4px 0;">✓ Color uniformity</li>
+                                <li style="padding: 4px 0;">✓ Leaf condition</li>
+                                <li style="padding: 4px 0;">✓ Disease/pest presence</li>
+                                <li style="padding: 4px 0;">✓ Physical damage</li>
+                            </ul>
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px;">
+                                <span style="color: var(--text-muted);">Last test:</span>
+                                <span style="color: var(--text-primary); font-weight: 500;">2 hours ago</span>
+                            </div>
+                        </div>
+
+                        <!-- Microbial Testing -->
+                        <div style="padding: 20px; border: 2px solid var(--accent-blue); border-radius: 8px; background: rgba(59, 130, 246, 0.05); cursor: pointer;" onclick="showCategoryTests('microbial')">
+                            <h3 style="color: var(--accent-blue); margin-bottom: 12px; font-size: 16px;">Microbial Testing</h3>
+                            <ul style="list-style: none; padding: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.8;">
+                                <li style="padding: 4px 0;">✓ E. coli detection</li>
+                                <li style="padding: 4px 0;">✓ Salmonella screening</li>
+                                <li style="padding: 4px 0;">✓ Total plate count</li>
+                                <li style="padding: 4px 0;">✓ Yeast & mold</li>
+                            </ul>
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px;">
+                                <span style="color: var(--text-muted);">Last test:</span>
+                                <span style="color: var(--text-primary); font-weight: 500;">1 day ago</span>
+                            </div>
+                        </div>
+
+                        <!-- Nutrient Analysis -->
+                        <div style="padding: 20px; border: 2px solid var(--accent-purple); border-radius: 8px; background: rgba(139, 92, 246, 0.05); cursor: pointer;" onclick="showCategoryTests('nutrient')">
+                            <h3 style="color: var(--accent-purple); margin-bottom: 12px; font-size: 16px;">Nutrient Analysis</h3>
+                            <ul style="list-style: none; padding: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.8;">
+                                <li style="padding: 4px 0;">✓ Nitrate levels</li>
+                                <li style="padding: 4px 0;">✓ Vitamin content</li>
+                                <li style="padding: 4px 0;">✓ Mineral profile</li>
+                                <li style="padding: 4px 0;">✓ Protein content</li>
+                            </ul>
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px;">
+                                <span style="color: var(--text-muted);">Last test:</span>
+                                <span style="color: var(--text-primary); font-weight: 500;">3 days ago</span>
+                            </div>
+                        </div>
+
+                        <!-- Weight & Size -->
+                        <div style="padding: 20px; border: 2px solid var(--accent-yellow); border-radius: 8px; background: rgba(245, 158, 11, 0.05); cursor: pointer;" onclick="showCategoryTests('physical')">
+                            <h3 style="color: var(--accent-yellow); margin-bottom: 12px; font-size: 16px;">Physical Metrics</h3>
+                            <ul style="list-style: none; padding: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.8;">
+                                <li style="padding: 4px 0;">✓ Weight verification</li>
+                                <li style="padding: 4px 0;">✓ Size grading</li>
+                                <li style="padding: 4px 0;">✓ Moisture content</li>
+                                <li style="padding: 4px 0;">✓ Density measurement</li>
+                            </ul>
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px;">
+                                <span style="color: var(--text-muted);">Last test:</span>
+                                <span style="color: var(--text-primary); font-weight: 500;">4 hours ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Quality Tests -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>Recent Quality Tests</h2>
+                        <div style="display: flex; gap: 12px;">
+                            <select id="quality-filter" onchange="filterQualityTests()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                <option value="all">All Tests</option>
+                                <option value="visual">Visual Inspection</option>
+                                <option value="microbial">Microbial</option>
+                                <option value="nutrient">Nutrient Analysis</option>
+                                <option value="physical">Physical Metrics</option>
+                            </select>
+                            <select id="status-filter" onchange="filterQualityTests()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                <option value="all">All Status</option>
+                                <option value="pass">Passed</option>
+                                <option value="fail">Failed</option>
+                                <option value="pending">Pending</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table id="quality-tests-table">
+                            <thead>
+                                <tr>
+                                    <th>Test ID</th>
+                                    <th>Date/Time</th>
+                                    <th>Batch ID</th>
+                                    <th>Crop</th>
+                                    <th>Category</th>
+                                    <th>Tested By</th>
+                                    <th>Result</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JavaScript -->
+                                <tr>
+                                    <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                        Loading quality tests...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Quality Standards -->
+                <div class="card">
+                    <h2 style="margin-bottom: 20px;">Quality Standards & Thresholds</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                        Define acceptable ranges for quality metrics. Tests outside these ranges will be flagged.
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                        <div>
+                            <h3 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary);">Visual Quality</h3>
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                <div>
+                                    <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Min Color Score (1-10)</label>
+                                    <input type="number" id="color-threshold" value="7" min="1" max="10" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Max Defect % Allowed</label>
+                                    <input type="number" id="defect-threshold" value="5" min="0" max="100" step="0.5" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary);">Microbial Limits</h3>
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                <div>
+                                    <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Max Total Plate Count (CFU/g)</label>
+                                    <input type="number" id="tpc-threshold" value="10000" step="1000" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted);">
+                                        <input type="checkbox" checked>
+                                        Zero tolerance for pathogens
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary);">Physical Standards</h3>
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                <div>
+                                    <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Max Moisture % Allowed</label>
+                                    <input type="number" id="moisture-threshold" value="95" min="0" max="100" step="0.5" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Min Weight (g per unit)</label>
+                                    <input type="number" id="weight-threshold" value="20" min="0" step="1" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <button class="btn" onclick="saveQualityStandards()" style="background: var(--accent-green); color: white;">Save Standards</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Quality Test Modal -->
+            <div id="qualityTestModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 600px;">
+                    <div class="modal-header">
+                        <h2>New Quality Test</h2>
+                        <button class="modal-close" onclick="closeQualityTestModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="quality-test-form" onsubmit="submitQualityTest(event)">
+                            <div style="display: flex; flex-direction: column; gap: 20px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Batch ID *</label>
+                                    <input type="text" id="test-batch-id" required placeholder="e.g., BATCH-2026-001" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Crop Type *</label>
+                                    <select id="test-crop" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <option value="">Select crop...</option>
+                                        <option value="lettuce">Lettuce</option>
+                                        <option value="spinach">Spinach</option>
+                                        <option value="kale">Kale</option>
+                                        <option value="arugula">Arugula</option>
+                                        <option value="basil">Basil</option>
+                                        <option value="microgreens">Microgreens</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Test Category *</label>
+                                    <select id="test-category" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <option value="">Select category...</option>
+                                        <option value="visual">Visual Inspection</option>
+                                        <option value="microbial">Microbial Testing</option>
+                                        <option value="nutrient">Nutrient Analysis</option>
+                                        <option value="physical">Physical Metrics</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Sample Size</label>
+                                    <input type="number" id="test-sample-size" placeholder="e.g., 50" min="1" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <small style="color: var(--text-muted);">Number of units tested</small>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Test Results</label>
+                                    <textarea id="test-results" rows="4" placeholder="Enter test observations and measurements..." style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); resize: vertical;"></textarea>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Result Status *</label>
+                                    <select id="test-status" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <option value="pass">Pass</option>
+                                        <option value="fail">Fail</option>
+                                        <option value="pending">Pending Review</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px;">
+                                    <button type="button" class="btn" onclick="closeQualityTestModal()" style="background: var(--bg-secondary); color: var(--text-primary);">Cancel</button>
+                                    <button type="submit" class="btn" style="background: var(--accent-green); color: white;">Save Test</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <!-- Other sections would be loaded here dynamically -->
             <div id="section-subscription" class="content-section" style="display: none;">
                 <div class="header">

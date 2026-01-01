@@ -475,6 +475,8 @@ function setupNavigation() {
                     loadSettings();
                 } else if (section === 'users') {
                     loadUsers();
+                } else if (section === 'quality') {
+                    loadQualityControl();
                 }
             }
         });
@@ -4368,3 +4370,424 @@ document.addEventListener('DOMContentLoaded', () => {
         userSearch.addEventListener('input', filterUsers);
     }
 });
+
+// ============================================
+// Quality Control System
+// ============================================
+
+// Mock quality test data
+let qualityTests = [
+    {
+        id: 'QT-2026-001',
+        date: '2026-01-15T08:30:00',
+        batchId: 'BATCH-2026-045',
+        crop: 'Lettuce',
+        category: 'visual',
+        tester: 'Sarah Johnson',
+        result: 'pass',
+        notes: 'Color score: 9/10, No defects detected, Excellent condition'
+    },
+    {
+        id: 'QT-2026-002',
+        date: '2026-01-15T10:15:00',
+        batchId: 'BATCH-2026-043',
+        crop: 'Spinach',
+        category: 'microbial',
+        tester: 'Mike Chen',
+        result: 'pass',
+        notes: 'TPC: 2,500 CFU/g, No pathogens detected'
+    },
+    {
+        id: 'QT-2026-003',
+        date: '2026-01-15T11:45:00',
+        batchId: 'BATCH-2026-044',
+        crop: 'Kale',
+        category: 'nutrient',
+        tester: 'Emily Rodriguez',
+        result: 'pass',
+        notes: 'Nitrate: 2,800 ppm, Vitamin C: 120 mg/100g, Excellent profile'
+    },
+    {
+        id: 'QT-2026-004',
+        date: '2026-01-15T13:20:00',
+        batchId: 'BATCH-2026-042',
+        crop: 'Arugula',
+        category: 'physical',
+        tester: 'David Lee',
+        result: 'fail',
+        notes: 'Average weight: 18g (below 20g threshold), Size variation too high'
+    },
+    {
+        id: 'QT-2026-005',
+        date: '2026-01-15T14:00:00',
+        batchId: 'BATCH-2026-046',
+        crop: 'Basil',
+        category: 'visual',
+        tester: 'Sarah Johnson',
+        result: 'pending',
+        notes: 'Some minor discoloration observed, awaiting supervisor review'
+    },
+    {
+        id: 'QT-2026-006',
+        date: '2026-01-14T16:30:00',
+        batchId: 'BATCH-2026-041',
+        crop: 'Microgreens',
+        category: 'microbial',
+        tester: 'Mike Chen',
+        result: 'pass',
+        notes: 'TPC: 1,200 CFU/g, Well within acceptable limits'
+    },
+    {
+        id: 'QT-2026-007',
+        date: '2026-01-14T09:00:00',
+        batchId: 'BATCH-2026-040',
+        crop: 'Lettuce',
+        category: 'physical',
+        tester: 'Emily Rodriguez',
+        result: 'pass',
+        notes: 'Average weight: 25g, Moisture content: 94.2%'
+    },
+    {
+        id: 'QT-2026-008',
+        date: '2026-01-14T11:30:00',
+        batchId: 'BATCH-2026-039',
+        crop: 'Spinach',
+        category: 'visual',
+        tester: 'David Lee',
+        result: 'fail',
+        notes: 'Defect rate: 7.2% (exceeds 5% threshold), minor pest damage'
+    },
+    {
+        id: 'QT-2026-009',
+        date: '2026-01-13T15:45:00',
+        batchId: 'BATCH-2026-038',
+        crop: 'Kale',
+        category: 'nutrient',
+        tester: 'Sarah Johnson',
+        result: 'pass',
+        notes: 'Comprehensive nutrient profile meets all standards'
+    },
+    {
+        id: 'QT-2026-010',
+        date: '2026-01-13T10:20:00',
+        batchId: 'BATCH-2026-037',
+        crop: 'Arugula',
+        category: 'microbial',
+        tester: 'Mike Chen',
+        result: 'pending',
+        notes: 'Lab results expected within 24 hours'
+    }
+];
+
+function loadQualityControl() {
+    console.log('Loading Quality Control section...');
+    
+    // Update metrics
+    updateQualityMetrics();
+    
+    // Load quality tests table
+    renderQualityTests();
+}
+
+function updateQualityMetrics() {
+    // Calculate pass rate
+    const completedTests = qualityTests.filter(t => t.result !== 'pending');
+    const passedTests = qualityTests.filter(t => t.result === 'pass');
+    const passRate = completedTests.length > 0 
+        ? ((passedTests.length / completedTests.length) * 100).toFixed(1) 
+        : 0;
+    
+    // Update DOM
+    const passRateElem = document.getElementById('quality-pass-rate');
+    if (passRateElem) {
+        passRateElem.textContent = `${passRate}%`;
+    }
+    
+    const testsCompletedElem = document.getElementById('tests-completed');
+    if (testsCompletedElem) {
+        testsCompletedElem.textContent = qualityTests.length;
+    }
+    
+    const pendingReviewElem = document.getElementById('pending-review');
+    if (pendingReviewElem) {
+        const pendingCount = qualityTests.filter(t => t.result === 'pending').length;
+        pendingReviewElem.textContent = pendingCount;
+    }
+    
+    const failedTestsElem = document.getElementById('failed-tests');
+    if (failedTestsElem) {
+        const failedCount = qualityTests.filter(t => t.result === 'fail').length;
+        failedTestsElem.textContent = failedCount;
+    }
+}
+
+function renderQualityTests(filteredTests = null) {
+    const tbody = document.querySelector('#quality-tests-table tbody');
+    if (!tbody) return;
+    
+    const testsToRender = filteredTests || qualityTests;
+    
+    if (testsToRender.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                    No quality tests found
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = testsToRender.map(test => {
+        const testDate = new Date(test.date);
+        const dateStr = testDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = testDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        
+        // Category labels
+        const categoryLabels = {
+            visual: 'Visual Inspection',
+            microbial: 'Microbial',
+            nutrient: 'Nutrient Analysis',
+            physical: 'Physical Metrics'
+        };
+        
+        // Result badge
+        let resultBadge = '';
+        if (test.result === 'pass') {
+            resultBadge = '<span style="padding: 4px 12px; background: var(--accent-green); color: white; border-radius: 12px; font-size: 12px; font-weight: 500;">PASS</span>';
+        } else if (test.result === 'fail') {
+            resultBadge = '<span style="padding: 4px 12px; background: var(--accent-red); color: white; border-radius: 12px; font-size: 12px; font-weight: 500;">FAIL</span>';
+        } else {
+            resultBadge = '<span style="padding: 4px 12px; background: var(--accent-yellow); color: white; border-radius: 12px; font-size: 12px; font-weight: 500;">PENDING</span>';
+        }
+        
+        return `
+            <tr>
+                <td><span style="font-family: monospace; color: var(--accent-blue);">${test.id}</span></td>
+                <td>
+                    <div>${dateStr}</div>
+                    <small style="color: var(--text-muted);">${timeStr}</small>
+                </td>
+                <td><span style="font-family: monospace;">${test.batchId}</span></td>
+                <td>${test.crop}</td>
+                <td>${categoryLabels[test.category]}</td>
+                <td>${test.tester}</td>
+                <td>${resultBadge}</td>
+                <td>
+                    <button class="btn-icon" onclick="viewQualityTest('${test.id}')" title="View Details">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" onclick="deleteQualityTest('${test.id}')" title="Delete">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterQualityTests() {
+    const categoryFilter = document.getElementById('quality-filter')?.value || 'all';
+    const statusFilter = document.getElementById('status-filter')?.value || 'all';
+    
+    let filtered = qualityTests;
+    
+    if (categoryFilter !== 'all') {
+        filtered = filtered.filter(t => t.category === categoryFilter);
+    }
+    
+    if (statusFilter !== 'all') {
+        filtered = filtered.filter(t => t.result === statusFilter);
+    }
+    
+    renderQualityTests(filtered);
+}
+
+function showCategoryTests(category) {
+    // Set filter and trigger
+    const categoryFilter = document.getElementById('quality-filter');
+    if (categoryFilter) {
+        categoryFilter.value = category;
+        filterQualityTests();
+        
+        // Scroll to table
+        document.getElementById('quality-tests-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function openQualityTestModal() {
+    const modal = document.getElementById('qualityTestModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        
+        // Reset form
+        document.getElementById('quality-test-form')?.reset();
+    }
+}
+
+function closeQualityTestModal() {
+    const modal = document.getElementById('qualityTestModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function submitQualityTest(event) {
+    event.preventDefault();
+    
+    const batchId = document.getElementById('test-batch-id')?.value;
+    const crop = document.getElementById('test-crop')?.value;
+    const category = document.getElementById('test-category')?.value;
+    const sampleSize = document.getElementById('test-sample-size')?.value;
+    const results = document.getElementById('test-results')?.value;
+    const status = document.getElementById('test-status')?.value;
+    
+    // Generate test ID
+    const testNum = (qualityTests.length + 1).toString().padStart(3, '0');
+    const testId = `QT-2026-${testNum}`;
+    
+    // Get current user (from localStorage/session)
+    const currentUser = localStorage.getItem('userName') || 'Current User';
+    
+    // Create new test
+    const newTest = {
+        id: testId,
+        date: new Date().toISOString(),
+        batchId: batchId,
+        crop: crop.charAt(0).toUpperCase() + crop.slice(1),
+        category: category,
+        tester: currentUser,
+        result: status,
+        notes: results || 'No additional notes'
+    };
+    
+    // Add to tests array
+    qualityTests.unshift(newTest); // Add to beginning
+    
+    // Update display
+    updateQualityMetrics();
+    renderQualityTests();
+    
+    // Close modal
+    closeQualityTestModal();
+    
+    // Show success message
+    showNotification('Quality test recorded successfully', 'success');
+}
+
+function viewQualityTest(testId) {
+    const test = qualityTests.find(t => t.id === testId);
+    if (!test) return;
+    
+    const testDate = new Date(test.date);
+    const dateStr = testDate.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    const categoryLabels = {
+        visual: 'Visual Inspection',
+        microbial: 'Microbial Testing',
+        nutrient: 'Nutrient Analysis',
+        physical: 'Physical Metrics'
+    };
+    
+    const resultColors = {
+        pass: 'var(--accent-green)',
+        fail: 'var(--accent-red)',
+        pending: 'var(--accent-yellow)'
+    };
+    
+    alert(`Quality Test Details\n\n` +
+          `Test ID: ${test.id}\n` +
+          `Date: ${dateStr}\n` +
+          `Batch: ${test.batchId}\n` +
+          `Crop: ${test.crop}\n` +
+          `Category: ${categoryLabels[test.category]}\n` +
+          `Tested By: ${test.tester}\n` +
+          `Result: ${test.result.toUpperCase()}\n\n` +
+          `Notes:\n${test.notes}`);
+}
+
+function deleteQualityTest(testId) {
+    if (!confirm('Are you sure you want to delete this quality test? This action cannot be undone.')) {
+        return;
+    }
+    
+    qualityTests = qualityTests.filter(t => t.id !== testId);
+    
+    // Update display
+    updateQualityMetrics();
+    renderQualityTests();
+    
+    showNotification('Quality test deleted', 'success');
+}
+
+function exportQualityReport() {
+    // Create CSV content
+    let csv = 'Test ID,Date/Time,Batch ID,Crop,Category,Tested By,Result,Notes\n';
+    
+    qualityTests.forEach(test => {
+        const row = [
+            test.id,
+            new Date(test.date).toLocaleString(),
+            test.batchId,
+            test.crop,
+            test.category,
+            test.tester,
+            test.result,
+            `"${test.notes.replace(/"/g, '""')}"` // Escape quotes in notes
+        ];
+        csv += row.join(',') + '\n';
+    });
+    
+    // Create download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `quality-report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    showNotification('Quality report exported successfully', 'success');
+}
+
+function saveQualityStandards() {
+    const colorThreshold = document.getElementById('color-threshold')?.value;
+    const defectThreshold = document.getElementById('defect-threshold')?.value;
+    const tpcThreshold = document.getElementById('tpc-threshold')?.value;
+    const moistureThreshold = document.getElementById('moisture-threshold')?.value;
+    const weightThreshold = document.getElementById('weight-threshold')?.value;
+    
+    // Save to localStorage
+    const standards = {
+        colorThreshold,
+        defectThreshold,
+        tpcThreshold,
+        moistureThreshold,
+        weightThreshold,
+        updatedAt: new Date().toISOString()
+    };
+    
+    localStorage.setItem('qualityStandards', JSON.stringify(standards));
+    
+    showNotification('Quality standards saved successfully', 'success');
+}
+
+function showNotification(message, type = 'info') {
+    // Simple notification - can be enhanced with a proper notification system
+    alert(message);
+}
