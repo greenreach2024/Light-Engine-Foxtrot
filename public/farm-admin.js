@@ -3262,12 +3262,29 @@ let setupData = {
  */
 async function checkFirstTimeSetup() {
     try {
-        const response = await fetch('/api/setup/status');
+        // Check localStorage first to prevent wizard loop
+        const setupCompleted = localStorage.getItem('setup_completed');
+        const farmData = localStorage.getItem('gr.farm');
+        
+        // If setup marked complete in localStorage, skip wizard
+        if (setupCompleted === 'true' || farmData) {
+            console.log('[setup-wizard] Setup already completed, skipping wizard');
+            return;
+        }
+        
+        // Get farmId from localStorage
+        const farmId = localStorage.getItem('farm_id');
+        const url = farmId ? `/api/setup/status?farmId=${farmId}` : '/api/setup/status';
+        
+        const response = await fetch(url);
         const data = await response.json();
         
-        // If not registered, show first-time setup modal
-        if (!data.registered) {
+        // Check 'completed' field (not 'registered')
+        if (!data.completed) {
             showFirstTimeSetup();
+        } else {
+            // Mark as completed in localStorage to prevent future wizard displays
+            localStorage.setItem('setup_completed', 'true');
         }
     } catch (error) {
         console.log('Setup status check failed, assuming first-time setup needed');
@@ -3622,6 +3639,9 @@ async function completeSetup() {
         } catch (e) {
             console.warn('Could not save to localStorage/backend:', e);
         }
+        
+        // Mark setup as completed to prevent wizard loop
+        localStorage.setItem('setup_completed', 'true');
         
         // Success! Close modal and refresh page
         const modal = document.getElementById('first-time-setup-modal');
