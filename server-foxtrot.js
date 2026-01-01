@@ -14561,63 +14561,66 @@ app.get('/api/recipes', (req, res) => {
  */
 app.get('/api/trays', async (req, res) => {
   try {
-    const db = await getDb();
+    // Use NeDB instead of SQLite
+    const trays = await traysDB.find({});
+    const trayFormats = await trayFormatsDB.find({});
+    const trayRuns = await trayRunsDB.find({});
+    const trayPlacements = await trayPlacementsDB.find({});
     
-    // Query all trays with their format details and latest run information
-    const trays = await db.all(`
-      SELECT 
-        t.tray_id,
-        t.qr_code_value,
-        t.tray_format_id,
-        t.created_at,
-        t.updated_at,
-        tf.format_name,
-        tf.plant_site_count,
-        tf.is_weight_based,
-        tf.weight_unit,
-        tf.target_weight_per_site,
-        CASE 
-          WHEN tr.tray_run_id IS NOT NULL AND tr.harvested_at IS NULL THEN 'active'
-          WHEN tr.tray_run_id IS NOT NULL AND tr.harvested_at IS NOT NULL THEN 'harvested'
-          ELSE 'available'
-        END as status,
-        tr.tray_run_id as current_run_id,
-        tr.recipe_id as current_recipe,
-        tr.seeded_at,
-        tr.planted_site_count,
-        CAST((julianday('now') - julianday(tr.seeded_at)) AS INTEGER) as days_since_seeding,
-        tp.location_qr as current_location
-      FROM trays t
-      LEFT JOIN tray_formats tf ON t.tray_format_id = tf.tray_format_id
-      LEFT JOIN (
-        SELECT * FROM tray_runs 
-        WHERE tray_run_id IN (
-          SELECT tray_run_id FROM tray_runs 
-          GROUP BY tray_id 
-          HAVING MAX(created_at)
-        )
-      ) tr ON t.tray_id = tr.tray_id
-      LEFT JOIN (
-        SELECT * FROM tray_placements
-        WHERE placement_id IN (
-          SELECT placement_id FROM tray_placements
-          GROUP BY tray_run_id
-          HAVING MAX(placed_at)
-        )
-      ) tp ON tr.tray_run_id = tp.tray_run_id
-      ORDER BY t.created_at DESC
-    `);
-
-    // Calculate forecasted yield for each tray
+    // Create lookup maps
+    const formatMap = new Map(trayFormats.map(f => [f.tray_format_id, f]));
+    
+    // Get latest run for each tray
+    const latestRuns = new Map();
+    for (const run of trayRuns) {
+      const existing = latestRuns.get(run.tray_id);
+      if (!existing || new Date(run.created_at) > new Date(existing.created_at)) {
+        latestRuns.set(run.tray_id, run);
+      }
+    }
+    
+    // Get latest placement for each run
+    const latestPlacements = new Map();
+    for (const placement of trayPlacements) {
+      const existing = latestPlacements.get(placement.tray_run_id);
+      if (!existing || new Date(placement.placed_at) > new Date(existing.placed_at)) {
+        latestPlacements.set(placement.tray_run_id, placement);
+      }
+    }
+    
+    // Build tray list with enriched data
     const traysWithYield = trays.map(tray => {
+      const format = formatMap.get(tray.tray_format_id);
+      const currentRun = latestRuns.get(tray.tray_id);
+      const currentPlacement = currentRun ? latestPlacements.get(currentRun.tray_run_id) : null;
+      
+      // Determine status
+      let status = 'available';
+      if (currentRun) {
+        if (currentRun.harvested_at) {
+          status = 'harvested';
+        } else {
+          status = 'active';
+        }
+      }
+      
+      // Calculate days since seeding
+      let daysSinceSeeding = null;
+      if (currentRun?.seeded_at) {
+        const seededDate = new Date(currentRun.seeded_at);
+        const now = new Date();
+        daysSinceSeeding = Math.floor((now - seededDate) / (1000 * 60 * 60 * 24));
+      }
+      
+      // Calculate forecasted yield
       let forecastedYield = null;
-      if (tray.format_name && tray.plant_site_count) {
-        if (tray.is_weight_based && tray.target_weight_per_site) {
-          const totalWeight = tray.plant_site_count * tray.target_weight_per_site;
-          forecastedYield = `${totalWeight.toFixed(1)} ${tray.weight_unit || 'oz'}`;
+      if (format?.plant_site_count) {
+        if (format.is_weight_based && format.target_weight_per_site) {
+          const totalWeight = format.plant_site_count * format.target_weight_per_site;
+          forecastedYield = `${totalWeight.toFixed(1)} ${format.weight_unit || 'oz'}`;
         } else {
           const successRate = 0.9; // 90% success rate
-          forecastedYield = `${Math.floor(tray.plant_site_count * successRate)} heads`;
+          forecastedYield = `${Math.floor(format.plant_site_count * successRate)} heads`;
         }
       }
 
@@ -14625,20 +14628,23 @@ app.get('/api/trays', async (req, res) => {
         trayId: tray.tray_id,
         qrCode: tray.qr_code_value,
         formatId: tray.tray_format_id,
-        formatName: tray.format_name,
-        plantSiteCount: tray.plant_site_count,
+        formatName: format?.format_name,
+        plantSiteCount: format?.plant_site_count,
         forecastedYield,
-        status: tray.status,
-        currentRunId: tray.current_run_id,
-        currentRecipe: tray.current_recipe,
-        currentLocation: tray.current_location,
-        seededAt: tray.seeded_at,
-        plantedSiteCount: tray.planted_site_count,
-        daysSinceSeeding: tray.days_since_seeding,
+        status,
+        currentRunId: currentRun?.tray_run_id,
+        currentRecipe: currentRun?.recipe_id,
+        currentLocation: currentPlacement?.location_qr,
+        seededAt: currentRun?.seeded_at,
+        plantedSiteCount: currentRun?.planted_site_count,
+        daysSinceSeeding,
         createdAt: tray.created_at,
         updatedAt: tray.updated_at
       };
     });
+    
+    // Sort by created_at descending
+    traysWithYield.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     res.json(traysWithYield);
   } catch (error) {
