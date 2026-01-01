@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GreenReach Wholesale | Farm-Fresh Produce, Simplified</title>
+  <meta name="description" content="Connect with local boutique growers. Order fresh, sustainable produce with consistent fulfillment from multiple farms. Built for restaurants, retailers, and food service.">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 22px;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+    }
+
+    .nav-cta {
+      background: var(--primary);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent);
+      color: var(--primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 100px 22px 50px;
+      background: linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(130, 195, 65, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(45, 80, 22, 0.06) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      max-width: 980px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-eyebrow {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 8px;
+      letter-spacing: 0.02em;
+    }
+
+    .hero-title {
+      font-size: 80px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 28px;
+      line-height: 1.14286;
+      font-weight: 400;
+      color: var(--text-light);
+      margin-bottom: 24px;
+      letter-spacing: -0.01em;
+    }
+
+    .hero-description {
+      font-size: 21px;
+      line-height: 1.381;
+      color: var(--text-light);
+      max-width: 700px;
+      margin: 0 auto 40px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 60px;
+    }
+
+    .btn-primary, .btn-secondary {
+      padding: 14px 32px;
+      border-radius: 980px;
+      font-size: 17px;
+      font-weight: 500;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent);
+      color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(45, 80, 22, 0.3);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+    }
+
+    .btn-secondary:hover {
+      background: var(--primary);
+      color: white;
+      transform: translateY(-2px);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 60px;
+      justify-content: center;
+      margin-top: 60px;
+      padding-top: 40px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 56px;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--text-light);
+      font-weight: 500;
+    }
+
+    /* Feature Sections */
+    .feature-section {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 100px 22px;
+      position: relative;
+    }
+
+    .feature-section:nth-child(even) {
+      background: var(--surface);
+    }
+
+    .feature-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .feature-section:nth-child(even) .feature-content {
+      direction: rtl;
+    }
+
+    .feature-section:nth-child(even) .feature-text {
+      direction: ltr;
+    }
+
+    .feature-text {
+      padding: 40px 0;
+    }
+
+    .feature-eyebrow {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+
+    .feature-title {
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1.05;
+      margin-bottom: 20px;
+      letter-spacing: -0.015em;
+      color: var(--text);
+    }
+
+    .feature-description {
+      font-size: 24px;
+      line-height: 1.5;
+      color: var(--text-light);
+      margin-bottom: 32px;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin-bottom: 32px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: start;
+      gap: 16px;
+      margin-bottom: 20px;
+      font-size: 19px;
+      color: var(--text);
+    }
+
+    .feature-list li::before {
+      content: '✓';
+      color: var(--accent);
+      font-size: 24px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .feature-visual {
+      background: linear-gradient(135deg, rgba(130, 195, 65, 0.1) 0%, rgba(45, 80, 22, 0.05) 100%);
+      border-radius: 24px;
+      padding: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 500px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-visual::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(130, 195, 65, 0.2) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .feature-icon {
+      font-size: 120px;
+      z-index: 1;
+      filter: drop-shadow(0 4px 16px rgba(45, 80, 22, 0.2));
+    }
+
+    /* How It Works Section */
+    .how-it-works {
+      padding: 120px 22px;
+      background: var(--primary);
+      color: white;
+      text-align: center;
+    }
+
+    .how-it-works-title {
+      font-size: 64px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      letter-spacing: -0.015em;
+    }
+
+    .how-it-works-subtitle {
+      font-size: 24px;
+      opacity: 0.8;
+      margin-bottom: 80px;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .steps {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 40px;
+    }
+
+    .step {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      border-radius: 24px;
+      padding: 48px 32px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      transition: transform 0.3s, background 0.3s;
+    }
+
+    .step:hover {
+      transform: translateY(-8px);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      background: var(--accent);
+      color: var(--primary);
+      border-radius: 50%;
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+
+    .step-title {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .step-description {
+      font-size: 17px;
+      line-height: 1.5;
+      opacity: 0.8;
+    }
+
+    /* Impact Section */
+    .impact-section {
+      padding: 120px 22px;
+      background: linear-gradient(180deg, #f5f5f7 0%, var(--bg) 100%);
+      text-align: center;
+    }
+
+    .impact-title {
+      font-size: 64px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      letter-spacing: -0.015em;
+    }
+
+    .impact-subtitle {
+      font-size: 24px;
+      color: var(--text-light);
+      margin-bottom: 80px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .impact-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 32px;
+    }
+
+    .impact-card {
+      background: white;
+      border-radius: 24px;
+      padding: 48px 32px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .impact-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    }
+
+    .impact-icon {
+      font-size: 64px;
+      margin-bottom: 24px;
+    }
+
+    .impact-card-title {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+
+    .impact-card-description {
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--text-light);
+    }
+
+    /* CTA Section */
+    .cta-section {
+      padding: 120px 22px;
+      background: linear-gradient(135deg, var(--primary) 0%, #3d6821 100%);
+      color: white;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(130, 195, 65, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(130, 195, 65, 0.15) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .cta-content {
+      max-width: 800px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .cta-title {
+      font-size: 72px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+    }
+
+    .cta-description {
+      font-size: 24px;
+      margin-bottom: 48px;
+      opacity: 0.9;
+    }
+
+    .cta-form {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      max-width: 600px;
+      margin: 0 auto;
+      flex-wrap: wrap;
+    }
+
+    .cta-input {
+      flex: 1;
+      min-width: 280px;
+      padding: 18px 24px;
+      border-radius: 980px;
+      border: none;
+      font-size: 17px;
+      background: white;
+      color: var(--text);
+    }
+
+    .cta-button {
+      padding: 18px 48px;
+      border-radius: 980px;
+      background: var(--accent);
+      color: var(--primary);
+      border: none;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .cta-button:hover {
+      background: white;
+      transform: scale(1.05);
+    }
+
+    /* Footer */
+    footer {
+      background: var(--text);
+      color: rgba(255, 255, 255, 0.7);
+      padding: 60px 22px 32px;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 48px;
+      margin-bottom: 48px;
+    }
+
+    .footer-section h3 {
+      color: white;
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .footer-section ul {
+      list-style: none;
+    }
+
+    .footer-section li {
+      margin-bottom: 12px;
+    }
+
+    .footer-section a {
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.3s;
+    }
+
+    .footer-section a:hover {
+      color: white;
+    }
+
+    .footer-bottom {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-top: 32px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-logo {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    /* Responsive */
+    @media (max-width: 1068px) {
+      .hero-title {
+        font-size: 56px;
+      }
+
+      .hero-subtitle {
+        font-size: 24px;
+      }
+
+      .feature-title {
+        font-size: 48px;
+      }
+
+      .feature-content {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .feature-section:nth-child(even) .feature-content {
+        direction: ltr;
+      }
+    }
+
+    @media (max-width: 734px) {
+      .hero-title {
+        font-size: 40px;
+      }
+
+      .hero-subtitle {
+        font-size: 21px;
+      }
+
+      .hero-description {
+        font-size: 19px;
+      }
+
+      .hero-stats {
+        flex-direction: column;
+        gap: 32px;
+      }
+
+      .feature-title {
+        font-size: 40px;
+      }
+
+      .feature-description {
+        font-size: 21px;
+      }
+
+      .how-it-works-title,
+      .impact-title,
+      .cta-title {
+        font-size: 40px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .cta-form {
+        flex-direction: column;
+      }
+
+      .cta-input {
+        min-width: 100%;
+      }
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in-up {
+      animation: fadeInUp 0.8s ease-out;
+    }
+
+    /* Smooth Scroll */
+    html {
+      scroll-behavior: smooth;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/" class="nav-logo">GreenReach</a>
+      <ul class="nav-links">
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#impact">Impact</a></li>
+        <li><a href="#pricing">What's Growing locally?</a></li>
+      </ul>
+      <a href="https://greenreachgreens.com/wholesale.html" class="nav-cta">Start Ordering</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content fade-in-up">
+      <div class="hero-eyebrow">GreenReach Wholesale</div>
+      <h1 class="hero-title">Fresh. Local. Simple.</h1>
+      <p class="hero-subtitle">The future of wholesale produce sourcing</p>
+      <p class="hero-description">
+        Browse a unified catalog of premium produce from local boutique growers. Place one order 
+        that automatically splits across farms. Get 99% fulfillment through our intelligent alternative 
+        sourcing system. Built for restaurants, retailers, and food service operations.
+      </p>
+      <div class="cta-buttons">
+        <a href="https://greenreachgreens.com/wholesale.html" class="btn-primary">
+          What's Growing locally?
+          <span>→</span>
+        </a>
+        <a href="#how-it-works" class="btn-secondary">Learn More</a>
+      </div>
+      
+      <div style="margin-top: 60px; padding-top: 40px; border-top: 1px solid rgba(0, 0, 0, 0.08); font-size: 32px; font-weight: 600; color: var(--text-light); letter-spacing: 0.02em;">
+        Locally sourced, made simple.
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 1: Boutique Growers -->
+  <section class="feature-section" id="features">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Direct from Source</div>
+        <h2 class="feature-title">Live crop inventory from farms across your region</h2>
+        <p class="feature-description">
+          Browse real-time availability from local growers. Filter by your unique needs, then place a single order—we'll automatically source it based on proximity and availability.
+        </p>
+        <ul class="feature-list">
+          <li>Live inventory updates from multiple farms, in one view</li>
+          <li>Filter by certifications, growing methods, pack sizes, and crop specs</li>
+          <li>One order entry, automatically split and routed to the right farms</li>
+          <li>Proximity-based sourcing to reduce transit time and keep product fresher</li>
+          <li>Full farm-of-origin transparency on every line item</li>
+        </ul>
+        <a href="https://greenreachgreens.com/wholesale.html" class="btn-primary">Explore Farms →</a>
+      </div>
+      <div class="feature-visual">
+        <div class="feature-icon">◈</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 2: Simple Ordering -->
+  <section class="feature-section">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">One Platform</div>
+        <h2 class="feature-title">Powered by local farms</h2>
+        <p class="feature-description">
+          Our platform automatically splits your order across participating farms when necessary, creating regular supply confidence for large orders. Payment is held until farms verify availability, ensuring farm/buyer confidence.
+        </p>
+        <ul class="feature-list">
+          <li>Single unified catalog - all farms, one interface</li>
+          <li>Automatic order splitting by farm location</li>
+          <li>Payment authorization hold (not charged until verified)</li>
+          <li>Real-time inventory and farm performance scores</li>
+        </ul>
+        <a href="#how-it-works" class="btn-primary">See How →</a>
+      </div>
+      <div class="feature-visual">
+        <div class="feature-icon">○</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 3: Consistent Fulfillment -->
+  <section class="feature-section">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Reliability Guaranteed</div>
+        <h2 class="feature-title">Never worry about stockouts again</h2>
+        <p class="feature-description">
+          Each farm has 24 hours to verify their portion of your order. If any farm declines, 
+          our system automatically finds alternative suppliers with matching products.
+        </p>
+        <ul class="feature-list">
+          <li>Automatic alternative farm sourcing if needed</li>
+          <li>24-hour farm verification window</li>
+          <li>Real-time order status tracking</li>
+          <li>FDA/CFIA-compliant lot code traceability</li>
+        </ul>
+      </div>
+      <div class="feature-visual">
+        <div class="feature-icon">✓</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="how-it-works" id="how-it-works">
+    <h2 class="how-it-works-title">How GreenReach Works</h2>
+    <p class="how-it-works-subtitle">
+      From farm to your door in four simple steps
+    </p>
+    
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3 class="step-title">Browse Unified Catalog</h3>
+        <p class="step-description">
+          View products from all participating farms in one unified catalog. 
+          Filter by certifications, sustainable practices, and distance from your location.
+        </p>
+      </div>
+      
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3 class="step-title">Place Order with Payment Hold</h3>
+        <p class="step-description">
+          Add items to cart from multiple farms. Enter delivery details and payment method. 
+          We authorize (not charge) your card to reserve funds while farms verify availability.
+        </p>
+      </div>
+      
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3 class="step-title">Farms Verify & Commit</h3>
+        <p class="step-description">
+          Your order is automatically split by farm. Each farm has 24 hours to verify they can 
+          fulfill their portion. If a farm declines, we automatically source from alternatives.
+        </p>
+      </div>
+      
+      <div class="step">
+        <div class="step-number">4</div>
+        <h3 class="step-title">Harvest, Pack & Deliver</h3>
+        <p class="step-description">
+          Once all farms verify, payment is captured and farms harvest your items. 
+          Orders are packed with FDA/CFIA-compliant lot codes and delivered via approved cold-chain logistics.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Impact Section -->
+  <section class="impact-section" id="impact">
+    <h2 class="impact-title">Local sourcing, global impact</h2>
+    <p class="impact-subtitle">
+      Every order supports sustainable agriculture, local economies, and food sovereignty
+    </p>
+    
+    <div class="impact-grid">
+      <div class="impact-card">
+        <div class="impact-icon">◉</div>
+        <h3 class="impact-card-title">Environmental</h3>
+        <p class="impact-card-description">
+          Reduce food miles by 90% compared to traditional wholesale. 
+          Support regenerative farming practices that rebuild soil health and sequester carbon.
+        </p>
+      </div>
+      
+      <div class="impact-card">
+        <div class="impact-icon">◐</div>
+        <h3 class="impact-card-title">Food Sovereignty</h3>
+        <p class="impact-card-description">
+          Strengthen local food systems and reduce dependency on distant supply chains. 
+          Keep food dollars circulating in your community.
+        </p>
+      </div>
+      
+      <div class="impact-card">
+        <div class="impact-icon">◆</div>
+        <h3 class="impact-card-title">Farm Viability</h3>
+        <p class="impact-card-description">
+          Fair prices for growers, direct market access. 
+          Help small and mid-size farms thrive and stay independent.
+        </p>
+      </div>
+      
+      <div class="impact-card">
+        <div class="impact-icon">◈</div>
+        <h3 class="impact-card-title">Community</h3>
+        <p class="impact-card-description">
+          Build transparent relationships between buyers and growers. 
+          Know your farmer, understand your food system.
+        </p>
+      </div>
+      
+      <div class="impact-card">
+        <div class="impact-icon">◇</div>
+        <h3 class="impact-card-title">Freshness</h3>
+        <p class="impact-card-description">
+          Harvest-to-table in 48 hours or less. 
+          Better taste, longer shelf life, higher nutrient density.
+        </p>
+      </div>
+      
+      <div class="impact-card">
+        <div class="impact-icon">◘</div>
+        <h3 class="impact-card-title">Food Security</h3>
+        <p class="impact-card-description">
+          Resilient multi-farm network ensures supply continuity. 
+          Less vulnerable to disruptions than single-source supply chains.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing CTA Section -->
+  <section class="cta-section" id="pricing">
+    <div class="cta-content">
+      <h2 class="cta-title">Ready to transform your sourcing?</h2>
+      <p class="cta-description">
+        Join leading restaurants, retailers, and food service operators who've made the switch to local.
+      </p>
+      <form class="cta-form" onsubmit="handleSignup(event)">
+        <input 
+          type="email" 
+          class="cta-input" 
+          placeholder="Enter your business email" 
+          required
+        >
+        <button type="submit" class="cta-button">Get Started</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-bottom">
+      <div class="footer-logo">GreenReach</div>
+      <div>
+        © 2026 GreenReach Wholesale. All rights reserved.
+        <span style="margin: 0 8px;">•</span>
+        <a href="#" style="color: rgba(255, 255, 255, 0.7);">Privacy</a>
+        <span style="margin: 0 8px;">•</span>
+        <a href="#" style="color: rgba(255, 255, 255, 0.7);">Terms</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Smooth scroll animation
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      });
+    });
+
+    // Fade in animation on scroll
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('fade-in-up');
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.feature-section, .step, .impact-card').forEach(el => {
+      observer.observe(el);
+    });
+
+    // Handle signup form
+    function handleSignup(e) {
+      e.preventDefault();
+      const email = e.target.querySelector('input[type="email"]').value;
+      
+      // Store email and redirect to wholesale portal
+      localStorage.setItem('prospectEmail', email);
+      window.location.href = '/greenreach-central/public/wholesale.html?signup=true';
+    }
+
+    // Update stats with animation
+    function animateStats() {
+      const stats = document.querySelectorAll('.stat-number');
+      stats.forEach(stat => {
+        const target = parseInt(stat.textContent);
+        let current = 0;
+        const increment = target / 50;
+        const timer = setInterval(() => {
+          current += increment;
+          if (current >= target) {
+            stat.textContent = stat.textContent.includes('+') ? target + '+' : target;
+            clearInterval(timer);
+          } else {
+            stat.textContent = Math.floor(current) + (stat.textContent.includes('+') ? '+' : '');
+          }
+        }, 30);
+      });
+    }
+
+    // Trigger stats animation when in view
+    const statsObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          animateStats();
+          statsObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.5 });
+
+    const heroStats = document.querySelector('.hero-stats');
+    if (heroStats) {
+      statsObserver.observe(heroStats);
+    }
+
+    // Dynamic nav background on scroll
+    let lastScroll = 0;
+    window.addEventListener('scroll', () => {
+      const nav = document.querySelector('nav');
+      const scrolled = window.pageYOffset;
+      
+      if (scrolled > 50) {
+        nav.style.background = 'rgba(251, 251, 253, 0.98)';
+        nav.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+      } else {
+        nav.style.background = 'rgba(251, 251, 253, 0.92)';
+        nav.style.boxShadow = 'none';
+      }
+      
+      lastScroll = scrolled;
+    });
+  </script>
+
+</body>
+</html>

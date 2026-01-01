@@ -264,6 +264,21 @@
       transform: scale(0.98);
       border-color: #60a5fa;
     }
+    
+    .priority-card.urgent-pulse {
+      animation: urgent-pulse-animation 2s ease-in-out infinite;
+      border-color: rgba(239, 68, 68, 0.6);
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+    }
+
+    @keyframes urgent-pulse-animation {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      }
+      50% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+      }
+    }
 
     .priority-number {
       font-size: 2.5rem;
@@ -1107,10 +1122,10 @@
             <div class="priority-number" id="harvestCount">0</div>
             <div class="priority-label">Ready to Harvest</div>
           </div>
-          <div class="priority-card" onclick="scrollToOrders()">
+          <div class="priority-card" id="orderPriorityCard" onclick="openOrderDashboard()">
             <div class="priority-number" id="orderCount">0</div>
             <div class="priority-label">Pending Orders</div>
-            <div class="priority-urgent" id="orderUrgent" style="display: none;">⚠️ URGENT</div>
+            <div class="priority-urgent" id="orderUrgent" style="display: none;"></div>
           </div>
           <div class="priority-card" onclick="scrollToChecklist()">
             <div class="priority-number" id="checklistCount">0</div>
@@ -2230,6 +2245,117 @@
       loadOrderForVerification(orderId);
     }
     
+    async function openOrderDetail(orderId) {
+      try {
+        const modal = document.getElementById('orderVerifyModal');
+        const content = document.getElementById('orderVerifyContent');
+        
+        modal.querySelector('.modal-header h2').textContent = 'Order Details';
+        content.innerHTML = '<div class="spinner"></div>';
+        
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/${orderId}`, {
+          headers: {
+            'X-Farm-ID': farmId,
+            ...getAuthHeaders()
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+          content.innerHTML = '<div class="empty-state">Order not found</div>';
+          return;
+        }
+        
+        const order = data.subOrder;
+        const mainOrder = data.mainOrder;
+        const hoursRemaining = data.hoursRemaining;
+        const isUrgent = hoursRemaining < 6;
+        
+        content.innerHTML = `
+          <div style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; border: 2px solid ${isUrgent ? '#ef4444' : 'rgba(59, 130, 246, 0.3)'};">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+              <div>
+                <div style="color: #60a5fa; font-weight: 700; font-size: 1.3rem; margin-bottom: 0.5rem;">Order #${order.id.slice(-8)}</div>
+                <div style="color: #cbd5e1; font-size: 1.1rem;">${mainOrder?.buyer_name || 'Wholesale Buyer'}</div>
+                ${mainOrder?.buyer_email ? `<div style="color: #94a3b8; font-size: 0.9rem;">${mainOrder.buyer_email}</div>` : ''}
+              </div>
+              <div style="text-align: right;">
+                <div style="color: ${isUrgent ? '#ef4444' : '#f59e0b'}; font-weight: 700; font-size: 1.1rem;">
+                  ${isUrgent ? '⚠️ URGENT' : Math.floor(hoursRemaining) + 'h left'}
+                </div>
+                <div style="color: #94a3b8; font-size: 0.9rem;">Deadline: ${new Date(order.verification_deadline).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            </div>
+            
+            ${mainOrder?.delivery_address ? `
+              <div style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px;">
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.5rem;">📍 Delivery Address:</div>
+                <div style="color: #f8fafc;">${mainOrder.delivery_address}</div>
+                <div style="color: #cbd5e1;">${mainOrder.delivery_city}, ${mainOrder.delivery_province}</div>
+              </div>
+            ` : ''}
+          </div>
+          
+          <h3 style="color: #60a5fa; margin-bottom: 1rem; font-size: 1.2rem;">Order Items</h3>
+          
+          <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+            ${order.items.map((item, index) => `
+              <div style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(52, 211, 153, 0.2); border-radius: 12px; padding: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; color: #f8fafc; font-size: 1.1rem; margin-bottom: 0.25rem;">${item.product_name}</div>
+                    <div style="color: #94a3b8; font-size: 0.9rem;">SKU: ${item.sku_id}</div>
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="color: #60a5fa; font-weight: 700; font-size: 1.2rem;">${item.quantity} ${item.unit}</div>
+                    <div style="color: #94a3b8; font-size: 0.9rem;">$${item.price_per_unit.toFixed(2)} each</div>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <input type="number" id="qty_${index}" value="${item.quantity}" min="0" max="${item.quantity * 2}" step="1" 
+                    data-original="${item.quantity}" data-sku-id="${item.sku_id}"
+                    style="width: 80px; padding: 0.5rem; border-radius: 6px; background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(59, 130, 246, 0.3); color: #f8fafc; font-size: 1rem;">
+                  <span style="color: #94a3b8; font-size: 0.9rem;">(Adjust if needed)</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid rgba(52, 211, 153, 0.3);">
+            <div style="display: flex; justify-content: space-between; font-size: 1.2rem; color: #34d399; font-weight: 700;">
+              <span>Order Total:</span>
+              <span>$${order.sub_total.toFixed(2)}</span>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; margin-bottom: 0.5rem; color: #94a3b8;">Response Notes</label>
+            <textarea id="orderResponseNotes" rows="3" placeholder="Any modifications or notes for the buyer..." 
+              style="width: 100%; padding: 1rem; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.3); color: #f8fafc; font-size: 1rem; resize: vertical;"></textarea>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+            <button onclick="acceptOrder('${orderId}')" class="button button-primary" style="background: linear-gradient(135deg, #34d399 0%, #10b981 100%);">
+              ✓ Accept
+            </button>
+            <button onclick="modifyOrder('${orderId}')" class="button" style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #0f172a;">
+              ✎ Modify
+            </button>
+            <button onclick="declineOrder('${orderId}')" class="button" style="background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);">
+              ✗ Decline
+            </button>
+          </div>
+          
+          <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%; margin-top: 1rem;">← Back to Orders</button>
+        `;
+        
+      } catch (error) {
+        console.error('Error loading order detail:', error);
+        document.getElementById('orderVerifyContent').innerHTML = '<div class="empty-state">Failed to load order</div>';
+      }
+    }
+    
     function closeOrderVerifyModal() {
       document.getElementById('orderVerifyModal').classList.remove('active');
     }
@@ -2299,6 +2425,336 @@
       } else {
         btn.textContent = `Submit Verification (${checked}/${total})`;
         btn.style.background = 'rgba(148, 163, 184, 0.3)';
+      }
+    }
+    
+    // === WHOLESALE ORDER RESPONSE FUNCTIONS ===
+    
+    async function acceptOrder(orderId) {
+      if (!confirm('Accept this order as-is? You will begin fulfillment immediately.')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/${orderId}/accept`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Farm-ID': farmId,
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify({ farmId })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+          alert('Error accepting order: ' + data.error);
+          return;
+        }
+        
+        speakMessage('Order accepted successfully');
+        
+        // Show success and option to start picking
+        const content = document.getElementById('orderVerifyContent');
+        content.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">✓</div>
+            <h3 style="color: #10b981; margin-bottom: 1rem;">Order Accepted!</h3>
+            <p style="color: #cbd5e1; margin-bottom: 2rem;">The buyer has been notified.</p>
+            
+            <button onclick="startPicking('${orderId}')" class="button button-primary" style="width: 100%; margin-bottom: 1rem;">
+              🌱 Start Picking
+            </button>
+            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
+              ← Back to Orders
+            </button>
+          </div>
+        `;
+        
+        // Refresh order count
+        loadOrderPickList();
+        
+      } catch (error) {
+        console.error('Error accepting order:', error);
+        alert('Failed to accept order. Please try again.');
+      }
+    }
+    
+    async function modifyOrder(orderId) {
+      const reason = document.getElementById('orderResponseNotes').value;
+      
+      if (!reason || reason.trim().length === 0) {
+        alert('Please provide a reason for the modifications.');
+        return;
+      }
+      
+      // Collect modified quantities
+      const items = [];
+      const qtyInputs = document.querySelectorAll('[id^="qty_"]');
+      let hasChanges = false;
+      
+      qtyInputs.forEach((input, index) => {
+        const newQty = parseInt(input.value) || 0;
+        const originalQty = parseInt(input.dataset.original) || 0;
+        
+        if (newQty !== originalQty) {
+          hasChanges = true;
+        }
+        
+        items.push({
+          sku_id: input.dataset.skuId,
+          quantity: newQty
+        });
+      });
+      
+      if (!hasChanges) {
+        alert('No quantity changes detected. Adjust quantities or click Accept instead.');
+        return;
+      }
+      
+      if (!confirm('Submit these modifications? The buyer will need to approve the changes.')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/${orderId}/modify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Farm-ID': farmId,
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify({
+            farmId,
+            modifications: { items },
+            reason
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+          alert('Error submitting modifications: ' + data.error);
+          return;
+        }
+        
+        speakMessage('Modifications submitted for approval');
+        
+        const content = document.getElementById('orderVerifyContent');
+        content.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 4rem; color: #f59e0b; margin-bottom: 1rem;">✎</div>
+            <h3 style="color: #f59e0b; margin-bottom: 1rem;">Modifications Submitted</h3>
+            <p style="color: #cbd5e1; margin-bottom: 1rem;">Waiting for buyer approval</p>
+            <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem;">You'll be notified once the buyer reviews your changes.</p>
+            
+            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
+              ← Back to Orders
+            </button>
+          </div>
+        `;
+        
+        loadOrderPickList();
+        
+      } catch (error) {
+        console.error('Error modifying order:', error);
+        alert('Failed to submit modifications. Please try again.');
+      }
+    }
+    
+    async function declineOrder(orderId) {
+      const reason = document.getElementById('orderResponseNotes').value;
+      
+      if (!reason || reason.trim().length === 0) {
+        alert('Please provide a reason for declining the order.');
+        return;
+      }
+      
+      if (!confirm('Decline this order? The system will search for alternative farms.')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/${orderId}/decline`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Farm-ID': farmId,
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify({
+            farmId,
+            reason
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+          alert('Error declining order: ' + data.error);
+          return;
+        }
+        
+        speakMessage('Order declined');
+        
+        const content = document.getElementById('orderVerifyContent');
+        content.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 4rem; color: #94a3b8; margin-bottom: 1rem;">✗</div>
+            <h3 style="color: #cbd5e1; margin-bottom: 1rem;">Order Declined</h3>
+            <p style="color: #94a3b8; margin-bottom: 2rem;">Searching for alternative farms...</p>
+            
+            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
+              ← Back to Orders
+            </button>
+          </div>
+        `;
+        
+        loadOrderPickList();
+        
+      } catch (error) {
+        console.error('Error declining order:', error);
+        alert('Failed to decline order. Please try again.');
+      }
+    }
+    
+    async function startPicking(orderId) {
+      try {
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/${orderId}/pick`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Farm-ID': farmId,
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify({
+            farmId,
+            pickedBy: farmName || 'Farm Worker'
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+          alert('Error starting pick: ' + data.error);
+          return;
+        }
+        
+        speakMessage('Picking started. Lot codes generated.');
+        
+        const content = document.getElementById('orderVerifyContent');
+        content.innerHTML = `
+          <div style="padding: 1.5rem;">
+            <div style="text-align: center; margin-bottom: 2rem;">
+              <div style="font-size: 3rem; color: #34d399; margin-bottom: 1rem;">🌱</div>
+              <h3 style="color: #34d399; margin-bottom: 0.5rem;">Picking Started</h3>
+              <p style="color: #cbd5e1;">Lot codes generated automatically</p>
+            </div>
+            
+            <h4 style="color: #60a5fa; margin-bottom: 1rem;">Lot Codes:</h4>
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid rgba(52, 211, 153, 0.3);">
+              ${data.lotCodes.map(item => `
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid rgba(148, 163, 184, 0.1);">
+                  <span style="color: #cbd5e1;">${item.product_name}</span>
+                  <span style="color: #34d399; font-family: monospace; font-weight: 600;">${item.lot_code}</span>
+                </div>
+              `).join('')}
+            </div>
+            
+            <button onclick="markAsPacked('${orderId}')" class="button button-primary" style="width: 100%; margin-bottom: 1rem;">
+              📦 Mark as Packed
+            </button>
+            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
+              ← Back to Orders
+            </button>
+          </div>
+        `;
+        
+      } catch (error) {
+        console.error('Error starting pick:', error);
+        alert('Failed to start picking. Please try again.');
+      }
+    }
+    
+    async function markAsPacked(orderId) {
+      try {
+        // Check if thermal printer is configured
+        const printerConfigured = localStorage.getItem('thermalPrinterConfigured') === 'true';
+        
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/${orderId}/pack`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Farm-ID': farmId,
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify({
+            farmId,
+            packedBy: farmName || 'Farm Worker',
+            hasPrinter: printerConfigured
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+          alert('Error packing order: ' + data.error);
+          return;
+        }
+        
+        speakMessage('Order packed. Label ready.');
+        
+        // If thermal printer configured, auto-send to printer
+        if (printerConfigured) {
+          try {
+            const printResponse = await fetch(`${currentAPI}/api/printer/print-packing`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Farm-ID': farmId,
+                ...getAuthHeaders()
+              },
+              body: JSON.stringify({
+                labelUrl: data.labelUrl,
+                orderId: orderId
+              })
+            });
+            
+            if (printResponse.ok) {
+              speakMessage('Label sent to printer');
+              console.log('[Print] Packing label sent to thermal printer');
+            } else {
+              console.warn('[Print] Failed to send to printer, showing manual print option');
+            }
+          } catch (printError) {
+            console.error('[Print] Thermal printer error:', printError);
+          }
+        }
+        
+        const content = document.getElementById('orderVerifyContent');
+        content.innerHTML = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 4rem; color: #34d399; margin-bottom: 1rem;">📦</div>
+            <h3 style="color: #34d399; margin-bottom: 1rem;">Order Packed!</h3>
+            <p style="color: #cbd5e1; margin-bottom: 1rem;">Packing label ready</p>
+            ${printerConfigured ? 
+              '<p style="color: #10b981; font-size: 0.9rem; margin-bottom: 2rem;">✓ Label sent to thermal printer</p>' :
+              '<p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem;">No thermal printer configured</p>'
+            }
+            
+            <button onclick="window.open('${data.labelUrl}', '_blank')" class="button button-primary" style="width: 100%; margin-bottom: 1rem;">
+              🖨️ ${printerConfigured ? 'View/Reprint Label' : 'Print Packing Label'}
+            </button>
+            <button onclick="loadPendingOrdersInModal()" class="button button-secondary" style="width: 100%;">
+              ← Back to Orders
+            </button>
+          </div>
+        `;
+        
+      } catch (error) {
+        console.error('Error packing order:', error);
+        alert('Failed to mark as packed. Please try again.');
       }
     }
     
@@ -2510,8 +2966,77 @@
     const QA_BACKEND_URL = window.location.origin;
 
     function openOrderDashboard() {
-      // Open wholesale order dashboard in new tab
-      window.open('/LE-wholesale-orders.html', '_blank');
+      // Open orders in Activity Hub modal instead of external tab
+      loadPendingOrdersInModal();
+    }
+
+    async function loadPendingOrdersInModal() {
+      try {
+        const modal = document.getElementById('orderVerifyModal');
+        const content = document.getElementById('orderVerifyContent');
+        
+        modal.querySelector('.modal-header h2').textContent = 'Pending Orders';
+        modal.classList.add('active');
+        
+        content.innerHTML = '<div class="spinner"></div>';
+        
+        const response = await fetch(`${currentAPI}/api/activity-hub/orders/pending`, {
+          headers: {
+            'X-Farm-ID': farmId,
+            ...getAuthHeaders()
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok || data.orders.length === 0) {
+          content.innerHTML = '<div class="empty-state">No pending orders</div>';
+          return;
+        }
+        
+        content.innerHTML = data.orders.map(order => {
+          const deadline = new Date(order.verification_deadline);
+          const hoursRemaining = Math.max(0, (deadline - new Date()) / (1000 * 60 * 60));
+          const isUrgent = hoursRemaining < 6;
+          
+          return `
+            <div class="order-card ${isUrgent ? 'urgent' : ''}" style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; border: 2px solid ${isUrgent ? '#ef4444' : 'rgba(59, 130, 246, 0.3)');">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                <div>
+                  <div style="color: #60a5fa; font-weight: 700; font-size: 1.2rem; margin-bottom: 0.25rem;">Order #${order.id.slice(-8)}</div>
+                  <div style="color: #cbd5e1;">${order.buyer_name || 'Wholesale Buyer'}</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="color: ${isUrgent ? '#ef4444' : '#f59e0b'}; font-weight: 600;">
+                    ${isUrgent ? '⚠️ ' : ''}${Math.floor(hoursRemaining)}h remaining
+                  </div>
+                  <div style="color: #94a3b8; font-size: 0.9rem;">${deadline.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              </div>
+              
+              <div style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.5rem;">Items:</div>
+                ${order.items.map(item => `
+                  <div style="display: flex; justify-content: space-between; color: #f8fafc; padding: 0.25rem 0;">
+                    <span>${item.product_name}</span>
+                    <span style="color: #60a5fa; font-weight: 600;">${item.quantity} ${item.unit}</span>
+                  </div>
+                `).join('')}
+                <div style="border-top: 1px solid rgba(148, 163, 184, 0.2); margin-top: 0.75rem; padding-top: 0.75rem; display: flex; justify-content: space-between; font-weight: 600; color: #34d399;">
+                  <span>Total:</span>
+                  <span>$${order.sub_total.toFixed(2)}</span>
+                </div>
+              </div>
+              
+              <button onclick="openOrderDetail('${order.id}')" class="button button-primary" style="width: 100%;">View & Respond</button>
+            </div>
+          `;
+        }).join('');
+        
+      } catch (error) {
+        console.error('Error loading orders:', error);
+        document.getElementById('orderVerifyContent').innerHTML = '<div class="empty-state">Failed to load orders</div>';
+      }
     }
 
     function openQACheckpoint() {
@@ -2654,6 +3179,17 @@
 
     // Photo preview
     document.addEventListener('DOMContentLoaded', () => {
+      // Handle URL parameters for deep linking (e.g., from notification emails)
+      const urlParams = new URLSearchParams(window.location.search);
+      const openOrderId = urlParams.get('openOrder');
+      
+      if (openOrderId) {
+        // Wait for authentication to complete, then open the order
+        setTimeout(() => {
+          openOrderDetail(openOrderId);
+        }, 1000);
+      }
+      
       const photoInput = document.querySelector('input[name="photo"]');
       if (photoInput) {
         photoInput.addEventListener('change', (event) => {
@@ -3143,10 +3679,21 @@
       // Update priority card
       document.getElementById('orderCount').textContent = orders.length;
       const urgentIndicator = document.getElementById('orderUrgent');
+      const priorityCard = document.getElementById('orderPriorityCard');
+      const orderCountEl = document.getElementById('orderCount');
+      
       if (urgentCount > 0) {
+        urgentIndicator.textContent = `⚠️ ${urgentCount} URGENT`;
         urgentIndicator.style.display = 'block';
+        priorityCard.classList.add('urgent-pulse');
+        orderCountEl.style.color = '#ef4444';
+        
+        // Voice alert for urgent orders
+        speakMessage(`You have ${urgentCount} urgent order${urgentCount > 1 ? 's' : ''} requiring immediate attention`);
       } else {
         urgentIndicator.style.display = 'none';
+        priorityCard.classList.remove('urgent-pulse');
+        orderCountEl.style.color = '#60a5fa';
       }
 
       container.innerHTML = orders.map(order => {
