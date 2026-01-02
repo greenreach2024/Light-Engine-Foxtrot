@@ -1,466 +1,425 @@
 """
-Wholesale Order Management System
-Handles multi-farm order splitting, verification, and payment workflow
+Wholesale Orders API
+B2B ordering for restaurants, grocery stores, and distributors with Square payment integration
 """
 
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict
-from enum import Enum
-import stripe
-import os
+from datetime import datetime, date, timedelta
+from typing import List, Optional
+import logging
+import uuid
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, func
 
-# Configure Stripe (use environment variable for key)
-stripe.api_key = os.getenv('STRIPE_SECRET_KEY', 'sk_test_placeholder')
+from backend.models.base import get_db
+from backend.models.inventory import (
+    ProductSKU, WholesaleBuyer, WholesaleOrder, WholesaleOrderItem, TrayRun
+)
+from backend.auth import get_current_user, get_tenant_id
 
-router = APIRouter(prefix="/api/wholesale/orders", tags=["wholesale_orders"])
+logger = logging.getLogger(__name__)
 
-
-class OrderStatus(str, Enum):
-    PENDING_PAYMENT = "pending_payment"
-    PAYMENT_AUTHORIZED = "payment_authorized"
-    SPLIT_COMPLETE = "split_complete"
-    PENDING_FARM_VERIFICATION = "pending_farm_verification"
-    FARMS_VERIFIED = "farms_verified"
-    PARTIAL_VERIFICATION = "partial_verification"
-    SEEKING_ALTERNATIVES = "seeking_alternatives"
-    PENDING_BUYER_REVIEW = "pending_buyer_review"
-    BUYER_APPROVED = "buyer_approved"
-    BUYER_REJECTED = "buyer_rejected"
-    READY_FOR_PICKUP = "ready_for_pickup"
-    PARTIALLY_PICKED_UP = "partially_picked_up"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
-    REFUNDED = "refunded"
+router = APIRouter()
 
 
-class SubOrderStatus(str, Enum):
-    PENDING_FARM = "pending_farm"
-    FARM_ACCEPTED = "farm_accepted"
-    FARM_DECLINED = "farm_declined"
-    FARM_MODIFIED = "farm_modified"
-    ALTERNATIVE_PENDING = "alternative_pending"
-    ALTERNATIVE_ACCEPTED = "alternative_accepted"
-    READY_FOR_PICKUP = "ready_for_pickup"
-    PICKED_UP = "picked_up"
-    PAYMENT_CAPTURED = "payment_captured"
-    FARM_PAID = "farm_paid"
-
-
-# Pydantic Models
-class CartItem(BaseModel):
-    sku_id: int
-    product_name: str
-    quantity: float
+class ProductResponse(BaseModel):
+    sku_id: str
+    name: str
+    category: str
+    variety: Optional[str] = None
+    retail_price: float
+    wholesale_price: Optional[float] = None
     unit: str
-    price_per_unit: float
-    farm_id: str
+    quantity_available: int
+    lot_code: Optional[str] = None
+    harvest_date: Optional[str] = None
+
+
+class OrderItemRequest(BaseModel):
+    sku_id: str
+    quantity: int
 
 
 class CreateOrderRequest(BaseModel):
-    buyer_id: int
+    items: List[OrderItemRequest]
+    delivery_date: Optional[str] = None
+    delivery_notes: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class OrderItemResponse(BaseModel):
+    item_id: str
+    sku_id: str
+    product_name: str
+    quantity: int
+    unit_price: float
+    line_total: float
+    lot_code: Optional[str] = None
+
+
+class OrderResponse(BaseModel):
+    order_id: str
+    order_number: str
+    buyer_id: str
     buyer_name: str
-    buyer_email: str
-    buyer_phone: str
-    delivery_address: str
-    delivery_city: str
-    delivery_province: str
-    delivery_postal_code: str
-    cart_items: List[CartItem]
-    payment_method_id: str  # Stripe payment method ID
-    fulfillment_cadence: str = "one_time"
-    delivery_instructions: Optional[str] = None
+    status: str
+    subtotal: float
+    tax: float
+    discount: float
+    delivery_fee: float
+    total: float
+    payment_method: str
+    payment_status: str
+    delivery_date: Optional[str] = None
+    created_at: str
+    confirmed_at: Optional[str] = None
+    delivered_at: Optional[str] = None
+    items: List[OrderItemResponse]
 
 
-class FarmVerificationRequest(BaseModel):
-    farm_id: str
-    sub_order_id: int
-    action: str  # "accept", "decline", "modify"
-    modified_items: Optional[List[Dict]] = None
-    decline_reason: Optional[str] = None
+class CheckoutRequest(BaseModel):
+    items: List[OrderItemRequest]
+    payment_method: str  # square, account, check
+    payment_nonce: Optional[str] = None  # Square payment nonce
+    delivery_date: Optional[str] = None
+    delivery_notes: Optional[str] = None
+    notes: Optional[str] = None
 
 
-class BuyerReviewRequest(BaseModel):
-    order_id: int
-    action: str  # "accept", "reject"
-    rejection_reason: Optional[str] = None
+class CheckoutResponse(BaseModel):
+    order_id: str
+    order_number: str
+    total: float
+    payment_status: str
+    message: str
 
 
-class PickupConfirmationRequest(BaseModel):
-    sub_order_id: int
-    qr_code: str
-    farm_id: str
-
-
-# Database would be PostgreSQL - these are placeholder functions
-class WholesaleOrderDB:
-    """Placeholder for database operations"""
+@router.get("/wholesale/products", response_model=List[ProductResponse])
+async def list_products(
+    category: Optional[str] = Query(None),
+    available_only: bool = Query(True),
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List available products for wholesale ordering"""
     
-    @staticmethod
-    async def create_order(order_data: dict) -> int:
-        """Create main wholesale order record"""
-        # INSERT INTO wholesale_orders ... RETURNING id
-        return 1  # Placeholder order_id
-    
-    @staticmethod
-    async def create_sub_orders(order_id: int, sub_orders: List[dict]) -> List[int]:
-        """Create farm sub-orders"""
-        # INSERT INTO farm_sub_orders ... RETURNING id
-        return [1, 2, 3]  # Placeholder sub_order_ids
-    
-    @staticmethod
-    async def create_line_items(sub_order_id: int, items: List[dict]) -> None:
-        """Create order line items"""
-        # INSERT INTO order_line_items
-        pass
-    
-    @staticmethod
-    async def update_order_status(order_id: int, status: OrderStatus) -> None:
-        """Update main order status"""
-        # UPDATE wholesale_orders SET status = ? WHERE id = ?
-        pass
-    
-    @staticmethod
-    async def update_sub_order_status(sub_order_id: int, status: SubOrderStatus) -> None:
-        """Update sub-order status"""
-        # UPDATE farm_sub_orders SET status = ? WHERE id = ?
-        pass
-    
-    @staticmethod
-    async def get_order(order_id: int) -> dict:
-        """Get order with all sub-orders and items"""
-        # SELECT with JOINs
-        return {}
-    
-    @staticmethod
-    async def get_pending_farm_orders(farm_id: str) -> List[dict]:
-        """Get orders awaiting farm verification"""
-        # SELECT WHERE farm_id = ? AND status = 'pending_farm'
-        return []
-    
-    @staticmethod
-    async def create_pickup_confirmation(sub_order_id: int, qr_code: str) -> None:
-        """Record pickup confirmation"""
-        # INSERT INTO pickup_confirmations
-        pass
-
-
-class StripePaymentService:
-    """Stripe payment authorization and capture"""
-    
-    @staticmethod
-    async def authorize_payment(amount_cents: int, payment_method_id: str, 
-                               customer_email: str, metadata: dict) -> str:
-        """Create payment intent with authorization hold"""
-        try:
-            intent = stripe.PaymentIntent.create(
-                amount=amount_cents,
-                currency='cad',
-                payment_method=payment_method_id,
-                customer_email=customer_email,
-                capture_method='manual',  # Hold funds, don't capture yet
-                confirm=True,
-                metadata=metadata
-            )
-            return intent.id
-        except stripe.error.StripeError as e:
-            raise HTTPException(status_code=400, detail=f"Payment authorization failed: {str(e)}")
-    
-    @staticmethod
-    async def capture_payment(payment_intent_id: str, amount_cents: Optional[int] = None) -> bool:
-        """Capture authorized payment (after pickup confirmed)"""
-        try:
-            intent = stripe.PaymentIntent.capture(
-                payment_intent_id,
-                amount_to_capture=amount_cents  # Can capture partial amount
-            )
-            return intent.status == 'succeeded'
-        except stripe.error.StripeError as e:
-            raise HTTPException(status_code=400, detail=f"Payment capture failed: {str(e)}")
-    
-    @staticmethod
-    async def cancel_authorization(payment_intent_id: str) -> bool:
-        """Cancel payment authorization (if order cancelled)"""
-        try:
-            intent = stripe.PaymentIntent.cancel(payment_intent_id)
-            return intent.status == 'canceled'
-        except stripe.error.StripeError as e:
-            raise HTTPException(status_code=400, detail=f"Payment cancellation failed: {str(e)}")
-    
-    @staticmethod
-    async def payout_to_farm(farm_stripe_account_id: str, amount_cents: int, 
-                            order_id: int) -> str:
-        """Transfer payment to farm (after platform fee deduction)"""
-        try:
-            transfer = stripe.Transfer.create(
-                amount=amount_cents,
-                currency='cad',
-                destination=farm_stripe_account_id,
-                metadata={'order_id': order_id}
-            )
-            return transfer.id
-        except stripe.error.StripeError as e:
-            raise HTTPException(status_code=400, detail=f"Farm payout failed: {str(e)}")
-
-
-class NotificationService:
-    """Email/SMS notifications for farms and buyers"""
-    
-    @staticmethod
-    async def notify_farms_new_order(farm_ids: List[str], order_id: int) -> None:
-        """Send notifications to farms about new orders"""
-        # Implementation: Send email/SMS via SES, Twilio, etc.
-        pass
-    
-    @staticmethod
-    async def notify_buyer_order_placed(buyer_email: str, order_id: int) -> None:
-        """Confirm order placement to buyer"""
-        pass
-    
-    @staticmethod
-    async def notify_buyer_modifications(buyer_email: str, order_id: int) -> None:
-        """Notify buyer of farm modifications requiring review"""
-        pass
-    
-    @staticmethod
-    async def notify_farm_verification_deadline(farm_id: str, sub_order_id: int) -> None:
-        """Reminder for farm verification deadline"""
-        pass
-
-
-# API Endpoints
-
-@router.post("/create")
-async def create_wholesale_order(request: CreateOrderRequest):
-    """
-    Create new wholesale order with payment authorization
-    - Splits order by farm
-    - Authorizes payment (hold, not charge)
-    - Notifies farms for verification
-    """
-    
-    # 1. Calculate totals
-    total_amount = sum(item.price_per_unit * item.quantity for item in request.cart_items)
-    total_cents = int(total_amount * 100)
-    
-    # 2. Authorize payment with Stripe
-    payment_intent_id = await StripePaymentService.authorize_payment(
-        amount_cents=total_cents,
-        payment_method_id=request.payment_method_id,
-        customer_email=request.buyer_email,
-        metadata={
-            'buyer_name': request.buyer_name,
-            'order_type': 'wholesale',
-            'fulfillment_cadence': request.fulfillment_cadence
-        }
+    # Build query
+    query = db.query(ProductSKU).filter(
+        and_(
+            ProductSKU.farm_id == tenant_id,
+            ProductSKU.is_active == True
+        )
     )
     
-    # 3. Create main order record
-    order_data = {
-        'buyer_id': request.buyer_id,
-        'buyer_name': request.buyer_name,
-        'buyer_email': request.buyer_email,
-        'buyer_phone': request.buyer_phone,
-        'delivery_address': request.delivery_address,
-        'delivery_city': request.delivery_city,
-        'delivery_province': request.delivery_province,
-        'delivery_postal_code': request.delivery_postal_code,
-        'total_amount': total_amount,
-        'status': OrderStatus.PAYMENT_AUTHORIZED,
-        'payment_intent_id': payment_intent_id,
-        'fulfillment_cadence': request.fulfillment_cadence,
-        'delivery_instructions': request.delivery_instructions,
-        'created_at': datetime.utcnow(),
-        'verification_deadline': datetime.utcnow() + timedelta(hours=24)
-    }
+    if category:
+        query = query.filter(ProductSKU.category == category)
     
-    order_id = await WholesaleOrderDB.create_order(order_data)
+    if available_only:
+        query = query.filter(ProductSKU.quantity_available > 0)
     
-    # 4. Split order by farm
-    farm_orders = {}
-    for item in request.cart_items:
-        if item.farm_id not in farm_orders:
-            farm_orders[item.farm_id] = []
-        farm_orders[item.farm_id].append(item)
+    products = query.all()
     
-    # 5. Create sub-orders for each farm
-    sub_order_ids = []
-    for farm_id, items in farm_orders.items():
-        farm_total = sum(item.price_per_unit * item.quantity for item in items)
-        
-        sub_order_data = {
-            'wholesale_order_id': order_id,
-            'farm_id': farm_id,
-            'status': SubOrderStatus.PENDING_FARM,
-            'sub_total': farm_total,
-            'verification_deadline': datetime.utcnow() + timedelta(hours=24)
-        }
-        
-        sub_order_id = (await WholesaleOrderDB.create_sub_orders(order_id, [sub_order_data]))[0]
-        sub_order_ids.append(sub_order_id)
-        
-        # Create line items for sub-order
-        line_items = [
-            {
-                'sub_order_id': sub_order_id,
-                'sku_id': item.sku_id,
-                'product_name': item.product_name,
-                'quantity': item.quantity,
-                'unit': item.unit,
-                'price_per_unit': item.price_per_unit,
-                'line_total': item.price_per_unit * item.quantity
-            }
-            for item in items
-        ]
-        await WholesaleOrderDB.create_line_items(sub_order_id, line_items)
-    
-    # 6. Update order status to pending verification
-    await WholesaleOrderDB.update_order_status(order_id, OrderStatus.PENDING_FARM_VERIFICATION)
-    
-    # 7. Notify farms
-    await NotificationService.notify_farms_new_order(list(farm_orders.keys()), order_id)
-    
-    # 8. Notify buyer
-    await NotificationService.notify_buyer_order_placed(request.buyer_email, order_id)
-    
-    return {
-        "ok": True,
-        "order_id": order_id,
-        "sub_order_ids": sub_order_ids,
-        "payment_intent_id": payment_intent_id,
-        "total_amount": total_amount,
-        "verification_deadline": order_data['verification_deadline'].isoformat(),
-        "message": "Order placed successfully. Farms have 24 hours to verify."
-    }
+    # Return with wholesale pricing
+    return [
+        ProductResponse(
+            sku_id=str(p.sku_id),
+            name=p.name,
+            category=p.category,
+            variety=p.variety,
+            retail_price=p.retail_price,
+            wholesale_price=p.wholesale_price if p.wholesale_price else p.retail_price * 0.7,  # 30% wholesale discount
+            unit=p.unit,
+            quantity_available=p.quantity_available,
+            lot_code=p.lot_code,
+            harvest_date=p.harvest_date.isoformat() if p.harvest_date else None
+        )
+        for p in products
+    ]
 
 
-@router.post("/farm-verify")
-async def farm_verify_order(request: FarmVerificationRequest):
-    """
-    Farm accepts/declines/modifies their portion of an order
-    """
+@router.get("/wholesale/orders", response_model=List[OrderResponse])
+async def list_orders(
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, le=200),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List buyer's order history"""
     
-    if request.action == "accept":
-        await WholesaleOrderDB.update_sub_order_status(
-            request.sub_order_id, 
-            SubOrderStatus.FARM_ACCEPTED
-        )
-        return {"ok": True, "message": "Order accepted"}
+    buyer_id = current_user.get("user_id")
     
-    elif request.action == "decline":
-        await WholesaleOrderDB.update_sub_order_status(
-            request.sub_order_id,
-            SubOrderStatus.FARM_DECLINED
-        )
-        # TODO: Trigger alternative farm matching
-        return {"ok": True, "message": "Order declined. Seeking alternative farms."}
-    
-    elif request.action == "modify":
-        await WholesaleOrderDB.update_sub_order_status(
-            request.sub_order_id,
-            SubOrderStatus.FARM_MODIFIED
-        )
-        # TODO: Store modifications and notify buyer
-        await NotificationService.notify_buyer_modifications(
-            "buyer@example.com",  # Get from order
-            request.sub_order_id
-        )
-        return {"ok": True, "message": "Modifications recorded. Buyer will review."}
-
-
-@router.post("/buyer-review")
-async def buyer_review_modifications(request: BuyerReviewRequest):
-    """
-    Buyer accepts/rejects farm modifications
-    """
-    
-    if request.action == "accept":
-        await WholesaleOrderDB.update_order_status(
-            request.order_id,
-            OrderStatus.BUYER_APPROVED
-        )
-        # TODO: Update payment authorization if total changed
-        return {"ok": True, "message": "Order approved"}
-    
-    elif request.action == "reject":
-        await WholesaleOrderDB.update_order_status(
-            request.order_id,
-            OrderStatus.BUYER_REJECTED
-        )
-        # TODO: Cancel order and refund payment authorization
-        return {"ok": True, "message": "Order rejected. Payment authorization cancelled."}
-
-
-@router.post("/confirm-pickup")
-async def confirm_pickup(request: PickupConfirmationRequest):
-    """
-    Confirm pickup with QR code scan
-    Triggers payment capture for this farm's portion
-    """
-    
-    # 1. Validate QR code
-    # TODO: Implement QR code validation
-    
-    # 2. Update sub-order status
-    await WholesaleOrderDB.update_sub_order_status(
-        request.sub_order_id,
-        SubOrderStatus.PICKED_UP
+    # Build query
+    query = db.query(WholesaleOrder).filter(
+        WholesaleOrder.buyer_id == buyer_id
     )
     
-    # 3. Record pickup confirmation
-    await WholesaleOrderDB.create_pickup_confirmation(
-        request.sub_order_id,
-        request.qr_code
+    if status:
+        query = query.filter(WholesaleOrder.status == status)
+    
+    query = query.order_by(WholesaleOrder.created_at.desc()).limit(limit)
+    orders = query.all()
+    
+    # Build response with items
+    result = []
+    for order in orders:
+        buyer = db.query(WholesaleBuyer).filter(WholesaleBuyer.buyer_id == order.buyer_id).first()
+        items = []
+        for item in order.items:
+            product = db.query(ProductSKU).filter(ProductSKU.sku_id == item.sku_id).first()
+            items.append(OrderItemResponse(
+                item_id=str(item.item_id),
+                sku_id=str(item.sku_id),
+                product_name=product.name if product else "Unknown",
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                line_total=item.line_total,
+                lot_code=item.lot_code
+            ))
+        
+        result.append(OrderResponse(
+            order_id=str(order.order_id),
+            order_number=order.order_number,
+            buyer_id=str(order.buyer_id),
+            buyer_name=buyer.business_name if buyer else "Unknown",
+            status=order.status,
+            subtotal=order.subtotal,
+            tax=order.tax,
+            discount=order.discount,
+            delivery_fee=order.delivery_fee,
+            total=order.total,
+            payment_method=order.payment_method,
+            payment_status=order.payment_status,
+            delivery_date=order.delivery_date.isoformat() if order.delivery_date else None,
+            created_at=order.created_at.isoformat(),
+            confirmed_at=order.confirmed_at.isoformat() if order.confirmed_at else None,
+            delivered_at=order.delivered_at.isoformat() if order.delivered_at else None,
+            items=items
+        ))
+    
+    return result
+
+
+@router.get("/wholesale/orders/{order_id}", response_model=OrderResponse)
+async def get_order(
+    order_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get order details"""
+    
+    buyer_id = current_user.get("user_id")
+    
+    order = db.query(WholesaleOrder).filter(
+        and_(
+            WholesaleOrder.order_id == order_id,
+            WholesaleOrder.buyer_id == buyer_id
+        )
+    ).first()
+    
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found"
+        )
+    
+    buyer = db.query(WholesaleBuyer).filter(WholesaleBuyer.buyer_id == order.buyer_id).first()
+    
+    items = []
+    for item in order.items:
+        product = db.query(ProductSKU).filter(ProductSKU.sku_id == item.sku_id).first()
+        items.append(OrderItemResponse(
+            item_id=str(item.item_id),
+            sku_id=str(item.sku_id),
+            product_name=product.name if product else "Unknown",
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            line_total=item.line_total,
+            lot_code=item.lot_code
+        ))
+    
+    return OrderResponse(
+        order_id=str(order.order_id),
+        order_number=order.order_number,
+        buyer_id=str(order.buyer_id),
+        buyer_name=buyer.business_name if buyer else "Unknown",
+        status=order.status,
+        subtotal=order.subtotal,
+        tax=order.tax,
+        discount=order.discount,
+        delivery_fee=order.delivery_fee,
+        total=order.total,
+        payment_method=order.payment_method,
+        payment_status=order.payment_status,
+        delivery_date=order.delivery_date.isoformat() if order.delivery_date else None,
+        created_at=order.created_at.isoformat(),
+        confirmed_at=order.confirmed_at.isoformat() if order.confirmed_at else None,
+        delivered_at=order.delivered_at.isoformat() if order.delivered_at else None,
+        items=items
     )
+
+
+@router.post("/wholesale/checkout", response_model=CheckoutResponse)
+async def checkout(
+    request: CheckoutRequest,
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Process wholesale order checkout with Square payment"""
     
-    # 4. Capture payment for this sub-order
-    # TODO: Calculate sub-order amount and capture from payment intent
+    buyer_id = current_user.get("user_id")
     
-    # 5. Check if all sub-orders picked up
-    # TODO: If all complete, mark main order as COMPLETED
+    if not request.items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Order must contain at least one item"
+        )
     
-    return {
-        "ok": True,
-        "message": "Pickup confirmed. Payment captured."
-    }
-
-
-@router.get("/pending-verification/{farm_id}")
-async def get_pending_farm_orders(farm_id: str):
-    """
-    Get orders awaiting verification for a specific farm
-    """
-    orders = await WholesaleOrderDB.get_pending_farm_orders(farm_id)
-    return {"ok": True, "orders": orders}
-
-
-@router.get("/{order_id}")
-async def get_order_details(order_id: int):
-    """
-    Get complete order details with all sub-orders and items
-    """
-    order = await WholesaleOrderDB.get_order(order_id)
-    return {"ok": True, "order": order}
-
-
-# Scheduled tasks (would run via cron/celery)
-async def check_verification_deadlines():
-    """
-    Check for farm verification deadlines and send reminders
-    Run every hour
-    """
-    # TODO: Query orders with approaching deadlines
-    # TODO: Send reminder notifications
-    pass
-
-
-async def auto_decline_expired_verifications():
-    """
-    Auto-decline farm orders that exceeded verification deadline
-    Run every 15 minutes
-    """
-    # TODO: Query sub-orders past deadline with pending status
-    # TODO: Auto-decline and trigger alternative matching
-    pass
+    # Validate payment method
+    valid_methods = ["square", "account", "check"]
+    if request.payment_method not in valid_methods:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid payment method. Must be one of: {', '.join(valid_methods)}"
+        )
+    
+    # Calculate order totals
+    subtotal = 0.0
+    order_items = []
+    
+    for item_request in request.items:
+        product = db.query(ProductSKU).filter(
+            and_(
+                ProductSKU.sku_id == item_request.sku_id,
+                ProductSKU.farm_id == tenant_id,
+                ProductSKU.is_active == True
+            )
+        ).first()
+        
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Product {item_request.sku_id} not found"
+            )
+        
+        if product.quantity_available < item_request.quantity:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Insufficient quantity for {product.name}. Available: {product.quantity_available}"
+            )
+        
+        # Use wholesale price (or 30% discount if not set)
+        unit_price = product.wholesale_price if product.wholesale_price else product.retail_price * 0.7
+        line_total = unit_price * item_request.quantity
+        subtotal += line_total
+        
+        order_items.append({
+            "sku_id": item_request.sku_id,
+            "quantity": item_request.quantity,
+            "unit_price": unit_price,
+            "line_total": line_total,
+            "lot_code": product.lot_code
+        })
+    
+    # Calculate tax and total
+    tax_rate = 0.07  # 7% tax (should be configurable)
+    tax = round(subtotal * tax_rate, 2)
+    delivery_fee = 0.0  # Free delivery for wholesale orders over $100
+    if subtotal < 100:
+        delivery_fee = 15.0
+    
+    total = subtotal + tax + delivery_fee
+    
+    # Process Square payment if method is square
+    payment_status = "pending"
+    payment_transaction_id = None
+    
+    if request.payment_method == "square":
+        if not request.payment_nonce:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Payment nonce required for Square payments"
+            )
+        
+        # TODO: Integrate with Square Payments API
+        # For now, simulate successful payment
+        payment_status = "completed"
+        payment_transaction_id = f"sq_txn_{uuid.uuid4().hex[:16]}"
+        
+        logger.info(f"Square payment processed: {payment_transaction_id} (${total})")
+    
+    elif request.payment_method == "account":
+        payment_status = "pending"  # Farm will approve payment
+        logger.info(f"Account payment requested for buyer {buyer_id} (${total})")
+    
+    elif request.payment_method == "check":
+        payment_status = "pending"  # Farm will confirm check receipt
+        logger.info(f"Check payment requested for buyer {buyer_id} (${total})")
+    
+    # Generate order number
+    order_number = f"WS{datetime.utcnow().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+    
+    # Parse delivery date
+    delivery_date = None
+    if request.delivery_date:
+        try:
+            delivery_date = datetime.fromisoformat(request.delivery_date.replace('Z', '+00:00')).date()
+        except:
+            # Default to 3 days from now
+            delivery_date = date.today() + timedelta(days=3)
+    
+    # Create order
+    order = WholesaleOrder(
+        order_number=order_number,
+        buyer_id=buyer_id,
+        farm_id=tenant_id,
+        status="confirmed" if payment_status == "completed" else "pending",
+        subtotal=subtotal,
+        tax=tax,
+        discount=0.0,
+        delivery_fee=delivery_fee,
+        total=total,
+        payment_method=request.payment_method,
+        payment_status=payment_status,
+        payment_transaction_id=payment_transaction_id,
+        delivery_date=delivery_date,
+        delivery_notes=request.delivery_notes,
+        notes=request.notes,
+        confirmed_at=datetime.utcnow() if payment_status == "completed" else None
+    )
+    db.add(order)
+    db.flush()
+    
+    # Create order items and update inventory
+    for item_data in order_items:
+        order_item = WholesaleOrderItem(
+            order_id=str(order.order_id),
+            sku_id=item_data["sku_id"],
+            quantity=item_data["quantity"],
+            unit_price=item_data["unit_price"],
+            line_total=item_data["line_total"],
+            lot_code=item_data["lot_code"]
+        )
+        db.add(order_item)
+        
+        # Reserve inventory
+        product = db.query(ProductSKU).filter(ProductSKU.sku_id == item_data["sku_id"]).first()
+        if product:
+            product.quantity_reserved += item_data["quantity"]
+            product.quantity_available -= item_data["quantity"]
+    
+    db.commit()
+    db.refresh(order)
+    
+    logger.info(f"Wholesale order created: {order_number} by buyer {buyer_id} (${total})")
+    
+    return CheckoutResponse(
+        order_id=str(order.order_id),
+        order_number=order_number,
+        total=total,
+        payment_status=payment_status,
+        message="Order placed successfully" if payment_status == "completed" else "Order pending payment approval"
+    )

@@ -35,12 +35,9 @@
       else if (params.get('demo') === '0') this.demoMode = false;
       else this.demoMode = false;
 
-      this.loadAuthState();
+      await this.loadAuthState();
       
-      // Auto-login with demo profile if not already logged in
-      if (!this.currentBuyer) {
-        this.createDemoProfile();
-      }
+      // No auto-login - require real authentication
       
       this.setupEventListeners();
       this.setDefaultDeliveryDate();
@@ -186,16 +183,43 @@
       this.deliveryDate = dateStr;
     },
 
-    loadAuthState() {
+    async loadAuthState() {
+      const token = localStorage.getItem(STORAGE_TOKEN);
+      if (!token) {
+        this.currentBuyer = null;
+        return;
+      }
+      
       try {
-        const buyerRaw = localStorage.getItem(STORAGE_BUYER);
-        this.currentBuyer = buyerRaw ? JSON.parse(buyerRaw) : null;
-      } catch {
+        const response = await fetch('/api/wholesale/auth/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          this.currentBuyer = {
+            id: data.buyer_id,
+            businessName: data.business_name,
+            contactName: data.contact_name,
+            email: data.email,
+            buyerType: data.buyer_type,
+            verified: data.verified,
+            isActive: data.is_active,
+            phone: data.phone,
+            postalCode: data.postal_code,
+            province: data.province
+          };
+          this.updateBuyerProfile();
+          this.populateCheckoutForm();
+        } else {
+          // Token invalid, clear it
+          localStorage.removeItem(STORAGE_TOKEN);
+          this.currentBuyer = null;
+        }
+      } catch (error) {
+        console.error('Error loading auth state:', error);
         this.currentBuyer = null;
       }
-
-      this.updateBuyerProfile();
-      this.populateCheckoutForm();
     },
 
     setActiveBuyer({ buyer, token }) {
@@ -278,29 +302,46 @@
       const province = document.getElementById('register-province')?.value?.trim() || '';
       const latitudeRaw = document.getElementById('register-lat')?.value;
       const longitudeRaw = document.getElementById('register-lng')?.value;
-      const latitude = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
-      const longitude = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
-
-      const location = {
-        postalCode,
-        province,
-        latitude: Number.isFinite(latitude) ? latitude : null,
-        longitude: Number.isFinite(longitude) ? longitude : null,
-        country: 'Canada'
-      };
+      const lat = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
+      const lng = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
 
       try {
-        const { response, json } = await this.apiFetch('/api/wholesale/buyers/register', {
+        const response = await fetch('/api/wholesale/auth/register', {
           method: 'POST',
-          body: JSON.stringify({ businessName, contactName, email, password, buyerType, location })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            business_name: businessName,
+            contact_name: contactName,
+            email,
+            password,
+            buyer_type: buyerType,
+            postal_code: postalCode,
+            province,
+            lat,
+            lng
+          })
         });
 
-        if (!response.ok || json?.status !== 'ok') {
-          this.showToast(json?.message || 'Registration failed', 'error');
+        const json = await response.json();
+
+        if (!response.ok) {
+          this.showToast(json?.detail || 'Registration failed', 'error');
           return;
         }
 
-        this.setActiveBuyer({ buyer: json.data.buyer, token: json.data.token });
+        // Store token and buyer data
+        localStorage.setItem(STORAGE_TOKEN, json.token);
+        this.currentBuyer = {
+          id: json.buyer.buyer_id,
+          businessName: json.buyer.business_name,
+          contactName: json.buyer.contact_name,
+          email: json.buyer.email,
+          buyerType: json.buyer.buyer_type,
+          verified: json.buyer.verified,
+          isActive: json.buyer.is_active
+        };
+        this.updateBuyerProfile();
+        this.populateCheckoutForm();
         this.hideAuthModal();
         this.showToast('Account created. Welcome to GreenReach!', 'success');
       } catch (error) {
@@ -314,17 +355,32 @@
       const password = document.getElementById('sign-in-password').value;
 
       try {
-        const { response, json } = await this.apiFetch('/api/wholesale/buyers/login', {
+        const response = await fetch('/api/wholesale/auth/login', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
 
-        if (!response.ok || json?.status !== 'ok') {
-          this.showToast(json?.message || 'Invalid email or password', 'error');
+        const json = await response.json();
+
+        if (!response.ok) {
+          this.showToast(json?.detail || 'Invalid email or password', 'error');
           return;
         }
 
-        this.setActiveBuyer({ buyer: json.data.buyer, token: json.data.token });
+        // Store token and buyer data
+        localStorage.setItem(STORAGE_TOKEN, json.token);
+        this.currentBuyer = {
+          id: json.buyer.buyer_id,
+          businessName: json.buyer.business_name,
+          contactName: json.buyer.contact_name,
+          email: json.buyer.email,
+          buyerType: json.buyer.buyer_type,
+          verified: json.buyer.verified,
+          isActive: json.buyer.is_active
+        };
+        this.updateBuyerProfile();
+        this.populateCheckoutForm();
         this.hideAuthModal();
         this.showToast('Signed in successfully', 'success');
       } catch (error) {
@@ -333,9 +389,21 @@
       }
     },
 
-    signOut() {
+    async signOut() {
+      try {
+        const token = localStorage.getItem(STORAGE_TOKEN);
+        if (token) {
+          await fetch('/api/wholesale/auth/logout', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        }
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+      
       this.currentBuyer = null;
-      this.token = '';
+      localStorage.removeItem(STORAGE_TOKEN);
       localStorage.removeItem(STORAGE_BUYER);
 
       this.updateBuyerProfile();

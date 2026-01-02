@@ -311,3 +311,122 @@ class DonationProgram(Base, TimestampMixin):
     # Dates
     active_since = Column(Date, nullable=False)
     expires_at = Column(Date, nullable=True)
+
+
+class WholesaleBuyer(Base, TimestampMixin):
+    """B2B wholesale buyer account (restaurants, grocery stores, distributors)"""
+    __tablename__ = "wholesale_buyers"
+
+    buyer_id = UUIDColumn(primary_key=True)
+    farm_id = Column(String(36), ForeignKey("farms.farm_id"), nullable=False)
+    
+    # Business details
+    business_name = Column(String(200), nullable=False)
+    contact_name = Column(String(200), nullable=False)
+    email = Column(String(200), nullable=False, unique=True)
+    phone = Column(String(50), nullable=True)
+    
+    # Buyer type
+    buyer_type = Column(String(50), nullable=False)  # restaurant, grocery, institutional, distributor
+    
+    # Location
+    postal_code = Column(String(20), nullable=True)
+    province = Column(String(100), nullable=True)
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
+    
+    # Delivery preferences
+    preferred_delivery_day = Column(String(20), nullable=True)  # monday, tuesday, etc
+    delivery_notes = Column(String(1000), nullable=True)
+    
+    # Account status
+    verified = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    
+    # Relationships
+    credentials = relationship("WholesaleBuyerCredentials", back_populates="buyer", uselist=False)
+    orders = relationship("WholesaleOrder", back_populates="buyer")
+
+
+class WholesaleBuyerCredentials(Base, TimestampMixin):
+    """Secure credentials for wholesale buyer authentication"""
+    __tablename__ = "wholesale_buyer_credentials"
+
+    credential_id = UUIDColumn(primary_key=True)
+    buyer_id = Column(String(36), ForeignKey("wholesale_buyers.buyer_id"), nullable=False, unique=True)
+    
+    # Password (bcrypt hashed)
+    password_hash = Column(String(255), nullable=False)
+    
+    # Security
+    last_login = Column(DateTime, nullable=True)
+    failed_login_attempts = Column(Integer, nullable=False, default=0)
+    locked_until = Column(DateTime, nullable=True)
+    
+    # Relationships
+    buyer = relationship("WholesaleBuyer", back_populates="credentials")
+
+
+class WholesaleOrder(Base, TimestampMixin):
+    """Wholesale B2B order"""
+    __tablename__ = "wholesale_orders"
+
+    order_id = UUIDColumn(primary_key=True)
+    order_number = Column(String(50), nullable=False, unique=True)
+    
+    # Buyer
+    buyer_id = Column(String(36), ForeignKey("wholesale_buyers.buyer_id"), nullable=False)
+    farm_id = Column(String(36), ForeignKey("farms.farm_id"), nullable=False)
+    
+    # Order details
+    status = Column(String(20), nullable=False, default="pending")  # pending, confirmed, packed, delivered, cancelled
+    
+    # Pricing
+    subtotal = Column(Float, nullable=False)
+    tax = Column(Float, nullable=False, default=0.0)
+    discount = Column(Float, nullable=False, default=0.0)
+    delivery_fee = Column(Float, nullable=False, default=0.0)
+    total = Column(Float, nullable=False)
+    
+    # Payment
+    payment_method = Column(String(20), nullable=False)  # square, account, check
+    payment_status = Column(String(20), nullable=False, default="pending")
+    payment_transaction_id = Column(String(100), nullable=True)
+    
+    # Delivery
+    delivery_date = Column(Date, nullable=True)
+    delivery_notes = Column(String(1000), nullable=True)
+    
+    # Timestamps
+    confirmed_at = Column(DateTime, nullable=True)
+    packed_at = Column(DateTime, nullable=True)
+    delivered_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    
+    # Notes
+    notes = Column(String(1000), nullable=True)
+    cancellation_reason = Column(String(500), nullable=True)
+    
+    # Relationships
+    buyer = relationship("WholesaleBuyer", back_populates="orders")
+    items = relationship("WholesaleOrderItem", back_populates="order")
+
+
+class WholesaleOrderItem(Base, TimestampMixin):
+    """Item in a wholesale order"""
+    __tablename__ = "wholesale_order_items"
+
+    item_id = UUIDColumn(primary_key=True)
+    order_id = Column(String(36), ForeignKey("wholesale_orders.order_id"), nullable=False)
+    sku_id = Column(String(36), ForeignKey("product_skus.sku_id"), nullable=False)
+    
+    quantity = Column(Integer, nullable=False)
+    unit_price = Column(Float, nullable=False)  # Wholesale price
+    line_total = Column(Float, nullable=False)
+    
+    # Traceability
+    lot_code = Column(String(100), nullable=True)
+    
+    # Relationships
+    order = relationship("WholesaleOrder", back_populates="items")
+    product = relationship("ProductSKU")
