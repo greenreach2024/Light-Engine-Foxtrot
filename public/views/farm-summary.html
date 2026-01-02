@@ -2014,17 +2014,34 @@
     let envDataCacheTime = 0;
     let envDataInFlight = null;
     const ENV_CACHE_TTL_MS = 30000; // 30 seconds cache
+    let isCloudMode = false; // Track if this is cloud-only (no sensors)
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       console.log('[Farm Summary] DOMContentLoaded fired');
       console.log('[Farm Summary] Chart.js available:', typeof Chart !== 'undefined');
       console.log('[Farm Summary] loadAnomalySparkline defined:', typeof loadAnomalySparkline === 'function');
       console.log('[Farm Summary] loadEnergyForecast defined:', typeof loadEnergyForecast === 'function');
       console.log('[Farm Summary] loadTempForecast defined:', typeof loadTempForecast === 'function');
       
+      // Detect cloud mode (no sensor data available)
+      try {
+        const testResponse = await fetch('/env?hours=1');
+        if (testResponse.status === 403 || testResponse.status === 404) {
+          isCloudMode = true;
+          console.log('[Farm Summary] ☁️ Cloud mode detected - no sensor data available');
+          showCloudModeNotice();
+        }
+      } catch (e) {
+        console.log('[Farm Summary] Could not detect mode:', e);
+      }
+      
       ensureChartCanvas();
-      loadData();
-      loadWeather();
+      if (!isCloudMode) {
+        loadData();
+        loadWeather();
+      } else {
+        loadCloudModeData();
+      }
       updateTimestamp();
       initializeNewPlantingModal();
       initializeMLToggle();
@@ -2039,9 +2056,13 @@
         
         if (typeof Chart !== 'undefined') {
           console.log('[Farm Summary] Chart.js loaded successfully after', chartJsAttempts, 'attempts, initializing ML widgets...');
-          loadAnomalySparkline();
-          loadEnergyForecast();
-          loadTempForecast();
+          if (!isCloudMode) {
+            loadAnomalySparkline();
+            loadEnergyForecast();
+            loadTempForecast();
+          } else {
+            hideMLWidgets();
+          }
         } else if (chartJsAttempts >= maxAttempts) {
           console.error('[Farm Summary] Chart.js failed to load after', maxAttempts, 'attempts (5 seconds)');
           console.error('[Farm Summary] ML widgets will not be available');
@@ -2062,17 +2083,19 @@
       waitForChartJS();
 
   // Refresh data frequently so trends stay fresh (Heat Map also uses 60s)
-  updateInterval = setInterval(loadData, 300000); // Refresh every 5 minutes (300 seconds)
-      setInterval(loadWeather, 300000); // Refresh weather every 5 minutes
+  if (!isCloudMode) {
+    updateInterval = setInterval(loadData, 300000); // Refresh every 5 minutes (300 seconds)
+        setInterval(loadWeather, 300000); // Refresh weather every 5 minutes
+        
+        // Refresh ML widgets every 10 minutes
+        setInterval(() => {
+          loadAnomalySparkline();
+          loadEnergyForecast();
+          loadTempForecast();
+        }, 600000);
+  }
       setInterval(updateTimestamp, 1000);
       setInterval(updateCountdowns, 60000); // Update countdowns every 60 seconds
-      
-      // Refresh ML widgets every 10 minutes
-      setInterval(() => {
-        loadAnomalySparkline();
-        loadEnergyForecast();
-        loadTempForecast();
-      }, 600000);
 
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') closeFullScreen();
@@ -2094,6 +2117,90 @@
         });
       }
     });
+    
+    /**
+     * Show cloud mode notice - this farm is cloud-only (no sensors)
+     */
+    function showCloudModeNotice() {
+      const mainContent = document.querySelector('.main-content');
+      if (!mainContent) return;
+      
+      const notice = document.createElement('div');
+      notice.style.cssText = `
+        background: rgba(59, 130, 246, 0.15);
+        border: 2px solid #3b82f6;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 1rem 2rem;
+        text-align: center;
+        color: #93c5fd;
+      `;
+      notice.innerHTML = `
+        <div style="font-size: 2rem; margin-bottom: 0.5rem;">☁️</div>
+        <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">Cloud Mode - Sales & Management System</div>
+        <div style="font-size: 0.95rem; opacity: 0.9;">
+          This farm instance is configured for sales, inventory, and administration only.
+          <br>Sensor data, environmental controls, and automation features are not available.
+        </div>
+      `;
+      mainContent.insertBefore(notice, mainContent.firstChild);
+    }
+    
+    /**
+     * Hide ML/sensor widgets in cloud mode
+     */
+    function hideMLWidgets() {
+      // Hide sensor-dependent widgets
+      const widgetsToHide = [
+        'anomalySparklineLoading',
+        'energyForecastLoading', 
+        'tempForecastLoading'
+      ];
+      
+      widgetsToHide.forEach(id => {
+        const widget = document.getElementById(id);
+        if (widget && widget.parentElement) {
+          widget.parentElement.style.display = 'none';
+        }
+      });
+      
+      // Hide environment chart section
+      const chartSection = document.querySelector('.scrollable-content');
+      if (chartSection) {
+        const chartContainer = chartSection.querySelector('canvas');
+        if (chartContainer) {
+          chartContainer.closest('.card')?.remove();
+        }
+      }
+    }
+    
+    /**
+     * Load cloud mode data (sales, inventory, admin - no sensors)
+     */
+    async function loadCloudModeData() {
+      console.log('[Farm Summary] Loading cloud mode data (sales/inventory only)...');
+      
+      // Load sales/inventory data from farm sales API
+      try {
+        const response = await fetch('/api/farm-sales/inventory');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Farm Summary] Cloud inventory loaded:', data.inventory?.length, 'products');
+        }
+      } catch (e) {
+        console.log('[Farm Summary] Cloud inventory not available:', e.message);
+      }
+      
+      // Hide sensor-related UI elements
+      const envCard = document.querySelector('#environmentCard');
+      if (envCard) envCard.style.display = 'none';
+      
+      const scheduleCard = document.querySelector('#scheduleCard');
+      if (scheduleCard) scheduleCard.style.display = 'none';
+      
+      const zonesCard = document.querySelector('#zonesCard');
+      if (zonesCard) zonesCard.style.display = 'none';
+    }
     
     /**
      * Populate the zone selector dropdown with available zones
