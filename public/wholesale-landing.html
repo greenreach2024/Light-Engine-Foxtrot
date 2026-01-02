@@ -332,6 +332,20 @@
       overflow: hidden;
     }
 
+    .feature-visual img {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+      z-index: 2;
+    }
+
+    .feature-visual img.active {
+      opacity: 1;
+    }
+
     .feature-visual::before {
       content: '';
       position: absolute;
@@ -778,7 +792,7 @@
         <a href="/GR-wholesale.html" class="btn-primary">Explore Farms →</a>
       </div>
       <div class="feature-visual">
-        <img src="/images/wholesale-portal.png" alt="Wholesale Portal" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+        <img class="farm-image" alt="Farm">
       </div>
     </div>
   </section>
@@ -801,7 +815,7 @@
         <a href="#how-it-works" class="btn-primary">See How →</a>
       </div>
       <div class="feature-visual">
-        <img src="/images/inventory-overview.png" alt="Inventory Overview" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+        <img class="farm-image" alt="Farm">
       </div>
     </div>
   </section>
@@ -824,7 +838,7 @@
         </ul>
       </div>
       <div class="feature-visual">
-        <img src="/images/farm-room-summary.png" alt="Farm Dashboard" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+        <img class="farm-image" alt="Farm">
       </div>
     </div>
   </section>
@@ -1065,6 +1079,85 @@
       
       lastScroll = scrolled;
     });
+
+    // Farm image rotation
+    (function() {
+      const images = [
+        '/images/plant-farm/iGrow.jpg',
+        '/images/plant-farm/IMG_4981.jpeg',
+        '/images/plant-farm/IMG_5244.jpeg',
+        '/images/plant-farm/IMG_5308.jpeg',
+        '/images/plant-farm/IMG_5507.jpeg',
+        '/images/plant-farm/IMG_5522.jpeg',
+        '/images/plant-farm/IMG_5581.jpeg',
+        '/images/plant-farm/IMG_5582.jpeg',
+        '/images/plant-farm/IMG_5663.jpeg',
+        '/images/plant-farm/IMG_5677.jpeg',
+        '/images/plant-farm/IMG_5753.jpeg',
+        '/images/plant-farm/IMG_5900.jpeg',
+        '/images/plant-farm/IMG_6028.jpeg',
+        '/images/plant-farm/IMG_6095.jpeg',
+        '/images/plant-farm/IMG_6162.jpeg',
+        '/images/plant-farm/Lettuce.jpg'
+      ];
+
+      const visualContainers = document.querySelectorAll('.feature-visual');
+      let activeContainers = new Set();
+      const MAX_ACTIVE = 2;
+
+      function getRandomImage() {
+        return images[Math.floor(Math.random() * images.length)];
+      }
+
+      function getRandomContainer() {
+        return visualContainers[Math.floor(Math.random() * visualContainers.length)];
+      }
+
+      function showImage(container) {
+        const img = container.querySelector('.farm-image');
+        
+        img.src = getRandomImage();
+        
+        // Fade in image
+        setTimeout(() => {
+          img.classList.add('active');
+        }, 100);
+
+        // Hold for 3-5 seconds
+        const holdTime = 3000 + Math.random() * 2000;
+        
+        setTimeout(() => {
+          // Fade out image
+          img.classList.remove('active');
+          
+          setTimeout(() => {
+            activeContainers.delete(container);
+            tryShowNext();
+          }, 1000);
+        }, holdTime);
+      }
+
+      function tryShowNext() {
+        if (activeContainers.size >= MAX_ACTIVE) return;
+        
+        let attempts = 0;
+        let container;
+        
+        do {
+          container = getRandomContainer();
+          attempts++;
+        } while (activeContainers.has(container) && attempts < 10);
+        
+        if (!activeContainers.has(container)) {
+          activeContainers.add(container);
+          showImage(container);
+        }
+      }
+
+      // Start the rotation
+      tryShowNext();
+      setInterval(tryShowNext, 2000);
+    })();
   </script>
 
 </body>
