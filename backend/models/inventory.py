@@ -187,6 +187,7 @@ class ProductSKU(Base, TimestampMixin):
     __tablename__ = "product_skus"
 
     sku_id = UUIDColumn(primary_key=True)
+    farm_id = Column(String(36), ForeignKey("farms.farm_id"), nullable=False)
     name = Column(String(200), nullable=False)
     category = Column(String(100), nullable=False)
     variety = Column(String(100), nullable=True)
