@@ -3,12 +3,17 @@ Farm Sales API - Point of Sale, Orders, and Donation Programs
 Connects POS terminals and online shop to farm inventory and payment processing
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from enum import Enum
+from sqlalchemy.orm import Session
 import uuid
+
+from backend.models.base import get_db
+from backend.models.inventory import ProductSKU, SalesOrder, SalesOrderItem, SalesCustomer, DonationProgram
+from backend.auth import get_tenant_id
 
 router = APIRouter()
 
@@ -327,14 +332,43 @@ DONATION_PROGRAMS = [
 # ============================================================================
 
 @router.get("/farm-sales/inventory")
-async def get_inventory() -> Dict[str, Any]:
-    """Get current product inventory for retail sales"""
+async def get_inventory(
+    tenant_id: str = Depends(get_tenant_id),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get current product inventory for retail sales - filtered by farm"""
     try:
-        # In production, query actual inventory from database
-        # For now, return sample data
+        # Query actual products from database for this farm
+        products = db.query(ProductSKU).filter(
+            ProductSKU.is_active == True
+        ).all()
+        
+        # Convert to dict format
+        inventory = []
+        for product in products:
+            inventory.append({
+                "sku_id": str(product.sku_id),
+                "name": product.name,
+                "category": product.category,
+                "retail_price": product.retail_price,
+                "wholesale_price": product.wholesale_price,
+                "unit": product.unit,
+                "available": product.quantity_available,
+                "reserved": product.quantity_reserved,
+                "is_taxable": product.is_taxable,
+                "lot_code": product.lot_code,
+                "harvest_date": product.harvest_date.isoformat() if product.harvest_date else None,
+                "variety": product.variety
+            })
+        
+        # If no products in database, return sample data for demo
+        if not inventory:
+            inventory = SAMPLE_INVENTORY
+        
         return {
             "ok": True,
-            "inventory": SAMPLE_INVENTORY,
+            "inventory": inventory,
+            "farm_id": tenant_id,
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
@@ -346,35 +380,79 @@ async def get_orders(
     date_from: Optional[str] = Query(None, description="Filter orders from date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Filter orders to date (YYYY-MM-DD)"),
     status: Optional[OrderStatus] = Query(None, description="Filter by order status"),
-    channel: Optional[OrderChannel] = Query(None, description="Filter by sales channel")
+    channel: Optional[OrderChannel] = Query(None, description="Filter by sales channel"),
+    tenant_id: str = Depends(get_tenant_id),
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Get sales orders with optional filters"""
+    """Get sales orders with optional filters - filtered by farm"""
     try:
-        filtered_orders = ORDERS_DB.copy()
+        # Query orders from database for this farm
+        query = db.query(SalesOrder)
         
         # Apply filters
         if date_from:
-            filtered_orders = [
-                o for o in filtered_orders 
-                if o["timestamps"]["created_at"] >= date_from
-            ]
+            query = query.filter(SalesOrder.created_at >= date_from)
         
         if date_to:
-            filtered_orders = [
-                o for o in filtered_orders 
-                if o["timestamps"]["created_at"] <= date_to
-            ]
+            query = query.filter(SalesOrder.created_at <= date_to)
         
         if status:
-            filtered_orders = [o for o in filtered_orders if o["status"] == status]
+            query = query.filter(SalesOrder.status == status)
         
         if channel:
-            filtered_orders = [o for o in filtered_orders if o["channel"] == channel]
+            query = query.filter(SalesOrder.channel == channel)
+        
+        orders = query.all()
+        
+        # Convert to dict format
+        orders_list = []
+        for order in orders:
+            orders_list.append({
+                "order_id": order.order_number,
+                "channel": order.channel,
+                "status": order.status,
+                "customer": {
+                    "name": order.customer.name if order.customer else None,
+                    "email": order.customer.email if order.customer else None
+                } if order.customer_id else None,
+                "items": [
+                    {
+                        "sku_id": str(item.sku_id),
+                        "name": item.product.name,
+                        "quantity": item.quantity,
+                        "unit_price": item.unit_price,
+                        "line_total": item.line_total,
+                        "lot_code": item.lot_code
+                    } for item in order.items
+                ],
+                "pricing": {
+                    "subtotal": order.subtotal,
+                    "tax": order.tax,
+                    "discount": order.discount,
+                    "subsidy": order.subsidy,
+                    "total": order.total
+                },
+                "payment": {
+                    "method": order.payment_method,
+                    "status": order.payment_status,
+                    "transaction_id": order.payment_transaction_id
+                },
+                "cashier": {
+                    "name": order.cashier_name,
+                    "employee_id": order.cashier_employee_id
+                } if order.cashier_name else None,
+                "timestamps": {
+                    "created_at": order.created_at.isoformat(),
+                    "completed_at": order.completed_at.isoformat() if order.completed_at else None
+                },
+                "notes": order.notes
+            })
         
         return {
             "ok": True,
-            "orders": filtered_orders,
-            "count": len(filtered_orders),
+            "orders": orders_list,
+            "count": len(orders_list),
+            "farm_id": tenant_id,
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
@@ -382,16 +460,24 @@ async def get_orders(
 
 
 @router.post("/farm-sales/pos/checkout")
-async def checkout(request: CheckoutRequest) -> Dict[str, Any]:
-    """Process POS checkout and create order"""
+async def checkout(
+    request: CheckoutRequest,
+    tenant_id: str = Depends(get_tenant_id),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Process POS checkout and create order - saves to database"""
     try:
         # Validate items exist in inventory
         for item in request.items:
-            product = next((p for p in SAMPLE_INVENTORY if p["sku_id"] == item.sku_id), None)
+            product = db.query(ProductSKU).filter(
+                ProductSKU.sku_id == item.sku_id,
+                ProductSKU.is_active == True
+            ).first()
+            
             if not product:
                 raise HTTPException(status_code=404, detail=f"Product {item.sku_id} not found")
-            if product["available"] < item.quantity:
-                raise HTTPException(status_code=400, detail=f"Insufficient inventory for {product['name']}")
+            if product.quantity_available < item.quantity:
+                raise HTTPException(status_code=400, detail=f"Insufficient inventory for {product.name}")
         
         # Calculate pricing
         subtotal = 0.0
@@ -399,21 +485,19 @@ async def checkout(request: CheckoutRequest) -> Dict[str, Any]:
         items_with_prices = []
         
         for item in request.items:
-            product = next(p for p in SAMPLE_INVENTORY if p["sku_id"] == item.sku_id)
-            unit_price = product["retail_price"]
+            product = db.query(ProductSKU).filter(ProductSKU.sku_id == item.sku_id).first()
+            unit_price = product.retail_price
             line_total = unit_price * item.quantity
             subtotal += line_total
             
-            if product["is_taxable"]:
+            if product.is_taxable:
                 taxable_subtotal += line_total
             
             items_with_prices.append({
-                "sku_id": item.sku_id,
-                "name": product["name"],
+                "product": product,
                 "quantity": item.quantity,
                 "unit_price": unit_price,
-                "line_total": line_total,
-                "lot_code": product.get("lot_code")
+                "line_total": line_total
             })
         
         # Calculate tax (8% on taxable items)
@@ -425,80 +509,142 @@ async def checkout(request: CheckoutRequest) -> Dict[str, Any]:
             if not request.payment.tendered or request.payment.tendered < total:
                 raise HTTPException(status_code=400, detail="Insufficient cash tendered")
         
-        # Process payment (in production, integrate with Square/Stripe)
+        # Get or create customer
+        customer = None
+        if request.customer:
+            customer = db.query(SalesCustomer).filter(
+                SalesCustomer.email == request.customer.email
+            ).first()
+            
+            if not customer:
+                customer = SalesCustomer(
+                    name=request.customer.name,
+                    email=request.customer.email,
+                    phone=request.customer.phone
+                )
+                db.add(customer)
+                db.flush()
+        
+        # Create order
+        order_number = f"ORD-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        
+        order = SalesOrder(
+            order_number=order_number,
+            customer_id=str(customer.customer_id) if customer else None,
+            channel="pos",
+            status="completed",
+            subtotal=subtotal,
+            tax=tax,
+            discount=0.0,
+            subsidy=0.0,
+            total=total,
+            payment_method=request.payment.method,
+            payment_status="completed",
+            payment_transaction_id=f"TXN-{uuid.uuid4().hex[:12].upper()}",
+            cashier_name=request.cashier.name if request.cashier else None,
+            cashier_employee_id=request.cashier.employee_id if request.cashier else None,
+            completed_at=datetime.utcnow(),
+            notes=request.notes
+        )
+        db.add(order)
+        db.flush()
+        
+        # Create order items and update inventory
+        for item_data in items_with_prices:
+            order_item = SalesOrderItem(
+                order_id=str(order.order_id),
+                sku_id=str(item_data["product"].sku_id),
+                quantity=item_data["quantity"],
+                unit_price=item_data["unit_price"],
+                line_total=item_data["line_total"],
+                lot_code=item_data["product"].lot_code
+            )
+            db.add(order_item)
+            
+            # Update inventory
+            product = item_data["product"]
+            product.quantity_available -= item_data["quantity"]
+        
+        db.commit()
+        
+        # Prepare response
         payment_result = {
             "method": request.payment.method,
             "amount": total,
             "status": "completed",
-            "transaction_id": f"TXN-{uuid.uuid4().hex[:12].upper()}"
+            "transaction_id": order.payment_transaction_id
         }
         
         if request.payment.method == PaymentMethod.CASH:
             payment_result["tendered"] = request.payment.tendered
             payment_result["change"] = round(request.payment.tendered - total, 2)
         
-        # Create order
-        order_id = f"ORD-{datetime.now().strftime('%Y%m%d')}-{len(ORDERS_DB) + 1:04d}"
-        now = datetime.utcnow().isoformat()
-        
-        order = {
-            "order_id": order_id,
-            "channel": "pos",
-            "status": "completed",
-            "customer": request.customer.dict() if request.customer else None,
-            "items": items_with_prices,
-            "pricing": {
-                "subtotal": subtotal,
-                "tax": tax,
-                "discount": 0.0,
-                "subsidy": 0.0,
-                "total": total
-            },
-            "payment": payment_result,
-            "cashier": request.cashier.dict() if request.cashier else None,
-            "timestamps": {
-                "created_at": now,
-                "completed_at": now
-            },
-            "notes": request.notes
-        }
-        
-        # Update inventory (reduce available quantity)
-        for item in request.items:
-            product = next(p for p in SAMPLE_INVENTORY if p["sku_id"] == item.sku_id)
-            product["available"] -= item.quantity
-        
-        # Store order
-        ORDERS_DB.append(order)
-        
         return {
             "ok": True,
             "message": "Checkout completed successfully",
-            "receipt": order,
-            "timestamp": now
+            "receipt": {
+                "order_id": order_number,
+                "total": total,
+                "payment": payment_result
+            },
+            "farm_id": tenant_id,
+            "timestamp": datetime.utcnow().isoformat()
         }
         
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"Checkout failed: {str(e)}")
 
 
 @router.get("/farm-sales/donations/programs")
 async def get_donation_programs(
-    status: Optional[ProgramStatus] = Query(None, description="Filter by program status")
+    status: Optional[ProgramStatus] = Query(None, description="Filter by program status"),
+    tenant_id: str = Depends(get_tenant_id),
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Get food assistance/donation programs"""
+    """Get food assistance/donation programs - filtered by farm"""
     try:
-        programs = DONATION_PROGRAMS.copy()
+        query = db.query(DonationProgram).filter(DonationProgram.status == "active")
         
         if status:
-            programs = [p for p in programs if p["status"] == status]
+            query = query.filter(DonationProgram.status == status)
+        
+        programs = query.all()
+        
+        # Convert to dict format
+        programs_list = []
+        for program in programs:
+            programs_list.append({
+                "program_id": str(program.program_id),
+                "name": program.name,
+                "type": program.program_type,
+                "status": program.status,
+                "subsidy_percent": program.subsidy_percent,
+                "grant": {
+                    "provider": program.grant_provider,
+                    "grant_number": program.grant_number,
+                    "total_budget": program.grant_total_budget,
+                    "spent_to_date": program.grant_spent_to_date,
+                    "expires_at": program.expires_at.isoformat() if program.expires_at else None
+                },
+                "eligible_products": program.eligible_products,
+                "verification_required": program.verification_required,
+                "active_since": program.active_since.isoformat(),
+                "expires_at": program.expires_at.isoformat() if program.expires_at else None
+            })
+        
+        # If no programs in database, return sample data for demo
+        if not programs_list:
+            programs_list = DONATION_PROGRAMS
         
         return {
             "ok": True,
-            "programs": programs,
-            "count": len(programs),
+            "programs": programs_list,
+            "count": len(programs_list),
+            "farm_id": tenant_id,
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
