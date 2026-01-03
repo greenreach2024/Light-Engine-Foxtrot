@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import pg from 'pg';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
+import { sendEmail } from '../lib/email-service.js';
 
 const router = express.Router();
 
@@ -194,13 +195,59 @@ router.post('/buyers/forgot-password', authRateLimiter, async (req, res) => {
       [buyer.id, token, expiresAt]
     );
 
-    // TODO: Send email with reset link
-    // For now, log the token (in production, this should be emailed)
+    // Send password reset email
     const resetLink = `${process.env.WHOLESALE_FRONTEND_URL || 'https://greenreachgreens.com'}/reset-password?token=${token}`;
-    console.log(`[Password Reset] Token for ${buyer.email}: ${resetLink}`);
     
-    // In production, integrate with AWS SES, SendGrid, or Mailgun:
-    // await sendPasswordResetEmail(buyer.email, buyer.contact_name, resetLink);
+    try {
+      await sendEmail({
+        to: buyer.email,
+        subject: 'Reset Your GreenReach Password',
+        text: `Hi ${buyer.contact_name},\n\nYou requested to reset your password for your GreenReach wholesale buyer account.\n\nClick the link below to reset your password:\n${resetLink}\n\nThis link will expire in 1 hour.\n\nIf you didn't request this, please ignore this email.\n\nBest regards,\nThe GreenReach Team`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #2e7d32; color: white; padding: 20px; text-align: center; }
+    .content { padding: 20px; background: #f9f9f9; }
+    .button { display: inline-block; padding: 12px 24px; background: #2e7d32; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0; }
+    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Reset Your Password</h1>
+    </div>
+    <div class="content">
+      <p>Hi ${buyer.contact_name},</p>
+      <p>You requested to reset your password for your GreenReach wholesale buyer account.</p>
+      <p>Click the button below to reset your password:</p>
+      <p style="text-align: center;">
+        <a href="${resetLink}" class="button">Reset Password</a>
+      </p>
+      <p>Or copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; color: #666;">${resetLink}</p>
+      <p><strong>This link will expire in 1 hour.</strong></p>
+      <p>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
+      <p>Best regards,<br>The GreenReach Team</p>
+    </div>
+    <div class="footer">
+      <p>GreenReach Wholesale Platform</p>
+    </div>
+  </div>
+</body>
+</html>
+        `
+      });
+
+      console.log(`[Password Reset] Email sent to ${buyer.email}`);
+    } catch (emailError) {
+      console.error(`[Password Reset] Failed to send email to ${buyer.email}:`, emailError);
+      // Continue anyway - token is stored in database
+    }
 
     return res.json({ 
       status: 'ok', 

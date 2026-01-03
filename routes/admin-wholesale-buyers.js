@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
+import { sendEmail } from '../lib/email-service.js';
 
 const router = express.Router();
 
@@ -180,8 +181,64 @@ router.post('/buyers/:id/reset-password', async (req, res) => {
 
     console.log(`[Admin] Reset password for buyer ID ${id} (${buyer.email})`);
 
-    // TODO: Send email with temporary password
-    // await sendPasswordResetEmail(buyer.email, buyer.contact_name, password);
+    // Send email with temporary password
+    try {
+      await sendEmail({
+        to: buyer.email,
+        subject: 'Your GreenReach Password Has Been Reset',
+        text: `Hi ${buyer.contact_name},\n\nYour GreenReach wholesale buyer account password has been reset by an administrator.\n\nYour temporary password is: ${password}\n\nPlease log in and change your password immediately.\n\nLogin at: ${process.env.WHOLESALE_FRONTEND_URL || 'https://greenreachgreens.com'}/wholesale\n\nBest regards,\nThe GreenReach Team`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #2e7d32; color: white; padding: 20px; text-align: center; }
+    .content { padding: 20px; background: #f9f9f9; }
+    .password-box { background: white; padding: 15px; margin: 20px 0; border-left: 4px solid #2e7d32; font-family: monospace; font-size: 18px; }
+    .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
+    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Password Reset</h1>
+    </div>
+    <div class="content">
+      <p>Hi ${buyer.contact_name},</p>
+      <p>Your GreenReach wholesale buyer account password has been reset by an administrator.</p>
+      
+      <div class="password-box">
+        <strong>Temporary Password:</strong><br>
+        ${password}
+      </div>
+      
+      <div class="warning">
+        <strong>⚠️ Important:</strong> Please log in and change your password immediately for security.
+      </div>
+      
+      <p>Login at: <a href="${process.env.WHOLESALE_FRONTEND_URL || 'https://greenreachgreens.com'}/wholesale">${process.env.WHOLESALE_FRONTEND_URL || 'https://greenreachgreens.com'}/wholesale</a></p>
+      
+      <p>If you didn't request this password reset, please contact support immediately.</p>
+      
+      <p>Best regards,<br>The GreenReach Team</p>
+    </div>
+    <div class="footer">
+      <p>GreenReach Wholesale Platform</p>
+    </div>
+  </div>
+</body>
+</html>
+        `
+      });
+
+      console.log(`[Admin] Password reset email sent to ${buyer.email}`);
+    } catch (emailError) {
+      console.error(`[Admin] Failed to send email to ${buyer.email}:`, emailError);
+      // Continue - admin still gets the password
+    }
 
     return res.json({
       status: 'ok',
