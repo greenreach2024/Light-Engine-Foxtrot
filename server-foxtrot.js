@@ -98,7 +98,7 @@ import wholesaleAdminRouter from './routes/wholesale-admin.js';
 import cropPricingRouter from './routes/crop-pricing.js';
 import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
 import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
-import wholesaleBuyersRouter from './greenreach-central/routes/wholesale.js';
+import wholesaleBuyersRouter from './routes/wholesale-buyers.js';
 import wholesaleWebhooksRouter from './routes/wholesale/webhooks.js';
 import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-webhooks.js';
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
