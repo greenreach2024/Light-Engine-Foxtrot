@@ -4700,7 +4700,29 @@ function buildAiAdvisory(rooms, legacyEnv) {
 
 function applyCorsHeaders(req, res, methods = 'GET,POST,PATCH,DELETE,OPTIONS') {
   const origin = req.headers?.origin;
-  if (origin) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // Allowed origins for production
+  const ALLOWED_ORIGINS = [
+    'http://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
+    'http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'https://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
+    'https://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'http://greenreachgreens.com',
+    'https://greenreachgreens.com',
+    'http://www.greenreachgreens.com',
+    'https://www.greenreachgreens.com',
+    'http://urbanyeild.ca',
+    'https://urbanyeild.ca',
+    'http://www.urbanyeild.ca',
+    'https://www.urbanyeild.ca',
+    'http://localhost:8091',
+    'http://127.0.0.1:8091',
+  ];
+  
+  // Check if origin is allowed
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    // Whitelisted origin
     res.setHeader('Access-Control-Allow-Origin', origin);
     const existingVary = res.getHeader('Vary');
     if (existingVary) {
@@ -4710,8 +4732,18 @@ function applyCorsHeaders(req, res, methods = 'GET,POST,PATCH,DELETE,OPTIONS') {
     } else {
       res.setHeader('Vary', 'Origin');
     }
-  } else {
+  } else if (!origin) {
+    // No origin (same-origin or server-to-server)
     res.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (!isProduction) {
+    // Development mode - allow all
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else {
+    // Production - reject unauthorized origin
+    console.error('[CORS] applyCorsHeaders REJECTED unauthorized origin:', origin);
+    // Don't set CORS headers - browser will block the request
+    return;
   }
 
   res.setHeader('Access-Control-Allow-Methods', methods);
@@ -4721,6 +4753,7 @@ function applyCorsHeaders(req, res, methods = 'GET,POST,PATCH,DELETE,OPTIONS') {
     ? requestedHeaders
     : 'Content-Type, Authorization, X-Requested-With';
   res.setHeader('Access-Control-Allow-Headers', allowHeaders);
+  res.setHeader('Access-Control-Max-Age', '600');
 }
 
 function setPreAutomationCors(req, res) {
