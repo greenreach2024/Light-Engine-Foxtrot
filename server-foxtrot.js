@@ -13713,15 +13713,30 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
       });
     }
 
-    const token = crypto.randomBytes(32).toString('hex');
+    // Generate JWT token
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtToken = jwt.sign(
+      {
+        farmId: farm.farm_id,
+        email: user.email,
+        role: user.role || 'admin',
+        userId: user.user_id
+      },
+      jwtSecret,
+      { expiresIn: '24h' }
+    );
+
     const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
+    // Also maintain session storage for backward compatibility
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    
     if (!global.farmAdminSessions) {
       global.farmAdminSessions = new Map();
     }
 
     const session = {
-      token,
+      token: sessionToken,
       farmId: farm.farm_id,
       email: user.email,
       role: user.role || 'admin',
@@ -13729,7 +13744,7 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
       expiresAt: sessionExpiry
     };
 
-    global.farmAdminSessions.set(token, session);
+    global.farmAdminSessions.set(sessionToken, session);
 
     await pool.query('UPDATE users SET last_login = NOW() WHERE user_id = $1', [user.user_id]);
 
@@ -13746,7 +13761,8 @@ app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
 
     return res.json({
       status: 'success',
-      token,
+      token: jwtToken,
+      sessionToken: sessionToken,
       farmId: farm.farm_id,
       farmName: farm.name,
       email: user.email,
