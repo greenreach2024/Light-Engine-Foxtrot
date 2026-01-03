@@ -16085,9 +16085,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Wholesale portal route - serves GreenReach branded interface with produce imagery
+// Wholesale landing page route - marketing page with features and signup
 app.get('/wholesale', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'GR-wholesale.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'wholesale-landing.html'));
 });
 
 // Wholesale portals are standalone and served by GreenReach Central, not Foxtrot.
