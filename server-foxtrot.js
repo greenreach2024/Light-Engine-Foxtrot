@@ -98,6 +98,7 @@ import wholesaleAdminRouter from './routes/wholesale-admin.js';
 import cropPricingRouter from './routes/crop-pricing.js';
 import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
 import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
+import wholesaleBuyersRouter from './greenreach-central/routes/wholesale.js';
 import wholesaleWebhooksRouter from './routes/wholesale/webhooks.js';
 import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-webhooks.js';
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
@@ -9715,6 +9716,17 @@ app.use('/api/wholesale/fulfillment', wholesaleFulfillmentRouter);
  */
 app.use('/api/wholesale/catalog', wholesaleCatalogRouter);
 app.use('/api/wholesale/checkout', wholesaleCheckoutRouter);
+
+/**
+ * GreenReach: Wholesale Buyer Authentication and Management
+ * - POST /api/wholesale/buyers/register: Register new wholesale buyer account
+ * - POST /api/wholesale/buyers/login: Authenticate buyer and issue JWT
+ * - POST /api/wholesale/buyers/logout: Invalidate buyer session
+ * - GET /api/wholesale/buyers/me: Get current buyer profile
+ * - PUT /api/wholesale/buyers/profile: Update buyer preferences
+ * - GET /api/wholesale/buyers/search: Search for buyers (admin)
+ */
+app.use('/api/wholesale', wholesaleBuyersRouter);
 
 /**
  * GreenReach: Webhook and Payment Reconciliation
