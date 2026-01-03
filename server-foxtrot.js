@@ -105,6 +105,7 @@ import wholesaleSLAPoliciesRouter from './routes/wholesale/sla-policies.js';
 import wholesaleNetworkRouter from './routes/wholesale/network.js';
 import wholesaleOrdersRouter from './routes/wholesale-orders.js';
 import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.js';
+import activityHubOrdersRouter from './routes/activity-hub-orders.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
 import emailRouter from './server/routes/email-routes.js';
@@ -9743,6 +9744,19 @@ app.use('/api/wholesale/network', wholesaleNetworkRouter);
  * - GET /api/wholesale/orders/:order_id: Complete order details
  */
 app.use('/api/wholesale/orders', wholesaleOrdersRouter);
+
+/**
+ * Activity Hub Orders (Farm Workflow)
+ * Simplified order response API for iPad Activity Hub interface
+ * - GET /api/activity-hub/orders/pending: Get farm's pending orders
+ * - GET /api/activity-hub/orders/:orderId: Get order details
+ * - POST /api/activity-hub/orders/:orderId/accept: Accept order
+ * - POST /api/activity-hub/orders/:orderId/modify: Modify quantities
+ * - POST /api/activity-hub/orders/:orderId/decline: Decline order
+ * - POST /api/activity-hub/orders/:orderId/pick: Start picking (generate lot codes)
+ * - POST /api/activity-hub/orders/:orderId/pack: Mark as packed (generate label)
+ */
+app.use('/api/activity-hub/orders', activityHubOrdersRouter);
 
 /**
  * Farm Performance Analytics (GreenReach Central)

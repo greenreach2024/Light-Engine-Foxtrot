@@ -31,7 +31,7 @@ import { startHealthCheckService } from './services/healthCheck.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
-import deadlineMonitor from '../services/deadline-monitor.js';
+// import deadlineMonitor from '../services/deadline-monitor.js'; // Not available in standalone deployment
 import logger from './utils/logger.js';
 
 // Load environment variables
@@ -207,9 +207,9 @@ async function startServer() {
       startHealthCheckService(app);
       startSyncMonitor(app);
       
-      // Start deadline monitor for wholesale orders
-      logger.info('Starting deadline monitor service...');
-      deadlineMonitor.start();
+      // Start deadline monitor for wholesale orders (disabled in standalone deployment)
+      // logger.info('Starting deadline monitor service...');
+      // deadlineMonitor.start();
     } else {
       logger.warn('Skipping background services (database not ready)');
     }

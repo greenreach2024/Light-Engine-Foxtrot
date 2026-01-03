@@ -111,7 +111,7 @@ class WholesaleNotificationService {
           </table>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.appUrl}/LE-wholesale-orders.html?order=${order.id}" class="button">
+            <a href="${this.appUrl}/views/tray-inventory.html?openOrder=${order.id}" class="button">
               View & Respond to Order →
             </a>
           </div>
@@ -154,7 +154,7 @@ ${subOrder.items.map(item =>
   `- ${item.product_name}: ${item.quantity} ${item.unit} @ $${item.price_per_unit.toFixed(2)}`
 ).join('\n')}
 
-RESPOND NOW: ${this.appUrl}/LE-wholesale-orders.html?order=${order.id}
+RESPOND NOW: ${this.appUrl}/views/tray-inventory.html?openOrder=${order.id}
 
 You can:
 - Accept (confirm fulfillment)

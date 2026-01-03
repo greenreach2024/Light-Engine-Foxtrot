@@ -5,7 +5,9 @@
  * Each farm sub-order gets its own Square payment with broker fee.
  */
 
-import { Client as SquareClient, Environment } from 'square';
+// CommonJS module - use default import
+import squarePkg from 'square';
+const { Client: SquareClient, Environment } = squarePkg;
 import crypto from 'crypto';
 import { getBatchFarmSquareCredentials } from './squareCredentials.js';
 

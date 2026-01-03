@@ -242,9 +242,19 @@
         const alertDiv = document.getElementById('alert');
         const loginButton = document.getElementById('login-button');
         const debugLogEl = document.getElementById('debug-log');
+        
         // Check if already logged in
         if (localStorage.getItem('admin_token')) {
             window.location.href = '/GR-central-admin.html';
+        }
+
+        // Demo mode detection (S3 static hosting or demo domain)
+        const isDemoMode = window.location.hostname.includes('s3-website') || 
+                          window.location.hostname.includes('amazonaws.com') ||
+                          window.location.search.includes('demo=true');
+
+        if (isDemoMode) {
+            console.log('🎭 Demo mode detected - enabling simplified authentication');
         }
 
         form.addEventListener('submit', async (e) => {
@@ -259,6 +269,32 @@
             loginButton.innerHTML = '<span class="loading-spinner"></span>Authenticating...';
             hideAlert();
 
+            // DEMO MODE: Client-side authentication for static hosting
+            if (isDemoMode) {
+                // Check demo credentials
+                if (email === 'admin@greenreach.com' && password === 'Admin2025!') {
+                    // Create demo token
+                    const demoToken = 'demo-admin-token-' + Date.now();
+                    
+                    localStorage.setItem('admin_token', demoToken);
+                    localStorage.setItem('admin_email', email);
+                    localStorage.setItem('admin_name', 'Demo Administrator');
+                    
+                    showAlert('Login successful! Redirecting...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = '/GR-central-admin.html';
+                    }, 500);
+                    return;
+                } else {
+                    showAlert('Invalid credentials. Use: admin@greenreach.com / Admin2025!', 'error');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = 'Login to Admin Portal';
+                    return;
+                }
+            }
+
+            // PRODUCTION MODE: Server-side authentication
             try {
                 const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
                     method: 'POST',

@@ -11,3 +11,9 @@ coverage/
 
 # Local-dev runtime state (do not commit)
 data/network-farms.json
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+.db-password
