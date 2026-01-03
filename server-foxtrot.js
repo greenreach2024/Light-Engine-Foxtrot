@@ -548,13 +548,56 @@ function loadIndexCharlieHtml() {
   }
 }
 
-// --- CORS guardrail: always answer OPTIONS and echo request headers ---
-app.use((req,res,next)=>{
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods','GET,POST,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Max-Age','600');
+// --- CORS Security: Whitelist-based origin validation ---
+// This middleware runs on ALL requests and enforces CORS policy
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // Allowed origins for production
+  const ALLOWED_ORIGINS = [
+    'http://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
+    'http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'https://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
+    'https://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'http://greenreachgreens.com',
+    'https://greenreachgreens.com',
+    'http://www.greenreachgreens.com',
+    'https://www.greenreachgreens.com',
+    'http://urbanyeild.ca',
+    'https://urbanyeild.ca',
+    'http://www.urbanyeild.ca',
+    'https://www.urbanyeild.ca',
+    'http://localhost:8091',
+    'http://127.0.0.1:8091',
+  ];
+  
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    // Whitelisted origin
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else if (!origin) {
+    // No origin (same-origin or server-to-server)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (!isProduction) {
+    // Development: allow all
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else {
+    // Production: reject unauthorized origin (don't set CORS headers)
+    console.error('[CORS] Global middleware REJECTED unauthorized origin:', origin);
+    // Don't set Access-Control-Allow-Origin - browser will block
+    if (req.method === 'OPTIONS') {
+      return res.status(403).json({ error: 'Forbidden', message: 'Origin not allowed' });
+    }
+    // For non-OPTIONS, continue but don't set CORS headers
+    return next();
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '600');
+  
   if (req.method === 'OPTIONS') return res.status(204).end();
   next();
 });
