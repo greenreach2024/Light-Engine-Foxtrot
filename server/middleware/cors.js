@@ -23,22 +23,21 @@ export function setCorsHeaders(req, res, next) {
   // Check if origin is in allowed list
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '600');
   } else if (!origin || process.env.NODE_ENV !== 'production') {
     // Allow requests with no origin (same-origin) or in development
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Max-Age', '600');
   } else {
-    // Production: reject unknown origins
-    console.warn('[CORS] Rejected request from origin:', origin);
+    // Production: reject unknown origins by not setting CORS headers
+    console.warn('[CORS] Rejected request from unauthorized origin:', origin);
+    return res.status(403).json({ error: 'Forbidden', message: 'Origin not allowed' });
   }
-  
-  // Allow common HTTP methods
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  
-  // Allow common headers
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
-  // Allow credentials (cookies, auth headers)
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {

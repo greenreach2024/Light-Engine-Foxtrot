@@ -67,6 +67,8 @@ import Datastore from 'nedb-promises';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import validator from 'validator';
+import rateLimit from 'express-rate-limit';
 import net from 'node:net';
 import mqtt from 'mqtt';
 import AutomationRulesEngine from './lib/automation-engine.js';
@@ -164,7 +166,7 @@ app.use(helmet({
       upgradeInsecureRequests: null, // Disable upgrade-insecure-requests for HTTP-only deployments
     },
   },
-  hsts: false, // Disable HSTS for HTTP-only deployments
+  hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
   noSniff: true,
   referrerPolicy: { policy: 'same-origin' },
   xssFilter: true,
@@ -173,7 +175,7 @@ app.use(helmet({
 
 console.log('[Security] Helmet.js security headers enabled');
 if (isProduction) {
-  console.log('[Security] HSTS enabled (maxAge: 1 year)');
+  console.log('[Security] HSTS enabled (maxAge: 1 year, includeSubDomains, preload)');
 }
 
 // Security Configuration
@@ -13591,7 +13593,21 @@ app.get('/api/admin/analytics/aggregate', adminAuthMiddleware, asyncHandler(asyn
  * Farm admin login endpoint
  * DEMO MODE: Bypasses authentication when DEMO_MODE=true
  */
-app.post('/api/farm/auth/login', asyncHandler(async (req, res) => {
+
+// Rate limiter for login endpoint: 5 attempts per 15 minutes
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 login attempts per window per IP
+  message: { status: 'error', message: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    console.log('[farm-auth] Rate limit exceeded for IP:', req.ip);
+    res.status(429).json({ status: 'error', message: 'Too many login attempts. Please try again in 15 minutes.' });
+  }
+});
+
+app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res) => {
   console.log('[farm-auth] POST /api/farm/auth/login called');
   const { farmId, email, password } = req.body;
   

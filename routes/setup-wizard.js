@@ -5,6 +5,7 @@
 
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import validator from 'validator';
 
 const router = express.Router();
 
@@ -116,9 +117,9 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
     }
 
     const farmId = req.farmId;
-    const { timezone, business_hours, certifications } = req.body;
+    let { farmName, location, farmSize, timezone, cropTypes, business_hours, certifications } = req.body;
 
-    // Validate input
+    // Validate and sanitize inputs
     if (!timezone) {
       return res.status(400).json({ 
         success: false, 
@@ -126,21 +127,60 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
       });
     }
 
+    // Sanitize text inputs to prevent XSS
+    if (farmName) farmName = validator.escape(validator.trim(farmName));
+    if (location) location = validator.escape(validator.trim(location));
+    if (farmSize) farmSize = validator.escape(validator.trim(farmSize));
+    
+    // Sanitize crop types array
+    if (cropTypes && Array.isArray(cropTypes)) {
+      cropTypes = cropTypes.map(crop => validator.escape(validator.trim(crop)));
+    }
+
+    // Build update query dynamically based on provided fields
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (farmName) {
+      updates.push(`name = $${paramCount++}`);
+      values.push(farmName);
+    }
+    if (location) {
+      updates.push(`location = $${paramCount++}`);
+      values.push(location);
+    }
+    if (farmSize) {
+      updates.push(`farm_size = $${paramCount++}`);
+      values.push(farmSize);
+    }
+    if (timezone) {
+      updates.push(`timezone = $${paramCount++}`);
+      values.push(timezone);
+    }
+    if (cropTypes) {
+      updates.push(`crop_types = $${paramCount++}`);
+      values.push(JSON.stringify(cropTypes));
+    }
+    if (business_hours) {
+      updates.push(`business_hours = $${paramCount++}`);
+      values.push(JSON.stringify(business_hours));
+    }
+    if (certifications) {
+      updates.push(`certifications = $${paramCount++}`);
+      values.push(JSON.stringify(certifications));
+    }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(farmId);
+
     // Update farm profile
     const result = await pool.query(
       `UPDATE farms 
-       SET timezone = $1, 
-           business_hours = $2, 
-           certifications = $3,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE farm_id = $4
+       SET ${updates.join(', ')}
+       WHERE farm_id = $${paramCount}
        RETURNING farm_id, name, timezone, business_hours, certifications`,
-      [
-        timezone,
-        business_hours ? JSON.stringify(business_hours) : null,
-        certifications ? JSON.stringify(certifications) : null,
-        farmId
-      ]
+      values
     );
 
     if (result.rows.length === 0) {
@@ -188,7 +228,7 @@ router.post('/rooms', authenticateToken, async (req, res) => {
     }
 
     const farmId = req.farmId;
-    const { rooms } = req.body;
+    let { rooms } = req.body;
 
     // Validate input
     if (!rooms || !Array.isArray(rooms) || rooms.length === 0) {
@@ -198,15 +238,18 @@ router.post('/rooms', authenticateToken, async (req, res) => {
       });
     }
 
-    // Validate each room
-    for (const room of rooms) {
+    // Validate and sanitize each room
+    rooms = rooms.map(room => {
       if (!room.name) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Room name is required' 
-        });
+        throw new Error('Room name is required');
       }
-    }
+      return {
+        name: validator.escape(validator.trim(room.name)),
+        type: room.type ? validator.escape(validator.trim(room.type)) : null,
+        capacity: room.capacity || null,
+        description: room.description ? validator.escape(validator.trim(room.description)) : null
+      };
+    });
 
     const client = await pool.connect();
     try {
@@ -222,9 +265,9 @@ router.post('/rooms', authenticateToken, async (req, res) => {
           [
             farmId,
             room.name,
-            room.type || null,
-            room.capacity || null,
-            room.description || null
+            room.type,
+            room.capacity,
+            room.description
           ]
         );
 
@@ -252,7 +295,7 @@ router.post('/rooms', authenticateToken, async (req, res) => {
     console.error('[Setup Wizard] Room creation error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to create rooms' 
+      error: error.message || 'Failed to create rooms' 
     });
   }
 });
