@@ -488,19 +488,31 @@
     },
 
     async loadDemoCatalog(filters) {
-      if (!this.demoData) {
-        const response = await fetch('/data/wholesale-demo-catalog.json');
-        this.demoData = await response.json();
-        this.farmDirectory = (this.demoData.farms || []).reduce((acc, farm) => {
-          acc[farm.farm_id] = farm;
-          return acc;
-        }, {});
-      }
+      try {
+        if (!this.demoData) {
+          const response = await fetch('/data/wholesale-demo-catalog.json');
+          if (!response.ok) {
+            console.warn('Demo catalog not available');
+            this.catalog = [];
+            this.renderCatalog();
+            return;
+          }
+          this.demoData = await response.json();
+          this.farmDirectory = (this.demoData.farms || []).reduce((acc, farm) => {
+            acc[farm.farm_id] = farm;
+            return acc;
+          }, {});
+        }
 
-      const items = this.applyDemoFilters(filters);
-      this.catalog = items.map((item) => this.mapDemoSku(item));
-      this.renderCatalog();
-      this.updateDemoBanner();
+        const items = this.applyDemoFilters(filters);
+        this.catalog = items.map((item) => this.mapDemoSku(item));
+        this.renderCatalog();
+        this.updateDemoBanner();
+      } catch (error) {
+        console.warn('Demo catalog unavailable:', error.message);
+        this.catalog = [];
+        this.renderCatalog();
+      }
     },
 
     applyDemoFilters(filters) {
