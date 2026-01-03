@@ -306,42 +306,33 @@
       const lng = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
 
       try {
-        const response = await fetch('/api/wholesale/auth/register', {
+        const response = await fetch('/api/wholesale/buyers/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            business_name: businessName,
-            contact_name: contactName,
+            businessName,
+            contactName,
             email,
             password,
-            buyer_type: buyerType,
-            postal_code: postalCode,
-            province,
-            lat,
-            lng
+            buyerType,
+            location: {
+              postalCode,
+              province,
+              latitude: lat,
+              longitude: lng
+            }
           })
         });
 
         const json = await response.json();
 
-        if (!response.ok) {
-          this.showToast(json?.detail || 'Registration failed', 'error');
+        if (!response.ok || json?.status !== 'ok') {
+          this.showToast(json?.message || 'Registration failed', 'error');
           return;
         }
 
-        // Store token and buyer data
-        localStorage.setItem(STORAGE_TOKEN, json.token);
-        this.currentBuyer = {
-          id: json.buyer.buyer_id,
-          businessName: json.buyer.business_name,
-          contactName: json.buyer.contact_name,
-          email: json.buyer.email,
-          buyerType: json.buyer.buyer_type,
-          verified: json.buyer.verified,
-          isActive: json.buyer.is_active
-        };
-        this.updateBuyerProfile();
-        this.populateCheckoutForm();
+        // Registration successful - set buyer and token
+        this.setActiveBuyer({ buyer: json.data.buyer, token: json.data.token });
         this.hideAuthModal();
         this.showToast('Account created. Welcome to GreenReach!', 'success');
       } catch (error) {
@@ -355,7 +346,7 @@
       const password = document.getElementById('sign-in-password').value;
 
       try {
-        const response = await fetch('/api/wholesale/auth/login', {
+        const response = await fetch('/api/wholesale/buyers/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
@@ -363,24 +354,13 @@
 
         const json = await response.json();
 
-        if (!response.ok) {
-          this.showToast(json?.detail || 'Invalid email or password', 'error');
+        if (!response.ok || json?.status !== 'ok') {
+          this.showToast(json?.message || 'Invalid email or password', 'error');
           return;
         }
 
-        // Store token and buyer data
-        localStorage.setItem(STORAGE_TOKEN, json.token);
-        this.currentBuyer = {
-          id: json.buyer.buyer_id,
-          businessName: json.buyer.business_name,
-          contactName: json.buyer.contact_name,
-          email: json.buyer.email,
-          buyerType: json.buyer.buyer_type,
-          verified: json.buyer.verified,
-          isActive: json.buyer.is_active
-        };
-        this.updateBuyerProfile();
-        this.populateCheckoutForm();
+        // Login successful - set buyer and token
+        this.setActiveBuyer({ buyer: json.data.buyer, token: json.data.token });
         this.hideAuthModal();
         this.showToast('Signed in successfully', 'success');
       } catch (error) {
