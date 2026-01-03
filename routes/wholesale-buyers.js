@@ -1,5 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import pg from 'pg';
 
 const router = express.Router();
@@ -53,12 +54,15 @@ router.post('/buyers/register', async (req, res) => {
       return res.status(409).json({ status: 'error', message: 'Email already registered' });
     }
 
-    // Create buyer (password should be hashed in production)
+    // Hash password with bcrypt (10 rounds - industry standard)
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create buyer with hashed password
     const result = await pool.query(
       `INSERT INTO wholesale_buyers (business_name, contact_name, email, password_hash, buyer_type, location, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())
        RETURNING id, business_name, contact_name, email, buyer_type, location, created_at`,
-      [businessName, contactName, email.toLowerCase(), password, buyerType, JSON.stringify(location || {})]
+      [businessName, contactName, email.toLowerCase(), passwordHash, buyerType, JSON.stringify(location || {})]
     );
 
     const buyer = result.rows[0];
@@ -88,11 +92,18 @@ router.post('/buyers/login', async (req, res) => {
       [email.toLowerCase()]
     );
 
-    if (result.rows.length === 0 || result.rows[0].password_hash !== password) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ status: 'error', message: 'Invalid credentials' });
     }
 
     const buyer = result.rows[0];
+
+    // Compare password with bcrypt
+    const isValid = await bcrypt.compare(password, buyer.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ status: 'error', message: 'Invalid credentials' });
+    }
+
     delete buyer.password_hash;
     
     const token = issueBuyerToken(buyer.id);
