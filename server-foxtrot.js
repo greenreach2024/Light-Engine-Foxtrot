@@ -99,6 +99,7 @@ import cropPricingRouter from './routes/crop-pricing.js';
 import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
 import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
 import wholesaleBuyersRouter from './routes/wholesale-buyers.js';
+import adminWholesaleBuyersRouter from './routes/admin-wholesale-buyers.js';
 import wholesaleWebhooksRouter from './routes/wholesale/webhooks.js';
 import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-webhooks.js';
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
@@ -9721,12 +9722,23 @@ app.use('/api/wholesale/checkout', wholesaleCheckoutRouter);
  * GreenReach: Wholesale Buyer Authentication and Management
  * - POST /api/wholesale/buyers/register: Register new wholesale buyer account
  * - POST /api/wholesale/buyers/login: Authenticate buyer and issue JWT
- * - POST /api/wholesale/buyers/logout: Invalidate buyer session
+ * - POST /api/wholesale/buyers/forgot-password: Request password reset
+ * - GET /api/wholesale/buyers/reset-password/:token: Validate reset token
+ * - POST /api/wholesale/buyers/reset-password: Complete password reset
  * - GET /api/wholesale/buyers/me: Get current buyer profile
- * - PUT /api/wholesale/buyers/profile: Update buyer preferences
- * - GET /api/wholesale/buyers/search: Search for buyers (admin)
  */
 app.use('/api/wholesale', wholesaleBuyersRouter);
+
+/**
+ * GreenReach: Admin Wholesale Buyer Management
+ * - GET /api/admin/wholesale/buyers: List all buyers (paginated)
+ * - GET /api/admin/wholesale/buyers/:id: Get buyer details
+ * - PUT /api/admin/wholesale/buyers/:id: Update buyer information
+ * - POST /api/admin/wholesale/buyers/:id/reset-password: Admin reset password
+ * - DELETE /api/admin/wholesale/buyers/:id: Delete buyer account
+ * - GET /api/admin/wholesale/buyers/search: Search buyers by name/email
+ */
+app.use('/api/admin/wholesale', adminWholesaleBuyersRouter);
 
 /**
  * GreenReach: Webhook and Payment Reconciliation
