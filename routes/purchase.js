@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { Client, Environment } from 'square';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
+import { provisionFarm } from '../lib/farm-provisioning.js';
 
 const router = express.Router();
 
@@ -511,6 +512,30 @@ router.get('/verify-session/:session_id', async (req, res) => {
         ]);
         
         console.log('[Verify] Admin user created');
+
+        // Auto-provision farm resources (POS, Online Store, Central linking)
+        console.log('[Verify] Starting auto-provisioning...');
+        try {
+          const provisioningResults = await provisionFarm({
+            farmId: farm_id,
+            farmName: farm_name,
+            planType: plan,
+            db
+          });
+          
+          console.log('[Verify] Provisioning completed:', {
+            posInstanceId: provisioningResults.posInstanceId,
+            storeSubdomain: provisioningResults.storeSubdomain,
+            centralLinked: provisioningResults.centralLinked
+          });
+          
+          if (provisioningResults.errors.length > 0) {
+            console.warn('[Verify] Provisioning warnings:', provisioningResults.errors);
+          }
+        } catch (provisioningError) {
+          console.error('[Verify] Provisioning failed (non-fatal):', provisioningError);
+          // Continue with account creation even if provisioning fails
+        }
 
         // Send welcome email
         const login_url = `${req.protocol}://${req.get('host')}/login.html`;
