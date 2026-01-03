@@ -468,8 +468,9 @@
           const response = await fetch(`/api/wholesale/catalog?${params.toString()}`);
           const data = await response.json();
 
-          if (data.status === 'ok' && data.data?.skus) {
-            this.catalog = data.data.skus;
+          // API returns { ok: true, items: [] } - empty items array is valid (no inventory yet)
+          if (data.ok && Array.isArray(data.items)) {
+            this.catalog = data.items;
             this.renderCatalog();
             this.updateDemoBanner();
             return;
