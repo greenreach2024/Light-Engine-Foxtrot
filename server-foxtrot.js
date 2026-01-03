@@ -147,6 +147,11 @@ const app = express();
 // Enable app.ws(...) WebSocket routes (used by sync status endpoint)
 expressWs(app);
 
+// Trust proxy - Required for Elastic Beanstalk, CloudFront, and other proxies
+// This allows express to trust X-Forwarded-* headers for client IP, protocol, etc.
+app.set('trust proxy', true);
+console.log('[Security] Trust proxy enabled - will use X-Forwarded-For for client IP');
+
 // Security Headers - Helmet.js
 // Configure helmet for production-ready security headers
 const isProduction = process.env.NODE_ENV === 'production';
@@ -13601,9 +13606,26 @@ const loginRateLimiter = rateLimit({
   message: { status: 'error', message: 'Too many login attempts. Please try again in 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  // Use keyGenerator to get IP from X-Forwarded-For (trust proxy must be enabled)
+  keyGenerator: (req) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    console.log('[farm-auth] Rate limit key for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
+    return ip;
+  },
   handler: (req, res) => {
-    console.log('[farm-auth] Rate limit exceeded for IP:', req.ip);
-    res.status(429).json({ status: 'error', message: 'Too many login attempts. Please try again in 15 minutes.' });
+    const ip = req.ip || req.connection.remoteAddress;
+    console.error('[farm-auth] ✗ Rate limit exceeded for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
+    res.status(429).json({ 
+      status: 'error', 
+      message: 'Too many login attempts. Please try again in 15 minutes.',
+      retryAfter: Math.ceil(15 * 60) // seconds
+    });
+  },
+  skip: (req) => {
+    // Log every request for debugging
+    const ip = req.ip || req.connection.remoteAddress;
+    console.log('[farm-auth] Login attempt from IP:', ip, 'Count will be tracked');
+    return false; // Don't skip any requests
   }
 });
 
