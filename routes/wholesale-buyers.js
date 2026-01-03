@@ -1,8 +1,21 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import pool from '../lib/db.js';
+import pg from 'pg';
 
 const router = express.Router();
+
+// Create database pool
+const pool = new pg.Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432'),
+  user: process.env.DB_USER || 'lightengine',
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME || 'lightengine',
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
 
 function getWholesaleJwtSecret() {
   const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET;
