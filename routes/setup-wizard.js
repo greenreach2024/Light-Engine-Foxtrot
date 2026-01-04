@@ -110,6 +110,24 @@ router.post('/change-password', authenticateToken, async (req, res) => {
  */
 router.get('/status', authenticateToken, async (req, res) => {
   try {
+    const farmId = req.farmId;
+
+    // Handle local development mode
+    if (farmId === 'LOCAL-FARM') {
+      return res.json({
+        success: true,
+        setupCompleted: false, // Always show wizard in local mode for testing
+        farm: {
+          farmId: 'LOCAL-FARM',
+          name: 'Local Development Farm',
+          planType: 'edge',
+          timezone: 'America/New_York',
+          hasBusinessHours: false
+        },
+        roomCount: 0
+      });
+    }
+
     const pool = req.app.locals?.db;
     if (!pool) {
       return res.status(500).json({ 
@@ -117,8 +135,6 @@ router.get('/status', authenticateToken, async (req, res) => {
         error: 'Database not configured' 
       });
     }
-
-    const farmId = req.farmId;
 
     // Check if farm has rooms configured (indicates setup completed)
     const roomsResult = await pool.query(
