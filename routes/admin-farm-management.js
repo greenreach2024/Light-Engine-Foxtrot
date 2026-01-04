@@ -1035,7 +1035,7 @@ router.get('/analytics/farms/:farmId/metrics', requireAdmin, async (req, res) =>
     const { farmId } = req.params;
     const days = Math.min(parseInt(req.query.days) || 30, 365); // Max 365 days
     
-    const metrics = await dbQuery(`
+    const result = await dbQuery(`
       SELECT 
         metric_id,
         farm_id,
@@ -1054,6 +1054,8 @@ router.get('/analytics/farms/:farmId/metrics', requireAdmin, async (req, res) =>
       WHERE farm_id = $1 AND date >= CURRENT_DATE - $2::integer * INTERVAL '1 day'
       ORDER BY date DESC
     `, [farmId, days]);
+    
+    const metrics = result.rows || [];
     
     // Calculate summary stats
     const summary = {
@@ -1094,7 +1096,7 @@ router.get('/analytics/buyers/:buyerId/insights', requireAdmin, async (req, res)
     const { buyerId } = req.params;
     const days = Math.min(parseInt(req.query.days) || 90, 365); // Max 365 days
     
-    const insights = await dbQuery(`
+    const result = await dbQuery(`
       SELECT 
         summary_id,
         buyer_id,
@@ -1109,6 +1111,8 @@ router.get('/analytics/buyers/:buyerId/insights', requireAdmin, async (req, res)
       WHERE buyer_id = $1 AND date >= CURRENT_DATE - $2::integer * INTERVAL '1 day'
       ORDER BY date DESC
     `, [buyerId, days]);
+    
+    const insights = result.rows || [];
     
     // Calculate summary stats
     const summary = {
