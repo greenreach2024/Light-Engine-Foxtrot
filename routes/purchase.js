@@ -493,7 +493,7 @@ router.get('/verify-session/:session_id', async (req, res) => {
         // Create admin user account
         const password_hash = await bcrypt.hash(temp_password, 10);
         
-        await db.query(`
+        const userResult = await db.query(`
           INSERT INTO users (
             farm_id,
             email,
@@ -504,6 +504,7 @@ router.get('/verify-session/:session_id', async (req, res) => {
             email_verified,
             created_at
           ) VALUES ($1, $2, $3, $4, 'admin', true, false, NOW())
+          RETURNING id
         `, [
           farm_id,
           email,
@@ -511,7 +512,8 @@ router.get('/verify-session/:session_id', async (req, res) => {
           contact_name
         ]);
         
-        console.log('[Verify] Admin user created');
+        const user_id = userResult.rows[0].id;
+        console.log('[Verify] Admin user created with ID:', user_id);
 
         // Auto-provision farm resources (POS, Online Store, Central linking)
         console.log('[Verify] Starting auto-provisioning...');
@@ -571,11 +573,26 @@ router.get('/verify-session/:session_id', async (req, res) => {
 
         console.log('[Verify] Account creation completed successfully');
         
+        // Generate JWT token for automatic login
+        const jwt = require('jsonwebtoken');
+        const jwtSecret = jwtSecretFromDb || process.env.JWT_SECRET || 'fallback-secret';
+        const token = jwt.sign(
+          { 
+            farmId: farm_id, 
+            userId: user_id,
+            email: email,
+            role: 'admin'
+          },
+          jwtSecret,
+          { expiresIn: '7d' }
+        );
+        
         return res.json({
           success: true,
           message: 'Account created successfully',
           farm_id,
-          email
+          email,
+          token // Return JWT token for automatic login
         });
 
       } catch (dbError) {
