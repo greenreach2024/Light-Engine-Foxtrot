@@ -3387,7 +3387,31 @@ function showFirstTimeSetup() {
     const modal = document.getElementById('first-time-setup-modal');
     if (modal) {
         modal.style.display = 'flex';
-        currentSetupStep = 1;
+        
+        // Check if this is a Cloud plan customer (skip activation code step)
+        const token = localStorage.getItem('token');
+        let isCloudPlan = false;
+        
+        if (token) {
+            try {
+                // Decode JWT to get plan type
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                isCloudPlan = payload.planType === 'Cloud' || payload.planType === 'cloud';
+            } catch (e) {
+                console.log('[Setup] Could not decode token, checking localStorage');
+            }
+        }
+        
+        // Also check localStorage for plan type
+        if (!isCloudPlan) {
+            const planType = localStorage.getItem('planType') || localStorage.getItem('plan_type');
+            isCloudPlan = planType === 'Cloud' || planType === 'cloud';
+        }
+        
+        // Start at Step 2 for Cloud customers (skip activation code)
+        currentSetupStep = isCloudPlan ? 2 : 1;
+        console.log(`[Setup] Starting wizard at step ${currentSetupStep} (Cloud: ${isCloudPlan})`);
+        
         updateSetupStepDisplay();
     }
 }

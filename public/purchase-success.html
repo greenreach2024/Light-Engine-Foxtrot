@@ -276,6 +276,7 @@
                         localStorage.setItem('token', data.token);
                         localStorage.setItem('farmId', data.farm_id);
                         localStorage.setItem('email', data.email);
+                        localStorage.setItem('planType', data.plan_type || 'Cloud'); // Store plan type
                         localStorage.setItem('isNewUser', 'true'); // Flag for first-time setup
                         console.log('JWT token stored, user auto-authenticated');
                     }
