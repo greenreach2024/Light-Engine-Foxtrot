@@ -3372,14 +3372,22 @@ let setupData = {
  */
 async function checkFirstTimeSetup() {
     try {
-        // Check localStorage first to prevent wizard loop
-        const setupCompleted = localStorage.getItem('setup_completed');
-        const farmData = localStorage.getItem('gr.farm');
+        // Check for force-wizard URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const forceWizard = urlParams.get('wizard') === 'true' || urlParams.get('setup') === 'true';
         
-        // If setup marked complete in localStorage, skip wizard
-        if (setupCompleted === 'true' || farmData) {
-            console.log('[setup-wizard] Setup already completed, skipping wizard');
-            return;
+        if (!forceWizard) {
+            // Check localStorage first to prevent wizard loop
+            const setupCompleted = localStorage.getItem('setup_completed');
+            const farmData = localStorage.getItem('gr.farm');
+            
+            // If setup marked complete in localStorage, skip wizard
+            if (setupCompleted === 'true' || farmData) {
+                console.log('[setup-wizard] Setup already completed, skipping wizard');
+                return;
+            }
+        } else {
+            console.log('[setup-wizard] Force-showing wizard via URL parameter');
         }
         
         const token = localStorage.getItem('token');
