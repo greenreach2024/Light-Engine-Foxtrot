@@ -1674,26 +1674,28 @@ function filterDevices() {
  * Load farm inventory
  */
 async function loadFarmInventory(farmId, trayCount) {
-    const recipes = ['Lettuce - Buttercrunch', 'Basil - Genovese', 'Kale - Lacinato', 'Arugula', 'Spinach'];
-    const statuses = ['growing', 'growing', 'ready', 'harvested'];
-    inventoryData = [];
-    
-    for (let i = 1; i <= Math.min(trayCount, 50); i++) {
-        const recipe = recipes[Math.floor(Math.random() * recipes.length)];
-        const plantCount = Math.floor(Math.random() * 50) + 20;
-        const age = Math.floor(Math.random() * 40) + 5;
-        const harvestDays = Math.max(0, Math.floor(Math.random() * 30) - age + 30);
-        const status = harvestDays < 5 ? 'ready' : 'growing';
+    try {
+        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/inventory`);
+        const data = await response.json();
         
-        inventoryData.push({
-            trayId: `TRY-${String(i).padStart(5, '0')}`,
-            recipe,
-            location: `Room ${String.fromCharCode(65 + Math.floor(Math.random() * 5))} / Zone ${Math.floor(Math.random() * 5) + 1}`,
-            plantCount,
-            age,
-            harvestEst: harvestDays === 0 ? 'Today' : `${harvestDays}d`,
-            status
-        });
+        if (data.success && data.trays) {
+            inventoryData = data.trays.map(tray => ({
+                trayId: tray.tray_code,
+                recipe: tray.recipe_name || 'Unknown',
+                location: tray.location || 'Unassigned',
+                plantCount: tray.plant_count || 0,
+                age: tray.age_days || 0,
+                harvestEst: tray.days_to_harvest !== null ? 
+                    (tray.days_to_harvest <= 0 ? 'Today' : `${Math.max(0, Math.floor(tray.days_to_harvest))}d`) : 
+                    'Unknown',
+                status: tray.status || 'unknown'
+            }));
+        } else {
+            inventoryData = [];
+        }
+    } catch (error) {
+        console.error('Error loading farm inventory:', error);
+        inventoryData = [];
     }
     
     renderInventoryTable();
@@ -1704,6 +1706,11 @@ async function loadFarmInventory(farmId, trayCount) {
  */
 function renderInventoryTable() {
     const tbody = document.getElementById('inventory-tbody');
+    
+    if (inventoryData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #a0aec0;">No trays found for this farm. Add trays to see inventory.</td></tr>';
+        return;
+    }
     
     tbody.innerHTML = inventoryData.map(item => `
         <tr>

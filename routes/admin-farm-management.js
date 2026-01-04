@@ -953,4 +953,44 @@ router.post('/impersonate/:farmId', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * Get farm inventory/trays
+ * GET /api/admin/farms/:farmId/inventory
+ */
+router.get('/farms/:farmId/inventory', requireAdmin, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    const trays = await dbQuery(`
+      SELECT 
+        gt.tray_id,
+        gt.tray_code,
+        gt.location,
+        gt.plant_count,
+        gt.seed_date,
+        gt.expected_harvest_date,
+        gt.age_days,
+        gt.status,
+        gt.notes,
+        gr.name as recipe_name,
+        gr.crop_type,
+        gr.cycle_duration_days,
+        CASE 
+          WHEN gt.expected_harvest_date IS NOT NULL THEN 
+            EXTRACT(DAY FROM (gt.expected_harvest_date - CURRENT_DATE))
+          ELSE NULL 
+        END as days_to_harvest
+      FROM grow_trays gt
+      LEFT JOIN grow_recipes gr ON gt.recipe_id = gr.recipe_id
+      WHERE gt.farm_id = $1
+      ORDER BY gt.status ASC, gt.expected_harvest_date ASC
+    `, [farmId]);
+    
+    res.json({ success: true, trays });
+  } catch (error) {
+    console.error('Error fetching farm inventory:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory' });
+  }
+});
+
 export default router;
