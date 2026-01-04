@@ -3899,11 +3899,6 @@ async function completeSetup() {
     }
 }
 
-// Check for first-time setup on page load
-window.addEventListener('DOMContentLoaded', () => {
-    checkFirstTimeSetup();
-});
-
 /**
  * Add a room to the setup wizard
  */
