@@ -456,11 +456,18 @@
             return;
           }
 
-          await this.enableDemoMode('Live catalog unavailable. Showing demo farms.');
+          // If API returns error, show empty catalog with error message
+          console.error('Catalog API error:', data);
+          this.catalog = [];
+          this.renderCatalog();
+          this.showToast('Unable to load catalog. Please try again later.', 'error');
           return;
         } catch (error) {
           console.error('Live catalog error:', error);
-          await this.enableDemoMode('Network issue detected. Showing demo farms.');
+          // Show empty catalog instead of switching to demo mode
+          this.catalog = [];
+          this.renderCatalog();
+          this.showToast('Network error loading catalog. Please check your connection.', 'error');
           return;
         }
       }
