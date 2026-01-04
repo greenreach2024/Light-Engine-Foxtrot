@@ -3340,9 +3340,10 @@ function closePairingQR() {
 // ============================================================================
 
 let currentSetupStep = 1;
-const totalSetupSteps = 5;
+const totalSetupSteps = 7;
 let setupData = {
-    rooms: []
+    rooms: [],
+    trayFormats: []
 };
 
 /**
@@ -3423,6 +3424,16 @@ async function generateSetupActivityHubQR() {
     } catch (error) {
         console.error('[Setup] Error generating Activity Hub QR:', error);
     }
+}
+
+/**
+ * Open QR Generator tool in new window
+ */
+function openQRGenerator() {
+    const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id') || '';
+    const url = `/tools/qr-generator.html${farmId ? '?farmId=' + farmId : ''}`;
+    window.open(url, '_blank', 'width=1200,height=800');
+    console.log('[Setup] Opened QR Generator tool');
 }
 
 /**
@@ -3517,6 +3528,14 @@ async function setupNextStep() {
     
     // Move to next step
     if (currentSetupStep < totalSetupSteps) {
+        // If on Step 5 (tray formats), collect selected formats
+        if (currentSetupStep === 5) {
+            const selectedFormats = Array.from(document.querySelectorAll('input[name="tray-format"]:checked'))
+                .map(cb => parseInt(cb.value));
+            setupData.trayFormats = selectedFormats;
+            console.log('[Setup] Tray formats selected:', selectedFormats);
+        }
+        
         currentSetupStep++;
         
         // If moving to Step 6 (Activity Hub), generate QR code
@@ -3628,7 +3647,17 @@ function validateSetupStep(step) {
             break;
             
         case 5:
+            // Tray formats are optional, always valid
+            isValid = true;
+            break;
+            
+        case 6:
             // Certifications are optional, always valid
+            isValid = true;
+            break;
+            
+        case 7:
+            // QR Label guide is informational only, always valid
             isValid = true;
             break;
     }
@@ -3739,6 +3768,15 @@ async function completeSetup() {
             .map(cb => cb.value);
         const attributes = Array.from(document.querySelectorAll('input[name="attribute"]:checked'))
             .map(cb => cb.value);
+        
+        // Submit tray formats before completing setup
+        console.log('[Setup] Submitting tray formats...');
+        const trayFormatsResult = await submitTrayFormats();
+        if (trayFormatsResult.success) {
+            console.log('[Setup] Tray formats submitted:', trayFormatsResult.message);
+        } else {
+            console.warn('[Setup] Tray formats submission had issues:', trayFormatsResult);
+        }
         
         // Call setup completion API
         const response = await fetch('/api/setup/complete', {
@@ -3976,6 +4014,64 @@ function addSetupZone(roomId) {
 function removeSetupRoom(roomId) {
     setupData.rooms = setupData.rooms.filter(r => r.id !== roomId);
     renderSetupRooms();
+}
+
+/**
+ * Submit tray formats to backend API
+ */
+async function submitTrayFormats() {
+    const selectedFormats = setupData.trayFormats || [];
+    
+    if (selectedFormats.length === 0) {
+        console.log('[Setup] No tray formats selected, skipping submission');
+        return { success: true, message: 'No formats selected' };
+    }
+    
+    try {
+        const token = localStorage.getItem('token');
+        const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id');
+        
+        const results = [];
+        
+        // Submit each tray format
+        for (const cells of selectedFormats) {
+            const response = await fetch('/api/inventory/tray-formats', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    name: `${cells}-Cell Tray`,
+                    cells: cells,
+                    rows: Math.ceil(Math.sqrt(cells)),
+                    columns: Math.ceil(Math.sqrt(cells)),
+                    description: `Standard ${cells}-cell tray format`,
+                    is_active: true
+                })
+            });
+            
+            const data = await response.json();
+            results.push({ cells, success: response.ok, data });
+            
+            if (response.ok) {
+                console.log(`[Setup] Created tray format: ${cells}-cell`);
+            } else {
+                console.error(`[Setup] Failed to create ${cells}-cell format:`, data);
+            }
+        }
+        
+        const successCount = results.filter(r => r.success).length;
+        return {
+            success: successCount > 0,
+            message: `${successCount} of ${selectedFormats.length} tray formats created`,
+            results
+        };
+        
+    } catch (error) {
+        console.error('[Setup] Error submitting tray formats:', error);
+        return { success: false, error: error.message };
+    }
 }
 
 /**
