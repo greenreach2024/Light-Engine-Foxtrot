@@ -1725,37 +1725,37 @@ function renderInventoryTable() {
  * Load farm recipes
  */
 async function loadFarmRecipes(farmId) {
-    recipesData = [
-        {
-            name: 'Lettuce - Buttercrunch',
-            cropType: 'Lettuce',
-            activeTrays: 42,
-            cycleDuration: '35 days',
-            avgHarvestTime: '33.2 days',
-            variance: '-1.8d',
-            successRate: '94.2%'
-        },
-        {
-            name: 'Basil - Genovese',
-            cropType: 'Basil',
-            activeTrays: 28,
-            cycleDuration: '28 days',
-            avgHarvestTime: '29.5 days',
-            variance: '+1.5d',
-            successRate: '91.7%'
-        },
-        {
-            name: 'Kale - Lacinato',
-            cropType: 'Kale',
-            activeTrays: 18,
-            cycleDuration: '45 days',
-            avgHarvestTime: '43.8 days',
-            variance: '-1.2d',
-            successRate: '96.1%'
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/recipes`);
+        
+        if (!response.ok) {
+            console.error('Failed to load recipes:', response.status);
+            recipesData = [];
+            renderRecipesTable();
+            return;
         }
-    ];
-    
-    renderRecipesTable();
+        
+        const data = await response.json();
+        recipesData = (data.recipes || []).map(recipe => ({
+            recipe_id: recipe.recipe_id,
+            name: recipe.name,
+            cropType: recipe.crop_type,
+            activeTrays: recipe.active_trays || 0,
+            cycleDuration: `${recipe.cycle_duration_days} days`,
+            avgHarvestTime: `${recipe.cycle_duration_days} days`,
+            variance: '0d',
+            successRate: '100%',
+            description: recipe.description,
+            lightSchedule: recipe.light_schedule,
+            harvestCriteria: recipe.harvest_criteria
+        }));
+        
+        renderRecipesTable();
+    } catch (error) {
+        console.error('Error loading recipes:', error);
+        recipesData = [];
+        renderRecipesTable();
+    }
 }
 
 /**
@@ -1763,6 +1763,11 @@ async function loadFarmRecipes(farmId) {
  */
 function renderRecipesTable() {
     const tbody = document.getElementById('recipes-tbody');
+    
+    if (recipesData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No recipes found for this farm. Create a recipe to get started.</td></tr>';
+        return;
+    }
     
     tbody.innerHTML = recipesData.map(recipe => `
         <tr>
@@ -1774,10 +1779,47 @@ function renderRecipesTable() {
             <td>${recipe.variance}</td>
             <td><span class="badge badge-success">${recipe.successRate}</span></td>
             <td>
-                <button class="btn" onclick="analyzeRecipe('${recipe.name}')">Analyze</button>
+                <button class="btn" onclick="editRecipe(${recipe.recipe_id})">Edit</button>
+                <button class="btn" onclick="viewRecipeDetails(${recipe.recipe_id})">View</button>
             </td>
         </tr>
     `).join('');
+}
+
+/**
+ * Edit recipe
+ */
+function editRecipe(recipeId) {
+    const recipe = recipesData.find(r => r.recipe_id === recipeId);
+    if (!recipe) {
+        alert('Recipe not found');
+        return;
+    }
+    
+    alert(`Edit Recipe: ${recipe.name}\n\nRecipe editing UI will be implemented in the next phase.`);
+}
+
+/**
+ * View recipe details
+ */
+function viewRecipeDetails(recipeId) {
+    const recipe = recipesData.find(r => r.recipe_id === recipeId);
+    if (!recipe) {
+        alert('Recipe not found');
+        return;
+    }
+    
+    const details = `
+Recipe: ${recipe.name}
+Crop Type: ${recipe.cropType}
+Cycle Duration: ${recipe.cycleDuration}
+Active Trays: ${recipe.activeTrays}
+Description: ${recipe.description || 'No description'}
+Light Schedule: ${recipe.lightSchedule ? JSON.stringify(recipe.lightSchedule) : 'Not configured'}
+Harvest Criteria: ${recipe.harvestCriteria || 'Not specified'}
+    `.trim();
+    
+    alert(details);
 }
 
 /**

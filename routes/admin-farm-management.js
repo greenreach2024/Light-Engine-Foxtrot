@@ -466,6 +466,135 @@ router.get('/farms/:farmId', requireAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/farms/:farmId/recipes
+ * Get all grow recipes for a specific farm
+ */
+router.get('/farms/:farmId/recipes', requireAdmin, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    // Query recipes with tray counts
+    const result = await dbQuery(`
+      SELECT 
+        r.recipe_id,
+        r.name,
+        r.crop_type,
+        r.cycle_duration_days,
+        r.description,
+        r.light_schedule,
+        r.nutrient_schedule,
+        r.environmental_params,
+        r.harvest_criteria,
+        r.active,
+        r.created_at,
+        r.updated_at,
+        COUNT(DISTINCT t.tray_id) as active_trays
+      FROM grow_recipes r
+      LEFT JOIN trays t ON r.recipe_id = t.recipe_id AND t.status = 'active'
+      WHERE r.farm_id = $1 AND r.active = true
+      GROUP BY r.recipe_id, r.name, r.crop_type, r.cycle_duration_days, r.description, 
+               r.light_schedule, r.nutrient_schedule, r.environmental_params, r.harvest_criteria, 
+               r.active, r.created_at, r.updated_at
+      ORDER BY r.name
+    `, [farmId]);
+    
+    res.json({ success: true, recipes: result.rows });
+  } catch (error) {
+    console.error('Error getting farm recipes:', error);
+    res.status(500).json({ error: 'Failed to get recipes', details: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/farms/:farmId/recipes
+ * Create a new grow recipe for a farm
+ */
+router.post('/farms/:farmId/recipes', requireAdmin, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const { name, crop_type, cycle_duration_days, description, light_schedule, nutrient_schedule, environmental_params, harvest_criteria } = req.body;
+    
+    if (!name || !crop_type || !cycle_duration_days) {
+      return res.status(400).json({ error: 'Missing required fields: name, crop_type, cycle_duration_days' });
+    }
+    
+    const result = await dbQuery(`
+      INSERT INTO grow_recipes (farm_id, name, crop_type, cycle_duration_days, description, light_schedule, nutrient_schedule, environmental_params, harvest_criteria, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *
+    `, [farmId, name, crop_type, cycle_duration_days, description || null, light_schedule || null, nutrient_schedule || null, environmental_params || null, harvest_criteria || null, req.admin.email]);
+    
+    res.json({ success: true, recipe: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating recipe:', error);
+    res.status(500).json({ error: 'Failed to create recipe', details: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/farms/:farmId/recipes/:recipeId
+ * Update a grow recipe
+ */
+router.put('/farms/:farmId/recipes/:recipeId', requireAdmin, async (req, res) => {
+  try {
+    const { farmId, recipeId } = req.params;
+    const { name, crop_type, cycle_duration_days, description, light_schedule, nutrient_schedule, environmental_params, harvest_criteria, active } = req.body;
+    
+    const result = await dbQuery(`
+      UPDATE grow_recipes
+      SET name = COALESCE($1, name),
+          crop_type = COALESCE($2, crop_type),
+          cycle_duration_days = COALESCE($3, cycle_duration_days),
+          description = COALESCE($4, description),
+          light_schedule = COALESCE($5, light_schedule),
+          nutrient_schedule = COALESCE($6, nutrient_schedule),
+          environmental_params = COALESCE($7, environmental_params),
+          harvest_criteria = COALESCE($8, harvest_criteria),
+          active = COALESCE($9, active),
+          updated_at = NOW()
+      WHERE recipe_id = $10 AND farm_id = $11
+      RETURNING *
+    `, [name, crop_type, cycle_duration_days, description, light_schedule, nutrient_schedule, environmental_params, harvest_criteria, active, recipeId, farmId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    
+    res.json({ success: true, recipe: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating recipe:', error);
+    res.status(500).json({ error: 'Failed to update recipe', details: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/farms/:farmId/recipes/:recipeId
+ * Delete (deactivate) a grow recipe
+ */
+router.delete('/farms/:farmId/recipes/:recipeId', requireAdmin, async (req, res) => {
+  try {
+    const { farmId, recipeId } = req.params;
+    
+    // Soft delete by setting active = false
+    const result = await dbQuery(`
+      UPDATE grow_recipes
+      SET active = false, updated_at = NOW()
+      WHERE recipe_id = $1 AND farm_id = $2
+      RETURNING *
+    `, [recipeId, farmId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    
+    res.json({ success: true, message: 'Recipe deactivated' });
+  } catch (error) {
+    console.error('Error deleting recipe:', error);
+    res.status(500).json({ error: 'Failed to delete recipe', details: error.message });
+  }
+});
+
+/**
  * GET /api/admin/users
  * List all users across all farms
  */
