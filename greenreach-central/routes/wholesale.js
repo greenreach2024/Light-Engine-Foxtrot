@@ -553,6 +553,7 @@ router.get('/orders/:orderId/invoice', requireBuyerAuth, async (req, res) => {
   const invoice = {
     invoice_number: `INV-${orderId.substring(0, 8)}`,
     order_id: orderId,
+    po_number: order.po_number || null,
     invoice_date: new Date().toISOString(),
     order_date: order.created_at,
     delivery_date: order.delivery_date,
@@ -657,7 +658,7 @@ router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
 
 router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
   try {
-    const { buyer_account, delivery_date, delivery_address, recurrence, cart, payment_provider, sourcing } = req.body || {};
+    const { buyer_account, delivery_date, delivery_address, recurrence, cart, payment_provider, sourcing, po_number } = req.body || {};
 
     if (!buyer_account?.email) throw new ValidationError('buyer_account.email is required');
     if (!delivery_date) throw new ValidationError('delivery_date is required');
@@ -681,6 +682,7 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
       const order = createOrder({
         buyerId: req.wholesaleBuyer.id,
         buyerAccount: buyer_account,
+        poNumber: po_number,
         deliveryDate: delivery_date,
         deliveryAddress: delivery_address,
         recurrence: recurrence || { cadence: 'one_time' },

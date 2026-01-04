@@ -47,6 +47,24 @@ function issueBuyerToken(buyerId) {
   return jwt.sign({ buyerId, type: 'wholesale' }, secret, { expiresIn: '30d' });
 }
 
+// Authenticate wholesale buyer using JWT in Authorization header
+async function requireBuyerAuth(req, res, next) {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ status: 'error', message: 'No token provided' });
+    }
+
+    const secret = getWholesaleJwtSecret();
+    const decoded = jwt.verify(token, secret);
+    req.buyerId = decoded.buyerId;
+    return next();
+  } catch (error) {
+    console.error('Wholesale auth error:', error.message);
+    return res.status(401).json({ status: 'error', message: 'Invalid or expired token' });
+  }
+}
+
 // POST /api/wholesale/buyers/register - Register new wholesale buyer
 router.post('/buyers/register', authRateLimiter, async (req, res) => {
   try {
@@ -131,19 +149,11 @@ router.post('/buyers/login', authRateLimiter, async (req, res) => {
 });
 
 // GET /api/wholesale/buyers/me - Get current buyer profile
-router.get('/buyers/me', async (req, res) => {
+router.get('/buyers/me', requireBuyerAuth, async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ status: 'error', message: 'No token provided' });
-    }
-
-    const secret = getWholesaleJwtSecret();
-    const decoded = jwt.verify(token, secret);
-
     const result = await pool.query(
       'SELECT id, business_name, contact_name, email, buyer_type, location, created_at FROM wholesale_buyers WHERE id = $1',
-      [decoded.buyerId]
+      [req.buyerId]
     );
 
     if (result.rows.length === 0) {
@@ -156,7 +166,102 @@ router.get('/buyers/me', async (req, res) => {
     });
   } catch (error) {
     console.error('Get buyer error:', error);
-    return res.status(401).json({ status: 'error', message: 'Invalid token' });
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch buyer profile' });
+  }
+});
+
+// PUT /api/wholesale/buyers/me - Update buyer profile
+router.put('/buyers/me', requireBuyerAuth, async (req, res) => {
+  try {
+    const { businessName, contactName, email, buyerType, phone, address, city, province, postalCode, country } = req.body || {};
+
+    if (!businessName || !contactName || !email) {
+      return res.status(400).json({ status: 'error', message: 'Business name, contact name, and email are required' });
+    }
+
+    // Ensure email uniqueness
+    const existing = await pool.query(
+      'SELECT id FROM wholesale_buyers WHERE email = $1 AND id <> $2',
+      [email.toLowerCase(), req.buyerId]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ status: 'error', message: 'Email already in use by another account' });
+    }
+
+    // Fetch current location to merge optional fields
+    const current = await pool.query(
+      'SELECT location FROM wholesale_buyers WHERE id = $1',
+      [req.buyerId]
+    );
+    const currentLocation = current.rows[0]?.location || {};
+
+    const location = {
+      ...currentLocation,
+      street: address ?? currentLocation.street,
+      city: city ?? currentLocation.city,
+      province: province ?? currentLocation.province,
+      postalCode: postalCode ?? currentLocation.postalCode,
+      country: country ?? currentLocation.country,
+      phone: phone ?? currentLocation.phone
+    };
+
+    const update = await pool.query(
+      `UPDATE wholesale_buyers
+         SET business_name = $1,
+             contact_name = $2,
+             email = $3,
+             buyer_type = $4,
+             location = $5
+       WHERE id = $6
+       RETURNING id, business_name, contact_name, email, buyer_type, location, created_at`,
+      [businessName, contactName, email.toLowerCase(), buyerType || 'restaurant', JSON.stringify(location), req.buyerId]
+    );
+
+    const buyer = update.rows[0];
+
+    return res.json({
+      status: 'ok',
+      data: { buyer }
+    });
+  } catch (error) {
+    console.error('Update buyer error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to update profile' });
+  }
+});
+
+// POST /api/wholesale/buyers/change-password - Change buyer password
+router.post('/buyers/change-password', requireBuyerAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ status: 'error', message: 'Current and new passwords are required' });
+    }
+
+    const result = await pool.query(
+      'SELECT password_hash FROM wholesale_buyers WHERE id = $1',
+      [req.buyerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Buyer not found' });
+    }
+
+    const matches = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!matches) {
+      return res.status(401).json({ status: 'error', message: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await pool.query(
+      'UPDATE wholesale_buyers SET password_hash = $1 WHERE id = $2',
+      [newHash, req.buyerId]
+    );
+
+    return res.json({ status: 'ok', message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to change password' });
   }
 });
 

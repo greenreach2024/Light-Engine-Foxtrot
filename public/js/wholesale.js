@@ -19,6 +19,21 @@
     authTab: 'sign-in',
     productRequests: [],
 
+    normalizeBuyer(buyer) {
+      if (!buyer) return null;
+      const location = buyer.location || buyer.location_json || {};
+      return {
+        id: buyer.id,
+        businessName: buyer.businessName || buyer.business_name,
+        contactName: buyer.contactName || buyer.contact_name,
+        email: buyer.email,
+        buyerType: buyer.buyerType || buyer.buyer_type,
+        phone: buyer.phone || location.phone || buyer.contact_phone,
+        location,
+        createdAt: buyer.createdAt || buyer.created_at
+      };
+    },
+
     get token() {
       return localStorage.getItem(STORAGE_TOKEN) || '';
     },
@@ -125,6 +140,16 @@
         this.handleRegister();
       });
 
+      document.getElementById('account-form')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        this.saveAccountSettings();
+      });
+
+      document.getElementById('password-form')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        this.updatePassword();
+      });
+
       const authModal = document.getElementById('auth-modal');
       authModal?.addEventListener('click', (event) => {
         if (event.target && event.target.id === 'auth-modal') {
@@ -223,8 +248,9 @@
     },
 
     setActiveBuyer({ buyer, token }) {
-      this.currentBuyer = buyer;
-      localStorage.setItem(STORAGE_BUYER, JSON.stringify(buyer));
+      const normalized = this.normalizeBuyer(buyer);
+      this.currentBuyer = normalized;
+      localStorage.setItem(STORAGE_BUYER, JSON.stringify(normalized));
       this.token = token;
       this.updateBuyerProfile();
       this.populateCheckoutForm();
@@ -403,7 +429,7 @@
     },
 
     navigateTo(view) {
-      if ((view === 'checkout' || view === 'orders') && !this.currentBuyer) {
+      if ((view === 'checkout' || view === 'orders' || view === 'account') && !this.currentBuyer) {
         this.showToast('Please sign in to access buyer-only tools', 'info');
         this.showAuthModal('sign-in');
         return;
@@ -421,6 +447,102 @@
 
       if (view === 'checkout') this.previewAllocation();
       if (view === 'orders') this.loadOrders();
+      if (view === 'account') this.loadAccountSettings();
+    },
+
+    async loadAccountSettings() {
+      if (!this.currentBuyer) return;
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me');
+        if (response.ok && json?.status === 'ok') {
+          const buyer = this.normalizeBuyer(json.data.buyer);
+          this.currentBuyer = buyer;
+          localStorage.setItem(STORAGE_BUYER, JSON.stringify(buyer));
+        }
+      } catch (error) {
+        console.error('Load account settings error:', error);
+      }
+
+      const b = this.currentBuyer;
+      document.getElementById('account-business-name').value = b?.businessName || '';
+      document.getElementById('account-contact-name').value = b?.contactName || '';
+      document.getElementById('account-email').value = b?.email || '';
+      document.getElementById('account-phone').value = b?.phone || '';
+      document.getElementById('account-address').value = b?.location?.street || '';
+      document.getElementById('account-city').value = b?.location?.city || '';
+      document.getElementById('account-province').value = b?.location?.province || '';
+      document.getElementById('account-postal').value = b?.location?.postalCode || '';
+      document.getElementById('account-buyer-type').value = b?.buyerType || 'restaurant';
+    },
+
+    async saveAccountSettings() {
+      if (!this.currentBuyer) return this.showAuthModal('sign-in');
+
+      const payload = {
+        businessName: document.getElementById('account-business-name').value,
+        contactName: document.getElementById('account-contact-name').value,
+        email: document.getElementById('account-email').value,
+        phone: document.getElementById('account-phone').value,
+        address: document.getElementById('account-address').value,
+        city: document.getElementById('account-city').value,
+        province: document.getElementById('account-province').value,
+        postalCode: document.getElementById('account-postal').value,
+        buyerType: document.getElementById('account-buyer-type').value,
+        country: 'Canada'
+      };
+
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me', {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok && json?.status === 'ok') {
+          const buyer = this.normalizeBuyer(json.data.buyer);
+          this.currentBuyer = buyer;
+          localStorage.setItem(STORAGE_BUYER, JSON.stringify(buyer));
+          this.updateBuyerProfile();
+          this.populateCheckoutForm();
+          this.showToast('Account updated', 'success');
+        } else {
+          this.showToast(json?.message || 'Failed to update account', 'error');
+        }
+      } catch (error) {
+        console.error('Save account error:', error);
+        this.showToast('Network error updating account', 'error');
+      }
+    },
+
+    async updatePassword() {
+      if (!this.currentBuyer) return this.showAuthModal('sign-in');
+
+      const currentPassword = document.getElementById('current-password').value;
+      const newPassword = document.getElementById('new-password').value;
+      const confirmPassword = document.getElementById('confirm-password').value;
+
+      if (newPassword !== confirmPassword) {
+        this.showToast('New passwords do not match', 'error');
+        return;
+      }
+
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/change-password', {
+          method: 'POST',
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        if (response.ok && json?.status === 'ok') {
+          this.showToast('Password updated', 'success');
+          document.getElementById('current-password').value = '';
+          document.getElementById('new-password').value = '';
+          document.getElementById('confirm-password').value = '';
+        } else {
+          this.showToast(json?.message || 'Failed to update password', 'error');
+        }
+      } catch (error) {
+        console.error('Update password error:', error);
+        this.showToast('Network error updating password', 'error');
+      }
     },
 
     async loadCatalog() {
@@ -908,6 +1030,7 @@
             allocation_strategy: 'cheapest',
             payment_provider: 'square',
             payment_source: { type: 'demo', nonce: `demo-${Date.now()}` },
+            po_number: document.getElementById('po-number')?.value?.trim() || '',
             sourcing
           })
         });

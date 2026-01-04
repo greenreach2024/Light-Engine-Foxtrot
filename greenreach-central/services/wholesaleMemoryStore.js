@@ -71,7 +71,7 @@ export function sanitizeBuyer(buyer) {
   };
 }
 
-export function createOrder({ buyerId, buyerAccount, deliveryDate, deliveryAddress, recurrence, farmSubOrders, totals }) {
+export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, deliveryAddress, recurrence, farmSubOrders, totals }) {
   const orderId = `wo-${randomUUID()}`;
   const order = {
     master_order_id: orderId,
@@ -79,6 +79,7 @@ export function createOrder({ buyerId, buyerAccount, deliveryDate, deliveryAddre
     created_at: new Date().toISOString(),
     buyer_id: buyerId,
     buyer_account: buyerAccount,
+    po_number: poNumber || null,
     delivery_date: deliveryDate,
     delivery_address: deliveryAddress,
     recurrence: recurrence || { cadence: 'one_time' },

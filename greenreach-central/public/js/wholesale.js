@@ -813,6 +813,7 @@
             allocation_strategy: 'cheapest',
             payment_provider: 'square',
             payment_source: { type: 'demo', nonce: `demo-${Date.now()}` },
+            po_number: document.getElementById('po-number')?.value?.trim() || '',
             sourcing
           })
         });
