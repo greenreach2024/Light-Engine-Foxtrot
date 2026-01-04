@@ -1033,7 +1033,7 @@ router.get('/farms/:farmId/devices', requireAdmin, async (req, res) => {
 router.get('/analytics/farms/:farmId/metrics', requireAdmin, async (req, res) => {
   try {
     const { farmId } = req.params;
-    const days = parseInt(req.query.days) || 30;
+    const days = Math.min(parseInt(req.query.days) || 30, 365); // Max 365 days
     
     const metrics = await dbQuery(`
       SELECT 
@@ -1051,9 +1051,9 @@ router.get('/analytics/farms/:farmId/metrics', requireAdmin, async (req, res) =>
         created_at,
         updated_at
       FROM farm_daily_metrics
-      WHERE farm_id = $1 AND date >= CURRENT_DATE - INTERVAL '${days} days'
+      WHERE farm_id = $1 AND date >= CURRENT_DATE - $2::integer * INTERVAL '1 day'
       ORDER BY date DESC
-    `, [farmId]);
+    `, [farmId, days]);
     
     // Calculate summary stats
     const summary = {
@@ -1092,7 +1092,7 @@ router.get('/analytics/farms/:farmId/metrics', requireAdmin, async (req, res) =>
 router.get('/analytics/buyers/:buyerId/insights', requireAdmin, async (req, res) => {
   try {
     const { buyerId } = req.params;
-    const days = parseInt(req.query.days) || 90;
+    const days = Math.min(parseInt(req.query.days) || 90, 365); // Max 365 days
     
     const insights = await dbQuery(`
       SELECT 
@@ -1106,9 +1106,9 @@ router.get('/analytics/buyers/:buyerId/insights', requireAdmin, async (req, res)
         created_at,
         updated_at
       FROM buyer_order_summary
-      WHERE buyer_id = $1 AND date >= CURRENT_DATE - INTERVAL '${days} days'
+      WHERE buyer_id = $1 AND date >= CURRENT_DATE - $2::integer * INTERVAL '1 day'
       ORDER BY date DESC
-    `, [buyerId]);
+    `, [buyerId, days]);
     
     // Calculate summary stats
     const summary = {
