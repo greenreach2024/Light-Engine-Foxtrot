@@ -14037,6 +14037,117 @@ app.post('/api/farm/auth/logout', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/configuration
+ * Get system configuration
+ */
+app.get('/api/configuration', asyncHandler(async (req, res) => {
+  res.json({
+    status: 'success',
+    configuration: {
+      apiVersion: '1.0',
+      features: {
+        wizard: true,
+        activityHub: true,
+        automation: true
+      },
+      defaultTimezone: 'America/New_York'
+    }
+  });
+}));
+
+/**
+ * GET /api/devices/:id
+ * Get device information
+ */
+app.get('/api/devices/:id', asyncHandler(async (req, res) => {
+  const deviceId = req.params.id;
+  
+  // Return mock device data for local development
+  res.json({
+    status: 'success',
+    device: {
+      id: deviceId,
+      name: `Device ${deviceId}`,
+      type: 'sensor',
+      status: 'online',
+      lastSeen: new Date().toISOString()
+    }
+  });
+}));
+
+/**
+ * GET /api/farms/:farmId
+ * Get farm details by ID
+ */
+app.get('/api/farms/:farmId', asyncHandler(async (req, res) => {
+  const farmId = req.params.farmId;
+  
+  if (farmId === 'LOCAL-FARM') {
+    return res.json({
+      status: 'success',
+      farm: {
+        farmId: 'LOCAL-FARM',
+        name: 'Local Development Farm',
+        planType: 'edge',
+        email: 'admin@local-farm.com',
+        contactName: 'Admin User',
+        location: null,
+        timezone: 'America/New_York',
+        rooms: []
+      }
+    });
+  }
+  
+  // Check database for real farm
+  try {
+    const result = await pool.query(
+      'SELECT farm_id, name, plan_type, email, contact_name, location, timezone FROM farms WHERE farm_id = $1',
+      [farmId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Farm not found'
+      });
+    }
+    
+    res.json({
+      status: 'success',
+      farm: {
+        farmId: result.rows[0].farm_id,
+        name: result.rows[0].name,
+        planType: result.rows[0].plan_type,
+        email: result.rows[0].email,
+        contactName: result.rows[0].contact_name,
+        location: result.rows[0].location,
+        timezone: result.rows[0].timezone
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching farm:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch farm data'
+    });
+  }
+}));
+
+/**
+ * GET /api/farms/:farmId/rooms
+ * Get rooms for a farm
+ */
+app.get('/api/farms/:farmId/rooms', asyncHandler(async (req, res) => {
+  const farmId = req.params.farmId;
+  
+  // Return empty rooms for local development
+  res.json({
+    status: 'success',
+    rooms: []
+  });
+}));
+
+/**
  * GET /api/farm/profile
  * Get authenticated farm's profile data
  */
