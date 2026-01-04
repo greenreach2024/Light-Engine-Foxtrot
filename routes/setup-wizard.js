@@ -6,6 +6,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import validator from 'validator';
+import bcrypt from 'bcrypt';
 
 const router = express.Router();
 
@@ -29,6 +30,7 @@ function authenticateToken(req, res, next) {
     const decoded = jwt.verify(token, jwtSecret);
     
     req.farmId = decoded.farmId;
+    req.userId = decoded.userId;
     req.userEmail = decoded.email;
     req.userRole = decoded.role || 'admin';
     
@@ -41,6 +43,57 @@ function authenticateToken(req, res, next) {
     });
   }
 }
+
+/**
+ * POST /api/setup-wizard/change-password
+ * Change password during first-time setup
+ * Body: { newPassword: string }
+ */
+router.post('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const pool = req.app.locals?.db;
+    if (!pool) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Database not configured' 
+      });
+    }
+
+    const { newPassword } = req.body;
+    const userId = req.userId;
+
+    // Validate password
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password must be at least 8 characters long' 
+      });
+    }
+
+    // Hash new password
+    const password_hash = await bcrypt.hash(newPassword, 10);
+
+    // Update user password and mark email as verified
+    await pool.query(
+      'UPDATE users SET password_hash = $1, email_verified = true WHERE id = $2',
+      [password_hash, userId]
+    );
+
+    console.log('[Setup Wizard] Password changed for user:', userId);
+
+    res.json({
+      success: true,
+      message: 'Password updated successfully'
+    });
+
+  } catch (error) {
+    console.error('[Setup Wizard] Password change error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update password' 
+    });
+  }
+});
 
 /**
  * GET /api/setup/status

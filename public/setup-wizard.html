@@ -369,12 +369,36 @@
                 <div class="step-dot" id="dot-3"></div>
                 <div class="step-dot" id="dot-4"></div>
                 <div class="step-dot" id="dot-5"></div>
+                <div class="step-dot" id="dot-6"></div>
             </div>
         </div>
 
         <div class="wizard-content">
-            <!-- Step 0: Welcome -->
+            <!-- Step 0: Password Change (First-Time Users Only) -->
             <div class="wizard-step active" id="step-0">
+                <h1 class="step-title">Create Your Password</h1>
+                <p class="step-description">
+                    For security, please create a new password for your account.
+                    Your temporary credentials have been sent via email for backup.
+                </p>
+                <div class="input-group">
+                    <label class="input-label">New Password (minimum 8 characters)</label>
+                    <input type="password" class="touch-input" id="new-password" minlength="8" placeholder="Enter new password" required>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Confirm Password</label>
+                    <input type="password" class="touch-input" id="confirm-password" minlength="8" placeholder="Re-enter password" required>
+                </div>
+                <div id="password-error" style="color: var(--accent-red); font-size: 1.5rem; margin-top: 1rem; display: none;"></div>
+                <div class="button-grid" style="margin-top: 2rem;">
+                    <button class="touch-button primary" onclick="submitPasswordChange()">
+                        <span>Set Password & Continue</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 1: Welcome -->
+            <div class="wizard-step" id="step-1">
                 <h1 class="step-title">Welcome to GreenReach!</h1>
                 <p class="step-description">
                     Let's get your vertical farm set up in just a few steps.
@@ -388,8 +412,8 @@
                 </div>
             </div>
 
-            <!-- Step 1: Network Configuration -->
-            <div class="wizard-step" id="step-1">
+            <!-- Step 2: Network Configuration -->
+            <div class="wizard-step" id="step-2">
                 <h1 class="step-title">Network Configuration</h1>
                 <p class="step-description">
                     Choose how your farm will connect to the internet
@@ -420,8 +444,8 @@
                 </div>
             </div>
 
-            <!-- Step 2: Farm Registration -->
-            <div class="wizard-step" id="step-2">
+            <!-- Step 3: Farm Registration -->
+            <div class="wizard-step" id="step-3">
                 <h1 class="step-title">Register Your Farm</h1>
                 <p class="step-description">
                     Enter the registration code provided by GreenReach
@@ -440,8 +464,8 @@
                 <div id="reg-status"></div>
             </div>
 
-            <!-- Step 3: Desktop Download (Cloud) / Certifications (Edge) -->
-            <div class="wizard-step" id="step-3">
+            <!-- Step 4: Desktop Download (Cloud) / Certifications (Edge) -->
+            <div class="wizard-step" id="step-4">
                 <!-- Cloud: Desktop App Download -->
                 <div id="cloud-download" style="display: none;">
                     <h1 class="step-title">Desktop Application Available</h1>
@@ -570,8 +594,8 @@
                 </div>
             </div>
 
-            <!-- Step 4: Cloud Features (Cloud only) / Hardware Detection (Edge only) -->
-            <div class="wizard-step" id="step-4">
+            <!-- Step 5: Cloud Features (Cloud only) / Hardware Detection (Edge only) -->
+            <div class="wizard-step" id="step-5">
                 <div id="cloud-features" style="display: none;">
                     <h1 class="step-title">Welcome to Your Cloud Farm!</h1>
                     <p class="step-description">
@@ -680,8 +704,8 @@
                 </div>
             </div>
 
-            <!-- Step 5: Complete -->
-            <div class="wizard-step" id="step-5">
+            <!-- Step 6: Complete -->
+            <div class="wizard-step" id="step-6">
                 <h1 class="step-title">Setup Complete!</h1>
                 <p class="step-description">
                     Your GreenReach farm is ready to go!
@@ -771,8 +795,72 @@
         console.log('[Setup Wizard] isCloudAccount:', isCloudAccount);
         
         let currentStep = 0;
-        const totalSteps = 6;
+        const totalSteps = 7; // Increased from 6 to 7 for password step
         let activeInput = null;
+        
+        // Check if this is a new user who needs to set password
+        const isNewUser = localStorage.getItem('isNewUser') === 'true';
+        
+        // Skip password step if not a new user
+        if (!isNewUser && currentStep === 0) {
+            currentStep = 1;
+        }
+        
+        async function submitPasswordChange() {
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const errorDiv = document.getElementById('password-error');
+            
+            // Validate
+            if (!newPassword || newPassword.length < 8) {
+                errorDiv.textContent = 'Password must be at least 8 characters long';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Clear error
+            errorDiv.style.display = 'none';
+            
+            // Submit to API
+            const token = localStorage.getItem('token');
+            if (!token) {
+                errorDiv.textContent = 'Authentication required. Please log in again.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/setup-wizard/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ newPassword })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    console.log('[Setup Wizard] Password changed successfully');
+                    localStorage.removeItem('isNewUser'); // Clear flag
+                    nextStep(); // Proceed to welcome screen
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to update password';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('[Setup Wizard] Password change error:', error);
+                errorDiv.textContent = 'Network error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
         let farmData = {
             network: null,
             registrationCode: isCloudAccount ? 'CLOUD-AUTO-SKIP' : null,
@@ -792,8 +880,8 @@
             // Update step indicators
             for (let i = 0; i < totalSteps; i++) {
                 const dot = document.getElementById(`dot-${i}`);
-                // Hide step 2 (registration) indicator for cloud accounts
-                if (i === 2 && isCloudAccount) {
+                // Hide step 3 (registration) indicator for cloud accounts
+                if (i === 3 && isCloudAccount) {
                     dot.style.display = 'none';
                     continue;
                 }
@@ -817,8 +905,8 @@
                 document.getElementById('next-btn').style.display = 'block';
             }
 
-            // Show/hide appropriate content for step 3 based on plan type
-            if (currentStep === 3) {
+            // Show/hide appropriate content for step 4 based on plan type
+            if (currentStep === 4) {
                 if (isCloudAccount) {
                     document.getElementById('cloud-download').style.display = 'block';
                     document.getElementById('edge-certifications').style.display = 'none';
@@ -828,8 +916,8 @@
                 }
             }
 
-            // Show/hide appropriate content for step 4 based on plan type
-            if (currentStep === 4) {
+            // Show/hide appropriate content for step 5 based on plan type
+            if (currentStep === 5) {
                 if (isCloudAccount) {
                     document.getElementById('cloud-features').style.display = 'block';
                     document.getElementById('hardware-detection').style.display = 'none';
@@ -844,15 +932,15 @@
             if (currentStep < totalSteps - 1) {
                 currentStep++;
                 console.log('[Setup Wizard] Moving to step:', currentStep);
-                // Skip activation code step (step 2) for cloud accounts
-                if (currentStep === 2 && isCloudAccount) {
+                // Skip activation code step (step 3, formerly step 2) for cloud accounts
+                if (currentStep === 3 && isCloudAccount) {
                     console.log('[Setup Wizard] Skipping activation code step for cloud account');
-                    currentStep++; // Skip to step 3
+                    currentStep++; // Skip to step 4
                 }
                 updateUI();
 
                 // Trigger step-specific actions
-                if (currentStep === 4 && !isCloudAccount) {
+                if (currentStep === 5 && !isCloudAccount) {
                     // Only detect hardware for edge devices
                     detectHardware();
                 }
@@ -862,9 +950,9 @@
         function previousStep() {
             if (currentStep > 0) {
                 currentStep--;
-                // Skip activation code step (step 2) for cloud accounts
-                if (currentStep === 2 && isCloudAccount) {
-                    currentStep--; // Skip to step 1
+                // Skip activation code step (step 3) for cloud accounts
+                if (currentStep === 3 && isCloudAccount) {
+                    currentStep--; // Skip to step 2
                 }
                 updateUI();
             }

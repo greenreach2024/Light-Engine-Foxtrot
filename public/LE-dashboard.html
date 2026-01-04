@@ -2808,5 +2808,45 @@
   <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
   <script src="/js/farm-assistant.js"></script>
   <script src="/js/pwa-installer.js"></script>
+  
+  <!-- Setup Completion Guard -->
+  <script>
+    // Check if user has completed setup wizard
+    async function checkSetupStatus() {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.log('[Dashboard] No token found, redirecting to login');
+        window.location.href = '/login.html';
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/setup-wizard/status', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+          console.log('[Dashboard] Setup status check failed, may need re-auth');
+          return; // Don't redirect on error, let normal auth flow handle it
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && !data.setupCompleted) {
+          console.log('[Dashboard] Setup not completed, redirecting to setup wizard');
+          window.location.href = '/setup-wizard.html';
+        } else {
+          console.log('[Dashboard] Setup complete, loading dashboard');
+        }
+      } catch (error) {
+        console.error('[Dashboard] Setup check error:', error);
+        // Don't redirect on network errors
+      }
+    }
+    
+    // Run setup check immediately
+    checkSetupStatus();
+  </script>
 </body>
 </html>
