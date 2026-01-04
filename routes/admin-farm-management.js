@@ -378,23 +378,30 @@ router.get('/farms', requireAdmin, async (req, res) => {
     }
     
     // PostgreSQL mode: Query actual database
-    const result = await dbQuery(`
+    // First get farms, then count users separately to avoid complex GROUP BY
+    const farmsResult = await dbQuery(`
       SELECT 
-        f.farm_id,
-        f.name,
-        f.email,
-        f.status,
-        f.plan_type as tier,
-        f.created_at,
-        f.updated_at as last_login,
-        COUNT(DISTINCT u.id) as user_count
-      FROM farms f
-      LEFT JOIN users u ON f.farm_id = u.farm_id
-      GROUP BY f.farm_id, f.name, f.email, f.status, f.plan_type, f.created_at, f.updated_at
-      ORDER BY f.created_at DESC
+        farm_id,
+        name,
+        email,
+        status,
+        plan_type as tier,
+        created_at,
+        updated_at as last_login
+      FROM farms
+      ORDER BY created_at DESC
     `);
     
-    res.json({ success: true, farms: result.rows, mode: 'database' });
+    // For each farm, count the users
+    const farms = farmsResult.rows;
+    for (const farm of farms) {
+      const countResult = await dbQuery(`
+        SELECT COUNT(*) as count FROM users WHERE farm_id = $1
+      `, [farm.farm_id]);
+      farm.user_count = parseInt(countResult.rows[0].count) || 0;
+    }
+    
+    res.json({ success: true, farms, mode: 'database' });
   } catch (error) {
     console.error('Error listing farms:', error);
     res.status(500).json({ error: 'Failed to list farms', details: error.message });
