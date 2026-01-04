@@ -603,8 +603,10 @@
           const response = await fetch('/data/wholesale-demo-catalog.json');
           if (!response.ok) {
             console.warn('Demo catalog not available');
-            this.catalog = [];
-            this.renderCatalog();
+            // Fall back to live mode when demo assets are missing
+            this.demoMode = false;
+            this.updateDemoBanner();
+            await this.loadCatalog();
             return;
           }
           this.demoData = await response.json();
