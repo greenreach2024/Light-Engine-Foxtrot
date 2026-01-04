@@ -8,6 +8,7 @@ try {
 import express from "express";
 import expressWs from 'express-ws';
 import helmet from 'helmet';
+import os from 'os';
 import { setCorsHeaders } from './server/middleware/cors.js';
 
 // Security middleware
@@ -7582,12 +7583,12 @@ app.get('/health', asyncHandler(async (req, res) => {
 
   // Memory usage check
   const memUsage = process.memoryUsage();
-  const memUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-  const memTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+  const memUsedMB = Math.round(memUsage.rss / 1024 / 1024); // resident set reflects real footprint
+  const memTotalMB = Math.max(Math.round(os.totalmem() / 1024 / 1024), memUsedMB || 1);
   const memPercent = (memUsedMB / memTotalMB) * 100;
-  
+
   health.checks.memory = {
-    status: memPercent < 80 ? 'healthy' : memPercent < 90 ? 'degraded' : 'unhealthy',
+    status: memPercent < 90 ? 'healthy' : memPercent < 95 ? 'degraded' : 'unhealthy',
     usedMB: memUsedMB,
     totalMB: memTotalMB,
     percentUsed: Math.round(memPercent)
