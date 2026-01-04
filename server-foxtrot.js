@@ -14148,6 +14148,118 @@ app.get('/api/farms/:farmId/rooms', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/user/profile
+ * Get authenticated user's profile data for wizard pre-fill
+ * This is used BEFORE farm is created during first-time setup
+ */
+app.get('/api/user/profile', asyncHandler(async (req, res) => {
+  console.log('[/api/user/profile] Request received for wizard pre-fill');
+  
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('[/api/user/profile] No valid authorization header');
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required'
+    });
+  }
+  
+  const token = authHeader.substring(7);
+  console.log('[/api/user/profile] Token:', token);
+  
+  // Handle local-access token for development
+  if (token === 'local-access') {
+    console.log('[/api/user/profile] Returning local development user data');
+    return res.json({
+      status: 'success',
+      user: {
+        email: 'admin@local-farm.com',
+        name: 'Admin User',
+        businessName: 'Local Development Farm',
+        phone: null,
+        hasPurchased: true,
+        planType: 'edge'
+      }
+    });
+  }
+  
+  // Check for session-based authentication
+  if (!global.farmAdminSessions) {
+    global.farmAdminSessions = new Map();
+  }
+  
+  const session = global.farmAdminSessions.get(token);
+  
+  if (session) {
+    console.log('[/api/user/profile] Found session, returning user data');
+    return res.json({
+      status: 'success',
+      user: {
+        email: session.email,
+        name: session.farmName || 'Farm User',
+        businessName: session.farmName || '',
+        phone: null,
+        hasPurchased: true,
+        planType: session.subscription?.plan || 'edge'
+      }
+    });
+  }
+  
+  // Try JWT token
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const decoded = jwt.verify(token, jwtSecret);
+    
+    console.log('[/api/user/profile] JWT decoded, fetching user data');
+    
+    // Fetch from users/buyers table
+    const pool = req.app.locals?.db;
+    if (pool) {
+      const userResult = await pool.query(
+        'SELECT email, name, business_name, phone FROM users WHERE email = $1 LIMIT 1',
+        [decoded.email]
+      );
+      
+      if (userResult.rows.length > 0) {
+        const user = userResult.rows[0];
+        return res.json({
+          status: 'success',
+          user: {
+            email: user.email,
+            name: user.name,
+            businessName: user.business_name,
+            phone: user.phone,
+            hasPurchased: true,
+            planType: 'edge'
+          }
+        });
+      }
+    }
+    
+    // Fallback to decoded JWT data
+    return res.json({
+      status: 'success',
+      user: {
+        email: decoded.email,
+        name: decoded.name || '',
+        businessName: decoded.businessName || '',
+        phone: null,
+        hasPurchased: true,
+        planType: 'edge'
+      }
+    });
+    
+  } catch (jwtError) {
+    console.log('[/api/user/profile] JWT verification failed:', jwtError.message);
+    return res.status(401).json({
+      status: 'error',
+      message: 'Invalid token'
+    });
+  }
+}));
+
+/**
  * GET /api/farm/profile
  * Get authenticated farm's profile data
  */

@@ -3511,11 +3511,12 @@ async function showFirstTimeSetup() {
         
         // Fetch farm data from API to pre-fill fields with purchase info
         try {
-            console.log('[Setup] Fetching farm profile for pre-fill...');
+            console.log('[Setup] Fetching user profile for wizard pre-fill...');
             console.log('[Setup] Token:', token);
             console.log('[Setup] API_BASE:', window.API_BASE || '(empty)');
             
-            const apiUrl = `${window.API_BASE || ''}/api/farm/profile`;
+            // Use /api/user/profile to get buyer/user data (not farm data which doesn't exist yet)
+            const apiUrl = `${window.API_BASE || ''}/api/user/profile`;
             console.log('[Setup] Fetching from:', apiUrl);
             
             const response = await fetch(apiUrl, {
@@ -3527,16 +3528,16 @@ async function showFirstTimeSetup() {
                 credentials: 'same-origin'
             });
             
-            console.log('[Setup] Farm profile response status:', response.status, response.statusText);
+            console.log('[Setup] User profile response status:', response.status, response.statusText);
             
             if (response.ok) {
                 const data = await response.json();
-                console.log('[Setup] Farm profile data received:', data);
+                console.log('[Setup] User profile data received:', data);
                 
-                if (data.status === 'success' && data.farm) {
-                    console.log('[Setup] Pre-filling wizard with purchase data:', data.farm);
+                if (data.status === 'success' && data.user) {
+                    console.log('[Setup] Pre-filling wizard with buyer/user data:', data.user);
                     
-                    // Pre-fill Step 2: Business Profile with data from purchase
+                    // Pre-fill Step 2: Business Profile with data from GreenReach buyer profile
                     const farmNameField = document.getElementById('setup-farm-name');
                     const contactNameField = document.getElementById('setup-contact-name');
                     const contactEmailField = document.getElementById('setup-contact-email');
@@ -3547,20 +3548,20 @@ async function showFirstTimeSetup() {
                         contactEmail: !!contactEmailField
                     });
                     
-                    if (data.farm.name && farmNameField) {
-                        farmNameField.value = data.farm.name;
-                        console.log('[Setup] Set farm name:', data.farm.name);
+                    if (data.user.businessName && farmNameField) {
+                        farmNameField.value = data.user.businessName;
+                        console.log('[Setup] Set farm name:', data.user.businessName);
                     }
-                    if (data.farm.contactName && contactNameField) {
-                        contactNameField.value = data.farm.contactName;
-                        console.log('[Setup] Set contact name:', data.farm.contactName);
+                    if (data.user.name && contactNameField) {
+                        contactNameField.value = data.user.name;
+                        console.log('[Setup] Set contact name:', data.user.name);
                     }
-                    if (data.farm.email && contactEmailField) {
-                        contactEmailField.value = data.farm.email;
-                        console.log('[Setup] Set email:', data.farm.email);
+                    if (data.user.email && contactEmailField) {
+                        contactEmailField.value = data.user.email;
+                        console.log('[Setup] Set email:', data.user.email);
                     }
                 } else {
-                    console.warn('[Setup] API response missing farm data:', data);
+                    console.warn('[Setup] API response missing user data:', data);
                 }
             } else {
                 const errorText = await response.text();
