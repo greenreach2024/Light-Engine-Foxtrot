@@ -327,9 +327,9 @@
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    // Redirect to setup wizard if not complete, otherwise to dashboard
+                    // Redirect to farm admin if setup not complete, otherwise to dashboard
                     if (setupData.success && !setupData.setupCompleted) {
-                        window.location.href = '/setup-wizard.html';
+                        window.location.href = '/farm-admin.html';
                     } else {
                         window.location.href = '/LE-dashboard.html';
                     }

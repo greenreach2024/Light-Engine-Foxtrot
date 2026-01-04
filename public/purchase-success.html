@@ -206,7 +206,7 @@
             </div>
 
             <div class="spinner" style="margin-top: 24px;"></div>
-            <p style="color: #4a5568; margin-top: 12px;">Redirecting to setup wizard...</p>
+            <p style="color: #4a5568; margin-top: 12px;">Redirecting to your farm dashboard...</p>
 
             <div class="support">
                 <p>Didn't receive the email? Check your spam folder or <a href="mailto:support@greenreach.io">contact support</a></p>
@@ -285,9 +285,9 @@
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('success').classList.remove('hidden');
                         
-                        // Redirect to setup wizard for new users after 3 seconds
+                        // Redirect to farm admin for new users after 3 seconds
                         setTimeout(() => {
-                            window.location.href = '/setup-wizard.html';
+                            window.location.href = '/farm-admin.html';
                         }, 3000);
                     }, 1500); // Small delay for better UX
                 } else {
