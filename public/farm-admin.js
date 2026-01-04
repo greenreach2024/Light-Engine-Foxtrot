@@ -3512,13 +3512,22 @@ async function showFirstTimeSetup() {
         // Fetch farm data from API to pre-fill fields with purchase info
         try {
             console.log('[Setup] Fetching farm profile for pre-fill...');
-            const response = await fetch(`${window.API_BASE || ''}/api/farm/profile`, {
+            console.log('[Setup] Token:', token);
+            console.log('[Setup] API_BASE:', window.API_BASE || '(empty)');
+            
+            const apiUrl = `${window.API_BASE || ''}/api/farm/profile`;
+            console.log('[Setup] Fetching from:', apiUrl);
+            
+            const response = await fetch(apiUrl, {
+                method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
             });
             
-            console.log('[Setup] Farm profile response status:', response.status);
+            console.log('[Setup] Farm profile response status:', response.status, response.statusText);
             
             if (response.ok) {
                 const data = await response.json();
@@ -3554,7 +3563,8 @@ async function showFirstTimeSetup() {
                     console.warn('[Setup] API response missing farm data:', data);
                 }
             } else {
-                console.error('[Setup] Farm profile API returned error:', response.status, response.statusText);
+                const errorText = await response.text();
+                console.error('[Setup] Farm profile API returned error:', response.status, response.statusText, errorText);
             }
         } catch (error) {
             console.error('[Setup] Could not fetch farm data for pre-fill:', error);
