@@ -3381,6 +3381,51 @@ async function checkFirstTimeSetup() {
 }
 
 /**
+ * Generate Activity Hub QR code for setup wizard
+ */
+async function generateSetupActivityHubQR() {
+    try {
+        const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id') || 'DEMO-FARM';
+        const token = localStorage.getItem('token');
+        
+        // Construct Activity Hub URL with authentication
+        const activityHubUrl = `${window.location.origin}/views/tray-inventory.html?farmId=${farmId}&token=${encodeURIComponent(token)}`;
+        
+        // Display the URL
+        const urlEl = document.getElementById('setup-activity-hub-url');
+        if (urlEl) {
+            urlEl.textContent = activityHubUrl;
+        }
+        
+        // Clear previous QR code
+        const qrContainer = document.getElementById('setup-qr-code');
+        if (qrContainer) {
+            qrContainer.innerHTML = '';
+            
+            // Generate QR code using QRCode library
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrContainer, {
+                    text: activityHubUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark: '#1a2332',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                console.log('[Setup] Activity Hub QR code generated');
+            } else {
+                // Fallback to API-based QR code generation
+                const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activityHubUrl)}`;
+                qrContainer.innerHTML = `<img src="${qrApiUrl}" alt="Activity Hub QR Code" style="width: 200px; height: 200px;">`;
+                console.log('[Setup] Activity Hub QR code generated (API fallback)');
+            }
+        }
+    } catch (error) {
+        console.error('[Setup] Error generating Activity Hub QR:', error);
+    }
+}
+
+/**
  * Show first-time setup modal
  */
 async function showFirstTimeSetup() {
@@ -3473,6 +3518,12 @@ async function setupNextStep() {
     // Move to next step
     if (currentSetupStep < totalSetupSteps) {
         currentSetupStep++;
+        
+        // If moving to Step 6 (Activity Hub), generate QR code
+        if (currentSetupStep === 6) {
+            await generateSetupActivityHubQR();
+        }
+        
         updateSetupStepDisplay();
     }
 }
