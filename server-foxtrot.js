@@ -13860,7 +13860,8 @@ app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res)
         farmId: farm.farm_id,
         email: user.email,
         role: user.role || 'admin',
-        userId: user.user_id
+        userId: user.user_id,
+        planType: farm.plan_type || 'cloud'
       },
       jwtSecret,
       { expiresIn: '24h' }

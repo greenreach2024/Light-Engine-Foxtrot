@@ -581,7 +581,8 @@ router.get('/verify-session/:session_id', async (req, res) => {
             farmId: farm_id, 
             userId: user_id,
             email: email,
-            role: 'admin'
+            role: 'admin',
+            planType: plan  // Include plan type for wizard detection
           },
           jwtSecret,
           { expiresIn: '7d' }
@@ -592,6 +593,7 @@ router.get('/verify-session/:session_id', async (req, res) => {
           message: 'Account created successfully',
           farm_id,
           email,
+          plan_type: plan,  // Also return in response for localStorage
           token // Return JWT token for automatic login
         });
 
