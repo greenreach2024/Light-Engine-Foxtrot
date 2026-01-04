@@ -1,5 +1,0 @@
-build:
-  commands:
-    pre_build:
-      - echo "Running npm ci instead of npm install"
-      - npm ci --production || npm install --production
