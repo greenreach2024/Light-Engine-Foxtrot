@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { getJwtSecret } from '../server/utils/secrets-manager.js';
-import { initDatabase } from '../lib/database.js';
+import { initDatabase, query as dbQuery } from '../lib/database.js';
 
 const router = express.Router();
 
@@ -378,26 +378,26 @@ router.get('/farms', requireAdmin, async (req, res) => {
     }
     
     // PostgreSQL mode: Query actual database
-    const farms = await db.all(`
+    const result = await dbQuery(`
       SELECT 
         f.farm_id,
         f.name,
         f.email,
         f.status,
-        f.tier,
+        f.plan_type as tier,
         f.created_at,
-        f.last_heartbeat as last_login,
+        f.updated_at as last_login,
         COUNT(DISTINCT u.id) as user_count
       FROM farms f
       LEFT JOIN users u ON f.farm_id = u.farm_id
-      GROUP BY f.farm_id
+      GROUP BY f.farm_id, f.name, f.email, f.status, f.plan_type, f.created_at, f.updated_at
       ORDER BY f.created_at DESC
     `);
     
-    res.json({ success: true, farms, mode: 'database' });
+    res.json({ success: true, farms: result.rows, mode: 'database' });
   } catch (error) {
     console.error('Error listing farms:', error);
-    res.status(500).json({ error: 'Failed to list farms' });
+    res.status(500).json({ error: 'Failed to list farms', details: error.message });
   }
 });
 
@@ -437,24 +437,24 @@ router.get('/farms/:farmId', requireAdmin, async (req, res) => {
     }
     
     // PostgreSQL mode: Query actual database
-    const farm = await db.get(`
+    const result = await dbQuery(`
       SELECT 
         f.*,
         COUNT(DISTINCT u.id) as user_count
       FROM farms f
       LEFT JOIN users u ON f.farm_id = u.farm_id
-      WHERE f.farm_id = ?
-      GROUP BY f.farm_id
+      WHERE f.farm_id = $1
+      GROUP BY f.farm_id, f.name, f.email, f.phone, f.contact_name, f.plan_type, f.status, f.created_at, f.updated_at, f.farm_slug, f.api_key, f.api_secret, f.jwt_secret, f.square_payment_id, f.square_amount
     `, [farmId]);
     
-    if (!farm) {
+    if (!result.rows || result.rows.length === 0) {
       return res.status(404).json({ error: 'Farm not found' });
     }
     
-    res.json(farm);
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error getting farm details:', error);
-    res.status(500).json({ error: 'Failed to get farm details' });
+    res.status(500).json({ error: 'Failed to get farm details', details: error.message });
   }
 });
 
