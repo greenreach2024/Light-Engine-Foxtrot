@@ -3361,23 +3361,31 @@ async function checkFirstTimeSetup() {
             return;
         }
         
-        // Get farmId from localStorage
-        const farmId = localStorage.getItem('farm_id');
-        const url = farmId ? `/api/setup/status?farmId=${farmId}` : '/api/setup/status';
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.log('[setup-wizard] No token found, skipping setup check');
+            return;
+        }
         
-        const response = await fetch(url);
+        // Use /api/setup-wizard/status endpoint
+        const response = await fetch('/api/setup-wizard/status', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
         const data = await response.json();
         
-        // Check 'completed' field (not 'registered')
-        if (!data.completed) {
+        // Check 'setupCompleted' field
+        if (!data.setupCompleted) {
             showFirstTimeSetup();
         } else {
             // Mark as completed in localStorage to prevent future wizard displays
             localStorage.setItem('setup_completed', 'true');
         }
     } catch (error) {
-        console.log('Setup status check failed, assuming first-time setup needed');
-        showFirstTimeSetup();
+        console.log('[setup-wizard] Setup status check failed:', error.message);
+        // Don't show wizard on error - prevents annoying users
     }
 }
 
@@ -3431,7 +3439,7 @@ async function generateSetupActivityHubQR() {
  */
 function openQRGenerator() {
     const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id') || '';
-    const url = `/tools/qr-generator.html${farmId ? '?farmId=' + farmId : ''}`;
+    const url = `/LE-qr-generator.html${farmId ? '?farmId=' + farmId : ''}`;
     window.open(url, '_blank', 'width=1200,height=800');
     console.log('[Setup] Opened QR Generator tool');
 }
@@ -4043,11 +4051,13 @@ async function submitTrayFormats() {
                 },
                 body: JSON.stringify({
                     name: `${cells}-Cell Tray`,
-                    cells: cells,
-                    rows: Math.ceil(Math.sqrt(cells)),
-                    columns: Math.ceil(Math.sqrt(cells)),
+                    plantSiteCount: cells,
+                    systemType: 'tray',
+                    trayMaterial: 'plastic',
                     description: `Standard ${cells}-cell tray format`,
-                    is_active: true
+                    targetWeightPerSite: 0,
+                    weightUnit: 'oz',
+                    isWeightBased: false
                 })
             });
             
