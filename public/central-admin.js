@@ -2173,30 +2173,10 @@ function showToast(message, type = 'info') {
  * Load AI Analytics view
  */
 async function loadAnalytics() {
-    console.log('[Analytics] Loading ML analytics data...');
+    console.log('[Analytics] Loading farm analytics data...');
     
-    // Update KPIs with mock data
-    document.getElementById('analytics-models').textContent = '3';
-    document.getElementById('analytics-predictions').textContent = '127';
-    document.getElementById('analytics-accuracy').textContent = '92%';
-    document.getElementById('analytics-anomalies').textContent = '5';
-    
-    // Load recent insights
-    const insightsHtml = `
-        <div class="metric-row">
-            <div class="metric-label">Last Updated</div>
-            <div class="metric-value">${new Date().toLocaleString()}</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Forecast Status</div>
-            <div class="metric-value">Active</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Next Update</div>
-            <div class="metric-value">In 6 hours</div>
-        </div>
-    `;
-    document.getElementById('analytics-insights').innerHTML = insightsHtml;
+    // Load farm metrics data
+    await loadFarmMetrics(currentAnalyticsFarmId, 7);
     
     // Load model performance
     const perfHtml = `
@@ -2672,6 +2652,126 @@ function filterAnomalies() {
 
 function filterAlerts() {
     console.log('[Alerts] Filter triggered');
+}
+
+/**
+ * ===================================
+ * ANALYTICS FUNCTIONS
+ * ===================================
+ */
+
+let currentAnalyticsFarmId = 'greenreach-greens';
+let analyticsData = {
+    metrics: [],
+    summary: {}
+};
+
+/**
+ * Load analytics for a specific farm
+ */
+async function loadAnalyticsForFarm(farmId) {
+    currentAnalyticsFarmId = farmId;
+    await loadFarmMetrics(farmId);
+}
+
+/**
+ * Refresh analytics data
+ */
+async function refreshAnalytics() {
+    await loadFarmMetrics(currentAnalyticsFarmId);
+}
+
+/**
+ * Load farm metrics from API
+ */
+async function loadFarmMetrics(farmId, days = 7) {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/farms/${farmId}/metrics?days=${days}`);
+        
+        if (!response.ok) {
+            console.error('Failed to load farm metrics:', response.status);
+            showToast('Failed to load analytics data', 'error');
+            return;
+        }
+        
+        const data = await response.json();
+        analyticsData = data;
+        
+        renderAnalyticsSummary(data.summary);
+        renderAnalyticsMetricsTable(data.metrics);
+        
+    } catch (error) {
+        console.error('Error loading farm metrics:', error);
+        showToast('Error loading analytics data', 'error');
+    }
+}
+
+/**
+ * Render analytics summary KPIs
+ */
+function renderAnalyticsSummary(summary) {
+    // Production
+    document.getElementById('analytics-production').textContent = `${summary.totalProduction.toFixed(1)} kg`;
+    document.getElementById('analytics-production-avg').textContent = `${(summary.totalProduction / summary.daysReported).toFixed(1)} kg/day avg`;
+    
+    // Revenue
+    document.getElementById('analytics-revenue').textContent = `$${summary.totalRevenue.toFixed(2)}`;
+    document.getElementById('analytics-revenue-avg').textContent = `$${(summary.totalRevenue / summary.daysReported).toFixed(2)}/day avg`;
+    
+    // Profit
+    const profitMargin = summary.totalRevenue > 0 ? ((summary.netProfit / summary.totalRevenue) * 100).toFixed(1) : 0;
+    document.getElementById('analytics-profit').textContent = `$${summary.netProfit.toFixed(2)}`;
+    document.getElementById('analytics-profit-margin').textContent = `${profitMargin}% margin`;
+    
+    // Efficiency
+    document.getElementById('analytics-efficiency').textContent = `${summary.avgEfficiency.toFixed(1)}%`;
+    document.getElementById('analytics-efficiency-trend').textContent = 'Optimal range';
+    
+    // Trays
+    const traysHarvested = analyticsData.metrics.reduce((sum, m) => sum + (m.trays_harvested || 0), 0);
+    const traysSeeded = analyticsData.metrics.reduce((sum, m) => sum + (m.trays_seeded || 0), 0);
+    document.getElementById('analytics-trays-harvested').textContent = traysHarvested;
+    document.getElementById('analytics-trays-seeded').textContent = `${traysSeeded} seeded`;
+    
+    // Orders
+    document.getElementById('analytics-orders').textContent = summary.totalOrders;
+    document.getElementById('analytics-orders-avg').textContent = `${(summary.totalOrders / summary.daysReported).toFixed(1)}/day avg`;
+    
+    // Update days count
+    document.getElementById('analytics-days-count').textContent = `Last ${summary.daysReported} days`;
+}
+
+/**
+ * Render analytics metrics table
+ */
+function renderAnalyticsMetricsTable(metrics) {
+    const tbody = document.getElementById('analytics-metrics-tbody');
+    
+    if (metrics.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">No metrics data available.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = metrics.map(m => {
+        const date = new Date(m.date);
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const profit = parseFloat(m.revenue) - parseFloat(m.costs);
+        const profitClass = profit >= 0 ? 'positive' : 'negative';
+        
+        return `
+            <tr>
+                <td><strong>${dateStr}</strong></td>
+                <td>${parseFloat(m.production_kg).toFixed(1)} kg</td>
+                <td>$${parseFloat(m.revenue).toFixed(2)}</td>
+                <td>$${parseFloat(m.costs).toFixed(2)}</td>
+                <td class="${profitClass}">$${profit.toFixed(2)}</td>
+                <td><span class="badge badge-success">${parseFloat(m.efficiency_score).toFixed(1)}%</span></td>
+                <td>${m.trays_seeded}</td>
+                <td>${m.trays_harvested}</td>
+                <td>${m.orders_fulfilled}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 // Initialize on load

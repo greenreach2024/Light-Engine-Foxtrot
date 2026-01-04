@@ -1068,6 +1068,92 @@
 
             <!-- AI Analytics View -->
             <div id="analytics-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>Farm Analytics & Insights</h1>
+                    <div class="header-actions">
+                        <select id="analytics-farm-select" onchange="loadAnalyticsForFarm(this.value)" class="btn">
+                            <option value="greenreach-greens">GreenReach Greens</option>
+                        </select>
+                        <button class="btn" onclick="refreshAnalytics()">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Farm Metrics KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Production (7d)</div>
+                        <div class="kpi-value" id="analytics-production">-- kg</div>
+                        <div class="kpi-change positive">
+                            <span id="analytics-production-avg">--</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Revenue (7d)</div>
+                        <div class="kpi-value" id="analytics-revenue">$--</div>
+                        <div class="kpi-change positive">
+                            <span id="analytics-revenue-avg">--</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Net Profit (7d)</div>
+                        <div class="kpi-value" id="analytics-profit">$--</div>
+                        <div class="kpi-change positive">
+                            <span id="analytics-profit-margin">--</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Efficiency</div>
+                        <div class="kpi-value" id="analytics-efficiency">--%</div>
+                        <div class="kpi-change positive">
+                            <span id="analytics-efficiency-trend">--</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Trays Harvested</div>
+                        <div class="kpi-value" id="analytics-trays-harvested">--</div>
+                        <div class="kpi-change neutral">
+                            <span id="analytics-trays-seeded">-- seeded</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Orders Fulfilled</div>
+                        <div class="kpi-value" id="analytics-orders">--</div>
+                        <div class="kpi-change positive">
+                            <span id="analytics-orders-avg">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Metrics Table -->
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <div class="card-title">Daily Performance Metrics</div>
+                        <div style="font-size: 0.85rem; color: #a0aec0;" id="analytics-days-count">Last 7 days</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Production (kg)</th>
+                                        <th>Revenue</th>
+                                        <th>Costs</th>
+                                        <th>Profit</th>
+                                        <th>Efficiency</th>
+                                        <th>Trays Seeded</th>
+                                        <th>Trays Harvested</th>
+                                        <th>Orders</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="analytics-metrics-tbody">
+                                    <tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading metrics...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
             <!-- Room Detail View -->
             <div id="room-detail-view" class="view" style="display: none;">
@@ -3737,6 +3823,6 @@
             }
         });
     </script>
-    <script src="/central-admin.js?v=1.6.0"></script>
+    <script src="/central-admin.js?v=1.9.0"></script>
 </body>
 </html>
