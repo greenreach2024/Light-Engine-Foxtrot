@@ -131,16 +131,17 @@
         }
 
         function testWizard() {
+            // Clear everything
             localStorage.removeItem('setup_completed');
             localStorage.removeItem('gr.farm');
             localStorage.removeItem('token');
             localStorage.removeItem('farmId');
             
-            updateStatus('✅ Cleared setup flags. Redirecting to wizard...', 'success');
+            updateStatus('✅ Cleared all setup flags.<br><br><strong>Opening farm-admin.html...</strong><br><br>Expected behavior:<br>1. Page loads<br>2. initDashboard() runs<br>3. Token "local-access" stored<br>4. checkFirstTimeSetup() runs<br>5. API returns setupCompleted: false<br>6. Wizard modal appears<br><br>Check browser console (F12) for [setup-wizard] logs', 'success');
             
             setTimeout(() => {
                 window.location.href = '/farm-admin.html';
-            }, 1000);
+            }, 2000);
         }
 
         function resetAll() {
