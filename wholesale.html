@@ -1314,9 +1314,17 @@
 
       async init() {
         const params = new URLSearchParams(window.location.search);
-        if (params.get('demo') === '0') {
+        
+        // Check if user is authenticated (has JWT token)
+        const token = localStorage.getItem('wholesale_token');
+        if (token) {
+          // User is authenticated - disable demo mode
+          this.demoMode = false;
+          console.log('[Wholesale] Authenticated user detected, disabling demo mode');
+        } else if (params.get('demo') === '0') {
           this.demoMode = false;
         }
+        
         console.log('[Wholesale] Initializing with demoMode:', this.demoMode);
 
         this.setupEventListeners();
@@ -1383,6 +1391,12 @@
           const active = localStorage.getItem('greenreach_active_buyer');
           if (active) {
             this.currentBuyer = JSON.parse(active);
+            // If we have a real user account, disable demo mode
+            const token = localStorage.getItem('wholesale_token');
+            if (token && this.currentBuyer.id !== 'demo-buyer-001') {
+              this.demoMode = false;
+              console.log('[Wholesale] Real user account found, demo mode disabled');
+            }
           }
         } catch (error) {
           this.currentBuyer = null;
