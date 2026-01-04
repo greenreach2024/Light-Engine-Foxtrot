@@ -14152,9 +14152,14 @@ app.get('/api/farms/:farmId/rooms', asyncHandler(async (req, res) => {
  * Get authenticated farm's profile data
  */
 app.get('/api/farm/profile', asyncHandler(async (req, res) => {
+  console.log('[/api/farm/profile] Request received');
+  console.log('[/api/farm/profile] Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('[/api/farm/profile] Authorization header:', req.headers.authorization);
+  
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('[/api/farm/profile] No valid authorization header - returning 401');
     return res.status(401).json({
       status: 'error',
       message: 'Authentication required'
@@ -14162,9 +14167,11 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
   }
   
   const token = authHeader.substring(7);
+  console.log('[/api/farm/profile] Token extracted:', token);
   
   // Handle local-access token for development
   if (token === 'local-access') {
+    console.log('[/api/farm/profile] Local access token recognized - returning mock data');
     return res.json({
       status: 'success',
       farm: {
