@@ -3448,7 +3448,18 @@ async function generateSetupActivityHubQR() {
                 const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activityHubUrl)}`;
                 qrContainer.innerHTML = `<img src="${qrApiUrl}" alt="Activity Hub QR Code" style="width: 200px; height: 200px;">`;
                 console.log('[Setup] Activity Hub QR code generated (API fallback)');
-            }currentSession?.farmId || '';
+            }
+        }
+    } catch (error) {
+        console.error('[Setup] Failed to generate Activity Hub QR:', error);
+    }
+}
+
+/**
+ * Open QR Generator tool in new window
+ */
+function openQRGenerator() {
+    const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id') || currentSession?.farmId || '';
     const farmName = currentSession?.farmName || localStorage.getItem('farmName') || 'Light Engine Farm';
     
     // Build URL with farm parameters for Activity Hub QR codes
@@ -3458,18 +3469,7 @@ async function generateSetupActivityHubQR() {
     
     const url = `/LE-qr-generator.html?${params.toString()}`;
     window.open(url, '_blank', 'width=1200,height=800');
-    console.log('[Setup] Opened QR Generator tool with farmId:', farmId, 'farmName:', farmNametivity Hub QR:', error);
-    }
-}
-
-/**
- * Open QR Generator tool in new window
- */
-function openQRGenerator() {
-    const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id') || '';
-    const url = `/LE-qr-generator.html${farmId ? '?farmId=' + farmId : ''}`;
-    window.open(url, '_blank', 'width=1200,height=800');
-    console.log('[Setup] Opened QR Generator tool');
+    console.log('[Setup] Opened QR Generator tool with farmId:', farmId, 'farmName:', farmName);
 }
 
 /**
