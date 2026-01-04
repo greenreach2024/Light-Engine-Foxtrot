@@ -2504,6 +2504,9 @@ async function loadAccountingData() {
     const period = document.getElementById('accountingPeriod')?.value || 'month';
     console.log(` Loading financial data for period: ${period}`);
     
+    // Check QuickBooks connection status
+    await checkQuickBooksStatus();
+    
     try {
         // Calculate date range based on period
         const now = new Date();
@@ -2740,6 +2743,201 @@ function exportFinancialReport() {
  */
 function printFinancialReport() {
     window.print();
+}
+
+// ============================================================================
+// QUICKBOOKS INTEGRATION FUNCTIONS
+// ============================================================================
+
+/**
+ * Check QuickBooks connection status
+ */
+async function checkQuickBooksStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/api/farm-sales/quickbooks/status`, {
+            headers: {
+                'Authorization': `Bearer ${currentSession?.token || localStorage.getItem('token')}`,
+                'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.connected) {
+            document.getElementById('quickbooks-not-connected').style.display = 'none';
+            document.getElementById('quickbooks-connected').style.display = 'block';
+            document.getElementById('qb-company-name').textContent = data.companyName || 'Connected';
+            document.getElementById('qb-last-sync').textContent = data.lastSync ? new Date(data.lastSync).toLocaleString() : 'Never';
+        } else {
+            document.getElementById('quickbooks-not-connected').style.display = 'block';
+            document.getElementById('quickbooks-connected').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error checking QuickBooks status:', error);
+    }
+}
+
+/**
+ * Connect to QuickBooks
+ */
+async function connectQuickBooks() {
+    try {
+        const response = await fetch(`${API_BASE}/api/farm-sales/quickbooks/auth`, {
+            headers: {
+                'Authorization': `Bearer ${currentSession?.token || localStorage.getItem('token')}`,
+                'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.authUrl) {
+            window.open(data.authUrl, 'QuickBooks OAuth', 'width=800,height=600');
+            showToast('Opening QuickBooks authorization window...', 'info');
+            
+            // Poll for connection status
+            const pollInterval = setInterval(async () => {
+                await checkQuickBooksStatus();
+                const connected = document.getElementById('quickbooks-connected').style.display === 'block';
+                if (connected) {
+                    clearInterval(pollInterval);
+                    showToast('Successfully connected to QuickBooks!', 'success');
+                }
+            }, 3000);
+            
+            // Stop polling after 5 minutes
+            setTimeout(() => clearInterval(pollInterval), 300000);
+        }
+    } catch (error) {
+        console.error('Error connecting to QuickBooks:', error);
+        showToast('Failed to connect to QuickBooks', 'error');
+    }
+}
+
+/**
+ * Disconnect from QuickBooks
+ */
+async function disconnectQuickBooks() {
+    if (!confirm('Are you sure you want to disconnect from QuickBooks?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/farm-sales/quickbooks/disconnect`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentSession?.token || localStorage.getItem('token')}`,
+                'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            document.getElementById('quickbooks-not-connected').style.display = 'block';
+            document.getElementById('quickbooks-connected').style.display = 'none';
+            showToast('Disconnected from QuickBooks', 'success');
+        }
+    } catch (error) {
+        console.error('Error disconnecting from QuickBooks:', error);
+        showToast('Failed to disconnect from QuickBooks', 'error');
+    }
+}
+
+/**
+ * Sync invoices to QuickBooks
+ */
+async function syncQuickBooksInvoices() {
+    document.getElementById('qb-sync-status').textContent = 'Syncing invoices...';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/farm-sales/quickbooks/sync-invoices`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentSession?.token || localStorage.getItem('token')}`,
+                'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            showToast(`Synced ${data.count || 0} invoices to QuickBooks`, 'success');
+            document.getElementById('qb-sync-status').textContent = 'Ready';
+            document.getElementById('qb-last-sync').textContent = new Date().toLocaleString();
+        } else {
+            throw new Error(data.message || 'Sync failed');
+        }
+    } catch (error) {
+        console.error('Error syncing invoices:', error);
+        showToast('Failed to sync invoices', 'error');
+        document.getElementById('qb-sync-status').textContent = 'Error';
+    }
+}
+
+/**
+ * Sync payments to QuickBooks
+ */
+async function syncQuickBooksPayments() {
+    document.getElementById('qb-sync-status').textContent = 'Syncing payments...';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/farm-sales/quickbooks/sync-payments`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentSession?.token || localStorage.getItem('token')}`,
+                'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            showToast(`Synced ${data.count || 0} payments to QuickBooks`, 'success');
+            document.getElementById('qb-sync-status').textContent = 'Ready';
+            document.getElementById('qb-last-sync').textContent = new Date().toLocaleString();
+        } else {
+            throw new Error(data.message || 'Sync failed');
+        }
+    } catch (error) {
+        console.error('Error syncing payments:', error);
+        showToast('Failed to sync payments', 'error');
+        document.getElementById('qb-sync-status').textContent = 'Error';
+    }
+}
+
+/**
+ * Sync customers to QuickBooks
+ */
+async function syncQuickBooksCustomers() {
+    document.getElementById('qb-sync-status').textContent = 'Syncing customers...';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/farm-sales/quickbooks/sync/customer`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentSession?.token || localStorage.getItem('token')}`,
+                'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            showToast(`Synced ${data.count || 0} customers to QuickBooks`, 'success');
+            document.getElementById('qb-sync-status').textContent = 'Ready';
+            document.getElementById('qb-last-sync').textContent = new Date().toLocaleString();
+        } else {
+            throw new Error(data.message || 'Sync failed');
+        }
+    } catch (error) {
+        console.error('Error syncing customers:', error);
+        showToast('Failed to sync customers', 'error');
+        document.getElementById('qb-sync-status').textContent = 'Error';
+    }
 }
 
 // ============================================================================

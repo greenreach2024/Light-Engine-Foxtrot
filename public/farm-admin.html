@@ -1894,6 +1894,57 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- QuickBooks Integration -->
+                <div class="card">
+                    <h2>QuickBooks Integration</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Export financial data to QuickBooks Online for comprehensive accounting and tax preparation.</p>
+                    
+                    <div id="quickbooks-not-connected" style="display: block;">
+                        <div style="padding: 30px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%); border-radius: 8px; text-align: center;">
+                            <div style="font-size: 48px; margin-bottom: 15px;">&#128202;</div>
+                            <h3 style="margin-bottom: 10px;">Connect to QuickBooks Online</h3>
+                            <p style="color: var(--text-secondary); margin-bottom: 20px;">Automatically sync invoices, payments, and financial reports to your QuickBooks account.</p>
+                            <button onclick="connectQuickBooks()" style="padding: 12px 32px; background: #2ca01c; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 16px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                                Connect to QuickBooks
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="quickbooks-connected" style="display: none;">
+                        <div style="padding: 20px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border-left: 4px solid var(--accent-green); margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 5px;">Connected to QuickBooks</div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Company: <span id="qb-company-name">--</span></div>
+                                    <div style="font-size: 14px; color: var(--text-secondary);">Last Sync: <span id="qb-last-sync">--</span></div>
+                                </div>
+                                <button onclick="disconnectQuickBooks()" style="padding: 8px 16px; background: var(--accent-red); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    Disconnect
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                            <button onclick="syncQuickBooksInvoices()" style="padding: 15px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: left; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-blue)'" onmouseout="this.style.borderColor='var(--border)'">
+                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 5px;">Sync Invoices</div>
+                                <div style="font-weight: 600; color: var(--accent-blue);">Export to QuickBooks</div>
+                            </button>
+                            <button onclick="syncQuickBooksPayments()" style="padding: 15px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: left; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-green)'" onmouseout="this.style.borderColor='var(--border)'">
+                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 5px;">Sync Payments</div>
+                                <div style="font-weight: 600; color: var(--accent-green);">Update Transactions</div>
+                            </button>
+                            <button onclick="syncQuickBooksCustomers()" style="padding: 15px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: left; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-purple)'" onmouseout="this.style.borderColor='var(--border)'">
+                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 5px;">Sync Customers</div>
+                                <div style="font-weight: 600; color: var(--accent-purple);">Update Client List</div>
+                            </button>
+                        </div>
+
+                        <div style="padding: 15px; background: rgba(245, 158, 11, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-yellow);">
+                            <strong>Sync Status:</strong> <span id="qb-sync-status">Ready</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Payment Methods Section -->
