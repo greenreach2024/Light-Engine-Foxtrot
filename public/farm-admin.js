@@ -3476,9 +3476,18 @@ function openQRGenerator() {
  * Show first-time setup modal
  */
 async function showFirstTimeSetup() {
+    console.log('[setup-wizard] showFirstTimeSetup() called');
     const modal = document.getElementById('first-time-setup-modal');
+    console.log('[setup-wizard] Modal element found:', !!modal);
+    
+    if (!modal) {
+        console.error('[setup-wizard] Modal element #first-time-setup-modal not found in DOM!');
+        return;
+    }
+    
     if (modal) {
         modal.style.display = 'flex';
+        console.log('[setup-wizard] Modal display set to flex');
         
         // Check if this is a Cloud plan customer (skip activation code step)
         const token = localStorage.getItem('token');
