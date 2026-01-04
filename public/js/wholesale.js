@@ -620,8 +620,10 @@
         this.updateDemoBanner();
       } catch (error) {
         console.warn('Demo catalog unavailable:', error.message);
-        this.catalog = [];
-        this.renderCatalog();
+        // Fallback to live catalog if demo assets are missing
+        this.demoMode = false;
+        this.updateDemoBanner();
+        await this.loadCatalog();
       }
     },
 
