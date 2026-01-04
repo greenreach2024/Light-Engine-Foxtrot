@@ -194,19 +194,19 @@
 
             <div class="info-box">
                 <h2>What happens next?</h2>
-                <p><strong>1. Automatic Login</strong> - You're being signed in automatically (no need to check email).</p>
-                <p><strong>2. Dashboard Access</strong> - You'll be redirected to your dashboard in a moment.</p>
-                <p><strong>3. Complete Setup</strong> - Follow the guided setup wizard to configure your farm.</p>
+                <p><strong>1. Automatic Login</strong> - You're being signed in automatically.</p>
+                <p><strong>2. Setup Wizard</strong> - Complete your farm profile and create your first password.</p>
+                <p><strong>3. Configure Your Farm</strong> - Add grow rooms and zones.</p>
                 <p><strong>4. Start Growing!</strong> - Begin managing your farm operations.</p>
             </div>
 
             <div class="alert">
                 <strong>Note</strong>
-                <p>We've also sent your login credentials via email for future reference. You can use them to sign in from other devices.</p>
+                <p>We've sent a backup email with login credentials for other devices. You'll set your own password in the setup wizard.</p>
             </div>
 
             <div class="spinner" style="margin-top: 24px;"></div>
-            <p style="color: #4a5568; margin-top: 12px;">Redirecting to dashboard...</p>
+            <p style="color: #4a5568; margin-top: 12px;">Redirecting to setup wizard...</p>
 
             <div class="support">
                 <p>Didn't receive the email? Check your spam folder or <a href="mailto:support@greenreach.io">contact support</a></p>
@@ -275,6 +275,8 @@
                     if (data.token) {
                         localStorage.setItem('token', data.token);
                         localStorage.setItem('farmId', data.farm_id);
+                        localStorage.setItem('email', data.email);
+                        localStorage.setItem('isNewUser', 'true'); // Flag for first-time setup
                         console.log('JWT token stored, user auto-authenticated');
                     }
                     
@@ -283,9 +285,9 @@
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('success').classList.remove('hidden');
                         
-                        // Auto-redirect to dashboard after 3 seconds
+                        // Redirect to setup wizard for new users after 3 seconds
                         setTimeout(() => {
-                            window.location.href = '/dashboard.html';
+                            window.location.href = '/setup-wizard.html';
                         }, 3000);
                     }, 1500); // Small delay for better UX
                 } else {
