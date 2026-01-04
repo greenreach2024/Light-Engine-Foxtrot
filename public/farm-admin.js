@@ -3372,31 +3372,17 @@ let setupData = {
  */
 async function checkFirstTimeSetup() {
     try {
-        // Check for force-wizard URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const forceWizard = urlParams.get('wizard') === 'true' || urlParams.get('setup') === 'true';
-        
-        if (!forceWizard) {
-            // Check localStorage first to prevent wizard loop
-            const setupCompleted = localStorage.getItem('setup_completed');
-            const farmData = localStorage.getItem('gr.farm');
-            
-            // If setup marked complete in localStorage, skip wizard
-            if (setupCompleted === 'true' || farmData) {
-                console.log('[setup-wizard] Setup already completed, skipping wizard');
-                return;
-            }
-        } else {
-            console.log('[setup-wizard] Force-showing wizard via URL parameter');
-        }
-        
         const token = localStorage.getItem('token');
         if (!token) {
             console.log('[setup-wizard] No token found, skipping setup check');
             return;
         }
         
-        // Use /api/setup-wizard/status endpoint
+        // Check for force-wizard URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const forceWizard = urlParams.get('wizard') === 'true' || urlParams.get('setup') === 'true';
+        
+        // Always check API status (don't trust localStorage alone)
         const response = await fetch('/api/setup-wizard/status', {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -3404,16 +3390,22 @@ async function checkFirstTimeSetup() {
         });
         
         const data = await response.json();
+        console.log('[setup-wizard] API status:', data);
         
-        // Check 'setupCompleted' field
-        if (!data.setupCompleted) {
+        // If API says setup NOT complete, clear any stale localStorage and show wizard
+        if (!data.setupCompleted || forceWizard) {
+            // Clear stale localStorage flags
+            localStorage.removeItem('setup_completed');
+            
+            console.log('[setup-wizard] Showing wizard - setupCompleted:', data.setupCompleted, 'forceWizard:', forceWizard);
             showFirstTimeSetup();
         } else {
             // Mark as completed in localStorage to prevent future wizard displays
             localStorage.setItem('setup_completed', 'true');
+            console.log('[setup-wizard] Setup already completed');
         }
     } catch (error) {
-        console.log('[setup-wizard] Setup status check failed:', error.message);
+        console.error('[setup-wizard] Setup status check failed:', error);
         // Don't show wizard on error - prevents annoying users
     }
 }
