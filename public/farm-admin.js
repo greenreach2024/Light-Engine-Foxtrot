@@ -3511,28 +3511,50 @@ async function showFirstTimeSetup() {
         
         // Fetch farm data from API to pre-fill fields with purchase info
         try {
+            console.log('[Setup] Fetching farm profile for pre-fill...');
             const response = await fetch(`${window.API_BASE || ''}/api/farm/profile`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
             
+            console.log('[Setup] Farm profile response status:', response.status);
+            
             if (response.ok) {
                 const data = await response.json();
+                console.log('[Setup] Farm profile data received:', data);
+                
                 if (data.status === 'success' && data.farm) {
                     console.log('[Setup] Pre-filling wizard with purchase data:', data.farm);
                     
                     // Pre-fill Step 2: Business Profile with data from purchase
-                    if (data.farm.name) {
-                        document.getElementById('setup-farm-name').value = data.farm.name;
+                    const farmNameField = document.getElementById('setup-farm-name');
+                    const contactNameField = document.getElementById('setup-contact-name');
+                    const contactEmailField = document.getElementById('setup-contact-email');
+                    
+                    console.log('[Setup] Form fields found:', {
+                        farmName: !!farmNameField,
+                        contactName: !!contactNameField,
+                        contactEmail: !!contactEmailField
+                    });
+                    
+                    if (data.farm.name && farmNameField) {
+                        farmNameField.value = data.farm.name;
+                        console.log('[Setup] Set farm name:', data.farm.name);
                     }
-                    if (data.farm.contactName) {
-                        document.getElementById('setup-contact-name').value = data.farm.contactName;
+                    if (data.farm.contactName && contactNameField) {
+                        contactNameField.value = data.farm.contactName;
+                        console.log('[Setup] Set contact name:', data.farm.contactName);
                     }
-                    if (data.farm.email) {
-                        document.getElementById('setup-contact-email').value = data.farm.email;
+                    if (data.farm.email && contactEmailField) {
+                        contactEmailField.value = data.farm.email;
+                        console.log('[Setup] Set email:', data.farm.email);
                     }
+                } else {
+                    console.warn('[Setup] API response missing farm data:', data);
                 }
+            } else {
+                console.error('[Setup] Farm profile API returned error:', response.status, response.statusText);
             }
         } catch (error) {
             console.error('[Setup] Could not fetch farm data for pre-fill:', error);
