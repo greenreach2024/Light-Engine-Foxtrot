@@ -78,6 +78,12 @@ async function initDashboard() {
         role: 'admin'
     };
     
+    // Store token in localStorage for wizard check
+    if (!localStorage.getItem('token')) {
+        localStorage.setItem('token', 'local-access');
+        localStorage.setItem('farmId', 'LOCAL-FARM');
+    }
+    
     // Setup navigation
     setupNavigation();
     
