@@ -993,4 +993,37 @@ router.get('/farms/:farmId/inventory', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * Get farm devices
+ * GET /api/admin/farms/:farmId/devices
+ */
+router.get('/farms/:farmId/devices', requireAdmin, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    const devices = await dbQuery(`
+      SELECT 
+        device_id,
+        device_code,
+        device_name,
+        device_type,
+        vendor,
+        model,
+        firmware_version,
+        location,
+        status,
+        last_seen,
+        created_at
+      FROM devices
+      WHERE farm_id = $1
+      ORDER BY device_type ASC, device_code ASC
+    `, [farmId]);
+    
+    res.json({ success: true, devices });
+  } catch (error) {
+    console.error('Error fetching farm devices:', error);
+    res.status(500).json({ error: 'Failed to fetch devices' });
+  }
+});
+
 export default router;

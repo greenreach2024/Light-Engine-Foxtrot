@@ -1616,23 +1616,26 @@ function renderRoomsTable() {
  * Load farm devices
  */
 async function loadFarmDevices(farmId, count) {
-    const deviceTypes = ['light', 'sensor', 'hvac', 'irrigation'];
-    const statuses = ['online', 'online', 'online', 'offline'];
-    devicesData = [];
-    
-    for (let i = 1; i <= Math.min(count, 50); i++) {
-        const type = deviceTypes[Math.floor(Math.random() * deviceTypes.length)];
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
+    try {
+        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
+        const data = await response.json();
         
-        devicesData.push({
-            deviceId: `DEV-${String(i).padStart(4, '0')}`,
-            name: `${type.charAt(0).toUpperCase() + type.slice(1)} ${i}`,
-            type,
-            location: `Room ${String.fromCharCode(65 + Math.floor(Math.random() * 5))} / Zone ${Math.floor(Math.random() * 5) + 1}`,
-            status,
-            lastSeen: generateRandomTime(),
-            firmware: `v${Math.floor(Math.random() * 3) + 1}.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 20)}`
-        });
+        if (data.success && data.devices) {
+            devicesData = data.devices.map(device => ({
+                deviceId: device.device_code,
+                name: device.device_name || 'Unnamed Device',
+                type: device.device_type,
+                location: device.location || 'Unknown',
+                status: device.status || 'offline',
+                lastSeen: device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never',
+                firmware: device.firmware_version || 'Unknown'
+            }));
+        } else {
+            devicesData = [];
+        }
+    } catch (error) {
+        console.error('Error loading farm devices:', error);
+        devicesData = [];
     }
     
     renderDevicesTable(devicesData);
@@ -1643,6 +1646,11 @@ async function loadFarmDevices(farmId, count) {
  */
 function renderDevicesTable(devices) {
     const tbody = document.getElementById('devices-tbody');
+    
+    if (devices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #a0aec0;">No devices found for this farm. Add devices to monitor equipment.</td></tr>';
+        return;
+    }
     
     tbody.innerHTML = devices.map(device => `
         <tr>
