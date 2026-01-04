@@ -300,6 +300,7 @@ function renderContextualSidebar() {
                     title: 'Wholesale',
                     items: [
                         { label: 'Admin Dashboard', view: 'wholesale-admin', external: '/GR-admin.html' },
+                        { label: 'Buyers', view: 'wholesale-buyers', external: '/GR-wholesale-admin.html' },
                         { label: 'Buyer Portal', view: 'wholesale-buyer', external: '/GR-wholesale.html' }
                     ]
                 },
@@ -654,7 +655,7 @@ async function loadFarms(page = 1) {
         }
         
         const data = await response.json();
-        farmsData = data.farms;
+        farmsData = data.farms || [];
         renderFarmsTable(farmsData);
         
         // Update pagination if available
@@ -663,10 +664,11 @@ async function loadFarms(page = 1) {
         }
     } catch (error) {
         console.error('Error loading farms:', error);
-        // Fallback to simulated data if API fails
-        console.warn('Falling back to simulated data');
-        farmsData = generateSampleFarms(12);
-        renderFarmsTable(farmsData);
+        // Show error message instead of mock data
+        const tbody = document.querySelector('#farmsTable tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--accent-red);">Failed to load farms. Please check your connection and try refreshing the page.</td></tr>';
+        }
     }
 }
 
@@ -719,31 +721,30 @@ function renderFarmsTable(farms) {
     }
     
     tbody.innerHTML = farms.map(farm => {
-        // Format last heartbeat/update
-        const lastUpdate = farm.lastHeartbeat 
-            ? new Date(farm.lastHeartbeat).toLocaleString()
+        // Format last login/update from database
+        const lastUpdate = farm.last_login || farm.updated_at
+            ? new Date(farm.last_login || farm.updated_at).toLocaleString()
             : 'Never';
         
-        // Show email if available
+        // Use database fields: farm_id, name, email, status, tier, user_count
         const email = farm.email || '';
+        const farmId = farm.farm_id || farm.farmId || 'unknown';
+        const status = farm.status || 'unknown';
+        const tier = farm.tier || farm.plan_type || 'standard';
         
         return `
         <tr>
-            <td><code>${farm.farmId}</code></td>
+            <td><code>${farmId}</code></td>
             <td>
                 <strong>${farm.name}</strong>
                 ${email ? `<br><small style="color: var(--text-muted)">${email}</small>` : ''}
             </td>
-            <td><span class="badge badge-${getStatusBadgeClass(farm.status)}">${farm.status}</span></td>
-            <td>${farm.rooms || 0}</td>
-            <td>${farm.zones || 0}</td>
-            <td>${farm.devices || 0}</td>
-            <td>${farm.trays || 0}</td>
-            <td>${farm.energy || 0} kWh</td>
-            <td>${farm.alerts > 0 ? `<span class="badge badge-danger">${farm.alerts}</span>` : '-'}</td>
+            <td><span class="badge badge-${getStatusBadgeClass(status)}">${status}</span></td>
+            <td><span class="badge badge-${tier === 'enterprise' ? 'success' : 'info'}">${tier}</span></td>
+            <td>${farm.user_count || 0}</td>
             <td>${lastUpdate}</td>
             <td>
-                <button class="btn" onclick="drillToFarm('${farm.farmId}')">View</button>
+                <button class="btn" onclick="drillToFarm('${farmId}')">View</button>
                 ${email ? `<button class="btn" style="background: var(--accent-red); margin-left: 5px;" onclick="deleteFarm('${email}', '${farm.name}')">Delete</button>` : ''}
             </td>
         </tr>
