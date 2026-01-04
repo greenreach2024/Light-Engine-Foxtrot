@@ -188,7 +188,8 @@ function renderContextualSidebar() {
                 {
                     title: 'Wholesale',
                     items: [
-                        { label: 'Admin Dashboard', view: 'wholesale-admin', external: '/GR-admin.html' },
+                        { label: 'Buyers', view: 'wholesale-buyers', external: '/GR-wholesale-admin.html' },
+                        { label: 'Purchase Orders', view: 'wholesale-orders' },
                         { label: 'Buyer Portal', view: 'wholesale-buyer', external: '/GR-wholesale.html' }
                     ]
                 },
@@ -204,7 +205,8 @@ function renderContextualSidebar() {
                     title: 'Management',
                     items: [
                         { label: 'All Farms', view: 'farms' },
-                        { label: 'Users', view: 'users' }
+                        { label: 'Admin Users', view: 'admin-users' },
+                        { label: 'Exports', view: 'exports' }
                     ]
                 }
             ];

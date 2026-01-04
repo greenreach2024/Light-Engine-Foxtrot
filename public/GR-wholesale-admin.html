@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wholesale Admin - GreenReach</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0a0f1e;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --border: #2d3748;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .header h1 { font-size: 24px; }
+        .btn {
+            padding: 10px 20px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+        .btn:hover { opacity: 0.9; }
+        .search-bar {
+            padding: 10px 15px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            width: 300px;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-body { padding: 20px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            text-align: left;
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        td {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+        tr:hover { background: rgba(59, 130, 246, 0.05); }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .badge-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+        }
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-header {
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🛒 Wholesale Buyers Management</h1>
+                <p style="color: var(--text-secondary); margin-top: 5px;">Manage buyers, orders, and passwords</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn" onclick="window.location.href='/GR-central-admin.html'">← Back to Admin</button>
+                <button class="btn btn-primary" onclick="exportBuyers()">📊 Export to CSV</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>All Buyers</h3>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" class="search-bar" id="searchInput" placeholder="Search buyers..." onkeyup="searchBuyers()">
+                    <select class="btn" id="typeFilter" onchange="loadBuyers()">
+                        <option value="">All Types</option>
+                        <option value="restaurant">Restaurant</option>
+                        <option value="grocery">Grocery Store</option>
+                        <option value="distributor">Distributor</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Business Name</th>
+                            <th>Contact</th>
+                            <th>Email</th>
+                            <th>Type</th>
+                            <th>Location</th>
+                            <th>Joined</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="buyersTable">
+                        <tr><td colspan="7" style="text-align: center; padding: 40px;">Loading buyers...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Reset Modal -->
+    <div id="resetPasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Reset Buyer Password</div>
+            <div class="form-group">
+                <label>Buyer Email</label>
+                <input type="text" id="resetEmail" readonly>
+            </div>
+            <div class="form-group">
+                <label>New Password</label>
+                <input type="text" id="newPassword" placeholder="Enter new password">
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="closeResetModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitPasswordReset()">Reset Password</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin.replace(/^http:/i, 'https:');
+        let allBuyers = [];
+
+        async function loadBuyers() {
+            try {
+                const typeFilter = document.getElementById('typeFilter').value;
+                const params = new URLSearchParams();
+                if (typeFilter) params.append('buyerType', typeFilter);
+                
+                const token = localStorage.getItem('admin_token');
+                const response = await fetch(`${API_BASE}/api/admin/wholesale/buyers?${params}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load buyers');
+                
+                const data = await response.json();
+                allBuyers = data.data?.buyers || [];
+                renderBuyers(allBuyers);
+            } catch (error) {
+                console.error('Error loading buyers:', error);
+                document.getElementById('buyersTable').innerHTML = 
+                    '<tr><td colspan="7" style="text-align: center; color: var(--accent-red); padding: 40px;">Failed to load buyers. Please check your authentication.</td></tr>';
+            }
+        }
+
+        function renderBuyers(buyers) {
+            const tbody = document.getElementById('buyersTable');
+            
+            if (buyers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">No buyers found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = buyers.map(buyer => `
+                <tr>
+                    <td><strong>${buyer.business_name}</strong></td>
+                    <td>${buyer.contact_name}</td>
+                    <td>${buyer.email}</td>
+                    <td><span class="badge badge-success">${buyer.buyer_type}</span></td>
+                    <td>${buyer.location || 'N/A'}</td>
+                    <td>${new Date(buyer.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <button class="btn" onclick="resetPassword('${buyer.email}')">🔑 Reset Password</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function searchBuyers() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allBuyers.filter(b => 
+                b.business_name.toLowerCase().includes(query) ||
+                b.contact_name.toLowerCase().includes(query) ||
+                b.email.toLowerCase().includes(query)
+            );
+            renderBuyers(filtered);
+        }
+
+        function resetPassword(email) {
+            document.getElementById('resetEmail').value = email;
+            document.getElementById('newPassword').value = '';
+            document.getElementById('resetPasswordModal').classList.add('active');
+        }
+
+        function closeResetModal() {
+            document.getElementById('resetPasswordModal').classList.remove('active');
+        }
+
+        async function submitPasswordReset() {
+            const email = document.getElementById('resetEmail').value;
+            const newPassword = document.getElementById('newPassword').value;
+            
+            if (!newPassword || newPassword.length < 8) {
+                alert('Password must be at least 8 characters');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('admin_token');
+                const response = await fetch(`${API_BASE}/api/admin/wholesale/buyers/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, newPassword })
+                });
+                
+                if (!response.ok) throw new Error('Failed to reset password');
+                
+                alert('Password reset successfully!');
+                closeResetModal();
+            } catch (error) {
+                console.error('Error resetting password:', error);
+                alert('Failed to reset password. Please try again.');
+            }
+        }
+
+        function exportBuyers() {
+            const csv = [
+                ['Business Name', 'Contact', 'Email', 'Type', 'Location', 'Joined'],
+                ...allBuyers.map(b => [
+                    b.business_name,
+                    b.contact_name,
+                    b.email,
+                    b.buyer_type,
+                    b.location || '',
+                    new Date(b.created_at).toLocaleDateString()
+                ])
+            ].map(row => row.join(',')).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `wholesale-buyers-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Check authentication
+        if (!localStorage.getItem('admin_token')) {
+            window.location.href = '/GR-central-admin-login.html';
+        }
+
+        // Load buyers on page load
+        loadBuyers();
+    </script>
+</body>
+</html>

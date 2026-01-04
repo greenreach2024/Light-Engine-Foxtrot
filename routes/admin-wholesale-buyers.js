@@ -313,4 +313,50 @@ router.get('/buyers/search', async (req, res) => {
   }
 });
 
+// POST /api/admin/wholesale/buyers/reset-password - Reset password by email
+router.post('/buyers/reset-password', async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ status: 'error', message: 'Email and newPassword required' });
+    }
+
+    // Hash the new password
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    // Update buyer password by email
+    const result = await pool.query(
+      'UPDATE wholesale_buyers SET password_hash = $1 WHERE email = $2 RETURNING email, business_name, contact_name',
+      [passwordHash, email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Buyer not found' });
+    }
+
+    const buyer = result.rows[0];
+    console.log(`[Admin] Reset password for buyer ${buyer.email}`);
+
+    // Send confirmation email
+    try {
+      await sendEmail({
+        to: buyer.email,
+        subject: 'Your GreenReach Password Has Been Reset',
+        text: `Hi ${buyer.contact_name},\n\nYour GreenReach wholesale buyer account password has been reset by an administrator.\n\nPlease log in with your new password.\n\nLogin at: ${process.env.WHOLESALE_FRONTEND_URL || 'https://greenreachgreens.com'}/GR-wholesale.html\n\nBest regards,\nThe GreenReach Team`
+      });
+    } catch (emailError) {
+      console.error('Failed to send reset confirmation email:', emailError);
+    }
+
+    return res.json({
+      status: 'ok',
+      message: 'Password reset successfully'
+    });
+  } catch (error) {
+    console.error('Admin reset password error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to reset password' });
+  }
+});
+
 export default router;
