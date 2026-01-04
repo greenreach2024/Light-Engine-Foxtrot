@@ -3473,6 +3473,75 @@ function openQRGenerator() {
 }
 
 /**
+ * Show Activity Hub app download QR code
+ */
+function showActivityHubDownloadQR() {
+    const container = document.getElementById('activityHubDownloadQRContainer');
+    const qrContainer = document.getElementById('activityHubDownloadQRCode');
+    
+    if (!container || !qrContainer) {
+        console.error('Activity Hub download QR containers not found');
+        return;
+    }
+    
+    // App Store URL for GreenReach Activity Hub app
+    // Replace with actual App Store URL when app is published
+    const appStoreUrl = 'https://apps.apple.com/app/greenreach-activity-hub/id123456789';
+    
+    // For now, show TestFlight or web app URL
+    const activityHubUrl = 'https://greenreach.farm/activity-hub/install';
+    
+    try {
+        // Clear existing QR code
+        qrContainer.innerHTML = '';
+        
+        // Generate QR code using qrcode.js if available
+        if (typeof QRCode !== 'undefined') {
+            new QRCode(qrContainer, {
+                text: activityHubUrl,
+                width: 256,
+                height: 256,
+                colorDark: '#1a2332',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            console.log('Activity Hub download QR code generated');
+        } else {
+            // Fallback to API-based QR code generation
+            const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(activityHubUrl)}`;
+            qrContainer.innerHTML = `<img src="${qrApiUrl}" alt="Activity Hub Download QR" style="width: 256px; height: 256px; border-radius: 8px;">`;
+            console.log('Activity Hub download QR code generated (API fallback)');
+        }
+        
+        // Show container
+        container.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Failed to generate Activity Hub download QR:', error);
+        qrContainer.innerHTML = `
+            <div style="padding: 40px; color: #ef4444;">
+                <p style="margin: 0; font-weight: 600;">Unable to generate QR code</p>
+                <p style="margin: 8px 0 0 0; font-size: 0.85rem;">Visit: ${activityHubUrl}</p>
+            </div>
+        `;
+        container.style.display = 'block';
+    }
+}
+
+/**
+ * Close Activity Hub download QR code
+ */
+function closeActivityHubDownloadQR() {
+    const container = document.getElementById('activityHubDownloadQRContainer');
+    if (container) {
+        container.style.display = 'none';
+    }
+}
+    window.open(url, '_blank', 'width=1200,height=800');
+    console.log('[Setup] Opened QR Generator tool with farmId:', farmId, 'farmName:', farmName);
+}
+
+/**
  * Show first-time setup modal
  */
 async function showFirstTimeSetup() {
