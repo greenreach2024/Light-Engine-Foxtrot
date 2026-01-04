@@ -72,6 +72,50 @@ import validator from 'validator';
 import rateLimit from 'express-rate-limit';
 import net from 'node:net';
 import mqtt from 'mqtt';
+
+// =====================================================
+// Plan-Based Access Control Middleware
+// =====================================================
+// Cloud customers get read-only monitoring access to prevent control issues
+// when their computer is offline. Edge customers (on-site hardware) get full control.
+
+function requireEdgeForControl(req, res, next) {
+  // Extract JWT token from Authorization header or query param
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') 
+    ? authHeader.substring(7) 
+    : req.query.token || req.cookies?.token;
+  
+  if (!token) {
+    // No token - allow for backward compatibility with PIN-based auth
+    return next();
+  }
+  
+  try {
+    const jwtSecret = process.env.JWT_SECRET || getJwtSecret();
+    const decoded = jwt.verify(token, jwtSecret);
+    const planType = (decoded.planType || '').toLowerCase();
+    
+    // Cloud users are restricted to read-only monitoring
+    if (planType === 'cloud') {
+      return res.status(403).json({
+        ok: false,
+        error: 'control_restricted',
+        message: 'Cloud plan does not allow direct device control. Use Edge hardware for reliable 24/7 automation.',
+        help: 'Cloud customers can monitor sensors but cannot send control commands. This prevents farm failures when your computer is offline.',
+        planType: 'cloud',
+        upgradeUrl: '/purchase.html?plan=edge'
+      });
+    }
+    
+    // Edge users and demo mode get full control access
+    next();
+  } catch (error) {
+    // Invalid token - let other middleware handle auth
+    console.warn('[access-control] JWT verification failed:', error.message);
+    next();
+  }
+}
 import AutomationRulesEngine from './lib/automation-engine.js';
 import { createPreAutomationLayer } from './automation/index.js';
 import {
@@ -2175,8 +2219,8 @@ app.post('/env/readings', pinGuard, (req, res) => {
   res.json({ ok: true, reading: entry });
 });
 
-// POST /automation/run → run one policy tick for a room (or all)
-app.post('/automation/run', async (req, res) => {
+// POST /automation/run → run one policy tick for a room (or all) - Edge-only
+app.post('/automation/run', requireEdgeForControl, async (req, res) => {
   if (needPin(req, res)) return;
   const room = (req.body || {}).room || null;
   const st = readEnv();
@@ -5301,7 +5345,7 @@ app.delete('/plugs/:plugId', pinGuard, (req, res) => {
   }
 });
 
-app.post('/plugs/:plugId/state', pinGuard, asyncHandler(async (req, res) => {
+app.post('/plugs/:plugId/state', requireEdgeForControl, pinGuard, asyncHandler(async (req, res) => {
   setPreAutomationCors(req, res);
   const plugId = decodeURIComponent(req.params.plugId);
   const body = req.body || {};
@@ -6086,8 +6130,8 @@ app.post('/devices', async (req, res) => {
   }
 });
 
-// PATCH /devices/:id → partial update
-app.patch('/devices/:id', async (req, res) => {
+// PATCH /devices/:id → partial update (Edge-only)
+app.patch('/devices/:id', requireEdgeForControl, async (req, res) => {
   try {
     setApiCors(res);
     const id = req.params.id;
@@ -8156,8 +8200,8 @@ app.get("/api/switchbot/devices/:deviceId/status", asyncHandler(async (req, res)
   }
 }));
 
-// Device control endpoints for plugs
-app.post("/api/switchbot/devices/:deviceId/commands", async (req, res) => {
+// Device control endpoints for plugs (Edge-only - Cloud users get read-only access)
+app.post("/api/switchbot/devices/:deviceId/commands", requireEdgeForControl, async (req, res) => {
   try {
     const { deviceId } = req.params;
     const { command, parameter } = req.body;
@@ -8507,8 +8551,8 @@ app.get('/api/automation/rules', (req, res) => {
   }
 });
 
-// Add or update an automation rule
-app.post('/api/automation/rules', (req, res) => {
+// Add or update an automation rule (Edge-only)
+app.post('/api/automation/rules', requireEdgeForControl, (req, res) => {
   try {
     const rule = req.body;
     // Accept either 'when' (engine format) or 'trigger' (API format)
@@ -12422,7 +12466,7 @@ app.options('/api/nutrients/targets', (req, res) => {
   res.status(204).end();
 });
 
-app.post('/api/nutrients/targets', async (req, res) => {
+app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
   try {
     setCors(req, res);
     const body = req.body || {};
@@ -12666,7 +12710,7 @@ app.options('/api/nutrients/command', (req, res) => {
   res.status(204).end();
 });
 
-app.post('/api/nutrients/command', async (req, res) => {
+app.post('/api/nutrients/command', requireEdgeForControl, async (req, res) => {
   try {
     setCors(req, res);
     const body = req.body || {};
@@ -12949,7 +12993,7 @@ app.post('/calibration', express.json(), (req, res) => {
   }
 });
 
-app.patch('/api/devicedatas/device/:id', pinGuard, express.json(), async (req, res) => {
+app.patch('/api/devicedatas/device/:id', requireEdgeForControl, pinGuard, express.json(), async (req, res) => {
   try {
     const target = `${CONTROLLER_BASE()}/api/devicedatas/device/${encodeURIComponent(req.params.id)}`;
     const payload = req.body && typeof req.body === 'object' ? { ...req.body } : {};
