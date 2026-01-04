@@ -1026,4 +1026,114 @@ router.get('/farms/:farmId/devices', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * Get farm analytics/metrics
+ * GET /api/admin/analytics/farms/:farmId/metrics?days=30
+ */
+router.get('/analytics/farms/:farmId/metrics', requireAdmin, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const days = parseInt(req.query.days) || 30;
+    
+    const metrics = await dbQuery(`
+      SELECT 
+        metric_id,
+        farm_id,
+        date,
+        production_kg,
+        revenue,
+        costs,
+        efficiency_score,
+        trays_seeded,
+        trays_harvested,
+        orders_fulfilled,
+        notes,
+        created_at,
+        updated_at
+      FROM farm_daily_metrics
+      WHERE farm_id = $1 AND date >= CURRENT_DATE - INTERVAL '${days} days'
+      ORDER BY date DESC
+    `, [farmId]);
+    
+    // Calculate summary stats
+    const summary = {
+      totalProduction: 0,
+      totalRevenue: 0,
+      totalCosts: 0,
+      avgEfficiency: 0,
+      totalOrders: 0,
+      daysReported: metrics.length
+    };
+    
+    metrics.forEach(m => {
+      summary.totalProduction += parseFloat(m.production_kg) || 0;
+      summary.totalRevenue += parseFloat(m.revenue) || 0;
+      summary.totalCosts += parseFloat(m.costs) || 0;
+      summary.avgEfficiency += parseFloat(m.efficiency_score) || 0;
+      summary.totalOrders += m.orders_fulfilled || 0;
+    });
+    
+    if (metrics.length > 0) {
+      summary.avgEfficiency = summary.avgEfficiency / metrics.length;
+      summary.netProfit = summary.totalRevenue - summary.totalCosts;
+    }
+    
+    res.json({ success: true, metrics, summary });
+  } catch (error) {
+    console.error('Error fetching farm metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch metrics' });
+  }
+});
+
+/**
+ * Get buyer analytics/insights
+ * GET /api/admin/analytics/buyers/:buyerId/insights?days=90
+ */
+router.get('/analytics/buyers/:buyerId/insights', requireAdmin, async (req, res) => {
+  try {
+    const { buyerId } = req.params;
+    const days = parseInt(req.query.days) || 90;
+    
+    const insights = await dbQuery(`
+      SELECT 
+        summary_id,
+        buyer_id,
+        date,
+        order_count,
+        total_spent,
+        avg_order_value,
+        items_purchased,
+        created_at,
+        updated_at
+      FROM buyer_order_summary
+      WHERE buyer_id = $1 AND date >= CURRENT_DATE - INTERVAL '${days} days'
+      ORDER BY date DESC
+    `, [buyerId]);
+    
+    // Calculate summary stats
+    const summary = {
+      totalOrders: 0,
+      totalSpent: 0,
+      avgOrderValue: 0,
+      totalItems: 0,
+      daysActive: insights.length
+    };
+    
+    insights.forEach(i => {
+      summary.totalOrders += i.order_count || 0;
+      summary.totalSpent += parseFloat(i.total_spent) || 0;
+      summary.totalItems += i.items_purchased || 0;
+    });
+    
+    if (summary.totalOrders > 0) {
+      summary.avgOrderValue = summary.totalSpent / summary.totalOrders;
+    }
+    
+    res.json({ success: true, insights, summary });
+  } catch (error) {
+    console.error('Error fetching buyer insights:', error);
+    res.status(500).json({ error: 'Failed to fetch buyer insights' });
+  }
+});
+
 export default router;

@@ -81,3 +81,6 @@ firmware/**/.piolibdeps/
 !.elasticbeanstalk/*.global.yml
 desktop-app/dist/*.dmg
 desktop-app/dist/mac*/
+
+# Unused legacy directory - DO NOT EDIT
+greenreach-central/
