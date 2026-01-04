@@ -4,7 +4,8 @@
  */
 
 // Use window.location.origin for admin API (port 8091)
-const API_BASE = window.location.origin;
+// Force HTTPS to prevent mixed-content blocks when served securely
+const API_BASE = window.location.origin.replace(/^http:/i, 'https:');
 let currentFarmId = null;
 let farmsData = [];
 let roomsData = [];
