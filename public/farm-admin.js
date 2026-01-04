@@ -3361,7 +3361,7 @@ function closePairingQR() {
 // ============================================================================
 
 let currentSetupStep = 1;
-const totalSetupSteps = 7;
+const totalSetupSteps = 8;
 let setupData = {
     rooms: [],
     trayFormats: []
@@ -3407,6 +3407,80 @@ async function checkFirstTimeSetup() {
     } catch (error) {
         console.error('[setup-wizard] Setup status check failed:', error);
         // Don't show wizard on error - prevents annoying users
+    }
+}
+
+/**
+ * Generate Activity Hub QR codes for setup wizard (download + pairing)
+ */
+async function generateWizardActivityHubQRCodes() {
+    console.log('[Setup] Generating Activity Hub QR codes for wizard...');
+    
+    // Generate Download QR Code
+    const downloadQRContainer = document.querySelector('#wizard-activity-hub-download-qr > div');
+    if (downloadQRContainer) {
+        const appStoreUrl = 'https://greenreach.farm/activity-hub/install';
+        
+        try {
+            downloadQRContainer.innerHTML = '';
+            
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(downloadQRContainer, {
+                    text: appStoreUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark: '#1a2332',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                console.log('[Setup] Download QR code generated');
+            } else {
+                const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(appStoreUrl)}`;
+                downloadQRContainer.innerHTML = `<img src="${qrApiUrl}" alt="Download Activity Hub" style="width: 200px; height: 200px; border-radius: 8px;">`;
+                console.log('[Setup] Download QR code generated (API fallback)');
+            }
+        } catch (error) {
+            console.error('[Setup] Failed to generate download QR:', error);
+        }
+    }
+    
+    // Generate Pairing QR Code
+    const pairingQRContainer = document.querySelector('#wizard-activity-hub-pairing-qr > div');
+    if (pairingQRContainer) {
+        const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id') || currentSession?.farmId || 'LOCAL-FARM';
+        const farmName = currentSession?.farmName || localStorage.getItem('farmName') || 'Light Engine Farm';
+        const token = localStorage.getItem('token') || currentSession?.token || 'local-access';
+        
+        const pairingData = {
+            farmId: farmId,
+            farmName: farmName,
+            token: token,
+            timestamp: Date.now()
+        };
+        
+        const pairingUrl = `greenreach-hub://pair?data=${encodeURIComponent(JSON.stringify(pairingData))}`;
+        
+        try {
+            pairingQRContainer.innerHTML = '';
+            
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(pairingQRContainer, {
+                    text: pairingUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark: '#1a2332',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                console.log('[Setup] Pairing QR code generated');
+            } else {
+                const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pairingUrl)}`;
+                pairingQRContainer.innerHTML = `<img src="${qrApiUrl}" alt="Pair Activity Hub" style="width: 200px; height: 200px; border-radius: 8px;">`;
+                console.log('[Setup] Pairing QR code generated (API fallback)');
+            }
+        } catch (error) {
+            console.error('[Setup] Failed to generate pairing QR:', error);
+        }
     }
 }
 
@@ -3685,9 +3759,9 @@ async function setupNextStep() {
         
         currentSetupStep++;
         
-        // If moving to Step 6 (Activity Hub), generate QR code
-        if (currentSetupStep === 6) {
-            await generateSetupActivityHubQR();
+        // If moving to Step 7 (Activity Hub), generate both QR codes
+        if (currentSetupStep === 7) {
+            await generateWizardActivityHubQRCodes();
         }
         
         updateSetupStepDisplay();

@@ -4125,8 +4125,60 @@
           </div>
         </div>
         
-        <!-- Step 7: QR Label Printing -->
+        <!-- Step 7: Activity Hub Setup -->
         <div id="setup-step-7" class="setup-step" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">Activity Hub Setup</h3>
+          <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Install and pair the Activity Hub app on your iPad for tray scanning and activity tracking.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 25px;">
+            <!-- Step 1: Download App -->
+            <div style="padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; color: white;">
+              <h4 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: white;">Step 1: Download Activity Hub App</h4>
+              <p style="margin: 0 0 15px 0; font-size: 14px; opacity: 0.95;">Scan this QR code with your iPad camera to download the Activity Hub app from the App Store.</p>
+              
+              <div id="wizard-activity-hub-download-qr" style="background: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
+                <div style="display: inline-block; padding: 10px; background: white;"></div>
+              </div>
+              
+              <div style="background: rgba(255, 255, 255, 0.15); padding: 15px; border-radius: 6px; backdrop-filter: blur(10px);">
+                <p style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">Installation Steps:</p>
+                <ol style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.8;">
+                  <li>Open Camera app on your iPad</li>
+                  <li>Point camera at QR code above</li>
+                  <li>Tap the notification to open App Store</li>
+                  <li>Install GreenReach Activity Hub</li>
+                </ol>
+              </div>
+            </div>
+            
+            <!-- Step 2: Pair Device -->
+            <div style="padding: 25px; background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); border-radius: 12px; color: white;">
+              <h4 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: white;">Step 2: Pair Your iPad</h4>
+              <p style="margin: 0 0 15px 0; font-size: 14px; opacity: 0.95;">After installing, open the app and scan this QR code to pair your iPad with this farm.</p>
+              
+              <div id="wizard-activity-hub-pairing-qr" style="background: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
+                <div style="display: inline-block; padding: 10px; background: white;"></div>
+              </div>
+              
+              <div style="background: rgba(255, 255, 255, 0.15); padding: 15px; border-radius: 6px; backdrop-filter: blur(10px);">
+                <p style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">Pairing Steps:</p>
+                <ol style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.8;">
+                  <li>Open Activity Hub app on iPad</li>
+                  <li>Tap Scan QR Code button</li>
+                  <li>Scan the pairing QR code above</li>
+                  <li>iPad is now connected to your farm</li>
+                </ol>
+              </div>
+            </div>
+            
+            <div style="padding: 15px; background: rgba(245, 158, 11, 0.1); border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.3);">
+              <div style="font-size: 13px; color: var(--text-secondary);"><strong>Note:</strong> You can skip this step and set up Activity Hub later from Settings if you don't have your iPad ready.</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Step 8: QR Label Printing -->
+        <div id="setup-step-8" class="setup-step" style="display: none;">
           <h3 style="margin: 0 0 10px 0; font-size: 18px; color: var(--text-primary);">QR Label Printing</h3>
           <p style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">Print QR code labels for your trays to enable quick scanning in the Activity Hub.</p>
           
