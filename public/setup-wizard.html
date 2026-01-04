@@ -369,37 +369,13 @@
                 <div class="step-dot" id="dot-3"></div>
                 <div class="step-dot" id="dot-4"></div>
                 <div class="step-dot" id="dot-5"></div>
-                <div class="step-dot" id="dot-6"></div>
             </div>
         </div>
 
         <div class="wizard-content">
-            <!-- Step 0: Password Change (First-Time Users Only) -->
+            <!-- Step 0: Welcome -->
             <div class="wizard-step active" id="step-0">
-                <h1 class="step-title">Create Your Password</h1>
-                <p class="step-description">
-                    For security, please create a new password for your account.
-                    Your temporary credentials have been sent via email for backup.
-                </p>
-                <div class="input-group">
-                    <label class="input-label">New Password (minimum 8 characters)</label>
-                    <input type="password" class="touch-input" id="new-password" minlength="8" placeholder="Enter new password" required>
-                </div>
-                <div class="input-group">
-                    <label class="input-label">Confirm Password</label>
-                    <input type="password" class="touch-input" id="confirm-password" minlength="8" placeholder="Re-enter password" required>
-                </div>
-                <div id="password-error" style="color: var(--accent-red); font-size: 1.5rem; margin-top: 1rem; display: none;"></div>
-                <div class="button-grid" style="margin-top: 2rem;">
-                    <button class="touch-button primary" onclick="submitPasswordChange()">
-                        <span>Set Password & Continue</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Step 1: Welcome -->
-            <div class="wizard-step" id="step-1">
-                <h1 class="step-title">Welcome to GreenReach!</h1>
+                <h1 class="step-title">Welcome to GreenReach! 👋</h1>
                 <p class="step-description">
                     Let's get your vertical farm set up in just a few steps.
                     This wizard will guide you through network configuration,
@@ -407,22 +383,25 @@
                 </p>
                 <div class="button-grid">
                     <button class="touch-button primary" onclick="nextStep()">
+                        <span class="button-icon">🚀</span>
                         <span>Start Setup</span>
                     </button>
                 </div>
             </div>
 
-            <!-- Step 2: Network Configuration -->
-            <div class="wizard-step" id="step-2">
+            <!-- Step 1: Network Configuration -->
+            <div class="wizard-step" id="step-1">
                 <h1 class="step-title">Network Configuration</h1>
                 <p class="step-description">
                     Choose how your farm will connect to the internet
                 </p>
                 <div class="button-grid">
                     <button class="touch-button success" onclick="selectNetwork('ethernet')">
+                        <span class="button-icon">🔌</span>
                         <span>Ethernet (Recommended)</span>
                     </button>
                     <button class="touch-button" onclick="selectNetwork('wifi')">
+                        <span class="button-icon">📡</span>
                         <span>WiFi</span>
                     </button>
                 </div>
@@ -444,8 +423,8 @@
                 </div>
             </div>
 
-            <!-- Step 3: Farm Registration -->
-            <div class="wizard-step" id="step-3">
+            <!-- Step 2: Farm Registration -->
+            <div class="wizard-step" id="step-2">
                 <h1 class="step-title">Register Your Farm</h1>
                 <p class="step-description">
                     Enter the registration code provided by GreenReach
@@ -464,61 +443,8 @@
                 <div id="reg-status"></div>
             </div>
 
-            <!-- Step 4: Desktop Download (Cloud) / Certifications (Edge) -->
-            <div class="wizard-step" id="step-4">
-                <!-- Cloud: Desktop App Download -->
-                <div id="cloud-download" style="display: none;">
-                    <h1 class="step-title">Desktop Application Available</h1>
-                    <p class="step-description">
-                        Get the Light Engine desktop app to manage your farm offline
-                    </p>
-                    
-                    <div style="display: grid; gap: 2rem; margin-top: 2rem; max-width: 600px; margin-left: auto; margin-right: auto;">
-                        <!-- Desktop App Info -->
-                        <div class="status-card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);">
-                            <div style="text-align: center;">
-                                <div style="font-size: 4rem; margin-bottom: 1rem;">💻</div>
-                                <h3 style="color: var(--accent-blue); font-size: 1.8rem; margin-bottom: 1rem;">Desktop Application</h3>
-                                <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1.5rem;">
-                                    Download the Light Engine desktop app for:
-                                </p>
-                                <div style="text-align: left; max-width: 400px; margin: 0 auto; font-size: 1.2rem; color: var(--text-secondary); line-height: 2;">
-                                    • Offline inventory management<br>
-                                    • Faster performance<br>
-                                    • System tray integration<br>
-                                    • Auto-start on computer boot
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Download Options -->
-                        <div class="status-card">
-                            <h3 style="color: var(--accent-green); font-size: 1.6rem; margin-bottom: 1rem; text-align: center;">Available For</h3>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                                <div style="text-align: center; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
-                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🍎</div>
-                                    <div style="font-size: 1.1rem; color: var(--text-secondary);">macOS</div>
-                                </div>
-                                <div style="text-align: center; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
-                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🪟</div>
-                                    <div style="font-size: 1.1rem; color: var(--text-secondary);">Windows</div>
-                                </div>
-                            </div>
-                            <p style="font-size: 1.1rem; color: var(--text-secondary); text-align: center;">
-                                Download links will be available in your dashboard after setup
-                            </p>
-                        </div>
-                    </div>
-
-                    <div style="text-align: center; margin-top: 2rem; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 12px;">
-                        <p style="font-size: 1.2rem; color: var(--text-secondary);">
-                            Click "Next" to continue with the web-based setup. You can download the desktop app anytime from your dashboard.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Edge: Certifications -->
-                <div id="edge-certifications" style="display: none;">
+            <!-- Step 3: Certifications & Differentiators -->
+            <div class="wizard-step" id="step-3">
                 <h1 class="step-title">Farm Certifications</h1>
                 <p class="step-description">
                     Help buyers find your farm by sharing certifications and practices.
@@ -548,7 +474,7 @@
                     <h3 style="color: var(--accent-green); margin-bottom: 1rem;">Growing Practices</h3>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="practice-pesticide-free" name="practices" value="Pesticide Free" style="width: 32px; height: 32px; margin-right: 1rem;">
-                        <span style="font-size: 1.2rem;">Pesticide Free</span>
+                        <span style="font-size: 1.2rem;">✅ Pesticide Free</span>
                     </label>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="practice-non-gmo" name="practices" value="Non-GMO" style="width: 32px; height: 32px; margin-right: 1rem;">
@@ -584,129 +510,49 @@
                     </label>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="attr-family-farm" name="attributes" value="Family Farm" style="width: 32px; height: 32px; margin-right: 1rem;">
-                        <span style="font-size: 1.2rem;">Family Farm</span>
+                        <span style="font-size: 1.2rem;">🏡 Family Farm</span>
                     </label>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="attr-sustainable" name="attributes" value="Sustainable" style="width: 32px; height: 32px; margin-right: 1rem;">
-                        <span style="font-size: 1.2rem;">Sustainable Practices</span>
+                        <span style="font-size: 1.2rem;">♻️ Sustainable Practices</span>
                     </label>
                 </div>
+            </div>
+
+            <!-- Step 4: Hardware Detection -->
+            <div class="wizard-step" id="step-4">
+                <h1 class="step-title">Hardware Detection</h1>
+                <p class="step-description">
+                    Scanning for connected devices...
+                </p>
+                <div id="hardware-status">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div id="hardware-results" style="display: none;">
+                    <div class="status-card">
+                        <div class="status-row">
+                            <span class="status-label">Lights:</span>
+                            <span class="status-value" id="lights-count">0</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Fans:</span>
+                            <span class="status-value" id="fans-count">0</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Sensors:</span>
+                            <span class="status-value" id="sensors-count">0</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Other Devices:</span>
+                            <span class="status-value" id="other-count">0</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Step 5: Cloud Features (Cloud only) / Hardware Detection (Edge only) -->
+            <!-- Step 5: Complete -->
             <div class="wizard-step" id="step-5">
-                <div id="cloud-features" style="display: none;">
-                    <h1 class="step-title">Welcome to Your Cloud Farm!</h1>
-                    <p class="step-description">
-                        Your GreenReach cloud platform includes powerful features to help manage and grow your farm business
-                    </p>
-                    
-                    <div style="display: grid; gap: 2rem; margin-top: 2rem;">
-                        <!-- AI Assistant -->
-                        <div class="status-card">
-                            <div style="display: flex; align-items: start; gap: 1.5rem;">
-                                <div style="font-size: 3rem; font-weight: bold; color: var(--accent-blue);">AI</div>
-                                <div>
-                                    <h3 style="color: var(--accent-blue); font-size: 1.8rem; margin-bottom: 0.5rem;">AI Assistant</h3>
-                                    <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
-                                        Get instant help with growing questions, pest identification, and farm optimization. 
-                                        Ask questions in natural language and receive expert guidance powered by AI.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Crop Pricing -->
-                        <div class="status-card">
-                            <div style="display: flex; align-items: start; gap: 1.5rem;">
-                                <div style="font-size: 3rem; font-weight: bold; color: var(--accent-green);">$</div>
-                                <div>
-                                    <h3 style="color: var(--accent-green); font-size: 1.8rem; margin-bottom: 0.5rem;">Smart Crop Pricing</h3>
-                                    <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
-                                        Track market prices, set your own pricing, and analyze profitability. 
-                                        Compare your prices with regional averages to stay competitive.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Activity Hub -->
-                        <div class="status-card">
-                            <div style="display: flex; align-items: start; gap: 1.5rem;">
-                                <div style="font-size: 2.5rem; font-weight: bold; color: var(--accent-yellow);">APP</div>
-                                <div>
-                                    <h3 style="color: var(--accent-yellow); font-size: 1.8rem; margin-bottom: 0.5rem;">Activity Hub - Mobile App</h3>
-                                    <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
-                                        Download the Activity Hub mobile app to manage your farm on the go. 
-                                        Track tasks, log activities, monitor conditions, and receive alerts anywhere.
-                                    </p>
-                                    <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                                        <a href="https://apps.apple.com/ca/app/greenreach-farms/id6738987013" target="_blank" style="text-decoration: none;">
-                                            <div class="touch-button" style="padding: 1rem 2rem; font-size: 1rem; min-height: auto;">
-                                                <span>iOS App Store</span>
-                                            </div>
-                                        </a>
-                                        <a href="https://play.google.com/store/apps" target="_blank" style="text-decoration: none;">
-                                            <div class="touch-button" style="padding: 1rem 2rem; font-size: 1rem; min-height: auto;">
-                                                <span>Google Play</span>
-                                            </div>
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Dashboard Tour -->
-                        <div class="status-card">
-                            <div style="display: flex; align-items: start; gap: 1.5rem;">
-                                <div style="font-size: 3rem; font-weight: bold; color: var(--accent-blue);">+</div>
-                                <div>
-                                    <h3 style="color: var(--accent-blue); font-size: 1.8rem; margin-bottom: 0.5rem;">Quick Start</h3>
-                                    <p style="font-size: 1.2rem; color: var(--text-secondary); line-height: 1.5;">
-                                        Access your dashboard to create rooms, add crops, set up automation rules, 
-                                        and start tracking your farm's progress. Everything you need is just a click away!
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="hardware-detection" style="display: none;">
-                    <h1 class="step-title">Hardware Detection</h1>
-                    <p class="step-description">
-                        Scanning for connected devices...
-                    </p>
-                    <div id="hardware-status">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    <div id="hardware-results" style="display: none;">
-                        <div class="status-card">
-                            <div class="status-row">
-                                <span class="status-label">Lights:</span>
-                                <span class="status-value" id="lights-count">0</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="status-label">Fans:</span>
-                                <span class="status-value" id="fans-count">0</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="status-label">Sensors:</span>
-                                <span class="status-value" id="sensors-count">0</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="status-label">Other Devices:</span>
-                                <span class="status-value" id="other-count">0</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 6: Complete -->
-            <div class="wizard-step" id="step-6">
-                <h1 class="step-title">Setup Complete!</h1>
+                <h1 class="step-title">Setup Complete! 🎉</h1>
                 <p class="step-description">
                     Your GreenReach farm is ready to go!
                 </p>
@@ -718,6 +564,7 @@
                 </div>
                 <div class="button-grid">
                     <button class="touch-button primary" onclick="completeSetup()">
+                        <span class="button-icon">🌱</span>
                         <span>Go to Dashboard</span>
                     </button>
                 </div>
@@ -790,77 +637,9 @@
         const farmId = localStorage.getItem('farm_id');
         const isCloudAccount = planType === 'cloud';
         
-        console.log('[Setup Wizard] planType from localStorage:', planType);
-        console.log('[Setup Wizard] farmId from localStorage:', farmId);
-        console.log('[Setup Wizard] isCloudAccount:', isCloudAccount);
-        
         let currentStep = 0;
-        const totalSteps = 7; // Increased from 6 to 7 for password step
+        const totalSteps = 6;
         let activeInput = null;
-        
-        // Check if this is a new user who needs to set password
-        const isNewUser = localStorage.getItem('isNewUser') === 'true';
-        
-        // Skip password step if not a new user
-        if (!isNewUser && currentStep === 0) {
-            currentStep = 1;
-        }
-        
-        async function submitPasswordChange() {
-            const newPassword = document.getElementById('new-password').value;
-            const confirmPassword = document.getElementById('confirm-password').value;
-            const errorDiv = document.getElementById('password-error');
-            
-            // Validate
-            if (!newPassword || newPassword.length < 8) {
-                errorDiv.textContent = 'Password must be at least 8 characters long';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            if (newPassword !== confirmPassword) {
-                errorDiv.textContent = 'Passwords do not match';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            // Clear error
-            errorDiv.style.display = 'none';
-            
-            // Submit to API
-            const token = localStorage.getItem('token');
-            if (!token) {
-                errorDiv.textContent = 'Authentication required. Please log in again.';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/setup-wizard/change-password', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ newPassword })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    console.log('[Setup Wizard] Password changed successfully');
-                    localStorage.removeItem('isNewUser'); // Clear flag
-                    nextStep(); // Proceed to welcome screen
-                } else {
-                    errorDiv.textContent = data.error || 'Failed to update password';
-                    errorDiv.style.display = 'block';
-                }
-            } catch (error) {
-                console.error('[Setup Wizard] Password change error:', error);
-                errorDiv.textContent = 'Network error. Please try again.';
-                errorDiv.style.display = 'block';
-            }
-        }
         let farmData = {
             network: null,
             registrationCode: isCloudAccount ? 'CLOUD-AUTO-SKIP' : null,
@@ -880,8 +659,8 @@
             // Update step indicators
             for (let i = 0; i < totalSteps; i++) {
                 const dot = document.getElementById(`dot-${i}`);
-                // Hide step 3 (registration) indicator for cloud accounts
-                if (i === 3 && isCloudAccount) {
+                // Hide step 2 (registration) indicator for cloud accounts
+                if (i === 2 && isCloudAccount) {
                     dot.style.display = 'none';
                     continue;
                 }
@@ -904,44 +683,19 @@
             } else {
                 document.getElementById('next-btn').style.display = 'block';
             }
-
-            // Show/hide appropriate content for step 4 based on plan type
-            if (currentStep === 4) {
-                if (isCloudAccount) {
-                    document.getElementById('cloud-download').style.display = 'block';
-                    document.getElementById('edge-certifications').style.display = 'none';
-                } else {
-                    document.getElementById('cloud-download').style.display = 'none';
-                    document.getElementById('edge-certifications').style.display = 'block';
-                }
-            }
-
-            // Show/hide appropriate content for step 5 based on plan type
-            if (currentStep === 5) {
-                if (isCloudAccount) {
-                    document.getElementById('cloud-features').style.display = 'block';
-                    document.getElementById('hardware-detection').style.display = 'none';
-                } else {
-                    document.getElementById('cloud-features').style.display = 'none';
-                    document.getElementById('hardware-detection').style.display = 'block';
-                }
-            }
         }
 
         function nextStep() {
             if (currentStep < totalSteps - 1) {
                 currentStep++;
-                console.log('[Setup Wizard] Moving to step:', currentStep);
-                // Skip activation code step (step 3, formerly step 2) for cloud accounts
-                if (currentStep === 3 && isCloudAccount) {
-                    console.log('[Setup Wizard] Skipping activation code step for cloud account');
-                    currentStep++; // Skip to step 4
+                // Skip activation code step (step 2) for cloud accounts
+                if (currentStep === 2 && isCloudAccount) {
+                    currentStep++; // Skip to step 3
                 }
                 updateUI();
 
                 // Trigger step-specific actions
-                if (currentStep === 5 && !isCloudAccount) {
-                    // Only detect hardware for edge devices
+                if (currentStep === 3) {
                     detectHardware();
                 }
             }
@@ -950,9 +704,9 @@
         function previousStep() {
             if (currentStep > 0) {
                 currentStep--;
-                // Skip activation code step (step 3) for cloud accounts
-                if (currentStep === 3 && isCloudAccount) {
-                    currentStep--; // Skip to step 2
+                // Skip activation code step (step 2) for cloud accounts
+                if (currentStep === 2 && isCloudAccount) {
+                    currentStep--; // Skip to step 1
                 }
                 updateUI();
             }
