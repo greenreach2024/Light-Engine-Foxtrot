@@ -2016,12 +2016,53 @@
     const ENV_CACHE_TTL_MS = 30000; // 30 seconds cache
     let isCloudMode = false; // Track if this is cloud-only (no sensors)
 
+    /**
+     * Load farm name from API and update page header
+     */
+    async function loadFarmNameIntoHeader() {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.log('[Farm Summary] No token, skipping farm name load');
+          return;
+        }
+        
+        const response = await fetch('/api/farm/profile', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'success' && data.farm && data.farm.name) {
+            const farmName = data.farm.name;
+            
+            // Update the h1 header
+            const h1 = document.querySelector('h1');
+            if (h1) {
+              h1.textContent = `${farmName} Room Summary`;
+              console.log('[Farm Summary] Updated header to:', h1.textContent);
+            }
+            
+            // Update page title
+            document.title = `${farmName} Room Summary - Light Engine`;
+          }
+        }
+      } catch (error) {
+        console.error('[Farm Summary] Failed to load farm name:', error);
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('[Farm Summary] DOMContentLoaded fired');
       console.log('[Farm Summary] Chart.js available:', typeof Chart !== 'undefined');
       console.log('[Farm Summary] loadAnomalySparkline defined:', typeof loadAnomalySparkline === 'function');
       console.log('[Farm Summary] loadEnergyForecast defined:', typeof loadEnergyForecast === 'function');
       console.log('[Farm Summary] loadTempForecast defined:', typeof loadTempForecast === 'function');
+      
+      // Load farm name and update header
+      await loadFarmNameIntoHeader();
       
       // Detect cloud mode (no sensor data available)
       try {

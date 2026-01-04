@@ -3383,7 +3383,7 @@ async function checkFirstTimeSetup() {
 /**
  * Show first-time setup modal
  */
-function showFirstTimeSetup() {
+async function showFirstTimeSetup() {
     const modal = document.getElementById('first-time-setup-modal');
     if (modal) {
         modal.style.display = 'flex';
@@ -3406,6 +3406,36 @@ function showFirstTimeSetup() {
         if (!isCloudPlan) {
             const planType = localStorage.getItem('planType') || localStorage.getItem('plan_type');
             isCloudPlan = planType === 'Cloud' || planType === 'cloud';
+        }
+        
+        // Fetch farm data from API to pre-fill fields with purchase info
+        try {
+            const response = await fetch(`${window.API_BASE || ''}/api/farm/profile`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'success' && data.farm) {
+                    console.log('[Setup] Pre-filling wizard with purchase data:', data.farm);
+                    
+                    // Pre-fill Step 2: Business Profile with data from purchase
+                    if (data.farm.name) {
+                        document.getElementById('setup-farm-name').value = data.farm.name;
+                    }
+                    if (data.farm.contactName) {
+                        document.getElementById('setup-contact-name').value = data.farm.contactName;
+                    }
+                    if (data.farm.email) {
+                        document.getElementById('setup-contact-email').value = data.farm.email;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[Setup] Could not fetch farm data for pre-fill:', error);
+            // Continue with wizard even if pre-fill fails
         }
         
         // Start at Step 2 for Cloud customers (skip activation code)
@@ -3919,20 +3949,21 @@ function escapeHtml(text) {
 
 /**
  * Use current GPS location to populate address fields
+ * Required for weather API integration
  */
 async function useCurrentLocation() {
     const statusEl = document.getElementById('setup-location-status');
     const btn = document.getElementById('setup-use-location');
     
     if (!navigator.geolocation) {
-        statusEl.textContent = 'Geolocation not supported';
+        statusEl.textContent = '❌ Geolocation not supported by your browser';
         statusEl.style.color = 'var(--error-red)';
         return;
     }
     
     btn.disabled = true;
     btn.textContent = '⏳ Getting location...';
-    statusEl.textContent = 'Requesting GPS coordinates...';
+    statusEl.textContent = 'Requesting GPS coordinates (required for weather data)...';
     statusEl.style.color = 'var(--text-muted)';
     
     navigator.geolocation.getCurrentPosition(
@@ -3940,16 +3971,28 @@ async function useCurrentLocation() {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
             
-            // Store coordinates
+            console.log('[Setup] Got GPS coordinates:', { lat, lon });
+            
+            // Store coordinates (required for weather API)
             document.getElementById('setup-latitude').value = lat;
             document.getElementById('setup-longitude').value = lon;
             
-            statusEl.textContent = 'Location captured! Fetching address...';
+            statusEl.textContent = '✔ Location captured! Fetching address...';
             
             try {
                 // Reverse geocode to get address
-                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`, {
+                    headers: {
+                        'User-Agent': 'LightEngineFoxtrot/1.0'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Geocoding API returned ${response.status}`);
+                }
+                
                 const data = await response.json();
+                console.log('[Setup] Geocoding result:', data);
                 
                 if (data && data.address) {
                     const addr = data.address;
@@ -3969,15 +4012,15 @@ async function useCurrentLocation() {
                         document.getElementById('setup-postal').value = addr.postcode;
                     }
                     
-                    statusEl.textContent = '✔ Location and address captured!';
+                    statusEl.textContent = '✔ Location and address captured! (Weather data enabled)';
                     statusEl.style.color = 'var(--accent-green)';
                 } else {
-                    statusEl.textContent = 'GPS captured, but could not determine address';
+                    statusEl.textContent = '⚠ GPS captured, but could not determine address. Please enter manually.';
                     statusEl.style.color = 'var(--text-secondary)';
                 }
             } catch (error) {
-                console.error('Geocoding error:', error);
-                statusEl.textContent = 'GPS captured, geocoding failed';
+                console.error('[Setup] Geocoding error:', error);
+                statusEl.textContent = '⚠ GPS captured, geocoding failed. Please enter address manually.';
                 statusEl.style.color = 'var(--text-secondary)';
             }
             
@@ -3985,8 +4028,24 @@ async function useCurrentLocation() {
             btn.textContent = '📍 Use Current Location';
         },
         (error) => {
-            console.error('Geolocation error:', error);
-            statusEl.textContent = 'Location access denied or unavailable';
+            console.error('[Setup] Geolocation error:', error);
+            
+            let errorMsg = 'Location access failed';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMsg = '❌ Location access denied. Please enable location permissions for weather data.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMsg = '❌ Location unavailable. Please check your device settings.';
+                    break;
+                case error.TIMEOUT:
+                    errorMsg = '❌ Location request timed out. Please try again.';
+                    break;
+                default:
+                    errorMsg = '❌ Unknown error accessing location. Please enter address manually.';
+            }
+            
+            statusEl.textContent = errorMsg;
             statusEl.style.color = 'var(--error-red)';
             btn.disabled = false;
             btn.textContent = '📍 Use Current Location';

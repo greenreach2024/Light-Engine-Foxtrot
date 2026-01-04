@@ -6209,6 +6209,9 @@ async function loadFarmData() {
         if (Array.isArray(data.farm.rooms)) {
           STATE.rooms = data.farm.rooms;
         }
+        
+        // Update header with farm name
+        updateFarmNameInHeader(data.farm.name);
       }
     } else if (resp.status === 401) {
       console.warn('[loadFarmData] Authentication failed, redirecting to login');
@@ -6216,6 +6219,30 @@ async function loadFarmData() {
     }
   } catch (e) {
     console.warn('[loadFarmData] Failed to load farm data:', e);
+  }
+}
+
+/**
+ * Update the header title and page title with the farm name
+ * Replaces "Light Engine Foxtrot" with "[Farm Name] - Light Engine"
+ */
+function updateFarmNameInHeader(farmName) {
+  if (!farmName) return;
+  
+  // Update the main header title element
+  const headerTitle = document.getElementById('lightEngineTitle');
+  if (headerTitle) {
+    headerTitle.textContent = `${farmName} - Light Engine`;
+    console.log('[Header] Updated header title with farm name:', farmName);
+  }
+  
+  // Update the page title
+  document.title = `${farmName} - Light Engine Foxtrot`;
+  
+  // Update the farm name display in the top card (left side)
+  const farmNameEl = document.getElementById('farmName');
+  if (farmNameEl) {
+    farmNameEl.textContent = farmName;
   }
 }
 
