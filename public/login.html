@@ -267,8 +267,8 @@
     
     <script>
         // Check if already logged in
-        if (localStorage.getItem('farm_auth_token')) {
-            window.location.href = '/farm-admin.html';
+        if (localStorage.getItem('token')) {
+            window.location.href = '/LE-dashboard.html';
         }
         
         // Check if redirected from successful purchase
@@ -307,20 +307,32 @@
                     throw new Error(data.message || data.error || 'Login failed');
                 }
                 
-                // Store token and farm info (must match auth-guard.js token key)
-                localStorage.setItem('farm_auth_token', data.token);
-                localStorage.setItem('farm_id', data.farmId);
-                localStorage.setItem('farm_name', data.farmName || '');
-                localStorage.setItem('user_email', email);
-                localStorage.setItem('user_role', data.role || 'admin');
+                // Store token and farm info (standardized to 'token' key)
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('farmId', data.farmId);
+                localStorage.setItem('farmName', data.farmName || '');
+                localStorage.setItem('email', email);
+                localStorage.setItem('role', data.role || 'admin');
                 
-                // Show success and redirect
+                // Check if setup is complete before redirecting
+                const setupResponse = await fetch('/api/setup-wizard/status', {
+                    headers: { 'Authorization': `Bearer ${data.token}` }
+                });
+                
+                const setupData = await setupResponse.json();
+                
+                // Show success message
                 alertDiv.className = 'alert success';
                 alertDiv.textContent = 'Login successful! Redirecting...';
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    window.location.href = '/farm-admin.html';
+                    // Redirect to setup wizard if not complete, otherwise to dashboard
+                    if (setupData.success && !setupData.setupCompleted) {
+                        window.location.href = '/setup-wizard.html';
+                    } else {
+                        window.location.href = '/LE-dashboard.html';
+                    }
                 }, 1000);
                 
             } catch (error) {

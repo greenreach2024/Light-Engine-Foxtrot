@@ -35,18 +35,18 @@
 
   // Check if user has valid token
   function hasValidToken() {
-    const token = localStorage.getItem('farm_auth_token');
+    const token = localStorage.getItem('token');
     if (!token) return false;
     
-    // Token is a hex string from server (not JWT), just check it exists
-    // Server will validate on API calls
-    // Basic check: should be 64 hex characters (32 bytes)
-    if (token.length === 64 && /^[0-9a-f]+$/i.test(token)) {
+    // Token is JWT from server - basic validation
+    // Server will fully validate on API calls
+    // Just check it exists and looks like a JWT (has two dots)
+    if (token && token.split('.').length === 3) {
       return true;
     }
     
     // If token format is invalid, remove it
-    localStorage.removeItem('farm_auth_token');
+    localStorage.removeItem('token');
     return false;
   }
 
@@ -69,7 +69,7 @@
   // Also add token to API requests
   const originalFetch = window.fetch;
   window.fetch = function(url, options = {}) {
-    const token = localStorage.getItem('farm_auth_token');
+    const token = localStorage.getItem('token');
     if (token && url.includes('/api/')) {
       options.headers = options.headers || {};
       options.headers['Authorization'] = `Bearer ${token}`;
