@@ -533,11 +533,10 @@ async function loadFarms(page = 1) {
         
         const params = new URLSearchParams({
             page: page.toString(),
-            limit: '50',
-            ...(status && { status }),
-            ...(region && { region }),
-            ...(search && { search })
+            limit: '50'
         });
+        
+        if (status) params.append('status', status);
         
         const response = await fetch(`${API_BASE}/api/admin/farms?${params}`);
         if (!response.ok) {
@@ -545,7 +544,21 @@ async function loadFarms(page = 1) {
         }
         
         const data = await response.json();
-        farmsData = data.farms;
+        
+        // Transform API response to match UI expectations
+        farmsData = data.farms.map(farm => ({
+            farmId: farm.farmId,
+            name: farm.name,
+            status: farm.status,
+            email: farm.email,
+            phone: farm.phone,
+            location: farm.address ? `${farm.address.city}, ${farm.address.state}` : '',
+            productCount: farm.productCount || 0,
+            lastHeartbeat: farm.lastHeartbeat,
+            createdAt: farm.createdAt,
+            tier: farm.tier || 'standard'
+        }));
+        
         renderFarmsTable(farmsData);
         
         // Update pagination if available
@@ -553,11 +566,15 @@ async function loadFarms(page = 1) {
             renderPagination(data.pagination);
         }
     } catch (error) {
-        console.error('Error loading farms:', error);
-        // Fallback to simulated data if API fails
-        console.warn('Falling back to simulated data');
-        farmsData = generateSampleFarms(12);
-        renderFarmsTable(farmsData);
+        console.error('Error loading farms from API:', error);
+        // Show error message instead of falling back to mock data
+        const tbody = document.getElementById('farms-tbody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 40px; color: var(--accent-red);">
+                Failed to load farms. Please check authentication and API connection.<br>
+                <small style="color: var(--text-secondary);">${error.message}</small>
+            </td></tr>`;
+        }
     }
 }
 
@@ -604,6 +621,8 @@ function generateSampleFarms(count) {
 function renderFarmsTable(farms) {
     const tbody = document.getElementById('farms-tbody');
     
+    if (!tbody) return;
+    
     if (farms.length === 0) {
         tbody.innerHTML = '<tr><td colspan="11" class="loading">No farms found</td></tr>';
         return;
@@ -613,19 +632,20 @@ function renderFarmsTable(farms) {
         // Format last heartbeat/update
         const lastUpdate = farm.lastHeartbeat 
             ? new Date(farm.lastHeartbeat).toLocaleString()
-            : 'Never';
+            : (farm.createdAt ? new Date(farm.createdAt).toLocaleString() : 'Never');
+        
+        const statusBadge = getStatusBadgeClass(farm.status || 'active');
         
         return `
         <tr>
             <td><code>${farm.farmId}</code></td>
             <td><strong>${farm.name}</strong></td>
-            <td><span class="badge badge-${getStatusBadgeClass(farm.status)}">${farm.status}</span></td>
-            <td>${farm.rooms || 0}</td>
-            <td>${farm.zones || 0}</td>
-            <td>${farm.devices || 0}</td>
-            <td>${farm.trays || 0}</td>
-            <td>${farm.energy || 0} kWh</td>
-            <td>${farm.alerts > 0 ? `<span class="badge badge-danger">${farm.alerts}</span>` : '-'}</td>
+            <td><span class="badge badge-${statusBadge}">${farm.status || 'active'}</span></td>
+            <td>${farm.location || 'N/A'}</td>
+            <td>${farm.email || 'N/A'}</td>
+            <td>${farm.phone || 'N/A'}</td>
+            <td>${farm.productCount || 0} products</td>
+            <td>${farm.tier || 'standard'}</td>
             <td>${lastUpdate}</td>
             <td>
                 <button class="btn" onclick="drillToFarm('${farm.farmId}')">View</button>
