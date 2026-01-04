@@ -87,6 +87,9 @@ async function initDashboard() {
     // Load dashboard data
     await loadDashboardData();
     
+    // Check for first-time setup wizard
+    await checkFirstTimeSetup();
+    
     // Setup auto-refresh
     setInterval(() => loadDashboardData(), 30000); // Refresh every 30 seconds
 }
