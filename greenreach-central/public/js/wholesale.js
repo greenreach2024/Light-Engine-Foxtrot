@@ -35,9 +35,9 @@
       else this.demoMode = false;
 
       this.loadAuthState();
-      
-      // Auto-login with demo profile if not already logged in
-      if (!this.currentBuyer) {
+
+      // Only auto-create a demo profile when demo mode is explicitly requested
+      if (this.demoMode && !this.currentBuyer) {
         this.createDemoProfile();
       }
       
@@ -399,8 +399,15 @@
           const response = await fetch(`/api/wholesale/catalog?${params.toString()}`);
           const data = await response.json();
 
+          // Accept both central (status/data.skus) and edge (ok/items) shapes
           if (data.status === 'ok' && data.data?.skus) {
             this.catalog = data.data.skus;
+            this.renderCatalog();
+            this.updateDemoBanner();
+            return;
+          }
+          if (data.ok && Array.isArray(data.items)) {
+            this.catalog = data.items;
             this.renderCatalog();
             this.updateDemoBanner();
             return;
@@ -424,8 +431,10 @@
           const response = await fetch('/data/wholesale-demo-catalog.json');
           if (!response.ok) {
             console.warn('Demo catalog not available');
-            this.catalog = [];
-            this.renderCatalog();
+            // Flip back to live mode when demo assets are missing
+            this.demoMode = false;
+            this.updateDemoBanner();
+            await this.loadCatalog();
             return;
           }
           this.demoData = await response.json();
@@ -441,8 +450,9 @@
         this.updateDemoBanner();
       } catch (error) {
         console.warn('Demo catalog unavailable:', error.message);
-        this.catalog = [];
-        this.renderCatalog();
+        this.demoMode = false;
+        this.updateDemoBanner();
+        await this.loadCatalog();
       }
     },
 
