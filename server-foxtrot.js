@@ -13992,6 +13992,80 @@ app.post('/api/farm/auth/logout', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/farm/profile
+ * Get authenticated farm's profile data
+ */
+app.get('/api/farm/profile', asyncHandler(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required'
+    });
+  }
+  
+  const token = authHeader.substring(7);
+  
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const decoded = jwt.verify(token, jwtSecret);
+    
+    const farmId = decoded.farmId;
+    
+    // Fetch farm data from database
+    const farmResult = await pool.query(
+      'SELECT farm_id, name, plan_type, email, contact_name, location, timezone, pos_instance_id, store_subdomain FROM farms WHERE farm_id = $1',
+      [farmId]
+    );
+    
+    if (farmResult.rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Farm not found'
+      });
+    }
+    
+    const farm = farmResult.rows[0];
+    
+    // Fetch rooms for this farm
+    const roomsResult = await pool.query(
+      'SELECT id, name, width, height, depth, room_type FROM rooms WHERE farm_id = $1 ORDER BY id',
+      [farmId]
+    );
+    
+    res.json({
+      status: 'success',
+      farm: {
+        farmId: farm.farm_id,
+        name: farm.name,
+        planType: farm.plan_type,
+        email: farm.email,
+        contactName: farm.contact_name,
+        location: farm.location,
+        timezone: farm.timezone,
+        posInstanceId: farm.pos_instance_id,
+        storeSubdomain: farm.store_subdomain,
+        rooms: roomsResult.rows.map(r => ({
+          id: r.id,
+          name: r.name,
+          width: r.width,
+          height: r.height,
+          depth: r.depth,
+          roomType: r.room_type
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('[farm/profile] Error:', error);
+    return res.status(403).json({
+      status: 'error',
+      message: 'Invalid or expired token'
+    });
+  }
+}));
+
+/**
  * GET /api/farm/activity/:farmId
  * Get recent activity for a farm (requires authentication)
  */

@@ -6186,10 +6186,33 @@ const setStatus = m => { const el=$("#status"); if(el) el.textContent = m; };
 // Load farm data to check demo mode status
 async function loadFarmData() {
   try {
-    const resp = await fetch('/data/farm.json');
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      console.warn('[loadFarmData] No authentication token, skipping farm data load');
+      return;
+    }
+    
+    const resp = await fetch('/api/farm/profile', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
     if (resp.ok) {
-      STATE.farm = await resp.json();
-      console.log('[loadFarmData] Loaded farm:', STATE.farm?.farmId || STATE.farm?.name);
+      const data = await resp.json();
+      if (data.status === 'success' && data.farm) {
+        STATE.farm = data.farm;
+        console.log('[loadFarmData] Loaded farm:', STATE.farm?.farmId || STATE.farm?.name);
+        
+        // Store farm data in STATE.rooms if provided
+        if (Array.isArray(data.farm.rooms)) {
+          STATE.rooms = data.farm.rooms;
+        }
+      }
+    } else if (resp.status === 401) {
+      console.warn('[loadFarmData] Authentication failed, redirecting to login');
+      window.location.href = '/login.html';
     }
   } catch (e) {
     console.warn('[loadFarmData] Failed to load farm data:', e);
