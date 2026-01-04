@@ -82,6 +82,7 @@ async function initDashboard() {
     if (!localStorage.getItem('token')) {
         localStorage.setItem('token', 'local-access');
         localStorage.setItem('farmId', 'LOCAL-FARM');
+        localStorage.setItem('farm_id', 'LOCAL-FARM');
     }
     
     // Setup navigation
@@ -184,7 +185,8 @@ async function handleLogin(e) {
  */
 async function loadFarmData() {
     try {
-        const response = await fetch(`${API_BASE}/api/admin/farms/${currentSession.farmId}`, {
+        // Use /api/farm/profile endpoint instead of admin endpoint
+        const response = await fetch(`${API_BASE}/api/farm/profile`, {
             headers: {
                 'Authorization': `Bearer ${currentSession.token}`
             }
@@ -195,9 +197,19 @@ async function loadFarmData() {
         if (data.status === 'success') {
             farmData = data.farm;
             
-            // Update UI
-            document.getElementById('farmName').textContent = farmData.name;
-            document.getElementById('farmId').textContent = farmData.farmId;
+            // Update UI with farm name
+            const farmNameEl = document.getElementById('farmName');
+            if (farmNameEl) {
+                farmNameEl.textContent = farmData.name || currentSession.farmName || 'Light Engine Farm';
+            }
+            
+            const farmIdEl = document.getElementById('farmId');
+            if (farmIdEl) {
+                farmIdEl.textContent = farmData.farmId || currentSession.farmId;
+            }
+            
+            // Store farm name in currentSession
+            currentSession.farmName = farmData.name;
             
             if (currentSession.subscription) {
                 const badge = document.getElementById('subscriptionBadge');
@@ -3447,10 +3459,17 @@ async function generateSetupActivityHubQR() {
  * Open QR Generator tool in new window
  */
 function openQRGenerator() {
-    const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id') || '';
-    const url = `/LE-qr-generator.html${farmId ? '?farmId=' + farmId : ''}`;
+    const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id') || currentSession?.farmId || '';
+    const farmName = currentSession?.farmName || localStorage.getItem('farmName') || 'Light Engine Farm';
+    
+    // Build URL with farm parameters for Activity Hub QR codes
+    const params = new URLSearchParams();
+    if (farmId) params.set('farmId', farmId);
+    if (farmName) params.set('farmName', encodeURIComponent(farmName));
+    
+    const url = `/LE-qr-generator.html?${params.toString()}`;
     window.open(url, '_blank', 'width=1200,height=800');
-    console.log('[Setup] Opened QR Generator tool');
+    console.log('[Setup] Opened QR Generator tool with farmId:', farmId, 'farmName:', farmName);
 }
 
 /**

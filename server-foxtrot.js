@@ -14052,6 +14052,23 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
   
   const token = authHeader.substring(7);
   
+  // Handle local-access token for development
+  if (token === 'local-access') {
+    return res.json({
+      status: 'success',
+      farm: {
+        farmId: 'LOCAL-FARM',
+        name: 'Local Development Farm',
+        planType: 'edge',
+        email: 'admin@local-farm.com',
+        contactName: 'Admin User',
+        location: null,
+        timezone: 'America/New_York',
+        rooms: []
+      }
+    });
+  }
+  
   try {
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
     const decoded = jwt.verify(token, jwtSecret);
