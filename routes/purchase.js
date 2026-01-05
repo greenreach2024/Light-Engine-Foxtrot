@@ -490,19 +490,32 @@ router.get('/verify-session/:session_id', async (req, res) => {
           });
         }
         
-        // Check if email already exists (to prevent duplicate emails)
+        // Check if email already exists with a valid farm
         const existingEmailResult = await db.query(
-          'SELECT email FROM users WHERE email = $1',
+          `SELECT u.email, u.farm_id, f.status, f.name as farm_name 
+           FROM users u 
+           LEFT JOIN farms f ON u.farm_id = f.farm_id 
+           WHERE u.email = $1`,
           [email]
         );
         
         if (existingEmailResult.rows.length > 0) {
-          console.log('[Verify] Email already exists:', email);
-          return res.status(409).json({
-            success: false,
-            error: 'Email already registered',
-            message: 'An account with this email already exists. Please use a different email or contact support.'
-          });
+          const existingUser = existingEmailResult.rows[0];
+          
+          // If user has a valid farm, they're already registered
+          if (existingUser.farm_id && existingUser.status) {
+            console.log('[Verify] Email already exists with valid farm:', email);
+            return res.status(409).json({
+              success: false,
+              error: 'Email already registered',
+              message: 'An account with this email already exists. Please use a different email or contact support.',
+              existing_farm: existingUser.farm_name
+            });
+          }
+          
+          // If user exists but has no farm (orphaned from failed signup), delete and continue
+          console.log('[Verify] Found orphaned user record, cleaning up:', email);
+          await db.query('DELETE FROM users WHERE email = $1 AND farm_id IS NULL', [email]);
         }
         
         // Generate unique farm ID
@@ -520,10 +533,14 @@ router.get('/verify-session/:session_id', async (req, res) => {
         // Generate temporary password
         const temp_password = crypto.randomBytes(8).toString('base64url');
         
-        // Create farm record in database
-        console.log('[Verify] Creating farm record...');
+        // Begin transaction to ensure atomicity
+        await db.query('BEGIN');
         
-        await db.query(`
+        try {
+          // Create farm record in database
+          console.log('[Verify] Creating farm record...');
+          
+          await db.query(`
           INSERT INTO farms (
             farm_id,
             name,
@@ -577,6 +594,10 @@ router.get('/verify-session/:session_id', async (req, res) => {
         
         const user_id = userResult.rows[0].id;
         console.log('[Verify] Admin user created with ID:', user_id);
+        
+        // Commit transaction - core account creation successful
+        await db.query('COMMIT');
+        console.log('[Verify] Transaction committed successfully');
 
         // Auto-provision farm resources (POS, Online Store, Central linking)
         console.log('[Verify] Starting auto-provisioning...');
@@ -659,6 +680,13 @@ router.get('/verify-session/:session_id', async (req, res) => {
           plan_type: plan,  // Also return in response for localStorage
           token // Return JWT token for automatic login
         });
+        
+        } catch (transactionError) {
+          // Rollback transaction on error
+          await db.query('ROLLBACK');
+          console.error('[Verify] Transaction rolled back due to error:', transactionError);
+          throw transactionError;
+        }
 
       } catch (dbError) {
         console.error('[Verify] Database error:', dbError);
