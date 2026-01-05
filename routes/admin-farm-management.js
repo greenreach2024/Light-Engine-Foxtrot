@@ -447,7 +447,7 @@ router.get('/farms/:farmId', requireAdmin, async (req, res) => {
     const result = await dbQuery(`
       SELECT 
         f.*,
-        COUNT(DISTINCT u.id) as user_count
+        COUNT(DISTINCT u.user_id) as user_count
       FROM farms f
       LEFT JOIN users u ON f.farm_id = u.farm_id
       WHERE f.farm_id = $1
