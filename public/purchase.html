@@ -643,6 +643,37 @@
             cursor: not-allowed;
         }
 
+        .existing-account-section {
+            padding: 20px 40px 24px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+        }
+
+        .existing-account-text {
+            font-size: 0.9rem;
+            color: #6e6e73;
+            margin-bottom: 12px;
+        }
+
+        .btn-signin {
+            display: inline-block;
+            padding: 12px 28px;
+            background: transparent;
+            color: #10b981;
+            border: 2px solid #10b981;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .btn-signin:hover {
+            background: #10b981;
+            color: white;
+        }
+
         .plan-summary {
             background: #f9fafb;
             border: 1px solid #e5e7eb;
@@ -1008,6 +1039,13 @@
                         </button>
                     </div>
                 </form>
+
+                <div class="existing-account-section">
+                    <p class="existing-account-text">Already have an account?</p>
+                    <button type="button" class="btn-signin" onclick="window.location.href='/'">
+                        Sign In to Light Engine
+                    </button>
+                </div>
             </div>
         </div>
     </div>
