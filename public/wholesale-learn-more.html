@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GreenReach | Learn More</title>
+  <meta name="description" content="Discover how GreenReach serves grocers, restaurants, food security organizations, and growers with reliable, traceable, local food systems.">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 22px;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+    }
+
+    .nav-cta {
+      background: var(--primary);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent);
+      color: var(--primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 60vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 100px 22px 80px;
+      background: linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(130, 195, 65, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(45, 80, 22, 0.06) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      max-width: 980px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-eyebrow {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 8px;
+      letter-spacing: 0.02em;
+    }
+
+    .hero-title {
+      font-size: 72px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 24px;
+      line-height: 1.381;
+      color: var(--text-light);
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    /* Section Styles */
+    .section {
+      padding: 100px 22px;
+      position: relative;
+    }
+
+    .section:nth-child(odd) {
+      background: var(--surface);
+    }
+
+    .section-content {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+
+    .section-eyebrow {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1.05;
+      margin-bottom: 20px;
+      letter-spacing: -0.015em;
+      color: var(--text);
+    }
+
+    .section-subtitle {
+      font-size: 21px;
+      line-height: 1.5;
+      color: var(--text-light);
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    /* Highlight Cards */
+    .highlights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 32px;
+      margin-top: 48px;
+    }
+
+    .highlight-card {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      transition: transform 0.3s, box-shadow 0.3s;
+      border: 1px solid rgba(0, 0, 0, 0.04);
+    }
+
+    .highlight-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    }
+
+    .highlight-icon {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 24px;
+    }
+
+    .highlight-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .highlight-description {
+      font-size: 17px;
+      line-height: 1.6;
+      color: var(--text-light);
+    }
+
+    /* CTA Section */
+    .cta-section {
+      padding: 100px 22px;
+      background: linear-gradient(135deg, var(--primary) 0%, #3d6821 100%);
+      color: white;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(130, 195, 65, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(130, 195, 65, 0.15) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .cta-content {
+      max-width: 800px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .cta-title {
+      font-size: 56px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+    }
+
+    .cta-description {
+      font-size: 21px;
+      margin-bottom: 40px;
+      opacity: 0.9;
+      line-height: 1.5;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary, .btn-secondary {
+      padding: 16px 40px;
+      border-radius: 980px;
+      font-size: 17px;
+      font-weight: 500;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--primary);
+    }
+
+    .btn-primary:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: white;
+      border: 2px solid white;
+    }
+
+    .btn-secondary:hover {
+      background: white;
+      color: var(--primary);
+      transform: translateY(-2px);
+    }
+
+    /* Footer */
+    footer {
+      background: var(--text);
+      color: rgba(255, 255, 255, 0.7);
+      padding: 40px 22px 32px;
+    }
+
+    .footer-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .footer-logo {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.3s;
+    }
+
+    .footer-links a:hover {
+      color: white;
+    }
+
+    .footer-copyright {
+      font-size: 12px;
+      opacity: 0.5;
+    }
+
+    /* Responsive */
+    @media (max-width: 1068px) {
+      .hero-title {
+        font-size: 56px;
+      }
+
+      .section-title {
+        font-size: 40px;
+      }
+
+      .cta-title {
+        font-size: 40px;
+      }
+    }
+
+    @media (max-width: 734px) {
+      .hero-title {
+        font-size: 40px;
+      }
+
+      .hero-subtitle {
+        font-size: 19px;
+      }
+
+      .section-title {
+        font-size: 32px;
+      }
+
+      .highlights-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in-up {
+      animation: fadeInUp 0.8s ease-out;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/wholesale-landing.html" class="nav-logo">GreenReach</a>
+      <ul class="nav-links">
+        <li><a href="#grocers">For Grocers & Restaurants</a></li>
+        <li><a href="#food-security">For Food Security</a></li>
+        <li><a href="#growers">For Growers</a></li>
+      </ul>
+      <a href="/GR-wholesale.html" class="nav-cta">Sign in/Register</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content fade-in-up">
+      <div class="hero-eyebrow">GreenReach Platform</div>
+      <h1 class="hero-title">Built for Everyone in the Local Food System</h1>
+      <p class="hero-subtitle">
+        One platform connecting growers, buyers, and communities with reliable, traceable, sustainably-grown food.
+      </p>
+    </div>
+  </section>
+
+  <!-- Grocers & Restaurants Section -->
+  <section class="section" id="grocers">
+    <div class="section-content">
+      <div class="section-header">
+        <div class="section-eyebrow">Reliability, Ordering, Traceability</div>
+        <h2 class="section-title">Highlights for Grocers & Restaurants</h2>
+      </div>
+
+      <div class="highlights-grid">
+        <div class="highlight-card">
+          <div class="highlight-icon">📊</div>
+          <h3 class="highlight-title">Know what's available and what's coming</h3>
+          <p class="highlight-description">
+            You don't just see today's inventory—you get visibility into future harvests so menus, specials, and purchasing plans can be set with confidence.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">✓</div>
+          <h3 class="highlight-title">Easy ordering, fewer surprises</h3>
+          <p class="highlight-description">
+            A buyer self-service portal supports 24/7 ordering, while real-time synchronization reduces substitutions and missed fills. For grocers, this improves shelf reliability; for restaurants, it reduces menu disruption.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">🌐</div>
+          <h3 class="highlight-title">Multi-farm aggregation, one buying experience</h3>
+          <p class="highlight-description">
+            The marketplace enables regional discovery and consolidated ordering across multiple farms—helpful when one farm can't cover the whole order or when buyers want a consistent supply across seasons.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">💰</div>
+          <h3 class="highlight-title">Cleaner margins with direct pricing</h3>
+          <p class="highlight-description">
+            Direct farm-to-buyer pricing can reduce distributor markups, while still preserving traceability and documentation standards that premium buyers expect.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">📋</div>
+          <h3 class="highlight-title">Food safety documentation that travels with the product</h3>
+          <p class="highlight-description">
+            Lot/batch tracking, environmental monitoring logs, and standards-aligned labels support procurement requirements, vendor onboarding, and recall readiness—especially for institutions and high-compliance buyers.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Food Security Organizations Section -->
+  <section class="section" id="food-security">
+    <div class="section-content">
+      <div class="section-header">
+        <div class="section-eyebrow">Access, Accountability, Planning</div>
+        <h2 class="section-title">Highlights for Food Security Organizations</h2>
+      </div>
+
+      <div class="highlights-grid">
+        <div class="highlight-card">
+          <div class="highlight-icon">📅</div>
+          <h3 class="highlight-title">More predictable supply for programs and partners</h3>
+          <p class="highlight-description">
+            Future inventory visibility helps food security teams plan distributions, meal programs, and pickup days around real harvest timelines—not estimates.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">🔍</div>
+          <h3 class="highlight-title">Traceability and accountability for donated or subsidized food</h3>
+          <p class="highlight-description">
+            Seed-to-sale tracking and batch records provide clear documentation for reporting, funding requirements, and food safety diligence—without adding admin burden to the grower or recipient organization.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">🌱</div>
+          <h3 class="highlight-title">Lower operational burden = more resilient local production</h3>
+          <p class="highlight-description">
+            Because the system reduces manual tracking and automates environmental management, it becomes easier for small-to-medium growers (and new entrants) to produce reliably—supporting community-scale food access.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">⚡</div>
+          <h3 class="highlight-title">Faster response in a safety event</h3>
+          <p class="highlight-description">
+            Audit-ready reporting, retained records, and recall capability strengthen risk management for organizations distributing food to vulnerable populations.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">🤝</div>
+          <h3 class="highlight-title">Built for community + commercial use together</h3>
+          <p class="highlight-description">
+            The same platform can serve community partners and commercial buyers simultaneously, enabling growers to balance revenue stability with mission-driven distribution—without running two separate systems.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Growers Section -->
+  <section class="section" id="growers">
+    <div class="section-content">
+      <div class="section-header">
+        <div class="section-eyebrow">Ease, Consistency, Profitability</div>
+        <h2 class="section-title">Highlights for Growers</h2>
+      </div>
+
+      <div class="highlights-grid">
+        <div class="highlight-card">
+          <div class="highlight-icon">📱</div>
+          <h3 class="highlight-title">Grow without spreadsheets or extra admin</h3>
+          <p class="highlight-description">
+            Light Engine captures inventory automatically through the work you already do—scan a tray QR code at seeding, movement, harvest, and sale. That single action updates everything in real time: crop status, yields, and what's available now vs. what's coming next.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">🔬</div>
+          <h3 class="highlight-title">Recipe-driven growing that "just runs"</h3>
+          <p class="highlight-description">
+            Choose the crop and the system applies research-validated targets for each growth stage—light, temperature, humidity, and VPD—then adjusts continuously based on sensor feedback. This reduces trial-and-error and makes results repeatable, even across staff shifts.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">⚡</div>
+          <h3 class="highlight-title">Energy savings without sacrificing quality</h3>
+          <p class="highlight-description">
+            Dynamic lighting schedules (spectrum + intensity) adapt through the growth cycle to reduce waste and plant stress. Gradual transitions and compensation for LED degradation improve consistency while delivering meaningful energy savings compared to static schedules.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">👤</div>
+          <h3 class="highlight-title">Non-technical by design</h3>
+          <p class="highlight-description">
+            Touchscreen-friendly workflows, clear "what to do next" prompts, and AI-assisted planning support growers who don't want to be programmers. The platform is built to reduce complexity, not add it.
+          </p>
+        </div>
+
+        <div class="highlight-card">
+          <div class="highlight-icon">📑</div>
+          <h3 class="highlight-title">Built-in compliance without the paperwork</h3>
+          <p class="highlight-description">
+            Batch tracking, audit trails, label generation, and exportable reports are integrated from seed to sale. Compliance becomes a byproduct of operations, not a separate job.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta-section">
+    <div class="cta-content">
+      <h2 class="cta-title">Ready to Get Started?</h2>
+      <p class="cta-description">
+        Join growers, buyers, and food security organizations building a more resilient local food system.
+      </p>
+      <div class="cta-buttons">
+        <a href="/GR-wholesale.html" class="btn-primary">Sign in/Register</a>
+        <a href="/wholesale-landing.html" class="btn-secondary">Back to Home</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-logo">GreenReach</div>
+      <div class="footer-links">
+        <a href="/wholesale-landing.html">Home</a>
+        <a href="#grocers">For Grocers & Restaurants</a>
+        <a href="#food-security">For Food Security</a>
+        <a href="#growers">For Growers</a>
+        <a href="/GR-wholesale.html">Sign in</a>
+      </div>
+      <div class="footer-copyright">© 2026 GreenReach. All rights reserved.</div>
+    </div>
+  </footer>
+</body>
+</html>
