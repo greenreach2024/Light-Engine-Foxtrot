@@ -3564,7 +3564,7 @@ API URL: ${farm.api_url || 'Not configured'}
                     <td>${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</td>
                     <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
                     <td>
-                        <button onclick="resetUserPassword('${user.user_id}', '${user.email}')" class="btn-icon" title="Reset Password">Reset</button>
+                        <button onclick="resetUserPassword('${user.farm_id}', '${user.email}')" class="btn-icon" title="Reset Password">Reset</button>
                         <button onclick="toggleUserStatus('${user.user_id}', '${user.status || 'active'}')" class="btn-icon" title="${user.status === 'active' ? 'Disable' : 'Enable'}">${user.status === 'active' ? 'Disable' : 'Enable'}</button>
                         <button onclick="editUserRole('${user.user_id}', '${user.role}')" class="btn-icon" title="Change Role">Role</button>
                     </td>
@@ -3663,21 +3663,30 @@ API URL: ${farm.api_url || 'Not configured'}
         /**
          * Reset user password
          */
-        async function resetUserPassword(userId, email) {
-            if (!confirm(`Reset password for user: ${email}?\n\nA temporary password will be emailed to the user.`)) {
+        async function resetUserPassword(farmId, email) {
+            if (!confirm(`Reset password for user: ${email}?\n\nA new temporary password will be generated.`)) {
                 return;
             }
             
             try {
-                const response = await fetch(`${FARM_API_URL}/api/admin/users/${userId}/reset-password`, {
+                const token = localStorage.getItem('admin_token');
+                const response = await fetch(`${API_BASE}/api/admin/farms/reset-user-password`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ farmId, email })
                 });
                 
                 const data = await response.json();
                 
-                if (data.success) {
-                    alert(`Password reset email sent to: ${email}\n\nTemporary Password: ${data.temp_password}`);
+                if (data.status === 'success') {
+                    alert(`Password Reset Successful!\n\n` +
+                          `Farm ID: ${data.farmId}\n` +
+                          `Email: ${data.email}\n` +
+                          `Temporary Password: ${data.tempPassword}\n\n` +
+                          `Please share this password securely with the user.`);
                 } else {
                     alert(`Error: ${data.message}`);
                 }

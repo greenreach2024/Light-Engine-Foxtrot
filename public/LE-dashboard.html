@@ -499,6 +499,28 @@
       <button id="profileReset" type="button" class="ghost">Reset</button>
     </div>
   </form>
+  
+  <!-- Password Change Section -->
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">Change Password</h3>
+    <p class="tiny" style="margin:0 0 16px;color:#475569">Update your password for added security. Use a strong password with at least 8 characters.</p>
+    <form id="passwordChangeForm" class="grid cols-2" style="gap:12px;align-items:end;max-width:640px">
+      <label class="tiny" style="grid-column:1 / -1">Current Password
+        <input id="currentPassword" type="password" placeholder="Enter current password" autocomplete="current-password" required>
+      </label>
+      <label class="tiny">New Password
+        <input id="newPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" required minlength="8">
+      </label>
+      <label class="tiny">Confirm New Password
+        <input id="confirmPassword" type="password" placeholder="Re-enter new password" autocomplete="new-password" required minlength="8">
+      </label>
+      <div class="row row--gap-sm" style="grid-column:1 / -1">
+        <button id="passwordChangeSave" type="submit" class="primary">Change Password</button>
+        <button id="passwordChangeReset" type="button" class="ghost">Clear</button>
+      </div>
+      <span id="passwordChangeStatus" class="tiny" style="grid-column:1 / -1" aria-live="polite"></span>
+    </form>
+  </div>
 </section>
         <section id="groupsV2Panel" class="card hud-shell gr-card" data-panel="groups-v2" data-card-prefix="GR" data-card-code="GV2" hidden>
         <div class="row row--between row--center hud-shell__header">
@@ -2362,6 +2384,80 @@
           }, 100);
         });
       }, 500);
+      
+      // Initialize password change form
+      const passwordChangeForm = document.getElementById('passwordChangeForm');
+      const passwordChangeReset = document.getElementById('passwordChangeReset');
+      const passwordChangeStatus = document.getElementById('passwordChangeStatus');
+      
+      if (passwordChangeForm) {
+        passwordChangeForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const currentPassword = document.getElementById('currentPassword').value;
+          const newPassword = document.getElementById('newPassword').value;
+          const confirmPassword = document.getElementById('confirmPassword').value;
+          
+          // Validate passwords match
+          if (newPassword !== confirmPassword) {
+            passwordChangeStatus.textContent = 'New passwords do not match';
+            passwordChangeStatus.style.color = '#ef4444';
+            return;
+          }
+          
+          // Validate password length
+          if (newPassword.length < 8) {
+            passwordChangeStatus.textContent = 'Password must be at least 8 characters';
+            passwordChangeStatus.style.color = '#ef4444';
+            return;
+          }
+          
+          passwordChangeStatus.textContent = 'Changing password...';
+          passwordChangeStatus.style.color = '#3b82f6';
+          
+          try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/farm/auth/change-password', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                currentPassword,
+                newPassword
+              })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+              passwordChangeStatus.textContent = '✓ Password changed successfully!';
+              passwordChangeStatus.style.color = '#10b981';
+              passwordChangeForm.reset();
+              
+              // Clear status after 3 seconds
+              setTimeout(() => {
+                passwordChangeStatus.textContent = '';
+              }, 3000);
+            } else {
+              passwordChangeStatus.textContent = data.message || 'Failed to change password';
+              passwordChangeStatus.style.color = '#ef4444';
+            }
+          } catch (error) {
+            console.error('Password change error:', error);
+            passwordChangeStatus.textContent = 'Error changing password. Please try again.';
+            passwordChangeStatus.style.color = '#ef4444';
+          }
+        });
+        
+        if (passwordChangeReset) {
+          passwordChangeReset.addEventListener('click', () => {
+            passwordChangeForm.reset();
+            passwordChangeStatus.textContent = '';
+          });
+        }
+      }
     });
     
     // Payment Wizard Functions

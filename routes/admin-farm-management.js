@@ -1280,4 +1280,75 @@ router.post('/run-migration/wholesale-password-reset', requireAdmin, async (req,
   }
 });
 
+/**
+ * POST /api/admin/farms/reset-user-password
+ * Reset password for an LE user (for support purposes)
+ */
+router.post('/farms/reset-user-password', requireAdmin, async (req, res) => {
+  try {
+    const { farmId, email } = req.body;
+    
+    if (!farmId || !email) {
+      return res.status(400).json({ 
+        status: 'error',
+        message: 'Farm ID and email are required' 
+      });
+    }
+
+    const db = await initDatabase();
+    
+    if (!db || !db.pool) {
+      return res.status(503).json({ 
+        status: 'error',
+        message: 'Database not available'
+      });
+    }
+
+    // Find user
+    const userResult = await db.query(
+      `SELECT user_id, email, name, farm_id 
+       FROM users 
+       WHERE farm_id = $1 AND LOWER(email) = LOWER($2)`,
+      [farmId, email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ 
+        status: 'error',
+        message: 'User not found with this farm ID and email' 
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Generate temporary password
+    const tempPassword = crypto.randomBytes(8).toString('base64url');
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    
+    // Update password
+    await db.query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2',
+      [passwordHash, user.user_id]
+    );
+
+    console.log(`[Admin] Password reset for user ${email} in farm ${farmId}`);
+
+    res.json({ 
+      status: 'success',
+      message: 'Password reset successfully',
+      tempPassword: tempPassword,
+      farmId: farmId,
+      email: user.email
+    });
+
+  } catch (error) {
+    console.error('[Admin] Reset user password error:', error);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Failed to reset password',
+      error: error.message
+    });
+  }
+});
+
 export default router;

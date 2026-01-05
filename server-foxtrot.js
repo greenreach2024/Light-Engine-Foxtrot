@@ -14050,6 +14050,128 @@ app.post('/api/farm/auth/logout', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/farm/auth/change-password
+ * Change password for authenticated LE user
+ */
+app.post('/api/farm/auth/change-password', asyncHandler(async (req, res) => {
+  console.log('[farm-auth] POST /api/farm/auth/change-password called');
+  const { currentPassword, newPassword } = req.body;
+  
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Current password and new password are required'
+    });
+  }
+
+  if (newPassword.length < 8) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'New password must be at least 8 characters long'
+    });
+  }
+
+  // Get token from header
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required'
+    });
+  }
+
+  const token = authHeader.substring(7);
+  
+  // Verify token (JWT or session)
+  let farmId, email;
+  
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const decoded = jwt.verify(token, jwtSecret);
+    farmId = decoded.farmId;
+    email = decoded.email;
+  } catch (jwtError) {
+    // Try session token
+    if (global.farmAdminSessions) {
+      const session = global.farmAdminSessions.get(token);
+      if (session && new Date(session.expiresAt) > new Date()) {
+        farmId = session.farmId;
+        email = session.email;
+      } else {
+        return res.status(401).json({
+          status: 'error',
+          message: 'Invalid or expired token'
+        });
+      }
+    } else {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid token'
+      });
+    }
+  }
+
+  const pool = req.app.locals?.db;
+  if (!pool) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Database not configured'
+    });
+  }
+
+  try {
+    // Get user
+    const userResult = await pool.query(
+      `SELECT user_id, email, password_hash, farm_id 
+       FROM users 
+       WHERE farm_id = $1 AND LOWER(email) = LOWER($2)`,
+      [farmId, email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Verify current password
+    const valid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Current password is incorrect'
+      });
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await pool.query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2',
+      [newPasswordHash, user.user_id]
+    );
+
+    console.log(`[farm-auth] Password changed successfully for ${email} in farm ${farmId}`);
+
+    res.json({
+      status: 'success',
+      message: 'Password changed successfully'
+    });
+
+  } catch (error) {
+    console.error('[farm-auth] Change password error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to change password'
+    });
+  }
+}));
+
+/**
  * GET /api/configuration
  * Get system configuration
  */
