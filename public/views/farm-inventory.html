@@ -563,13 +563,25 @@
     // Use current server origin for API calls (works on localhost and AWS)
     const API_BASE = window.location.origin;
 
+    // Detect if we're on Central server or Farm server
+    const isCentralServer = window.location.hostname.includes('greenreachgreens.com') || 
+                           window.location.hostname.includes('greenreach.farm');
+
     async function loadInventory() {
       console.log('[loadInventory] Starting...');
       console.log('[loadInventory] API_BASE:', API_BASE);
+      console.log('[loadInventory] isCentralServer:', isCentralServer);
       console.log('[loadInventory] window.location:', window.location.href);
       showLoading();
 
       try {
+        // If on Central server, show message that this page is for farm view only
+        if (isCentralServer) {
+          hideLoading();
+          showError('This inventory view is designed for individual farm servers. Please access this page from your farm\'s Light Engine dashboard.');
+          return;
+        }
+
         console.log('[loadInventory] Fetching data from:', API_BASE);
         console.log('[loadInventory] Endpoint 1:', `${API_BASE}/api/inventory/current`);
         console.log('[loadInventory] Endpoint 2:', `${API_BASE}/api/inventory/forecast`);
@@ -616,12 +628,13 @@
         }
 
         if (!currentResp.ok || !forecastResp.ok || !groupsResp.ok) {
-          throw new Error('Failed to load some inventory data');
+          console.warn('[loadInventory] Some data sources failed, continuing with available data');
+          // Continue with partial data instead of throwing
         }
 
-        const currentData = await currentResp.json();
-        const forecastData = await forecastResp.json();
-        const groupsResponse = await groupsResp.json();
+        const currentData = currentResp.ok ? await currentResp.json() : { crops: [], summary: {} };
+        const forecastData = forecastResp.ok ? await forecastResp.json() : { forecast: [] };
+        const groupsResponse = groupsResp.ok ? await groupsResp.json() : { groups: [] };
         const groupsData = groupsResponse.groups || [];
 
         console.log('[loadInventory] Data loaded:', {
@@ -644,6 +657,8 @@
         console.error('[loadInventory] Error:', error);
         console.error('[loadInventory] Error stack:', error.stack);
         showError('Failed to load inventory data. Please try again.');
+      } finally {
+        hideLoading();
       }
     }
 
