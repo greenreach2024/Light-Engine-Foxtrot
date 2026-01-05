@@ -1232,4 +1232,52 @@ router.get('/wholesale/orders', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/admin/run-migration/wholesale-password-reset
+ * One-time endpoint to run password reset migration
+ */
+router.post('/run-migration/wholesale-password-reset', requireAdmin, async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    
+    if (!db) {
+      return res.status(500).json({ 
+        status: 'error', 
+        error: 'Database connection error' 
+      });
+    }
+
+    console.log('[Admin Migration] Running wholesale password reset migration...');
+
+    // Add password reset columns
+    await db.query(`
+      ALTER TABLE wholesale_buyers 
+        ADD COLUMN IF NOT EXISTS password_reset_token TEXT,
+        ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP;
+    `);
+
+    // Create index
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_wholesale_buyers_reset_token 
+        ON wholesale_buyers(password_reset_token) 
+        WHERE password_reset_token IS NOT NULL;
+    `);
+
+    console.log('[Admin Migration] ✅ Migration completed successfully');
+
+    res.json({
+      status: 'ok',
+      message: 'Wholesale password reset migration completed successfully'
+    });
+
+  } catch (error) {
+    console.error('[Admin Migration] Error:', error);
+    res.status(500).json({ 
+      status: 'error',
+      error: 'Migration failed',
+      details: error.message
+    });
+  }
+});
+
 export default router;
