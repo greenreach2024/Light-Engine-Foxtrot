@@ -3346,9 +3346,55 @@
             alert(`Update status for grower: ${growerId}`);
         }
 
-        function viewFarmDetails(farmId) {
+        async function viewFarmDetails(farmId) {
             console.log('View farm details:', farmId);
-            alert(`View details for farm: ${farmId}`);
+            
+            try {
+                // Try to fetch farm details from the network API
+                const response = await fetch(`${NETWORK_API_URL}/api/network/farms/${farmId}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch farm details');
+                }
+                
+                const data = await response.json();
+                
+                if (data.ok && data.farm) {
+                    const farm = data.farm;
+                    const summary = data.summary || {};
+                    
+                    // Show farm details in a modal or alert
+                    const detailsHTML = `
+Farm: ${farm.farm_name}
+Location: ${farm.location || 'N/A'}
+Capacity: ${farm.capacity || 'N/A'} cells
+Status: ${farm.status || 'unknown'}
+Certifications: ${farm.certifications?.join(', ') || 'None'}
+
+Recent Performance:
+• Production (30d): ${summary.total_production?.toFixed(1) || 0} kg
+• Revenue (30d): $${summary.total_revenue?.toFixed(0) || 0}
+• Active Batches: ${summary.active_batches || 0}
+• QA Score: ${summary.avg_qa_score?.toFixed(1) || 0}%
+
+API URL: ${farm.api_url || 'Not configured'}
+                    `.trim();
+                    
+                    if (confirm(`${detailsHTML}\n\nOpen farm dashboard in new window?`)) {
+                        // If farm has an API URL, open it
+                        if (farm.api_url) {
+                            window.open(farm.api_url + '/farm-admin.html', '_blank');
+                        } else {
+                            alert('Farm dashboard URL not configured. Please configure the farm\'s API URL first.');
+                        }
+                    }
+                } else {
+                    throw new Error('Invalid farm data received');
+                }
+            } catch (error) {
+                console.error('Error loading farm details:', error);
+                alert(`Unable to load farm details. Please try again.\n\nError: ${error.message}`);
+            }
         }
 
         function unassignFarm(farmId) {
