@@ -3064,6 +3064,12 @@ async function loadRecipes() {
         params.append('limit', '100');
         
         const response = await authenticatedFetch(`/api/admin/recipes?${params.toString()}`);
+        
+        // Check if authentication failed
+        if (!response) {
+            throw new Error('Authentication required. Please log in again.');
+        }
+        
         const data = await response.json();
         
         if (!data.ok) {
@@ -3076,11 +3082,14 @@ async function loadRecipes() {
         
     } catch (error) {
         console.error('Error loading recipes:', error);
-        document.getElementById('recipes-tbody').innerHTML = `
-            <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--accent-red);">
-                Error loading recipes: ${error.message}
-            </td></tr>
-        `;
+        const tbody = document.getElementById('recipes-tbody');
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--accent-red);">
+                    Error loading recipes: ${error.message}
+                </td></tr>
+            `;
+        }
     }
 }
 
