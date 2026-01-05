@@ -1156,4 +1156,66 @@ router.get('/analytics/buyers/:buyerId/insights', requireAdmin, async (req, res)
   }
 });
 
+/**
+ * GET /api/admin/wholesale/orders
+ * List all wholesale orders (admin view)
+ */
+router.get('/wholesale/orders', requireAdmin, async (req, res) => {
+  try {
+    const db = req.app.locals.wholesaleDb || req.app.locals.db;
+    
+    if (!db) {
+      return res.status(500).json({ 
+        status: 'error', 
+        error: 'Database connection error' 
+      });
+    }
+
+    // Query all orders with farm sub-orders
+    const orders = await db.all(`
+      SELECT 
+        o.*,
+        json_group_array(
+          json_object(
+            'id', so.id,
+            'farm_id', so.farm_id,
+            'status', so.status,
+            'line_items', so.line_items,
+            'subtotal', so.subtotal,
+            'broker_fee_amount', so.broker_fee_amount,
+            'tax_amount', so.tax_amount,
+            'total', so.total
+          )
+        ) as sub_orders
+      FROM master_orders o
+      LEFT JOIN farm_sub_orders so ON o.id = so.master_order_id
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+      LIMIT 100
+    `);
+
+    // Parse JSON fields
+    const parsedOrders = orders.map(order => ({
+      ...order,
+      sub_orders: JSON.parse(order.sub_orders || '[]'),
+      delivery_address: order.delivery_address ? JSON.parse(order.delivery_address) : null,
+      logistics_plan: order.logistics_plan ? JSON.parse(order.logistics_plan) : null
+    }));
+
+    res.json({
+      status: 'ok',
+      orders: parsedOrders,
+      count: parsedOrders.length
+    });
+
+  } catch (error) {
+    console.error('[Admin Wholesale Orders] List error:', error);
+    res.status(500).json({ 
+      status: 'error',
+      error: 'Failed to fetch orders',
+      details: error.message
+    });
+  }
+});
+
 export default router;

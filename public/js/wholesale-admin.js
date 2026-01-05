@@ -422,8 +422,8 @@
         const farmsData = await farmsRes.json();
         this.farms = farmsData.data?.farms || [];
         
-        // Load wholesale orders
-        const ordersRes = await fetch('/api/wholesale/orders', { headers });
+        // Load wholesale orders from admin endpoint
+        const ordersRes = await fetch('/api/admin/wholesale/orders', { headers });
         const ordersData = await ordersRes.json();
         this.orders = ordersData.orders || [];
 
