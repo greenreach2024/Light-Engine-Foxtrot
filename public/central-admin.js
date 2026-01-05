@@ -3046,7 +3046,7 @@ function renderAnalyticsMetricsTable(metrics) {
 // RECIPES MANAGEMENT FUNCTIONS
 // ============================================================================
 
-let recipesData = [];
+// recipesData already declared as global variable at top of file
 let currentRecipeId = null;
 let recipeSpectrumChart = null;
 
