@@ -5,13 +5,13 @@
  */
 
 import express from 'express';
-import { dbQuery } from '../../lib/database.js';
+import { query } from '../../lib/database.js';
 const router = express.Router();
 
 // Helper function to get active farms from database
 async function getActiveFarms() {
   try {
-    const result = await dbQuery(
+    const result = await query(
       `SELECT farm_id, name, contact_name, email, status 
        FROM farms 
        WHERE status = 'active'
