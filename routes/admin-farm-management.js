@@ -1162,7 +1162,7 @@ router.get('/analytics/buyers/:buyerId/insights', requireAdmin, async (req, res)
  */
 router.get('/wholesale/orders', requireAdmin, async (req, res) => {
   try {
-    const db = req.app.locals.wholesaleDb || req.app.locals.db;
+    const db = req.app.locals.db;
     
     if (!db) {
       return res.status(500).json({ 
@@ -1171,12 +1171,12 @@ router.get('/wholesale/orders', requireAdmin, async (req, res) => {
       });
     }
 
-    // Query all orders with farm sub-orders
-    const orders = await db.all(`
+    // Query all orders with farm sub-orders (PostgreSQL syntax)
+    const result = await db.query(`
       SELECT 
         o.*,
-        json_group_array(
-          json_object(
+        json_agg(
+          json_build_object(
             'id', so.id,
             'farm_id', so.farm_id,
             'status', so.status,
@@ -1194,18 +1194,12 @@ router.get('/wholesale/orders', requireAdmin, async (req, res) => {
       LIMIT 100
     `);
 
-    // Parse JSON fields
-    const parsedOrders = orders.map(order => ({
-      ...order,
-      sub_orders: JSON.parse(order.sub_orders || '[]'),
-      delivery_address: order.delivery_address ? JSON.parse(order.delivery_address) : null,
-      logistics_plan: order.logistics_plan ? JSON.parse(order.logistics_plan) : null
-    }));
+    const orders = result.rows;
 
     res.json({
       status: 'ok',
-      orders: parsedOrders,
-      count: parsedOrders.length
+      orders: orders,
+      count: orders.length
     });
 
   } catch (error) {
