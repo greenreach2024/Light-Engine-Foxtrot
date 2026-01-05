@@ -355,17 +355,70 @@ router.get('/verify-session/:session_id', async (req, res) => {
 
     console.log('[Verify] Verifying session:', session_id);
 
+    // Validate session_id format
+    if (!session_id || session_id.length < 10) {
+      console.error('[Verify] Invalid session ID format:', session_id);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session ID',
+        message: 'The payment session ID is invalid or malformed.'
+      });
+    }
+
+    // Check Square client configuration
+    if (!process.env.SQUARE_ACCESS_TOKEN) {
+      console.error('[Verify] Square access token not configured');
+      return res.status(500).json({
+        success: false,
+        error: 'Payment system not configured',
+        message: 'Square payment system is not properly configured. Please contact support.'
+      });
+    }
+
     // Get payment link to retrieve order ID
-    const linkResponse = await squareClient.checkoutApi.retrievePaymentLink(session_id);
-    const paymentLink = linkResponse.result.paymentLink;
-    const orderId = paymentLink.orderId;
+    let linkResponse, paymentLink, orderId;
+    try {
+      linkResponse = await squareClient.checkoutApi.retrievePaymentLink(session_id);
+      paymentLink = linkResponse.result.paymentLink;
+      orderId = paymentLink.orderId;
+    } catch (squareError) {
+      console.error('[Verify] Square API error retrieving payment link:', squareError);
+      console.error('[Verify] Square error details:', squareError.errors || squareError.message);
+      
+      // Check if it's a "not found" error
+      if (squareError.statusCode === 404) {
+        return res.status(404).json({
+          success: false,
+          error: 'Payment session not found',
+          message: 'The payment session could not be found. It may have expired or been cancelled.'
+        });
+      }
+      
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve payment link',
+        message: 'Unable to verify payment. Please try again or contact support.',
+        details: squareError.message
+      });
+    }
 
     console.log('[Verify] Payment link status:', paymentLink.status);
     console.log('[Verify] Order ID:', orderId);
 
     // Get order details
-    const orderResponse = await squareClient.ordersApi.retrieveOrder(orderId);
-    const order = orderResponse.result.order;
+    let orderResponse, order;
+    try {
+      orderResponse = await squareClient.ordersApi.retrieveOrder(orderId);
+      order = orderResponse.result.order;
+    } catch (squareError) {
+      console.error('[Verify] Square API error retrieving order:', squareError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve order',
+        message: 'Unable to verify order details. Please try again or contact support.',
+        details: squareError.message
+      });
+    }
 
     console.log('[Verify] Order state:', order.state);
     console.log('[Verify] Order tenders:', order.tenders?.length || 0);
@@ -408,6 +461,16 @@ router.get('/verify-session/:session_id', async (req, res) => {
       // Create account directly here instead of forwarding
       try {
         const db = req.app.locals.db;
+        
+        // Check if database connection exists
+        if (!db) {
+          console.error('[Verify] Database connection not available');
+          return res.status(500).json({
+            success: false,
+            error: 'Database connection error',
+            message: 'Unable to connect to database. Please try again or contact support.'
+          });
+        }
         
         // Check if this payment has already been processed
         const existingFarmResult = await db.query(
