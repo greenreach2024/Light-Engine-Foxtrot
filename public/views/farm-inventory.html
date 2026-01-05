@@ -684,6 +684,12 @@
       document.getElementById('harvestView').innerHTML = '';
     }
 
+    function hideLoading() {
+      // Clear loading state - content will be populated by render functions
+      const loadingElements = document.querySelectorAll('.loading');
+      loadingElements.forEach(el => el.remove());
+    }
+
     function showError(message) {
       document.getElementById('summaryCards').innerHTML = `
         <div class="empty-state">
