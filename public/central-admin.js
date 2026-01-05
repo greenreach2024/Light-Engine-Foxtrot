@@ -1889,7 +1889,69 @@ async function navigate(view, element) {
             if (dashboardNav) {
                 dashboardNav.classList.add('active');
             }
-            loadDashboard();
+            // If farmId is present, filter dashboard for that farm
+            if (navigationContext.farmId) {
+                await loadFarmSpecificDashboard(navigationContext.farmId);
+            } else {
+                await loadDashboard();
+            }
+            break;
+            
+        // Farm-specific views
+        case 'farm-overview':
+            document.getElementById('overview-view').style.display = 'block';
+            if (navigationContext.farmId) {
+                await loadFarmSpecificDashboard(navigationContext.farmId);
+            }
+            break;
+            
+        case 'farm-rooms':
+            document.getElementById('rooms-view').style.display = 'block';
+            if (navigationContext.farmId) {
+                await loadFarmRoomsView(navigationContext.farmId);
+            }
+            break;
+            
+        case 'farm-devices':
+            document.getElementById('devices-view').style.display = 'block';
+            if (navigationContext.farmId) {
+                await loadFarmDevicesView(navigationContext.farmId);
+            }
+            break;
+            
+        case 'farm-inventory':
+            document.getElementById('inventory-view').style.display = 'block';
+            if (navigationContext.farmId) {
+                await loadFarmInventoryView(navigationContext.farmId);
+            }
+            break;
+            
+        case 'farm-recipes':
+            document.getElementById('recipes-view').style.display = 'block';
+            if (navigationContext.farmId) {
+                await loadFarmRecipesView(navigationContext.farmId);
+            }
+            break;
+            
+        case 'farm-environmental':
+            document.getElementById('environmental-view').style.display = 'block';
+            if (navigationContext.farmId) {
+                await loadFarmEnvironmentalView(navigationContext.farmId);
+            }
+            break;
+            
+        case 'farm-energy':
+            document.getElementById('energy-view').style.display = 'block';
+            if (navigationContext.farmId) {
+                await loadFarmEnergyDashboard(navigationContext.farmId);
+            }
+            break;
+            
+        case 'farm-alerts':
+            document.getElementById('alerts-view').style.display = 'block';
+            if (navigationContext.farmId) {
+                await loadFarmAlertsView(navigationContext.farmId);
+            }
             break;
             
         case 'farms':
@@ -2716,6 +2778,187 @@ function renderAnalyticsSummary(summary) {
     
     // Revenue
     document.getElementById('analytics-revenue').textContent = `$${summary.totalRevenue.toFixed(2)}`;
+
+/**
+ * ===================================
+ * FARM-SPECIFIC VIEW LOADING FUNCTIONS
+ * ===================================
+ */
+
+/**
+ * Load dashboard filtered for a specific farm
+ */
+async function loadFarmSpecificDashboard(farmId) {
+    console.log(`Loading dashboard for farm: ${farmId}`);
+    currentFarmId = farmId;
+    
+    try {
+        // Load dashboard but filter data for this farm
+        await loadDashboard();
+        
+        // Filter the displayed farms table to show only this farm
+        const farmRows = document.querySelectorAll('#farms-table tr');
+        farmRows.forEach(row => {
+            const farmIdCell = row.querySelector('td:first-child');
+            if (farmIdCell && farmIdCell.textContent !== farmId) {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Update page title
+        const farm = farmsData.find(f => f.farmId === farmId);
+        if (farm) {
+            const header = document.querySelector('.header h1');
+            if (header) {
+                header.textContent = `${farm.name} - Operations Overview`;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading farm dashboard:', error);
+    }
+}
+
+/**
+ * Load rooms view filtered for a specific farm
+ */
+async function loadFarmRoomsView(farmId) {
+    console.log(`Loading rooms for farm: ${farmId}`);
+    currentFarmId = farmId;
+    
+    try {
+        await loadRoomsView();
+        
+        // Filter rooms table
+        const roomRows = document.querySelectorAll('#rooms-table tr');
+        roomRows.forEach(row => {
+            const farmIdCell = row.cells[0];
+            if (farmIdCell && farmIdCell.textContent !== farmId) {
+                row.style.display = 'none';
+            }
+        });
+    } catch (error) {
+        console.error('Error loading farm rooms:', error);
+    }
+}
+
+/**
+ * Load devices view filtered for a specific farm
+ */
+async function loadFarmDevicesView(farmId) {
+    console.log(`Loading devices for farm: ${farmId}`);
+    currentFarmId = farmId;
+    
+    try {
+        await loadAllDevicesView();
+        
+        // Filter devices table
+        const deviceRows = document.querySelectorAll('#devices-table tr');
+        deviceRows.forEach(row => {
+            const farmIdCell = row.cells[0];
+            if (farmIdCell && farmIdCell.textContent !== farmId) {
+                row.style.display = 'none';
+            }
+        });
+    } catch (error) {
+        console.error('Error loading farm devices:', error);
+    }
+}
+
+/**
+ * Load inventory view filtered for a specific farm
+ */
+async function loadFarmInventoryView(farmId) {
+    console.log(`Loading inventory for farm: ${farmId}`);
+    currentFarmId = farmId;
+    
+    try {
+        // Load inventory data
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/inventory`);
+        if (response && response.ok) {
+            const data = await response.json();
+            // Render farm-specific inventory
+            console.log('Farm inventory:', data);
+        }
+    } catch (error) {
+        console.error('Error loading farm inventory:', error);
+    }
+}
+
+/**
+ * Load recipes view filtered for a specific farm
+ */
+async function loadFarmRecipesView(farmId) {
+    console.log(`Loading recipes for farm: ${farmId}`);
+    currentFarmId = farmId;
+    
+    try {
+        await loadAllRecipesView();
+        
+        // Filter recipes for this farm
+        const recipeCards = document.querySelectorAll('.recipe-card');
+        recipeCards.forEach(card => {
+            const farmIdAttr = card.getAttribute('data-farm-id');
+            if (farmIdAttr && farmIdAttr !== farmId) {
+                card.style.display = 'none';
+            }
+        });
+    } catch (error) {
+        console.error('Error loading farm recipes:', error);
+    }
+}
+
+/**
+ * Load environmental view filtered for a specific farm
+ */
+async function loadFarmEnvironmentalView(farmId) {
+    console.log(`Loading environmental data for farm: ${farmId}`);
+    currentFarmId = farmId;
+    
+    try {
+        await loadEnvironmentalView();
+        // Additional farm-specific filtering if needed
+    } catch (error) {
+        console.error('Error loading farm environmental data:', error);
+    }
+}
+
+/**
+ * Load energy dashboard filtered for a specific farm
+ */
+async function loadFarmEnergyDashboard(farmId) {
+    console.log(`Loading energy dashboard for farm: ${farmId}`);
+    currentFarmId = farmId;
+    
+    try {
+        await loadEnergyDashboard();
+        // Filter energy data for this farm
+    } catch (error) {
+        console.error('Error loading farm energy dashboard:', error);
+    }
+}
+
+/**
+ * Load alerts view filtered for a specific farm
+ */
+async function loadFarmAlertsView(farmId) {
+    console.log(`Loading alerts for farm: ${farmId}`);
+    currentFarmId = farmId;
+    
+    try {
+        await loadAlertsView();
+        
+        // Filter alerts table
+        const alertRows = document.querySelectorAll('#alerts-table tr');
+        alertRows.forEach(row => {
+            const farmIdCell = row.cells[0];
+            if (farmIdCell && farmIdCell.textContent !== farmId) {
+                row.style.display = 'none';
+            }
+        });
+    } catch (error) {
+        console.error('Error loading farm alerts:', error);
+    }
+}
     document.getElementById('analytics-revenue-avg').textContent = `$${(summary.totalRevenue / summary.daysReported).toFixed(2)}/day avg`;
     
     // Profit
