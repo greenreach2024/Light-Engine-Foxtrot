@@ -570,10 +570,12 @@
           const response = await fetch(`/api/wholesale/catalog?${params.toString()}`);
           const data = await response.json();
 
-          // API returns { ok: true, items: [] } - empty items array is valid (no inventory yet)
-          if (data.ok && Array.isArray(data.items)) {
-            this.catalog = data.items;
+          // API returns { ok: true, items: [], farms: [] }
+          if (data.ok) {
+            this.catalog = Array.isArray(data.items) ? data.items : [];
+            this.farms = Array.isArray(data.farms) ? data.farms : [];
             this.renderCatalog();
+            this.renderFarmList(); // Show farms even if no inventory
             this.updateDemoBanner();
             return;
           }
@@ -581,6 +583,7 @@
           // If API returns error, show empty catalog with error message
           console.error('Catalog API error:', data);
           this.catalog = [];
+          this.farms = [];
           this.renderCatalog();
           this.showToast('Unable to load catalog. Please try again later.', 'error');
           return;
@@ -767,6 +770,33 @@
         `
         )
         .join('');
+      
+      // If no products but we have farms, show farm info
+      if (this.catalog.length === 0 && this.farms && this.farms.length > 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+            <h3 style="color: var(--primary); margin-bottom: 1rem;">No Products Available Yet</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+              We have ${this.farms.length} farm${this.farms.length !== 1 ? 's' : ''} registered, but they haven't added inventory yet.
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center;">
+              ${this.farms.map(f => `
+                <div style="background: var(--bg); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                  <strong style="color: var(--primary);">${f.farm_name}</strong>
+                  <span style="color: var(--text-secondary); font-size: 0.875rem; margin-left: 0.5rem;">(${f.status})</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+    },
+
+    renderFarmList() {
+      // Additional function for displaying farm info in sidebar or header
+      if (!this.farms || this.farms.length === 0) return;
+      
+      console.log(`[Wholesale] ${this.farms.length} active farms:`, this.farms.map(f => f.farm_name).join(', '));
     },
 
     addToCart(skuId) {
