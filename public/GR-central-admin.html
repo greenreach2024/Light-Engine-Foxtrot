@@ -2623,7 +2623,182 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Recipes Management View -->
+            <div id="recipes-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>Grow Recipes Management</h1>
+                    <div class="header-actions">
+                        <select id="recipe-category-filter" onchange="filterRecipes()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                            <option value="">All Categories</option>
+                            <option value="Leafy Greens">Leafy Greens</option>
+                            <option value="Herbs">Herbs</option>
+                            <option value="Fruiting Crops">Fruiting Crops</option>
+                        </select>
+                        <input type="text" id="recipe-search" placeholder="Search recipes..." onkeyup="filterRecipes()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 250px;">
+                        <button class="btn-primary" onclick="openAddRecipeModal()">
+                            <span>+</span> Add New Recipe
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Recipe Statistics -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Recipes</div>
+                        <div class="kpi-value" id="recipe-total">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Leafy Greens</div>
+                        <div class="kpi-value" id="recipe-leafy">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Herbs</div>
+                        <div class="kpi-value" id="recipe-herbs">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Fruiting Crops</div>
+                        <div class="kpi-value" id="recipe-fruiting">0</div>
+                    </div>
+                </div>
+
+                <!-- Recipes Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Recipe Library</div>
+                        <span id="recipes-count" style="color: var(--text-secondary); font-size: 0.9rem;">Loading...</span>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30%;">Variety Name</th>
+                                    <th style="width: 15%;">Category</th>
+                                    <th style="width: 10%;">Total Days</th>
+                                    <th style="width: 10%;">Stages</th>
+                                    <th style="width: 20%;">Spectrum Range</th>
+                                    <th style="width: 15%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recipes-tbody">
+                                <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading recipes...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </main>
+    </div>
+
+    <!-- Recipe Edit/Add Modal -->
+    <div id="recipe-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; overflow-y: auto;">
+        <div style="min-height: 100vh; padding: 40px; display: flex; align-items: center; justify-content: center;">
+            <div style="background: var(--bg-card); border-radius: 12px; width: 100%; max-width: 1200px; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border);">
+                <div style="padding: 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                    <h2 id="recipe-modal-title" style="margin: 0; font-size: 20px;">Edit Recipe</h2>
+                    <button onclick="closeRecipeModal()" style="background: none; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer;">&times;</button>
+                </div>
+                
+                <div style="padding: 24px;">
+                    <form id="recipe-form" onsubmit="saveRecipe(event)">
+                        <!-- Basic Information -->
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--text-primary);">Basic Information</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-secondary);">Variety Name *</label>
+                                    <input type="text" id="recipe-name" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-secondary);">Category *</label>
+                                    <select id="recipe-category" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                        <option value="Leafy Greens">Leafy Greens</option>
+                                        <option value="Herbs">Herbs</option>
+                                        <option value="Fruiting Crops">Fruiting Crops</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="margin-top: 16px;">
+                                <label style="display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-secondary);">Description</label>
+                                <textarea id="recipe-description" rows="2" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); resize: vertical;"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Growth Schedule -->
+                        <div style="margin-bottom: 24px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <h3 style="margin: 0; font-size: 16px; color: var(--text-primary);">Growth Schedule</h3>
+                                <button type="button" onclick="addScheduleDay()" class="btn-primary" style="padding: 6px 12px; font-size: 14px;">+ Add Day</button>
+                            </div>
+                            
+                            <div id="schedule-container" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 16px; background: var(--bg-secondary);">
+                                <p style="text-align: center; color: var(--text-secondary); padding: 20px;">No schedule days added yet</p>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid var(--border);">
+                            <button type="button" onclick="closeRecipeModal()" class="btn" style="padding: 10px 20px;">Cancel</button>
+                            <button type="submit" class="btn-primary" style="padding: 10px 20px;">Save Recipe</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recipe View Modal (Read-only for viewing details) -->
+    <div id="recipe-view-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; overflow-y: auto;">
+        <div style="min-height: 100vh; padding: 40px; display: flex; align-items: center; justify-content: center;">
+            <div style="background: var(--bg-card); border-radius: 12px; width: 100%; max-width: 1400px; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border);">
+                <div style="padding: 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 id="recipe-view-title" style="margin: 0; font-size: 20px; margin-bottom: 8px;">Recipe Details</h2>
+                        <div style="font-size: 14px; color: var(--text-secondary);">
+                            <span id="recipe-view-category"></span> • <span id="recipe-view-days"></span> days
+                        </div>
+                    </div>
+                    <button onclick="closeRecipeViewModal()" style="background: none; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer;">&times;</button>
+                </div>
+                
+                <div style="padding: 24px;">
+                    <!-- Spectrum Visualization -->
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="margin-bottom: 16px; font-size: 16px;">Light Spectrum Profile</h3>
+                        <canvas id="recipe-spectrum-chart" style="max-height: 250px;"></canvas>
+                    </div>
+
+                    <!-- Day-by-Day Schedule Table -->
+                    <div>
+                        <h3 style="margin-bottom: 16px; font-size: 16px;">Day-by-Day Schedule</h3>
+                        <div style="overflow-x: auto;">
+                            <table class="data-table" style="font-size: 12px;">
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th>Stage</th>
+                                        <th>Temp (°C)</th>
+                                        <th>Blue %</th>
+                                        <th>Green %</th>
+                                        <th>Red %</th>
+                                        <th>Far-Red %</th>
+                                        <th>PPFD</th>
+                                        <th>VPD (kPa)</th>
+                                        <th>Humidity %</th>
+                                        <th>EC</th>
+                                        <th>pH</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recipe-view-schedule">
+                                    <tr><td colspan="12" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

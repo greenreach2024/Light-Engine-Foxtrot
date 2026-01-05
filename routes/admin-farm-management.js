@@ -1351,4 +1351,264 @@ router.post('/farms/reset-user-password', requireAdmin, async (req, res) => {
   }
 });
 
+// ============================================================================
+// RECIPE MANAGEMENT ROUTES
+// ============================================================================
+
+/**
+ * GET /api/admin/recipes
+ * List all recipes with filtering and pagination
+ */
+router.get('/recipes', requireAdmin, async (req, res) => {
+  try {
+    const { category, search, page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    let whereClause = [];
+    let params = [];
+    let paramIndex = 1;
+    
+    if (category) {
+      whereClause.push(`category = $${paramIndex++}`);
+      params.push(category);
+    }
+    
+    if (search) {
+      whereClause.push(`name ILIKE $${paramIndex++}`);
+      params.push(`%${search}%`);
+    }
+    
+    const whereSQL = whereClause.length > 0 ? 'WHERE ' + whereClause.join(' AND ') : '';
+    
+    // Get total count
+    const countResult = await dbQuery(
+      `SELECT COUNT(*) as total FROM recipes ${whereSQL}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].total);
+    
+    // Get recipes
+    params.push(parseInt(limit), offset);
+    const result = await dbQuery(
+      `SELECT id, name, category, description, total_days, 
+              jsonb_array_length(data->'schedule') as schedule_length,
+              created_at, updated_at
+       FROM recipes
+       ${whereSQL}
+       ORDER BY category, name
+       LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+      params
+    );
+    
+    res.json({
+      ok: true,
+      recipes: result.rows,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      pages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (error) {
+    console.error('[ADMIN RECIPES] Error listing recipes:', error);
+    res.status(500).json({ error: 'Failed to list recipes', details: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/recipes/:id
+ * Get full recipe details including schedule data
+ */
+router.get('/recipes/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await dbQuery(
+      'SELECT * FROM recipes WHERE id = $1',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    
+    res.json({
+      ok: true,
+      recipe: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[ADMIN RECIPES] Error fetching recipe:', error);
+    res.status(500).json({ error: 'Failed to fetch recipe', details: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/recipes
+ * Create new recipe
+ */
+router.post('/recipes', requireAdmin, async (req, res) => {
+  try {
+    const { name, category, description, total_days, data } = req.body;
+    
+    // Validate required fields
+    if (!name || !category || !data) {
+      return res.status(400).json({ error: 'Missing required fields: name, category, data' });
+    }
+    
+    // Validate data structure
+    if (!data.schedule || !Array.isArray(data.schedule)) {
+      return res.status(400).json({ error: 'Invalid data format: schedule array required' });
+    }
+    
+    const result = await dbQuery(
+      `INSERT INTO recipes (name, category, description, total_days, data)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [name, category, description, total_days, JSON.stringify(data)]
+    );
+    
+    console.log(`[ADMIN RECIPES] Created recipe: ${name} (ID: ${result.rows[0].id})`);
+    
+    res.status(201).json({
+      ok: true,
+      message: 'Recipe created successfully',
+      recipe: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[ADMIN RECIPES] Error creating recipe:', error);
+    if (error.code === '23505') { // unique_violation
+      return res.status(409).json({ error: 'Recipe with this name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create recipe', details: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/recipes/:id
+ * Update existing recipe
+ */
+router.put('/recipes/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, category, description, total_days, data } = req.body;
+    
+    // Check if recipe exists
+    const existing = await dbQuery('SELECT id FROM recipes WHERE id = $1', [id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    
+    // Build update query dynamically based on provided fields
+    const updates = [];
+    const params = [];
+    let paramIndex = 1;
+    
+    if (name !== undefined) {
+      updates.push(`name = $${paramIndex++}`);
+      params.push(name);
+    }
+    if (category !== undefined) {
+      updates.push(`category = $${paramIndex++}`);
+      params.push(category);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      params.push(description);
+    }
+    if (total_days !== undefined) {
+      updates.push(`total_days = $${paramIndex++}`);
+      params.push(total_days);
+    }
+    if (data !== undefined) {
+      if (!data.schedule || !Array.isArray(data.schedule)) {
+        return res.status(400).json({ error: 'Invalid data format: schedule array required' });
+      }
+      updates.push(`data = $${paramIndex++}`);
+      params.push(JSON.stringify(data));
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    updates.push(`updated_at = NOW()`);
+    params.push(id);
+    
+    const result = await dbQuery(
+      `UPDATE recipes 
+       SET ${updates.join(', ')}
+       WHERE id = $${paramIndex}
+       RETURNING *`,
+      params
+    );
+    
+    console.log(`[ADMIN RECIPES] Updated recipe ID ${id}: ${result.rows[0].name}`);
+    
+    res.json({
+      ok: true,
+      message: 'Recipe updated successfully',
+      recipe: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[ADMIN RECIPES] Error updating recipe:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Recipe name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to update recipe', details: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/recipes/:id
+ * Delete recipe
+ */
+router.delete('/recipes/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await dbQuery(
+      'DELETE FROM recipes WHERE id = $1 RETURNING name',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    
+    console.log(`[ADMIN RECIPES] Deleted recipe: ${result.rows[0].name} (ID: ${id})`);
+    
+    res.json({
+      ok: true,
+      message: 'Recipe deleted successfully',
+      name: result.rows[0].name
+    });
+  } catch (error) {
+    console.error('[ADMIN RECIPES] Error deleting recipe:', error);
+    res.status(500).json({ error: 'Failed to delete recipe', details: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/recipes/categories/list
+ * Get list of unique recipe categories
+ */
+router.get('/recipes/categories/list', requireAdmin, async (req, res) => {
+  try {
+    const result = await dbQuery(
+      `SELECT DISTINCT category, COUNT(*) as count
+       FROM recipes
+       GROUP BY category
+       ORDER BY category`
+    );
+    
+    res.json({
+      ok: true,
+      categories: result.rows
+    });
+  } catch (error) {
+    console.error('[ADMIN RECIPES] Error listing categories:', error);
+    res.status(500).json({ error: 'Failed to list categories', details: error.message });
+  }
+});
+
 export default router;
+

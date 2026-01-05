@@ -316,7 +316,8 @@ function renderContextualSidebar() {
                     title: 'Management',
                     items: [
                         { label: 'All Farms', view: 'farms' },
-                        { label: 'Users', view: 'users' }
+                        { label: 'Users', view: 'users' },
+                        { label: 'Recipes', view: 'recipes' }
                     ]
                 }
             ];
@@ -2005,7 +2006,7 @@ async function navigate(view, element) {
             
         case 'recipes':
             document.getElementById('recipes-view').style.display = 'block';
-            await loadAllRecipesView();
+            await loadRecipes();
             break;
             
         case 'harvest':
@@ -3039,6 +3040,534 @@ function renderAnalyticsMetricsTable(metrics) {
             </tr>
         `;
     }).join('');
+}
+
+// ============================================================================
+// RECIPES MANAGEMENT FUNCTIONS
+// ============================================================================
+
+let recipesData = [];
+let currentRecipeId = null;
+let recipeSpectrumChart = null;
+
+/**
+ * Load and display recipes
+ */
+async function loadRecipes() {
+    try {
+        const category = document.getElementById('recipe-category-filter')?.value || '';
+        const search = document.getElementById('recipe-search')?.value || '';
+        
+        const params = new URLSearchParams();
+        if (category) params.append('category', category);
+        if (search) params.append('search', search);
+        params.append('limit', '100');
+        
+        const response = await authenticatedFetch(`/api/admin/recipes?${params.toString()}`);
+        const data = await response.json();
+        
+        if (!data.ok) {
+            throw new Error(data.error || 'Failed to load recipes');
+        }
+        
+        recipesData = data.recipes || [];
+        renderRecipesTable(recipesData);
+        updateRecipeStats(recipesData);
+        
+    } catch (error) {
+        console.error('Error loading recipes:', error);
+        document.getElementById('recipes-tbody').innerHTML = `
+            <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--accent-red);">
+                Error loading recipes: ${error.message}
+            </td></tr>
+        `;
+    }
+}
+
+/**
+ * Render recipes table
+ */
+function renderRecipesTable(recipes) {
+    const tbody = document.getElementById('recipes-tbody');
+    
+    if (recipes.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                No recipes found
+            </td></tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = recipes.map(recipe => {
+        const stages = recipe.schedule_length || 0;
+        
+        return `
+            <tr>
+                <td>
+                    <div style="font-weight: 500;">${recipe.name}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">${recipe.description || ''}</div>
+                </td>
+                <td>
+                    <span class="badge" style="background: ${getCategoryColor(recipe.category)}; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">
+                        ${recipe.category}
+                    </span>
+                </td>
+                <td>${recipe.total_days || 0}</td>
+                <td>${stages} entries</td>
+                <td>
+                    <div style="font-size: 0.85rem;">
+                        <div style="margin-bottom: 2px;">B: 0-100% • G: 0-100%</div>
+                        <div>R: 0-100% • FR: 0-100%</div>
+                    </div>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="viewRecipe(${recipe.id})" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
+                        <button onclick="editRecipe(${recipe.id})" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">Edit</button>
+                        <button onclick="deleteRecipe(${recipe.id}, '${recipe.name}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem; background: var(--accent-red);">Delete</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    document.getElementById('recipes-count').textContent = `${recipes.length} recipe${recipes.length !== 1 ? 's' : ''}`;
+}
+
+/**
+ * Update recipe statistics
+ */
+function updateRecipeStats(recipes) {
+    const stats = {
+        total: recipes.length,
+        leafy: recipes.filter(r => r.category === 'Leafy Greens').length,
+        herbs: recipes.filter(r => r.category === 'Herbs').length,
+        fruiting: recipes.filter(r => r.category === 'Fruiting Crops').length
+    };
+    
+    document.getElementById('recipe-total').textContent = stats.total;
+    document.getElementById('recipe-leafy').textContent = stats.leafy;
+    document.getElementById('recipe-herbs').textContent = stats.herbs;
+    document.getElementById('recipe-fruiting').textContent = stats.fruiting;
+}
+
+/**
+ * Get category color
+ */
+function getCategoryColor(category) {
+    const colors = {
+        'Leafy Greens': '#10b981',
+        'Herbs': '#8b5cf6',
+        'Fruiting Crops': '#f59e0b',
+        'Other': '#6b7280'
+    };
+    return colors[category] || colors['Other'];
+}
+
+/**
+ * Filter recipes
+ */
+function filterRecipes() {
+    loadRecipes();
+}
+
+/**
+ * View recipe details (read-only modal)
+ */
+async function viewRecipe(recipeId) {
+    try {
+        const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`);
+        const data = await response.json();
+        
+        if (!data.ok) {
+            throw new Error(data.error || 'Failed to load recipe');
+        }
+        
+        const recipe = data.recipe;
+        const schedule = recipe.data?.schedule || [];
+        
+        // Update modal header
+        document.getElementById('recipe-view-title').textContent = recipe.name;
+        document.getElementById('recipe-view-category').textContent = recipe.category;
+        document.getElementById('recipe-view-days').textContent = recipe.total_days || schedule.length;
+        
+        // Render schedule table
+        const tbody = document.getElementById('recipe-view-schedule');
+        tbody.innerHTML = schedule.map(day => `
+            <tr>
+                <td>${day.day}</td>
+                <td>${day.stage || ''}</td>
+                <td>${day.temperature || ''}</td>
+                <td>${day.blue || 0}</td>
+                <td>${day.green || 0}</td>
+                <td>${day.red || 0}</td>
+                <td>${day.far_red || 0}</td>
+                <td>${day.ppfd || 0}</td>
+                <td>${day.vpd || 0}</td>
+                <td>${day.max_humidity || 0}</td>
+                <td>${day.ec || 0}</td>
+                <td>${day.ph || 0}</td>
+            </tr>
+        `).join('');
+        
+        // Draw spectrum chart
+        drawSpectrumChart(schedule);
+        
+        // Show modal
+        document.getElementById('recipe-view-modal').style.display = 'block';
+        
+    } catch (error) {
+        console.error('Error viewing recipe:', error);
+        alert('Failed to load recipe details: ' + error.message);
+    }
+}
+
+/**
+ * Draw spectrum visualization chart
+ */
+function drawSpectrumChart(schedule) {
+    const ctx = document.getElementById('recipe-spectrum-chart');
+    
+    if (recipeSpectrumChart) {
+        recipeSpectrumChart.destroy();
+    }
+    
+    // Sample every 5th day for visualization
+    const sampleRate = Math.max(1, Math.floor(schedule.length / 50));
+    const sampledSchedule = schedule.filter((_, i) => i % sampleRate === 0);
+    
+    recipeSpectrumChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: sampledSchedule.map(d => `Day ${d.day}`),
+            datasets: [
+                {
+                    label: 'Blue %',
+                    data: sampledSchedule.map(d => d.blue || 0),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: 'Green %',
+                    data: sampledSchedule.map(d => d.green || 0),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: 'Red %',
+                    data: sampledSchedule.map(d => d.red || 0),
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: 'Far-Red %',
+                    data: sampledSchedule.map(d => d.far_red || 0),
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: '#e5e7eb' }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: { color: '#9ca3af' },
+                    grid: { color: '#2d3748' }
+                },
+                x: {
+                    ticks: { color: '#9ca3af' },
+                    grid: { color: '#2d3748' }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Close recipe view modal
+ */
+function closeRecipeViewModal() {
+    document.getElementById('recipe-view-modal').style.display = 'none';
+    if (recipeSpectrumChart) {
+        recipeSpectrumChart.destroy();
+        recipeSpectrumChart = null;
+    }
+}
+
+/**
+ * Open add recipe modal
+ */
+function openAddRecipeModal() {
+    currentRecipeId = null;
+    document.getElementById('recipe-modal-title').textContent = 'Add New Recipe';
+    document.getElementById('recipe-form').reset();
+    document.getElementById('schedule-container').innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No schedule days added yet</p>';
+    document.getElementById('recipe-modal').style.display = 'block';
+}
+
+/**
+ * Edit recipe
+ */
+async function editRecipe(recipeId) {
+    try {
+        const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`);
+        const data = await response.json();
+        
+        if (!data.ok) {
+            throw new Error(data.error || 'Failed to load recipe');
+        }
+        
+        const recipe = data.recipe;
+        currentRecipeId = recipeId;
+        
+        document.getElementById('recipe-modal-title').textContent = 'Edit Recipe';
+        document.getElementById('recipe-name').value = recipe.name;
+        document.getElementById('recipe-category').value = recipe.category;
+        document.getElementById('recipe-description').value = recipe.description || '';
+        
+        // Render schedule
+        const schedule = recipe.data?.schedule || [];
+        scheduleData = JSON.parse(JSON.stringify(schedule)); // Deep copy
+        renderScheduleEditor(scheduleData);
+        
+        document.getElementById('recipe-modal').style.display = 'block';
+        
+    } catch (error) {
+        console.error('Error loading recipe:', error);
+        alert('Failed to load recipe: ' + error.message);
+    }
+}
+
+/**
+ * Render schedule editor
+ */
+function renderScheduleEditor(schedule) {
+    const container = document.getElementById('schedule-container');
+    
+    if (schedule.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No schedule days added yet</p>';
+        return;
+    }
+    
+    container.innerHTML = schedule.map((day, index) => `
+        <div class="schedule-day" style="background: var(--bg-card); padding: 16px; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border);">
+            <div style="display: flex; justify-content: between; margin-bottom: 12px;">
+                <h4 style="margin: 0; font-size: 14px;">Day ${day.day} - ${day.stage || 'Unnamed'}</h4>
+                <button type="button" onclick="removeScheduleDay(${index})" style="background: var(--accent-red); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">Remove</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 13px;">
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">Day</label>
+                    <input type="number" value="${day.day}" data-index="${index}" data-field="day" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">Stage</label>
+                    <input type="text" value="${day.stage || ''}" data-index="${index}" data-field="stage" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">Temp (°C)</label>
+                    <input type="text" value="${day.temperature || ''}" data-index="${index}" data-field="temperature" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">PPFD</label>
+                    <input type="number" value="${day.ppfd || 0}" data-index="${index}" data-field="ppfd" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">Blue %</label>
+                    <input type="number" value="${day.blue || 0}" data-index="${index}" data-field="blue" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">Green %</label>
+                    <input type="number" value="${day.green || 0}" data-index="${index}" data-field="green" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">Red %</label>
+                    <input type="number" value="${day.red || 0}" data-index="${index}" data-field="red" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">Far-Red %</label>
+                    <input type="number" value="${day.far_red || 0}" data-index="${index}" data-field="far_red" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">VPD (kPa)</label>
+                    <input type="number" step="0.1" value="${day.vpd || 0}" data-index="${index}" data-field="vpd" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">Humidity %</label>
+                    <input type="number" value="${day.max_humidity || 0}" data-index="${index}" data-field="max_humidity" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">EC</label>
+                    <input type="number" step="0.01" value="${day.ec || 0}" data-index="${index}" data-field="ec" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; color: var(--text-secondary);">pH</label>
+                    <input type="number" step="0.1" value="${day.ph || 0}" data-index="${index}" data-field="ph" onchange="updateScheduleDay(this)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+let scheduleData = [];
+
+/**
+ * Update schedule day
+ */
+function updateScheduleDay(input) {
+    const index = parseInt(input.dataset.index);
+    const field = input.dataset.field;
+    const value = input.type === 'number' ? parseFloat(input.value) || 0 : input.value;
+    
+    if (!scheduleData[index]) {
+        scheduleData[index] = {};
+    }
+    
+    scheduleData[index][field] = value;
+}
+
+/**
+ * Add schedule day
+ */
+function addScheduleDay() {
+    const newDay = {
+        day: scheduleData.length + 1,
+        stage: 'New Stage',
+        temperature: '20',
+        blue: 30,
+        green: 5,
+        red: 50,
+        far_red: 5,
+        ppfd: 200,
+        vpd: 0.8,
+        max_humidity: 70,
+        ec: 1.5,
+        ph: 6.0
+    };
+    
+    scheduleData.push(newDay);
+    renderScheduleEditor(scheduleData);
+}
+
+/**
+ * Remove schedule day
+ */
+function removeScheduleDay(index) {
+    scheduleData.splice(index, 1);
+    renderScheduleEditor(scheduleData);
+}
+
+/**
+ * Save recipe
+ */
+async function saveRecipe(event) {
+    event.preventDefault();
+    
+    try {
+        const name = document.getElementById('recipe-name').value.trim();
+        const category = document.getElementById('recipe-category').value;
+        const description = document.getElementById('recipe-description').value.trim();
+        
+        if (!name || !category) {
+            alert('Please fill in all required fields');
+            return;
+        }
+        
+        if (scheduleData.length === 0) {
+            alert('Please add at least one schedule day');
+            return;
+        }
+        
+        const totalDays = Math.max(...scheduleData.map(d => d.day));
+        
+        const payload = {
+            name,
+            category,
+            description,
+            total_days: totalDays,
+            data: {
+                schedule: scheduleData,
+                version: '1.0'
+            }
+        };
+        
+        const url = currentRecipeId 
+            ? `/api/admin/recipes/${currentRecipeId}`
+            : '/api/admin/recipes';
+        
+        const method = currentRecipeId ? 'PUT' : 'POST';
+        
+        const response = await authenticatedFetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+            throw new Error(data.error || 'Failed to save recipe');
+        }
+        
+        alert(`Recipe ${currentRecipeId ? 'updated' : 'created'} successfully!`);
+        closeRecipeModal();
+        loadRecipes();
+        
+    } catch (error) {
+        console.error('Error saving recipe:', error);
+        alert('Failed to save recipe: ' + error.message);
+    }
+}
+
+/**
+ * Delete recipe
+ */
+async function deleteRecipe(recipeId, recipeName) {
+    if (!confirm(`Are you sure you want to delete the recipe "${recipeName}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+            throw new Error(data.error || 'Failed to delete recipe');
+        }
+        
+        alert('Recipe deleted successfully');
+        loadRecipes();
+        
+    } catch (error) {
+        console.error('Error deleting recipe:', error);
+        alert('Failed to delete recipe: ' + error.message);
+    }
+}
+
+/**
+ * Close recipe modal
+ */
+function closeRecipeModal() {
+    document.getElementById('recipe-modal').style.display = 'none';
+    currentRecipeId = null;
+    scheduleData = [];
 }
 
 // Initialize on load

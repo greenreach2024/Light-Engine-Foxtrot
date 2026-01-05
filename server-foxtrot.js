@@ -6305,74 +6305,98 @@ app.delete('/lights/:id', async (req, res) => {
   }
 });
 
-// --- Lighting Recipes API ---
-const RECIPES_PATH = path.join(PUBLIC_DIR, 'data', 'lighting-recipes.json');
-let recipesCache = null;
-let recipesCacheTime = 0;
-const RECIPES_CACHE_TTL = 300_000; // 5 minutes
-
-function loadRecipes() {
-  const now = Date.now();
-  if (recipesCache && (now - recipesCacheTime) < RECIPES_CACHE_TTL) {
-    return recipesCache;
-  }
-  try {
-    const data = fs.readFileSync(RECIPES_PATH, 'utf8');
-    recipesCache = JSON.parse(data);
-    recipesCacheTime = now;
-    return recipesCache;
-  } catch (e) {
-    console.error('[recipes] Failed to load lighting-recipes.json:', e.message);
-    return { crops: {} };
-  }
-}
-
-// GET /recipes?search=tomato → search crop recipes by name
+// --- Lighting Recipes API (now using PostgreSQL database) ---
+// Recipe endpoints updated to use PostgreSQL database
+// GET /recipes?search=tomato&category=Fruiting%20Crops&limit=10
 app.get('/recipes', async (req, res) => {
   try {
     setApiCors(res);
-    const recipes = loadRecipes();
-    const search = (req.query.search || '').toLowerCase().trim();
-    let crops = Object.keys(recipes.crops || {});
+    const { search, category, limit = 10 } = req.query;
+    
+    let whereClause = [];
+    let params = [];
+    let paramIndex = 1;
     
     if (search) {
-      crops = crops.filter(name => name.toLowerCase().includes(search));
+      whereClause.push(`name ILIKE $${paramIndex++}`);
+      params.push(`%${search}%`);
     }
     
-    // Limit to 6 results for display
-    const limit = parseInt(req.query.limit || '6', 10);
-    crops = crops.slice(0, limit);
+    if (category) {
+      whereClause.push(`category = $${paramIndex++}`);
+      params.push(category);
+    }
     
-    const results = {};
-    crops.forEach(crop => {
-      results[crop] = recipes.crops[crop];
+    const whereSQL = whereClause.length > 0 ? 'WHERE ' + whereClause.join(' AND ') : '';
+    
+    // Get total count
+    const countResult = await dbPool.query(
+      `SELECT COUNT(*) as total FROM recipes ${whereSQL}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].total);
+    
+    // Get recipes (name and basic info only for listing)
+    params.push(parseInt(limit));
+    const result = await dbPool.query(
+      `SELECT id, name, category, description, total_days
+       FROM recipes
+       ${whereSQL}
+       ORDER BY category, name
+       LIMIT $${paramIndex++}`,
+      params
+    );
+    
+    const recipes = {};
+    result.rows.forEach(r => {
+      recipes[r.name] = {
+        id: r.id,
+        category: r.category,
+        description: r.description,
+        total_days: r.total_days
+      };
     });
     
     return res.json({ 
       ok: true, 
-      crops: results, 
-      count: Object.keys(results).length,
-      total: Object.keys(recipes.crops || {}).length
+      crops: recipes,
+      count: result.rows.length,
+      total
     });
   } catch (e) {
+    console.error('[recipes] Error fetching recipes:', e);
     return res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// GET /recipes/:crop → get specific crop recipe
+// GET /recipes/:crop → get specific crop recipe with full schedule
 app.get('/recipes/:crop', async (req, res) => {
   try {
     setApiCors(res);
-    const recipes = loadRecipes();
     const cropName = decodeURIComponent(req.params.crop);
-    const crop = recipes.crops?.[cropName];
     
-    if (!crop) {
+    const result = await dbPool.query(
+      'SELECT * FROM recipes WHERE name = $1',
+      [cropName]
+    );
+    
+    if (result.rows.length === 0) {
       return res.status(404).json({ ok: false, error: 'Crop not found' });
     }
     
-    return res.json({ ok: true, crop: cropName, days: crop });
+    const recipe = result.rows[0];
+    const schedule = recipe.data?.schedule || [];
+    
+    return res.json({ 
+      ok: true, 
+      crop: cropName,
+      category: recipe.category,
+      description: recipe.description,
+      total_days: recipe.total_days,
+      days: schedule
+    });
   } catch (e) {
+    console.error('[recipes] Error fetching recipe:', e);
     return res.status(500).json({ ok: false, error: e.message });
   }
 });
