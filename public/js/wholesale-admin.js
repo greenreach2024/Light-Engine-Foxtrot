@@ -15,7 +15,25 @@
       recommendations: []
     },
 
+    // Get authentication headers for admin API calls
+    getAuthHeaders() {
+      const token = localStorage.getItem('admin_token');
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      return headers;
+    },
+
     async init() {
+      // Check for admin token
+      const token = localStorage.getItem('admin_token');
+      if (!token) {
+        console.warn('[Wholesale Admin] No admin token found. Some features may be limited.');
+      }
+      
       this.setupEventListeners();
       await this.loadOverview();
       
@@ -104,12 +122,13 @@
 
     async loadNetwork() {
       try {
+        const headers = this.getAuthHeaders();
         const [farmsRes, snapshotsRes, aggregateRes, eventsRes, recsRes] = await Promise.all([
-          fetch('/api/wholesale/network/farms'),
-          fetch('/api/wholesale/network/snapshots'),
-          fetch('/api/wholesale/network/aggregate'),
-          fetch('/api/wholesale/network/market-events'),
-          fetch('/api/wholesale/network/recommendations')
+          fetch('/api/wholesale/network/farms', { headers }),
+          fetch('/api/wholesale/network/snapshots', { headers }),
+          fetch('/api/wholesale/network/aggregate', { headers }),
+          fetch('/api/wholesale/network/market-events', { headers }),
+          fetch('/api/wholesale/network/recommendations', { headers })
         ]);
 
         const farmsJson = await farmsRes.json().catch(() => null);
@@ -396,11 +415,19 @@
 
     async loadOverview() {
       try {
-        const farmsRes = await fetch('/api/wholesale/oauth/square/farms');
+        const headers = this.getAuthHeaders();
+        
+        // Load network farms for operations dashboard
+        const farmsRes = await fetch('/api/wholesale/network/farms', { headers });
         const farmsData = await farmsRes.json();
         this.farms = farmsData.data?.farms || [];
+        
+        // Load wholesale orders
+        const ordersRes = await fetch('/api/wholesale/orders', { headers });
+        const ordersData = await ordersRes.json();
+        this.orders = ordersData.orders || [];
 
-        const paymentsRes = await fetch('/api/wholesale/webhooks/payments');
+        const paymentsRes = await fetch('/api/wholesale/webhooks/payments', { headers });
         const paymentsData = await paymentsRes.json();
         this.payments = paymentsData.data?.payments || [];
 
@@ -413,11 +440,26 @@
           .reduce((sum, p) => sum + p.broker_fee_amount, 0);
 
         const activeFarms = this.farms.filter((f) => f.status === 'active').length;
+        
+        // Order statistics
+        const pendingOrders = this.orders.filter(o => 
+          o.verification_status === 'pending_farm_verification'
+        ).length;
+        
+        const activeOrders = this.orders.filter(o => 
+          ['pending_farm_verification', 'farm_verified', 'pending_buyer_review'].includes(o.verification_status)
+        ).length;
 
         document.getElementById('stat-gmv').textContent = `$${totalGMV.toFixed(2)}`;
         document.getElementById('stat-fees').textContent = `$${totalFees.toFixed(2)}`;
         document.getElementById('stat-farms').textContent = activeFarms.toString();
-        document.getElementById('stat-orders').textContent = this.payments.length.toString();
+        document.getElementById('stat-orders').textContent = activeOrders.toString();
+        
+        // Add pending verification count if element exists
+        const pendingEl = document.getElementById('stat-pending-verification');
+        if (pendingEl) {
+          pendingEl.textContent = pendingOrders.toString();
+        }
 
         this.renderGMVChart();
         this.renderRecentActivity();
@@ -462,12 +504,13 @@
     renderRecentActivity() {
       const container = document.getElementById('recent-activity');
 
-      const recentPayments = [...this.payments]
+      // Show recent orders instead of payments
+      const recentOrders = [...this.orders]
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 5);
+        .slice(0, 10);
 
-      if (recentPayments.length === 0) {
-        container.innerHTML = '<div class="empty-state">No recent activity</div>';
+      if (recentOrders.length === 0) {
+        container.innerHTML = '<div class="empty-state">No recent orders</div>';
         return;
       }
 
@@ -475,7 +518,34 @@
           <table>
             <thead>
               <tr>
-                <th>Time</th>
+                <th>Order ID</th>
+                <th>Buyer</th>
+                <th>Farm(s)</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Verification</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recentOrders
+                .map(
+                  (order) => `
+                <tr>
+                  <td>${order.order_id}</td>
+                  <td>${order.buyer_name || order.buyer_id}</td>
+                  <td>${order.farm_id || (order.farms ? order.farms.length + ' farms' : 'N/A')}</td>
+                  <td>$${(order.total_price || 0).toFixed(2)}</td>
+                  <td><span class="badge ${order.order_status || 'pending'}">${order.order_status || 'pending'}</span></td>
+                  <td><span class="badge ${order.verification_status || 'pending'}">${order.verification_status || 'pending_farm_verification'}</span></td>
+                  <td>${new Date(order.created_at).toLocaleString()}</td>
+                </tr>
+              `
+                )
+                .join('')}
+            </tbody>
+          </table>
+        `;
                 <th>Event</th>
                 <th>Farm</th>
                 <th>Amount</th>
@@ -503,7 +573,8 @@
 
     async loadFarms() {
       try {
-        const response = await fetch('/api/wholesale/oauth/square/farms');
+        const headers = this.getAuthHeaders();
+        const response = await fetch('/api/wholesale/network/farms', { headers });
         const data = await response.json();
 
         if (data.status === 'ok') {
@@ -522,30 +593,34 @@
       const tbody = document.getElementById('farms-table');
 
       if (this.farms.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No farms onboarded yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No farms registered yet</td></tr>';
         return;
       }
 
       tbody.innerHTML = this.farms
         .map((farm) => {
-          const refreshBtn = farm.needs_refresh
-            ? `<button class="btn btn-secondary btn-sm" data-action="refresh-token" data-farmid="${farm.farm_id}">Refresh Token</button>`
-            : '';
+          const certBadges = (farm.certifications || []).map(c => 
+            `<span class="badge badge-info">${c}</span>`
+          ).join(' ');
+          
+          const practiceBadges = (farm.practices || []).map(p => 
+            `<span class="badge badge-secondary">${p}</span>`
+          ).join(' ');
 
           return `
           <tr>
             <td>${farm.farm_id}</td>
-            <td>${farm.merchant_id}</td>
-            <td>${farm.location_name}</td>
+            <td>${farm.farm_name || 'N/A'}</td>
+            <td>${farm.location?.city || 'N/A'}, ${farm.location?.province || 'N/A'}</td>
             <td><span class="badge ${farm.status}">${farm.status}</span></td>
             <td>
-              ${new Date(farm.expires_at).toLocaleDateString()}
-              ${farm.needs_refresh ? '<span style="color: var(--warning);">(needs refresh)</span>' : ''}
+              ${farm.last_sync ? new Date(farm.last_sync).toLocaleString() : 'Never'}
             </td>
-            <td>${new Date(farm.onboarded_at).toLocaleDateString()}</td>
             <td>
-              ${refreshBtn}
-              <button class="btn btn-danger btn-sm" data-action="disconnect-farm" data-farmid="${farm.farm_id}">Disconnect</button>
+              ${certBadges || 'None'}
+            </td>
+            <td>
+              ${practiceBadges || 'None'}
             </td>
           </tr>
         `;
