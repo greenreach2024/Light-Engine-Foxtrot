@@ -446,12 +446,28 @@ router.get('/farms/:farmId', requireAdmin, async (req, res) => {
     // PostgreSQL mode: Query actual database
     const result = await dbQuery(`
       SELECT 
-        f.*,
+        f.farm_id,
+        f.name,
+        f.email,
+        f.phone,
+        f.contact_name,
+        f.plan_type,
+        f.status,
+        f.created_at,
+        f.updated_at,
+        f.api_key,
+        f.api_secret,
+        f.jwt_secret,
+        f.square_payment_id,
+        f.square_amount,
+        f.timezone,
+        f.business_hours,
+        f.certifications,
         COUNT(DISTINCT u.user_id) as user_count
       FROM farms f
       LEFT JOIN users u ON f.farm_id = u.farm_id
       WHERE f.farm_id = $1
-      GROUP BY f.farm_id, f.name, f.email, f.phone, f.contact_name, f.plan_type, f.status, f.created_at, f.updated_at, f.farm_slug, f.api_key, f.api_secret, f.jwt_secret, f.square_payment_id, f.square_amount
+      GROUP BY f.farm_id, f.name, f.email, f.phone, f.contact_name, f.plan_type, f.status, f.created_at, f.updated_at, f.api_key, f.api_secret, f.jwt_secret, f.square_payment_id, f.square_amount, f.timezone, f.business_hours, f.certifications
     `, [farmId]);
     
     if (!result.rows || result.rows.length === 0) {
