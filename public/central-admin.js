@@ -566,6 +566,17 @@ function highlightDevice(deviceId) {
  */
 async function loadDashboardData() {
     try {
+        // Reset display for platform-wide view
+        const header = document.querySelector('#overview-view .header h1');
+        const farmsTable = document.querySelector('#farms-table')?.closest('.card');
+        
+        if (header) {
+            header.textContent = 'Operations Overview';
+        }
+        if (farmsTable) {
+            farmsTable.style.display = 'block';
+        }
+        
         await Promise.all([
             loadKPIs(),
             loadFarms(),
@@ -1893,7 +1904,7 @@ async function navigate(view, element) {
             if (navigationContext.farmId) {
                 await loadFarmSpecificDashboard(navigationContext.farmId);
             } else {
-                await loadDashboard();
+                await loadDashboardData();
             }
             break;
             
@@ -2794,24 +2805,37 @@ async function loadFarmSpecificDashboard(farmId) {
     
     try {
         // Load dashboard but filter data for this farm
-        await loadDashboard();
+        await loadDashboardData();
         
-        // Filter the displayed farms table to show only this farm
-        const farmRows = document.querySelectorAll('#farms-table tr');
-        farmRows.forEach(row => {
-            const farmIdCell = row.querySelector('td:first-child');
-            if (farmIdCell && farmIdCell.textContent !== farmId) {
-                row.style.display = 'none';
-            }
-        });
+        // Hide platform-wide elements and show farm-specific summary
+        const header = document.querySelector('#overview-view .header h1');
+        const farmsTable = document.querySelector('#farms-table').closest('.card');
+        const alertsSection = document.querySelector('#alerts-section');
         
-        // Update page title
+        // Get farm data
         const farm = farmsData.find(f => f.farmId === farmId);
+        
         if (farm) {
-            const header = document.querySelector('.header h1');
+            // Update page title to show farm-specific overview
             if (header) {
-                header.textContent = `${farm.name} - Operations Overview`;
+                header.textContent = `${farm.name} - Farm Summary`;
             }
+            
+            // Hide the farms table when viewing a specific farm
+            if (farmsTable) {
+                farmsTable.style.display = 'none';
+            }
+            
+            // Update KPIs to show farm-specific data instead of platform-wide
+            // Filter the KPI values to only show this farm's data
+            document.getElementById('kpi-farms').textContent = '1';
+            document.getElementById('kpi-farms-change').textContent = farm.name;
+            
+            // You could enhance this to show farm-specific stats from the API
+            // For now, we'll show the farm is selected and hide multi-farm overview
+            
+        } else {
+            console.error('Farm not found:', farmId);
         }
     } catch (error) {
         console.error('Error loading farm dashboard:', error);
