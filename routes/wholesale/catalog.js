@@ -104,6 +104,13 @@ router.get('/', async (req, res) => {
       items: catalogItems
     });
 
+  } catch (error) {
+    console.error('[Wholesale Catalog] Error fetching farms:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to fetch wholesale catalog',
+      message: error.message
+    });
   }
 });
 
