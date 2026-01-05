@@ -546,29 +546,6 @@
             </tbody>
           </table>
         `;
-                <th>Event</th>
-                <th>Farm</th>
-                <th>Amount</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${recentPayments
-                .map(
-                  (p) => `
-                <tr>
-                  <td>${new Date(p.created_at).toLocaleString()}</td>
-                  <td>Payment</td>
-                  <td>${p.farm_id}</td>
-                  <td>$${p.amount.toFixed(2)}</td>
-                  <td><span class="badge ${p.status}">${p.status}</span></td>
-                </tr>
-              `
-                )
-                .join('')}
-            </tbody>
-          </table>
-        `;
     },
 
     async loadFarms() {
