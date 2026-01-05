@@ -879,6 +879,8 @@
       font-weight: 500;
       margin-bottom: 0.5rem;
       color: var(--text);
+      word-wrap: break-word;
+      white-space: normal;
     }
 
     .form-group input,
@@ -1481,6 +1483,85 @@
       align-items: center;
       justify-content: center;
       border: 2px solid var(--surface);
+    }
+
+    /* Generic Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      overflow-y: auto;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      margin: 2rem auto;
+      max-width: 600px;
+      width: 90%;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header h2 {
+      font-size: 1.5rem;
+      color: var(--primary);
+      margin: 0;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 2rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
+    }
+
+    .modal-body p {
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 1rem;
+      justify-content: flex-end;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
     }
 
     /* Auth Modal */
