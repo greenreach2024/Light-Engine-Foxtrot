@@ -1171,21 +1171,41 @@ router.get('/wholesale/orders', requireAdmin, async (req, res) => {
       });
     }
 
+    // Check if master_orders table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'master_orders'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      return res.json({
+        status: 'ok',
+        orders: [],
+        count: 0,
+        message: 'Wholesale orders table not yet created'
+      });
+    }
+
     // Query all orders with farm sub-orders (PostgreSQL syntax)
     const result = await db.query(`
       SELECT 
         o.*,
-        json_agg(
-          json_build_object(
-            'id', so.id,
-            'farm_id', so.farm_id,
-            'status', so.status,
-            'line_items', so.line_items,
-            'subtotal', so.subtotal,
-            'broker_fee_amount', so.broker_fee_amount,
-            'tax_amount', so.tax_amount,
-            'total', so.total
-          )
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', so.id,
+              'farm_id', so.farm_id,
+              'status', so.status,
+              'line_items', so.line_items,
+              'subtotal', so.subtotal,
+              'broker_fee_amount', so.broker_fee_amount,
+              'tax_amount', so.tax_amount,
+              'total', so.total
+            )
+          ) FILTER (WHERE so.id IS NOT NULL), '[]'
         ) as sub_orders
       FROM master_orders o
       LEFT JOIN farm_sub_orders so ON o.id = so.master_order_id
