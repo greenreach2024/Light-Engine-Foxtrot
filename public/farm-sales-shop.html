@@ -684,7 +684,7 @@
 <body>
   <!-- Hero Header -->
   <section class="hero">
-    <h1>🌱 Fresh Farm Produce</h1>
+    <h1>Fresh Farm Produce</h1>
     <p>Local, Sustainable, Delicious</p>
     <div class="farm-selector">
       <h2 id="farm-name" style="margin: 0; font-size: 1.5rem;">Loading...</h2>
@@ -699,7 +699,7 @@
       <a href="#about" class="nav-link">About</a>
     </div>
     <button class="cart-button" onclick="toggleCart()">
-      🛒 Cart
+      Cart
       <span class="cart-badge" id="cart-count">0</span>
     </button>
   </nav>
@@ -728,7 +728,7 @@
     
     <!-- Subscriptions Section -->
     <section id="subscriptions">
-      <h2 class="section-title">📦 CSA Subscription Boxes</h2>
+      <h2 class="section-title">CSA Subscription Boxes</h2>
       <p style="color: var(--text-light); margin-bottom: 2rem;">
         Join our Community Supported Agriculture program! Get a weekly box of fresh, seasonal produce delivered to your door.
       </p>
@@ -751,7 +751,7 @@
     
     <div id="cart-items" class="cart-items">
       <div class="empty-cart">
-        <div class="empty-cart-icon">🛒</div>
+        <div class="empty-cart-icon"></div>
         <p>Your cart is empty</p>
       </div>
     </div>
@@ -868,13 +868,8 @@
     let cart = [];
     let currentCategory = 'all';
     
-    // Category icons
-    const categoryIcons = {
-      leafy_greens: '🥬',
-      herbs: '🌿',
-      microgreens: '🌱',
-      produce: '🍅'
-    };
+    // Category icons removed
+    const categoryIcons = {};
     
     // Initialize farm from config
     async function initializeFarm() {
@@ -959,7 +954,7 @@
       grid.innerHTML = filtered.map(product => `
         <div class="product-card">
           <div class="product-image">
-            ${categoryIcons[product.category] || '🌾'}
+            ${product.category.charAt(0).toUpperCase()}
           </div>
           <div class="product-info">
             <div class="product-category">${product.category.replace('_', ' ')}</div>
@@ -1086,14 +1081,14 @@
       if (cart.length === 0) {
         container.innerHTML = `
           <div class="empty-cart">
-            <div class="empty-cart-icon">🛒</div>
+            <div class="empty-cart-icon"></div>
             <p>Your cart is empty</p>
           </div>
         `;
       } else {
         container.innerHTML = cart.map(item => `
           <div class="cart-item">
-            <div class="cart-item-image">${categoryIcons[item.category] || '🌾'}</div>
+            <div class="cart-item-image">${item.category.charAt(0).toUpperCase()}</div>
             <div class="cart-item-details">
               <div class="cart-item-name">${item.name}</div>
               <div class="cart-item-price">$${(item.retail_price * item.quantity).toFixed(2)}</div>
