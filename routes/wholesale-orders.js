@@ -719,6 +719,84 @@ router.post('/confirm-pickup', async (req, res) => {
 });
 
 /**
+ * GET /api/wholesale/orders
+ * List all orders for the authenticated buyer
+ */
+router.get('/', async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    
+    if (!db) {
+      return res.status(500).json({ 
+        status: 'error', 
+        error: 'Database connection error' 
+      });
+    }
+
+    // Get buyer_id from auth token (if available) or query params
+    const buyer_id = req.buyer?.id || req.query.buyer_id;
+    
+    if (!buyer_id) {
+      // If no buyer authenticated, return empty list
+      return res.json({
+        status: 'ok',
+        data: {
+          orders: [],
+          count: 0
+        }
+      });
+    }
+
+    // Query all orders for this buyer
+    const orders = await db.all(`
+      SELECT 
+        o.*,
+        json_group_array(
+          json_object(
+            'id', so.id,
+            'farm_id', so.farm_id,
+            'status', so.status,
+            'line_items', so.line_items,
+            'subtotal', so.subtotal,
+            'broker_fee_amount', so.broker_fee_amount,
+            'tax_amount', so.tax_amount,
+            'total', so.total
+          )
+        ) as sub_orders
+      FROM master_orders o
+      LEFT JOIN farm_sub_orders so ON o.id = so.master_order_id
+      WHERE o.buyer_id = ?
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+    `, [buyer_id]);
+
+    // Parse JSON fields
+    const parsedOrders = orders.map(order => ({
+      ...order,
+      sub_orders: JSON.parse(order.sub_orders || '[]'),
+      delivery_address: order.delivery_address ? JSON.parse(order.delivery_address) : null,
+      logistics_plan: order.logistics_plan ? JSON.parse(order.logistics_plan) : null
+    }));
+
+    res.json({
+      status: 'ok',
+      data: {
+        orders: parsedOrders,
+        count: parsedOrders.length
+      }
+    });
+
+  } catch (error) {
+    console.error('[Wholesale Orders] List orders error:', error);
+    res.status(500).json({ 
+      status: 'error',
+      error: 'Failed to fetch orders',
+      details: error.message
+    });
+  }
+});
+
+/**
  * GET /api/wholesale/orders/pending-verification/:farm_id
  * Get pending orders for a farm
  */
