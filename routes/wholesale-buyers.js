@@ -98,6 +98,32 @@ router.post('/buyers/register', authRateLimiter, async (req, res) => {
     const buyer = result.rows[0];
     const token = issueBuyerToken(buyer.id);
 
+    // Send welcome email
+    try {
+      await sendEmail({
+        to: buyer.email,
+        subject: 'Welcome to GreenReach Wholesale',
+        text: `Welcome to GreenReach Wholesale, ${buyer.contact_name || buyer.business_name}!\n\nYour account has been successfully created.\n\nBusiness Name: ${buyer.business_name}\nEmail: ${buyer.email}\n\nYou can now browse our network of local farms and place wholesale orders.\n\nThank you for joining GreenReach!`,
+        html: `
+          <h2>Welcome to GreenReach Wholesale!</h2>
+          <p>Hello ${buyer.contact_name || buyer.business_name},</p>
+          <p>Your wholesale buyer account has been successfully created.</p>
+          <h3>Account Details</h3>
+          <ul>
+            <li><strong>Business Name:</strong> ${buyer.business_name}</li>
+            <li><strong>Email:</strong> ${buyer.email}</li>
+            <li><strong>Buyer Type:</strong> ${buyer.buyer_type || 'Not specified'}</li>
+          </ul>
+          <p>You can now browse our network of certified local farms and place wholesale orders for fresh, sustainable produce.</p>
+          <p>Thank you for choosing GreenReach!</p>
+        `
+      });
+      console.log('[Wholesale Registration] Welcome email sent to:', buyer.email);
+    } catch (emailError) {
+      console.error('[Wholesale Registration] Failed to send welcome email:', emailError.message);
+      // Continue with registration even if email fails
+    }
+
     return res.json({
       status: 'ok',
       data: { buyer, token }
@@ -145,6 +171,144 @@ router.post('/buyers/login', authRateLimiter, async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     return res.status(500).json({ status: 'error', message: 'Login failed' });
+  }
+});
+
+// POST /api/wholesale/buyers/password-reset-request - Request password reset
+router.post('/buyers/password-reset-request', authRateLimiter, async (req, res) => {
+  try {
+    const { email } = req.body || {};
+
+    if (!email) {
+      return res.status(400).json({ status: 'error', message: 'Email is required' });
+    }
+
+    // Check if buyer exists
+    const result = await pool.query(
+      'SELECT id, business_name, contact_name, email FROM wholesale_buyers WHERE email = $1',
+      [email.toLowerCase()]
+    );
+
+    // Always return success to prevent email enumeration
+    if (result.rows.length === 0) {
+      console.log('[Password Reset] Email not found:', email);
+      return res.json({
+        status: 'ok',
+        message: 'If an account exists with this email, a password reset link has been sent.'
+      });
+    }
+
+    const buyer = result.rows[0];
+
+    // Generate reset token (valid for 1 hour)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Store reset token
+    await pool.query(
+      'UPDATE wholesale_buyers SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
+      [resetTokenHash, resetTokenExpiry, buyer.id]
+    );
+
+    // Send password reset email
+    const resetUrl = `${process.env.APP_URL || 'https://light-engine-foxtrot-prod.us-east-1.elasticbeanstalk.com'}/GR-wholesale.html?reset_token=${resetToken}`;
+
+    try {
+      await sendEmail({
+        to: buyer.email,
+        subject: 'Password Reset Request - GreenReach Wholesale',
+        text: `Hello ${buyer.contact_name || buyer.business_name},\n\nYou requested a password reset for your GreenReach Wholesale account.\n\nClick the link below to reset your password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this reset, please ignore this email.\n\nGreenReach Support`,
+        html: `
+          <h2>Password Reset Request</h2>
+          <p>Hello ${buyer.contact_name || buyer.business_name},</p>
+          <p>You requested a password reset for your GreenReach Wholesale account.</p>
+          <p><a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #10b981; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a></p>
+          <p>Or copy this link: <br/><code>${resetUrl}</code></p>
+          <p><strong>This link expires in 1 hour.</strong></p>
+          <p>If you did not request this reset, please ignore this email. Your password will remain unchanged.</p>
+          <p>GreenReach Support</p>
+        `
+      });
+      console.log('[Password Reset] Email sent to:', buyer.email);
+    } catch (emailError) {
+      console.error('[Password Reset] Failed to send email:', emailError.message);
+      return res.status(500).json({ status: 'error', message: 'Failed to send password reset email' });
+    }
+
+    return res.json({
+      status: 'ok',
+      message: 'If an account exists with this email, a password reset link has been sent.'
+    });
+  } catch (error) {
+    console.error('[Password Reset Request] Error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to process password reset request' });
+  }
+});
+
+// POST /api/wholesale/buyers/password-reset - Complete password reset
+router.post('/buyers/password-reset', authRateLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = req.body || {};
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ status: 'error', message: 'Token and new password are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ status: 'error', message: 'Password must be at least 8 characters' });
+    }
+
+    // Hash the token to compare with stored hash
+    const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find buyer with valid reset token
+    const result = await pool.query(
+      'SELECT id, email, contact_name, business_name FROM wholesale_buyers WHERE password_reset_token = $1 AND password_reset_expires > NOW()',
+      [resetTokenHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Invalid or expired reset token' });
+    }
+
+    const buyer = result.rows[0];
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear reset token
+    await pool.query(
+      'UPDATE wholesale_buyers SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL WHERE id = $2',
+      [passwordHash, buyer.id]
+    );
+
+    // Send confirmation email
+    try {
+      await sendEmail({
+        to: buyer.email,
+        subject: 'Password Reset Successful - GreenReach Wholesale',
+        text: `Hello ${buyer.contact_name || buyer.business_name},\n\nYour password has been successfully reset.\n\nIf you did not make this change, please contact support immediately.\n\nGreenReach Support`,
+        html: `
+          <h2>Password Reset Successful</h2>
+          <p>Hello ${buyer.contact_name || buyer.business_name},</p>
+          <p>Your password has been successfully reset.</p>
+          <p>You can now log in with your new password.</p>
+          <p><strong>If you did not make this change, please contact support immediately.</strong></p>
+          <p>GreenReach Support</p>
+        `
+      });
+    } catch (emailError) {
+      console.error('[Password Reset] Failed to send confirmation email:', emailError.message);
+    }
+
+    return res.json({
+      status: 'ok',
+      message: 'Password reset successful. You can now log in with your new password.'
+    });
+  } catch (error) {
+    console.error('[Password Reset] Error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to reset password' });
   }
 });
 
