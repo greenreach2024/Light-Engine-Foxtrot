@@ -155,6 +155,7 @@ import wholesaleSLAPoliciesRouter from './routes/wholesale/sla-policies.js';
 import wholesaleNetworkRouter from './routes/wholesale/network.js';
 import wholesaleOrdersRouter from './routes/wholesale-orders.js';
 import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.js';
+import networkRouter from './routes/network.js';
 import activityHubOrdersRouter from './routes/activity-hub-orders.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
@@ -9876,13 +9877,25 @@ app.use('/api/wholesale/substitution', wholesaleSLAPoliciesRouter);
 app.use('/api/wholesale/buyer/preferences', wholesaleSLAPoliciesRouter);
 
 /**
+ * GreenReach Central: Network API Routes
+ * Provides farm network data for GreenReach Central Admin dashboard
+ * - GET /api/network/dashboard: Network-wide dashboard statistics
+ * - GET /api/network/farms/list: List all farms in network
+ * - GET /api/network/farms/:farmId: Get detailed farm information
+ * - GET /api/network/comparative-analytics: Cross-farm analytics
+ * - GET /api/network/trends: Network-wide trends
+ * - GET /api/network/alerts: Network alerts and notifications
+ */
+app.use('/api/network', networkRouter);
+
+/**
  * Wholesale Network Routes (Edge Farm)
  * Returns local farm data for wholesale admin dashboard
  * - GET /api/wholesale/network/farms: List network farms (returns local farm)
  * - GET /api/wholesale/network/snapshots: Inventory snapshots
  * - GET /api/wholesale/network/aggregate: Aggregated catalog
  * - GET /api/wholesale/network/market-events: Market events
- * - GET /api/wholesale/network/recommendations: Network recommendations
+ * - GET /api/network/recommendations: Network recommendations
  */
 app.use('/api/wholesale/network', wholesaleNetworkRouter);
 
