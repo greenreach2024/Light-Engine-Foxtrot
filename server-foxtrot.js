@@ -6558,29 +6558,21 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
         ['active', farmId]
       );
       
-      // If rooms were provided, save them
+      // If rooms were provided, save them using the actual rooms table schema
       if (rooms && rooms.length > 0) {
-        // Try to create rooms table if it doesn't exist
         try {
-          await pool.query(`
-            CREATE TABLE IF NOT EXISTS rooms (
-              id SERIAL PRIMARY KEY,
-              farm_id VARCHAR(50) NOT NULL,
-              name VARCHAR(100) NOT NULL,
-              width DECIMAL(10,2),
-              height DECIMAL(10,2),
-              depth DECIMAL(10,2),
-              room_type VARCHAR(50),
-              created_at TIMESTAMP DEFAULT NOW(),
-              FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
-            )
-          `);
-          
-          // Insert rooms
+          // Insert rooms using correct schema (name, type, capacity, description)
           for (const room of rooms) {
             await pool.query(
-              'INSERT INTO rooms (farm_id, name, width, height, depth, room_type) VALUES ($1, $2, $3, $4, $5, $6)',
-              [farmId, room.name, room.width, room.height, room.depth, room.roomType || 'grow']
+              `INSERT INTO rooms (farm_id, name, type, capacity, description, created_at, updated_at) 
+               VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+              [
+                farmId, 
+                room.name || 'Growing Room', 
+                room.type || room.roomType || 'grow',
+                room.capacity || null,
+                room.description || null
+              ]
             );
           }
           console.log('[setup-wizard] Saved', rooms.length, 'rooms for farm:', farmId);
@@ -6591,23 +6583,10 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
       } else {
         // No rooms provided - create a default room so status check passes
         try {
-          await pool.query(`
-            CREATE TABLE IF NOT EXISTS rooms (
-              id SERIAL PRIMARY KEY,
-              farm_id VARCHAR(50) NOT NULL,
-              name VARCHAR(100) NOT NULL,
-              width DECIMAL(10,2),
-              height DECIMAL(10,2),
-              depth DECIMAL(10,2),
-              room_type VARCHAR(50),
-              created_at TIMESTAMP DEFAULT NOW(),
-              FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
-            )
-          `);
-          
           await pool.query(
-            'INSERT INTO rooms (farm_id, name, width, height, depth, room_type) VALUES ($1, $2, $3, $4, $5, $6)',
-            [farmId, 'Main Growing Room', 10.0, 8.0, 12.0, 'grow']
+            `INSERT INTO rooms (farm_id, name, type, capacity, description, created_at, updated_at) 
+             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+            [farmId, 'Main Growing Room', 'grow', null, 'Default room created during setup']
           );
           console.log('[setup-wizard] Created default room for farm:', farmId);
         } catch (roomError) {
