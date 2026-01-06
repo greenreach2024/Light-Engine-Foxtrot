@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { Client, Environment } from 'square';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
+import jwt from 'jsonwebtoken';
 import { provisionFarm } from '../lib/farm-provisioning.js';
 
 const router = express.Router();
@@ -658,7 +659,6 @@ router.get('/verify-session/:session_id', async (req, res) => {
         console.log('[Verify] Account creation completed successfully');
         
         // Generate JWT token for automatic login
-        const jwt = require('jsonwebtoken');
         // Use the jwt_secret we just generated for this farm
         const token = jwt.sign(
           { 
