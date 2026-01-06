@@ -235,6 +235,12 @@ async function loadFarmData() {
                 farmIdEl.textContent = farmData.farmId || currentSession.farmId;
             }
             
+            // Update header farm ID display
+            const headerFarmIdEl = document.getElementById('headerFarmId');
+            if (headerFarmIdEl) {
+                headerFarmIdEl.textContent = `Farm ID: ${farmData.farmId || currentSession.farmId}`;
+            }
+            
             // Store farm name in currentSession
             currentSession.farmName = farmData.name;
             
@@ -256,6 +262,12 @@ async function loadFarmData() {
         
     } catch (error) {
         console.error(' Error loading farm data:', error);
+        
+        // Even if API fails, show farm ID from current session
+        const headerFarmIdEl = document.getElementById('headerFarmId');
+        if (headerFarmIdEl && currentSession) {
+            headerFarmIdEl.textContent = `Farm ID: ${currentSession.farmId}`;
+        }
     }
 }
 

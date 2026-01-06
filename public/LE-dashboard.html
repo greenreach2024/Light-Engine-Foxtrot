@@ -19,7 +19,9 @@
   <!-- Console wrapper for demo mode - loaded FIRST to suppress all console output -->
   <script src="/js/console-wrapper.js?v={{BUILD_TIME}}"></script>
   <script>
-    window.API_BASE = 'http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com';
+    // Use current page protocol (HTTPS in production, HTTP in local dev)
+    // This prevents mixed content warnings when page loads over HTTPS
+    window.API_BASE = window.location.origin;
     console.log('[index.html] Set window.API_BASE to:', window.API_BASE);
   </script>
   <script src="/js/net.guard.js?v={{BUILD_TIME}}" defer></script>
