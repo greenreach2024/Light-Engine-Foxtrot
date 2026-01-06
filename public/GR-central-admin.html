@@ -4048,8 +4048,27 @@ API URL: ${farm.api_url || 'Not configured'}
                 });
                 observer.observe(networkView, { attributes: true });
             }
+            
+            // Load recipes when recipes view becomes active
+            const recipesViews = document.querySelectorAll('#recipes-view');
+            recipesViews.forEach(recipesView => {
+                if (recipesView) {
+                    const recipesObserver = new MutationObserver((mutations) => {
+                        mutations.forEach((mutation) => {
+                            if (mutation.attributeName === 'style') {
+                                if (recipesView.style.display !== 'none') {
+                                    if (typeof loadRecipes === 'function') {
+                                        loadRecipes();
+                                    }
+                                }
+                            }
+                        });
+                    });
+                    recipesObserver.observe(recipesView, { attributes: true });
+                }
+            });
         });
     </script>
-    <script src="/central-admin.js?v=1.9.2"></script>
+    <script src="/central-admin.js?v=1.9.3"></script>
 </body>
 </html>
