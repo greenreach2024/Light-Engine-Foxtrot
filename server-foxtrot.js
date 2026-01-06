@@ -14372,11 +14372,15 @@ app.get('/api/user/profile', asyncHandler(async (req, res) => {
     
     console.log('[/api/user/profile] JWT decoded, fetching user data');
     
-    // Fetch from users/buyers table
-    const pool = req.app.locals?.db;
-    if (pool) {
-      const userResult = await pool.query(
-        'SELECT email, name, business_name, phone FROM users WHERE email = $1 LIMIT 1',
+    // Fetch from users/farms tables
+    const db = req.app.locals?.db;
+    if (db) {
+      // Join users with farms to get business name
+      const userResult = await db.query(
+        `SELECT u.email, u.role, f.name as business_name, f.contact_name, f.plan_type 
+         FROM users u 
+         LEFT JOIN farms f ON u.farm_id = f.farm_id 
+         WHERE u.email = $1 LIMIT 1`,
         [decoded.email]
       );
       
@@ -14386,11 +14390,11 @@ app.get('/api/user/profile', asyncHandler(async (req, res) => {
           status: 'success',
           user: {
             email: user.email,
-            name: user.name,
-            businessName: user.business_name,
-            phone: user.phone,
+            name: user.contact_name || '',
+            businessName: user.business_name || '',
+            phone: null,
             hasPurchased: true,
-            planType: 'edge'
+            planType: user.plan_type || 'edge'
           }
         });
       }
@@ -14463,9 +14467,18 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     const decoded = jwt.verify(token, jwtSecret);
     
     const farmId = decoded.farmId;
+    const db = req.app.locals.db;
+    
+    if (!db) {
+      console.error('[/api/farm/profile] Database not available');
+      return res.status(500).json({
+        status: 'error',
+        message: 'Database connection not available'
+      });
+    }
     
     // Fetch farm data from database
-    const farmResult = await pool.query(
+    const farmResult = await db.query(
       'SELECT farm_id, name, plan_type, email, contact_name, location, timezone, pos_instance_id, store_subdomain FROM farms WHERE farm_id = $1',
       [farmId]
     );
@@ -14479,11 +14492,17 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     
     const farm = farmResult.rows[0];
     
-    // Fetch rooms for this farm
-    const roomsResult = await pool.query(
-      'SELECT id, name, width, height, depth, room_type FROM rooms WHERE farm_id = $1 ORDER BY id',
-      [farmId]
-    );
+    // Fetch rooms for this farm (may not exist yet for new farms)
+    let rooms = [];
+    try {
+      const roomsResult = await db.query(
+        'SELECT id, name, width, height, depth, room_type FROM rooms WHERE farm_id = $1 ORDER BY id',
+        [farmId]
+      );
+      rooms = roomsResult.rows;
+    } catch (roomsError) {
+      console.log('[/api/farm/profile] Rooms table query failed (may not exist):', roomsError.message);
+    }
     
     res.json({
       status: 'success',
@@ -14497,7 +14516,7 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
         timezone: farm.timezone,
         posInstanceId: farm.pos_instance_id,
         storeSubdomain: farm.store_subdomain,
-        rooms: roomsResult.rows.map(r => ({
+        rooms: rooms.map(r => ({
           id: r.id,
           name: r.name,
           width: r.width,
