@@ -2454,33 +2454,11 @@ async function loadAllDevicesView() {
 }
 
 /**
- * Load All Recipes view
+ * Load All Recipes view - redirects to main recipes loader
  */
 async function loadAllRecipesView() {
-    console.log('[Recipes] Loading all recipes...');
-    const tbody = document.getElementById('all-recipes-tbody');
-    
-    const recipes = [
-        { name: 'Buttercrunch Lettuce - 28 Day', crop: 'Lettuce', trays: 45, duration: 28, avgHarvest: 29, expectedVsActual: '+1d', success: '94%' },
-        { name: 'Genovese Basil - 35 Day', crop: 'Basil', trays: 32, duration: 35, avgHarvest: 34, expectedVsActual: '-1d', success: '97%' },
-        { name: 'Lacinato Kale - 42 Day', crop: 'Kale', trays: 28, duration: 42, avgHarvest: 44, expectedVsActual: '+2d', success: '91%' },
-        { name: 'Arugula - 21 Day', crop: 'Arugula', trays: 18, duration: 21, avgHarvest: 20, expectedVsActual: '-1d', success: '98%' },
-    ];
-    
-    const html = recipes.map(recipe => `
-        <tr>
-            <td>${recipe.name}</td>
-            <td>${recipe.crop}</td>
-            <td>${recipe.trays}</td>
-            <td>${recipe.duration} days</td>
-            <td>${recipe.avgHarvest} days</td>
-            <td>${recipe.expectedVsActual}</td>
-            <td>${recipe.success}</td>
-            <td><button class="btn-small" onclick="analyzeRecipe('${recipe.name}')">Analyze</button></td>
-        </tr>
-    `).join('');
-    
-    tbody.innerHTML = html;
+    console.log('[Recipes] Redirecting to loadRecipes()...');
+    await loadRecipes();
 }
 
 /**

@@ -2291,60 +2291,6 @@
                 </div>
             </div>
 
-            <!-- Grow Recipes View -->
-            <div id="recipes-view" class="view" style="display: none;">
-                <div class="breadcrumb">
-                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
-                    <span>/</span>
-                    <span>Grow Recipes</span>
-                </div>
-
-                <div class="header">
-                    <h1>Grow Recipes Management</h1>
-                    <div class="header-actions">
-                        <button class="btn btn-primary">Create Recipe</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">All Recipes</div>
-                        <div class="filter-bar">
-                            <select id="filter-recipe-crop" onchange="filterRecipes()">
-                                <option value="">All Crops</option>
-                                <option value="lettuce">Lettuce</option>
-                                <option value="basil">Basil</option>
-                                <option value="kale">Kale</option>
-                                <option value="arugula">Arugula</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-container">
-                            <table id="all-recipes-table">
-                                <thead>
-                                    <tr>
-                                        <th>Recipe Name</th>
-                                        <th>Crop Type</th>
-                                        <th>Active Trays</th>
-                                        <th>Cycle Duration</th>
-                                        <th>Avg Harvest Time</th>
-                                        <th>Expected vs Actual</th>
-                                        <th>Success Rate</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="all-recipes-tbody">
-                                    <tr>
-                                        <td colspan="8" class="loading">Loading recipe data...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Harvest Analysis View -->
             <div id="harvest-view" class="view" style="display: none;">
                 <div class="breadcrumb">
