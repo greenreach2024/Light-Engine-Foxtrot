@@ -517,6 +517,11 @@ router.get('/farms/:farmId/recipes', requireAdmin, async (req, res) => {
     res.json({ success: true, recipes: result.rows });
   } catch (error) {
     console.error('Error getting farm recipes:', error);
+    // Return empty array instead of 500 error if tables don't exist
+    if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+      console.log('[RECIPES] Database tables not yet created, returning empty recipes');
+      return res.json({ success: true, recipes: [], message: 'Recipe system not yet configured' });
+    }
     res.status(500).json({ error: 'Failed to get recipes', details: error.message });
   }
 });
@@ -1005,7 +1010,12 @@ router.get('/farms/:farmId/inventory', requireAdmin, async (req, res) => {
     res.json({ success: true, trays });
   } catch (error) {
     console.error('Error fetching farm inventory:', error);
-    res.status(500).json({ error: 'Failed to fetch inventory' });
+    // Return empty array instead of 500 error if tables don't exist
+    if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+      console.log('[INVENTORY] Database tables not yet created, returning empty inventory');
+      return res.json({ success: true, trays: [], message: 'Inventory system not yet configured' });
+    }
+    res.status(500).json({ error: 'Failed to fetch inventory', details: error.message });
   }
 });
 
