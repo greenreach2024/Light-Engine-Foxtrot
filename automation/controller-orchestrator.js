@@ -65,8 +65,8 @@ export default class ControllerOrchestrator {
     this.logger = baseLogger;
     
     // Core systems
-    this.hardwareCaps = new HardwareCapabilities({ dataDir, 
-    this.recipeTargets = new RecipeEnvironmentalTargets({ dbQuery, dataDir, logger: this.logger });publicDataDir });
+    this.hardwareCaps = new HardwareCapabilities({ dataDir, publicDataDir });
+    this.recipeTargets = new RecipeEnvironmentalTargets({ dbQuery, dataDir, logger: this.logger });
     this.stageManager = new GrowthStageManager({ dataDir });
     
     // Controllers (instantiated only when needed)
