@@ -489,16 +489,16 @@ router.get('/farms/:farmId', requireAdmin, async (req, res) => {
 router.delete('/farms/:email', requireAdmin, async (req, res) => {
   try {
     const { email } = req.params;
-    const db = await initDatabase();
+    const db = req.app.locals.db;
     
     console.log(`[Admin Delete] Request to delete all farms for email: ${email}`);
     
     // Check if database is available (PostgreSQL mode)
-    if (!db || !db.pool || db.mode === 'nedb') {
+    if (!db || !db.query) {
       console.log('[Admin Delete] Database not available, cannot delete farms');
       return res.status(503).json({ 
         status: 'error',
-        message: 'Farm deletion not available in demo mode' 
+        message: 'Farm deletion not available - database not initialized' 
       });
     }
     
@@ -507,7 +507,7 @@ router.delete('/farms/:email', requireAdmin, async (req, res) => {
     
     try {
       // Find all farms for this email
-      const farmsResult = await dbQuery(`
+      const farmsResult = await db.query(`
         SELECT farm_id, name FROM farms WHERE email = $1
       `, [email]);
       
@@ -527,16 +527,16 @@ router.delete('/farms/:email', requireAdmin, async (req, res) => {
       console.log(`[Admin Delete] Found ${farms.length} farm(s) to delete:`, farmIds);
       
       // Delete users associated with these farms
-      const deleteUsersResult = await dbQuery(`
+      const deleteUsersResult = await db.query(`
         DELETE FROM users WHERE farm_id = ANY($1::text[])
-        RETURNING id
+        RETURNING user_id
       `, [farmIds]);
       
       const usersDeleted = deleteUsersResult.rows?.length || 0;
       console.log(`[Admin Delete] Deleted ${usersDeleted} user(s)`);
       
       // Delete farms
-      const deleteFarmsResult = await dbQuery(`
+      const deleteFarmsResult = await db.query(`
         DELETE FROM farms WHERE email = $1
         RETURNING farm_id
       `, [email]);
