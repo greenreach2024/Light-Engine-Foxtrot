@@ -2580,6 +2580,9 @@
                             <option value="Fruiting Crops">Fruiting Crops</option>
                         </select>
                         <input type="text" id="recipe-search" placeholder="Search recipes..." onkeyup="filterRecipes()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 250px;">
+                        <button class="btn" onclick="exportRecipes()" style="padding: 8px 16px; background: var(--accent-green); color: white;">
+                            <span>📊</span> Export to Excel
+                        </button>
                         <button class="btn-primary" onclick="openAddRecipeModal()">
                             <span>+</span> Add New Recipe
                         </button>
