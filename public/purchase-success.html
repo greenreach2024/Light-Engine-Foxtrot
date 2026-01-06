@@ -279,8 +279,9 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    // Clear pending purchase from localStorage
+                    // Clear pending purchase from localStorage and sessionStorage
                     localStorage.removeItem('pendingPurchase');
+                    sessionStorage.removeItem('checkoutSessionId');
                     
                     // Store JWT token for automatic login
                     if (data.token) {
@@ -289,7 +290,7 @@
                         localStorage.setItem('email', data.email);
                         localStorage.setItem('planType', data.plan_type || 'Cloud'); // Store plan type
                         localStorage.setItem('isNewUser', 'true'); // Flag for first-time setup
-                        console.log('JWT token stored, user auto-authenticated');
+                        console.log('[Verify] JWT token stored, user auto-authenticated');
                     }
                     
                     // Account created successfully
@@ -303,13 +304,35 @@
                         }, 3000);
                     }, 1500); // Small delay for better UX
                 } else {
-                    // Show specific error message from server
-                    const errorMsg = data.message || data.error || 'Payment verification failed';
-                    showError(errorMsg + (data.status ? ` (Status: ${data.status})` : ''));
+                    // Handle specific error codes
+                    let errorMsg = data.message || data.error || 'Payment verification failed';
+                    
+                    // Special handling for duplicate email (409 conflict)
+                    if (response.status === 409) {
+                        console.log('[Verify] Email already registered:', data);
+                        errorMsg = `This email address is already registered${data.existing_farm ? ' to ' + data.existing_farm : ''}. Please sign in to your existing account or use a different email address.`;
+                        
+                        // Clear the pending purchase since it can't be completed
+                        localStorage.removeItem('pendingPurchase');
+                        sessionStorage.removeItem('checkoutSessionId');
+                        
+                        // Add login link to error message
+                        setTimeout(() => {
+                            const errorDiv = document.querySelector('.error-message');
+                            if (errorDiv) {
+                                const loginLink = document.createElement('div');
+                                loginLink.style.marginTop = '20px';
+                                loginLink.innerHTML = '<a href="/login.html" class="button" style="background: #3b82f6;">Sign In to Existing Account</a>';
+                                errorDiv.appendChild(loginLink);
+                            }
+                        }, 100);
+                    }
+                    
+                    showError(errorMsg);
                 }
             } catch (error) {
-                console.error('Verification error:', error);
-                showError('Unable to connect to server. Please try again.');
+                console.error('[Verify] Verification error:', error);
+                showError('Unable to connect to server. Please try again or contact support.');
             }
         }
 
