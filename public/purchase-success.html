@@ -287,8 +287,10 @@
                     if (data.token) {
                         localStorage.setItem('token', data.token);
                         localStorage.setItem('farmId', data.farm_id);
+                        localStorage.setItem('farm_id', data.farm_id); // Also store as farm_id for consistency
                         localStorage.setItem('email', data.email);
                         localStorage.setItem('planType', data.plan_type || 'Cloud'); // Store plan type
+                        localStorage.setItem('plan_type', data.plan_type || 'Cloud'); // Also store as plan_type
                         localStorage.setItem('isNewUser', 'true'); // Flag for first-time setup
                         console.log('[Verify] JWT token stored, user auto-authenticated');
                     }

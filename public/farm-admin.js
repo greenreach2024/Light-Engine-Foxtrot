@@ -68,21 +68,48 @@ function initLogin() {
 async function initDashboard() {
     console.log(' Initializing farm admin dashboard...');
     
-    // AUTHENTICATION DISABLED - Direct access granted
-    // Create a default session for farm operations
-    currentSession = {
-        token: 'local-access',
-        farmId: 'LOCAL-FARM',
-        farmName: 'Light Engine Farm',
-        email: 'admin@local-farm.com',
-        role: 'admin'
-    };
+    // Check for existing JWT token from purchase/login
+    const existingToken = localStorage.getItem('token');
+    const existingFarmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId');
+    const existingEmail = localStorage.getItem('email');
     
-    // Store token in localStorage for wizard check
-    if (!localStorage.getItem('token')) {
-        localStorage.setItem('token', 'local-access');
-        localStorage.setItem('farmId', 'LOCAL-FARM');
-        localStorage.setItem('farm_id', 'LOCAL-FARM');
+    if (existingToken && existingToken !== 'local-access' && existingFarmId && existingFarmId !== 'LOCAL-FARM') {
+        // Use existing session from purchase/login
+        try {
+            const payload = JSON.parse(atob(existingToken.split('.')[1]));
+            currentSession = {
+                token: existingToken,
+                farmId: payload.farmId || existingFarmId,
+                userId: payload.userId,
+                farmName: localStorage.getItem('farm_name') || payload.farmName || 'Light Engine Farm',
+                email: payload.email || existingEmail || 'admin@farm.com',
+                role: payload.role || 'admin'
+            };
+            console.log(' Using existing session:', currentSession.farmId, currentSession.email);
+        } catch (e) {
+            console.error(' Could not decode JWT token:', e);
+            // Fall through to local default
+        }
+    }
+    
+    // AUTHENTICATION DISABLED - Direct access granted
+    // Create a default session for farm operations if no JWT exists
+    if (!currentSession) {
+        currentSession = {
+            token: 'local-access',
+            farmId: 'LOCAL-FARM',
+            farmName: 'Light Engine Farm',
+            email: 'admin@local-farm.com',
+            role: 'admin'
+        };
+        
+        // Store token in localStorage for wizard check
+        if (!localStorage.getItem('token')) {
+            localStorage.setItem('token', 'local-access');
+            localStorage.setItem('farmId', 'LOCAL-FARM');
+            localStorage.setItem('farm_id', 'LOCAL-FARM');
+        }
+        console.log(' Using local default session');
     }
     
     // Setup navigation
