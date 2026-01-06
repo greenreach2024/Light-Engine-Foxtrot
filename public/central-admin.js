@@ -1862,6 +1862,11 @@ function showView(viewId) {
     const targetView = document.getElementById(viewId);
     if (targetView) {
         targetView.style.display = 'block';
+        
+        // Load data for specific views
+        if (viewId === 'recipes-view' && typeof loadRecipes === 'function') {
+            loadRecipes();
+        }
     } else {
         console.error(`View not found: ${viewId}`);
     }
@@ -3054,6 +3059,7 @@ let recipeSpectrumChart = null;
  * Load and display recipes
  */
 async function loadRecipes() {
+    console.log('[Recipes] loadRecipes() called');
     try {
         const category = document.getElementById('recipe-category-filter')?.value || '';
         const search = document.getElementById('recipe-search')?.value || '';
@@ -3063,25 +3069,30 @@ async function loadRecipes() {
         if (search) params.append('search', search);
         params.append('limit', '100');
         
+        console.log('[Recipes] Fetching:', `/api/admin/recipes?${params.toString()}`);
         const response = await authenticatedFetch(`/api/admin/recipes?${params.toString()}`);
         
         // Check if authentication failed
         if (!response) {
+            console.error('[Recipes] No response - authentication failed');
             throw new Error('Authentication required. Please log in again.');
         }
         
+        console.log('[Recipes] Response status:', response.status);
         const data = await response.json();
+        console.log('[Recipes] Data received:', data);
         
         if (!data.ok) {
             throw new Error(data.error || 'Failed to load recipes');
         }
         
         recipesData = data.recipes || [];
+        console.log('[Recipes] Loaded', recipesData.length, 'recipes');
         renderRecipesTable(recipesData);
         updateRecipeStats(recipesData);
         
     } catch (error) {
-        console.error('Error loading recipes:', error);
+        console.error('[Recipes] Error loading recipes:', error);
         const tbody = document.getElementById('recipes-tbody');
         if (tbody) {
             tbody.innerHTML = `
