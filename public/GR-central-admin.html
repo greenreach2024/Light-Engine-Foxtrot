@@ -1048,13 +1048,15 @@
                                             <th>Category</th>
                                             <th>Total Days</th>
                                             <th>Stages</th>
-                                            <th>Spectrum Range</th>
+                                            <th>Spectrum (B→R %)</th>
+                                            <th>PPFD Range</th>
+                                            <th>Temp Range</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="overview-recipes-tbody">
                                         <tr>
-                                            <td colspan="6" class="loading">Loading recipe data...</td>
+                                            <td colspan="8" class="loading">Loading recipe data...</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -2670,16 +2672,18 @@
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 30%;">Variety Name</th>
-                                    <th style="width: 15%;">Category</th>
-                                    <th style="width: 10%;">Total Days</th>
-                                    <th style="width: 10%;">Stages</th>
-                                    <th style="width: 20%;">Spectrum Range</th>
-                                    <th style="width: 15%;">Actions</th>
+                                    <th style="width: 25%;">Variety Name</th>
+                                    <th style="width: 12%;">Category</th>
+                                    <th style="width: 8%;">Total Days</th>
+                                    <th style="width: 8%;">Stages</th>
+                                    <th style="width: 15%;">Spectrum (B→R %)</th>
+                                    <th style="width: 12%;">PPFD Range</th>
+                                    <th style="width: 10%;">Temp Range</th>
+                                    <th style="width: 10%;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="recipes-tbody">
-                                <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading recipes...</td></tr>
+                                <tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading recipes...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -4067,6 +4071,6 @@ API URL: ${farm.api_url || 'Not configured'}
             });
         });
     </script>
-    <script src="/central-admin.js?v=1.9.6"></script>
+    <script src="/central-admin.js?v=1.9.7"></script>
 </body>
 </html>

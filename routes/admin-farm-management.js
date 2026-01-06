@@ -1390,7 +1390,7 @@ router.get('/recipes', requireAdmin, async (req, res) => {
     // Get recipes
     params.push(parseInt(limit), offset);
     const result = await dbQuery(
-      `SELECT id, name, category, description, total_days, 
+      `SELECT id, name, category, description, total_days, data,
               jsonb_array_length(data->'schedule') as schedule_length,
               created_at, updated_at
        FROM recipes

@@ -3096,7 +3096,7 @@ async function loadRecipes() {
         const tbody = document.getElementById('recipes-tbody');
         if (tbody) {
             tbody.innerHTML = `
-                <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--accent-red);">
+                <tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--accent-red);">
                     Error loading recipes: ${error.message}
                 </td></tr>
             `;
@@ -3112,7 +3112,7 @@ function renderRecipesTable(recipes) {
     
     if (recipes.length === 0) {
         tbody.innerHTML = `
-            <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+            <tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">
                 No recipes found
             </td></tr>
         `;
@@ -3121,6 +3121,34 @@ function renderRecipesTable(recipes) {
     
     tbody.innerHTML = recipes.map(recipe => {
         const stages = recipe.schedule_length || 0;
+        
+        // Parse schedule data to get first and last entries for display
+        let scheduleInfo = 'No schedule data';
+        let spectrumRange = 'N/A';
+        let ppfdRange = 'N/A';
+        let tempRange = 'N/A';
+        
+        if (recipe.data && recipe.data.schedule && recipe.data.schedule.length > 0) {
+            const firstEntry = recipe.data.schedule[0];
+            const lastEntry = recipe.data.schedule[recipe.data.schedule.length - 1];
+            
+            // Spectrum percentages (blue, green, red, far-red)
+            if (firstEntry.spectrum) {
+                const firstSpec = firstEntry.spectrum;
+                const lastSpec = lastEntry.spectrum;
+                spectrumRange = `B:${firstSpec.blue||0}→${lastSpec.blue||0}% R:${firstSpec.red||0}→${lastSpec.red||0}%`;
+            }
+            
+            // PPFD range
+            if (firstEntry.ppfd !== undefined && lastEntry.ppfd !== undefined) {
+                ppfdRange = `${firstEntry.ppfd} → ${lastEntry.ppfd} μmol/m²/s`;
+            }
+            
+            // Temperature range
+            if (firstEntry.temperature !== undefined && lastEntry.temperature !== undefined) {
+                tempRange = `${firstEntry.temperature}°C → ${lastEntry.temperature}°C`;
+            }
+        }
         
         return `
             <tr>
@@ -3133,14 +3161,11 @@ function renderRecipesTable(recipes) {
                         ${recipe.category}
                     </span>
                 </td>
-                <td>${recipe.total_days || 0}</td>
+                <td>${recipe.total_days || 0} days</td>
                 <td>${stages} entries</td>
-                <td>
-                    <div style="font-size: 0.85rem;">
-                        <div style="margin-bottom: 2px;">B: 0-100% • G: 0-100%</div>
-                        <div>R: 0-100% • FR: 0-100%</div>
-                    </div>
-                </td>
+                <td style="font-size: 0.85rem;">${spectrumRange}</td>
+                <td style="font-size: 0.85rem;">${ppfdRange}</td>
+                <td style="font-size: 0.85rem;">${tempRange}</td>
                 <td>
                     <div style="display: flex; gap: 8px;">
                         <button onclick="viewRecipe(${recipe.id})" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
