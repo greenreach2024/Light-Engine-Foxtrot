@@ -3860,9 +3860,16 @@ async function showFirstTimeSetup() {
         
         if (token) {
             try {
-                // Decode JWT to get plan type
+                // Decode JWT to get plan type and farmId
                 const payload = JSON.parse(atob(token.split('.')[1]));
                 isCloudPlan = payload.planType === 'Cloud' || payload.planType === 'cloud';
+                
+                // For Cloud plan, populate setupData with JWT info
+                if (isCloudPlan && payload.farmId) {
+                    setupData.farmId = payload.farmId;
+                    setupData.userId = payload.userId;
+                    console.log('[Setup] Cloud plan detected, farmId from JWT:', setupData.farmId);
+                }
             } catch (e) {
                 console.log('[Setup] Could not decode token, checking localStorage');
             }
@@ -3872,6 +3879,12 @@ async function showFirstTimeSetup() {
         if (!isCloudPlan) {
             const planType = localStorage.getItem('planType') || localStorage.getItem('plan_type');
             isCloudPlan = planType === 'Cloud' || planType === 'cloud';
+            
+            // If Cloud plan from localStorage, get farmId from localStorage too
+            if (isCloudPlan) {
+                setupData.farmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId');
+                console.log('[Setup] Cloud plan from localStorage, farmId:', setupData.farmId);
+            }
         }
         
         // Fetch farm data from API to pre-fill fields with purchase info

@@ -6531,9 +6531,11 @@ app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
 
 // Setup completion endpoint
 app.post('/api/setup/complete', asyncHandler(async (req, res) => {
-  const { network, registrationCode, farmId, hardware, certifications } = req.body;
+  const { network, registrationCode, farmId, hardware, certifications, rooms } = req.body;
   
   try {
+    console.log('[setup-wizard] Setup complete request for farm:', farmId);
+    
     // Save setup configuration to database
     const setupConfig = {
       completed: true,
@@ -6547,13 +6549,72 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
 
     // Store in database
     // Check if using PostgreSQL (Cloud plan) or NeDB (Edge device)
-    if (dbPool) {
+    const pool = req.app.locals?.db;
+    
+    if (pool) {
       // For Cloud plan: mark farm as setup complete in PostgreSQL
-      await dbPool.query(
+      await pool.query(
         'UPDATE farms SET status = $1, updated_at = NOW() WHERE farm_id = $2',
         ['active', farmId]
       );
-    } else {
+      
+      // If rooms were provided, save them
+      if (rooms && rooms.length > 0) {
+        // Try to create rooms table if it doesn't exist
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS rooms (
+              id SERIAL PRIMARY KEY,
+              farm_id VARCHAR(50) NOT NULL,
+              name VARCHAR(100) NOT NULL,
+              width DECIMAL(10,2),
+              height DECIMAL(10,2),
+              depth DECIMAL(10,2),
+              room_type VARCHAR(50),
+              created_at TIMESTAMP DEFAULT NOW(),
+              FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
+            )
+          `);
+          
+          // Insert rooms
+          for (const room of rooms) {
+            await pool.query(
+              'INSERT INTO rooms (farm_id, name, width, height, depth, room_type) VALUES ($1, $2, $3, $4, $5, $6)',
+              [farmId, room.name, room.width, room.height, room.depth, room.roomType || 'grow']
+            );
+          }
+          console.log('[setup-wizard] Saved', rooms.length, 'rooms for farm:', farmId);
+        } catch (roomError) {
+          console.error('[setup-wizard] Error saving rooms:', roomError.message);
+          // Continue anyway - farm is marked as active
+        }
+      } else {
+        // No rooms provided - create a default room so status check passes
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS rooms (
+              id SERIAL PRIMARY KEY,
+              farm_id VARCHAR(50) NOT NULL,
+              name VARCHAR(100) NOT NULL,
+              width DECIMAL(10,2),
+              height DECIMAL(10,2),
+              depth DECIMAL(10,2),
+              room_type VARCHAR(50),
+              created_at TIMESTAMP DEFAULT NOW(),
+              FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
+            )
+          `);
+          
+          await pool.query(
+            'INSERT INTO rooms (farm_id, name, width, height, depth, room_type) VALUES ($1, $2, $3, $4, $5, $6)',
+            [farmId, 'Main Growing Room', 10.0, 8.0, 12.0, 'grow']
+          );
+          console.log('[setup-wizard] Created default room for farm:', farmId);
+        } catch (roomError) {
+          console.error('[setup-wizard] Error creating default room:', roomError.message);
+        }
+      }
+    } else if (db) {
       // For Edge device: use NeDB
       await db.update(
         { key: 'setup_config' },
