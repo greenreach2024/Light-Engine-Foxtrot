@@ -482,6 +482,97 @@ router.get('/farms/:farmId', requireAdmin, async (req, res) => {
 });
 
 /**
+ * DELETE /api/admin/farms/:email
+ * Delete all farms and users for a given email address
+ * This is used for cleanup/testing purposes
+ */
+router.delete('/farms/:email', requireAdmin, async (req, res) => {
+  try {
+    const { email } = req.params;
+    const db = await initDatabase();
+    
+    console.log(`[Admin Delete] Request to delete all farms for email: ${email}`);
+    
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin Delete] Database not available, cannot delete farms');
+      return res.status(503).json({ 
+        status: 'error',
+        message: 'Farm deletion not available in demo mode' 
+      });
+    }
+    
+    // Start transaction
+    await db.query('BEGIN');
+    
+    try {
+      // Find all farms for this email
+      const farmsResult = await dbQuery(`
+        SELECT farm_id, name FROM farms WHERE email = $1
+      `, [email]);
+      
+      const farms = farmsResult.rows || [];
+      const farmIds = farms.map(f => f.farm_id);
+      
+      if (farms.length === 0) {
+        await db.query('ROLLBACK');
+        return res.json({
+          status: 'success',
+          message: 'No farms found for this email',
+          deleted: { farms: 0, users: 0 },
+          farmIds: []
+        });
+      }
+      
+      console.log(`[Admin Delete] Found ${farms.length} farm(s) to delete:`, farmIds);
+      
+      // Delete users associated with these farms
+      const deleteUsersResult = await dbQuery(`
+        DELETE FROM users WHERE farm_id = ANY($1::text[])
+        RETURNING id
+      `, [farmIds]);
+      
+      const usersDeleted = deleteUsersResult.rows?.length || 0;
+      console.log(`[Admin Delete] Deleted ${usersDeleted} user(s)`);
+      
+      // Delete farms
+      const deleteFarmsResult = await dbQuery(`
+        DELETE FROM farms WHERE email = $1
+        RETURNING farm_id
+      `, [email]);
+      
+      const farmsDeleted = deleteFarmsResult.rows?.length || 0;
+      console.log(`[Admin Delete] Deleted ${farmsDeleted} farm(s)`);
+      
+      // Commit transaction
+      await db.query('COMMIT');
+      
+      console.log(`[Admin Delete] ✅ Successfully deleted farms and users for ${email}`);
+      
+      res.json({
+        status: 'success',
+        message: `Successfully deleted ${farmsDeleted} farm(s) and ${usersDeleted} user(s)`,
+        deleted: {
+          farms: farmsDeleted,
+          users: usersDeleted
+        },
+        farmIds: farmIds
+      });
+    } catch (error) {
+      await db.query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('[Admin Delete] Error deleting farms:', error);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Failed to delete farms',
+      details: error.message 
+    });
+  }
+});
+
+/**
  * GET /api/admin/farms/:farmId/recipes
  * Get all grow recipes for a specific farm
  */
