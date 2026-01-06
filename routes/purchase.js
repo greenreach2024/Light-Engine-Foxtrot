@@ -306,7 +306,7 @@ router.post('/create-checkout-session', async (req, res) => {
         }
       },
       checkoutOptions: {
-        redirectUrl: `${req.protocol}://${req.get('host')}/purchase-success.html`,
+        redirectUrl: `${req.protocol}://${req.get('host')}/purchase-success.html?session_id={CHECKOUT_ID}`,
         askForShippingAddress: false
       },
       prePopulatedData: {
