@@ -4249,7 +4249,10 @@ async function completeSetup() {
         // Call setup completion API
         const response = await fetch('/api/setup/complete', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
             body: JSON.stringify({
                 farmId: setupData.farmId,
                 farmName: farmName,
