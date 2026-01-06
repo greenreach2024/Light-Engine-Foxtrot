@@ -267,15 +267,8 @@
     
     <script>
         // Check if already logged in
-        const existingToken = localStorage.getItem('token');
-        const existingPlanType = localStorage.getItem('planType');
-        if (existingToken) {
-            // Redirect to correct dashboard based on plan type
-            if (existingPlanType === 'cloud') {
-                window.location.href = '/farm-admin.html';
-            } else {
-                window.location.href = '/LE-dashboard.html';
-            }
+        if (localStorage.getItem('token')) {
+            window.location.href = '/LE-dashboard.html';
         }
         
         // Check if redirected from successful purchase
@@ -337,9 +330,8 @@
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    // Cloud users: always go to farm-admin.html
-                    // Edge users: go to LE-dashboard.html
-                    if (data.planType === 'cloud') {
+                    // Redirect to farm admin if setup not complete, otherwise to dashboard
+                    if (setupData.success && !setupData.setupCompleted) {
                         window.location.href = '/farm-admin.html';
                     } else {
                         window.location.href = '/LE-dashboard.html';
