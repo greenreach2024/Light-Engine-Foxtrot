@@ -659,7 +659,7 @@ router.get('/verify-session/:session_id', async (req, res) => {
         
         // Generate JWT token for automatic login
         const jwt = require('jsonwebtoken');
-        const jwtSecret = jwtSecretFromDb || process.env.JWT_SECRET || 'fallback-secret';
+        // Use the jwt_secret we just generated for this farm
         const token = jwt.sign(
           { 
             farmId: farm_id, 
@@ -668,7 +668,7 @@ router.get('/verify-session/:session_id', async (req, res) => {
             role: 'admin',
             planType: plan  // Include plan type for wizard detection
           },
-          jwtSecret,
+          jwt_secret,
           { expiresIn: '7d' }
         );
         

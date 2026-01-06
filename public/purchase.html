@@ -1139,6 +1139,8 @@
                     return;
                 }
                 
+                console.log('[Purchase] Creating checkout for:', { plan: currentPlan, email, farmName });
+                
                 // Create checkout session
                 const response = await fetch('/api/farms/create-checkout-session', {
                     method: 'POST',
@@ -1153,18 +1155,26 @@
                     })
                 });
                 
-                const data = await response.json();
+                console.log('[Purchase] Response status:', response.status);
                 
                 if (!response.ok) {
+                    const data = await response.json();
+                    console.error('[Purchase] Server error:', data);
+                    
                     // Handle specific error from Square
                     if (data.error && data.error.includes('Invalid email')) {
                         throw new Error('Invalid email address. Please use a real email like yourname@yourdomain.com');
                     }
-                    throw new Error(data.error || data.message || 'Failed to create checkout session');
+                    
+                    // Show detailed error message
+                    throw new Error(data.error || data.message || `Server returned status ${response.status}`);
                 }
                 
+                const data = await response.json();
+                console.log('[Purchase] Checkout session created:', data);
+                
                 if (!data.url) {
-                    throw new Error('No payment URL received from server');
+                    throw new Error('No payment URL received from server. Please try again or contact support.');
                 }
                 
                 // Store session info for verification
@@ -1175,12 +1185,25 @@
                     email: email
                 }));
                 
+                console.log('[Purchase] Redirecting to Square payment:', data.url);
+                
                 // Redirect to Square payment
                 window.location.href = data.url;
                 
             } catch (error) {
-                console.error('Purchase error:', error);
-                showModalError(error.message || 'Failed to create checkout session. Please try again.');
+                console.error('[Purchase] Error details:', error);
+                
+                // Provide user-friendly error message
+                let errorMsg = error.message || 'Failed to create checkout session. Please try again.';
+                
+                // Add contact info for persistent errors
+                if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+                    errorMsg = 'Unable to connect to server. Please check your internet connection and try again.';
+                } else if (errorMsg.includes('500') || errorMsg.includes('not configured')) {
+                    errorMsg = 'Payment system is temporarily unavailable. Please contact support at support@greenreach.io';
+                }
+                
+                showModalError(errorMsg);
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
             }
