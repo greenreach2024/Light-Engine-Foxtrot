@@ -173,6 +173,17 @@ export function autoEnforceFeatures() {
       return next();
     }
     
+    // Cloud plan users: Check JWT token for authentication (no license file needed)
+    // License files are only for edge devices with hardware control
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      // Cloud plan user with JWT - allow all monitoring/readonly endpoints
+      // Monitoring endpoints: /api/ml/*, /api/sensors (GET), /api/env (GET), etc.
+      // Control endpoints are blocked by requireEdgeForControl middleware
+      console.log('[FeatureFlags] Cloud user with JWT token - allowing monitoring access');
+      return next();
+    }
+    
     // Check if this endpoint requires a feature
     let requiredFeature = null;
     
@@ -188,7 +199,7 @@ export function autoEnforceFeatures() {
       return next();
     }
     
-    // Check feature access
+    // Check feature access (for edge devices with license files)
     try {
       const enabled = await hasFeature(requiredFeature);
       
