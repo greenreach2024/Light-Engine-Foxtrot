@@ -22,12 +22,14 @@ import MixingController from './controllers/mixing-controller.js';
 import IrrigationController from './controllers/irrigation-controller.js';
 import HardwareCapabilities from './hardware-capabilities.js';
 import GrowthStageManager from './growth-stage-manager.js';
+import RecipeEnvironmentalTargets from './recipe-environmental-targets.js';
 
 export default class ControllerOrchestrator {
   constructor(options = {}) {
     const {
       dataDir,
       publicDataDir,
+      dbQuery = null, // Database query function for recipe targeting
       logger = console
     } = options;
     
@@ -63,7 +65,8 @@ export default class ControllerOrchestrator {
     this.logger = baseLogger;
     
     // Core systems
-    this.hardwareCaps = new HardwareCapabilities({ dataDir, publicDataDir });
+    this.hardwareCaps = new HardwareCapabilities({ dataDir, 
+    this.recipeTargets = new RecipeEnvironmentalTargets({ dbQuery, dataDir, logger: this.logger });publicDataDir });
     this.stageManager = new GrowthStageManager({ dataDir });
     
     // Controllers (instantiated only when needed)
@@ -300,11 +303,26 @@ export default class ControllerOrchestrator {
   }
   
   /**
-   * Execute VPD control for a zone
+   * Execute VPD control for a zone using recipe-based environmental targets
    */
   async _executeVpdControl(zoneId, zoneCaps, sensorReading, deviceStates) {
-    // Get VPD band from growth stage
-    const vpdBand = this.stageManager.getVpdBand(zoneId);
+    // Get recipe-based environmental targets for this zone
+    const roomId = zoneCaps.roomId || null;
+    let targets;
+    
+    try {
+      // Try recipe-based targeting first (zone-focused)
+      targets = await this.recipeTargets.getZoneTargets(zoneId, roomId);
+      this.logger.debug(`[orchestrator] Using recipe targets for zone ${zoneId}: VPD ${targets.vpd.target} kPa, Temp ${targets.temperature.target}°C, MaxRH ${targets.maxRh}%`);
+    } catch (error) {
+      // Fallback to growth stage manager if recipe targeting fails
+      this.logger.warn(`[orchestrator] Recipe targeting failed for zone ${zoneId}, falling back to growth stage: ${error.message}`);
+      targets = {
+        vpd: this.stageManager.getVpdBand(zoneId),
+        temperature: this.stageManager.getTemperatureSetpoints(zoneId),
+        maxRh: this.stageManager.getHumiditySetpoints(zoneId).max
+      };
+    }
     
     // Get available devices for this zone
     const devices = {
@@ -312,14 +330,19 @@ export default class ControllerOrchestrator {
       dehumidifiers: zoneCaps.devices.dehumidifiers || []
     };
     
-    // Execute VPD control
+    // Execute VPD control with Max RH override
     const vpdResult = await this.vpdController.control(
       zoneId,
       sensorReading,
-      vpdBand,
+      targets.vpd,
       devices,
-      deviceStates
+      deviceStates,
+      targets.maxRh // Pass Max RH override
     );
+    
+    // Add recipe metadata to result
+    vpdResult.targets = targets;
+    vpdResult.targetSource = targets.level === 'default' ? 'growth-stage-fallback' : 'recipe-based';
     
     // Add capability-specific warnings
     if (devices.fans.length === 0 && devices.dehumidifiers.length === 0) {

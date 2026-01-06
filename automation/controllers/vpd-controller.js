@@ -45,15 +45,16 @@ export default class VpdController {
   }
   
   /**
-   * Execute VPD control for a zone
+   * Execute VPD control for a zone with Max RH override
    * @param {string} zoneId - Zone identifier
    * @param {Object} sensorReading - Current temp/RH reading
-   * @param {Object} vpdBand - Target VPD band from growth stage manager
+   * @param {Object} vpdBand - Target VPD band from recipe
+   * @param {number} maxRh - Maximum humidity override from recipe (independent of VPD)
    * @param {Object} devices - Available devices { fans: [], dehumidifiers: [] }
    * @param {Object} deviceStates - Current device states
    * @returns {Object} Control actions to execute
    */
-  async control(zoneId, sensorReading, vpdBand, devices, deviceStates) {
+  async control(zoneId, sensorReading, vpdBand, devices, deviceStates, maxRh = null) {
     // Calculate psychrometrics
     const psychro = calculatePsychrometrics(
       sensorReading.tempC,
@@ -69,6 +70,7 @@ export default class VpdController {
     }
     
     const currentVpd = psychro.vpd;
+    const currentRh = sensorReading.rhPct;
     const targetMin = vpdBand.min;
     const targetMax = vpdBand.max;
     const targetVpd = vpdBand.target;
@@ -78,11 +80,24 @@ export default class VpdController {
     if (!zoneState) {
       zoneState = {
         lastVpd: currentVpd,
+        lastRh: currentRh,
         lastAction: 'initialize',
         consecutiveOutOfBand: 0,
+        consecutiveRhViolations: 0,
         actionTimestamp: Date.now()
       };
       this.zoneStates.set(zoneId, zoneState);
+    }
+    
+    // Check Max RH override FIRST (safety critical)
+    // If RH exceeds recipe maximum, prioritize dehumidification over VPD
+    let maxRhViolation = false;
+    if (maxRh !== null && currentRh > maxRh) {
+      maxRhViolation = true;
+      zoneState.consecutiveRhViolations++;
+      this.logger.warn(`[vpd-controller] Zone ${zoneId} Max RH violation: ${currentRh}% > ${maxRh}%`);
+    } else {
+      zoneState.consecutiveRhViolations = 0;
     }
     
     // Determine control regime with hysteresis
@@ -98,7 +113,12 @@ export default class VpdController {
       reason = `VPD ${currentVpd} kPa > target max ${targetMax} kPa (dry)`;
       zoneState.consecutiveOutOfBand++;
     } else if (currentVpd >= targetMin && currentVpd <= targetMax) {
-      regime = 'in-band';
+    // MAX RH OVERRIDE: If humidity ceiling violated, force dehumidification
+    if (maxRhViolation) {
+      actions.push(...this._forceMaxRhCompliance(zoneId, currentRh, maxRh, devices, deviceStates));
+      reason = `Max RH override: ${currentRh}% > ${maxRh}% (VPD ${currentVpd} kPa)`;
+      regime = 'max-rh-override';
+    } else   regime = 'in-band';
       reason = `VPD ${currentVpd} kPa within band ${targetMin}-${targetMax} kPa`;
       zoneState.consecutiveOutOfBand = 0;
     } else {
@@ -108,19 +128,88 @@ export default class VpdController {
         : 'in-band';
       reason = `VPD ${currentVpd} kPa in hysteresis zone - maintaining previous action`;
     }
+    Rh = currentRh;
+    zoneState.lastAction = regime;
+    zoneState.actionTimestamp = Date.now();
     
-    // Generate control actions based on regime
+    return {
+      zoneId,
+      psychrometrics: psychro,
+      vpdBand,
+      currentVpd,
+      currentRh,
+      maxRh,
+      maxRhViolation,
+      regime,
+      reason,
+      consecutiveOutOfBand: zoneState.consecutiveOutOfBand,
+      consecutiveRhViolations: zoneState.consecutiveRhViolations,
+      actions
+    };
+  }
+  
+  /**
+   * Force dehumidification to bring RH below recipe maximum
+   * This overrides VPD targeting to prevent crop damage from excess humidity
+   */
+  _forceMaxRhCompliance(zoneId, currentRh, maxRh, devices, deviceStates) {
     const actions = [];
+    const violation = currentRh - maxRh;
+    const urgency = violation > 5 ? 'high' : 'moderate'; // >5% violation is urgent
     
-    if (regime === 'vpd-too-low') {
-      // Increase dehumidification and mixing
-      actions.push(...this._increaseDehumidification(zoneId, devices.dehumidifiers, deviceStates));
-      actions.push(...this._increaseMixing(zoneId, devices.fans, deviceStates));
-    } else if (regime === 'vpd-too-high') {
-      // Reduce mixing and dehumidification
-      actions.push(...this._decreaseMixing(zoneId, devices.fans, deviceStates));
-      actions.push(...this._decreaseDehumidification(zoneId, devices.dehumidifiers, deviceStates));
-    } else if (regime === 'in-band') {
+    this.logger.warn(`[vpd-controller] Forcing Max RH compliance for zone ${zoneId}: ${currentRh}% -> ${maxRh}% (${urgency} urgency)`);
+    
+    // Turn on ALL available dehumidifiers immediately
+    for (const dehu of devices.dehumidifiers) {
+      const state = this._getDeviceState(dehu.deviceId, deviceStates);
+      
+      if (state.state === 'off') {
+        // Ignore min-off-time for safety-critical Max RH violations
+        actions.push({
+          deviceId: dehu.deviceId,
+          deviceType: 'dehumidifier',
+          action: 'turn-on',
+          reason: `Max RH override: ${currentRh}% > ${maxRh}%`,
+          minOnSec: this.dehuMinOnSec,
+          priority: 'high'
+        });
+      } else {
+        // Already on - keep running
+        actions.push({
+          deviceId: dehu.deviceId,
+          deviceType: 'dehumidifier',
+          action: 'maintain-on',
+          reason: `Max RH override: maintaining dehumidification`,
+          priority: 'high'
+        });
+      }
+    }
+    
+    // Increase air mixing to help distribute drier air
+    for (const fan of devices.fans) {
+      const state = this._getDeviceState(fan.deviceId, deviceStates);
+      
+      if (state.state === 'off') {
+        actions.push({
+          deviceId: fan.deviceId,
+          deviceType: 'fan',
+          action: 'turn-on',
+          level: urgency === 'high' ? 80 : 60,
+          reason: `Max RH override: increase air mixing`,
+          minOnSec: this.fanMinOnSec
+        });
+      } else if (state.level != null && state.level < 80) {
+        actions.push({
+          deviceId: fan.deviceId,
+          deviceType: 'fan',
+          action: 'increase-speed',
+          level: Math.min(100, state.level + 30),
+          reason: `Max RH override: boost mixing for humidity control`
+        });
+      }
+    }
+    
+    return actions else if (regime === 'in-band') {
       // Decay toward efficient minimums
       actions.push(...this._decayToMinimum(zoneId, devices, deviceStates));
     }
