@@ -14503,8 +14503,16 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
   }
   
   try {
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
-    const decoded = jwt.verify(token, jwtSecret);
+    // First decode JWT without verification to get farmId
+    const decoded = jwt.decode(token);
+    
+    if (!decoded || !decoded.farmId) {
+      console.error('[/api/farm/profile] JWT decode failed or missing farmId');
+      return res.status(403).json({
+        status: 'error',
+        message: 'Invalid token format'
+      });
+    }
     
     const farmId = decoded.farmId;
     const db = req.app.locals.db;
@@ -14517,13 +14525,14 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
       });
     }
     
-    // Fetch farm data from database
+    // Fetch farm data including jwt_secret for verification
     const farmResult = await db.query(
-      'SELECT farm_id, name, plan_type, email, contact_name, location, timezone, pos_instance_id, store_subdomain FROM farms WHERE farm_id = $1',
+      'SELECT farm_id, name, plan_type, email, contact_name, location, timezone, pos_instance_id, store_subdomain, jwt_secret FROM farms WHERE farm_id = $1',
       [farmId]
     );
     
     if (farmResult.rows.length === 0) {
+      console.error('[/api/farm/profile] Farm not found:', farmId);
       return res.status(404).json({
         status: 'error',
         message: 'Farm not found'
@@ -14531,12 +14540,26 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     }
     
     const farm = farmResult.rows[0];
+    const jwtSecret = farm.jwt_secret || process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    
+    // Now verify the token with the farm's specific secret
+    try {
+      jwt.verify(token, jwtSecret);
+    } catch (verifyError) {
+      console.error('[/api/farm/profile] JWT verification failed:', verifyError.message);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Invalid or expired token'
+      });
+    }
+    
+    console.log('[/api/farm/profile] JWT verified successfully for farm:', farmId);
     
     // Fetch rooms for this farm (may not exist yet for new farms)
     let rooms = [];
     try {
       const roomsResult = await db.query(
-        'SELECT id, name, width, height, depth, room_type FROM rooms WHERE farm_id = $1 ORDER BY id',
+        'SELECT room_id, name, type, capacity, description FROM rooms WHERE farm_id = $1 ORDER BY room_id',
         [farmId]
       );
       rooms = roomsResult.rows;
@@ -14557,12 +14580,11 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
         posInstanceId: farm.pos_instance_id,
         storeSubdomain: farm.store_subdomain,
         rooms: rooms.map(r => ({
-          id: r.id,
+          id: r.room_id,
           name: r.name,
-          width: r.width,
-          height: r.height,
-          depth: r.depth,
-          roomType: r.room_type
+          type: r.type,
+          capacity: r.capacity,
+          description: r.description
         }))
       }
     });
