@@ -136,21 +136,36 @@ router.get('/status', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if farm has rooms configured (indicates setup completed)
-    const roomsResult = await pool.query(
-      'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
-      [farmId]
-    );
-
-    const hasRooms = parseInt(roomsResult.rows[0]?.count) > 0;
-
-    // Get farm details
+    // Get farm details first
     const farmResult = await pool.query(
       'SELECT name, plan_type, timezone, business_hours FROM farms WHERE farm_id = $1',
       [farmId]
     );
 
     const farm = farmResult.rows[0];
+
+    // Check if farm has rooms configured (indicates setup completed)
+    // Handle case where rooms table doesn't exist yet
+    let hasRooms = false;
+    let roomCount = 0;
+    
+    try {
+      const roomsResult = await pool.query(
+        'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
+        [farmId]
+      );
+      roomCount = parseInt(roomsResult.rows[0]?.count) || 0;
+      hasRooms = roomCount > 0;
+    } catch (roomError) {
+      // If rooms table doesn't exist, setup is definitely not complete
+      if (roomError.message?.includes('relation') && roomError.message?.includes('does not exist')) {
+        console.log('[Setup Wizard] rooms table does not exist yet, setup not completed');
+        hasRooms = false;
+        roomCount = 0;
+      } else {
+        throw roomError; // Re-throw if it's not a missing table error
+      }
+    }
 
     res.json({
       success: true,
@@ -162,14 +177,16 @@ router.get('/status', authenticateToken, async (req, res) => {
         timezone: farm?.timezone,
         hasBusinessHours: !!farm?.business_hours
       },
-      roomCount: parseInt(roomsResult.rows[0]?.count)
+      roomCount
     });
 
   } catch (error) {
     console.error('[Setup Wizard] Status check error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to check setup status' 
+    // Return setupCompleted: false on error so wizard shows
+    res.json({ 
+      success: true,
+      setupCompleted: false,
+      error: error.message 
     });
   }
 });
