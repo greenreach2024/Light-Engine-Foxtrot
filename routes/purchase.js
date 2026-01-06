@@ -584,7 +584,7 @@ router.get('/verify-session/:session_id', async (req, res) => {
             email_verified,
             created_at
           ) VALUES ($1, $2, $3, $4, 'admin', true, false, NOW())
-          RETURNING id
+          RETURNING user_id
         `, [
           farm_id,
           email,
@@ -592,7 +592,7 @@ router.get('/verify-session/:session_id', async (req, res) => {
           contact_name
         ]);
         
-        const user_id = userResult.rows[0].id;
+        const user_id = userResult.rows[0].user_id;
         console.log('[Verify] Admin user created with ID:', user_id);
         
         // Commit transaction - core account creation successful
