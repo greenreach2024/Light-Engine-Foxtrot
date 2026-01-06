@@ -268,7 +268,9 @@
     <script>
         // Check if already logged in
         if (localStorage.getItem('token')) {
-            window.location.href = '/LE-dashboard.html';
+            // Cloud users go to farm-admin, edge users go to LE-dashboard
+            const planType = localStorage.getItem('planType') || 'cloud';
+            window.location.href = planType === 'cloud' ? '/farm-admin.html' : '/LE-dashboard.html';
         }
         
         // Check if redirected from successful purchase
@@ -330,11 +332,19 @@
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    // Redirect to farm admin if setup not complete, otherwise to dashboard
-                    if (setupData.success && !setupData.setupCompleted) {
+                    // Cloud users always use farm-admin.html (monitoring dashboard)
+                    // Edge users use LE-dashboard.html (full hardware control)
+                    const planType = data.planType || localStorage.getItem('planType') || 'cloud';
+                    
+                    if (planType === 'cloud') {
                         window.location.href = '/farm-admin.html';
                     } else {
-                        window.location.href = '/LE-dashboard.html';
+                        // Edge device - check if setup complete
+                        if (setupData.success && !setupData.setupCompleted) {
+                            window.location.href = '/farm-admin.html';
+                        } else {
+                            window.location.href = '/LE-dashboard.html';
+                        }
                     }
                 }, 1000);
                 
