@@ -3187,7 +3187,11 @@ async function loadSettings() {
         // Try to load setup configuration from API
         let setupData = {};
         try {
-            const setupResponse = await fetch('/api/setup/status');
+            const headers = {};
+            if (currentSession?.token) {
+                headers['Authorization'] = `Bearer ${currentSession.token}`;
+            }
+            const setupResponse = await fetch('/api/setup/status', { headers });
             if (setupResponse.ok) {
                 setupData = await setupResponse.json();
             }
@@ -4174,9 +4178,13 @@ function showSetupSuccess(message) {
  */
 async function activateDevice(activationCode) {
     try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentSession?.token) {
+            headers['Authorization'] = `Bearer ${currentSession.token}`;
+        }
         const response = await fetch('/api/setup/activate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify({ activationCode })
         });
         
