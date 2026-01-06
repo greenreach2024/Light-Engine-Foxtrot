@@ -1185,6 +1185,9 @@
                     email: email
                 }));
                 
+                // Also store in sessionStorage which is more reliable
+                sessionStorage.setItem('checkoutSessionId', data.sessionId);
+                
                 console.log('[Purchase] Redirecting to Square payment:', data.url);
                 
                 // Redirect to Square payment

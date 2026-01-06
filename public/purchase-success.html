@@ -238,22 +238,33 @@
     </div>
 
     <script>
-        // Get session ID from URL or localStorage
+        // Get session ID from URL, sessionStorage, or localStorage
         const urlParams = new URLSearchParams(window.location.search);
         let sessionId = urlParams.get('session_id');
         
-        // If not in URL, try to get from localStorage (Square doesn't append it to redirect)
+        // If not in URL, try sessionStorage first (more reliable than localStorage)
         if (!sessionId) {
-            const pendingPurchase = localStorage.getItem('pendingPurchase');
-            if (pendingPurchase) {
-                try {
-                    const purchase = JSON.parse(pendingPurchase);
-                    sessionId = purchase.sessionId;
-                    console.log('Retrieved session ID from localStorage:', sessionId);
-                } catch (e) {
-                    console.error('Failed to parse pendingPurchase from localStorage:', e);
+            console.log('[Verify] Checking sessionStorage for checkoutSessionId');
+            sessionId = sessionStorage.getItem('checkoutSessionId');
+            
+            if (sessionId) {
+                console.log('[Verify] Retrieved session from sessionStorage:', sessionId);
+            } else {
+                // Fall back to localStorage
+                console.log('[Verify] Checking localStorage for pendingPurchase');
+                const pendingPurchase = localStorage.getItem('pendingPurchase');
+                if (pendingPurchase) {
+                    try {
+                        const purchase = JSON.parse(pendingPurchase);
+                        sessionId = purchase.sessionId;
+                        console.log('[Verify] Retrieved session ID from localStorage:', sessionId);
+                    } catch (e) {
+                        console.error('[Verify] Failed to parse pendingPurchase from localStorage:', e);
+                    }
                 }
             }
+        } else {
+            console.log('[Verify] Retrieved session from URL:', sessionId);
         }
 
         if (!sessionId) {
