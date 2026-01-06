@@ -3181,65 +3181,51 @@ function filterRecipes() {
     loadRecipes();
 }
 
+// Store current recipe being viewed/edited for export
+let currentRecipeData = null;
+
 /**
- * Export recipes to CSV/Excel format
+ * Export current recipe to CSV/Excel format
  */
-function exportRecipes() {
-    if (!recipesData || recipesData.length === 0) {
-        alert('No recipes to export. Please load recipes first.');
+function exportCurrentRecipe() {
+    if (!currentRecipeData) {
+        alert('No recipe data available. Please try opening the recipe again.');
         return;
     }
     
-    console.log('[Export] Exporting', recipesData.length, 'recipes');
+    const recipe = currentRecipeData;
+    console.log('[Export] Exporting recipe:', recipe.name);
     
-    // Create CSV header
-    let csv = 'Recipe Name,Category,Description,Total Days,Stages,Avg Temp (°C),';
-    csv += 'Day,Stage,Light (hrs),Temp (°C),Humidity (%),CO2 (ppm),EC,pH,Notes\n';
+    // Create CSV header with all detailed columns
+    let csv = 'Day,Stage,Light Hours,Temperature (°C),Humidity (%),CO2 (ppm),EC,pH,';
+    csv += 'Blue %,Green %,Red %,Far-Red %,PPFD,Notes\n';
     
-    // Add each recipe with its schedule details
-    recipesData.forEach(recipe => {
-        const name = escapeCsv(recipe.name);
-        const category = escapeCsv(recipe.category);
-        const description = escapeCsv(recipe.description || '');
-        const totalDays = recipe.total_days || 0;
-        const stages = recipe.schedule_length || 0;
+    const schedule = recipe.data?.schedule || [];
+    
+    if (schedule.length === 0) {
+        alert('This recipe has no schedule data to export.');
+        return;
+    }
+    
+    // Add each day's detailed data
+    schedule.forEach((day, index) => {
+        const dayNum = day.day || (index + 1);
+        const stage = escapeCsv(day.stage_name || day.stage || '');
+        const light = day.light_hours || day.daylength || '';
+        const temp = day.temperature || day.tempC || day.afternoon_temp || '';
+        const humidity = day.humidity || '';
+        const co2 = day.co2_ppm || day.co2 || '';
+        const ec = day.ec || '';
+        const ph = day.ph || '';
+        const blue = day.blue || '';
+        const green = day.green || '';
+        const red = day.red || '';
+        const farRed = day.far_red || '';
+        const ppfd = day.ppfd || '';
+        const notes = escapeCsv(day.notes || '');
         
-        // Calculate average temperature
-        let avgTemp = 'N/A';
-        if (recipe.data && recipe.data.schedule && recipe.data.schedule.length > 0) {
-            const temps = recipe.data.schedule
-                .map(day => {
-                    const temp = day.temperature || day.tempC || day.afternoon_temp;
-                    return typeof temp === 'string' ? parseFloat(temp) : temp;
-                })
-                .filter(t => !isNaN(t) && t > 0);
-            
-            if (temps.length > 0) {
-                const sum = temps.reduce((a, b) => a + b, 0);
-                avgTemp = (sum / temps.length).toFixed(1);
-            }
-        }
-        
-        // If recipe has schedule data, export each day
-        if (recipe.data && recipe.data.schedule && recipe.data.schedule.length > 0) {
-            recipe.data.schedule.forEach((day, index) => {
-                const dayNum = day.day || (index + 1);
-                const stage = escapeCsv(day.stage_name || day.stage || '');
-                const light = day.light_hours || day.daylength || '';
-                const temp = day.temperature || day.tempC || day.afternoon_temp || '';
-                const humidity = day.humidity || '';
-                const co2 = day.co2_ppm || day.co2 || '';
-                const ec = day.ec || '';
-                const ph = day.ph || '';
-                const notes = escapeCsv(day.notes || '');
-                
-                csv += `${name},${category},${description},${totalDays},${stages},${avgTemp},`;
-                csv += `${dayNum},${stage},${light},${temp},${humidity},${co2},${ec},${ph},${notes}\n`;
-            });
-        } else {
-            // No schedule data, just add the recipe summary row
-            csv += `${name},${category},${description},${totalDays},${stages},${avgTemp},,,,,,,,,\n`;
-        }
+        csv += `${dayNum},${stage},${light},${temp},${humidity},${co2},${ec},${ph},`;
+        csv += `${blue},${green},${red},${farRed},${ppfd},${notes}\n`;
     });
     
     // Create blob and download
@@ -3248,7 +3234,8 @@ function exportRecipes() {
     const url = URL.createObjectURL(blob);
     
     const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `GreenReach_Recipes_${timestamp}.csv`;
+    const safeName = recipe.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${safeName}_Recipe_${timestamp}.csv`;
     
     link.setAttribute('href', url);
     link.setAttribute('download', filename);
@@ -3258,7 +3245,6 @@ function exportRecipes() {
     document.body.removeChild(link);
     
     console.log('[Export] Download initiated:', filename);
-    alert(`Exported ${recipesData.length} recipes to ${filename}`);
 }
 
 /**
@@ -3288,6 +3274,9 @@ async function viewRecipe(recipeId) {
         
         const recipe = data.recipe;
         const schedule = recipe.data?.schedule || [];
+        
+        // Store recipe data for export
+        currentRecipeData = recipe;
         
         // Update modal header
         document.getElementById('recipe-view-title').textContent = recipe.name;
@@ -3431,6 +3420,9 @@ async function editRecipe(recipeId) {
         
         const recipe = data.recipe;
         currentRecipeId = recipeId;
+        
+        // Store recipe data for export
+        currentRecipeData = recipe;
         
         document.getElementById('recipe-modal-title').textContent = 'Edit Recipe';
         document.getElementById('recipe-name').value = recipe.name;
