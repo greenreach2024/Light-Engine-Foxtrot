@@ -3196,9 +3196,10 @@ function exportCurrentRecipe() {
     const recipe = currentRecipeData;
     console.log('[Export] Exporting recipe:', recipe.name);
     
-    // Create CSV header with all detailed columns
-    let csv = 'Day,Stage,Light Hours,Temperature (°C),Humidity (%),CO2 (ppm),EC,pH,';
-    csv += 'Blue %,Green %,Red %,Far-Red %,PPFD,Notes\n';
+    // Create CSV header with all v2 format columns
+    let csv = 'Day,Stage,DLI Target (mol/m²/d),Temp Target (°C),Blue (%),Green (%),Red (%),Far-Red (%),';
+    csv += 'PPFD Target (µmol/m²/s),VPD Target (kPa),Max Humidity (%),EC Target (dS/m),pH Target,';
+    csv += 'Light Hours,Veg,Fruit\n';
     
     const schedule = recipe.data?.schedule || [];
     
@@ -3211,21 +3212,23 @@ function exportCurrentRecipe() {
     schedule.forEach((day, index) => {
         const dayNum = day.day || (index + 1);
         const stage = escapeCsv(day.stage_name || day.stage || '');
-        const light = day.light_hours || day.daylength || '';
+        const dli = day.dli_target || '';
         const temp = day.temperature || day.tempC || day.afternoon_temp || '';
-        const humidity = day.humidity || '';
-        const co2 = day.co2_ppm || day.co2 || '';
-        const ec = day.ec || '';
-        const ph = day.ph || '';
         const blue = day.blue || '';
         const green = day.green || '';
         const red = day.red || '';
         const farRed = day.far_red || '';
         const ppfd = day.ppfd || '';
-        const notes = escapeCsv(day.notes || '');
+        const vpd = day.vpd_target || '';
+        const maxHumidity = day.max_humidity || '';
+        const ec = day.ec || '';
+        const ph = day.ph || '';
+        const light = day.light_hours || day.daylength || '';
+        const veg = day.veg !== undefined ? day.veg : '';
+        const fruit = day.fruit !== undefined ? day.fruit : '';
         
-        csv += `${dayNum},${stage},${light},${temp},${humidity},${co2},${ec},${ph},`;
-        csv += `${blue},${green},${red},${farRed},${ppfd},${notes}\n`;
+        csv += `${dayNum},${stage},${dli},${temp},${blue},${green},${red},${farRed},`;
+        csv += `${ppfd},${vpd},${maxHumidity},${ec},${ph},${light},${veg},${fruit}\n`;
     });
     
     // Create blob and download
@@ -3287,14 +3290,19 @@ async function viewRecipe(recipeId) {
         const tbody = document.getElementById('recipe-view-schedule');
         tbody.innerHTML = schedule.map(day => `
             <tr>
-                <td>${day.day}</td>
+                <td>${day.day.toFixed(1) || ''}</td>
                 <td>${day.stage || ''}</td>
+                <td>${day.dli_target ? day.dli_target.toFixed(2) : ''}</td>
                 <td>${day.temperature || day.tempC || day.afternoon_temp || ''}</td>
+                <td>${day.vpd_target ? day.vpd_target.toFixed(2) : ''}</td>
+                <td>${day.max_humidity || ''}</td>
                 <td>${day.blue || 0}</td>
                 <td>${day.green || 0}</td>
                 <td>${day.red || 0}</td>
                 <td>${day.far_red || 0}</td>
-                <td>${day.ppfd || 0}</td>
+                <td>${day.ppfd ? Math.round(day.ppfd) : 0}</td>
+                <td>${day.ec ? day.ec.toFixed(2) : ''}</td>
+                <td>${day.ph || ''}</td>
             </tr>
         `).join('');
         
