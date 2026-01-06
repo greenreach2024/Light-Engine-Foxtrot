@@ -580,30 +580,24 @@ router.get('/farms/:farmId/recipes', requireAdmin, async (req, res) => {
   try {
     const { farmId } = req.params;
     
-    // Query recipes with tray counts
+    // Query all recipes from the recipes table (shared across all farms)
+    // Note: recipes are not farm-specific, they are global grow recipes
     const result = await dbQuery(`
       SELECT 
-        r.recipe_id,
-        r.name,
-        r.crop_type,
-        r.cycle_duration_days,
-        r.description,
-        r.light_schedule,
-        r.nutrient_schedule,
-        r.environmental_params,
-        r.harvest_criteria,
-        r.active,
-        r.created_at,
-        r.updated_at,
-        COUNT(DISTINCT t.tray_id) as active_trays
-      FROM grow_recipes r
-      LEFT JOIN trays t ON r.recipe_id = t.recipe_id AND t.status = 'active'
-      WHERE r.farm_id = $1 AND r.active = true
-      GROUP BY r.recipe_id, r.name, r.crop_type, r.cycle_duration_days, r.description, 
-               r.light_schedule, r.nutrient_schedule, r.environmental_params, r.harvest_criteria, 
-               r.active, r.created_at, r.updated_at
-      ORDER BY r.name
-    `, [farmId]);
+        id as recipe_id,
+        name,
+        category as crop_type,
+        total_days as cycle_duration_days,
+        description,
+        data->'light_schedule' as light_schedule,
+        data as environmental_params,
+        data->'harvest_criteria' as harvest_criteria,
+        created_at,
+        updated_at,
+        0 as active_trays
+      FROM recipes
+      ORDER BY category, name
+    `);
     
     res.json({ success: true, recipes: result.rows });
   } catch (error) {
