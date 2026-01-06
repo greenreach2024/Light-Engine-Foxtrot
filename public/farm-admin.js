@@ -3809,9 +3809,6 @@ function closeActivityHubDownloadQR() {
         container.style.display = 'none';
     }
 }
-    window.open(url, '_blank', 'width=1200,height=800');
-    console.log('[Setup] Opened QR Generator tool with farmId:', farmId, 'farmName:', farmName);
-}
 
 /**
  * Show first-time setup modal
