@@ -14463,6 +14463,27 @@ app.get('/api/user/profile', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/farm/configuration
+ * Get farm configuration (cloud-compatible stub)
+ */
+app.get('/api/farm/configuration', asyncHandler(async (req, res) => {
+  // Return default configuration for cloud users
+  res.json({
+    status: 'success',
+    data: {
+      farmId: req.query.farmId || 'unknown',
+      timezone: 'America/New_York',
+      locale: 'en-US',
+      features: {
+        monitoring: true,
+        automation: false,
+        reporting: true
+      }
+    }
+  });
+}));
+
+/**
  * GET /api/farm/profile
  * Get authenticated farm's profile data
  */
@@ -15133,7 +15154,8 @@ app.get('/api/inventory/current', (req, res) => {
  * GET /api/inventory/forecast
  * Returns harvest forecast bucketed by time period
  */
-app.get('/api/inventory/forecast', (req, res) => {
+// Inventory forecast endpoint with optional days parameter (cloud-compatible)
+app.get('/api/inventory/forecast/:days?', (req, res) => {
   try {
     // Load from groups.json (real crop data)
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
