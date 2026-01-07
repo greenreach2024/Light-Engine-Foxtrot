@@ -6531,10 +6531,16 @@ app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
 
 // Setup completion endpoint
 app.post('/api/setup/complete', asyncHandler(async (req, res) => {
-  const { network, registrationCode, farmId, hardware, certifications, rooms } = req.body;
+  const { 
+    network, registrationCode, farmId, hardware, certifications, rooms,
+    farmName, ownerName, contactEmail, contactPhone, store
+  } = req.body;
   
   try {
     console.log('[setup-wizard] Setup complete request for farm:', farmId);
+    console.log('[setup-wizard] Farm profile:', { farmName, ownerName, contactEmail });
+    console.log('[setup-wizard] Rooms:', rooms);
+    console.log('[setup-wizard] Store config:', store);
     
     // Save setup configuration to database
     const setupConfig = {
@@ -6552,11 +6558,36 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
     const pool = req.app.locals?.db;
     
     if (pool) {
-      // For Cloud plan: mark farm as setup complete in PostgreSQL
+      // For Cloud plan: Update farm with profile information
       await pool.query(
-        'UPDATE farms SET status = $1, updated_at = NOW() WHERE farm_id = $2',
-        ['active', farmId]
+        `UPDATE farms 
+         SET business_name = $1, 
+             contact_name = $2, 
+             contact_email = $3, 
+             contact_phone = $4,
+             status = $5, 
+             updated_at = NOW() 
+         WHERE farm_id = $6`,
+        [farmName || 'Unnamed Farm', ownerName, contactEmail, contactPhone, 'active', farmId]
       );
+      console.log('[setup-wizard] Updated farm profile for:', farmId);
+      
+      // Save store configuration if enabled
+      if (store && store.enabled) {
+        try {
+          await pool.query(
+            `UPDATE farms 
+             SET storefront_name = $1, 
+                 storefront_description = $2, 
+                 storefront_enabled = $3
+             WHERE farm_id = $4`,
+            [store.name || farmName, store.description, true, farmId]
+          );
+          console.log('[setup-wizard] Enabled online store for:', farmId);
+        } catch (storeError) {
+          console.error('[setup-wizard] Error saving store config:', storeError.message);
+        }
+      }
       
       // If rooms were provided, save them using the actual rooms table schema
       if (rooms && rooms.length > 0) {

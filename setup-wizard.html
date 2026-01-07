@@ -443,8 +443,107 @@
                 <div id="reg-status"></div>
             </div>
 
-            <!-- Step 3: Certifications & Differentiators -->
+            <!-- Step 3: Farm Profile -->
             <div class="wizard-step" id="step-3">
+                <h1 class="step-title">Farm Profile</h1>
+                <p class="step-description">
+                    Tell us about your farm
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div class="input-group">
+                        <label class="input-label">Farm Name (Business Name):</label>
+                        <input 
+                            type="text" 
+                            class="touch-input" 
+                            id="farm-name" 
+                            placeholder="e.g., Green Valley Farms"
+                            required
+                        >
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Owner/Contact Name:</label>
+                        <input 
+                            type="text" 
+                            class="touch-input" 
+                            id="owner-name" 
+                            placeholder="e.g., John Smith"
+                            required
+                        >
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Contact Email:</label>
+                        <input 
+                            type="email" 
+                            class="touch-input" 
+                            id="contact-email" 
+                            placeholder="e.g., john@greenfarms.com"
+                            required
+                        >
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Phone Number:</label>
+                        <input 
+                            type="tel" 
+                            class="touch-input" 
+                            id="contact-phone" 
+                            placeholder="e.g., (555) 123-4567"
+                        >
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Grow Rooms -->
+            <div class="wizard-step" id="step-4">
+                <h1 class="step-title">Grow Rooms Configuration</h1>
+                <p class="step-description">
+                    Add the growing spaces in your farm
+                </p>
+                <div id="rooms-container" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem;">
+                    <!-- Rooms will be added dynamically -->
+                </div>
+                <button class="touch-button" onclick="addRoom()" style="width: 100%;">
+                    <span class="button-icon">➕</span>
+                    <span>Add Room</span>
+                </button>
+            </div>
+
+            <!-- Step 5: Online Store -->
+            <div class="wizard-step" id="step-5">
+                <h1 class="step-title">Online Store Setup</h1>
+                <p class="step-description">
+                    Enable direct sales to restaurants and retailers
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 2rem;">
+                    <label class="checkbox-label" style="display: flex; align-items: center; padding: 1.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="enable-store" onchange="toggleStoreForm()" style="width: 32px; height: 32px; margin-right: 1rem;">
+                        <span style="font-size: 1.3rem;">Enable Online Store</span>
+                    </label>
+                    
+                    <div id="store-form" style="display: none; flex-direction: column; gap: 1.5rem;">
+                        <div class="input-group">
+                            <label class="input-label">Storefront Name:</label>
+                            <input 
+                                type="text" 
+                                class="touch-input" 
+                                id="store-name" 
+                                placeholder="e.g., Green Valley Fresh"
+                            >
+                        </div>
+                        <div class="input-group">
+                            <label class="input-label">Store Description:</label>
+                            <textarea 
+                                class="touch-input" 
+                                id="store-description" 
+                                placeholder="Describe your products and farm..."
+                                rows="4"
+                            ></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 6: Certifications & Differentiators -->
+            <div class="wizard-step" id="step-6">
                 <h1 class="step-title">Farm Certifications</h1>
                 <p class="step-description">
                     Help buyers find your farm by sharing certifications and practices.
@@ -519,8 +618,8 @@
                 </div>
             </div>
 
-            <!-- Step 4: Hardware Detection -->
-            <div class="wizard-step" id="step-4">
+            <!-- Step 7: Hardware Detection -->
+            <div class="wizard-step" id="step-7">
                 <h1 class="step-title">Hardware Detection</h1>
                 <p class="step-description">
                     Scanning for connected devices...
@@ -550,8 +649,8 @@
                 </div>
             </div>
 
-            <!-- Step 5: Complete -->
-            <div class="wizard-step" id="step-5">
+            <!-- Step 8: Complete -->
+            <div class="wizard-step" id="step-8">
                 <h1 class="step-title">Setup Complete! 🎉</h1>
                 <p class="step-description">
                     Your GreenReach farm is ready to go!
@@ -638,13 +737,23 @@
         const isCloudAccount = planType === 'cloud';
         
         let currentStep = 0;
-        const totalSteps = 6;
+        const totalSteps = 9; // Updated to include new steps
         let activeInput = null;
         let farmData = {
             network: null,
             registrationCode: isCloudAccount ? 'CLOUD-AUTO-SKIP' : null,
             farmId: farmId,
-            hardware: {}
+            hardware: {},
+            farmName: '',
+            ownerName: '',
+            contactEmail: '',
+            contactPhone: '',
+            rooms: [],
+            store: {
+                enabled: false,
+                name: '',
+                description: ''
+            }
         };
 
         function updateUI() {
@@ -686,6 +795,44 @@
         }
 
         function nextStep() {
+            // Collect data from current step before moving forward
+            if (currentStep === 3) {
+                // Farm Profile step - validate and collect
+                const farmName = document.getElementById('farm-name').value.trim();
+                const ownerName = document.getElementById('owner-name').value.trim();
+                const contactEmail = document.getElementById('contact-email').value.trim();
+                const contactPhone = document.getElementById('contact-phone').value.trim();
+                
+                if (!farmName || !ownerName || !contactEmail) {
+                    alert('Please fill in all required fields (Farm Name, Owner Name, Email)');
+                    return;
+                }
+                
+                farmData.farmName = farmName;
+                farmData.ownerName = ownerName;
+                farmData.contactEmail = contactEmail;
+                farmData.contactPhone = contactPhone;
+            }
+            
+            if (currentStep === 4) {
+                // Grow Rooms step - collect room data
+                collectRooms();
+                if (farmData.rooms.length === 0) {
+                    alert('Please add at least one grow room');
+                    return;
+                }
+            }
+            
+            if (currentStep === 5) {
+                // Online Store step - collect store configuration
+                const enableStore = document.getElementById('enable-store').checked;
+                farmData.store.enabled = enableStore;
+                if (enableStore) {
+                    farmData.store.name = document.getElementById('store-name').value.trim();
+                    farmData.store.description = document.getElementById('store-description').value.trim();
+                }
+            }
+            
             if (currentStep < totalSteps - 1) {
                 currentStep++;
                 // Skip activation code step (step 2) for cloud accounts
@@ -695,7 +842,13 @@
                 updateUI();
 
                 // Trigger step-specific actions
-                if (currentStep === 3) {
+                if (currentStep === 4) {
+                    // Initialize with one default room
+                    if (farmData.rooms.length === 0) {
+                        addRoom();
+                    }
+                }
+                if (currentStep === 7) {
                     detectHardware();
                 }
             }
@@ -835,6 +988,72 @@
                     document.getElementById('next-btn').disabled = true;
                 }
             }
+        }
+
+        // Room management functions
+        let roomCounter = 0;
+        
+        function addRoom() {
+            roomCounter++;
+            const roomId = `room-${roomCounter}`;
+            const roomsContainer = document.getElementById('rooms-container');
+            
+            const roomCard = document.createElement('div');
+            roomCard.id = roomId;
+            roomCard.style.cssText = 'padding: 1.5rem; background: var(--bg-card); border-radius: 8px; border: 2px solid var(--border);';
+            roomCard.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="color: var(--accent-blue);">Room ${roomCounter}</h3>
+                    <button class="touch-button" onclick="removeRoom('${roomId}')" style="padding: 0.5rem 1rem; background: var(--accent-red);">
+                        Remove
+                    </button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div>
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary);">Room Name:</label>
+                        <input type="text" class="touch-input" placeholder="e.g., North Growing Room" data-field="name" required>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary);">Room Type:</label>
+                        <select class="touch-input" data-field="type" style="height: 64px; font-size: 1.2rem;">
+                            <option value="grow">Growing Room</option>
+                            <option value="nursery">Nursery</option>
+                            <option value="harvest">Harvest/Processing</option>
+                            <option value="storage">Storage</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary);">Capacity (optional):</label>
+                        <input type="text" class="touch-input" placeholder="e.g., 1000 plants or 50 sq ft" data-field="capacity">
+                    </div>
+                </div>
+            `;
+            roomsContainer.appendChild(roomCard);
+        }
+        
+        function removeRoom(roomId) {
+            document.getElementById(roomId).remove();
+        }
+        
+        function collectRooms() {
+            farmData.rooms = [];
+            const roomCards = document.querySelectorAll('#rooms-container > div');
+            roomCards.forEach(card => {
+                const room = {
+                    name: card.querySelector('[data-field="name"]').value.trim(),
+                    type: card.querySelector('[data-field="type"]').value,
+                    capacity: card.querySelector('[data-field="capacity"]').value.trim() || null
+                };
+                if (room.name) {
+                    farmData.rooms.push(room);
+                }
+            });
+        }
+        
+        function toggleStoreForm() {
+            const enabled = document.getElementById('enable-store').checked;
+            const storeForm = document.getElementById('store-form');
+            storeForm.style.display = enabled ? 'flex' : 'none';
         }
 
         async function detectHardware() {
