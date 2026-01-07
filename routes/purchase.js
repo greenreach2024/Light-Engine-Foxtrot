@@ -504,14 +504,41 @@ router.get('/verify-session/:session_id', async (req, res) => {
           const existingUser = existingEmailResult.rows[0];
           
           // If user has a valid farm, they're already registered
+          // This happens when user refreshes purchase-success page
           if (existingUser.farm_id && existingUser.status) {
-            console.log('[Verify] Email already exists with valid farm:', email);
-            return res.status(409).json({
-              success: false,
-              error: 'Email already registered',
-              message: 'An account with this email already exists. Please use a different email or contact support.',
-              existing_farm: existingUser.farm_name
-            });
+            console.log('[Verify] Email already exists with valid farm, returning existing account:', email);
+            
+            // Get farm details to return complete info
+            const farmResult = await db.query(
+              'SELECT farm_id, name, email, plan_type, jwt_secret FROM farms WHERE farm_id = $1',
+              [existingUser.farm_id]
+            );
+            
+            if (farmResult.rows.length > 0) {
+              const farm = farmResult.rows[0];
+              
+              // Generate fresh JWT token for automatic login
+              const token = jwt.sign(
+                { 
+                  farmId: farm.farm_id, 
+                  email: farm.email,
+                  role: 'admin',
+                  planType: farm.plan_type
+                },
+                farm.jwt_secret,
+                { expiresIn: '7d' }
+              );
+              
+              return res.json({
+                success: true,
+                message: 'Account already created (verification called multiple times)',
+                farm_id: farm.farm_id,
+                email: farm.email,
+                plan_type: farm.plan_type,
+                token: token,
+                already_created: true
+              });
+            }
           }
           
           // If user exists but has no farm (orphaned from failed signup), delete and continue
@@ -650,7 +677,12 @@ router.get('/verify-session/:session_id', async (req, res) => {
             // Don't fail account creation if email fails
           }
         } else {
-          console.log('[Verify] MOCK EMAIL - Would send to:', email);
+          console.warn('============================================');
+          console.warn('[Verify] WARNING: NO EMAIL SENT');
+          console.warn('[Verify] SENDGRID_API_KEY not configured');
+          console.warn('[Verify] User will not receive credentials');
+          console.warn('============================================');
+          console.log('[Verify] Email would have been sent to:', email);
           console.log('[Verify] Farm ID:', farm_id);
           console.log('[Verify] Temp password:', temp_password);
           console.log('[Verify] Login URL:', login_url);
