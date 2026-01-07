@@ -365,8 +365,22 @@
         const totalSteps = 4;
         let roomCounter = 0;
 
+        // Extract farmId from JWT token
+        function getFarmIdFromToken() {
+            const token = localStorage.getItem('token');
+            if (!token) return null;
+            
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.farmId;
+            } catch (e) {
+                console.error('Failed to decode token:', e);
+                return null;
+            }
+        }
+
         const farmData = {
-            farmId: localStorage.getItem('farmId'),
+            farmId: getFarmIdFromToken() || localStorage.getItem('farmId'),
             farmName: '',
             contactName: '',
             contactEmail: '',
@@ -484,10 +498,6 @@
                         <option value="storage">Storage</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Capacity</label>
-                    <input type="text" class="form-input" data-field="capacity" placeholder="e.g., 1000 plants or 50 sq ft">
-                </div>
             `;
             roomsContainer.appendChild(roomCard);
         }
@@ -504,13 +514,11 @@
             roomCards.forEach(card => {
                 const name = card.querySelector('[data-field="name"]').value.trim();
                 const type = card.querySelector('[data-field="type"]').value;
-                const capacity = card.querySelector('[data-field="capacity"]').value.trim();
 
                 if (name) {
                     farmData.rooms.push({
                         name,
-                        type,
-                        capacity: capacity || null
+                        type
                     });
                 }
             });
@@ -519,6 +527,20 @@
         async function saveSetup() {
             try {
                 const token = localStorage.getItem('token');
+                if (!token) {
+                    alert('Authentication token not found. Please log in again.');
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                if (!farmData.farmId) {
+                    alert('Farm ID not found. Please log in again.');
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                console.log('Saving setup for farm:', farmData.farmId);
+                
                 const response = await fetch('/api/setup/complete', {
                     method: 'POST',
                     headers: {
@@ -536,15 +558,17 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to save setup');
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Server error:', errorData);
+                    throw new Error(errorData.error || `Server returned ${response.status}`);
                 }
 
                 const data = await response.json();
-                console.log('Setup saved:', data);
+                console.log('Setup saved successfully:', data);
 
             } catch (error) {
                 console.error('Setup save error:', error);
-                alert('Failed to save setup. Please try again.');
+                alert(`Failed to save setup: ${error.message}. Please try again.`);
                 throw error;
             }
         }
