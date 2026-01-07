@@ -3615,7 +3615,7 @@ async function checkFirstTimeSetup() {
     try {
         // Cloud users use standalone wizard (redirected from login.html)
         // Only check for embedded wizard on edge devices
-        const planType = localStorage.getItem('planType') || 'cloud';
+        const planType = (localStorage.getItem('planType') || 'cloud').toLowerCase();
         
         if (planType === 'cloud') {
             console.log('[setup-wizard] Cloud user - skipping embedded wizard check (uses standalone wizard)');
