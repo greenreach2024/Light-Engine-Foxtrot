@@ -6561,9 +6561,9 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
       // For Cloud plan: Update farm with profile information
       await pool.query(
         `UPDATE farms 
-         SET business_name = $1, 
+         SET name = $1, 
              contact_name = $2, 
-             contact_email = $3, 
+             email = $3, 
              contact_phone = $4,
              status = $5, 
              updated_at = NOW() 
@@ -6572,22 +6572,22 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
       );
       console.log('[setup-wizard] Updated farm profile for:', farmId);
       
-      // Save store configuration if enabled
-      if (store && store.enabled) {
-        try {
-          await pool.query(
-            `UPDATE farms 
-             SET storefront_name = $1, 
-                 storefront_description = $2, 
-                 storefront_enabled = $3
-             WHERE farm_id = $4`,
-            [store.name || farmName, store.description, true, farmId]
-          );
-          console.log('[setup-wizard] Enabled online store for:', farmId);
-        } catch (storeError) {
-          console.error('[setup-wizard] Error saving store config:', storeError.message);
-        }
-      }
+      // TODO: Save store configuration when storefront columns are added to schema
+      // if (store && store.enabled) {
+      //   try {
+      //     await pool.query(
+      //       `UPDATE farms 
+      //        SET storefront_name = $1, 
+      //            storefront_description = $2, 
+      //            storefront_enabled = $3
+      //        WHERE farm_id = $4`,
+      //       [store.name || farmName, store.description, true, farmId]
+      //     );
+      //     console.log('[setup-wizard] Enabled online store for:', farmId);
+      //   } catch (storeError) {
+      //     console.error('[setup-wizard] Error saving store config:', storeError.message);
+      //   }
+      // }
       
       // If rooms were provided, save them using the actual rooms table schema
       if (rooms && rooms.length > 0) {
