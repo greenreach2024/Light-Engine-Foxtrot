@@ -3613,6 +3613,15 @@ let setupData = {
  */
 async function checkFirstTimeSetup() {
     try {
+        // Cloud users use standalone wizard (redirected from login.html)
+        // Only check for embedded wizard on edge devices
+        const planType = localStorage.getItem('planType') || 'cloud';
+        
+        if (planType === 'cloud') {
+            console.log('[setup-wizard] Cloud user - skipping embedded wizard check (uses standalone wizard)');
+            return;
+        }
+        
         const token = localStorage.getItem('token');
         if (!token) {
             console.log('[setup-wizard] No token found, skipping setup check');

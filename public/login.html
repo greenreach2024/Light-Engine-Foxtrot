@@ -337,9 +337,14 @@
                     const planType = data.planType || localStorage.getItem('planType') || 'cloud';
                     
                     if (planType === 'cloud') {
-                        window.location.href = '/farm-admin.html';
+                        // Cloud users: redirect to standalone wizard if setup incomplete
+                        if (setupData.success && !setupData.setupCompleted) {
+                            window.location.href = '/setup-wizard.html';
+                        } else {
+                            window.location.href = '/farm-admin.html';
+                        }
                     } else {
-                        // Edge device - check if setup complete
+                        // Edge device - use farm-admin for setup with embedded wizard
                         if (setupData.success && !setupData.setupCompleted) {
                             window.location.href = '/farm-admin.html';
                         } else {
