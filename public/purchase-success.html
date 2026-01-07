@@ -300,9 +300,9 @@
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('success').classList.remove('hidden');
                         
-                        // Redirect to farm admin for new users after 3 seconds
+                        // Redirect to setup wizard for new users after 3 seconds
                         setTimeout(() => {
-                            window.location.href = '/farm-admin.html';
+                            window.location.href = '/setup-wizard.html';
                         }, 3000);
                     }, 1500); // Small delay for better UX
                 } else {
