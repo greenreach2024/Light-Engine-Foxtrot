@@ -2135,8 +2135,117 @@
             <div id="section-users" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Users & Access Control</h1>
+                    <p class="header-subtitle">Manage user accounts and access permissions</p>
                 </div>
-                <p>User management coming soon...</p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 24px; margin-top: 24px;">
+                    <!-- Current User Profile -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">Your Account</h2>
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Email</label>
+                                <input type="email" id="current-user-email" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Role</label>
+                                <input type="text" id="current-user-role" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); text-transform: capitalize;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Change Password -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">Change Password</h2>
+                        <form id="change-password-form" style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Current Password</label>
+                                <input type="password" id="current-password" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">New Password</label>
+                                <input type="password" id="new-password" required minlength="8" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
+                                <small style="color: var(--text-muted);">Minimum 8 characters</small>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Confirm New Password</label>
+                                <input type="password" id="confirm-password" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
+                            </div>
+                            <button type="submit" style="padding: 12px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                Update Password
+                            </button>
+                            <div id="password-change-message" style="display: none; padding: 12px; border-radius: 6px; font-size: 14px;"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- User Management (Admin Only) -->
+                <div id="user-management-section" style="margin-top: 32px;">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2>Team Members</h2>
+                            <button id="add-user-btn" style="padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                Add User
+                            </button>
+                        </div>
+
+                        <!-- Add User Form (Hidden by default) -->
+                        <div id="add-user-form-container" style="display: none; background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                            <h3 style="margin-bottom: 15px; font-size: 16px;">Add New User</h3>
+                            <form id="add-user-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Email</label>
+                                    <input type="email" id="new-user-email" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Full Name</label>
+                                    <input type="text" id="new-user-name" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Role</label>
+                                    <select id="new-user-role" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
+                                        <option value="viewer">Viewer (Read-only)</option>
+                                        <option value="operator">Operator (Monitor & Report)</option>
+                                        <option value="admin">Admin (Full Access)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Temporary Password</label>
+                                    <input type="password" id="new-user-password" required minlength="8" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;">
+                                </div>
+                                <div style="grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end;">
+                                    <button type="button" id="cancel-add-user-btn" style="padding: 10px 20px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; font-weight: 600; cursor: pointer;">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" style="padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                                        Create User
+                                    </button>
+                                </div>
+                                <div id="add-user-message" style="grid-column: 1 / -1; display: none; padding: 12px; border-radius: 6px; font-size: 14px;"></div>
+                            </form>
+                        </div>
+
+                        <!-- Users Table -->
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--border);">
+                                        <th style="text-align: left; padding: 12px; font-weight: 600; color: var(--text-secondary);">Name</th>
+                                        <th style="text-align: left; padding: 12px; font-weight: 600; color: var(--text-secondary);">Email</th>
+                                        <th style="text-align: left; padding: 12px; font-weight: 600; color: var(--text-secondary);">Role</th>
+                                        <th style="text-align: left; padding: 12px; font-weight: 600; color: var(--text-secondary);">Status</th>
+                                        <th style="text-align: right; padding: 12px; font-weight: 600; color: var(--text-secondary);">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body">
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">Loading users...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="section-settings" class="content-section" style="display: none;">

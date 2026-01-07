@@ -5497,3 +5497,237 @@ function showNotification(message, type = 'info') {
     // Simple notification - can be enhanced with a proper notification system
     alert(message);
 }
+// ========================================
+// USER MANAGEMENT FUNCTIONS
+// ========================================
+
+/**
+ * Initialize user management section
+ */
+async function initUserManagement() {
+    // Load current user info
+    if (currentSession && currentSession.email) {
+        document.getElementById('current-user-email').value = currentSession.email || '';
+        document.getElementById('current-user-role').value = currentSession.role || 'admin';
+    }
+
+    // Setup event listeners
+    document.getElementById('change-password-form').addEventListener('submit', handlePasswordChange);
+    document.getElementById('add-user-btn').addEventListener('click', () => {
+        document.getElementById('add-user-form-container').style.display = 'block';
+    });
+    document.getElementById('cancel-add-user-btn').addEventListener('click', () => {
+        document.getElementById('add-user-form-container').style.display = 'none';
+        document.getElementById('add-user-form').reset();
+    });
+    document.getElementById('add-user-form').addEventListener('submit', handleAddUser);
+
+    // Load users list
+    await loadUsers();
+}
+
+/**
+ * Handle password change
+ */
+async function handlePasswordChange(event) {
+    event.preventDefault();
+    
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    const messageEl = document.getElementById('password-change-message');
+
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+        messageEl.textContent = 'New passwords do not match';
+        messageEl.style.display = 'block';
+        messageEl.style.background = '#fee';
+        messageEl.style.color = '#c33';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/user/change-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({
+                currentPassword,
+                newPassword
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            messageEl.textContent = 'Password updated successfully';
+            messageEl.style.display = 'block';
+            messageEl.style.background = '#efe';
+            messageEl.style.color = '#3a3';
+            document.getElementById('change-password-form').reset();
+        } else {
+            throw new Error(data.message || 'Failed to update password');
+        }
+    } catch (error) {
+        messageEl.textContent = error.message;
+        messageEl.style.display = 'block';
+        messageEl.style.background = '#fee';
+        messageEl.style.color = '#c33';
+    }
+}
+
+/**
+ * Handle add new user
+ */
+async function handleAddUser(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('new-user-email').value;
+    const name = document.getElementById('new-user-name').value;
+    const role = document.getElementById('new-user-role').value;
+    const password = document.getElementById('new-user-password').value;
+    const messageEl = document.getElementById('add-user-message');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/users/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({
+                email,
+                name,
+                role,
+                password,
+                farmId: currentSession.farmId
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            messageEl.textContent = 'User created successfully. They can now log in with the provided credentials.';
+            messageEl.style.display = 'block';
+            messageEl.style.background = '#efe';
+            messageEl.style.color = '#3a3';
+            document.getElementById('add-user-form').reset();
+            
+            // Reload users list
+            setTimeout(() => {
+                document.getElementById('add-user-form-container').style.display = 'none';
+                loadUsers();
+            }, 2000);
+        } else {
+            throw new Error(data.message || 'Failed to create user');
+        }
+    } catch (error) {
+        messageEl.textContent = error.message;
+        messageEl.style.display = 'block';
+        messageEl.style.background = '#fee';
+        messageEl.style.color = '#c33';
+    }
+}
+
+/**
+ * Load users list
+ */
+async function loadUsers() {
+    const tbody = document.getElementById('users-table-body');
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/users/list?farmId=${currentSession.farmId}`, {
+            headers: {
+                'Authorization': `Bearer ${currentSession.token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load users');
+        }
+
+        const data = await response.json();
+        const users = data.users || [];
+
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #999;">No users found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = users.map(user => `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 12px;">${user.name || '-'}</td>
+                <td style="padding: 12px;">${user.email}</td>
+                <td style="padding: 12px;">
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; background: #f5f5f5; text-transform: capitalize;">
+                        ${user.role}
+                    </span>
+                </td>
+                <td style="padding: 12px;">
+                    <span style="color: #4caf50;">Active</span>
+                </td>
+                <td style="padding: 12px; text-align: right;">
+                    ${user.email !== currentSession.email ? `
+                        <button onclick="deleteUser('${user.email}')" style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                            Remove
+                        </button>
+                    ` : '<span style="color: #999; font-size: 12px;">You</span>'}
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading users:', error);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #f44336;">Failed to load users</td></tr>';
+    }
+}
+
+/**
+ * Delete user
+ */
+async function deleteUser(email) {
+    if (!confirm(`Are you sure you want to remove ${email} from this farm?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/users/delete`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({
+                email,
+                farmId: currentSession.farmId
+            })
+        });
+
+        if (response.ok) {
+            showNotification('User removed successfully', 'success');
+            loadUsers();
+        } else {
+            const data = await response.json();
+            throw new Error(data.message || 'Failed to remove user');
+        }
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+// Initialize user management when the section is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if we're on the users section
+    const urlHash = window.location.hash;
+    if (urlHash === '#users') {
+        initUserManagement();
+    }
+    
+    // Also initialize when navigating to users section
+    document.addEventListener('click', (e) => {
+        if (e.target.matches('[data-section="users"]') || e.target.closest('[data-section="users"]')) {
+            setTimeout(() => initUserManagement(), 100);
+        }
+    });
+});

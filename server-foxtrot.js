@@ -14463,6 +14463,280 @@ app.get('/api/user/profile', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/user/change-password
+ * Change user password
+ */
+app.post('/api/user/change-password', asyncHandler(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required'
+    });
+  }
+  
+  const token = authHeader.substring(7);
+  const { currentPassword, newPassword } = req.body;
+  
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Current password and new password are required'
+    });
+  }
+  
+  try {
+    // Decode token to get farmId and email
+    const decoded = jwt.decode(token);
+    if (!decoded || !decoded.farmId || !decoded.email) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid token'
+      });
+    }
+    
+    // Get farm's JWT secret from database
+    const farmResult = await req.app.locals.db.query(
+      'SELECT jwt_secret FROM farms WHERE farm_id = $1',
+      [decoded.farmId]
+    );
+    
+    if (farmResult.rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Farm not found'
+      });
+    }
+    
+    const jwtSecret = farmResult.rows[0].jwt_secret;
+    
+    // Verify token with farm's secret
+    jwt.verify(token, jwtSecret);
+    
+    // Get user's current password hash
+    const userResult = await req.app.locals.db.query(
+      'SELECT password_hash FROM farm_users WHERE farm_id = $1 AND email = $2',
+      [decoded.farmId, decoded.email]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+    
+    // Verify current password
+    const validPassword = await bcrypt.compare(currentPassword, userResult.rows[0].password_hash);
+    if (!validPassword) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Current password is incorrect'
+      });
+    }
+    
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    
+    // Update password
+    await req.app.locals.db.query(
+      'UPDATE farm_users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE farm_id = $2 AND email = $3',
+      [newPasswordHash, decoded.farmId, decoded.email]
+    );
+    
+    res.json({
+      status: 'success',
+      message: 'Password updated successfully'
+    });
+    
+  } catch (error) {
+    console.error('[/api/user/change-password] Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to update password'
+    });
+  }
+}));
+
+/**
+ * POST /api/users/create
+ * Create a new user for the farm
+ */
+app.post('/api/users/create', asyncHandler(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required'
+    });
+  }
+  
+  const token = authHeader.substring(7);
+  const { email, name, role, password, farmId } = req.body;
+  
+  if (!email || !name || !role || !password || !farmId) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Email, name, role, password, and farmId are required'
+    });
+  }
+  
+  try {
+    // Verify requester is an admin
+    const decoded = jwt.decode(token);
+    if (!decoded || decoded.role !== 'admin') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Admin access required'
+      });
+    }
+    
+    // Check if user already exists
+    const existingUser = await req.app.locals.db.query(
+      'SELECT id FROM farm_users WHERE farm_id = $1 AND email = $2',
+      [farmId, email]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'User with this email already exists'
+      });
+    }
+    
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Create user
+    await req.app.locals.db.query(
+      `INSERT INTO farm_users (farm_id, email, name, role, password_hash, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [farmId, email, name, role, passwordHash]
+    );
+    
+    res.json({
+      status: 'success',
+      message: 'User created successfully',
+      user: { email, name, role }
+    });
+    
+  } catch (error) {
+    console.error('[/api/users/create] Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to create user'
+    });
+  }
+}));
+
+/**
+ * GET /api/users/list
+ * List all users for a farm
+ */
+app.get('/api/users/list', asyncHandler(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required'
+    });
+  }
+  
+  const { farmId } = req.query;
+  
+  if (!farmId) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'farmId is required'
+    });
+  }
+  
+  try {
+    const result = await req.app.locals.db.query(
+      'SELECT email, name, role, created_at FROM farm_users WHERE farm_id = $1 ORDER BY created_at DESC',
+      [farmId]
+    );
+    
+    res.json({
+      status: 'success',
+      users: result.rows
+    });
+    
+  } catch (error) {
+    console.error('[/api/users/list] Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to load users'
+    });
+  }
+}));
+
+/**
+ * DELETE /api/users/delete
+ * Delete a user from the farm
+ */
+app.delete('/api/users/delete', asyncHandler(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required'
+    });
+  }
+  
+  const token = authHeader.substring(7);
+  const { email, farmId } = req.body;
+  
+  if (!email || !farmId) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Email and farmId are required'
+    });
+  }
+  
+  try {
+    // Verify requester is an admin
+    const decoded = jwt.decode(token);
+    if (!decoded || decoded.role !== 'admin') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Admin access required'
+      });
+    }
+    
+    // Don't allow deleting yourself
+    if (decoded.email === email) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Cannot delete your own account'
+      });
+    }
+    
+    // Delete user
+    await req.app.locals.db.query(
+      'DELETE FROM farm_users WHERE farm_id = $1 AND email = $2',
+      [farmId, email]
+    );
+    
+    res.json({
+      status: 'success',
+      message: 'User removed successfully'
+    });
+    
+  } catch (error) {
+    console.error('[/api/users/delete] Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to remove user'
+    });
+  }
+}));
+
+/**
  * GET /api/farm/configuration
  * Get farm configuration (cloud-compatible stub)
  */
