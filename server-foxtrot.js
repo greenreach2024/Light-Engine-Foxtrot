@@ -6662,7 +6662,17 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
     res.json({ success: true, config: setupConfig });
   } catch (error) {
     console.error('[setup-wizard] Setup completion error:', error);
-    res.status(500).json({ error: 'Setup completion failed' });
+    console.error('[setup-wizard] Error stack:', error.stack);
+    console.error('[setup-wizard] Error details:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail
+    });
+    res.status(500).json({ 
+      error: 'Setup completion failed',
+      message: error.message,
+      detail: error.detail || error.code
+    });
   }
 }));
 

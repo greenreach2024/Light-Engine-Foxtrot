@@ -560,7 +560,8 @@
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     console.error('Server error:', errorData);
-                    throw new Error(errorData.error || `Server returned ${response.status}`);
+                    const errorMsg = errorData.detail || errorData.message || errorData.error || `Server returned ${response.status}`;
+                    throw new Error(errorMsg);
                 }
 
                 const data = await response.json();
