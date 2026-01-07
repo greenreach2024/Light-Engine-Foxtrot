@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>GreenReach Setup Wizard</title>
+    <title>Setup Wizard - Light Engine</title>
     <style>
         * {
             margin: 0;
@@ -361,7 +361,7 @@
 <body>
     <div class="wizard-container">
         <div class="wizard-header">
-            <div class="wizard-title">🌱 GreenReach Setup</div>
+            <div class="wizard-title">Light Engine Setup</div>
             <div class="step-indicator">
                 <div class="step-dot active" id="dot-0"></div>
                 <div class="step-dot" id="dot-1"></div>
@@ -375,7 +375,7 @@
         <div class="wizard-content">
             <!-- Step 0: Welcome -->
             <div class="wizard-step active" id="step-0">
-                <h1 class="step-title">Welcome to GreenReach! 👋</h1>
+                <h1 class="step-title">Welcome to Light Engine</h1>
                 <p class="step-description">
                     Let's get your vertical farm set up in just a few steps.
                     This wizard will guide you through network configuration,
@@ -383,7 +383,6 @@
                 </p>
                 <div class="button-grid">
                     <button class="touch-button primary" onclick="nextStep()">
-                        <span class="button-icon">🚀</span>
                         <span>Start Setup</span>
                     </button>
                 </div>
@@ -397,11 +396,9 @@
                 </p>
                 <div class="button-grid">
                     <button class="touch-button success" onclick="selectNetwork('ethernet')">
-                        <span class="button-icon">🔌</span>
                         <span>Ethernet (Recommended)</span>
                     </button>
                     <button class="touch-button" onclick="selectNetwork('wifi')">
-                        <span class="button-icon">📡</span>
                         <span>WiFi</span>
                     </button>
                 </div>
@@ -502,7 +499,6 @@
                     <!-- Rooms will be added dynamically -->
                 </div>
                 <button class="touch-button" onclick="addRoom()" style="width: 100%;">
-                    <span class="button-icon">➕</span>
                     <span>Add Room</span>
                 </button>
             </div>
@@ -573,7 +569,7 @@
                     <h3 style="color: var(--accent-green); margin-bottom: 1rem;">Growing Practices</h3>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="practice-pesticide-free" name="practices" value="Pesticide Free" style="width: 32px; height: 32px; margin-right: 1rem;">
-                        <span style="font-size: 1.2rem;">✅ Pesticide Free</span>
+                        <span style="font-size: 1.2rem;">Pesticide Free</span>
                     </label>
                     <label class="checkbox-label" style="display: flex; align-items: center; padding: 1rem; margin-bottom: 0.5rem; background: var(--bg-card); border-radius: 8px; cursor: pointer;">
                         <input type="checkbox" id="practice-non-gmo" name="practices" value="Non-GMO" style="width: 32px; height: 32px; margin-right: 1rem;">

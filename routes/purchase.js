@@ -210,7 +210,7 @@ router.post('/purchase', async (req, res) => {
       farm_id,
       email,
       login_url: `${req.protocol}://${req.get('host')}/LE-login.html`,
-      setup_url: `${req.protocol}://${req.get('host')}/LE-setup-wizard.html`,
+      setup_url: `${req.protocol}://${req.get('host')}/setup-wizard.html`,
       // Don't send API keys in response - only via email
       instructions: 'Check your email for login credentials and setup instructions'
     });
