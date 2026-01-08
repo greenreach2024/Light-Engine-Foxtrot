@@ -6592,36 +6592,36 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
       // If rooms were provided, save them using the actual rooms table schema
       if (rooms && rooms.length > 0) {
         try {
-          // Insert rooms using correct schema (name, type, capacity, description)
+          // Insert rooms using minimal schema (farm_id, name, type)
           for (const room of rooms) {
             await pool.query(
-              `INSERT INTO rooms (farm_id, name, type, capacity, description, created_at, updated_at) 
-               VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+              `INSERT INTO rooms (farm_id, name, type) 
+               VALUES ($1, $2, $3)`,
               [
                 farmId, 
                 room.name || 'Growing Room', 
-                room.type || room.roomType || 'grow',
-                room.capacity || null,
-                room.description || null
+                room.type || room.roomType || 'grow'
               ]
             );
           }
           console.log('[setup-wizard] Saved', rooms.length, 'rooms for farm:', farmId);
         } catch (roomError) {
-          console.error('[setup-wizard] Error saving rooms:', roomError.message);
+          console.error('[setup-wizard] Error saving rooms:', roomError.message, roomError.code);
+          console.error('[setup-wizard] Room error detail:', roomError.detail);
           // Continue anyway - farm is marked as active
         }
       } else {
         // No rooms provided - create a default room so status check passes
         try {
           await pool.query(
-            `INSERT INTO rooms (farm_id, name, type, capacity, description, created_at, updated_at) 
-             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-            [farmId, 'Main Growing Room', 'grow', null, 'Default room created during setup']
+            `INSERT INTO rooms (farm_id, name, type) 
+             VALUES ($1, $2, $3)`,
+            [farmId, 'Main Growing Room', 'grow']
           );
           console.log('[setup-wizard] Created default room for farm:', farmId);
         } catch (roomError) {
-          console.error('[setup-wizard] Error creating default room:', roomError.message);
+          console.error('[setup-wizard] Error creating default room:', roomError.message, roomError.code);
+          console.error('[setup-wizard] Room error detail:', roomError.detail);
         }
       }
     } else if (db) {
