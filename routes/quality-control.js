@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { db } from '../server/utils/db-pool.js';
+import { query as db } from '../lib/database.js';
 
 const router = express.Router();
 
@@ -158,7 +158,7 @@ router.post('/checkpoints/record', async (req, res) => {
             farm_id || null
         ];
 
-        const checkpointResult = await db.query(insertQuery, values);
+        const checkpointResult = await db(insertQuery, values);
         const checkpoint = checkpointResult.rows[0];
 
         // Parse JSON fields
@@ -211,7 +211,7 @@ router.get('/checkpoints/batch/:batch_id', async (req, res) => {
             ORDER BY created_at DESC
         `;
 
-        const result = await db.query(query, [batch_id]);
+        const result = await db(query, [batch_id]);
         const checkpoints = result.rows.map(row => ({
             ...row,
             metrics: row.metrics ? JSON.parse(row.metrics) : null
@@ -323,7 +323,7 @@ router.get('/checkpoints/list', async (req, res) => {
         query += ` ORDER BY created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
         values.push(parseInt(limit), parseInt(offset));
 
-        const result_data = await db.query(query, values);
+        const result_data = await db(query, values);
 
         res.json({
             success: true,
@@ -358,7 +358,7 @@ router.get('/photos/:checkpoint_id', async (req, res) => {
             WHERE id = $1
         `;
 
-        const result = await db.query(query, [checkpoint_id]);
+        const result = await db(query, [checkpoint_id]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({
@@ -418,7 +418,7 @@ router.post('/photos/upload', async (req, res) => {
             RETURNING id, batch_id, checkpoint_type
         `;
 
-        const result = await db.query(query, [photo_data, checkpoint_id]);
+        const result = await db(query, [photo_data, checkpoint_id]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({
@@ -473,7 +473,7 @@ router.get('/stats', async (req, res) => {
             ORDER BY checkpoint_type, result
         `;
 
-        const result = await db.query(query, values);
+        const result = await db(query, values);
 
         // Calculate totals
         const stats = {
@@ -570,8 +570,8 @@ router.get('/dashboard', async (req, res) => {
         `;
 
         const [recentResult, failedResult] = await Promise.all([
-            db.query(recentQuery, values),
-            db.query(failedQuery, values)
+            db(recentQuery, values),
+            db(failedQuery, values)
         ]);
 
         res.json({

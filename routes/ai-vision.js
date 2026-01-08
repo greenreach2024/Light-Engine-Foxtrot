@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { db } from '../server/utils/db-pool.js';
+import { query as db } from '../lib/database.js';
 
 const router = express.Router();
 
@@ -244,7 +244,7 @@ router.post('/checklist-photo', async (req, res) => {
             farm_id || null
         ];
 
-        const checkpointResult = await db.query(insertQuery, values);
+        const checkpointResult = await db(insertQuery, values);
         const checkpoint = checkpointResult.rows[0];
 
         res.json({
