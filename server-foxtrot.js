@@ -161,6 +161,8 @@ import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
 import emailRouter from './server/routes/email-routes.js';
 import adminFarmManagementRouter from './routes/admin-farm-management.js';
+import qualityControlRouter from './routes/quality-control.js';
+import aiVisionRouter from './routes/ai-vision.js';
 import { router as migrationRouter, initDb as initMigrationDb } from './routes/migration.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import edgeRouter from './routes/edge.js';
@@ -10028,6 +10030,23 @@ app.use('/api/wholesale/orders', wholesaleOrdersRouter);
  * - POST /api/activity-hub/orders/:orderId/pack: Mark as packed (generate label)
  */
 app.use('/api/activity-hub/orders', activityHubOrdersRouter);
+
+/**
+ * Quality Control & AI Vision Routes
+ * Quality assurance checkpoints with photo documentation and AI analysis
+ * - POST /api/quality/checkpoints/record: Create QA checkpoint
+ * - GET /api/quality/checkpoints/batch/:batch_id: Get batch QA history
+ * - GET /api/quality/standards/:checkpoint_type: Get quality criteria
+ * - GET /api/quality/checkpoints/list: List checkpoints with filters
+ * - GET /api/quality/photos/:checkpoint_id: Get checkpoint photo
+ * - POST /api/quality/photos/upload: Upload photo to checkpoint
+ * - GET /api/quality/stats: QA statistics
+ * - GET /api/quality/dashboard: Dashboard overview
+ * - POST /api/qa/analyze-photo: AI plant health analysis
+ * - POST /api/qa/checklist-photo: Complete workflow with AI + checkpoint
+ */
+app.use('/api/quality', qualityControlRouter);
+app.use('/api/qa', aiVisionRouter);
 
 /**
  * Farm Performance Analytics (GreenReach Central)
