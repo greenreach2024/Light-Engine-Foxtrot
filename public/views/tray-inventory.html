@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Farm Activity Hub | Light Engine</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest-activity-hub.json">
+  
+  <!-- iOS PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Activity Hub">
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+  
+  <!-- Theme -->
+  <meta name="theme-color" content="#60a5fa">
+  
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
   <style>
     * {
@@ -4853,5 +4866,147 @@
     };
 
   </script>
+
+  <!-- iOS Install Banner -->
+  <div id="iosInstallBanner" style="display: none;">
+    <div style="flex: 1;">
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px; color: #1e293b;">
+        📱 Install Activity Hub
+      </div>
+      <div style="font-size: 13px; color: #64748b;">
+        Add to Home Screen for the best experience
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <button onclick="dismissInstallBanner()" style="padding: 8px 16px; background: transparent; color: #64748b; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">
+        Not Now
+      </button>
+      <button onclick="showInstallInstructions()" style="padding: 8px 16px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);">
+        Install Now
+      </button>
+    </div>
+  </div>
+
+  <!-- Install Instructions Modal -->
+  <div id="installModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this) closeInstallModal()">
+    <div class="modal-content" style="max-width: 480px; background: white; border-radius: 12px; padding: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #1e293b;">
+          Install Activity Hub on iPad
+        </h2>
+        <button onclick="closeInstallModal()" style="background: transparent; border: none; font-size: 24px; color: #64748b; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+          ×
+        </button>
+      </div>
+      
+      <div style="color: #475569; line-height: 1.6;">
+        <ol style="padding-left: 20px; margin: 16px 0;">
+          <li style="margin-bottom: 16px;">
+            <strong>Tap the Share button</strong> <span style="font-size: 18px;">⎋</span> in Safari's toolbar
+            <div style="margin-top: 8px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-size: 13px; color: #64748b;">
+              It's at the top-right corner (or bottom on iPhone)
+            </div>
+          </li>
+          <li style="margin-bottom: 16px;">
+            <strong>Scroll down and tap "Add to Home Screen"</strong> 📱
+            <div style="margin-top: 8px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-size: 13px; color: #64748b;">
+              You may need to scroll down in the share menu
+            </div>
+          </li>
+          <li style="margin-bottom: 16px;">
+            <strong>Tap "Add"</strong> in the top-right corner
+          </li>
+          <li>
+            <strong>Find the Activity Hub icon</strong> on your iPad home screen 🎉
+          </li>
+        </ol>
+        
+        <div style="margin-top: 20px; padding: 16px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-radius: 8px; border: 1px solid #bfdbfe;">
+          <div style="font-size: 14px; font-weight: 600; color: #1e40af; margin-bottom: 8px;">
+            ✨ Pro Tip
+          </div>
+          <div style="font-size: 13px; color: #3b82f6;">
+            Once installed, the Activity Hub will work offline and load instantly - perfect for the farm floor!
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 24px; text-align: center;">
+        <button onclick="closeInstallModal()" style="padding: 12px 32px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);">
+          Got It!
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    #iosInstallBanner {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      background: white;
+      padding: 16px 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 10000;
+      animation: slideUp 0.3s ease-out;
+      border: 1px solid #e2e8f0;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @media (min-width: 768px) {
+      #iosInstallBanner {
+        left: auto;
+        right: 20px;
+        max-width: 420px;
+      }
+    }
+  </style>
+
+  <script>
+    // iOS Install Banner Logic
+    (function() {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const isInStandaloneMode = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+      const hasSeenBanner = localStorage.getItem('activityHubInstallBannerDismissed');
+      
+      if (isIOS && !isInStandaloneMode && !hasSeenBanner) {
+        // Show banner after 3 seconds
+        setTimeout(function() {
+          document.getElementById('iosInstallBanner').style.display = 'flex';
+        }, 3000);
+      }
+    })();
+
+    function dismissInstallBanner() {
+      document.getElementById('iosInstallBanner').style.display = 'none';
+      localStorage.setItem('activityHubInstallBannerDismissed', 'true');
+    }
+
+    function showInstallInstructions() {
+      document.getElementById('iosInstallBanner').style.display = 'none';
+      document.getElementById('installModal').style.display = 'flex';
+    }
+
+    function closeInstallModal() {
+      document.getElementById('installModal').style.display = 'none';
+      // Don't mark as dismissed if they viewed instructions - they might want to see them again
+    }
+  </script>
+
 </body>
 </html>
