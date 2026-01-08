@@ -17,6 +17,9 @@
   <!-- Theme -->
   <meta name="theme-color" content="#60a5fa">
   
+  <!-- Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://chart.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' blob:;">
+  
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
   <style>
     * {
@@ -1643,13 +1646,6 @@
     let currentQABatch = null;
     let currentQACheckpoint = null;
     let selectedQAResult = null;
-    
-    // === AUTHENTICATION STATE ===
-    
-    let deviceToken = localStorage.getItem('deviceToken');
-    let farmId = localStorage.getItem('farmId');
-    let farmName = localStorage.getItem('farmName');
-    let pairingScanner = null;
     
     // === DEVICE PAIRING & AUTHENTICATION FUNCTIONS ===
     
