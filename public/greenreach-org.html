@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GreenReach | Building Canadian Food Sovereignty</title>
+  <meta name="description" content="An agri research-and-development organization building practical tools to strengthen Canadian food sovereignty—starting with fresh produce.">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 22px;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+    }
+
+    .nav-cta {
+      background: var(--primary);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent);
+      color: var(--primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 100px 22px 50px;
+      background: linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(130, 195, 65, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(45, 80, 22, 0.06) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      max-width: 980px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-eyebrow {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 8px;
+      letter-spacing: 0.02em;
+    }
+
+    .hero-title {
+      font-size: 80px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 28px;
+      line-height: 1.14286;
+      font-weight: 400;
+      color: var(--text-light);
+      margin-bottom: 24px;
+      letter-spacing: -0.01em;
+    }
+
+    .hero-description {
+      font-size: 21px;
+      line-height: 1.381;
+      color: var(--text-light);
+      max-width: 800px;
+      margin: 0 auto 40px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 60px;
+    }
+
+    .btn-primary, .btn-secondary {
+      padding: 14px 32px;
+      border-radius: 980px;
+      font-size: 17px;
+      font-weight: 500;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent);
+      color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(45, 80, 22, 0.3);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+    }
+
+    .btn-secondary:hover {
+      background: var(--primary);
+      color: white;
+      transform: translateY(-2px);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 60px;
+      justify-content: center;
+      margin-top: 60px;
+      padding-top: 40px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 56px;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--text-light);
+      font-weight: 500;
+    }
+
+    /* Feature Sections */
+    .feature-section {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 100px 22px;
+      position: relative;
+    }
+
+    .feature-section:nth-child(even) {
+      background: var(--surface);
+    }
+
+    .feature-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .feature-section:nth-child(even) .feature-content {
+      direction: rtl;
+    }
+
+    .feature-section:nth-child(even) .feature-text {
+      direction: ltr;
+    }
+
+    .feature-text {
+      padding: 40px 0;
+    }
+
+    .feature-eyebrow {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+
+    .feature-title {
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1.05;
+      margin-bottom: 20px;
+      letter-spacing: -0.015em;
+      color: var(--text);
+    }
+
+    .feature-description {
+      font-size: 24px;
+      line-height: 1.5;
+      color: var(--text-light);
+      margin-bottom: 32px;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin-bottom: 32px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: start;
+      gap: 16px;
+      margin-bottom: 20px;
+      font-size: 19px;
+      color: var(--text);
+    }
+
+    .feature-list li::before {
+      content: '✓';
+      color: var(--accent);
+      font-size: 24px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .feature-visual {
+      background: linear-gradient(135deg, rgba(130, 195, 65, 0.1) 0%, rgba(45, 80, 22, 0.05) 100%);
+      border-radius: 24px;
+      padding: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 500px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-visual img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      position: relative;
+      z-index: 2;
+    }
+
+    .feature-visual::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(130, 195, 65, 0.2) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .feature-icon {
+      font-size: 120px;
+      z-index: 1;
+      filter: drop-shadow(0 4px 16px rgba(45, 80, 22, 0.2));
+    }
+
+    /* Study Cards */
+    .studies-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 32px;
+      margin-top: 48px;
+    }
+
+    .study-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      transition: all 0.3s;
+    }
+
+    .study-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+    }
+
+    .study-card h3 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .study-card p {
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--text-light);
+    }
+
+    /* Products Section */
+    .products-section {
+      background: var(--primary);
+      color: white;
+      padding: 120px 22px;
+    }
+
+    .products-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .products-title {
+      font-size: 64px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      line-height: 1.05;
+    }
+
+    .products-description {
+      font-size: 24px;
+      line-height: 1.5;
+      opacity: 0.9;
+      max-width: 800px;
+      margin: 0 auto 60px;
+    }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 40px;
+      margin-top: 60px;
+    }
+
+    .product-card {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 24px;
+      padding: 48px;
+      text-align: left;
+      border: 1px solid rgba(255,255,255,0.2);
+      transition: all 0.3s;
+    }
+
+    .product-card:hover {
+      background: rgba(255,255,255,0.15);
+      transform: translateY(-4px);
+    }
+
+    .product-card h3 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+
+    .product-card .product-subtitle {
+      font-size: 17px;
+      opacity: 0.8;
+      margin-bottom: 24px;
+    }
+
+    .product-card p {
+      font-size: 19px;
+      line-height: 1.5;
+      opacity: 0.9;
+    }
+
+    /* Footer */
+    footer {
+      background: var(--text);
+      color: white;
+      padding: 80px 22px 40px;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 60px;
+      margin-bottom: 40px;
+    }
+
+    .footer-about h3 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    .footer-about p {
+      font-size: 15px;
+      line-height: 1.6;
+      opacity: 0.8;
+    }
+
+    .footer-links h4 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    .footer-links ul {
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
+      opacity: 0.7;
+      transition: opacity 0.3s;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .footer-links a:hover {
+      opacity: 1;
+    }
+
+    .footer-bottom {
+      text-align: center;
+      padding-top: 40px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+      opacity: 0.6;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero-title {
+        font-size: 48px;
+      }
+
+      .hero-subtitle {
+        font-size: 21px;
+      }
+
+      .hero-description {
+        font-size: 17px;
+      }
+
+      .feature-title {
+        font-size: 40px;
+      }
+
+      .feature-description {
+        font-size: 19px;
+      }
+
+      .feature-content {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+
+      .feature-section:nth-child(even) .feature-content {
+        direction: ltr;
+      }
+
+      .hero-stats {
+        gap: 40px;
+      }
+
+      .stat-number {
+        font-size: 40px;
+      }
+
+      .products-title {
+        font-size: 40px;
+      }
+
+      .products-description {
+        font-size: 19px;
+      }
+
+      .products-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .footer-content {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+
+      .studies-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/" class="nav-logo">GreenReach</a>
+      <ul class="nav-links">
+        <li><a href="#mission">Mission</a></li>
+        <li><a href="#research">Research</a></li>
+        <li><a href="#pilots">Pilots</a></li>
+        <li><a href="#products">Products</a></li>
+      </ul>
+      <a href="https://greenreachgreens.com/wholesale-landing.html" class="nav-cta">Explore Wholesale</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-eyebrow">GreenReach</div>
+      <h1 class="hero-title">Building Canadian Food Sovereignty</h1>
+      <p class="hero-subtitle">Research-driven tools for local food security</p>
+      <p class="hero-description">
+        An agri research-and-development organization building practical tools to strengthen Canadian food sovereignty—starting with fresh produce.
+      </p>
+      <div class="cta-buttons">
+        <a href="#research" class="btn-primary">Our Research</a>
+        <a href="#products" class="btn-secondary">Our Solutions</a>
+      </div>
+
+      <!-- Stats -->
+      <div class="hero-stats">
+        <div class="stat">
+          <div class="stat-number">1 in 4</div>
+          <div class="stat-label">Canadians in food insecure households</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">2.2M</div>
+          <div class="stat-label">Food bank visits (March 2025)</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">Year-Round</div>
+          <div class="stat-label">Local fresh produce production</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mission Section -->
+  <section id="mission" class="feature-section">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Our Mission</div>
+        <h2 class="feature-title">Turning research into local capacity</h2>
+        <p class="feature-description">
+          Food insecurity isn't distant or rare. GreenReach exists to help communities and growers respond with durable, local capacity—not just short-term relief.
+        </p>
+        <ul class="feature-list">
+          <li>Transform research into deployable systems for local growers</li>
+          <li>Enable institutions and community organizations to produce fresh food reliably</li>
+          <li>Support year-round production in repurposed urban spaces</li>
+          <li>Build tools that strengthen Canadian food sovereignty</li>
+        </ul>
+      </div>
+      <div class="feature-visual">
+        <div class="feature-icon">🌱</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Research Section -->
+  <section id="research" class="feature-section">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Evidence-Based Solutions</div>
+        <h2 class="feature-title">Key studies that guide our work</h2>
+        <p class="feature-description">
+          Our approach is grounded in rigorous research addressing the real barriers preventing local food systems from scaling.
+        </p>
+        
+        <div class="studies-grid">
+          <div class="study-card">
+            <h3>Canadian Food Sovereignty (Produce Focus)</h3>
+            <p>Mapping the vulnerabilities of Canada's fresh-produce supply and the barriers preventing local alternatives from scaling.</p>
+          </div>
+          
+          <div class="study-card">
+            <h3>A System at Risk (Supporting Local Growers)</h3>
+            <p>Identifying operational, market-access, and risk factors that hold back small and mid-sized growers—and what "support systems" actually move the needle.</p>
+          </div>
+          
+          <div class="study-card">
+            <h3>Financial Viability of Indoor Agriculture</h3>
+            <p>Separating hype from reality with unit economics, labour practicality, energy strategy, and go-to-market pathways that work in Canadian conditions.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pilot Projects -->
+  <section id="pilots" class="feature-section">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Pilot Projects</div>
+        <h2 class="feature-title">Living Grocer Urban Farm</h2>
+        <p class="feature-description">
+          A real-world model for producing fresh greens in repurposed urban infrastructure—designed to improve local access, reduce fragility in the supply chain, and create transparent, community-connected distribution.
+        </p>
+        <ul class="feature-list">
+          <li>Repurposed urban space for year-round production</li>
+          <li>Community-connected distribution model</li>
+          <li>Transparent operations and food safety practices</li>
+          <li>Proof of concept for institutional adoption</li>
+        </ul>
+      </div>
+      <div class="feature-visual">
+        <div class="feature-icon">🏙️</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Products Section -->
+  <section id="products" class="products-section">
+    <div class="products-content">
+      <div class="feature-eyebrow" style="color: var(--accent);">Product Development</div>
+      <h2 class="products-title">Technology that enables—never replaces</h2>
+      <p class="products-description">
+        We design technology to amplify people and local capability, not displace it: clearer workflows, fewer failure points, better planning, and stronger operating confidence.
+      </p>
+
+      <div class="products-grid">
+        <div class="product-card">
+          <h3>Light Engine</h3>
+          <div class="product-subtitle">Seed-to-Table Farm Management System</div>
+          <p>
+            A recipe-driven platform for urban farms that connects growing operations to real inventory: crop plans, traceability, compliance-ready records, harvesting workflows, and simple scanning to keep admin low and reliability high.
+          </p>
+        </div>
+
+        <div class="product-card">
+          <h3>GROW</h3>
+          <div class="product-subtitle">Urban Farming Growing System</div>
+          <p>
+            A pragmatic growing system engineered for repeatability, cleanability, and day-to-day usability—so farms can scale without requiring specialist labour or complex retrofits.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Philosophy Section -->
+  <section class="feature-section">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Our Philosophy</div>
+        <h2 class="feature-title">Building a stronger system—together</h2>
+        <p class="feature-description">
+          GreenReach is guided by the same Canada-wide themes driving today's most effective food work: partnership across sectors, research-led decision-making, and solutions that also reduce waste and improve sustainability.
+        </p>
+        <ul class="feature-list">
+          <li>Collaboration across sectors—growers, institutions, communities</li>
+          <li>Research-led decision-making for evidence-based solutions</li>
+          <li>Reduce waste and improve sustainability simultaneously</li>
+          <li>Technology that amplifies people, not replaces them</li>
+          <li>Systems-level solutions over short-term band-aids</li>
+        </ul>
+      </div>
+      <div class="feature-visual">
+        <div class="feature-icon">🤝</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-about">
+        <h3>GreenReach</h3>
+        <p>
+          Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations to produce fresh food reliably, year-round.
+        </p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Our Work</h4>
+        <ul>
+          <li><a href="#research">Research Studies</a></li>
+          <li><a href="#pilots">Pilot Projects</a></li>
+          <li><a href="#products">Product Development</a></li>
+          <li><a href="#mission">Our Mission</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Solutions</h4>
+        <ul>
+          <li><a href="https://greenreachgreens.com/wholesale-landing.html">GreenReach Wholesale</a></li>
+          <li><a href="#products">Light Engine Platform</a></li>
+          <li><a href="#products">GROW System</a></li>
+          <li><a href="#pilots">Living Grocer Farm</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
+    </div>
+  </footer>
+</body>
+</html>
