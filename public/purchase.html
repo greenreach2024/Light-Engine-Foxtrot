@@ -150,6 +150,60 @@
             letter-spacing: 0.5px;
         }
 
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-top: 32px;
+            flex-wrap: wrap;
+        }
+
+        .btn-contact {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: #3b82f6;
+            color: white;
+            border: 2px solid #3b82f6;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .btn-contact:hover {
+            background: #2563eb;
+            border-color: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-schedule {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: white;
+            color: #3b82f6;
+            border: 2px solid #3b82f6;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .btn-schedule:hover {
+            background: #3b82f6;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
         .products-section {
             max-width: 1400px;
             margin: 0 auto;
@@ -805,6 +859,14 @@
                 </div>
             </div>
         </div>
+        <div class="hero-actions">
+            <a href="mailto:info@greenreachfarms.com?subject=Light%20Engine%20Inquiry" class="btn-contact">
+                <span>📧</span> Contact Us
+            </a>
+            <a href="mailto:info@greenreachfarms.com?subject=Schedule%20Discovery%20Call%20-%20Light%20Engine&body=Hi%20GreenReach%20Team%2C%0A%0AI'm%20interested%20in%20scheduling%20a%20discovery%20call%20to%20learn%20more%20about%20Light%20Engine.%0A%0AName%3A%20%0AFarm%20Name%3A%20%0APhone%3A%20%0APreferred%20Date%2FTime%3A%20%0A%0AThank%20you!" class="btn-schedule">
+                <span>📅</span> Schedule a Call
+            </a>
+        </div>
     </section>
 
     <section class="products-section">
@@ -1376,7 +1438,7 @@
                 if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
                     errorMsg = 'Unable to connect to server. Please check your internet connection and try again.';
                 } else if (errorMsg.includes('500')) {
-                    errorMsg = 'Server error occurred. Please contact support at support@greenreach.io';
+                    errorMsg = 'Server error occurred. Please contact support at info@greenreachfarms.com';
                 }
                 
                 showModalError(errorMsg);
