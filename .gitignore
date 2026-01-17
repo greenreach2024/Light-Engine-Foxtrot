@@ -23,6 +23,9 @@ budget.json
 cors-config.json
 lifecycle-policy.json
 
+# Elastic Beanstalk deployment bundles (can grow to 13GB+)
+.elasticbeanstalk/app_versions/
+
 # License system - PRIVATE KEYS ONLY
 config/greenreach-private.pem
 config/demo-license.json
