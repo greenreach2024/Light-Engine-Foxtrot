@@ -2026,6 +2026,11 @@ async function navigate(view, element) {
             await loadRecipes();
             break;
             
+        case 'users':
+            document.getElementById('users-view').style.display = 'block';
+            await loadUsersView();
+            break;
+            
         case 'harvest':
             document.getElementById('harvest-view').style.display = 'block';
             await loadHarvestView();
@@ -3818,6 +3823,259 @@ async function loadPlatformMonitoring() {
     } catch (error) {
         console.error('[Platform] Error loading platform monitoring:', error);
         showToast('Failed to load platform monitoring data', 'error');
+    }
+}
+
+/**
+ * ============================================
+ * USER MANAGEMENT FUNCTIONS
+ * ============================================
+ */
+
+let allUsers = [];
+let deleteUserId = null;
+
+/**
+ * Load and display users
+ */
+async function loadUsersView() {
+    try {
+        const response = await apiRequest('/api/admin/users', {
+            method: 'GET'
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load users');
+        }
+        
+        allUsers = data.users || [];
+        renderUsers(allUsers);
+        updateUserStats(allUsers);
+        
+    } catch (error) {
+        console.error('Error loading users:', error);
+        document.getElementById('users-tbody').innerHTML = `
+            <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--accent-red);">
+                Failed to load users: ${error.message}
+            </td></tr>
+        `;
+    }
+}
+
+/**
+ * Render users table
+ */
+function renderUsers(users) {
+    const tbody = document.getElementById('users-tbody');
+    const count = document.getElementById('users-count');
+    
+    count.textContent = `${users.length} ${users.length === 1 ? 'employee' : 'employees'}`;
+    
+    if (users.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                No employees found. Click "Add Employee" to create your first user.
+            </td></tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = users.map(user => {
+        const statusBadge = user.status === 'active' 
+            ? '<span class="badge badge-success">Active</span>' 
+            : '<span class="badge badge-default">Inactive</span>';
+            
+        const roleBadge = {
+            'admin': '<span class="badge badge-danger">Admin</span>',
+            'operations': '<span class="badge badge-primary">Operations</span>',
+            'support': '<span class="badge badge-info">Support</span>',
+            'viewer': '<span class="badge badge-default">Viewer</span>'
+        }[user.role] || `<span class="badge">${user.role}</span>`;
+        
+        const lastLogin = user.last_login 
+            ? new Date(user.last_login).toLocaleDateString() 
+            : 'Never';
+            
+        return `
+            <tr>
+                <td><strong>${user.first_name} ${user.last_name}</strong></td>
+                <td>${user.email}</td>
+                <td>${roleBadge}</td>
+                <td>${statusBadge}</td>
+                <td>${lastLogin}</td>
+                <td>
+                    <button class="btn-icon" onclick="editUser(${user.user_id})" title="Edit">
+                        <span style="font-size: 18px;">✏️</span>
+                    </button>
+                    <button class="btn-icon" onclick="deleteUser(${user.user_id}, '${user.first_name} ${user.last_name}')" title="Delete">
+                        <span style="font-size: 18px;">🗑️</span>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Update user statistics
+ */
+function updateUserStats(users) {
+    document.getElementById('users-total').textContent = users.length;
+    document.getElementById('users-active').textContent = users.filter(u => u.status === 'active').length;
+    document.getElementById('users-admins').textContent = users.filter(u => u.role === 'admin').length;
+    document.getElementById('users-ops').textContent = users.filter(u => u.role === 'operations').length;
+}
+
+/**
+ * Filter users by search
+ */
+function filterUsers() {
+    const searchTerm = document.getElementById('user-search').value.toLowerCase();
+    
+    const filtered = allUsers.filter(user => {
+        return user.first_name.toLowerCase().includes(searchTerm) ||
+               user.last_name.toLowerCase().includes(searchTerm) ||
+               user.email.toLowerCase().includes(searchTerm) ||
+               user.role.toLowerCase().includes(searchTerm);
+    });
+    
+    renderUsers(filtered);
+}
+
+/**
+ * Open add user modal
+ */
+function openAddUserModal() {
+    document.getElementById('user-modal-title').textContent = 'Add New Employee';
+    document.getElementById('user-save-btn-text').textContent = 'Create Employee';
+    document.getElementById('user-form').reset();
+    document.getElementById('user-id').value = '';
+    document.getElementById('password-field').style.display = 'block';
+    document.getElementById('user-modal').style.display = 'flex';
+}
+
+/**
+ * Edit user
+ */
+function editUser(userId) {
+    const user = allUsers.find(u => u.user_id === userId);
+    if (!user) return;
+    
+    document.getElementById('user-modal-title').textContent = 'Edit Employee';
+    document.getElementById('user-save-btn-text').textContent = 'Save Changes';
+    document.getElementById('user-id').value = user.user_id;
+    document.getElementById('user-first-name').value = user.first_name;
+    document.getElementById('user-last-name').value = user.last_name;
+    document.getElementById('user-email').value = user.email;
+    document.getElementById('user-role').value = user.role;
+    document.getElementById('password-field').style.display = 'none';
+    document.getElementById('user-modal').style.display = 'flex';
+}
+
+/**
+ * Close user modal
+ */
+function closeUserModal() {
+    document.getElementById('user-modal').style.display = 'none';
+    document.getElementById('user-form').reset();
+}
+
+/**
+ * Save user (create or update)
+ */
+async function saveUser(event) {
+    event.preventDefault();
+    
+    const userId = document.getElementById('user-id').value;
+    const formData = {
+        first_name: document.getElementById('user-first-name').value.trim(),
+        last_name: document.getElementById('user-last-name').value.trim(),
+        email: document.getElementById('user-email').value.trim(),
+        role: document.getElementById('user-role').value
+    };
+    
+    // Add password for new users
+    if (!userId) {
+        const password = document.getElementById('user-password').value.trim();
+        if (password) {
+            formData.password = password;
+        }
+    }
+    
+    try {
+        const url = userId ? `/api/admin/users/${userId}` : '/api/admin/users';
+        const method = userId ? 'PUT' : 'POST';
+        
+        const response = await apiRequest(url, {
+            method: method,
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to save user');
+        }
+        
+        // Show temp password if generated
+        if (data.user?.temporary_password) {
+            alert(`User created successfully!\n\nTemporary password: ${data.user.temporary_password}\n\nPlease save this password and share it securely with the user.`);
+        } else {
+            alert(userId ? 'User updated successfully!' : 'User created successfully!');
+        }
+        
+        closeUserModal();
+        await loadUsersView();
+        
+    } catch (error) {
+        console.error('Error saving user:', error);
+        alert(`Failed to save user: ${error.message}`);
+    }
+}
+
+/**
+ * Delete user (show confirmation)
+ */
+function deleteUser(userId, userName) {
+    deleteUserId = userId;
+    document.getElementById('delete-user-name').textContent = userName;
+    document.getElementById('delete-user-modal').style.display = 'flex';
+}
+
+/**
+ * Close delete modal
+ */
+function closeDeleteUserModal() {
+    document.getElementById('delete-user-modal').style.display = 'none';
+    deleteUserId = null;
+}
+
+/**
+ * Confirm delete user
+ */
+async function confirmDeleteUser() {
+    if (!deleteUserId) return;
+    
+    try {
+        const response = await apiRequest(`/api/admin/users/${deleteUserId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to delete user');
+        }
+        
+        alert('User deleted successfully!');
+        closeDeleteUserModal();
+        await loadUsersView();
+        
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        alert(`Failed to delete user: ${error.message}`);
     }
 }
 

@@ -2632,6 +2632,67 @@
                 </div>
             </div>
 
+            <!-- Users Management View -->
+            <div id="users-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>GreenReach Team Management</h1>
+                    <div class="header-actions">
+                        <input type="text" id="user-search" placeholder="Search users..." onkeyup="filterUsers()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 250px;">
+                        <button class="btn-primary" onclick="openAddUserModal()">
+                            <span>+</span> Add Employee
+                        </button>
+                    </div>
+                </div>
+
+                <!-- User Statistics -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Employees</div>
+                        <div class="kpi-value" id="users-total">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active</div>
+                        <div class="kpi-value" id="users-active">0</div>
+                        <div class="kpi-change positive">
+                            <span style="color: var(--accent-green);">Online</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Admins</div>
+                        <div class="kpi-value" id="users-admins">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Operations Team</div>
+                        <div class="kpi-value" id="users-ops">0</div>
+                    </div>
+                </div>
+
+                <!-- Users Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Employee Directory</div>
+                        <span id="users-count" style="color: var(--text-secondary); font-size: 0.9rem;">Loading...</span>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 25%;">Name</th>
+                                    <th style="width: 25%;">Email</th>
+                                    <th style="width: 12%;">Role</th>
+                                    <th style="width: 10%;">Status</th>
+                                    <th style="width: 13%;">Last Login</th>
+                                    <th style="width: 15%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody">
+                                <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading users...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Platform Monitoring View (Light Engine Fleet) -->
             <div id="platform-monitoring-view" class="view" style="display: none;">
                 <div class="breadcrumb">
@@ -4160,5 +4221,82 @@ API URL: ${farm.api_url || 'Not configured'}
         });
     </script>
     <script src="/central-admin.js?v=2.0.0"></script>
+
+    <!-- Add/Edit User Modal -->
+    <div id="user-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="user-modal-title">Add New Employee</h2>
+                <button class="modal-close" onclick="closeUserModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="user-form" onsubmit="saveUser(event)">
+                    <input type="hidden" id="user-id">
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: var(--text-primary); font-weight: 500;">First Name *</label>
+                        <input type="text" id="user-first-name" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: var(--text-primary); font-weight: 500;">Last Name *</label>
+                        <input type="text" id="user-last-name" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: var(--text-primary); font-weight: 500;">Email *</label>
+                        <input type="email" id="user-email" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: var(--text-primary); font-weight: 500;">Role *</label>
+                        <select id="user-role" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                            <option value="">Select role...</option>
+                            <option value="admin">Admin - Full system access</option>
+                            <option value="operations">Operations - Farm & order management</option>
+                            <option value="support">Support - Customer assistance</option>
+                            <option value="viewer">Viewer - Read-only access</option>
+                        </select>
+                    </div>
+                    
+                    <div id="password-field" style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: var(--text-primary); font-weight: 500;">Password</label>
+                        <input type="password" id="user-password" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                        <small style="color: var(--text-muted); display: block; margin-top: 4px;">Leave blank to auto-generate</small>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                        <button type="button" class="btn" onclick="closeUserModal()">Cancel</button>
+                        <button type="submit" class="btn-primary">
+                            <span id="user-save-btn-text">Create Employee</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Delete User Modal -->
+    <div id="delete-user-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h2>Confirm Delete</h2>
+                <button class="modal-close" onclick="closeDeleteUserModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 20px; color: var(--text-secondary);">
+                    Are you sure you want to delete <strong id="delete-user-name" style="color: var(--text-primary);"></strong>?
+                </p>
+                <p style="margin-bottom: 20px; color: var(--text-muted); font-size: 0.9rem;">
+                    This will deactivate the user account. They will no longer be able to access GreenReach Central.
+                </p>
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button class="btn" onclick="closeDeleteUserModal()">Cancel</button>
+                    <button class="btn" onclick="confirmDeleteUser()" style="background: var(--accent-red); color: white;">Delete User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

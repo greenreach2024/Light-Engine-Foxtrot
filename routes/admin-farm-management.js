@@ -1879,5 +1879,197 @@ router.get('/recipes/categories/list', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/admin/users
+ * Create a new GreenReach employee user
+ */
+router.post('/users', requireAdmin, async (req, res) => {
+  try {
+    const { email, first_name, last_name, role, password } = req.body;
+    
+    // Validate required fields
+    if (!email || !first_name || !last_name || !role) {
+      return res.status(400).json({ error: 'Missing required fields: email, first_name, last_name, role' });
+    }
+    
+    // Validate role
+    const validRoles = ['admin', 'operations', 'support', 'viewer'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be: admin, operations, support, or viewer' });
+    }
+    
+    const db = await initDatabase();
+    
+    // Check if database is available
+    if (!db || !db.pool || db.mode === 'nedb') {
+      return res.status(503).json({ 
+        error: 'Database not available. User management requires PostgreSQL database.',
+        mode: 'demo'
+      });
+    }
+    
+    // Check if email already exists
+    const existingUser = await db.get('SELECT id FROM users WHERE email = ?', [email]);
+    if (existingUser) {
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+    
+    // Generate password hash
+    const tempPassword = password || crypto.randomBytes(8).toString('hex');
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    
+    // Insert user
+    const result = await db.run(
+      `INSERT INTO users (email, first_name, last_name, role, password_hash, status, farm_id, created_at)
+       VALUES (?, ?, ?, ?, ?, 'active', 'greenreach-hq', datetime('now'))`,
+      [email, first_name, last_name, role, passwordHash]
+    );
+    
+    // Log action
+    await db.run(
+      `INSERT INTO admin_audit_log (admin_id, action, resource_type, resource_id, metadata, ip_address)
+       VALUES (?, 'CREATE_USER', 'user', ?, ?, ?)`,
+      [req.admin.admin_id || req.admin.email, result.lastID, JSON.stringify({ email, role }), req.ip]
+    );
+    
+    res.json({ 
+      success: true, 
+      message: 'User created successfully',
+      user: {
+        user_id: result.lastID,
+        email,
+        first_name,
+        last_name,
+        role,
+        status: 'active',
+        temporary_password: !password ? tempPassword : undefined
+      }
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+/**
+ * PUT /api/admin/users/:userId
+ * Update user details
+ */
+router.put('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { email, first_name, last_name, role } = req.body;
+    const db = await initDatabase();
+    
+    if (!db || !db.pool || db.mode === 'nedb') {
+      return res.status(503).json({ error: 'Database not available', mode: 'demo' });
+    }
+    
+    // Validate role if provided
+    if (role) {
+      const validRoles = ['admin', 'operations', 'support', 'viewer'];
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ error: 'Invalid role' });
+      }
+    }
+    
+    // Check if user exists
+    const existingUser = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Build update query dynamically
+    const updates = [];
+    const params = [];
+    
+    if (email) {
+      // Check email uniqueness
+      const emailCheck = await db.get('SELECT id FROM users WHERE email = ? AND id != ?', [email, userId]);
+      if (emailCheck) {
+        return res.status(409).json({ error: 'Email already in use' });
+      }
+      updates.push('email = ?');
+      params.push(email);
+    }
+    if (first_name) {
+      updates.push('first_name = ?');
+      params.push(first_name);
+    }
+    if (last_name) {
+      updates.push('last_name = ?');
+      params.push(last_name);
+    }
+    if (role) {
+      updates.push('role = ?');
+      params.push(role);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    params.push(userId);
+    
+    await db.run(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+    
+    // Log action
+    await db.run(
+      `INSERT INTO admin_audit_log (admin_id, action, resource_type, resource_id, metadata, ip_address)
+       VALUES (?, 'UPDATE_USER', 'user', ?, ?, ?)`,
+      [req.admin.admin_id || req.admin.email, userId, JSON.stringify({ userId, updates: { email, first_name, last_name, role } }), req.ip]
+    );
+    
+    res.json({ success: true, message: 'User updated successfully' });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+/**
+ * DELETE /api/admin/users/:userId
+ * Delete a user (soft delete - set status to deleted)
+ */
+router.delete('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const db = await initDatabase();
+    
+    if (!db || !db.pool || db.mode === 'nedb') {
+      return res.status(503).json({ error: 'Database not available', mode: 'demo' });
+    }
+    
+    // Check if user exists
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Prevent deleting yourself
+    if (user.email === req.admin.email) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    
+    // Soft delete: set status to 'deleted'
+    await db.run('UPDATE users SET status = ?, deleted_at = datetime(\'now\') WHERE id = ?', ['deleted', userId]);
+    
+    // Log action
+    await db.run(
+      `INSERT INTO admin_audit_log (admin_id, action, resource_type, resource_id, metadata, ip_address)
+       VALUES (?, 'DELETE_USER', 'user', ?, ?, ?)`,
+      [req.admin.admin_id || req.admin.email, userId, JSON.stringify({ userId, email: user.email }), req.ip]
+    );
+    
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 export default router;
 
