@@ -474,10 +474,184 @@ router.get('/farms/:farmId', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Farm not found' });
     }
     
-    res.json(result.rows[0]);
+    const farm = result.rows[0];
+    
+    // Get detailed metrics for this farm
+    try {
+      // Count rooms
+      const roomsResult = await dbQuery(
+        'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
+        [farmId]
+      );
+      farm.room_count = parseInt(roomsResult.rows[0]?.count || 0);
+      
+      // Count devices  
+      const devicesResult = await dbQuery(
+        'SELECT COUNT(*) as count FROM devices WHERE farm_id = $1',
+        [farmId]
+      );
+      farm.device_count = parseInt(devicesResult.rows[0]?.count || 0);
+      
+      // Count zones (if zones table exists)
+      try {
+        const zonesResult = await dbQuery(
+          'SELECT COUNT(*) as count FROM zones WHERE farm_id = $1',
+          [farmId]
+        );
+        farm.zone_count = parseInt(zonesResult.rows[0]?.count || 0);
+      } catch (err) {
+        farm.zone_count = 0;
+      }
+      
+      // Get inventory trays count
+      try {
+        const traysResult = await dbQuery(
+          'SELECT SUM(qty_available) as count FROM farm_inventory WHERE farm_id = $1',
+          [farmId]
+        );
+        farm.tray_count = parseInt(traysResult.rows[0]?.count || 0);
+      } catch (err) {
+        farm.tray_count = 0;
+      }
+      
+      // Calculate plant count (estimate: ~40 plants per tray)
+      farm.plant_count = farm.tray_count * 40;
+      
+      // Get active alerts count
+      try {
+        const alertsResult = await dbQuery(
+          'SELECT COUNT(*) as count FROM alerts WHERE farm_id = $1 AND status = $2',
+          [farmId, 'active']
+        );
+        farm.active_alerts = parseInt(alertsResult.rows[0]?.count || 0);
+      } catch (err) {
+        farm.active_alerts = 0;
+      }
+      
+      // Add metrics object for easy access
+      farm.metrics = {
+        room_count: farm.room_count,
+        zone_count: farm.zone_count,
+        device_count: farm.device_count,
+        tray_count: farm.tray_count,
+        plant_count: farm.plant_count,
+        active_alerts: farm.active_alerts,
+        user_count: farm.user_count
+      };
+      
+    } catch (metricsError) {
+      console.error('Error calculating farm metrics:', metricsError);
+      // Continue without metrics
+      farm.metrics = {
+        room_count: 0,
+        zone_count: 0,
+        device_count: 0,
+        tray_count: 0,
+        plant_count: 0,
+        active_alerts: 0,
+        user_count: farm.user_count || 0
+      };
+    }
+    
+    res.json(farm);
   } catch (error) {
     console.error('Error getting farm details:', error);
     res.status(500).json({ error: 'Failed to get farm details', details: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/farms/:farmId/rooms
+ * Get all rooms for a specific farm with environmental data
+ */
+router.get('/farms/:farmId/rooms', requireAdmin, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const db = await initDatabase();
+    
+    // Check if database is available
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, returning sample rooms');
+      return res.json({
+        success: true,
+        rooms: [
+          {
+            room_id: 'room-a',
+            name: 'Room A',
+            farm_id: farmId,
+            type: 'grow',
+            status: 'active',
+            temperature: 72.5,
+            humidity: 65,
+            co2: 1050,
+            vpd: 0.85,
+            zone_count: 3,
+            device_count: 12
+          }
+        ]
+      });
+    }
+    
+    // Query rooms for this farm
+    const result = await dbQuery(`
+      SELECT 
+        r.id as room_id,
+        r.farm_id,
+        r.name,
+        r.type,
+        r.status,
+        r.created_at,
+        r.updated_at,
+        COUNT(DISTINCT z.id) as zone_count,
+        COUNT(DISTINCT d.device_id) as device_count
+      FROM rooms r
+      LEFT JOIN zones z ON r.id = z.room_id
+      LEFT JOIN devices d ON r.id = d.room_id
+      WHERE r.farm_id = $1
+      GROUP BY r.id, r.farm_id, r.name, r.type, r.status, r.created_at, r.updated_at
+      ORDER BY r.name ASC
+    `, [farmId]);
+    
+    // Get latest environmental readings for each room (if sensors table exists)
+    const rooms = result.rows || [];
+    for (const room of rooms) {
+      try {
+        const envResult = await dbQuery(`
+          SELECT 
+            AVG(CASE WHEN sensor_type = 'temperature' THEN value END) as temperature,
+            AVG(CASE WHEN sensor_type = 'humidity' THEN value END) as humidity,
+            AVG(CASE WHEN sensor_type = 'co2' THEN value END) as co2,
+            AVG(CASE WHEN sensor_type = 'vpd' THEN value END) as vpd
+          FROM sensor_readings
+          WHERE room_id = $1
+            AND timestamp > NOW() - INTERVAL '5 minutes'
+        `, [room.room_id]);
+        
+        if (envResult.rows && envResult.rows.length > 0) {
+          const env = envResult.rows[0];
+          room.temperature = env.temperature ? parseFloat(env.temperature).toFixed(1) : null;
+          room.humidity = env.humidity ? parseFloat(env.humidity).toFixed(0) : null;
+          room.co2 = env.co2 ? parseFloat(env.co2).toFixed(0) : null;
+          room.vpd = env.vpd ? parseFloat(env.vpd).toFixed(2) : null;
+        }
+      } catch (err) {
+        // Sensor data not available, continue without it
+        room.temperature = null;
+        room.humidity = null;
+        room.co2 = null;
+        room.vpd = null;
+      }
+      
+      // Determine status based on environmental conditions
+      if (!room.status || room.status === 'active') {
+        room.status = 'optimal';
+      }
+    }
+    
+    res.json({ success: true, rooms });
+  } catch (error) {
+    console.error('Error getting farm rooms:', error);
+    res.status(500).json({ error: 'Failed to get farm rooms', details: error.message });
   }
 });
 

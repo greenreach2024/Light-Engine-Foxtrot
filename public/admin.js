@@ -7,28 +7,45 @@ const API_BASE = window.location.origin.replace(':8091', ':8000');
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log(' Initializing admin dashboard...');
+    console.log('🚀 Initializing admin dashboard...');
     
-    // Auto-authenticate in demo/sandbox mode
-    await autoAuthenticate();
+    // Check authentication - redirect if not authenticated
+    if (!isAuthenticated()) {
+        console.warn('⚠️ Not authenticated, redirecting to login...');
+        window.location.href = '/LE-login.html?redirect=' + encodeURIComponent(window.location.pathname);
+        return;
+    }
+    
+    // Only auto-authenticate in localhost development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        await autoAuthenticateLocal();
+    }
     
     await loadDashboardData();
 });
 
 /**
- * Auto-authenticate for demo/sandbox mode
- * Automatically logs in with demo credentials to skip sign-in requirement
+ * Check if user is authenticated
  */
-async function autoAuthenticate() {
+function isAuthenticated() {
+    const token = localStorage.getItem('adminAuthToken');
+    return token && token.length > 0;
+}
+
+/**
+ * Auto-authenticate for LOCAL DEVELOPMENT ONLY
+ * Automatically logs in with demo credentials on localhost
+ */
+async function autoAuthenticateLocal() {
     // Check if already authenticated
     const existingToken = localStorage.getItem('adminAuthToken');
     if (existingToken) {
-        console.log(' Already authenticated');
+        console.log('✅ Already authenticated');
         return;
     }
     
-    // Auto-login with demo credentials
-    console.log('🔐 Auto-authenticating in demo mode...');
+    // Auto-login with demo credentials (localhost only)
+    console.log('🔐 Auto-authenticating in local development mode...');
     
     const credentials = {
         farmId: 'GR-00001',
@@ -50,13 +67,15 @@ async function autoAuthenticate() {
             localStorage.setItem('adminAuthToken', data.token);
             localStorage.setItem('adminFarmId', data.farmId);
             localStorage.setItem('adminEmail', data.email);
-            console.log(' Auto-authentication successful');
+            console.log('✅ Auto-authentication successful');
         } else {
-            console.warn(' Auto-authentication failed, continuing in demo mode');
+            console.warn('⚠️ Auto-authentication failed');
+            // Redirect to login if auto-auth fails
+            window.location.href = '/LE-login.html';
         }
     } catch (error) {
-        console.warn(' Auto-authentication error:', error.message);
-        // Continue anyway - admin page works without auth in demo mode
+        console.warn('⚠️ Auto-authentication error:', error.message);
+        window.location.href = '/LE-login.html';
     }
 }
 

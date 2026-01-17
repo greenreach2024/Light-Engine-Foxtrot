@@ -7,6 +7,38 @@
     <script src="./js/console-guard.js"></script>
     <link rel="stylesheet" href="/styles.foxtrot.css?v=2025-12-10-01">
     <link rel="stylesheet" href="/styles/le-dashboard-theme.css?v=2025-12-20-01">
+    <script>
+        // Authentication check - must run before page loads
+        (function() {
+            const token = localStorage.getItem('adminAuthToken');
+            const isAuthenticated = token && token.length > 0;
+            
+            if (!isAuthenticated) {
+                // Redirect to login page if not authenticated
+                window.location.href = '/LE-login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                // Stop page load
+                throw new Error('Not authenticated');
+            }
+            
+            // Verify token is valid
+            fetch('/api/farm/auth/verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                }
+            }).then(response => {
+                if (!response.ok) {
+                    localStorage.removeItem('adminAuthToken');
+                    window.location.href = '/LE-login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                }
+            }).catch(() => {
+                // If verification fails, redirect to login
+                localStorage.removeItem('adminAuthToken');
+                window.location.href = '/LE-login.html?redirect=' + encodeURIComponent(window.location.pathname);
+            });
+        })();
+    </script>
     <style>
         :root {
             --admin-primary: #8b5cf6;
@@ -647,12 +679,15 @@
     <!-- Standard Header Menu -->
     <header class="page-header">
         <div>
-            <h1>GreenReach Multi-Farm Monitoring Platform</h1>
-            <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem; color: #94a3b8;">Central monitoring and analytics for Light Engine deployments</p>
+            <h1>Light Engine Fleet Monitoring (Deprecated)</h1>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem; color: #ef4444;">
+                ⚠️ This page has been consolidated into GreenReach Central Operations. 
+                <a href="/GR-central-admin.html?view=platform-monitoring" style="color: #60a5fa; text-decoration: underline;">Go to Platform Monitoring</a>
+            </p>
         </div>
         <div class="header-actions">
+            <button class="nav-btn" onclick="window.location.href='/GR-central-admin.html?view=platform-monitoring'" style="background: rgba(59, 130, 246, 0.2); border-color: #3b82f6; color: #3b82f6;">Go to Central Operations</button>
             <button class="nav-btn" onclick="window.location.href='/GR-admin.html'" style="background: rgba(130, 195, 65, 0.2); border-color: #82c341; color: #82c341;">Wholesale Admin</button>
-            <button class="nav-btn" onclick="window.location.reload()">Refresh Dashboard</button>
         </div>
     </header>
 

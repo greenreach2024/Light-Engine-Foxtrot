@@ -319,6 +319,12 @@ function renderContextualSidebar() {
                         { label: 'Users', view: 'users' },
                         { label: 'Recipes', view: 'recipes' }
                     ]
+                },
+                {
+                    title: 'Platform',
+                    items: [
+                        { label: 'LE Fleet Monitoring', view: 'platform-monitoring' }
+                    ]
                 }
             ];
             break;
@@ -2043,6 +2049,11 @@ async function navigate(view, element) {
             await loadAlertsView();
             break;
             
+        case 'platform-monitoring':
+            document.getElementById('platform-monitoring-view').style.display = 'block';
+            await loadPlatformMonitoring();
+            break;
+            
         case 'tenants':
         case 'billing':
         case 'support':
@@ -2788,41 +2799,85 @@ async function loadFarmSpecificDashboard(farmId) {
     currentFarmId = farmId;
     
     try {
-        // Load dashboard but filter data for this farm
-        await loadDashboardData();
+        // Fetch farm-specific data from backend
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        const farm = await response.json();
         
-        // Hide platform-wide elements and show farm-specific summary
+        console.log('Farm data:', farm);
+        
+        // Update page title
         const header = document.querySelector('#overview-view .header h1');
-        const farmsTable = document.querySelector('#farms-table').closest('.card');
-        const alertsSection = document.querySelector('#alerts-section');
-        
-        // Get farm data
-        const farm = farmsData.find(f => f.farmId === farmId);
-        
-        if (farm) {
-            // Update page title to show farm-specific overview
-            if (header) {
-                header.textContent = `${farm.name} - Farm Summary`;
-            }
-            
-            // Hide the farms table when viewing a specific farm
-            if (farmsTable) {
-                farmsTable.style.display = 'none';
-            }
-            
-            // Update KPIs to show farm-specific data instead of platform-wide
-            // Filter the KPI values to only show this farm's data
-            document.getElementById('kpi-farms').textContent = '1';
-            document.getElementById('kpi-farms-change').textContent = farm.name;
-            
-            // You could enhance this to show farm-specific stats from the API
-            // For now, we'll show the farm is selected and hide multi-farm overview
-            
-        } else {
-            console.error('Farm not found:', farmId);
+        if (header) {
+            header.textContent = `${farm.name} - Farm Summary`;
         }
+        
+        // Hide the farms table when viewing a specific farm
+        const farmsTable = document.querySelector('#farms-table')?.closest('.card');
+        if (farmsTable) {
+            farmsTable.style.display = 'none';
+        }
+        
+        // Update KPIs with farm-specific metrics
+        const metrics = farm.metrics || {};
+        
+        // Update room count
+        const kpiRooms = document.getElementById('kpi-rooms');
+        if (kpiRooms) {
+            kpiRooms.textContent = metrics.room_count || '0';
+        }
+        
+        // Update zone count (reuse farms KPI for zones)
+        const kpiFarms = document.getElementById('kpi-farms');
+        const kpiFarmsChange = document.getElementById('kpi-farms-change');
+        if (kpiFarms) {
+            kpiFarms.textContent = metrics.zone_count || '0';
+        }
+        if (kpiFarmsChange) {
+            kpiFarmsChange.textContent = 'Zones';
+        }
+        
+        // Update device count (reuse users KPI for devices)
+        const kpiUsers = document.getElementById('kpi-users');
+        const kpiUsersChange = document.getElementById('kpi-users-change');
+        if (kpiUsers) {
+            kpiUsers.textContent = metrics.device_count || '0';
+        }
+        if (kpiUsersChange) {
+            kpiUsersChange.textContent = 'Devices';
+        }
+        
+        // Update alerts (reuse alerts KPI)
+        const kpiAlerts = document.getElementById('kpi-alerts');
+        if (kpiAlerts) {
+            kpiAlerts.textContent = metrics.active_alerts || '0';
+        }
+        
+        // Update farm status card
+        const statusCard = document.querySelector('#farm-status-card .card-content');
+        if (statusCard) {
+            statusCard.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-label">Trays</div>
+                    <div class="stat-value">${metrics.tray_count || 0}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Plants (est.)</div>
+                    <div class="stat-value">${metrics.plant_count || 0}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Users</div>
+                    <div class="stat-value">${metrics.user_count || 0}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value"><span class="badge badge-${farm.status === 'active' ? 'success' : 'warning'}">${farm.status || 'unknown'}</span></div>
+                </div>
+            `;
+        }
+        
     } catch (error) {
         console.error('Error loading farm dashboard:', error);
+        showToast('Failed to load farm data', 'error');
     }
 }
 
@@ -2834,18 +2889,48 @@ async function loadFarmRoomsView(farmId) {
     currentFarmId = farmId;
     
     try {
-        await loadRoomsView();
+        // Fetch farm-specific rooms from backend
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/rooms`);
+        const data = await response.json();
         
-        // Filter rooms table
-        const roomRows = document.querySelectorAll('#rooms-table tr');
-        roomRows.forEach(row => {
-            const farmIdCell = row.cells[0];
-            if (farmIdCell && farmIdCell.textContent !== farmId) {
-                row.style.display = 'none';
-            }
-        });
+        console.log('Farm rooms:', data);
+        
+        const rooms = data.rooms || [];
+        
+        // Update page header
+        const header = document.querySelector('#rooms-view .header h1');
+        if (header) {
+            header.textContent = 'Farm Rooms';
+        }
+        
+        // Render rooms table
+        const tableBody = document.querySelector('#rooms-table');
+        if (!tableBody) {
+            console.error('Rooms table not found');
+            return;
+        }
+        
+        if (rooms.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center">No rooms found for this farm</td></tr>';
+            return;
+        }
+        
+        tableBody.innerHTML = rooms.map(room => `
+            <tr>
+                <td>${room.farm_id || farmId}</td>
+                <td><a href="#" onclick="navigateToRoom('${farmId}', '${room.room_id}'); return false;" class="link">${room.name}</a></td>
+                <td>${room.type || 'grow'}</td>
+                <td>${room.temperature ? room.temperature + '°F' : 'N/A'}</td>
+                <td>${room.humidity ? room.humidity + '%' : 'N/A'}</td>
+                <td>${room.co2 ? room.co2 + ' ppm' : 'N/A'}</td>
+                <td>${room.vpd ? room.vpd : 'N/A'}</td>
+                <td><span class="badge badge-${room.status === 'optimal' ? 'success' : (room.status === 'warning' ? 'warning' : 'secondary')}">${room.status || 'active'}</span></td>
+            </tr>
+        `).join('');
+        
     } catch (error) {
         console.error('Error loading farm rooms:', error);
+        showToast('Failed to load rooms', 'error');
     }
 }
 
@@ -2857,18 +2942,48 @@ async function loadFarmDevicesView(farmId) {
     currentFarmId = farmId;
     
     try {
-        await loadAllDevicesView();
+        // Fetch farm-specific devices from backend
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
+        const data = await response.json();
         
-        // Filter devices table
-        const deviceRows = document.querySelectorAll('#devices-table tr');
-        deviceRows.forEach(row => {
-            const farmIdCell = row.cells[0];
-            if (farmIdCell && farmIdCell.textContent !== farmId) {
-                row.style.display = 'none';
-            }
-        });
+        console.log('Farm devices:', data);
+        
+        const devices = data.devices || [];
+        
+        // Update page header
+        const header = document.querySelector('#devices-view .header h1');
+        if (header) {
+            header.textContent = 'Farm Devices';
+        }
+        
+        // Render devices table
+        const tableBody = document.querySelector('#devices-table');
+        if (!tableBody) {
+            console.error('Devices table not found');
+            return;
+        }
+        
+        if (devices.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center">No devices found for this farm</td></tr>';
+            return;
+        }
+        
+        tableBody.innerHTML = devices.map(device => `
+            <tr>
+                <td>${device.farm_id || farmId}</td>
+                <td>${device.device_code || device.device_id}</td>
+                <td>${device.device_name || 'Unnamed Device'}</td>
+                <td>${device.device_type || 'Unknown'}</td>
+                <td>${device.vendor || 'N/A'}</td>
+                <td>${device.model || 'N/A'}</td>
+                <td>${device.firmware_version || 'N/A'}</td>
+                <td><span class="badge badge-${device.status === 'online' ? 'success' : (device.status === 'offline' ? 'danger' : 'secondary')}">${device.status || 'unknown'}</span></td>
+            </tr>
+        `).join('');
+        
     } catch (error) {
         console.error('Error loading farm devices:', error);
+        showToast('Failed to load devices', 'error');
     }
 }
 
@@ -3667,6 +3782,39 @@ function closeRecipeModal() {
     currentRecipeId = null;
     scheduleData = [];
 }
+
+// ============================================================================
+// PLATFORM MONITORING (LIGHT ENGINE FLEET) FUNCTIONS
+// ============================================================================
+
+/**
+ * Load Platform Monitoring dashboard (Light Engine fleet)
+ */
+async function loadPlatformMonitoring() {
+    console.log('[Platform] Loading Light Engine fleet monitoring...');
+    
+    try {
+        // In production, fetch from Light Engine fleet API
+        // For now, show static data matching LE-admin.html
+        
+        // Update KPIs
+        document.getElementById('platform-farms').textContent = '24';
+        document.getElementById('platform-mrr').textContent = '$4,847';
+        document.getElementById('platform-zones').textContent = '312';
+        document.getElementById('platform-sensors').textContent = '1,247';
+        document.getElementById('platform-health').textContent = '87';
+        document.getElementById('platform-alerts').textContent = '12';
+        
+        // Deployments table already has static data in HTML
+        // In production, fetch and render from API
+        
+        console.log('[Platform] Platform monitoring loaded');
+    } catch (error) {
+        console.error('[Platform] Error loading platform monitoring:', error);
+        showToast('Failed to load platform monitoring data', 'error');
+    }
+}
+
 
 // Initialize on load
 console.log('Central Admin loaded');

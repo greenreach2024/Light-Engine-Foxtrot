@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GreenReach | Building Canadian Food Sovereignty</title>
-  <meta name="description" content="An agri research-and-development organization building practical tools to strengthen Canadian food sovereignty—starting with fresh produce.">
+  <meta name="description" content="An agri research-and-development organization building practical tools to strengthen Canadian food sovereignty—by supporting local farms and scaling fresh produce production.">
   <style>
     * {
       margin: 0;
@@ -54,11 +54,14 @@
     }
 
     .nav-logo {
-      font-size: 21px;
-      font-weight: 600;
-      color: var(--primary);
       text-decoration: none;
-      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-logo img {
+      height: 32px;
+      width: auto;
     }
 
     .nav-links {
@@ -130,11 +133,14 @@
     }
 
     .hero-eyebrow {
-      font-size: 21px;
-      font-weight: 600;
-      color: var(--accent);
       margin-bottom: 8px;
-      letter-spacing: 0.02em;
+      display: flex;
+      justify-content: center;
+    }
+
+    .hero-eyebrow img {
+      height: 80px;
+      width: auto;
     }
 
     .hero-title {
@@ -247,6 +253,59 @@
       align-items: center;
       padding: 100px 22px;
       position: relative;
+    }
+
+    /* Value Cards */
+    .value-cards-section {
+      padding: 80px 22px;
+      background: var(--surface);
+    }
+
+    .value-cards-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .value-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+
+    .value-card {
+      background: var(--bg);
+      border-radius: 20px;
+      padding: 40px;
+      transition: all 0.3s;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .value-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 16px 40px rgba(45, 80, 22, 0.15);
+      border-color: var(--accent);
+    }
+
+    .value-card-headline {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 12px;
+      line-height: 1.1;
+    }
+
+    .value-card-subline {
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .value-card-body {
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--text-light);
     }
 
     .feature-section:nth-child(even) {
@@ -374,11 +433,14 @@
       padding: 32px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.06);
       transition: all 0.3s;
+      cursor: pointer;
+      border: 2px solid transparent;
     }
 
     .study-card:hover {
       transform: translateY(-4px);
       box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+      border-color: var(--accent);
     }
 
     .study-card h3 {
@@ -386,12 +448,35 @@
       font-weight: 600;
       color: var(--primary);
       margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .study-card .expand-icon {
+      font-size: 20px;
+      color: var(--accent);
+      transition: transform 0.3s;
+    }
+
+    .study-card.expanded .expand-icon {
+      transform: rotate(180deg);
     }
 
     .study-card p {
       font-size: 17px;
       line-height: 1.5;
       color: var(--text-light);
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.3s ease;
+    }
+
+    .study-card.expanded p {
+      max-height: 500px;
+      opacity: 1;
+      margin-top: 12px;
     }
 
     /* Products Section */
@@ -474,8 +559,8 @@
       max-width: 1200px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: 2fr 1fr 1fr;
-      gap: 60px;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+      gap: 40px;
       margin-bottom: 40px;
     }
 
@@ -585,6 +670,10 @@
       .studies-grid {
         grid-template-columns: 1fr;
       }
+
+      .value-cards-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -592,44 +681,48 @@
   <!-- Navigation -->
   <nav>
     <div class="nav-content">
-      <a href="/" class="nav-logo">GreenReach</a>
+      <a href="/greenreach-org.html" class="nav-logo"><img src="images/greenreach-clr.png" alt="GreenReach" /></a>
       <ul class="nav-links">
-        <li><a href="#mission">Mission</a></li>
-        <li><a href="#research">Research</a></li>
-        <li><a href="#pilots">Pilots</a></li>
-        <li><a href="#products">Products</a></li>
+        <li><a href="/greenreach-org.html">Home</a></li>
+        <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+        <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
+        <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
       </ul>
-      <a href="https://greenreachgreens.com/wholesale-landing.html" class="nav-cta">Explore Wholesale</a>
     </div>
   </nav>
 
   <!-- Hero Section -->
   <section class="hero">
     <div class="hero-content">
-      <div class="hero-eyebrow">GreenReach</div>
+      <div class="hero-eyebrow"><img src="images/greenreach-clr.png" alt="GreenReach" /></div>
       <h1 class="hero-title">Building Canadian Food Sovereignty</h1>
       <p class="hero-subtitle">Research-driven tools for local food security</p>
       <p class="hero-description">
-        An agri research-and-development organization building practical tools to strengthen Canadian food sovereignty—starting with fresh produce.
+        An agri research-and-development organization building practical tools to strengthen Canadian food sovereignty—by supporting local farms and scaling fresh produce production.
       </p>
-      <div class="cta-buttons">
-        <a href="#research" class="btn-primary">Our Research</a>
-        <a href="#products" class="btn-secondary">Our Solutions</a>
-      </div>
+    </div>
+  </section>
 
-      <!-- Stats -->
-      <div class="hero-stats">
-        <div class="stat">
-          <div class="stat-number">1 in 4</div>
-          <div class="stat-label">Canadians in food insecure households</div>
+  <!-- Value Cards -->
+  <section class="value-cards-section">
+    <div class="value-cards-container">
+      <div class="value-cards-grid">
+        <div class="value-card" onclick="window.location.href='growing-made-easy.html'" style="cursor: pointer;">
+          <h3 class="value-card-headline">Growing made easy</h3>
+          <p class="value-card-subline">Grow what your local market asks for—without adding complexity.</p>
+          <p class="value-card-body">More varieties. Higher quality. Better predictability—with workflows that stay simple.</p>
         </div>
-        <div class="stat">
-          <div class="stat-number">2.2M</div>
-          <div class="stat-label">Food bank visits (March 2025)</div>
+
+        <div class="value-card" onclick="window.location.href='grow-and-sell.html'" style="cursor: pointer;">
+          <h3 class="value-card-headline">Grow & Sell</h3>
+          <p class="value-card-subline">Increase demand, improve margins, reduce waste.</p>
+          <p class="value-card-body">Align production with purchasing so you sell more—and throw out less.</p>
         </div>
-        <div class="stat">
-          <div class="stat-number">Year-Round</div>
-          <div class="stat-label">Local fresh produce production</div>
+
+        <div class="value-card" onclick="window.location.href='grow-and-sell.html#farmers'" style="cursor: pointer;">
+          <h3 class="value-card-headline">Represent!</h3>
+          <p class="value-card-subline">Unique produce. Locally grown. Harvested fresh.</p>
+          <p class="value-card-body">Stand out with ingredients that tell a story—and deliver on quality.</p>
         </div>
       </div>
     </div>
@@ -652,42 +745,42 @@
         </ul>
       </div>
       <div class="feature-visual">
-        <div class="feature-icon">🌱</div>
+        <img src="images/IMG_5309.jpeg" alt="GreenReach Indoor Farm" />
       </div>
     </div>
   </section>
 
-  <!-- Research Section -->
+  <!-- Research & Pilots Section -->
   <section id="research" class="feature-section">
     <div class="feature-content">
-      <div class="feature-text">
-        <div class="feature-eyebrow">Evidence-Based Solutions</div>
-        <h2 class="feature-title">Key studies that guide our work</h2>
-        <p class="feature-description">
-          Our approach is grounded in rigorous research addressing the real barriers preventing local food systems from scaling.
-        </p>
-        
-        <div class="studies-grid">
-          <div class="study-card">
-            <h3>Canadian Food Sovereignty (Produce Focus)</h3>
-            <p>Mapping the vulnerabilities of Canada's fresh-produce supply and the barriers preventing local alternatives from scaling.</p>
-          </div>
-          
-          <div class="study-card">
-            <h3>A System at Risk (Supporting Local Growers)</h3>
-            <p>Identifying operational, market-access, and risk factors that hold back small and mid-sized growers—and what "support systems" actually move the needle.</p>
-          </div>
-          
-          <div class="study-card">
-            <h3>Financial Viability of Indoor Agriculture</h3>
-            <p>Separating hype from reality with unit economics, labour practicality, energy strategy, and go-to-market pathways that work in Canadian conditions.</p>
-          </div>
+      <div class="studies-grid">
+        <div class="study-card" onclick="toggleStudyCard(this)">
+          <h3>Canadian Food Sovereignty (Produce Focus) <span class="expand-icon">▼</span></h3>
+          <p>Mapping the vulnerabilities of Canada's fresh-produce supply and the barriers preventing local alternatives from scaling.</p>
         </div>
+        
+        <div class="study-card" onclick="toggleStudyCard(this)">
+          <h3>A System at Risk (Supporting Local Growers) <span class="expand-icon">▼</span></h3>
+          <p>Identifying operational, market-access, and risk factors that hold back small and mid-sized growers—and what "support systems" actually move the needle.</p>
+        </div>
+        
+        <div class="study-card" onclick="toggleStudyCard(this)">
+          <h3>Financial Viability of Indoor Agriculture <span class="expand-icon">▼</span></h3>
+          <p>Separating hype from reality with unit economics, labour practicality, energy strategy, and go-to-market pathways that work in Canadian conditions.</p>
+        </div>
+      </div>
+      
+      <div class="feature-text">
+        <div class="feature-eyebrow">Research & Pilot Projects</div>
+        <h2 class="feature-title">From research to real-world implementation</h2>
+        <p class="feature-description">
+          Our approach is grounded in rigorous research addressing the real barriers preventing local food systems from scaling—then proven through practical pilot projects.
+        </p>
       </div>
     </div>
   </section>
 
-  <!-- Pilot Projects -->
+  <!-- Pilot Implementation -->
   <section id="pilots" class="feature-section">
     <div class="feature-content">
       <div class="feature-text">
@@ -704,7 +797,7 @@
         </ul>
       </div>
       <div class="feature-visual">
-        <div class="feature-icon">🏙️</div>
+        <img src="images/IMG_5306.jpeg" alt="Living Grocer Urban Farm" />
       </div>
     </div>
   </section>
@@ -719,7 +812,7 @@
       </p>
 
       <div class="products-grid">
-        <div class="product-card">
+        <div class="product-card" onclick="window.location.href='https://greenreachgreens.com/purchase.html'" style="cursor: pointer;">
           <h3>Light Engine</h3>
           <div class="product-subtitle">Seed-to-Table Farm Management System</div>
           <p>
@@ -756,7 +849,7 @@
         </ul>
       </div>
       <div class="feature-visual">
-        <div class="feature-icon">🤝</div>
+        <img src="images/_MAT9338.jpg" alt="Building a stronger system together" />
       </div>
     </div>
   </section>
@@ -767,27 +860,46 @@
       <div class="footer-about">
         <h3>GreenReach</h3>
         <p>
-          Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations to produce fresh food reliably, year-round.
+          Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.
         </p>
       </div>
 
       <div class="footer-links">
-        <h4>Our Work</h4>
+        <h4>Main Sites</h4>
         <ul>
-          <li><a href="#research">Research Studies</a></li>
-          <li><a href="#pilots">Pilot Projects</a></li>
-          <li><a href="#products">Product Development</a></li>
-          <li><a href="#mission">Our Mission</a></li>
+          <li><a href="/greenreach-org.html">Home</a></li>
+          <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+          <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
         </ul>
       </div>
 
       <div class="footer-links">
-        <h4>Solutions</h4>
+        <h4>Light Engine</h4>
         <ul>
-          <li><a href="https://greenreachgreens.com/wholesale-landing.html">GreenReach Wholesale</a></li>
-          <li><a href="#products">Light Engine Platform</a></li>
-          <li><a href="#products">GROW System</a></li>
-          <li><a href="#pilots">Living Grocer Farm</a></li>
+          <li><a href="/purchase.html">Purchase</a></li>
+          <li><a href="/landing-edge.html">Edge Device</a></li>
+          <li><a href="/landing-cloud.html">Cloud Service</a></li>
+          <li><a href="/landing-downloads.html">Downloads</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Wholesale</h4>
+        <ul>
+          <li><a href="/wholesale-landing.html">Buyer Portal</a></li>
+          <li><a href="/wholesale-learn-more.html">Learn More</a></li>
+          <li><a href="/GR-wholesale.html">Buyer Login</a></li>
+          <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Admin Access</h4>
+        <ul>
+          <li><a href="/GR-central-admin-login.html">Central Admin Login</a></li>
+          <li><a href="/LE-admin.html">Light Engine Admin</a></li>
+          <li><a href="/farm-admin.html">Farm Admin</a></li>
         </ul>
       </div>
     </div>
@@ -796,5 +908,11 @@
       <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
     </div>
   </footer>
+
+  <script>
+    function toggleStudyCard(card) {
+      card.classList.toggle('expanded');
+    }
+  </script>
 </body>
 </html>

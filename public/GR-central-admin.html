@@ -2631,6 +2631,141 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Platform Monitoring View (Light Engine Fleet) -->
+            <div id="platform-monitoring-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Platform Monitoring</span>
+                </div>
+
+                <div class="header">
+                    <h1>Light Engine Fleet Monitoring</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Central monitoring and analytics for Light Engine deployments</p>
+                </div>
+
+                <!-- Fleet KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Connected Farms</div>
+                        <div class="kpi-value" id="platform-farms">24</div>
+                        <div class="kpi-change positive">
+                            <span>↑</span>
+                            <span>3 added this month</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-label">Monthly Recurring Revenue</div>
+                        <div class="kpi-value" id="platform-mrr">$4,847</div>
+                        <div class="kpi-change positive">
+                            <span>↑</span>
+                            <span>$621 vs last month</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Growing Zones</div>
+                        <div class="kpi-value" id="platform-zones">312</div>
+                        <div class="kpi-change positive">
+                            <span>Across all farms</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-label">Connected Sensors</div>
+                        <div class="kpi-value" id="platform-sensors">1,247</div>
+                        <div class="kpi-change positive">
+                            <span>↑</span>
+                            <span>18 added this week</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-label">Fleet Health Score</div>
+                        <div class="kpi-value" id="platform-health">87</div>
+                        <div class="kpi-change positive">
+                            <span>Average across fleet</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Alerts</div>
+                        <div class="kpi-value" id="platform-alerts">12</div>
+                        <div class="kpi-change neutral">
+                            <span>Requiring attention</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fleet Deployment Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Light Engine Deployments</div>
+                        <button class="btn" onclick="loadPlatformMonitoring()">Refresh</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Farm</th>
+                                        <th>Plan</th>
+                                        <th>Status</th>
+                                        <th>Sensors</th>
+                                        <th>API Calls (30d)</th>
+                                        <th>Data Storage</th>
+                                        <th>Health</th>
+                                        <th>Last Seen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="platform-deployments-tbody">
+                                    <tr>
+                                        <td>
+                                            <strong>Sandbox Test Farm</strong><br>
+                                            <small style="color: var(--text-muted);">sandbox-test-tenant</small>
+                                        </td>
+                                        <td><span class="badge badge-info">Starter</span></td>
+                                        <td><span class="badge badge-warning">TRIAL</span></td>
+                                        <td>5 / 10</td>
+                                        <td>2,847</td>
+                                        <td>128 MB</td>
+                                        <td><span class="badge badge-success">92%</span></td>
+                                        <td>2 min ago</td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <strong>Urban Greens Co.</strong><br>
+                                            <small style="color: var(--text-muted);">urban-greens-123</small>
+                                        </td>
+                                        <td><span class="badge badge-primary">Pro</span></td>
+                                        <td><span class="badge badge-success">ACTIVE</span></td>
+                                        <td>47 / 50</td>
+                                        <td>18,392</td>
+                                        <td>2.4 GB</td>
+                                        <td><span class="badge badge-success">94%</span></td>
+                                        <td>5 sec ago</td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <strong>VertiFarm Solutions</strong><br>
+                                            <small style="color: var(--text-muted);">vertifarm-456</small>
+                                        </td>
+                                        <td><span class="badge badge-primary">Enterprise</span></td>
+                                        <td><span class="badge badge-success">ACTIVE</span></td>
+                                        <td>312 / 500</td>
+                                        <td>127,684</td>
+                                        <td>18.7 GB</td>
+                                        <td><span class="badge badge-success">89%</span></td>
+                                        <td>12 sec ago</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 

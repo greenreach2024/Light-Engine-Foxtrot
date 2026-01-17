@@ -421,37 +421,64 @@
     /* Footer */
     footer {
       background: var(--text);
-      color: rgba(255, 255, 255, 0.7);
-      padding: 60px 22px 32px;
+      color: white;
+      padding: 80px 22px 40px;
     }
 
     .footer-content {
       max-width: 1200px;
       margin: 0 auto;
-      text-align: center;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+      gap: 40px;
+      margin-bottom: 40px;
     }
 
-    .footer-logo {
-      font-size: 21px;
-      font-weight: 600;
-      color: var(--accent);
+    .footer-about h3 {
+      font-size: 24px;
       margin-bottom: 16px;
-      display: block;
+      color: var(--accent);
     }
 
-    .footer-description {
+    .footer-about p {
+      font-size: 15px;
+      line-height: 1.6;
+      opacity: 0.8;
+    }
+
+    .footer-links h4 {
       font-size: 14px;
-      margin-bottom: 32px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    .footer-links ul {
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
       opacity: 0.7;
+      transition: opacity 0.3s;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .footer-links a:hover {
+      opacity: 1;
     }
 
     .footer-bottom {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding-top: 32px;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-      font-size: 12px;
       text-align: center;
+      padding-top: 40px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+      opacity: 0.6;
     }
 
     /* Loading State */
@@ -554,11 +581,12 @@
   <!-- Navigation -->
   <nav>
     <div class="nav-content">
-      <a href="#" class="nav-logo" id="farm-logo">Loading...</a>
+      <a href="/greenreach-org.html" class="nav-logo"><img src="images/greenreach-clr.png" alt="GreenReach" /></a>
       <ul class="nav-links">
-        <li><a href="#about">About</a></li>
-        <li><a href="#products">Products</a></li>
-        <li><a href="#sustainability">Sustainability</a></li>
+        <li><a href="/greenreach-org.html">Home</a></li>
+        <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+        <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
+        <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
       </ul>
       <a href="/farm-sales-shop.html" class="nav-cta">Start Shopping</a>
     </div>
@@ -688,13 +716,54 @@
   <!-- Footer -->
   <footer>
     <div class="footer-content">
-      <div class="footer-logo" id="footer-farm-name">Loading...</div>
-      <p class="footer-description" id="footer-description">
-        Fresh, sustainable produce grown locally with Light Engine technology.
-      </p>
+      <div class="footer-about">
+        <h3>GreenReach</h3>
+        <p>
+          Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.
+        </p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Main Sites</h4>
+        <ul>
+          <li><a href="/greenreach-org.html">Home</a></li>
+          <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+          <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Light Engine</h4>
+        <ul>
+          <li><a href="/purchase.html">Purchase</a></li>
+          <li><a href="/landing-edge.html">Edge Device</a></li>
+          <li><a href="/landing-cloud.html">Cloud Service</a></li>
+          <li><a href="/landing-downloads.html">Downloads</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Wholesale</h4>
+        <ul>
+          <li><a href="/wholesale-landing.html">Buyer Portal</a></li>
+          <li><a href="/wholesale-learn-more.html">Learn More</a></li>
+          <li><a href="/GR-wholesale.html">Buyer Login</a></li>
+          <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Admin Access</h4>
+        <ul>
+          <li><a href="/GR-central-admin-login.html">Central Admin Login</a></li>
+          <li><a href="/LE-admin.html">Light Engine Admin</a></li>
+          <li><a href="/farm-admin.html">Farm Admin</a></li>
+        </ul>
+      </div>
     </div>
     <div class="footer-bottom">
-      <p>&copy; <span id="current-year"></span> <span id="footer-farm-name-2">Farm</span>. Powered by <a href="https://www.greenreachgreens.com" style="color: var(--accent); text-decoration: none;">GreenReach Light Engine</a>.</p>
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
     </div>
   </footer>
 

@@ -406,22 +406,37 @@
         footer {
             background: #1e293b;
             color: white;
-            padding: 60px 20px 40px;
+            padding: 80px 20px 40px;
         }
 
         .footer-content {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 48px;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+            gap: 40px;
             margin-bottom: 40px;
         }
 
+        .footer-about h3 {
+            font-size: 24px;
+            margin-bottom: 16px;
+            color: #10b981;
+        }
+
+        .footer-about p {
+            font-size: 15px;
+            line-height: 1.6;
+            opacity: 0.8;
+        }
+
         .footer-column h4 {
-            font-size: 16px;
-            margin-bottom: 20px;
-            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 16px;
+            color: #10b981;
         }
 
         .footer-column ul {
@@ -434,22 +449,25 @@
         }
 
         .footer-column a {
-            color: rgba(255, 255, 255, 0.7);
+            color: white;
             text-decoration: none;
             font-size: 14px;
-            transition: color 0.3s;
+            opacity: 0.7;
+            transition: opacity 0.3s;
         }
 
         .footer-column a:hover {
-            color: #10b981;
+            opacity: 1;
         }
 
         .footer-bottom {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
-            padding-top: 30px;
+            padding-top: 40px;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             text-align: center;
+            font-size: 12px;
+            opacity: 0.6;
         }
 
         .footer-bottom a {
@@ -459,12 +477,6 @@
 
         .footer-bottom a:hover {
             color: #10b981;
-        }
-
-        footer p {
-            opacity: 0.8;
-            font-size: 0.9rem;
-            line-height: 1.8;
         }
 
         @media (max-width: 768px) {
@@ -728,10 +740,12 @@
 <body>
     <header>
         <nav>
-            <a href="/purchase.html" class="logo">Light Engine</a>
+            <a href="/greenreach-org.html" class="logo"><img src="images/greenreach-clr.png" alt="GreenReach" style="height: 32px;" /></a>
             <div class="nav-links">
-                <a href="/landing-edge.html">Edge Device</a>
-                <a href="/landing-cloud.html">Cloud Service</a>
+                <a href="/greenreach-org.html">Home</a>
+                <a href="/growing-made-easy.html">Growing Made Easy</a>
+                <a href="/grow-and-sell.html">GreenReach Wholesale</a>
+                <a href="https://greenreachgreens.com/wholesale-about.html">About</a>
             </div>
         </nav>
     </header>
@@ -941,33 +955,54 @@
 
     <footer>
         <div class="footer-content">
+            <div class="footer-about">
+                <h3>GreenReach</h3>
+                <p>
+                    Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.
+                </p>
+            </div>
+
             <div class="footer-column">
-                <h4>Product</h4>
+                <h4>Main Sites</h4>
                 <ul>
-                    <li><a href="/landing-cloud.html">Cloud Solution</a></li>
+                    <li><a href="/greenreach-org.html">Home</a></li>
+                    <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+                    <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
+                    <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h4>Light Engine</h4>
+                <ul>
+                    <li><a href="/purchase.html">Purchase</a></li>
                     <li><a href="/landing-edge.html">Edge Device</a></li>
-                    <li><a href="/purchase.html">Pricing</a></li>
+                    <li><a href="/landing-cloud.html">Cloud Service</a></li>
+                    <li><a href="/landing-downloads.html">Downloads</a></li>
                 </ul>
             </div>
+
             <div class="footer-column">
-                <h4>Company</h4>
+                <h4>Wholesale</h4>
                 <ul>
-                    <li><a href="/contact">Contact</a></li>
-                    <li><a href="/landing.html">About</a></li>
+                    <li><a href="/wholesale-landing.html">Buyer Portal</a></li>
+                    <li><a href="/wholesale-learn-more.html">Learn More</a></li>
+                    <li><a href="/GR-wholesale.html">Buyer Login</a></li>
+                    <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
                 </ul>
             </div>
+
             <div class="footer-column">
-                <h4>Support</h4>
+                <h4>Admin Access</h4>
                 <ul>
-                    <li><a href="mailto:support@greenreach.io">Email Support</a></li>
-                    <li><a href="/status">System Status</a></li>
-                    <li><a href="/security">Security</a></li>
+                    <li><a href="/GR-central-admin-login.html">Central Admin Login</a></li>
+                    <li><a href="/LE-admin.html">Light Engine Admin</a></li>
+                    <li><a href="/farm-admin.html">Farm Admin</a></li>
                 </ul>
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2025 Light Engine. Powered by GreenReach. All rights reserved. | <a href="/privacy">Privacy</a> | <a href="/terms">Terms</a></p>
-            <p style="margin-top: 10px;">Software & Hardware by Light Engine | Monitoring & Wholesale by GreenReach</p>
+            <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
         </div>
     </footer>
 
