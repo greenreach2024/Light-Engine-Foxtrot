@@ -1163,7 +1163,7 @@
             try {
                 // Disable button and show loading
                 submitBtn.disabled = true;
-                submitBtn.textContent = 'Submitting...';
+                submitBtn.textContent = 'Processing...';
                 
                 // Get form values
                 const farmName = document.getElementById('modalFarmName').value.trim();
@@ -1198,36 +1198,106 @@
                     return;
                 }
                 
-                // Validate Farm ID format if provided
-                if (farmId && !farmId.match(/^GR-[A-Z0-9]{10,}$/i)) {
-                    showModalError('Invalid Farm ID format. Farm IDs start with "GR-" followed by alphanumeric characters (e.g., GR-1234567890ABCD)');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = originalText;
+                // If Farm ID provided, verify it first
+                if (farmId) {
+                    // Validate Farm ID format
+                    if (!farmId.match(/^GR-[A-Z0-9]{10,}$/i)) {
+                        showModalError('Invalid Farm ID format. Farm IDs start with "GR-" followed by alphanumeric characters (e.g., GR-1234567890ABCD)');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                        return;
+                    }
+                    
+                    console.log('[Purchase] Verifying Farm ID:', farmId);
+                    submitBtn.textContent = 'Verifying Farm ID...';
+                    
+                    // Verify Farm ID
+                    const verifyResponse = await fetch('/api/farms/verify-id', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ farm_id: farmId })
+                    });
+                    
+                    const verifyData = await verifyResponse.json();
+                    console.log('[Purchase] Verification result:', verifyData);
+                    
+                    if (!verifyData.valid) {
+                        showModalError(verifyData.message || 'Invalid Farm ID. Please check your Farm ID or leave blank for new registration.');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                        return;
+                    }
+                    
+                    // Farm ID is valid - proceed to payment
+                    console.log('[Purchase] Farm ID verified - proceeding to payment');
+                    submitBtn.textContent = 'Creating checkout session...';
+                    
+                    const response = await fetch('/api/farms/create-checkout-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            plan: currentPlan,
+                            farm_name: farmName,
+                            contact_name: contactName,
+                            email: email,
+                            farm_id: farmId
+                        })
+                    });
+                    
+                    console.log('[Purchase] Payment response status:', response.status);
+                    
+                    if (!response.ok) {
+                        const data = await response.json();
+                        console.error('[Purchase] Payment error:', data);
+                        throw new Error(data.error || data.message || `Payment system error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('[Purchase] Checkout session created:', data);
+                    
+                    if (!data.url) {
+                        throw new Error('No payment URL received. Please try again or contact support.');
+                    }
+                    
+                    // Store session info
+                    localStorage.setItem('pendingPurchase', JSON.stringify({
+                        sessionId: data.sessionId,
+                        plan: currentPlan,
+                        farmName: farmName,
+                        farmId: farmId,
+                        email: email
+                    }));
+                    
+                    sessionStorage.setItem('checkoutSessionId', data.sessionId);
+                    
+                    console.log('[Purchase] Redirecting to Square payment:', data.url);
+                    
+                    // Redirect to Square payment
+                    window.location.href = data.url;
                     return;
                 }
                 
-                console.log('[Purchase] Submitting lead:', { plan: currentPlan, email, farmName, farmId });
+                // No Farm ID - submit to CRM for pre-order/lead capture
+                console.log('[Purchase] No Farm ID - submitting to CRM:', { plan: currentPlan, email, farmName });
+                submitBtn.textContent = 'Submitting...';
                 
-                // Submit to CRM endpoint
                 const response = await fetch('/api/purchase/leads', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         farmName: farmName,
                         contactName: contactName,
                         email: email,
-                        farmId: farmId,
+                        farmId: null,
                         plan: currentPlan
                     })
                 });
                 
-                console.log('[Purchase] Response status:', response.status);
+                console.log('[Purchase] CRM response status:', response.status);
                 
                 if (!response.ok) {
                     const data = await response.json();
-                    console.error('[Purchase] Server error:', data);
+                    console.error('[Purchase] CRM error:', data);
                     throw new Error(data.message || `Server returned status ${response.status}`);
                 }
                 
@@ -1253,7 +1323,7 @@
                 console.error('[Purchase] Error details:', error);
                 
                 // Provide user-friendly error message
-                let errorMsg = error.message || 'Failed to submit your information. Please try again.';
+                let errorMsg = error.message || 'Failed to process your request. Please try again.';
                 
                 // Add contact info for persistent errors
                 if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {

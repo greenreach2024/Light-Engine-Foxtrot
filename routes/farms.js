@@ -205,6 +205,61 @@ router.get('/:farmId', (req, res) => {
 });
 
 /**
+ * POST /api/farms/verify-id
+ * Verify if a Farm ID is valid and active
+ * Used by purchase flow to determine if payment should be enabled
+ * 
+ * Body: { farm_id: string }
+ * Returns: { valid: boolean, farm_name?: string, status?: string }
+ */
+router.post('/verify-id', (req, res) => {
+  try {
+    const { farm_id } = req.body;
+
+    if (!farm_id) {
+      return res.status(400).json({
+        valid: false,
+        error: 'farm_id is required'
+      });
+    }
+
+    // Validate format
+    if (!farm_id.match(/^GR-[A-Z0-9]{10,}$/i)) {
+      return res.json({
+        valid: false,
+        message: 'Invalid Farm ID format'
+      });
+    }
+
+    // Check if farm exists
+    const farm = registeredFarms.get(farm_id);
+
+    if (!farm) {
+      return res.json({
+        valid: false,
+        message: 'Farm ID not found in our system'
+      });
+    }
+
+    // Farm exists and is valid
+    return res.json({
+      valid: true,
+      farm_id: farm.farm_id,
+      farm_name: farm.farm_name,
+      status: farm.status,
+      message: 'Farm ID verified successfully'
+    });
+
+  } catch (error) {
+    console.error('[Farm Verification] Error:', error);
+    return res.status(500).json({
+      valid: false,
+      error: 'verification_failed'
+    });
+  }
+});
+
+/**
  * POST /api/farms/generate-code
  * 
  * GreenReach admin endpoint to generate registration codes
