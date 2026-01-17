@@ -10135,6 +10135,7 @@ import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
 import authRouter from './routes/auth.js';
 import farmsRouter from './routes/farms.js';
 import purchaseRouter from './routes/purchase.js';
+import purchaseLeadsRouter from './routes/purchase-leads.js';
 import setupWizardRouter from './routes/setup-wizard.js';
 import pg from 'pg';
 
@@ -10173,6 +10174,16 @@ app.use('/api/farms', farmsRouter);
  * - GET /api/farms/verify-session/:session_id: Verify payment and create account
  */
 app.use('/api/farms', purchaseRouter);
+
+/**
+ * Purchase Leads CRM
+ * Capture pre-order interest and schedule calls
+ * - POST /api/purchase/leads: Create new lead
+ * - GET /api/purchase/leads: List all leads (admin)
+ * - GET /api/purchase/leads/:leadId: Get specific lead
+ * - PUT /api/purchase/leads/:leadId/status: Update lead status
+ */
+app.use('/api/purchase', purchaseLeadsRouter);
 
 /**
  * Authentication & Device Pairing

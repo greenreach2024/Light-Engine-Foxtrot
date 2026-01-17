@@ -772,8 +772,8 @@
                     <h2 class="product-title">The Edge</h2>
                     <p class="product-subtitle">Complete on-premises control with integrated environmental automation and inventory management</p>
                     
-                    <div class="product-price">$1</div>
-                    <p class="price-note">One-time hardware purchase (test pricing)</p>
+                    <div class="product-price" style="font-size: 2rem;">Launching Wednesday, April 22, 2026</div>
+                    <p class="price-note">Pre-order now - Schedule a call with our team</p>
 
                     <ul class="features-list">
                         <li>
@@ -819,8 +819,8 @@
                     <h2 class="product-title">The Cloud</h2>
                     <p class="product-subtitle">Manage your farm operations from anywhere with cloud-based inventory and sales management</p>
                     
-                    <div class="product-price">$1<span style="font-size: 1.5rem; font-weight: 500;">/mo</span></div>
-                    <p class="price-note">Monthly subscription (test pricing)</p>
+                    <div class="product-price" style="font-size: 2rem;">Launching Wednesday, April 22, 2026</div>
+                    <p class="price-note">Pre-order now - Schedule a call with our team</p>
 
                     <ul class="features-list">
                         <li>
@@ -1068,12 +1068,28 @@
                         <p class="form-help">Use a real email address - we'll send your login credentials here. Avoid generic test emails like test@example.com</p>
                     </div>
 
+                    <div class="form-group">
+                        <label for="modalFarmId" class="form-label">
+                            Unique Farm ID <span style="color: #6e6e73;">(Optional - Existing Customers Only)</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="modalFarmId" 
+                            class="form-input" 
+                            placeholder="e.g., GR-1234567890ABCD"
+                            minlength="18"
+                            maxlength="20"
+                            style="font-family: monospace;"
+                        >
+                        <p class="form-help">If you're an existing customer, enter your Farm ID from Settings. New customers can leave this blank.</p>
+                    </div>
+
                     <div class="modal-footer">
                         <button type="button" class="btn-modal btn-modal-cancel" onclick="closePurchaseModal()">
                             Cancel
                         </button>
                         <button type="submit" class="btn-modal btn-modal-submit" id="modalSubmitBtn">
-                            Continue to Payment
+                            Schedule a Call
                         </button>
                     </div>
                 </form>
@@ -1147,14 +1163,15 @@
             try {
                 // Disable button and show loading
                 submitBtn.disabled = true;
-                submitBtn.textContent = 'Creating checkout session...';
+                submitBtn.textContent = 'Submitting...';
                 
                 // Get form values
                 const farmName = document.getElementById('modalFarmName').value.trim();
                 const contactName = document.getElementById('modalContactName').value.trim();
                 const email = document.getElementById('modalEmail').value.trim();
+                const farmId = document.getElementById('modalFarmId').value.trim() || null;
                 
-                // Validate
+                // Validate required fields
                 if (!farmName || !contactName || !email) {
                     showModalError('Please fill in all required fields');
                     submitBtn.disabled = false;
@@ -1162,29 +1179,47 @@
                     return;
                 }
                 
-                // Block common test email domains that Square rejects
-                const testEmailDomains = ['example.com', 'test.com', 'localhost', 'invalid'];
-                const emailDomain = email.split('@')[1]?.toLowerCase();
-                if (testEmailDomains.includes(emailDomain)) {
-                    showModalError('Please use a real email address. Test emails like "test@example.com" are not accepted by our payment processor.');
+                // Validate email format
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    showModalError('Please provide a valid email address');
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
                     return;
                 }
                 
-                console.log('[Purchase] Creating checkout for:', { plan: currentPlan, email, farmName });
+                // Block common test email domains
+                const testEmailDomains = ['example.com', 'test.com', 'localhost', 'invalid'];
+                const emailDomain = email.split('@')[1]?.toLowerCase();
+                if (testEmailDomains.includes(emailDomain)) {
+                    showModalError('Please use a real email address. Test emails like "test@example.com" are not accepted.');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
                 
-                // Create checkout session
-                const response = await fetch('/api/farms/create-checkout-session', {
+                // Validate Farm ID format if provided
+                if (farmId && !farmId.match(/^GR-[A-Z0-9]{10,}$/i)) {
+                    showModalError('Invalid Farm ID format. Farm IDs start with "GR-" followed by alphanumeric characters (e.g., GR-1234567890ABCD)');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+                
+                console.log('[Purchase] Submitting lead:', { plan: currentPlan, email, farmName, farmId });
+                
+                // Submit to CRM endpoint
+                const response = await fetch('/api/purchase/leads', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        plan: currentPlan,
-                        farm_name: farmName,
-                        contact_name: contactName,
-                        email: email
+                        farmName: farmName,
+                        contactName: contactName,
+                        email: email,
+                        farmId: farmId,
+                        plan: currentPlan
                     })
                 });
                 
@@ -1193,50 +1228,38 @@
                 if (!response.ok) {
                     const data = await response.json();
                     console.error('[Purchase] Server error:', data);
-                    
-                    // Handle specific error from Square
-                    if (data.error && data.error.includes('Invalid email')) {
-                        throw new Error('Invalid email address. Please use a real email like yourname@yourdomain.com');
-                    }
-                    
-                    // Show detailed error message
-                    throw new Error(data.error || data.message || `Server returned status ${response.status}`);
+                    throw new Error(data.message || `Server returned status ${response.status}`);
                 }
                 
                 const data = await response.json();
-                console.log('[Purchase] Checkout session created:', data);
+                console.log('[Purchase] Lead created:', data);
                 
-                if (!data.url) {
-                    throw new Error('No payment URL received from server. Please try again or contact support.');
-                }
+                // Success! Show confirmation message
+                submitBtn.textContent = '✓ Submitted Successfully';
+                submitBtn.style.background = '#10b981';
                 
-                // Store session info for verification
-                localStorage.setItem('pendingPurchase', JSON.stringify({
-                    sessionId: data.sessionId,
-                    plan: currentPlan,
-                    farmName: farmName,
-                    email: email
-                }));
-                
-                // Also store in sessionStorage which is more reliable
-                sessionStorage.setItem('checkoutSessionId', data.sessionId);
-                
-                console.log('[Purchase] Redirecting to Square payment:', data.url);
-                
-                // Redirect to Square payment
-                window.location.href = data.url;
+                // Close modal after 2 seconds and show thank you message
+                setTimeout(() => {
+                    closePurchaseModal();
+                    alert(`Thank you for your interest, ${contactName}!\\n\\nYour pre-order request for ${planDetails[currentPlan].name} has been received.\\n\\nLead ID: ${data.lead_id}\\n\\nOur team will contact you within 1-2 business days to schedule a call and discuss your farm's needs.\\n\\nCheck your email (${email}) for confirmation.`);
+                    
+                    // Reset button
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    submitBtn.style.background = '';
+                }, 2000);
                 
             } catch (error) {
                 console.error('[Purchase] Error details:', error);
                 
                 // Provide user-friendly error message
-                let errorMsg = error.message || 'Failed to create checkout session. Please try again.';
+                let errorMsg = error.message || 'Failed to submit your information. Please try again.';
                 
                 // Add contact info for persistent errors
                 if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
                     errorMsg = 'Unable to connect to server. Please check your internet connection and try again.';
-                } else if (errorMsg.includes('500') || errorMsg.includes('not configured')) {
-                    errorMsg = 'Payment system is temporarily unavailable. Please contact support at support@greenreach.io';
+                } else if (errorMsg.includes('500')) {
+                    errorMsg = 'Server error occurred. Please contact support at support@greenreach.io';
                 }
                 
                 showModalError(errorMsg);
