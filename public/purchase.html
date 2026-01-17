@@ -785,7 +785,7 @@
         <h1>Choose Your Platform</h1>
         <p>Professional farm management solutions designed for modern growers</p>
         <div class="test-pricing-note">
-            ⚠️ TEST PRICING: All products $1 for development testing
+            The Movement Begins
             <div class="countdown-timer" id="countdown-timer">
                 <div class="countdown-unit">
                     <span class="countdown-value" id="days">--</span>
@@ -1112,7 +1112,7 @@
                             required
                             pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
                         >
-                        <p class="form-help">Use a real email address - we'll send your login credentials here. Avoid generic test emails like test@example.com</p>
+                        <p class="form-help">We'll send your login credentials to this email address</p>
                     </div>
 
                     <div class="form-group">
@@ -1239,7 +1239,7 @@
                 const testEmailDomains = ['example.com', 'test.com', 'localhost', 'invalid'];
                 const emailDomain = email.split('@')[1]?.toLowerCase();
                 if (testEmailDomains.includes(emailDomain)) {
-                    showModalError('Please use a real email address. Test emails like "test@example.com" are not accepted.');
+                    showModalError('Please provide a valid email address from a real domain.');
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
                     return;
