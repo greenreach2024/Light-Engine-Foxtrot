@@ -325,6 +325,12 @@ function renderContextualSidebar() {
                     items: [
                         { label: 'LE Fleet Monitoring', view: 'platform-monitoring' }
                     ]
+                },
+                {
+                    title: 'Field Tools',
+                    items: [
+                        { label: 'Edge Setup Guide', view: 'edge-setup', external: '/landing-downloads.html' }
+                    ]
                 }
             ];
             break;
