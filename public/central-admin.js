@@ -3420,30 +3420,6 @@ async function loadFarmAlertsView(farmId) {
         console.error('Error loading farm alerts:', error);
     }
 }
-    document.getElementById('analytics-revenue-avg').textContent = `$${(summary.totalRevenue / summary.daysReported).toFixed(2)}/day avg`;
-    
-    // Profit
-    const profitMargin = summary.totalRevenue > 0 ? ((summary.netProfit / summary.totalRevenue) * 100).toFixed(1) : 0;
-    document.getElementById('analytics-profit').textContent = `$${summary.netProfit.toFixed(2)}`;
-    document.getElementById('analytics-profit-margin').textContent = `${profitMargin}% margin`;
-    
-    // Efficiency
-    document.getElementById('analytics-efficiency').textContent = `${summary.avgEfficiency.toFixed(1)}%`;
-    document.getElementById('analytics-efficiency-trend').textContent = 'Optimal range';
-    
-    // Trays
-    const traysHarvested = analyticsData.metrics.reduce((sum, m) => sum + (m.trays_harvested || 0), 0);
-    const traysSeeded = analyticsData.metrics.reduce((sum, m) => sum + (m.trays_seeded || 0), 0);
-    document.getElementById('analytics-trays-harvested').textContent = traysHarvested;
-    document.getElementById('analytics-trays-seeded').textContent = `${traysSeeded} seeded`;
-    
-    // Orders
-    document.getElementById('analytics-orders').textContent = summary.totalOrders;
-    document.getElementById('analytics-orders-avg').textContent = `${(summary.totalOrders / summary.daysReported).toFixed(1)}/day avg`;
-    
-    // Update days count
-    document.getElementById('analytics-days-count').textContent = `Last ${summary.daysReported} days`;
-}
 
 /**
  * Render analytics metrics table
