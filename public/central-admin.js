@@ -3,7 +3,10 @@
  * Enterprise-grade farm management and monitoring system
  */
 
-const API_BASE = window.location.origin;
+// Use the main domain consistently (without www)
+const API_BASE = window.location.hostname.includes('greenreachgreens.com') 
+    ? 'https://greenreachgreens.com' 
+    : window.location.origin;
 
 // Authentication check - redirect to login if not authenticated
 function checkAuth() {

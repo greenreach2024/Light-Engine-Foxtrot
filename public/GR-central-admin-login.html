@@ -237,8 +237,10 @@
     </div>
 
     <script>
-        // Force HTTPS to avoid mixed-content blocks when page is served securely
-        const API_BASE = window.location.origin.replace(/^http:/i, 'https:');
+        // Use the main domain consistently (without www)
+        const API_BASE = window.location.hostname.includes('greenreachgreens.com')
+            ? 'https://greenreachgreens.com'
+            : window.location.origin.replace(/^http:/i, 'https:');
         const form = document.getElementById('login-form');
         const alertDiv = document.getElementById('alert');
         const loginButton = document.getElementById('login-button');
