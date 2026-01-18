@@ -13991,54 +13991,114 @@ app.get('/api/admin/analytics/farms/:farmId/metrics', adminAuthMiddleware, async
 app.get('/api/admin/fleet/monitoring', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log('[admin] GET /api/admin/fleet/monitoring');
   
-  // TODO: Query actual fleet data from database
-  // For now, return structured placeholder data
-  res.json({
-    summary: {
-      connectedFarms: 24,
-      monthlyRecurringRevenue: 4847,
-      totalZones: 312,
-      connectedSensors: 1247,
-      fleetHealthScore: 87,
-      activeAlerts: 12
-    },
-    deployments: [
-      {
-        farmId: 'sandbox-test-tenant',
-        farmName: 'Sandbox Test Farm',
-        plan: 'Starter',
-        status: 'TRIAL',
-        sensors: { current: 5, limit: 10 },
-        apiCalls30d: 2847,
-        dataStorageMB: 128,
-        healthScore: 92,
-        lastSeen: new Date(Date.now() - 2 * 60 * 1000).toISOString() // 2 min ago
-      },
-      {
-        farmId: 'urban-greens-123',
-        farmName: 'Urban Greens Co.',
-        plan: 'Pro',
-        status: 'ACTIVE',
-        sensors: { current: 47, limit: 50 },
-        apiCalls30d: 18392,
-        dataStorageMB: 2457,
-        healthScore: 94,
-        lastSeen: new Date(Date.now() - 5 * 1000).toISOString() // 5 sec ago
-      },
-      {
-        farmId: 'vertifarm-456',
-        farmName: 'VertiFarm Solutions',
-        plan: 'Enterprise',
-        status: 'ACTIVE',
-        sensors: { current: 312, limit: 500 },
-        apiCalls30d: 127684,
-        dataStorageMB: 19148,
-        healthScore: 89,
-        lastSeen: new Date(Date.now() - 12 * 1000).toISOString() // 12 sec ago
+  try {
+    // Query real farms data from database
+    const farmsResult = await db.query(`
+      SELECT 
+        f.id,
+        f.farm_id,
+        f.name,
+        f.status,
+        f.last_seen,
+        f.created_at,
+        fm.room_count,
+        fm.zone_count,
+        fm.device_count,
+        fm.alert_count
+      FROM farms f
+      LEFT JOIN LATERAL (
+        SELECT 
+          room_count,
+          zone_count,
+          device_count,
+          alert_count
+        FROM farm_metrics
+        WHERE farm_id = f.id
+        ORDER BY recorded_at DESC
+        LIMIT 1
+      ) fm ON true
+      WHERE f.enabled = true
+      ORDER BY f.created_at DESC
+    `);
+    
+    const farms = farmsResult.rows || [];
+    
+    // Calculate aggregate metrics
+    const totalZones = farms.reduce((sum, f) => sum + (f.zone_count || 0), 0);
+    const totalDevices = farms.reduce((sum, f) => sum + (f.device_count || 0), 0);
+    const activeAlerts = farms.reduce((sum, f) => sum + (f.alert_count || 0), 0);
+    
+    // Calculate fleet health (percentage of online farms)
+    const onlineFarms = farms.filter(f => f.status === 'online').length;
+    const fleetHealthScore = farms.length > 0 ? Math.round((onlineFarms / farms.length) * 100) : 0;
+    
+    // Calculate MRR (placeholder - would come from billing system)
+    // Assume $50/month per farm for demo
+    const monthlyRecurringRevenue = farms.length * 50;
+    
+    // Transform farms into deployment format
+    const deployments = farms.map(f => {
+      // Determine plan based on device count
+      let plan = 'Starter';
+      let sensorLimit = 10;
+      if (f.device_count > 50) {
+        plan = 'Enterprise';
+        sensorLimit = 500;
+      } else if (f.device_count > 10) {
+        plan = 'Pro';
+        sensorLimit = 50;
       }
-    ],
-    timestamp: new Date().toISOString()
-  });
+      
+      // Determine status
+      let status = 'ACTIVE';
+      if (!f.last_seen || (Date.now() - new Date(f.last_seen).getTime() > 7 * 24 * 60 * 60 * 1000)) {
+        status = 'TRIAL';
+      }
+      
+      // Calculate health score
+      let healthScore = 100;
+      if (f.status === 'offline') healthScore = 50;
+      else if (f.status === 'warning') healthScore = 75;
+      else if (f.status === 'critical') healthScore = 25;
+      
+      // Estimate storage (10MB base + 1MB per device)
+      const dataStorageMB = 10 + (f.device_count || 0);
+      
+      // Estimate API calls (1000 base + 500 per device for 30 days)
+      const apiCalls30d = 1000 + ((f.device_count || 0) * 500);
+      
+      return {
+        farmId: f.farm_id,
+        farmName: f.name,
+        plan,
+        status,
+        sensors: {
+          current: f.device_count || 0,
+          limit: sensorLimit
+        },
+        apiCalls30d,
+        dataStorageMB,
+        healthScore,
+        lastSeen: f.last_seen || f.created_at
+      };
+    });
+    
+    res.json({
+      summary: {
+        connectedFarms: farms.length,
+        monthlyRecurringRevenue,
+        totalZones,
+        connectedSensors: totalDevices,
+        fleetHealthScore,
+        activeAlerts
+      },
+      deployments,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[admin] Error fetching fleet monitoring data:', error);
+    res.status(500).json({ error: 'Failed to fetch fleet monitoring data' });
+  }
 }));
 
 /**

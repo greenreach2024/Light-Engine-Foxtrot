@@ -4108,12 +4108,6 @@ async function loadPlatformMonitoring() {
     console.log('[Platform] Loading Light Engine fleet monitoring...');
     
     try {
-        // In production, fetch from Light Engine fleet API
-        // For now, show static data matching LE-admin.html
-        
-        // Update KPIs
-        document.getElementById('platform-farms').textContent = '24';
-        document.getElementById('platform-mrr').textContent = '$4,847';
         const response = await authenticatedFetch(`${API_BASE}/api/admin/fleet/monitoring`);
         if (!response.ok) {
             throw new Error('Failed to load fleet monitoring data');
