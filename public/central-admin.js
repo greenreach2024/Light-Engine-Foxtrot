@@ -3,10 +3,8 @@
  * Enterprise-grade farm management and monitoring system
  */
 
-// Use the main domain consistently (without www)
-const API_BASE = window.location.hostname.includes('greenreachgreens.com') 
-    ? 'https://greenreachgreens.com' 
-    : window.location.origin;
+// API_BASE is declared globally in GR-central-admin.html
+// No need to redeclare it here to avoid duplicate variable error
 
 // Authentication check - redirect to login if not authenticated
 function checkAuth() {
