@@ -1317,6 +1317,11 @@ router.post('/users', requireAdmin, async (req, res) => {
       const sesVerification = await verifySESRecipient(normalizedEmail);
       console.log('[Admin] SES verification result:', sesVerification);
       
+      // Also verify CC email (info@greenreachfarms.com)
+      console.log('[Admin] Auto-verifying CC email (info@greenreachfarms.com) in SES...');
+      const ccVerification = await verifySESRecipient('info@greenreachfarms.com');
+      console.log('[Admin] CC SES verification result:', ccVerification);
+      
       const emailHtml = generateAdminWelcomeEmail({
         first_name,
         last_name,
@@ -1329,8 +1334,8 @@ router.post('/users', requireAdmin, async (req, res) => {
       let emailSent = false;
       let emailError = null;
       
-      // Only send email if recipient is verified (or not using SES)
-      if (sesVerification.verified) {
+      // Only send email if both recipient AND CC are verified (or not using SES)
+      if (sesVerification.verified && ccVerification.verified) {
         try {
           console.log('[Admin] ===== SENDING WELCOME EMAIL (DEMO MODE) =====');
           const emailResult = await sendEmail({
@@ -1348,10 +1353,14 @@ router.post('/users', requireAdmin, async (req, res) => {
           console.error('[Admin] Error:', err.message);
           console.error('[Admin] Stack:', err.stack);
         }
-      } else if (sesVerification.needs_confirmation) {
-        emailError = 'Recipient email verification pending - AWS sent verification email to user';
-        console.log('[Admin] ⏳ Welcome email NOT sent - awaiting recipient verification');
-        console.log('[Admin] User must click AWS verification link, then you can resend welcome email');
+      } else if (sesVerification.needs_confirmation || ccVerification.needs_confirmation) {
+        const pendingEmails = [];
+        if (sesVerification.needs_confirmation) pendingEmails.push(normalizedEmail);
+        if (ccVerification.needs_confirmation) pendingEmails.push('info@greenreachfarms.com');
+        
+        emailError = `Email verification pending for: ${pendingEmails.join(', ')} - AWS sent verification email(s)`;
+        console.log('[Admin] ⏳ Welcome email NOT sent - awaiting verification for:', pendingEmails.join(', '));
+        console.log('[Admin] User(s) must click AWS verification link, then you can resend welcome email');
       }
 
       return res.json({
@@ -1447,6 +1456,11 @@ router.post('/users', requireAdmin, async (req, res) => {
       const sesVerification = await verifySESRecipient(normalizedEmail);
       console.log('[Admin] SES verification result:', sesVerification);
       
+      // Also verify CC email (info@greenreachfarms.com)
+      console.log('[Admin] Auto-verifying CC email (info@greenreachfarms.com) in SES...');
+      const ccVerification = await verifySESRecipient('info@greenreachfarms.com');
+      console.log('[Admin] CC SES verification result:', ccVerification);
+      
       const loginUrl = `https://greenreachgreens.com/GR-central-admin-login.html`;
       const emailHtml = generateAdminWelcomeEmail({
         first_name,
@@ -1457,8 +1471,8 @@ router.post('/users', requireAdmin, async (req, res) => {
         login_url: loginUrl
       });
       
-      // Only send email if recipient is verified (or not using SES)
-      if (sesVerification.verified) {
+      // Only send email if both recipient AND CC are verified (or not using SES)
+      if (sesVerification.verified && ccVerification.verified) {
         console.log('[Admin] Calling sendEmail function...');
         const emailResult = await sendEmail({
           to: normalizedEmail,
@@ -1470,10 +1484,14 @@ router.post('/users', requireAdmin, async (req, res) => {
         
         emailSent = true;
         console.log('[Admin] Welcome email sent successfully:', emailResult);
-      } else if (sesVerification.needs_confirmation) {
-        emailError = 'Recipient email verification pending - AWS sent verification email to user';
-        console.log('[Admin] Welcome email NOT sent - awaiting recipient verification');
-        console.log('[Admin] User must click AWS verification link, then you can resend welcome email');
+      } else if (sesVerification.needs_confirmation || ccVerification.needs_confirmation) {
+        const pendingEmails = [];
+        if (sesVerification.needs_confirmation) pendingEmails.push(normalizedEmail);
+        if (ccVerification.needs_confirmation) pendingEmails.push('info@greenreachfarms.com');
+        
+        emailError = `Email verification pending for: ${pendingEmails.join(', ')} - AWS sent verification email(s)`;
+        console.log('[Admin] Welcome email NOT sent - awaiting verification for:', pendingEmails.join(', '));
+        console.log('[Admin] User(s) must click AWS verification link, then you can resend welcome email');
       } else {
         throw new Error(sesVerification.error || 'SES verification failed');
       }
