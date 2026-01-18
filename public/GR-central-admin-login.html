@@ -261,7 +261,7 @@
             console.log('[LOGIN PAGE] Token exists - will redirect in 5 seconds...');
             alert(`EXISTING TOKEN FOUND!\n\nHostname: ${window.location.hostname}\nURL: ${window.location.href}\nAPI_BASE: ${API_BASE}\nToken length: ${existingToken.length}\n\nWaiting 5 seconds - check console!\n\nClick OK to see console.`);
             setTimeout(() => {
-                const redirectUrl = `${API_BASE}/GR-central-admin.html`;
+                const redirectUrl = `${API_BASE}/GR-central-admin.html?debug=true`;
                 console.log('[LOGIN PAGE] Redirecting to:', redirectUrl);
                 window.location.href = redirectUrl;
             }, 5000);
@@ -350,7 +350,7 @@
                     
                     // Wait 3 seconds before redirect to ensure storage completes
                     setTimeout(() => {
-                        const redirectUrl = `${API_BASE}/GR-central-admin.html`;
+                        const redirectUrl = `${API_BASE}/GR-central-admin.html?debug=true`;
                         console.log('[Login] Redirecting to:', redirectUrl);
                         window.location.href = redirectUrl;
                     }, 3000);
