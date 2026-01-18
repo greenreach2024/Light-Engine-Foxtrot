@@ -908,7 +908,7 @@ router.get('/users', requireAdmin, async (req, res) => {
     // PostgreSQL mode: Query actual database
     const result = await dbQuery(`
       SELECT 
-        u.id as user_id,
+        u.user_id as user_id,
         u.email,
         u.name,
         u.role,
@@ -991,18 +991,19 @@ router.post('/users', requireAdmin, async (req, res) => {
     const tempPassword = password || crypto.randomBytes(8).toString('hex');
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     const name = `${first_name} ${last_name}`.trim();
+    const effectiveFarmId = farm_id || 'greenreach-hq';
 
     // Insert new user
     const created = await dbQuery(
       `INSERT INTO users (email, name, role, password_hash, farm_id, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
-       RETURNING id`,
-      [normalizedEmail, name, role, passwordHash, farm_id || null]
+       RETURNING user_id`,
+      [normalizedEmail, name, role, passwordHash, effectiveFarmId]
     );
     
     res.json({ 
       success: true, 
-      user_id: created.rows[0].id,
+      user_id: created.rows[0].user_id,
       message: 'User created successfully',
       temp_password: password ? undefined : tempPassword
     });
@@ -1033,7 +1034,7 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
     }
     
     // Check if user exists
-    const existing = await dbQuery('SELECT id FROM users WHERE id = $1', [userId]);
+    const existing = await dbQuery('SELECT user_id FROM users WHERE user_id = $1', [userId]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -1076,7 +1077,7 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
     await dbQuery(
       `UPDATE users 
        SET ${updates.join(', ')}
-       WHERE id = $${paramIndex}`,
+       WHERE user_id = $${paramIndex}`,
       values
     );
     
@@ -1107,7 +1108,7 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
     }
     
     // Check if user exists
-    const existing = await dbQuery('SELECT id FROM users WHERE id = $1', [userId]);
+    const existing = await dbQuery('SELECT user_id FROM users WHERE user_id = $1', [userId]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -1116,7 +1117,7 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
     await dbQuery(
       `UPDATE users 
        SET is_active = false, updated_at = NOW()
-       WHERE id = $1`,
+       WHERE user_id = $1`,
       [userId]
     );
     
