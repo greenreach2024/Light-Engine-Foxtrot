@@ -248,7 +248,7 @@
         
         // Check if already logged in
         if (localStorage.getItem('admin_token')) {
-            window.location.href = '/GR-central-admin.html';
+            window.location.href = `${API_BASE}/GR-central-admin.html`;
         }
 
         // Demo mode detection (S3 static hosting or demo domain)
@@ -286,7 +286,7 @@
                     showAlert('Login successful! Redirecting...', 'success');
                     
                     setTimeout(() => {
-                        window.location.href = '/GR-central-admin.html';
+                        window.location.href = `${API_BASE}/GR-central-admin.html`;
                     }, 500);
                     return;
                 } else {
@@ -315,10 +315,16 @@
                     localStorage.setItem('admin_email', data.admin.email);
                     localStorage.setItem('admin_name', data.admin.name);
                     
+                    console.log('[Login] Token stored, redirecting...');
+                    console.log('[Login] Current hostname:', window.location.hostname);
+                    console.log('[Login] API_BASE:', API_BASE);
+                    
                     showAlert('Login successful! Redirecting...', 'success');
                     
-                    // Redirect
-                    window.location.href = '/GR-central-admin.html';
+                    // Redirect to the same domain as API_BASE to ensure localStorage consistency
+                    const redirectUrl = `${API_BASE}/GR-central-admin.html`;
+                    console.log('[Login] Redirecting to:', redirectUrl);
+                    window.location.href = redirectUrl;
                 } else {
                     // Handle specific error cases
                     let errorMessage = data.error || data.message || 'Login failed';
