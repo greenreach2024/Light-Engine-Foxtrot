@@ -20,6 +20,8 @@ async function verifySession() {
     const token = checkAuth();
     if (!token) return false;
     
+    console.log('[verifySession] Verifying token...', token.substring(0, 20) + '...');
+    
     try {
         const response = await fetch(`${API_BASE}/api/admin/auth/verify`, {
             headers: {
@@ -27,21 +29,26 @@ async function verifySession() {
             }
         });
         
+        console.log('[verifySession] Response status:', response.status);
+        
         if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('[verifySession] Verification failed:', response.status, errorData);
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_email');
             localStorage.removeItem('admin_name');
-            window.location.href = '/GR-central-admin-login.html';
+            window.location.href = '/GR-central-admin-login.html?error=session_expired';
             return false;
         }
         
+        console.log('[verifySession] Verification successful');
         return true;
     } catch (error) {
-        console.error('Verification error:', error);
+        console.error('[verifySession] Verification error:', error);
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_email');
         localStorage.removeItem('admin_name');
-        window.location.href = '/GR-central-admin-login.html';
+        window.location.href = '/GR-central-admin-login.html?error=verification_failed';
         return false;
     }
 }
