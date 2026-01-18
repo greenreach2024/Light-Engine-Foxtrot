@@ -1294,7 +1294,8 @@ router.post('/users', requireAdmin, async (req, res) => {
       console.log('[Admin] ===== SENDING WELCOME EMAIL =====');
       console.log('[Admin] To:', normalizedEmail);
       console.log('[Admin] CC: info@greenreachfarms.com');
-      console.log('[Admin] From:', process.env.FROM_EMAIL || 'noreply@greenreach.org');
+      console.log('[Admin] From:', process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'noreply@greenreach.org');
+      console.log('[Admin] From Name:', process.env.FROM_NAME || process.env.EMAIL_FROM_NAME || 'GreenReach');
       console.log('[Admin] Provider:', process.env.EMAIL_PROVIDER || 'ses');
       console.log('[Admin] AWS Region:', process.env.AWS_REGION || 'us-east-1');
       
