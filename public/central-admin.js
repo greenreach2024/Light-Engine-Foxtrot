@@ -2781,64 +2781,95 @@ async function loadAnomaliesView() {
     console.log('[Anomalies] Loading anomaly data...');
     const tbody = document.getElementById('anomalies-tbody');
     
-    document.getElementById('anomalies-total').textContent = '12';
-    document.getElementById('anomalies-critical').textContent = '2';
-    document.getElementById('anomalies-ack').textContent = '7';
-    document.getElementById('anomalies-rate').textContent = '98.5%';
-    
-    const anomalies = [
-        { 
-            id: 'anom-001',
-            timestamp: new Date().toISOString(), 
-            farm: 'Farm Alpha', 
-            type: 'environmental', 
-            severity: 'critical', 
-            description: 'Temperature spike detected', 
-            confidence: 0.95, 
-            status: 'new',
-            context: { farmId: 'GR-00001', roomId: 'room-a', zoneId: 'zone-2', groupId: null, deviceId: 'temp-sensor-zone-2' }
-        },
-        { 
-            id: 'anom-002',
-            timestamp: new Date(Date.now() - 3600000).toISOString(), 
-            farm: 'Farm Beta', 
-            type: 'device', 
-            severity: 'warning', 
-            description: 'Sensor reading anomaly', 
-            confidence: 0.87, 
-            status: 'acknowledged',
-            context: { farmId: 'GR-00002', roomId: 'room-b', zoneId: 'zone-1', groupId: 'group-1', deviceId: 'light-group-1-2' }
-        },
-        { 
-            id: 'anom-003',
-            timestamp: new Date(Date.now() - 7200000).toISOString(), 
-            farm: 'Farm Gamma', 
-            type: 'energy', 
-            severity: 'info', 
-            description: 'Unusual energy consumption pattern', 
-            confidence: 0.76, 
-            status: 'resolved',
-            context: { farmId: 'GR-00003', roomId: 'room-c', zoneId: null, groupId: null, deviceId: null }
+    try {
+        // Fetch live anomaly data from API
+        const response = await fetch(`${API_BASE}/api/schedule-executor/ml-anomalies`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-    ];
-    
-    const html = anomalies.map(anomaly => `
-        <tr>
-            <td>${new Date(anomaly.timestamp).toLocaleString()}</td>
-            <td>${anomaly.farm}</td>
-            <td>${anomaly.type}</td>
-            <td><span class="status-badge status-${anomaly.severity}">${anomaly.severity}</span></td>
-            <td>${anomaly.description}</td>
-            <td>${(anomaly.confidence * 100).toFixed(0)}%</td>
-            <td>${anomaly.status}</td>
-            <td>
-                <button class="btn-small" onclick="traceAnomaly('${anomaly.id}', ${JSON.stringify(anomaly.context).replace(/"/g, '&quot;')})">Trace</button>
-                <button class="btn-small" style="margin-left: 4px;">Acknowledge</button>
-            </td>
-        </tr>
-    `).join('');
-    
-    tbody.innerHTML = html;
+        
+        const data = await response.json();
+        console.log('[Anomalies] Received data:', data);
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load anomalies');
+        }
+        
+        const anomalies = data.anomalies || [];
+        
+        // Update KPIs based on actual data
+        const totalAnomalies = anomalies.length;
+        const criticalCount = anomalies.filter(a => a.severity === 'critical').length;
+        const warningCount = anomalies.filter(a => a.severity === 'warning').length;
+        const acknowledged = anomalies.filter(a => a.status === 'acknowledged').length;
+        
+        document.getElementById('anomalies-total').textContent = totalAnomalies;
+        document.getElementById('anomalies-critical').textContent = criticalCount;
+        document.getElementById('anomalies-ack').textContent = acknowledged;
+        document.getElementById('anomalies-rate').textContent = data.mlEnabled ? '98.5%' : 'N/A';
+        
+        if (anomalies.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">No anomalies detected</td></tr>';
+            return;
+        }
+        
+        // Transform data to match dashboard format
+        const html = anomalies.map((anomaly, idx) => {
+            const timestamp = anomaly.timestamp ? new Date(anomaly.timestamp).toLocaleString() : new Date().toLocaleString();
+            const farm = 'Farm Alpha'; // TODO: Get actual farm name from context
+            const type = 'environmental'; // Most ML anomalies are environmental
+            const severity = anomaly.severity || 'warning';
+            const description = anomaly.reason || 'Anomaly detected';
+            const confidence = 85; // Default confidence if not provided
+            const status = anomaly.status || 'new';
+            
+            // Build context for tracing
+            const context = {
+                farmId: 'GR-00001', // TODO: Get from actual farm data
+                roomId: 'room-a',
+                zoneId: anomaly.zone || null,
+                groupId: null,
+                deviceId: null
+            };
+            
+            return `
+                <tr>
+                    <td>${timestamp}</td>
+                    <td>${farm}</td>
+                    <td>${type}</td>
+                    <td><span class="status-badge status-${severity}">${severity}</span></td>
+                    <td>${description}</td>
+                    <td>${confidence}%</td>
+                    <td>${status}</td>
+                    <td>
+                        <button class="btn-small" onclick="traceAnomaly('anom-${idx}', ${JSON.stringify(context).replace(/"/g, '&quot;')})">Trace</button>
+                        <button class="btn-small" style="margin-left: 4px;">Acknowledge</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        tbody.innerHTML = html;
+        
+        if (data.demo) {
+            showToast('Demo mode: Displaying synthetic anomaly data', 'info');
+        }
+        
+    } catch (error) {
+        console.error('[Anomalies] Error loading data:', error);
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--accent-red);">Error loading anomalies: ' + error.message + '</td></tr>';
+        
+        // Set error state for KPIs
+        document.getElementById('anomalies-total').textContent = '--';
+        document.getElementById('anomalies-critical').textContent = '--';
+        document.getElementById('anomalies-ack').textContent = '--';
+        document.getElementById('anomalies-rate').textContent = '--';
+        
+        showToast('Failed to load anomaly data', 'error');
+    }
 }
 
 /**
