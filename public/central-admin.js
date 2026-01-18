@@ -2783,9 +2783,7 @@ async function loadAnomaliesView() {
     
     try {
         // Fetch live anomaly data from API
-        const response = await fetch(`${API_BASE}/api/schedule-executor/ml-anomalies`, {
-            headers: getAuthHeaders()
-        });
+        const response = await authenticatedFetch(`${API_BASE}/api/schedule-executor/ml-anomalies`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -2886,9 +2884,7 @@ async function loadAlertsView() {
     
     try {
         // Fetch live alert data from API
-        const response = await fetch(`${API_BASE}/api/admin/alerts`, {
-            headers: getAuthHeaders()
-        });
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
