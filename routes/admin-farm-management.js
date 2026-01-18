@@ -1252,13 +1252,27 @@ router.post('/users', requireAdmin, async (req, res) => {
     
     const normalizedEmail = email.toLowerCase();
 
-    // Check if email already exists
-    const existing = await dbQuery('SELECT id FROM admin_users WHERE email = $1', [normalizedEmail]);
+    // Check if user already exists (active or inactive)
+    const existing = await dbQuery('SELECT id, active FROM admin_users WHERE email = $1', [normalizedEmail]);
+    
+    let userId;
+    let isReactivation = false;
+    
     if (existing.rows.length > 0) {
-      return res.status(409).json({ 
-        success: false, 
-        error: 'User with this email already exists' 
-      });
+      const existingUser = existing.rows[0];
+      
+      if (existingUser.active) {
+        // User is active - cannot create duplicate
+        return res.status(409).json({ 
+          success: false, 
+          error: 'User with this email already exists and is active' 
+        });
+      }
+      
+      // User exists but is inactive - reactivate with new details
+      isReactivation = true;
+      userId = existingUser.id;
+      console.log('[Admin] Reactivating deleted user:', normalizedEmail);
     }
     
     // Always generate a random temporary password
@@ -1276,16 +1290,26 @@ router.post('/users', requireAdmin, async (req, res) => {
           : ['read']
     };
 
-    // Insert new admin user
-    const created = await dbQuery(
-      `INSERT INTO admin_users (email, password_hash, name, permissions, active, mfa_enabled, created_at, updated_at)
-       VALUES ($1, $2, $3, $4::jsonb, true, false, NOW(), NOW())
-       RETURNING id`,
-      [normalizedEmail, passwordHash, name, JSON.stringify(permissions)]
-    );
-    
-    const userId = created.rows[0].id;
-    console.log('[Admin] User created with ID:', userId);
+    if (isReactivation) {
+      // Reactivate and update existing user
+      await dbQuery(
+        `UPDATE admin_users 
+         SET password_hash = $1, name = $2, permissions = $3::jsonb, active = true, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $4`,
+        [passwordHash, name, JSON.stringify(permissions), userId]
+      );
+      console.log('[Admin] User reactivated with ID:', userId);
+    } else {
+      // Insert new admin user
+      const created = await dbQuery(
+        `INSERT INTO admin_users (email, password_hash, name, permissions, active, mfa_enabled, created_at, updated_at)
+         VALUES ($1, $2, $3, $4::jsonb, true, false, NOW(), NOW())
+         RETURNING id`,
+        [normalizedEmail, passwordHash, name, JSON.stringify(permissions)]
+      );
+      userId = created.rows[0].id;
+      console.log('[Admin] User created with ID:', userId);
+    }
     
     // Send welcome email
     let emailSent = false;
@@ -1328,10 +1352,14 @@ router.post('/users', requireAdmin, async (req, res) => {
       // Don't fail user creation if email fails - admin can manually send credentials
     }
     
+    const action = isReactivation ? 'reactivated' : 'created';
     res.json({ 
       success: true, 
       user_id: userId,
-      message: emailSent ? 'User created successfully and welcome email sent' : 'User created successfully (email failed - see temp_password)',
+      reactivated: isReactivation,
+      message: emailSent 
+        ? `User ${action} successfully and welcome email sent` 
+        : `User ${action} successfully (email failed - see temp_password)`,
       email_sent: emailSent,
       email_error: emailError,
       temp_password: tempPassword // Always return so admin can manually share if email fails
