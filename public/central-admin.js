@@ -30,25 +30,31 @@ async function verifySession() {
         });
         
         console.log('[verifySession] Response status:', response.status);
+        const responseData = await response.json().catch(() => ({}));
+        console.log('[verifySession] Response data:', responseData);
         
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('[verifySession] Verification failed:', response.status, errorData);
-            localStorage.removeItem('admin_token');
-            localStorage.removeItem('admin_email');
-            localStorage.removeItem('admin_name');
-            window.location.href = '/GR-central-admin-login.html?error=session_expired';
+            console.error('[verifySession] Verification failed:', response.status, responseData);
+            alert(`Session verification failed!\nStatus: ${response.status}\nError: ${JSON.stringify(responseData)}\n\nCheck console for details. Click OK to continue debugging.`);
+            // Comment out redirect temporarily for debugging
+            // localStorage.removeItem('admin_token');
+            // localStorage.removeItem('admin_email');
+            // localStorage.removeItem('admin_name');
+            // window.location.href = '/GR-central-admin-login.html?error=session_expired';
             return false;
         }
         
         console.log('[verifySession] Verification successful');
+        alert('Session verification PASSED! Token is valid.');
         return true;
     } catch (error) {
         console.error('[verifySession] Verification error:', error);
-        localStorage.removeItem('admin_token');
-        localStorage.removeItem('admin_email');
-        localStorage.removeItem('admin_name');
-        window.location.href = '/GR-central-admin-login.html?error=verification_failed';
+        alert(`Session verification EXCEPTION!\nError: ${error.message}\n\nCheck console for details. Click OK to continue debugging.`);
+        // Comment out redirect temporarily for debugging
+        // localStorage.removeItem('admin_token');
+        // localStorage.removeItem('admin_email');
+        // localStorage.removeItem('admin_name');
+        // window.location.href = '/GR-central-admin-login.html?error=verification_failed';
         return false;
     }
 }
