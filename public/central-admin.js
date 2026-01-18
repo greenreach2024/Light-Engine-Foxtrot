@@ -19,7 +19,7 @@ function checkAuth() {
     if (!token) {
         console.log('[checkAuth] NO TOKEN - redirecting to login');
         alert(`NO TOKEN FOUND!\nHostname: ${window.location.hostname}\nURL: ${window.location.href}\n\nYou will be redirected to login.`);
-        window.location.href = '/GR-central-admin-login.html';
+        window.location.href = `${API_BASE}/GR-central-admin-login.html`;
         return null;
     }
     console.log('[checkAuth] Token found, proceeding...');
@@ -100,7 +100,7 @@ async function logout() {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_email');
     localStorage.removeItem('admin_name');
-    window.location.href = '/GR-central-admin-login.html';
+    window.location.href = `${API_BASE}/GR-central-admin-login.html`;
 }
 
 // Make authenticated API request
@@ -122,7 +122,7 @@ async function authenticatedFetch(url, options = {}) {
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_email');
             localStorage.removeItem('admin_name');
-            window.location.href = '/GR-central-admin-login.html';
+            window.location.href = `${API_BASE}/GR-central-admin-login.html`;
             return null;
         }
         
@@ -1942,10 +1942,10 @@ async function navigate(view, element) {
     // Navigate to view and load data
     switch(view) {
         case 'wholesale-admin':
-            window.location.href = '/GR-admin.html';
+            window.location.href = `${API_BASE}/GR-admin.html`;
             return;
         case 'wholesale-buyer':
-            window.location.href = '/GR-wholesale.html';
+            window.location.href = `${API_BASE}/GR-wholesale.html`;
             return;
         case 'overview':
             document.getElementById('overview-view').style.display = 'block';
