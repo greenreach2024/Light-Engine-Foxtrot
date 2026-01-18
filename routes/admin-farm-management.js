@@ -5,8 +5,35 @@ import crypto from 'crypto';
 import { getJwtSecret } from '../server/utils/secrets-manager.js';
 import { initDatabase, query as dbQuery } from '../lib/database.js';
 import { sendEmail } from '../lib/email-service.js';
+import { SESClient, VerifyEmailIdentityCommand } from '@aws-sdk/client-ses';
 
 const router = express.Router();
+
+// Initialize SES client for email verification
+const sesClient = new SESClient({ region: process.env.AWS_REGION || 'us-east-1' });
+
+/**
+ * Verify email address in SES to enable sending (required in sandbox mode)
+ * Admins creating users are trusted, so we auto-verify their email addresses
+ */
+async function verifySESRecipient(email) {
+  // Only verify if using SES provider
+  const emailProvider = process.env.EMAIL_PROVIDER || 'ses';
+  if (emailProvider !== 'ses') {
+    console.log('[SES] Skipping verification - not using SES provider');
+    return { verified: true, reason: 'not_ses' };
+  }
+
+  try {
+    const command = new VerifyEmailIdentityCommand({ EmailAddress: email });
+    await sesClient.send(command);
+    console.log(`[SES] ✅ Verification email sent to ${email} (or already verified)`);
+    return { verified: true, verification_sent: true };
+  } catch (error) {
+    console.error(`[SES] ❌ Failed to verify ${email}:`, error.message);
+    return { verified: false, error: error.message };
+  }
+}
 
 /**
  * Admin authentication middleware
@@ -1254,6 +1281,12 @@ router.post('/users', requireAdmin, async (req, res) => {
       const normalizedEmail = email.toLowerCase();
       const tempPassword = crypto.randomBytes(12).toString('base64').slice(0, 16);
       const loginUrl = `https://www.greenreach.org/GR-central-admin.html`;
+      
+      // Auto-verify recipient email in SES (admin-created users are trusted)
+      console.log('[Admin] Auto-verifying recipient email in SES...');
+      const sesVerification = await verifySESRecipient(normalizedEmail);
+      console.log('[Admin] SES verification result:', sesVerification);
+      
       const emailHtml = generateAdminWelcomeEmail({
         first_name,
         last_name,
@@ -1367,6 +1400,11 @@ router.post('/users', requireAdmin, async (req, res) => {
       console.log('[Admin] From Name:', process.env.FROM_NAME || process.env.EMAIL_FROM_NAME || 'GreenReach');
       console.log('[Admin] Provider:', process.env.EMAIL_PROVIDER || 'ses');
       console.log('[Admin] AWS Region:', process.env.AWS_REGION || 'us-east-1');
+      
+      // Auto-verify recipient email in SES (admin-created users are trusted)
+      console.log('[Admin] Auto-verifying recipient email in SES...');
+      const sesVerification = await verifySESRecipient(normalizedEmail);
+      console.log('[Admin] SES verification result:', sesVerification);
       
       const loginUrl = `https://www.greenreach.org/GR-central-admin.html`;
       const emailHtml = generateAdminWelcomeEmail({
