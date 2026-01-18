@@ -11,10 +11,18 @@ const API_BASE = window.location.hostname.includes('greenreachgreens.com')
 // Authentication check - redirect to login if not authenticated
 function checkAuth() {
     const token = localStorage.getItem('admin_token');
+    console.log('[checkAuth] Current hostname:', window.location.hostname);
+    console.log('[checkAuth] Token exists:', !!token);
+    console.log('[checkAuth] Token length:', token?.length || 0);
+    console.log('[checkAuth] Current URL:', window.location.href);
+    
     if (!token) {
+        console.log('[checkAuth] NO TOKEN - redirecting to login');
+        alert(`NO TOKEN FOUND!\nHostname: ${window.location.hostname}\nURL: ${window.location.href}\n\nYou will be redirected to login.`);
         window.location.href = '/GR-central-admin-login.html';
         return null;
     }
+    console.log('[checkAuth] Token found, proceeding...');
     return token;
 }
 
