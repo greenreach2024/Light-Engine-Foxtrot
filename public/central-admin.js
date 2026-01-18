@@ -2450,25 +2450,8 @@ function showToast(message, type = 'info') {
 async function loadAnalytics() {
     console.log('[Analytics] Loading farm analytics data...');
     
-    // Load farm metrics data
+    // Load farm metrics data - this will also populate model performance from API
     await loadFarmMetrics(currentAnalyticsFarmId, 7);
-    
-    // Load model performance
-    const perfHtml = `
-        <div class="metric-row">
-            <div class="metric-label">Temperature Forecast</div>
-            <div class="metric-value">92% accuracy</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Harvest Timing</div>
-            <div class="metric-value">88% accuracy</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Energy Prediction</div>
-            <div class="metric-value">95% accuracy</div>
-        </div>
-    `;
-    document.getElementById('analytics-performance').innerHTML = perfHtml;
 }
 
 /**
@@ -2663,46 +2646,58 @@ async function loadAllRecipesView() {
 async function loadHarvestView() {
     console.log('[Harvest] Loading harvest analysis...');
     
-    document.getElementById('harvest-week').textContent = '12';
-    document.getElementById('harvest-cycle').textContent = '32';
-    document.getElementById('harvest-success').textContent = '94.2';
-    document.getElementById('harvest-upcoming').textContent = '8';
-    
-    const forecastHtml = `
-        <div class="metric-row">
-            <div class="metric-label">7-Day Bucket</div>
-            <div class="metric-value">8 trays (1,024 plants)</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">14-Day Bucket</div>
-            <div class="metric-value">15 trays (1,920 plants)</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">30-Day Bucket</div>
-            <div class="metric-value">42 trays (5,376 plants)</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">30+ Day Bucket</div>
-            <div class="metric-value">68 trays (8,704 plants)</div>
-        </div>
-    `;
-    document.getElementById('harvest-forecast').innerHTML = forecastHtml;
-    
-    const perfHtml = `
-        <div class="metric-row">
-            <div class="metric-label">Best Performer</div>
-            <div class="metric-value">Genovese Basil (97% success)</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Most Popular</div>
-            <div class="metric-value">Buttercrunch Lettuce (45 trays)</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Fastest Cycle</div>
-            <div class="metric-value">Arugula (20 days avg)</div>
-        </div>
-    `;
-    document.getElementById('harvest-recipe-performance').innerHTML = perfHtml;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/harvest/forecast`);
+        if (!response.ok) {
+            throw new Error('Failed to load harvest data');
+        }
+        
+        const data = await response.json();
+        
+        document.getElementById('harvest-week').textContent = data.thisWeek;
+        document.getElementById('harvest-cycle').textContent = data.thisCycle;
+        document.getElementById('harvest-success').textContent = data.successRate;
+        document.getElementById('harvest-upcoming').textContent = data.upcomingTrays;
+        
+        const forecastHtml = `
+            <div class="metric-row">
+                <div class="metric-label">7-Day Bucket</div>
+                <div class="metric-value">${data.forecast.sevenDay.trays} trays (${data.forecast.sevenDay.plants.toLocaleString()} plants)</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">14-Day Bucket</div>
+                <div class="metric-value">${data.forecast.fourteenDay.trays} trays (${data.forecast.fourteenDay.plants.toLocaleString()} plants)</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">30-Day Bucket</div>
+                <div class="metric-value">${data.forecast.thirtyDay.trays} trays (${data.forecast.thirtyDay.plants.toLocaleString()} plants)</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">30+ Day Bucket</div>
+                <div class="metric-value">${data.forecast.thirtyPlus.trays} trays (${data.forecast.thirtyPlus.plants.toLocaleString()} plants)</div>
+            </div>
+        `;
+        document.getElementById('harvest-forecast').innerHTML = forecastHtml;
+        
+        const perfHtml = `
+            <div class="metric-row">
+                <div class="metric-label">Best Performer</div>
+                <div class="metric-value">${data.recipePerformance.bestPerformer}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Most Popular</div>
+                <div class="metric-value">${data.recipePerformance.mostPopular}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Fastest Cycle</div>
+                <div class="metric-value">${data.recipePerformance.fastestCycle}</div>
+            </div>
+        `;
+        document.getElementById('harvest-recipe-performance').innerHTML = perfHtml;
+    } catch (error) {
+        console.error('[Harvest] Error loading data:', error);
+        showToast('Failed to load harvest data', 'error');
+    }
 }
 
 /**
@@ -2755,26 +2750,33 @@ async function loadEnvironmentalView() {
 async function loadEnergyDashboard() {
     console.log('[Energy] Loading energy data...');
     
-    document.getElementById('energy-total-24h').textContent = '1,234';
-    document.getElementById('energy-cost-kwh').textContent = '0.12';
-    document.getElementById('energy-efficiency').textContent = '87%';
-    document.getElementById('energy-savings').textContent = '285';
-    
-    const consumersHtml = `
-        <div class="metric-row">
-            <div class="metric-label">Farm Alpha - Lighting</div>
-            <div class="metric-value">456 kWh</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Farm Beta - HVAC</div>
-            <div class="metric-value">324 kWh</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Farm Gamma - Lighting</div>
-            <div class="metric-value">298 kWh</div>
-        </div>
-    `;
-    document.getElementById('energy-top-consumers').innerHTML = consumersHtml;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/energy/dashboard`);
+        if (!response.ok) {
+            throw new Error('Failed to load energy data');
+        }
+        
+        const data = await response.json();
+        
+        document.getElementById('energy-total-24h').textContent = data.total24h.toLocaleString();
+        document.getElementById('energy-cost-kwh').textContent = data.costPerKwh.toFixed(2);
+        document.getElementById('energy-efficiency').textContent = `${data.efficiency}%`;
+        document.getElementById('energy-savings').textContent = data.savingsKwh.toLocaleString();
+        
+        const consumersHtml = data.topConsumers && data.topConsumers.length > 0
+            ? data.topConsumers.map(c => `
+                <div class="metric-row">
+                    <div class="metric-label">${c.name} - ${c.type}</div>
+                    <div class="metric-value">${c.consumption} kWh</div>
+                </div>
+            `).join('')
+            : '<div class="metric-row"><div class="metric-label">No data available</div></div>';
+        
+        document.getElementById('energy-top-consumers').innerHTML = consumersHtml;
+    } catch (error) {
+        console.error('[Energy] Error loading data:', error);
+        showToast('Failed to load energy data', 'error');
+    }
 }
 
 /**
@@ -3095,12 +3097,36 @@ async function loadFarmMetrics(farmId, days = 7) {
  * Render analytics summary KPIs
  */
 function renderAnalyticsSummary(summary) {
+    if (!summary) return;
+    
     // Production
-    document.getElementById('analytics-production').textContent = `${summary.totalProduction.toFixed(1)} kg`;
-    document.getElementById('analytics-production-avg').textContent = `${(summary.totalProduction / summary.daysReported).toFixed(1)} kg/day avg`;
+    document.getElementById('analytics-production').textContent = `${(summary.totalProduction || 0).toFixed(1)} kg`;
+    document.getElementById('analytics-production-avg').textContent = `${((summary.totalProduction || 0) / (summary.daysReported || 1)).toFixed(1)} kg/day avg`;
     
     // Revenue
-    document.getElementById('analytics-revenue').textContent = `$${summary.totalRevenue.toFixed(2)}`;
+    document.getElementById('analytics-revenue').textContent = `$${(summary.totalRevenue || 0).toFixed(2)}`;
+    
+    // Model performance (from API response)
+    const perfData = summary.modelPerformance || analyticsData.modelPerformance;
+    if (perfData) {
+        const perfHtml = `
+            <div class="metric-row">
+                <div class="metric-label">Temperature Forecast</div>
+                <div class="metric-value">${perfData.temperatureForecast || 0}% accuracy</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Harvest Timing</div>
+                <div class="metric-value">${perfData.harvestTiming || 0}% accuracy</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Energy Prediction</div>
+                <div class="metric-value">${perfData.energyPrediction || 0}% accuracy</div>
+            </div>
+        `;
+        const perfEl = document.getElementById('analytics-performance');
+        if (perfEl) perfEl.innerHTML = perfHtml;
+    }
+}
 
 /**
  * ===================================

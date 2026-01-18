@@ -13952,6 +13952,88 @@ app.get('/api/admin/analytics/aggregate', adminAuthMiddleware, asyncHandler(asyn
 }));
 
 /**
+ * GET /api/admin/analytics/farms/:farmId/metrics
+ * Returns farm-specific analytics metrics
+ * PROTECTED: Requires admin authentication
+ */
+app.get('/api/admin/analytics/farms/:farmId/metrics', adminAuthMiddleware, asyncHandler(async (req, res) => {
+  const { farmId } = req.params;
+  const days = parseInt(req.query.days) || 7;
+  
+  console.log(`[admin] GET /api/admin/analytics/farms/${farmId}/metrics?days=${days}`);
+  
+  // TODO: Query actual farm data from database
+  // For now, return structured placeholder data
+  res.json({
+    farmId,
+    days,
+    summary: {
+      totalProduction: 0,
+      totalRevenue: 0,
+      daysReported: days,
+      avgYield: 0,
+      topCrop: 'N/A'
+    },
+    metrics: [],
+    modelPerformance: {
+      temperatureForecast: 0,
+      harvestTiming: 0,
+      energyPrediction: 0
+    }
+  });
+}));
+
+/**
+ * GET /api/admin/energy/dashboard
+ * Returns platform-wide energy consumption data
+ * PROTECTED: Requires admin authentication
+ */
+app.get('/api/admin/energy/dashboard', adminAuthMiddleware, asyncHandler(async (req, res) => {
+  console.log('[admin] GET /api/admin/energy/dashboard');
+  
+  // TODO: Query actual energy data from farms
+  // For now, return structured placeholder data
+  res.json({
+    total24h: 0,
+    costPerKwh: 0.12,
+    efficiency: 0,
+    savingsKwh: 0,
+    topConsumers: [],
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
+ * GET /api/admin/harvest/forecast
+ * Returns platform-wide harvest forecast data
+ * PROTECTED: Requires admin authentication
+ */
+app.get('/api/admin/harvest/forecast', adminAuthMiddleware, asyncHandler(async (req, res) => {
+  console.log('[admin] GET /api/admin/harvest/forecast');
+  
+  // TODO: Query actual harvest data from inventory
+  // For now, return structured placeholder data
+  res.json({
+    thisWeek: 0,
+    thisCycle: 0,
+    successRate: 0,
+    upcomingTrays: 0,
+    forecast: {
+      sevenDay: { trays: 0, plants: 0 },
+      fourteenDay: { trays: 0, plants: 0 },
+      thirtyDay: { trays: 0, plants: 0 },
+      thirtyPlus: { trays: 0, plants: 0 }
+    },
+    recipePerformance: {
+      bestPerformer: 'N/A',
+      mostPopular: 'N/A',
+      fastestCycle: 'N/A'
+    },
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
  * FARM AUTHENTICATION ENDPOINTS
  * Farm-specific admin authentication and session management
  */
