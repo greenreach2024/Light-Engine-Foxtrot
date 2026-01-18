@@ -69,7 +69,7 @@ router.post('/auth/login', async (req, res) => {
     
     // Hard-coded fallback admin credentials (for NeDB/in-memory mode)
     const FALLBACK_ADMIN = {
-      email: 'admin@greenreach.com',
+      email: 'info@greenreachfarms.com',
       password: 'Admin2025!',
       name: 'System Administrator',
       id: 1,
