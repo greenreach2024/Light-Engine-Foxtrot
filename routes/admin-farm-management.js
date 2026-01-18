@@ -906,14 +906,13 @@ router.get('/users', requireAdmin, async (req, res) => {
     }
     
     // PostgreSQL mode: Query actual database
-    const users = await db.all(`
+    const result = await dbQuery(`
       SELECT 
         u.id as user_id,
         u.email,
-        u.first_name,
-        u.last_name,
+        u.name,
         u.role,
-        u.status,
+        u.is_active,
         u.last_login,
         u.created_at,
         u.farm_id,
@@ -922,6 +921,26 @@ router.get('/users', requireAdmin, async (req, res) => {
       LEFT JOIN farms f ON u.farm_id = f.farm_id
       ORDER BY u.created_at DESC
     `);
+    
+    const users = result.rows.map((row) => {
+      const nameParts = String(row.name || '').trim().split(/\s+/).filter(Boolean);
+      const first_name = nameParts[0] || '';
+      const last_name = nameParts.slice(1).join(' ') || '';
+      const status = row.is_active === false ? 'inactive' : 'active';
+      
+      return {
+        user_id: row.user_id,
+        email: row.email,
+        first_name,
+        last_name,
+        role: row.role,
+        status,
+        last_login: row.last_login,
+        created_at: row.created_at,
+        farm_id: row.farm_id,
+        farm_name: row.farm_name
+      };
+    });
     
     res.json({ success: true, users, mode: 'database' });
   } catch (error) {
@@ -957,31 +976,35 @@ router.post('/users', requireAdmin, async (req, res) => {
       });
     }
     
+    const normalizedEmail = email.toLowerCase();
+
     // Check if email already exists
-    const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
-    if (existing) {
+    const existing = await dbQuery('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+    if (existing.rows.length > 0) {
       return res.status(409).json({ 
         success: false, 
         error: 'User with this email already exists' 
       });
     }
     
-    // Hash password if provided
-    let passwordHash = null;
-    if (password) {
-      passwordHash = await bcrypt.hash(password, 10);
-    }
-    
+    // Hash password (required by schema)
+    const tempPassword = password || crypto.randomBytes(8).toString('hex');
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    const name = `${first_name} ${last_name}`.trim();
+
     // Insert new user
-    const result = await db.run(`
-      INSERT INTO users (email, first_name, last_name, role, password_hash, farm_id, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'active', datetime('now'))
-    `, [email, first_name, last_name, role, passwordHash, farm_id || null]);
+    const created = await dbQuery(
+      `INSERT INTO users (email, name, role, password_hash, farm_id, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
+       RETURNING id`,
+      [normalizedEmail, name, role, passwordHash, farm_id || null]
+    );
     
     res.json({ 
       success: true, 
-      user_id: result.lastID,
-      message: 'User created successfully' 
+      user_id: created.rows[0].id,
+      message: 'User created successfully',
+      temp_password: password ? undefined : tempPassword
     });
   } catch (error) {
     console.error('Error creating user:', error);
@@ -1010,38 +1033,36 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
     }
     
     // Check if user exists
-    const existing = await db.get('SELECT id FROM users WHERE id = ?', [userId]);
-    if (!existing) {
+    const existing = await dbQuery('SELECT id FROM users WHERE id = $1', [userId]);
+    if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
     // Build update query dynamically based on provided fields
     const updates = [];
     const values = [];
+    let paramIndex = 1;
     
-    if (first_name !== undefined) {
-      updates.push('first_name = ?');
-      values.push(first_name);
-    }
-    if (last_name !== undefined) {
-      updates.push('last_name = ?');
-      values.push(last_name);
+    if (first_name !== undefined || last_name !== undefined) {
+      const name = `${first_name || ''} ${last_name || ''}`.trim();
+      updates.push(`name = $${paramIndex++}`);
+      values.push(name);
     }
     if (email !== undefined) {
-      updates.push('email = ?');
-      values.push(email);
+      updates.push(`email = $${paramIndex++}`);
+      values.push(email.toLowerCase());
     }
     if (role !== undefined) {
-      updates.push('role = ?');
+      updates.push(`role = $${paramIndex++}`);
       values.push(role);
     }
     if (status !== undefined) {
-      updates.push('status = ?');
-      values.push(status);
+      updates.push(`is_active = $${paramIndex++}`);
+      values.push(status === 'active');
     }
     if (password) {
       const passwordHash = await bcrypt.hash(password, 10);
-      updates.push('password_hash = ?');
+      updates.push(`password_hash = $${paramIndex++}`);
       values.push(passwordHash);
     }
     
@@ -1049,14 +1070,15 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'No fields to update' });
     }
     
-    updates.push('updated_at = datetime(\'now\')');
+    updates.push('updated_at = NOW()');
     values.push(userId);
     
-    await db.run(`
-      UPDATE users 
-      SET ${updates.join(', ')}
-      WHERE id = ?
-    `, values);
+    await dbQuery(
+      `UPDATE users 
+       SET ${updates.join(', ')}
+       WHERE id = $${paramIndex}`,
+      values
+    );
     
     res.json({ success: true, message: 'User updated successfully' });
   } catch (error) {
@@ -1085,17 +1107,18 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
     }
     
     // Check if user exists
-    const existing = await db.get('SELECT id FROM users WHERE id = ?', [userId]);
-    if (!existing) {
+    const existing = await dbQuery('SELECT id FROM users WHERE id = $1', [userId]);
+    if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
     // Soft delete by setting status to inactive
-    await db.run(`
-      UPDATE users 
-      SET status = 'inactive', updated_at = datetime('now')
-      WHERE id = ?
-    `, [userId]);
+    await dbQuery(
+      `UPDATE users 
+       SET is_active = false, updated_at = NOW()
+       WHERE id = $1`,
+      [userId]
+    );
     
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
