@@ -20,22 +20,33 @@ async function verifySession() {
     const token = checkAuth();
     if (!token) return false;
     
+    console.log('[verifySession] API_BASE:', API_BASE);
     console.log('[verifySession] Verifying token...', token.substring(0, 20) + '...');
+    console.log('[verifySession] Token length:', token.length);
+    
+    const verifyUrl = `${API_BASE}/api/admin/auth/verify`;
+    console.log('[verifySession] Calling:', verifyUrl);
     
     try {
-        const response = await fetch(`${API_BASE}/api/admin/auth/verify`, {
+        const response = await fetch(verifyUrl, {
+            method: 'GET',
             headers: {
-                'Authorization': `Bearer ${token}`
-            }
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin'
         });
         
         console.log('[verifySession] Response status:', response.status);
+        console.log('[verifySession] Response ok:', response.ok);
+        console.log('[verifySession] Response headers:', [...response.headers.entries()]);
+        
         const responseData = await response.json().catch(() => ({}));
         console.log('[verifySession] Response data:', responseData);
         
         if (!response.ok) {
             console.error('[verifySession] Verification failed:', response.status, responseData);
-            alert(`Session verification failed!\nStatus: ${response.status}\nError: ${JSON.stringify(responseData)}\n\nCheck console for details. Click OK to continue debugging.`);
+            alert(`Session verification failed!\nStatus: ${response.status}\nError: ${JSON.stringify(responseData)}\nURL: ${verifyUrl}\nToken length: ${token.length}\n\nCheck console for details. Click OK to continue debugging.`);
             // Comment out redirect temporarily for debugging
             // localStorage.removeItem('admin_token');
             // localStorage.removeItem('admin_email');
@@ -49,7 +60,7 @@ async function verifySession() {
         return true;
     } catch (error) {
         console.error('[verifySession] Verification error:', error);
-        alert(`Session verification EXCEPTION!\nError: ${error.message}\n\nCheck console for details. Click OK to continue debugging.`);
+        alert(`Session verification EXCEPTION!\nError: ${error.message}\nURL: ${verifyUrl}\nToken length: ${token.length}\n\nCheck console for details. Click OK to continue debugging.`);
         // Comment out redirect temporarily for debugging
         // localStorage.removeItem('admin_token');
         // localStorage.removeItem('admin_email');
