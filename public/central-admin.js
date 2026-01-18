@@ -4116,12 +4116,25 @@ async function loadPlatformMonitoring() {
         const data = await response.json();
         
         // Update KPIs
-        document.getElementById('platform-farms').textContent = data.summary.connectedFarms;
-        document.getElementById('platform-mrr').textContent = `$${data.summary.monthlyRecurringRevenue.toLocaleString()}`;
-        document.getElementById('platform-zones').textContent = data.summary.totalZones;
-        document.getElementById('platform-sensors').textContent = data.summary.connectedSensors.toLocaleString();
-        document.getElementById('platform-health').textContent = data.summary.fleetHealthScore;
-        document.getElementById('platform-alerts').textContent = data.summary.activeAlerts;
+        const summary = data.summary || {};
+        document.getElementById('platform-farms').textContent = Number.isFinite(summary.connectedFarms)
+            ? summary.connectedFarms
+            : '—';
+        document.getElementById('platform-mrr').textContent = Number.isFinite(summary.monthlyRecurringRevenue)
+            ? `$${summary.monthlyRecurringRevenue.toLocaleString()}`
+            : '—';
+        document.getElementById('platform-zones').textContent = Number.isFinite(summary.totalZones)
+            ? summary.totalZones
+            : '—';
+        document.getElementById('platform-sensors').textContent = Number.isFinite(summary.connectedSensors)
+            ? summary.connectedSensors.toLocaleString()
+            : '—';
+        document.getElementById('platform-health').textContent = Number.isFinite(summary.fleetHealthScore)
+            ? summary.fleetHealthScore
+            : '—';
+        document.getElementById('platform-alerts').textContent = Number.isFinite(summary.activeAlerts)
+            ? summary.activeAlerts
+            : '—';
         
         // Render deployments table
         const tbody = document.getElementById('platform-deployments-tbody');
@@ -4133,9 +4146,13 @@ async function loadPlatformMonitoring() {
                     'Enterprise': '<span class="badge badge-primary">Enterprise</span>'
                 }[d.plan] || `<span class="badge">${d.plan}</span>`;
                 
-                const statusBadge = d.status === 'ACTIVE' 
-                    ? '<span class="badge badge-success">ACTIVE</span>' 
-                    : '<span class="badge badge-warning">TRIAL</span>';
+                const statusLabel = (d.status || 'UNKNOWN').toString().toUpperCase();
+                const statusBadge = {
+                    'ONLINE': '<span class="badge badge-success">ONLINE</span>',
+                    'OFFLINE': '<span class="badge badge-danger">OFFLINE</span>',
+                    'WARNING': '<span class="badge badge-warning">WARNING</span>',
+                    'CRITICAL': '<span class="badge badge-danger">CRITICAL</span>'
+                }[statusLabel] || `<span class="badge">${statusLabel}</span>`;
                 
                 const healthBadge = d.healthScore >= 90 
                     ? `<span class="badge badge-success">${d.healthScore}%</span>`
@@ -4143,10 +4160,14 @@ async function loadPlatformMonitoring() {
                     ? `<span class="badge badge-warning">${d.healthScore}%</span>`
                     : `<span class="badge badge-danger">${d.healthScore}%</span>`;
                 
-                const lastSeen = formatTimeAgo(new Date(d.lastSeen));
-                const storageMB = d.dataStorageMB < 1024 
-                    ? `${d.dataStorageMB} MB` 
-                    : `${(d.dataStorageMB / 1024).toFixed(1)} GB`;
+                const lastSeen = d.lastSeen ? formatTimeAgo(new Date(d.lastSeen)) : '—';
+                const storageMB = Number.isFinite(d.dataStorageMB)
+                    ? (d.dataStorageMB < 1024 
+                        ? `${d.dataStorageMB} MB` 
+                        : `${(d.dataStorageMB / 1024).toFixed(1)} GB`)
+                    : '—';
+                const sensorLimit = Number.isFinite(d.sensors?.limit) ? d.sensors.limit : '—';
+                const apiCalls30d = Number.isFinite(d.apiCalls30d) ? d.apiCalls30d.toLocaleString() : '—';
                 
                 return `
                     <tr>
@@ -4156,14 +4177,16 @@ async function loadPlatformMonitoring() {
                         </td>
                         <td>${planBadge}</td>
                         <td>${statusBadge}</td>
-                        <td>${d.sensors.current} / ${d.sensors.limit}</td>
-                        <td>${d.apiCalls30d.toLocaleString()}</td>
+                        <td>${Number.isFinite(d.sensors?.current) ? d.sensors.current : '—'} / ${sensorLimit}</td>
+                        <td>${apiCalls30d}</td>
                         <td>${storageMB}</td>
                         <td>${healthBadge}</td>
                         <td>${lastSeen}</td>
                     </tr>
                 `;
             }).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">No deployments found</td></tr>';
         }
         
         console.log('[Platform] Fleet monitoring loaded successfully');

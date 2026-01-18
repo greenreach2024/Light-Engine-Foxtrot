@@ -14001,6 +14001,8 @@ app.get('/api/admin/fleet/monitoring', adminAuthMiddleware, asyncHandler(async (
         f.status,
         f.last_seen,
         f.created_at,
+        f.plan_type,
+        f.square_amount,
         fm.room_count,
         fm.zone_count,
         fm.device_count,
@@ -14032,28 +14034,24 @@ app.get('/api/admin/fleet/monitoring', adminAuthMiddleware, asyncHandler(async (
     const onlineFarms = farms.filter(f => f.status === 'online').length;
     const fleetHealthScore = farms.length > 0 ? Math.round((onlineFarms / farms.length) * 100) : 0;
     
-    // Calculate MRR (placeholder - would come from billing system)
-    // Assume $50/month per farm for demo
-    const monthlyRecurringRevenue = farms.length * 50;
+    // Calculate MRR from real billing data when available
+    // Use square_amount (cents) for cloud plans only
+    const mrrCents = farms.reduce((sum, f) => {
+      const amount = Number.isFinite(Number(f.square_amount)) ? Number(f.square_amount) : 0;
+      return sum + (f.plan_type === 'cloud' ? amount : 0);
+    }, 0);
+    const monthlyRecurringRevenue = mrrCents > 0 ? Math.round(mrrCents / 100) : null;
     
     // Transform farms into deployment format
     const deployments = farms.map(f => {
-      // Determine plan based on device count
-      let plan = 'Starter';
-      let sensorLimit = 10;
-      if (f.device_count > 50) {
-        plan = 'Enterprise';
-        sensorLimit = 500;
-      } else if (f.device_count > 10) {
-        plan = 'Pro';
-        sensorLimit = 50;
-      }
+      // Determine plan from actual plan_type
+      const plan = f.plan_type
+        ? f.plan_type.charAt(0).toUpperCase() + f.plan_type.slice(1)
+        : 'Unknown';
+      const sensorLimit = null;
       
-      // Determine status
-      let status = 'ACTIVE';
-      if (!f.last_seen || (Date.now() - new Date(f.last_seen).getTime() > 7 * 24 * 60 * 60 * 1000)) {
-        status = 'TRIAL';
-      }
+      // Use real status from farms table
+      const status = f.status || 'offline';
       
       // Calculate health score
       let healthScore = 100;
@@ -14061,11 +14059,9 @@ app.get('/api/admin/fleet/monitoring', adminAuthMiddleware, asyncHandler(async (
       else if (f.status === 'warning') healthScore = 75;
       else if (f.status === 'critical') healthScore = 25;
       
-      // Estimate storage (10MB base + 1MB per device)
-      const dataStorageMB = 10 + (f.device_count || 0);
-      
-      // Estimate API calls (1000 base + 500 per device for 30 days)
-      const apiCalls30d = 1000 + ((f.device_count || 0) * 500);
+      // Storage and API usage not tracked yet
+      const dataStorageMB = null;
+      const apiCalls30d = null;
       
       return {
         farmId: f.farm_id,
