@@ -560,12 +560,14 @@
   </div>
 
   <script>
-    // Use current server origin for API calls (works on localhost and AWS)
-    const API_BASE = window.location.origin;
+    // Wrap in IIFE to prevent API_BASE conflicts when loaded in iframe
+    (function() {
+      // Use current server origin for API calls (works on localhost and AWS)
+      const API_BASE = window.location.origin;
 
-    // Detect if we're on Central server or Farm server
-    const isCentralServer = window.location.hostname.includes('greenreachgreens.com') || 
-                           window.location.hostname.includes('greenreach.farm');
+      // Detect if we're on Central server or Farm server
+      const isCentralServer = window.location.hostname.includes('greenreachgreens.com') || 
+                             window.location.hostname.includes('greenreach.farm');
 
     async function loadInventory() {
       console.log('[loadInventory] Starting...');
@@ -1351,6 +1353,7 @@
         showIntroCard('farm-inventory');
       }, 500);
     });
+    })(); // End of IIFE wrapper
   </script>
   <script src="/js/farm-assistant.js"></script>
 </body>

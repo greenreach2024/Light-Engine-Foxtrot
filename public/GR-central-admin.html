@@ -6,6 +6,35 @@
     <title>GreenReach Central Operations</title>
     <script src="./js/console-guard.js"></script>
     <script>
+        // ============================================================================
+        // IMMEDIATE AUTHENTICATION CHECK - RUNS BEFORE PAGE LOADS
+        // ============================================================================
+        (function() {
+            const token = localStorage.getItem('admin_token');
+            const urlParams = new URLSearchParams(window.location.search);
+            const forceLogin = urlParams.get('forceLogin') === 'true';
+            
+            console.log('🔐 [Pre-load Auth] Checking authentication...');
+            console.log('🔐 [Pre-load Auth] Token exists:', !!token);
+            console.log('🔐 [Pre-load Auth] Force login:', forceLogin);
+            
+            if (!token || forceLogin) {
+                console.log('🔐 [Pre-load Auth] ❌ NO AUTH - Redirecting to login NOW');
+                if (forceLogin) {
+                    localStorage.removeItem('admin_token');
+                    localStorage.removeItem('admin_email');
+                    localStorage.removeItem('admin_name');
+                }
+                const loginUrl = window.location.hostname.includes('greenreachgreens.com')
+                    ? 'https://greenreachgreens.com/GR-central-admin-login.html'
+                    : window.location.origin + '/GR-central-admin-login.html';
+                window.location.replace(loginUrl);
+                // Stop execution
+                throw new Error('Redirecting to login');
+            }
+            console.log('🔐 [Pre-load Auth] ✅ Token found, proceeding...');
+        })();
+        
         // Global API_BASE for all scripts - declared once at the top
         const API_BASE = window.location.hostname.includes('greenreachgreens.com')
             ? 'https://greenreachgreens.com'
