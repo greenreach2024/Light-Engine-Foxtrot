@@ -13962,25 +13962,74 @@ app.get('/api/admin/analytics/farms/:farmId/metrics', adminAuthMiddleware, async
   
   console.log(`[admin] GET /api/admin/analytics/farms/${farmId}/metrics?days=${days}`);
   
-  // TODO: Query actual farm data from database
-  // For now, return structured placeholder data
-  res.json({
-    farmId,
-    days,
-    summary: {
-      totalProduction: 0,
-      totalRevenue: 0,
-      daysReported: days,
-      avgYield: 0,
-      topCrop: 'N/A'
-    },
-    metrics: [],
-    modelPerformance: {
-      temperatureForecast: 0,
-      harvestTiming: 0,
-      energyPrediction: 0
+  try {
+    // Get farm ID from farm_id string
+    const farmResult = await db.query(
+      'SELECT id FROM farms WHERE farm_id = $1',
+      [farmId]
+    );
+    
+    if (farmResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Farm not found' });
     }
-  });
+    
+    const farm_pk = farmResult.rows[0].id;
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    
+    // Get time-series metrics
+    const metricsResult = await db.query(`
+      SELECT 
+        recorded_at,
+        room_count,
+        zone_count,
+        device_count,
+        tray_count,
+        plant_count,
+        energy_24h,
+        alert_count
+      FROM farm_metrics
+      WHERE farm_id = $1 AND recorded_at >= $2
+      ORDER BY recorded_at ASC
+    `, [farm_pk, cutoffDate]);
+    
+    // Get inventory summary for production/yield data
+    const inventoryResult = await db.query(`
+      SELECT 
+        COUNT(*) as total_trays,
+        SUM(plant_count) as total_plants,
+        recipe_name
+      FROM farm_inventory
+      WHERE farm_id = $1 AND status IN ('growing', 'ready', 'harvested')
+      GROUP BY recipe_name
+      ORDER BY COUNT(*) DESC
+      LIMIT 1
+    `, [farm_pk]);
+    
+    const topCrop = inventoryResult.rows.length > 0 
+      ? inventoryResult.rows[0].recipe_name 
+      : null;
+    
+    res.json({
+      farmId,
+      days,
+      summary: {
+        totalProduction: null, // Would come from harvest tracking
+        totalRevenue: null, // Would come from sales data
+        daysReported: metricsResult.rows.length,
+        avgYield: null, // Would need harvest weight tracking
+        topCrop
+      },
+      metrics: metricsResult.rows,
+      modelPerformance: {
+        temperatureForecast: null, // Would need ML model metrics
+        harvestTiming: null,
+        energyPrediction: null
+      }
+    });
+  } catch (error) {
+    console.error('[admin] Error fetching analytics:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics data' });
+  }
 }));
 
 /**
@@ -14105,16 +14154,46 @@ app.get('/api/admin/fleet/monitoring', adminAuthMiddleware, asyncHandler(async (
 app.get('/api/admin/energy/dashboard', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log('[admin] GET /api/admin/energy/dashboard');
   
-  // TODO: Query actual energy data from farms
-  // For now, return structured placeholder data
-  res.json({
-    total24h: 0,
-    costPerKwh: 0.12,
-    efficiency: 0,
-    savingsKwh: 0,
-    topConsumers: [],
-    timestamp: new Date().toISOString()
-  });
+  try {
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    // Aggregate energy by farm for last 24h
+    const energyResult = await db.query(`
+      SELECT 
+        f.farm_id,
+        f.name,
+        SUM(e.kwh) as total_kwh,
+        SUM(e.cost) as total_cost
+      FROM farm_energy e
+      JOIN farms f ON e.farm_id = f.id
+      WHERE e.period_start >= $1
+      GROUP BY f.farm_id, f.name
+      ORDER BY total_kwh DESC
+      LIMIT 10
+    `, [last24h]);
+    
+    // Calculate totals
+    const total24h = energyResult.rows.reduce((sum, r) => sum + Number(r.total_kwh || 0), 0);
+    const totalCost = energyResult.rows.reduce((sum, r) => sum + Number(r.total_cost || 0), 0);
+    const costPerKwh = total24h > 0 ? totalCost / total24h : null;
+    
+    res.json({
+      total24h: Math.round(total24h * 100) / 100,
+      costPerKwh: costPerKwh ? Math.round(costPerKwh * 100) / 100 : null,
+      efficiency: null, // Would need baseline comparison
+      savingsKwh: null, // Would need historical comparison
+      topConsumers: energyResult.rows.map(r => ({
+        farmId: r.farm_id,
+        farmName: r.name,
+        kwh: Math.round(Number(r.total_kwh || 0) * 100) / 100,
+        cost: Math.round(Number(r.total_cost || 0) * 100) / 100
+      })),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[admin] Error fetching energy data:', error);
+    res.status(500).json({ error: 'Failed to fetch energy data' });
+  }
 }));
 
 /**
@@ -14125,26 +14204,86 @@ app.get('/api/admin/energy/dashboard', adminAuthMiddleware, asyncHandler(async (
 app.get('/api/admin/harvest/forecast', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log('[admin] GET /api/admin/harvest/forecast');
   
-  // TODO: Query actual harvest data from inventory
-  // For now, return structured placeholder data
-  res.json({
-    thisWeek: 0,
-    thisCycle: 0,
-    successRate: 0,
-    upcomingTrays: 0,
-    forecast: {
-      sevenDay: { trays: 0, plants: 0 },
-      fourteenDay: { trays: 0, plants: 0 },
-      thirtyDay: { trays: 0, plants: 0 },
-      thirtyPlus: { trays: 0, plants: 0 }
-    },
-    recipePerformance: {
-      bestPerformer: 'N/A',
-      mostPopular: 'N/A',
-      fastestCycle: 'N/A'
-    },
-    timestamp: new Date().toISOString()
-  });
+  try {
+    const today = new Date();
+    const sevenDays = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const fourteenDays = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const thirtyDays = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    
+    // Get harvest forecast by date ranges
+    const forecastResult = await db.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE harvest_date <= $1) as seven_day_trays,
+        SUM(plant_count) FILTER (WHERE harvest_date <= $1) as seven_day_plants,
+        COUNT(*) FILTER (WHERE harvest_date > $1 AND harvest_date <= $2) as fourteen_day_trays,
+        SUM(plant_count) FILTER (WHERE harvest_date > $1 AND harvest_date <= $2) as fourteen_day_plants,
+        COUNT(*) FILTER (WHERE harvest_date > $2 AND harvest_date <= $3) as thirty_day_trays,
+        SUM(plant_count) FILTER (WHERE harvest_date > $2 AND harvest_date <= $3) as thirty_day_plants,
+        COUNT(*) FILTER (WHERE harvest_date > $3) as thirty_plus_trays,
+        SUM(plant_count) FILTER (WHERE harvest_date > $3) as thirty_plus_plants
+      FROM farm_inventory
+      WHERE status IN ('growing', 'flowering', 'ready')
+        AND harvest_date IS NOT NULL
+    `, [sevenDays, fourteenDays, thirtyDays]);
+    
+    // Get recipe performance
+    const recipeResult = await db.query(`
+      SELECT 
+        recipe_name,
+        COUNT(*) as tray_count,
+        AVG(age_days) as avg_cycle_days
+      FROM farm_inventory
+      WHERE status = 'harvested'
+        AND recipe_name IS NOT NULL
+      GROUP BY recipe_name
+      ORDER BY tray_count DESC
+      LIMIT 3
+    `);
+    
+    const forecast = forecastResult.rows[0] || {};
+    const mostPopular = recipeResult.rows[0]?.recipe_name || null;
+    const fastestCycle = recipeResult.rows.length > 0
+      ? recipeResult.rows.reduce((min, r) => 
+          Number(r.avg_cycle_days || 999) < Number(min.avg_cycle_days || 999) ? r : min
+        ).recipe_name
+      : null;
+    
+    res.json({
+      thisWeek: Number(forecast.seven_day_trays || 0),
+      thisCycle: null, // Would need cycle definition
+      successRate: null, // Would need loss tracking
+      upcomingTrays: Number(forecast.seven_day_trays || 0) + 
+                     Number(forecast.fourteen_day_trays || 0) + 
+                     Number(forecast.thirty_day_trays || 0),
+      forecast: {
+        sevenDay: { 
+          trays: Number(forecast.seven_day_trays || 0), 
+          plants: Number(forecast.seven_day_plants || 0) 
+        },
+        fourteenDay: { 
+          trays: Number(forecast.fourteen_day_trays || 0), 
+          plants: Number(forecast.fourteen_day_plants || 0) 
+        },
+        thirtyDay: { 
+          trays: Number(forecast.thirty_day_trays || 0), 
+          plants: Number(forecast.thirty_day_plants || 0) 
+        },
+        thirtyPlus: { 
+          trays: Number(forecast.thirty_plus_trays || 0), 
+          plants: Number(forecast.thirty_plus_plants || 0) 
+        }
+      },
+      recipePerformance: {
+        bestPerformer: null, // Would need yield/quality scoring
+        mostPopular,
+        fastestCycle
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[admin] Error fetching harvest forecast:', error);
+    res.status(500).json({ error: 'Failed to fetch harvest forecast' });
+  }
 }));
 
 /**
