@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { getJwtSecret } from '../server/utils/secrets-manager.js';
 import { initDatabase, query as dbQuery } from '../lib/database.js';
+import { sendEmail } from '../lib/email-service.js';
 
 const router = express.Router();
 
@@ -1196,10 +1197,38 @@ router.post('/users', requireAdmin, async (req, res) => {
       [normalizedEmail, passwordHash, name, JSON.stringify(permissions)]
     );
     
+    const userId = created.rows[0].id;
+    console.log('[Admin] User created with ID:', userId);
+    
+    // Send welcome email
+    try {
+      const loginUrl = `https://www.greenreach.org/GR-central-admin.html`;
+      const emailHtml = generateAdminWelcomeEmail({
+        first_name,
+        last_name,
+        email: normalizedEmail,
+        role,
+        temp_password: tempPassword,
+        login_url: loginUrl
+      });
+      
+      await sendEmail({
+        to: normalizedEmail,
+        subject: 'Welcome to the GreenReach Team',
+        html: emailHtml,
+        text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
+      });
+      
+      console.log('[Admin] Welcome email sent to:', normalizedEmail);
+    } catch (emailError) {
+      console.error('[Admin] Failed to send welcome email:', emailError.message);
+      // Don't fail user creation if email fails
+    }
+    
     res.json({ 
       success: true, 
-      user_id: created.rows[0].id,
-      message: 'User created successfully',
+      user_id: userId,
+      message: 'User created successfully and welcome email sent',
       temp_password: password ? undefined : tempPassword
     });
   } catch (error) {
@@ -2549,6 +2578,158 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete user' });
   }
 });
+
+/**
+ * Generate welcome email HTML for new admin users
+ */
+function generateAdminWelcomeEmail({ first_name, last_name, email, role, temp_password, login_url }) {
+  const roleDescriptions = {
+    'admin': 'Full administrative access to all GreenReach systems',
+    'operations': 'Operations team access to manage farms, orders, and inventory',
+    'support': 'Customer support access to help farms and buyers',
+    'viewer': 'Read-only access to view system data and reports'
+  };
+  
+  const rolePermissions = {
+    'admin': ['Manage all farms and users', 'Configure system settings', 'View all analytics', 'Full API access'],
+    'operations': ['Manage farm inventory', 'Process orders', 'View farm analytics', 'Support farm operations'],
+    'support': ['View customer accounts', 'Process support tickets', 'View order history', 'Help troubleshoot issues'],
+    'viewer': ['View dashboard metrics', 'Generate reports', 'View farm profiles', 'Monitor system status']
+  };
+  
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 20px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Welcome to GreenReach</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">You've been added to the team</p>
+      </div>
+      
+      <!-- Body -->
+      <div style="padding: 40px 30px;">
+        <p style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 20px 0;">
+          Hi <strong>${first_name}</strong>,
+        </p>
+        
+        <p style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 30px 0;">
+          Your GreenReach admin account has been created! You now have access to the central administration platform as a <strong>${role.charAt(0).toUpperCase() + role.slice(1)}</strong>.
+        </p>
+        
+        <!-- Login Credentials -->
+        <div style="background: #f9fafb; border: 2px solid #10b981; border-radius: 12px; padding: 24px; margin: 0 0 30px 0;">
+          <h2 style="color: #059669; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">🔐 Your Login Credentials</h2>
+          
+          <div style="margin-bottom: 12px;">
+            <div style="color: #6b7280; font-size: 13px; margin-bottom: 4px;">Email Address</div>
+            <div style="color: #111827; font-size: 15px; font-weight: 500;">${email}</div>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <div style="color: #6b7280; font-size: 13px; margin-bottom: 4px;">Temporary Password</div>
+            <div style="background: #ffffff; padding: 10px 12px; border-radius: 6px; border: 1px solid #d1d5db;">
+              <code style="color: #dc2626; font-size: 15px; font-weight: 600; font-family: 'Courier New', monospace;">${temp_password}</code>
+            </div>
+          </div>
+          
+          <div style="margin-top: 20px;">
+            <a href="${login_url}" style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+              Sign In to Dashboard →
+            </a>
+          </div>
+        </div>
+        
+        <!-- Security Notice -->
+        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px 20px; margin: 0 0 30px 0; border-radius: 6px;">
+          <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.5;">
+            <strong>⚠️ Important Security Notice:</strong> Please change your password immediately after your first login. Click your profile icon in the top right and select "Change Password".
+          </p>
+        </div>
+        
+        <!-- Role & Permissions -->
+        <h2 style="color: #059669; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">👤 Your Role & Access</h2>
+        
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 0 0 30px 0;">
+          <div style="margin-bottom: 12px;">
+            <div style="color: #065f46; font-size: 15px; font-weight: 600; margin-bottom: 4px;">Role: ${role.charAt(0).toUpperCase() + role.slice(1)}</div>
+            <div style="color: #047857; font-size: 14px; line-height: 1.5;">${roleDescriptions[role]}</div>
+          </div>
+          
+          <div style="margin-top: 16px;">
+            <div style="color: #065f46; font-size: 14px; font-weight: 600; margin-bottom: 8px;">Your Permissions:</div>
+            <ul style="margin: 0; padding-left: 20px; color: #047857; font-size: 14px; line-height: 1.8;">
+              ${rolePermissions[role].map(perm => `<li>${perm}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+        
+        <!-- What's Available -->
+        <h2 style="color: #059669; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">🚀 What You Can Do</h2>
+        
+        <div style="margin: 0 0 30px 0;">
+          <div style="display: flex; margin-bottom: 12px;">
+            <div style="color: #10b981; font-size: 20px; margin-right: 12px;">📊</div>
+            <div>
+              <div style="color: #111827; font-size: 15px; font-weight: 600; margin-bottom: 2px;">Dashboard Analytics</div>
+              <div style="color: #6b7280; font-size: 14px;">View real-time KPIs, farm statistics, and network health</div>
+            </div>
+          </div>
+          
+          <div style="display: flex; margin-bottom: 12px;">
+            <div style="color: #10b981; font-size: 20px; margin-right: 12px;">🏭</div>
+            <div>
+              <div style="color: #111827; font-size: 15px; font-weight: 600; margin-bottom: 2px;">Farm Management</div>
+              <div style="color: #6b7280; font-size: 14px;">Monitor and manage all farms in the GreenReach network</div>
+            </div>
+          </div>
+          
+          <div style="display: flex; margin-bottom: 12px;">
+            <div style="color: #10b981; font-size: 20px; margin-right: 12px;">📦</div>
+            <div>
+              <div style="color: #111827; font-size: 15px; font-weight: 600; margin-bottom: 2px;">Order Processing</div>
+              <div style="color: #6b7280; font-size: 14px;">Track wholesale orders and fulfillment across the network</div>
+            </div>
+          </div>
+          
+          <div style="display: flex; margin-bottom: 12px;">
+            <div style="color: #10b981; font-size: 20px; margin-right: 12px;">👥</div>
+            <div>
+              <div style="color: #111827; font-size: 15px; font-weight: 600; margin-bottom: 2px;">Team Collaboration</div>
+              <div style="color: #6b7280; font-size: 14px;">Work with the GreenReach team to support our farmers</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Support -->
+        <h2 style="color: #059669; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">💬 Need Help?</h2>
+        
+        <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 12px 0;">
+          If you have questions or need assistance, reach out to the team:
+        </p>
+        
+        <ul style="margin: 0 0 30px 0; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.8;">
+          <li>Email: <a href="mailto:support@greenreach.org" style="color: #10b981; text-decoration: none;">support@greenreach.org</a></li>
+          <li>Documentation: <a href="https://www.greenreach.org/docs" style="color: #10b981; text-decoration: none;">GreenReach Admin Docs</a></li>
+          <li>Team Chat: Available in the dashboard</li>
+        </ul>
+        
+        <p style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0;">
+          Welcome to the team! 🌱<br>
+          <strong>The GreenReach Team</strong>
+        </p>
+      </div>
+      
+      <!-- Footer -->
+      <div style="background: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 13px;">
+          &copy; ${new Date().getFullYear()} GreenReach. All rights reserved.
+        </p>
+        <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+          This email contains sensitive account information. Please keep it secure and do not forward it.
+        </p>
+      </div>
+    </div>
+  `;
+}
 
 export default router;
 
