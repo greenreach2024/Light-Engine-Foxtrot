@@ -1090,6 +1090,7 @@ router.get('/users', requireAdmin, async (req, res) => {
         last_login,
         created_at
       FROM admin_users
+      WHERE active = true
       ORDER BY created_at DESC
     `);
     
@@ -2520,24 +2521,25 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
       return res.status(503).json({ error: 'Database not available', mode: 'demo' });
     }
     
-    // Check if user exists
-    const user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
-    if (!user) {
+    // Check if user exists in admin_users table
+    const result = await dbQuery('SELECT * FROM admin_users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+    const user = result.rows[0];
     
     // Prevent deleting yourself
     if (user.email === req.admin.email) {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
     
-    // Soft delete: set status to 'deleted'
-    await db.run('UPDATE users SET status = ?, deleted_at = datetime(\'now\') WHERE id = ?', ['deleted', userId]);
+    // Soft delete: set active to false
+    await dbQuery('UPDATE admin_users SET active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [userId]);
     
     // Log action
-    await db.run(
+    await dbQuery(
       `INSERT INTO admin_audit_log (admin_id, action, resource_type, resource_id, metadata, ip_address)
-       VALUES (?, 'DELETE_USER', 'user', ?, ?, ?)`,
+       VALUES ($1, 'DELETE_USER', 'user', $2, $3, $4)`,
       [req.admin.admin_id || req.admin.email, userId, JSON.stringify({ userId, email: user.email }), req.ip]
     );
     
