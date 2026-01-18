@@ -4170,3 +4170,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ============================================================================
+// AUTHENTICATION INITIALIZATION - Run auth check on page load
+// ============================================================================
+(async function initAuth() {
+    console.log('🔐 [initAuth] Starting authentication check...');
+    
+    // Check for force login parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('forceLogin') === 'true') {
+        console.log('🔐 [initAuth] Force login requested, clearing tokens and redirecting...');
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_email');
+        localStorage.removeItem('admin_name');
+        window.location.href = `${API_BASE}/GR-central-admin-login.html`;
+        return;
+    }
+    
+    // Verify the session is valid
+    const isValid = await verifySession();
+    if (!isValid) {
+        console.log('🔐 [initAuth] Session invalid, user will be redirected to login');
+        return; // verifySession already handles redirect
+    }
+    
+    console.log('🔐 [initAuth] Authentication verified successfully');
+    console.log('🔐 [initAuth] User:', localStorage.getItem('admin_name'));
+    console.log('🔐 [initAuth] Email:', localStorage.getItem('admin_email'));
+})();
+
