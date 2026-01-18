@@ -1293,8 +1293,10 @@ router.post('/users', requireAdmin, async (req, res) => {
     try {
       console.log('[Admin] ===== SENDING WELCOME EMAIL =====');
       console.log('[Admin] To:', normalizedEmail);
+      console.log('[Admin] CC: info@greenreachfarms.com');
       console.log('[Admin] From:', process.env.FROM_EMAIL || 'noreply@greenreach.org');
       console.log('[Admin] Provider:', process.env.EMAIL_PROVIDER || 'ses');
+      console.log('[Admin] AWS Region:', process.env.AWS_REGION || 'us-east-1');
       
       const loginUrl = `https://www.greenreach.org/GR-central-admin.html`;
       const emailHtml = generateAdminWelcomeEmail({
@@ -1306,8 +1308,10 @@ router.post('/users', requireAdmin, async (req, res) => {
         login_url: loginUrl
       });
       
+      console.log('[Admin] Calling sendEmail function...');
       const emailResult = await sendEmail({
         to: normalizedEmail,
+        cc: 'info@greenreachfarms.com',
         subject: 'Welcome to the GreenReach Team',
         html: emailHtml,
         text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
