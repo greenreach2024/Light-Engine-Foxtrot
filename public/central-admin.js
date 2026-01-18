@@ -4212,7 +4212,13 @@ function formatTimeAgo(date) {
     if (seconds < 60) return `${seconds} sec ago`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`;
-    return `${Math.floor(seconds / 86400)} days ago`;==========================================
+    return `${Math.floor(seconds / 86400)} days ago`;
+}
+
+/**
+ * ============================================
+ * USER MANAGEMENT FUNCTIONS
+ * ============================================
  */
 
 let allUsers = [];
