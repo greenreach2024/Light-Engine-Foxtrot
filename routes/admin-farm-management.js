@@ -890,15 +890,15 @@ router.get('/users', requireAdmin, async (req, res) => {
       const sampleUsers = [
         {
           user_id: 1,
-          email: 'admin@greenreach.com',
-          first_name: 'System',
-          last_name: 'Administrator',
+          email: 'info@greenreachfarms.com',
+          first_name: 'GreenReach',
+          last_name: 'Admin',
           role: 'admin',
           status: 'active',
           last_login: new Date().toISOString(),
           created_at: new Date().toISOString(),
           farm_id: 'greenreach-hq',
-          farm_name: 'GreenReach HQ Demo Farm'
+          farm_name: 'GreenReach Central'
         }
       ];
       
@@ -927,6 +927,180 @@ router.get('/users', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error listing users:', error);
     res.status(500).json({ error: 'Failed to list users' });
+  }
+});
+
+/**
+ * POST /api/admin/users
+ * Create a new user
+ */
+router.post('/users', requireAdmin, async (req, res) => {
+  try {
+    const { first_name, last_name, email, role, password, farm_id } = req.body;
+    
+    // Validate required fields
+    if (!first_name || !last_name || !email || !role) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: first_name, last_name, email, role' 
+      });
+    }
+    
+    const db = await initDatabase();
+    
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot create users in demo mode');
+      return res.status(503).json({ 
+        success: false, 
+        error: 'User creation not available in demo mode. Please configure database.' 
+      });
+    }
+    
+    // Check if email already exists
+    const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing) {
+      return res.status(409).json({ 
+        success: false, 
+        error: 'User with this email already exists' 
+      });
+    }
+    
+    // Hash password if provided
+    let passwordHash = null;
+    if (password) {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+    
+    // Insert new user
+    const result = await db.run(`
+      INSERT INTO users (email, first_name, last_name, role, password_hash, farm_id, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'active', datetime('now'))
+    `, [email, first_name, last_name, role, passwordHash, farm_id || null]);
+    
+    res.json({ 
+      success: true, 
+      user_id: result.lastID,
+      message: 'User created successfully' 
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ success: false, error: 'Failed to create user' });
+  }
+});
+
+/**
+ * PUT /api/admin/users/:userId
+ * Update an existing user
+ */
+router.put('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { first_name, last_name, email, role, status, password } = req.body;
+    
+    const db = await initDatabase();
+    
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot update users in demo mode');
+      return res.status(503).json({ 
+        success: false, 
+        error: 'User updates not available in demo mode. Please configure database.' 
+      });
+    }
+    
+    // Check if user exists
+    const existing = await db.get('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    // Build update query dynamically based on provided fields
+    const updates = [];
+    const values = [];
+    
+    if (first_name !== undefined) {
+      updates.push('first_name = ?');
+      values.push(first_name);
+    }
+    if (last_name !== undefined) {
+      updates.push('last_name = ?');
+      values.push(last_name);
+    }
+    if (email !== undefined) {
+      updates.push('email = ?');
+      values.push(email);
+    }
+    if (role !== undefined) {
+      updates.push('role = ?');
+      values.push(role);
+    }
+    if (status !== undefined) {
+      updates.push('status = ?');
+      values.push(status);
+    }
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      updates.push('password_hash = ?');
+      values.push(passwordHash);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fields to update' });
+    }
+    
+    updates.push('updated_at = datetime(\'now\')');
+    values.push(userId);
+    
+    await db.run(`
+      UPDATE users 
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `, values);
+    
+    res.json({ success: true, message: 'User updated successfully' });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
+/**
+ * DELETE /api/admin/users/:userId
+ * Delete a user
+ */
+router.delete('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const db = await initDatabase();
+    
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot delete users in demo mode');
+      return res.status(503).json({ 
+        success: false, 
+        error: 'User deletion not available in demo mode. Please configure database.' 
+      });
+    }
+    
+    // Check if user exists
+    const existing = await db.get('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    // Soft delete by setting status to inactive
+    await db.run(`
+      UPDATE users 
+      SET status = 'inactive', updated_at = datetime('now')
+      WHERE id = ?
+    `, [userId]);
+    
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete user' });
   }
 });
 
