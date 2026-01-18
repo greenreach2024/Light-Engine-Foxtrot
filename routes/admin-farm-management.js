@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { getJwtSecret } from '../server/utils/secrets-manager.js';
 import { initDatabase, query as dbQuery } from '../lib/database.js';
 import { sendEmail } from '../lib/email-service.js';
-import { SESClient, VerifyEmailIdentityCommand } from '@aws-sdk/client-ses';
+import { SESClient, VerifyEmailIdentityCommand, GetIdentityVerificationAttributesCommand } from '@aws-sdk/client-ses';
 
 const router = express.Router();
 
@@ -13,8 +13,30 @@ const router = express.Router();
 const sesClient = new SESClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 /**
+ * Check if email is already verified in SES
+ */
+async function checkSESVerificationStatus(email) {
+  const emailProvider = process.env.EMAIL_PROVIDER || 'ses';
+  if (emailProvider !== 'ses') {
+    return { verified: true, reason: 'not_ses' };
+  }
+
+  try {
+    const command = new GetIdentityVerificationAttributesCommand({ Identities: [email] });
+    const response = await sesClient.send(command);
+    const status = response.VerificationAttributes?.[email]?.VerificationStatus;
+    console.log(`[SES] Verification status for ${email}:`, status);
+    return { verified: status === 'Success', status };
+  } catch (error) {
+    console.error(`[SES] Error checking verification status for ${email}:`, error.message);
+    return { verified: false, error: error.message };
+  }
+}
+
+/**
  * Verify email address in SES to enable sending (required in sandbox mode)
  * Admins creating users are trusted, so we auto-verify their email addresses
+ * Returns verification status immediately - caller should check if already verified
  */
 async function verifySESRecipient(email) {
   // Only verify if using SES provider
@@ -24,13 +46,21 @@ async function verifySESRecipient(email) {
     return { verified: true, reason: 'not_ses' };
   }
 
+  // First check if already verified
+  const statusCheck = await checkSESVerificationStatus(email);
+  if (statusCheck.verified) {
+    console.log(`[SES] ✅ ${email} is already verified`);
+    return { verified: true, already_verified: true };
+  }
+
+  // Not verified - send verification email
   try {
     const command = new VerifyEmailIdentityCommand({ EmailAddress: email });
     await sesClient.send(command);
-    console.log(`[SES] ✅ Verification email sent to ${email} (or already verified)`);
-    return { verified: true, verification_sent: true };
+    console.log(`[SES] 📧 Verification email sent to ${email} - awaiting user confirmation`);
+    return { verified: false, verification_sent: true, needs_confirmation: true };
   } catch (error) {
-    console.error(`[SES] ❌ Failed to verify ${email}:`, error.message);
+    console.error(`[SES] ❌ Failed to send verification email to ${email}:`, error.message);
     return { verified: false, error: error.message };
   }
 }
@@ -1298,32 +1328,43 @@ router.post('/users', requireAdmin, async (req, res) => {
 
       let emailSent = false;
       let emailError = null;
-      try {
-        console.log('[Admin] ===== SENDING WELCOME EMAIL (DEMO MODE) =====');
-        const emailResult = await sendEmail({
-          to: normalizedEmail,
-          cc: 'info@greenreachfarms.com',
-          subject: 'Welcome to the GreenReach Team',
-          html: emailHtml,
-          text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
-        });
-        emailSent = true;
-        console.log('[Admin] ✅ Welcome email sent successfully (demo mode):', emailResult);
-      } catch (err) {
-        emailError = err.message;
-        console.error('[Admin] ❌ FAILED to send welcome email (demo mode)');
-        console.error('[Admin] Error:', err.message);
-        console.error('[Admin] Stack:', err.stack);
+      
+      // Only send email if recipient is verified (or not using SES)
+      if (sesVerification.verified) {
+        try {
+          console.log('[Admin] ===== SENDING WELCOME EMAIL (DEMO MODE) =====');
+          const emailResult = await sendEmail({
+            to: normalizedEmail,
+            cc: 'info@greenreachfarms.com',
+            subject: 'Welcome to the GreenReach Team',
+            html: emailHtml,
+            text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
+          });
+          emailSent = true;
+          console.log('[Admin] ✅ Welcome email sent successfully (demo mode):', emailResult);
+        } catch (err) {
+          emailError = err.message;
+          console.error('[Admin] ❌ FAILED to send welcome email (demo mode)');
+          console.error('[Admin] Error:', err.message);
+          console.error('[Admin] Stack:', err.stack);
+        }
+      } else if (sesVerification.needs_confirmation) {
+        emailError = 'Recipient email verification pending - AWS sent verification email to user';
+        console.log('[Admin] ⏳ Welcome email NOT sent - awaiting recipient verification');
+        console.log('[Admin] User must click AWS verification link, then you can resend welcome email');
       }
 
       return res.json({
-        success: emailSent,
+        success: true,
         demo_mode: true,
         message: emailSent
           ? 'User created (demo mode) and welcome email sent'
-          : 'User created (demo mode) but welcome email failed',
+          : sesVerification.needs_confirmation
+            ? 'User created (demo mode). AWS verification email sent to recipient - welcome email will be sent after they verify.'
+            : 'User created (demo mode) but welcome email failed',
         email_sent: emailSent,
         email_error: emailError,
+        verification_pending: sesVerification.needs_confirmation || false,
         temp_password: tempPassword
       });
     }
@@ -1416,17 +1457,26 @@ router.post('/users', requireAdmin, async (req, res) => {
         login_url: loginUrl
       });
       
-      console.log('[Admin] Calling sendEmail function...');
-      const emailResult = await sendEmail({
-        to: normalizedEmail,
-        cc: 'info@greenreachfarms.com',
-        subject: 'Welcome to the GreenReach Team',
-        html: emailHtml,
-        text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
-      });
-      
-      emailSent = true;
-      console.log('[Admin] ✅ Welcome email sent successfully:', emailResult);
+      // Only send email if recipient is verified (or not using SES)
+      if (sesVerification.verified) {
+        console.log('[Admin] Calling sendEmail function...');
+        const emailResult = await sendEmail({
+          to: normalizedEmail,
+          cc: 'info@greenreachfarms.com',
+          subject: 'Welcome to the GreenReach Team',
+          html: emailHtml,
+          text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
+        });
+        
+        emailSent = true;
+        console.log('[Admin] ✅ Welcome email sent successfully:', emailResult);
+      } else if (sesVerification.needs_confirmation) {
+        emailError = 'Recipient email verification pending - AWS sent verification email to user';
+        console.log('[Admin] ⏳ Welcome email NOT sent - awaiting recipient verification');
+        console.log('[Admin] User must click AWS verification link, then you can resend welcome email');
+      } else {
+        throw new Error(sesVerification.error || 'SES verification failed');
+      }
     } catch (err) {
       emailError = err.message;
       console.error('[Admin] ❌ FAILED to send welcome email');
@@ -1436,15 +1486,20 @@ router.post('/users', requireAdmin, async (req, res) => {
     }
     
     const action = isReactivation ? 'reactivated' : 'created';
+    const verificationPending = emailError && emailError.includes('verification pending');
+    
     res.json({ 
       success: true, 
       user_id: userId,
       reactivated: isReactivation,
       message: emailSent 
-        ? `User ${action} successfully and welcome email sent` 
-        : `User ${action} successfully (email failed - see temp_password)`,
+        ? `User ${action} successfully and welcome email sent to ${normalizedEmail} (CC: info@greenreachfarms.com)` 
+        : verificationPending
+          ? `User ${action} successfully. AWS verification email sent to ${normalizedEmail} - welcome email will be sent after they verify.`
+          : `User ${action} successfully (email failed - see temp_password)`,
       email_sent: emailSent,
       email_error: emailError,
+      verification_pending: verificationPending,
       temp_password: tempPassword // Always return so admin can manually share if email fails
     });
   } catch (error) {
