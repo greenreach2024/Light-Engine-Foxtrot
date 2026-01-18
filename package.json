@@ -30,6 +30,7 @@
     "@aws-sdk/client-cloudwatch": "^3.956.0",
     "@aws-sdk/client-secrets-manager": "^3.956.0",
     "@aws-sdk/client-ses": "^3.958.0",
+    "@sendgrid/mail": "^8.1.6",
     "axios": "^1.7.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",

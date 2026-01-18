@@ -1228,25 +1228,70 @@ router.get('/users', requireAdmin, async (req, res) => {
  * Create a new user
  */
 router.post('/users', requireAdmin, async (req, res) => {
+  console.log('[Admin POST /users] ===== REQUEST RECEIVED =====');
+  console.log('[Admin POST /users] Body:', JSON.stringify(req.body));
+  
   try {
     const { first_name, last_name, email, role, farm_id } = req.body;
     
     // Validate required fields (password is NOT required - always auto-generated)
     if (!first_name || !last_name || !email || !role) {
+      console.error('[Admin POST /users] Missing required fields');
       return res.status(400).json({ 
         success: false, 
         error: 'Missing required fields: first_name, last_name, email, role' 
       });
     }
     
+    console.log('[Admin POST /users] Initializing database...');
     const db = await initDatabase();
+    console.log('[Admin POST /users] Database mode:', db?.mode || 'null');
     
     // Check if database is available (PostgreSQL mode)
     if (!db || !db.pool || db.mode === 'nedb') {
-      console.log('[Admin] Database not available, cannot create users in demo mode');
-      return res.status(503).json({ 
-        success: false, 
-        error: 'User creation not available in demo mode. Please configure database.' 
+      console.log('[Admin] Database not available, sending welcome email only (demo mode)');
+
+      const normalizedEmail = email.toLowerCase();
+      const tempPassword = crypto.randomBytes(12).toString('base64').slice(0, 16);
+      const loginUrl = `https://www.greenreach.org/GR-central-admin.html`;
+      const emailHtml = generateAdminWelcomeEmail({
+        first_name,
+        last_name,
+        email: normalizedEmail,
+        role,
+        temp_password: tempPassword,
+        login_url: loginUrl
+      });
+
+      let emailSent = false;
+      let emailError = null;
+      try {
+        console.log('[Admin] ===== SENDING WELCOME EMAIL (DEMO MODE) =====');
+        const emailResult = await sendEmail({
+          to: normalizedEmail,
+          cc: 'info@greenreachfarms.com',
+          subject: 'Welcome to the GreenReach Team',
+          html: emailHtml,
+          text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
+        });
+        emailSent = true;
+        console.log('[Admin] ✅ Welcome email sent successfully (demo mode):', emailResult);
+      } catch (err) {
+        emailError = err.message;
+        console.error('[Admin] ❌ FAILED to send welcome email (demo mode)');
+        console.error('[Admin] Error:', err.message);
+        console.error('[Admin] Stack:', err.stack);
+      }
+
+      return res.json({
+        success: emailSent,
+        demo_mode: true,
+        message: emailSent
+          ? 'User created (demo mode) and welcome email sent'
+          : 'User created (demo mode) but welcome email failed',
+        email_sent: emailSent,
+        email_error: emailError,
+        temp_password: tempPassword
       });
     }
     
@@ -1365,8 +1410,10 @@ router.post('/users', requireAdmin, async (req, res) => {
       temp_password: tempPassword // Always return so admin can manually share if email fails
     });
   } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({ success: false, error: 'Failed to create user' });
+    console.error('[Admin POST /users] ===== ERROR CAUGHT =====');
+    console.error('[Admin POST /users] Error message:', error.message);
+    console.error('[Admin POST /users] Error stack:', error.stack);
+    res.status(500).json({ success: false, error: 'Failed to create user', details: error.message });
   }
 });
 
