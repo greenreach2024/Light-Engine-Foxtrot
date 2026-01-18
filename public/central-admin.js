@@ -4070,8 +4070,9 @@ async function saveUser(event) {
         }
         
         // Show temp password if generated
-        if (data.user?.temporary_password) {
-            alert(`User created successfully!\n\nTemporary password: ${data.user.temporary_password}\n\nPlease save this password and share it securely with the user.`);
+        const tempPassword = data.user?.temporary_password || data.temp_password;
+        if (tempPassword) {
+            alert(`User created successfully!\n\nTemporary password: ${tempPassword}\n\nPlease save this password and share it securely with the user.`);
         } else {
             alert(userId ? 'User updated successfully!' : 'User created successfully!');
         }

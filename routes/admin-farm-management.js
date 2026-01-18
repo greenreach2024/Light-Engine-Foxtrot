@@ -924,9 +924,22 @@ router.get('/users', requireAdmin, async (req, res) => {
       const first_name = nameParts[0] || '';
       const last_name = nameParts.slice(1).join(' ') || '';
       const status = row.active === false ? 'inactive' : 'active';
-      const role = Array.isArray(row.permissions) && row.permissions.includes('delete')
-        ? 'admin'
-        : 'viewer';
+      let role = 'viewer';
+      let permissions = row.permissions;
+
+      if (typeof permissions === 'string') {
+        try {
+          permissions = JSON.parse(permissions);
+        } catch {
+          permissions = null;
+        }
+      }
+
+      if (permissions && typeof permissions === 'object' && !Array.isArray(permissions)) {
+        role = permissions.role || role;
+      } else if (Array.isArray(permissions)) {
+        role = permissions.includes('delete') ? 'admin' : 'viewer';
+      }
       
       return {
         user_id: row.user_id,
@@ -991,14 +1004,19 @@ router.post('/users', requireAdmin, async (req, res) => {
     const tempPassword = password || crypto.randomBytes(8).toString('hex');
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     const name = `${first_name} ${last_name}`.trim();
-    const permissions = role === 'admin'
-      ? ['read', 'write', 'delete']
-      : ['read'];
+    const permissions = {
+      role,
+      scopes: role === 'admin'
+        ? ['read', 'write', 'delete']
+        : role === 'operations' || role === 'support'
+          ? ['read', 'write']
+          : ['read']
+    };
 
     // Insert new admin user
     const created = await dbQuery(
       `INSERT INTO admin_users (email, password_hash, name, permissions, active, mfa_enabled, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, true, false, NOW(), NOW())
+       VALUES ($1, $2, $3, $4::jsonb, true, false, NOW(), NOW())
        RETURNING id`,
       [normalizedEmail, passwordHash, name, JSON.stringify(permissions)]
     );
@@ -1056,10 +1074,15 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
       values.push(email.toLowerCase());
     }
     if (role !== undefined) {
-      const permissions = role === 'admin'
-        ? ['read', 'write', 'delete']
-        : ['read'];
-      updates.push(`permissions = $${paramIndex++}`);
+      const permissions = {
+        role,
+        scopes: role === 'admin'
+          ? ['read', 'write', 'delete']
+          : role === 'operations' || role === 'support'
+            ? ['read', 'write']
+            : ['read']
+      };
+      updates.push(`permissions = $${paramIndex++}::jsonb`);
       values.push(JSON.stringify(permissions));
     }
     if (status !== undefined) {
