@@ -1804,9 +1804,21 @@ router.post('/farms/reset-user-password', requireAdmin, async (req, res) => {
  */
 router.get('/recipes', requireAdmin, async (req, res) => {
   try {
+    const db = await initDatabase();
     const { category, search, page = 1, limit = 50 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
     
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot list recipes');
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Recipes require PostgreSQL. Set DB_ENABLED=true and configure DB_HOST/DB_NAME/DB_USER/DB_PASSWORD in the environment.',
+        mode: 'database_unavailable'
+      });
+    }
+    
+    // PostgreSQL mode: Query actual database
+    const offset = (parseInt(page) - 1) * parseInt(limit);
     let whereClause = [];
     let params = [];
     let paramIndex = 1;
@@ -1849,7 +1861,8 @@ router.get('/recipes', requireAdmin, async (req, res) => {
       total,
       page: parseInt(page),
       limit: parseInt(limit),
-      pages: Math.ceil(total / parseInt(limit))
+      pages: Math.ceil(total / parseInt(limit)),
+      mode: 'database'
     });
   } catch (error) {
     console.error('[ADMIN RECIPES] Error listing recipes:', error);
@@ -1863,8 +1876,20 @@ router.get('/recipes', requireAdmin, async (req, res) => {
  */
 router.get('/recipes/:id', requireAdmin, async (req, res) => {
   try {
+    const db = await initDatabase();
     const { id } = req.params;
     
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot fetch recipe');
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Recipes require PostgreSQL. Set DB_ENABLED=true and configure DB_HOST/DB_NAME/DB_USER/DB_PASSWORD in the environment.',
+        mode: 'database_unavailable'
+      });
+    }
+    
+    // PostgreSQL mode: Query actual database
     const result = await dbQuery(
       'SELECT * FROM recipes WHERE id = $1',
       [id]
@@ -1876,7 +1901,8 @@ router.get('/recipes/:id', requireAdmin, async (req, res) => {
     
     res.json({
       ok: true,
-      recipe: result.rows[0]
+      recipe: result.rows[0],
+      mode: 'database'
     });
   } catch (error) {
     console.error('[ADMIN RECIPES] Error fetching recipe:', error);
@@ -1890,6 +1916,7 @@ router.get('/recipes/:id', requireAdmin, async (req, res) => {
  */
 router.post('/recipes', requireAdmin, async (req, res) => {
   try {
+    const db = await initDatabase();
     const { name, category, description, total_days, data } = req.body;
     
     // Validate required fields
@@ -1902,6 +1929,17 @@ router.post('/recipes', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid data format: schedule array required' });
     }
     
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot create recipe');
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Recipes require PostgreSQL. Set DB_ENABLED=true and configure DB_HOST/DB_NAME/DB_USER/DB_PASSWORD in the environment.',
+        mode: 'database_unavailable'
+      });
+    }
+    
+    // PostgreSQL mode: Insert into database
     const result = await dbQuery(
       `INSERT INTO recipes (name, category, description, total_days, data)
        VALUES ($1, $2, $3, $4, $5)
@@ -1914,7 +1952,8 @@ router.post('/recipes', requireAdmin, async (req, res) => {
     res.status(201).json({
       ok: true,
       message: 'Recipe created successfully',
-      recipe: result.rows[0]
+      recipe: result.rows[0],
+      mode: 'database'
     });
   } catch (error) {
     console.error('[ADMIN RECIPES] Error creating recipe:', error);
@@ -1931,9 +1970,21 @@ router.post('/recipes', requireAdmin, async (req, res) => {
  */
 router.put('/recipes/:id', requireAdmin, async (req, res) => {
   try {
+    const db = await initDatabase();
     const { id } = req.params;
     const { name, category, description, total_days, data } = req.body;
     
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot update recipe');
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Recipes require PostgreSQL. Set DB_ENABLED=true and configure DB_HOST/DB_NAME/DB_USER/DB_PASSWORD in the environment.',
+        mode: 'database_unavailable'
+      });
+    }
+    
+    // PostgreSQL mode: Update database
     // Check if recipe exists
     const existing = await dbQuery('SELECT id FROM recipes WHERE id = $1', [id]);
     if (existing.rows.length === 0) {
@@ -1989,7 +2040,8 @@ router.put('/recipes/:id', requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: 'Recipe updated successfully',
-      recipe: result.rows[0]
+      recipe: result.rows[0],
+      mode: 'database'
     });
   } catch (error) {
     console.error('[ADMIN RECIPES] Error updating recipe:', error);
@@ -2006,8 +2058,20 @@ router.put('/recipes/:id', requireAdmin, async (req, res) => {
  */
 router.delete('/recipes/:id', requireAdmin, async (req, res) => {
   try {
+    const db = await initDatabase();
     const { id } = req.params;
     
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot delete recipe');
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Recipes require PostgreSQL. Set DB_ENABLED=true and configure DB_HOST/DB_NAME/DB_USER/DB_PASSWORD in the environment.',
+        mode: 'database_unavailable'
+      });
+    }
+    
+    // PostgreSQL mode: Delete from database
     const result = await dbQuery(
       'DELETE FROM recipes WHERE id = $1 RETURNING name',
       [id]
@@ -2017,12 +2081,12 @@ router.delete('/recipes/:id', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Recipe not found' });
     }
     
-    console.log(`[ADMIN RECIPES] Deleted recipe: ${result.rows[0].name} (ID: ${id})`);
+    console.log(`[ADMIN RECIPES] Deleted recipe ID ${id}: ${result.rows[0].name}`);
     
     res.json({
       ok: true,
       message: 'Recipe deleted successfully',
-      name: result.rows[0].name
+      mode: 'database'
     });
   } catch (error) {
     console.error('[ADMIN RECIPES] Error deleting recipe:', error);
@@ -2036,6 +2100,18 @@ router.delete('/recipes/:id', requireAdmin, async (req, res) => {
  */
 router.get('/recipes/categories/list', requireAdmin, async (req, res) => {
   try {
+    const db = await initDatabase();
+
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] Database not available, cannot list recipe categories');
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Recipes require PostgreSQL. Set DB_ENABLED=true and configure DB_HOST/DB_NAME/DB_USER/DB_PASSWORD in the environment.',
+        mode: 'database_unavailable'
+      });
+    }
+
     const result = await dbQuery(
       `SELECT DISTINCT category, COUNT(*) as count
        FROM recipes
@@ -2045,7 +2121,8 @@ router.get('/recipes/categories/list', requireAdmin, async (req, res) => {
     
     res.json({
       ok: true,
-      categories: result.rows
+      categories: result.rows,
+      mode: 'database'
     });
   } catch (error) {
     console.error('[ADMIN RECIPES] Error listing categories:', error);
