@@ -424,6 +424,105 @@ router.get('/analytics/aggregate', requireAdmin, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/farms/:farmId/metadata
+ * Update farm metadata (room/zone/device counts)
+ * Can be called by farm systems to report their current state
+ */
+router.post('/farms/:farmId/metadata', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const { room_count, zone_count, device_count, tray_count, plant_count, metadata } = req.body;
+    
+    console.log(`[Farm Metadata] Update request for farm: ${farmId}`);
+    console.log('[Farm Metadata] Data:', { room_count, zone_count, device_count, tray_count, plant_count });
+    
+    const db = await initDatabase();
+    
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Farm Metadata] Database not available, cannot update metadata');
+      return res.json({ success: false, error: 'Database not available', mode: 'demo' });
+    }
+    
+    // Verify farm exists
+    const farmCheck = await dbQuery('SELECT farm_id FROM farms WHERE farm_id = $1', [farmId]);
+    if (farmCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Farm not found' });
+    }
+    
+    // Upsert farm metadata
+    await dbQuery(`
+      INSERT INTO farm_metadata (farm_id, room_count, zone_count, device_count, tray_count, plant_count, metadata, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ON CONFLICT (farm_id) 
+      DO UPDATE SET 
+        room_count = EXCLUDED.room_count,
+        zone_count = EXCLUDED.zone_count,
+        device_count = EXCLUDED.device_count,
+        tray_count = EXCLUDED.tray_count,
+        plant_count = EXCLUDED.plant_count,
+        metadata = EXCLUDED.metadata,
+        updated_at = NOW()
+    `, [
+      farmId,
+      room_count || 0,
+      zone_count || 0,
+      device_count || 0,
+      tray_count || 0,
+      plant_count || 0,
+      JSON.stringify(metadata || {})
+    ]);
+    
+    console.log(`[Farm Metadata] ✅ Updated metadata for farm: ${farmId}`);
+    res.json({ success: true, farm_id: farmId });
+  } catch (error) {
+    console.error('[Farm Metadata] Error updating farm metadata:', error);
+    res.status(500).json({ error: 'Failed to update farm metadata', details: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/farms/sync-all-stats
+ * Trigger a sync of all farm statistics
+ * This can ping each farm to request their current metadata
+ */
+router.post('/farms/sync-all-stats', requireAdmin, async (req, res) => {
+  try {
+    console.log('[Farm Stats Sync] Sync all farm stats requested');
+    
+    const db = await initDatabase();
+    
+    if (!db || !db.pool || db.mode === 'nedb') {
+      return res.json({ 
+        success: false, 
+        error: 'Database not available',
+        mode: 'demo',
+        message: 'Sync not available in demo mode'
+      });
+    }
+    
+    // Get all active farms
+    const farmsResult = await dbQuery('SELECT farm_id, name, email FROM farms WHERE status = $1', ['active']);
+    const farms = farmsResult.rows;
+    
+    console.log(`[Farm Stats Sync] Found ${farms.length} active farms to sync`);
+    
+    // For now, we'll just return the list of farms that need syncing
+    // In a real implementation, this would trigger webhooks or API calls to each farm
+    const syncResults = {
+      total: farms.length,
+      farms: farms.map(f => ({ farm_id: f.farm_id, name: f.name })),
+      message: 'Farm metadata reporting endpoint is available at POST /api/admin/farms/{farmId}/metadata',
+      note: 'Farms should periodically report their stats to this endpoint'
+    };
+    
+    res.json({ success: true, sync: syncResults });
+  } catch (error) {
+    console.error('[Farm Stats Sync] Error syncing farm stats:', error);
+    res.status(500).json({ error: 'Failed to sync farm stats', details: error.message });
+  }
+});
+
+/**
  * GET /api/admin/farms
  * List all registered farms
  */

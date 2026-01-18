@@ -674,43 +674,78 @@ async function loadKPIs() {
             zones: data.totalZones || 0,
             devices: data.totalDevices || 0,
             trays: data.totalTrays || 0,
-            plants: 128492,
-            energy: 4821,
-            alerts: 12
+            plants: data.totalPlants || 0
         };
 
         document.getElementById('kpi-farms').textContent = kpis.farms;
-        document.getElementById('kpi-farms-change').textContent = '+3 this week';
+        document.getElementById('kpi-farms-change').textContent = data.mode || 'live';
         
         document.getElementById('kpi-rooms').textContent = kpis.rooms;
-        document.getElementById('kpi-rooms-change').textContent = '+8 this month';
+        document.getElementById('kpi-rooms-change').textContent = '';
         
         document.getElementById('kpi-zones').textContent = kpis.zones;
-        document.getElementById('kpi-zones-change').textContent = '+15 this month';
+        document.getElementById('kpi-zones-change').textContent = '';
         
         document.getElementById('kpi-devices').textContent = kpis.devices;
-        document.getElementById('kpi-devices-change').textContent = '+42 this week';
+        document.getElementById('kpi-devices-change').textContent = '';
         
         document.getElementById('kpi-trays').textContent = kpis.trays;
-        document.getElementById('kpi-trays-change').textContent = '+156 this week';
+        document.getElementById('kpi-trays-change').textContent = '';
         
         document.getElementById('kpi-plants').textContent = kpis.plants.toLocaleString();
-        document.getElementById('kpi-plants-change').textContent = '+8,234 this week';
+        document.getElementById('kpi-plants-change').textContent = '';
         
-        document.getElementById('kpi-energy').textContent = `${kpis.energy.toLocaleString()} kWh`;
-        document.getElementById('kpi-energy-change').textContent = '8.2% vs last week';
-        
-        document.getElementById('kpi-alerts').textContent = kpis.alerts;
-        document.getElementById('kpi-alerts-change').textContent = '3 critical';
-        
-        if (kpis.alerts > 0) {
-            document.getElementById('alerts-section').style.display = 'block';
-            document.getElementById('critical-count').textContent = 3;
-        }
+        // Hide energy and alerts cards for now (no data source yet)
+        const energyCard = document.getElementById('kpi-energy')?.closest('.kpi-card');
+        const alertsCard = document.getElementById('kpi-alerts')?.closest('.kpi-card');
+        if (energyCard) energyCard.style.display = 'none';
+        if (alertsCard) alertsCard.style.display = 'none';
     } catch (error) {
         console.error('Error loading KPIs:', error);
     }
 }
+
+/**
+ * Sync all farm stats
+ */
+async function syncFarmStats() {
+    try {
+        const syncBtn = document.getElementById('sync-stats-btn');
+        if (syncBtn) {
+            syncBtn.disabled = true;
+            syncBtn.textContent = 'Syncing...';
+        }
+        
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/sync-all-stats`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Farm stats sync result:', result);
+        
+        // Reload KPIs to show updated data
+        await loadKPIs();
+        
+        alert(`Sync initiated for ${result.sync?.total || 0} farms.\n\n${result.sync?.message || ''}`);
+    } catch (error) {
+        console.error('Error syncing farm stats:', error);
+        alert('Failed to sync farm stats. Check console for details.');
+    } finally {
+        const syncBtn = document.getElementById('sync-stats-btn');
+        if (syncBtn) {
+            syncBtn.disabled = false;
+            syncBtn.textContent = 'Sync Farm Stats';
+        }
+    }
+}
+
+// Make syncFarmStats globally available
+window.syncFarmStats = syncFarmStats;
+
 
 /**
  * Load farms data
