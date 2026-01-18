@@ -905,40 +905,40 @@ router.get('/users', requireAdmin, async (req, res) => {
       return res.json({ success: true, users: sampleUsers, mode: 'demo' });
     }
     
-    // PostgreSQL mode: Query actual database
+    // PostgreSQL mode: Query admin users (GreenReach team)
     const result = await dbQuery(`
       SELECT 
-        u.user_id as user_id,
-        u.email,
-        u.name,
-        u.role,
-        u.is_active,
-        u.last_login,
-        u.created_at,
-        u.farm_id,
-        f.name as farm_name
-      FROM users u
-      LEFT JOIN farms f ON u.farm_id = f.farm_id
-      ORDER BY u.created_at DESC
+        id as user_id,
+        email,
+        name,
+        permissions,
+        active,
+        last_login,
+        created_at
+      FROM admin_users
+      ORDER BY created_at DESC
     `);
     
     const users = result.rows.map((row) => {
       const nameParts = String(row.name || '').trim().split(/\s+/).filter(Boolean);
       const first_name = nameParts[0] || '';
       const last_name = nameParts.slice(1).join(' ') || '';
-      const status = row.is_active === false ? 'inactive' : 'active';
+      const status = row.active === false ? 'inactive' : 'active';
+      const role = Array.isArray(row.permissions) && row.permissions.includes('delete')
+        ? 'admin'
+        : 'viewer';
       
       return {
         user_id: row.user_id,
         email: row.email,
         first_name,
         last_name,
-        role: row.role,
+        role,
         status,
         last_login: row.last_login,
         created_at: row.created_at,
-        farm_id: row.farm_id,
-        farm_name: row.farm_name
+        farm_id: 'greenreach-central',
+        farm_name: 'GreenReach Central'
       };
     });
     
@@ -979,7 +979,7 @@ router.post('/users', requireAdmin, async (req, res) => {
     const normalizedEmail = email.toLowerCase();
 
     // Check if email already exists
-    const existing = await dbQuery('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+    const existing = await dbQuery('SELECT id FROM admin_users WHERE email = $1', [normalizedEmail]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ 
         success: false, 
@@ -991,19 +991,21 @@ router.post('/users', requireAdmin, async (req, res) => {
     const tempPassword = password || crypto.randomBytes(8).toString('hex');
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     const name = `${first_name} ${last_name}`.trim();
-    const effectiveFarmId = farm_id || 'greenreach-hq';
+    const permissions = role === 'admin'
+      ? ['read', 'write', 'delete']
+      : ['read'];
 
-    // Insert new user
+    // Insert new admin user
     const created = await dbQuery(
-      `INSERT INTO users (email, name, role, password_hash, farm_id, is_active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
-       RETURNING user_id`,
-      [normalizedEmail, name, role, passwordHash, effectiveFarmId]
+      `INSERT INTO admin_users (email, password_hash, name, permissions, active, mfa_enabled, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, true, false, NOW(), NOW())
+       RETURNING id`,
+      [normalizedEmail, passwordHash, name, JSON.stringify(permissions)]
     );
     
     res.json({ 
       success: true, 
-      user_id: created.rows[0].user_id,
+      user_id: created.rows[0].id,
       message: 'User created successfully',
       temp_password: password ? undefined : tempPassword
     });
@@ -1034,7 +1036,7 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
     }
     
     // Check if user exists
-    const existing = await dbQuery('SELECT user_id FROM users WHERE user_id = $1', [userId]);
+    const existing = await dbQuery('SELECT id FROM admin_users WHERE id = $1', [userId]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -1054,11 +1056,14 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
       values.push(email.toLowerCase());
     }
     if (role !== undefined) {
-      updates.push(`role = $${paramIndex++}`);
-      values.push(role);
+      const permissions = role === 'admin'
+        ? ['read', 'write', 'delete']
+        : ['read'];
+      updates.push(`permissions = $${paramIndex++}`);
+      values.push(JSON.stringify(permissions));
     }
     if (status !== undefined) {
-      updates.push(`is_active = $${paramIndex++}`);
+      updates.push(`active = $${paramIndex++}`);
       values.push(status === 'active');
     }
     if (password) {
@@ -1075,9 +1080,9 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
     values.push(userId);
     
     await dbQuery(
-      `UPDATE users 
+      `UPDATE admin_users 
        SET ${updates.join(', ')}
-       WHERE user_id = $${paramIndex}`,
+       WHERE id = $${paramIndex}`,
       values
     );
     
@@ -1108,16 +1113,16 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
     }
     
     // Check if user exists
-    const existing = await dbQuery('SELECT user_id FROM users WHERE user_id = $1', [userId]);
+    const existing = await dbQuery('SELECT id FROM admin_users WHERE id = $1', [userId]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
     // Soft delete by setting status to inactive
     await dbQuery(
-      `UPDATE users 
-       SET is_active = false, updated_at = NOW()
-       WHERE user_id = $1`,
+      `UPDATE admin_users 
+       SET active = false, updated_at = NOW()
+       WHERE id = $1`,
       [userId]
     );
     
