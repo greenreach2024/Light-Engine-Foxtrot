@@ -115,6 +115,86 @@ async function logout() {
     window.location.href = `${API_BASE}/GR-central-admin-login.html`;
 }
 
+// Change Password Modal Functions
+function openChangePasswordModal() {
+    document.getElementById('changePasswordModal').style.display = 'block';
+    document.getElementById('changePasswordForm').reset();
+    document.getElementById('passwordChangeError').style.display = 'none';
+    document.getElementById('passwordChangeSuccess').style.display = 'none';
+}
+
+function closeChangePasswordModal() {
+    document.getElementById('changePasswordModal').style.display = 'none';
+    document.getElementById('changePasswordForm').reset();
+}
+
+async function handleChangePassword(event) {
+    event.preventDefault();
+    
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    const errorDiv = document.getElementById('passwordChangeError');
+    const successDiv = document.getElementById('passwordChangeSuccess');
+    
+    // Hide previous messages
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+        errorDiv.textContent = 'New passwords do not match';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    // Validate password strength
+    if (newPassword.length < 8) {
+        errorDiv.textContent = 'Password must be at least 8 characters';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/auth/change-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            successDiv.textContent = 'Password changed successfully! You can continue using the dashboard.';
+            successDiv.style.display = 'block';
+            document.getElementById('changePasswordForm').reset();
+            
+            // Close modal after 2 seconds
+            setTimeout(() => {
+                closeChangePasswordModal();
+            }, 2000);
+        } else {
+            errorDiv.textContent = data.error || 'Failed to change password';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Password change error:', error);
+        errorDiv.textContent = 'An error occurred. Please try again.';
+        errorDiv.style.display = 'block';
+    }
+}
+
+// Expose change password functions to window
+window.openChangePasswordModal = openChangePasswordModal;
+window.closeChangePasswordModal = closeChangePasswordModal;
+window.handleChangePassword = handleChangePassword;
+
 // Make authenticated API request
 async function authenticatedFetch(url, options = {}) {
     const token = checkAuth();

@@ -350,6 +350,91 @@ router.post('/auth/logout', requireAdmin, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/auth/change-password
+ * Change password for current admin user
+ * Body: { current_password: string, new_password: string }
+ */
+router.post('/auth/change-password', requireAdmin, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+    
+    // Validate input
+    if (!current_password || !new_password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Both current_password and new_password are required' 
+      });
+    }
+    
+    // Password strength validation
+    if (new_password.length < 8) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'New password must be at least 8 characters long' 
+      });
+    }
+    
+    const db = await initDatabase();
+    
+    if (!db || !db.pool || db.mode === 'nedb') {
+      return res.status(503).json({ error: 'Database not available', mode: 'demo' });
+    }
+    
+    // Get current user from database
+    const result = await dbQuery(
+      'SELECT id, email, password_hash FROM admin_users WHERE email = $1 AND active = true',
+      [req.admin.email]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    const user = result.rows[0];
+    
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(current_password, user.password_hash);
+    if (!isValidPassword) {
+      console.log('[Auth] Password change failed - invalid current password for:', req.admin.email);
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Current password is incorrect' 
+      });
+    }
+    
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(new_password, 10);
+    
+    // Update password
+    await dbQuery(
+      'UPDATE admin_users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newPasswordHash, user.id]
+    );
+    
+    // Log action
+    try {
+      await dbQuery(
+        `INSERT INTO admin_audit_log (admin_id, action, resource_type, resource_id, metadata, ip_address)
+         VALUES ($1, 'PASSWORD_CHANGE', 'admin', $2, $3, $4)`,
+        [user.id, user.id, JSON.stringify({ email: user.email }), req.ip]
+      );
+    } catch (auditError) {
+      console.warn('[Auth] Audit log not available:', auditError.message);
+    }
+    
+    console.log('[Auth] Password changed successfully for:', req.admin.email);
+    
+    res.json({ 
+      success: true, 
+      message: 'Password changed successfully. Please use your new password on next login.' 
+    });
+  } catch (error) {
+    console.error('[Auth] Password change error:', error);
+    res.status(500).json({ success: false, error: 'Failed to change password' });
+  }
+});
+
+/**
  * GET /api/admin/analytics/aggregate
  * Get aggregated statistics across all farms for dashboard KPIs
  */
@@ -1144,9 +1229,9 @@ router.get('/users', requireAdmin, async (req, res) => {
  */
 router.post('/users', requireAdmin, async (req, res) => {
   try {
-    const { first_name, last_name, email, role, password, farm_id } = req.body;
+    const { first_name, last_name, email, role, farm_id } = req.body;
     
-    // Validate required fields
+    // Validate required fields (password is NOT required - always auto-generated)
     if (!first_name || !last_name || !email || !role) {
       return res.status(400).json({ 
         success: false, 
@@ -1176,9 +1261,11 @@ router.post('/users', requireAdmin, async (req, res) => {
       });
     }
     
-    // Hash password (required by schema)
-    const tempPassword = password || crypto.randomBytes(8).toString('hex');
+    // Always generate a random temporary password
+    const tempPassword = crypto.randomBytes(12).toString('base64').slice(0, 16);
     const passwordHash = await bcrypt.hash(tempPassword, 10);
+    
+    console.log('[Admin] Generated temp password for:', normalizedEmail);
     const name = `${first_name} ${last_name}`.trim();
     const permissions = {
       role,
@@ -1201,7 +1288,14 @@ router.post('/users', requireAdmin, async (req, res) => {
     console.log('[Admin] User created with ID:', userId);
     
     // Send welcome email
+    let emailSent = false;
+    let emailError = null;
     try {
+      console.log('[Admin] ===== SENDING WELCOME EMAIL =====');
+      console.log('[Admin] To:', normalizedEmail);
+      console.log('[Admin] From:', process.env.FROM_EMAIL || 'noreply@greenreach.org');
+      console.log('[Admin] Provider:', process.env.EMAIL_PROVIDER || 'ses');
+      
       const loginUrl = `https://www.greenreach.org/GR-central-admin.html`;
       const emailHtml = generateAdminWelcomeEmail({
         first_name,
@@ -1212,24 +1306,30 @@ router.post('/users', requireAdmin, async (req, res) => {
         login_url: loginUrl
       });
       
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: normalizedEmail,
         subject: 'Welcome to the GreenReach Team',
         html: emailHtml,
         text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
       });
       
-      console.log('[Admin] Welcome email sent to:', normalizedEmail);
-    } catch (emailError) {
-      console.error('[Admin] Failed to send welcome email:', emailError.message);
-      // Don't fail user creation if email fails
+      emailSent = true;
+      console.log('[Admin] ✅ Welcome email sent successfully:', emailResult);
+    } catch (err) {
+      emailError = err.message;
+      console.error('[Admin] ❌ FAILED to send welcome email');
+      console.error('[Admin] Error:', err.message);
+      console.error('[Admin] Stack:', err.stack);
+      // Don't fail user creation if email fails - admin can manually send credentials
     }
     
     res.json({ 
       success: true, 
       user_id: userId,
-      message: 'User created successfully and welcome email sent',
-      temp_password: password ? undefined : tempPassword
+      message: emailSent ? 'User created successfully and welcome email sent' : 'User created successfully (email failed - see temp_password)',
+      email_sent: emailSent,
+      email_error: emailError,
+      temp_password: tempPassword // Always return so admin can manually share if email fails
     });
   } catch (error) {
     console.error('Error creating user:', error);
