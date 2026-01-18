@@ -435,9 +435,9 @@ function renderContextualSidebar() {
                 {
                     title: 'Wholesale',
                     items: [
-                        { label: 'Admin Dashboard', view: 'wholesale-admin', external: '/GR-admin.html' },
-                        { label: 'Buyers', view: 'wholesale-buyers', external: '/GR-wholesale-admin.html' },
-                        { label: 'Buyer Portal', view: 'wholesale-buyer', external: '/GR-wholesale.html' }
+                        { label: 'Admin Dashboard', view: 'wholesale-admin' },
+                        { label: 'Buyers', view: 'wholesale-buyers' },
+                        { label: 'Buyer Portal', view: 'wholesale-buyer' }
                     ]
                 },
                 {
@@ -2078,11 +2078,14 @@ async function navigate(view, element) {
     // Navigate to view and load data
     switch(view) {
         case 'wholesale-admin':
-            window.location.href = `${API_BASE}/GR-admin.html`;
-            return;
+            document.getElementById('wholesale-admin-view').style.display = 'block';
+            break;
+        case 'wholesale-buyers':
+            document.getElementById('wholesale-buyers-view').style.display = 'block';
+            break;
         case 'wholesale-buyer':
-            window.location.href = `${API_BASE}/GR-wholesale.html`;
-            return;
+            document.getElementById('wholesale-buyer-view').style.display = 'block';
+            break;
         case 'overview':
             document.getElementById('overview-view').style.display = 'block';
             const dashboardNav = document.querySelector('.nav-item[onclick*="overview"]');
