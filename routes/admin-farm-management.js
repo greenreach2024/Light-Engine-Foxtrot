@@ -49,7 +49,7 @@ async function verifySESRecipient(email) {
   // First check if already verified
   const statusCheck = await checkSESVerificationStatus(email);
   if (statusCheck.verified) {
-    console.log(`[SES] ✅ ${email} is already verified`);
+    console.log(`[SES] ${email} is already verified`);
     return { verified: true, already_verified: true };
   }
 
@@ -57,7 +57,7 @@ async function verifySESRecipient(email) {
   try {
     const command = new VerifyEmailIdentityCommand({ EmailAddress: email });
     await sesClient.send(command);
-    console.log(`[SES] 📧 Verification email sent to ${email} - awaiting user confirmation`);
+    console.log(`[SES] Verification email sent to ${email} - awaiting user confirmation`);
     return { verified: false, verification_sent: true, needs_confirmation: true };
   } catch (error) {
     console.error(`[SES] ❌ Failed to send verification email to ${email}:`, error.message);
@@ -1310,7 +1310,7 @@ router.post('/users', requireAdmin, async (req, res) => {
 
       const normalizedEmail = email.toLowerCase();
       const tempPassword = crypto.randomBytes(12).toString('base64').slice(0, 16);
-      const loginUrl = `https://www.greenreach.org/GR-central-admin.html`;
+      const loginUrl = `https://greenreachgreens.com/GR-central-admin-login.html`;
       
       // Auto-verify recipient email in SES (admin-created users are trusted)
       console.log('[Admin] Auto-verifying recipient email in SES...');
@@ -1341,10 +1341,10 @@ router.post('/users', requireAdmin, async (req, res) => {
             text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
           });
           emailSent = true;
-          console.log('[Admin] ✅ Welcome email sent successfully (demo mode):', emailResult);
+          console.log('[Admin] Welcome email sent successfully (demo mode):', emailResult);
         } catch (err) {
           emailError = err.message;
-          console.error('[Admin] ❌ FAILED to send welcome email (demo mode)');
+          console.error('[Admin] FAILED to send welcome email (demo mode)');
           console.error('[Admin] Error:', err.message);
           console.error('[Admin] Stack:', err.stack);
         }
@@ -1447,7 +1447,7 @@ router.post('/users', requireAdmin, async (req, res) => {
       const sesVerification = await verifySESRecipient(normalizedEmail);
       console.log('[Admin] SES verification result:', sesVerification);
       
-      const loginUrl = `https://www.greenreach.org/GR-central-admin.html`;
+      const loginUrl = `https://greenreachgreens.com/GR-central-admin-login.html`;
       const emailHtml = generateAdminWelcomeEmail({
         first_name,
         last_name,
@@ -1469,17 +1469,17 @@ router.post('/users', requireAdmin, async (req, res) => {
         });
         
         emailSent = true;
-        console.log('[Admin] ✅ Welcome email sent successfully:', emailResult);
+        console.log('[Admin] Welcome email sent successfully:', emailResult);
       } else if (sesVerification.needs_confirmation) {
         emailError = 'Recipient email verification pending - AWS sent verification email to user';
-        console.log('[Admin] ⏳ Welcome email NOT sent - awaiting recipient verification');
+        console.log('[Admin] Welcome email NOT sent - awaiting recipient verification');
         console.log('[Admin] User must click AWS verification link, then you can resend welcome email');
       } else {
         throw new Error(sesVerification.error || 'SES verification failed');
       }
     } catch (err) {
       emailError = err.message;
-      console.error('[Admin] ❌ FAILED to send welcome email');
+      console.error('[Admin] FAILED to send welcome email');
       console.error('[Admin] Error:', err.message);
       console.error('[Admin] Stack:', err.stack);
       // Don't fail user creation if email fails - admin can manually send credentials
@@ -2871,133 +2871,120 @@ function generateAdminWelcomeEmail({ first_name, last_name, email, role, temp_pa
   };
   
   return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
       <!-- Header -->
-      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 20px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Welcome to GreenReach</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">You've been added to the team</p>
+      <div style="background: #1a1a1a; padding: 32px 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Welcome to GreenReach</h1>
+        <p style="color: #a3a3a3; margin: 8px 0 0 0; font-size: 14px;">Central Administration Platform</p>
       </div>
       
       <!-- Body -->
-      <div style="padding: 40px 30px;">
-        <p style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 20px 0;">
-          Hi <strong>${first_name}</strong>,
+      <div style="padding: 32px 24px;">
+        <p style="font-size: 15px; color: #262626; line-height: 1.6; margin: 0 0 16px 0;">
+          Hi ${first_name},
         </p>
         
-        <p style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 30px 0;">
-          Your GreenReach admin account has been created! You now have access to the central administration platform as a <strong>${role.charAt(0).toUpperCase() + role.slice(1)}</strong>.
+        <p style="font-size: 15px; color: #262626; line-height: 1.6; margin: 0 0 24px 0;">
+          Your GreenReach admin account has been created. You now have access to the central administration platform as a <strong>${role.charAt(0).toUpperCase() + role.slice(1)}</strong>.
         </p>
         
         <!-- Login Credentials -->
-        <div style="background: #f9fafb; border: 2px solid #10b981; border-radius: 12px; padding: 24px; margin: 0 0 30px 0;">
-          <h2 style="color: #059669; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">🔐 Your Login Credentials</h2>
+        <div style="background: #fafafa; border: 1px solid #e5e5e5; border-radius: 8px; padding: 20px; margin: 0 0 24px 0;">
+          <h2 style="color: #171717; margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Your Login Credentials</h2>
           
           <div style="margin-bottom: 12px;">
-            <div style="color: #6b7280; font-size: 13px; margin-bottom: 4px;">Email Address</div>
-            <div style="color: #111827; font-size: 15px; font-weight: 500;">${email}</div>
+            <div style="color: #737373; font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Email Address</div>
+            <div style="color: #171717; font-size: 14px; font-weight: 500;">${email}</div>
           </div>
           
-          <div style="margin-bottom: 12px;">
-            <div style="color: #6b7280; font-size: 13px; margin-bottom: 4px;">Temporary Password</div>
-            <div style="background: #ffffff; padding: 10px 12px; border-radius: 6px; border: 1px solid #d1d5db;">
-              <code style="color: #dc2626; font-size: 15px; font-weight: 600; font-family: 'Courier New', monospace;">${temp_password}</code>
+          <div style="margin-bottom: 16px;">
+            <div style="color: #737373; font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Temporary Password</div>
+            <div style="background: #ffffff; padding: 10px 12px; border-radius: 4px; border: 1px solid #d4d4d4; font-family: 'Courier New', monospace;">
+              <code style="color: #dc2626; font-size: 14px; font-weight: 600;">${temp_password}</code>
             </div>
           </div>
           
-          <div style="margin-top: 20px;">
-            <a href="${login_url}" style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
-              Sign In to Dashboard →
+          <div style="margin-top: 16px;">
+            <a href="${login_url}" style="display: inline-block; background: #171717; color: #ffffff; padding: 10px 24px; border-radius: 4px; text-decoration: none; font-weight: 500; font-size: 14px;">
+              Sign In to Dashboard
             </a>
           </div>
         </div>
         
         <!-- Security Notice -->
-        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px 20px; margin: 0 0 30px 0; border-radius: 6px;">
-          <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.5;">
-            <strong>⚠️ Important Security Notice:</strong> Please change your password immediately after your first login. Click your profile icon in the top right and select "Change Password".
+        <div style="background: #fef9c3; border-left: 3px solid #eab308; padding: 14px 16px; margin: 0 0 24px 0; border-radius: 4px;">
+          <p style="margin: 0; color: #713f12; font-size: 13px; line-height: 1.5;">
+            <strong>Important:</strong> Please change your password immediately after your first login. Use the account menu in the top right corner.
           </p>
         </div>
         
         <!-- Role & Permissions -->
-        <h2 style="color: #059669; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">👤 Your Role & Access</h2>
+        <h2 style="color: #171717; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">Your Role & Access</h2>
         
-        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 0 0 30px 0;">
+        <div style="background: #fafafa; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin: 0 0 24px 0;">
           <div style="margin-bottom: 12px;">
-            <div style="color: #065f46; font-size: 15px; font-weight: 600; margin-bottom: 4px;">Role: ${role.charAt(0).toUpperCase() + role.slice(1)}</div>
-            <div style="color: #047857; font-size: 14px; line-height: 1.5;">${roleDescriptions[role]}</div>
+            <div style="color: #171717; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Role: ${role.charAt(0).toUpperCase() + role.slice(1)}</div>
+            <div style="color: #525252; font-size: 13px; line-height: 1.5;">${roleDescriptions[role]}</div>
           </div>
           
-          <div style="margin-top: 16px;">
-            <div style="color: #065f46; font-size: 14px; font-weight: 600; margin-bottom: 8px;">Your Permissions:</div>
-            <ul style="margin: 0; padding-left: 20px; color: #047857; font-size: 14px; line-height: 1.8;">
-              ${rolePermissions[role].map(perm => `<li>${perm}</li>`).join('')}
+          <div style="margin-top: 12px;">
+            <div style="color: #171717; font-size: 13px; font-weight: 600; margin-bottom: 6px;">Your Permissions:</div>
+            <ul style="margin: 0; padding-left: 20px; color: #525252; font-size: 13px; line-height: 1.6;">
+              ${rolePermissions[role].map(perm => `<li style="margin-bottom: 4px;">${perm}</li>`).join('')}
             </ul>
           </div>
         </div>
         
         <!-- What's Available -->
-        <h2 style="color: #059669; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">🚀 What You Can Do</h2>
+        <h2 style="color: #171717; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">Platform Features</h2>
         
-        <div style="margin: 0 0 30px 0;">
-          <div style="display: flex; margin-bottom: 12px;">
-            <div style="color: #10b981; font-size: 20px; margin-right: 12px;">📊</div>
-            <div>
-              <div style="color: #111827; font-size: 15px; font-weight: 600; margin-bottom: 2px;">Dashboard Analytics</div>
-              <div style="color: #6b7280; font-size: 14px;">View real-time KPIs, farm statistics, and network health</div>
-            </div>
+        <div style="margin: 0 0 24px 0;">
+          <div style="margin-bottom: 12px; padding-left: 0;">
+            <div style="color: #171717; font-size: 14px; font-weight: 600; margin-bottom: 2px;">Dashboard Analytics</div>
+            <div style="color: #737373; font-size: 13px;">View real-time KPIs, farm statistics, and network health</div>
           </div>
           
-          <div style="display: flex; margin-bottom: 12px;">
-            <div style="color: #10b981; font-size: 20px; margin-right: 12px;">🏭</div>
-            <div>
-              <div style="color: #111827; font-size: 15px; font-weight: 600; margin-bottom: 2px;">Farm Management</div>
-              <div style="color: #6b7280; font-size: 14px;">Monitor and manage all farms in the GreenReach network</div>
-            </div>
+          <div style="margin-bottom: 12px; padding-left: 0;">
+            <div style="color: #171717; font-size: 14px; font-weight: 600; margin-bottom: 2px;">Farm Management</div>
+            <div style="color: #737373; font-size: 13px;">Monitor and manage all farms in the GreenReach network</div>
           </div>
           
-          <div style="display: flex; margin-bottom: 12px;">
-            <div style="color: #10b981; font-size: 20px; margin-right: 12px;">📦</div>
-            <div>
-              <div style="color: #111827; font-size: 15px; font-weight: 600; margin-bottom: 2px;">Order Processing</div>
-              <div style="color: #6b7280; font-size: 14px;">Track wholesale orders and fulfillment across the network</div>
-            </div>
+          <div style="margin-bottom: 12px; padding-left: 0;">
+            <div style="color: #171717; font-size: 14px; font-weight: 600; margin-bottom: 2px;">Order Processing</div>
+            <div style="color: #737373; font-size: 13px;">Track wholesale orders and fulfillment across the network</div>
           </div>
           
-          <div style="display: flex; margin-bottom: 12px;">
-            <div style="color: #10b981; font-size: 20px; margin-right: 12px;">👥</div>
-            <div>
-              <div style="color: #111827; font-size: 15px; font-weight: 600; margin-bottom: 2px;">Team Collaboration</div>
-              <div style="color: #6b7280; font-size: 14px;">Work with the GreenReach team to support our farmers</div>
-            </div>
+          <div style="margin-bottom: 0; padding-left: 0;">
+            <div style="color: #171717; font-size: 14px; font-weight: 600; margin-bottom: 2px;">Team Collaboration</div>
+            <div style="color: #737373; font-size: 13px;">Work with the GreenReach team to support our farmers</div>
           </div>
         </div>
         
         <!-- Support -->
-        <h2 style="color: #059669; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">💬 Need Help?</h2>
+        <h2 style="color: #171717; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">Need Help?</h2>
         
-        <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 12px 0;">
-          If you have questions or need assistance, reach out to the team:
+        <p style="font-size: 13px; color: #525252; line-height: 1.6; margin: 0 0 8px 0;">
+          If you have questions or need assistance:
         </p>
         
-        <ul style="margin: 0 0 30px 0; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.8;">
-          <li>Email: <a href="mailto:support@greenreach.org" style="color: #10b981; text-decoration: none;">support@greenreach.org</a></li>
-          <li>Documentation: <a href="https://www.greenreach.org/docs" style="color: #10b981; text-decoration: none;">GreenReach Admin Docs</a></li>
-          <li>Team Chat: Available in the dashboard</li>
+        <ul style="margin: 0 0 24px 0; padding-left: 20px; color: #525252; font-size: 13px; line-height: 1.6;">
+          <li style="margin-bottom: 4px;">Email: <a href="mailto:info@greenreachfarms.com" style="color: #171717; text-decoration: underline;">info@greenreachfarms.com</a></li>
+          <li style="margin-bottom: 4px;">Web: <a href="https://greenreachgreens.com" style="color: #171717; text-decoration: underline;">greenreachgreens.com</a></li>
         </ul>
         
-        <p style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0;">
-          Welcome to the team! 🌱<br>
-          <strong>The GreenReach Team</strong>
+        <p style="font-size: 14px; color: #262626; line-height: 1.6; margin: 0;">
+          Welcome to the team,<br>
+          <strong>GreenReach</strong>
         </p>
       </div>
       
       <!-- Footer -->
-      <div style="background: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
-        <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 13px;">
+      <div style="background: #fafafa; padding: 24px; text-align: center; border-top: 1px solid #e5e5e5;">
+        <p style="margin: 0 0 8px 0; color: #737373; font-size: 12px;">
           &copy; ${new Date().getFullYear()} GreenReach. All rights reserved.
         </p>
-        <p style="margin: 0; color: #9ca3af; font-size: 12px;">
-          This email contains sensitive account information. Please keep it secure and do not forward it.
+        <p style="margin: 0; color: #a3a3a3; font-size: 11px;">
+          This email contains sensitive account information. Please keep it secure.
         </p>
       </div>
     </div>
