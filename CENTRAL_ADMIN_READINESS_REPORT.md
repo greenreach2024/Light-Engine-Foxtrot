@@ -27,10 +27,9 @@
 - QuickBooks sync service already built
 
 ❌ **Critical Gaps:**
-- **NO AUTHENTICATION** - Admin portal is completely open
-- No admin login system
-- No access control or authorization
-- No audit logging for admin actions
+- **AUTH GATING REQUIRED** - Demo login must be explicitly enabled for non-prod
+- Admin login exists, but demo auth must be gated by runtime flag
+- Farm management view required auth headers (now addressed)
 - No IP whitelist or VPN requirement
 - QuickBooks OAuth not wired to admin UI
 
@@ -40,25 +39,19 @@
 
 ### 🔴 CRITICAL: Authentication & Authorization
 
-#### Issue 1.1: No Admin Authentication System
+#### Issue 1.1: Admin Authentication Requires Gating
 
 **Current State:**
-```javascript
-// GR-central-admin.html - NO LOGIN REQUIRED
-// Anyone with the URL can access:
-- View all farms
-- Delete farms by email
-- Access all wholesale orders
-- View financial data
-- Monitor all Light Engine users
-```
+- Admin login exists (server-side JWT) in GR-central-admin-login.html.
+- Admin API routes require JWT via `requireAdmin` in admin-farm-management.js.
+- Demo login must be explicitly enabled to avoid client-side auth bypass.
 
 **Risk Level:** 🔴 CRITICAL  
-**Impact:** Complete exposure of business operations and customer data
+**Impact:** Unauthorized access possible if demo auth is enabled in production.
 
 **Required Implementation:**
 ```javascript
-// 1. Create admin login page
+// 1. Gate demo auth behind a runtime flag
 // File: public/GR-central-admin-login.html
 <form id="admin-login-form">
   <input type="email" name="email" required />

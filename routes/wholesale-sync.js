@@ -26,6 +26,138 @@ const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.resolve(__dirname, '../public');
 const GROUPS_FILE = path.join(PUBLIC_DIR, 'data', 'groups.json');
 const RECIPES_FILE = path.join(PUBLIC_DIR, 'data', 'lighting-recipes.json');
+const WHOLESALE_STATUS_FILE = path.join(PUBLIC_DIR, 'data', 'wholesale-status.json');
+
+function readFarmInfo() {
+  const farmPath = path.join(PUBLIC_DIR, 'data', 'farm.json');
+  let farmInfo = { farmId: 'light-engine-demo', name: 'GreenReach Demo Farm' };
+  try {
+    const farmData = JSON.parse(fs.readFileSync(farmPath, 'utf8'));
+    if (farmData.farmId) farmInfo.farmId = farmData.farmId;
+    if (farmData.name) farmInfo.name = farmData.name;
+  } catch {
+    // ignore
+  }
+  return farmInfo;
+}
+
+function loadWholesaleStatus() {
+  const defaults = {
+    enabled: true,
+    lastCatalogSync: null,
+    lastPriceSync: null,
+    pendingOrders: 0,
+    reservedItems: 0,
+    catalogSyncInterval: 5 * 60 * 1000,
+    priceSyncInterval: 15 * 60 * 1000
+  };
+
+  try {
+    const raw = fs.readFileSync(WHOLESALE_STATUS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return { ...defaults, ...parsed };
+  } catch {
+    return { ...defaults };
+  }
+}
+
+function saveWholesaleStatus(status) {
+  const payload = {
+    ...status,
+    updated_at: new Date().toISOString()
+  };
+  fs.writeFileSync(WHOLESALE_STATUS_FILE, JSON.stringify(payload, null, 2), 'utf8');
+}
+
+/**
+ * GET /api/wholesale/status
+ * Return wholesale integration status and sync metadata
+ */
+router.get('/status', async (_req, res) => {
+  try {
+    const farmInfo = readFarmInfo();
+    const status = loadWholesaleStatus();
+    const reservedBySku = getTotalReservedBySku();
+    const reservedItems = Array.from(reservedBySku.values()).reduce((sum, qty) => sum + Number(qty || 0), 0);
+
+    return res.json({
+      enabled: status.enabled,
+      lastCatalogSync: status.lastCatalogSync,
+      lastPriceSync: status.lastPriceSync,
+      pendingOrders: status.pendingOrders || 0,
+      reservedItems,
+      catalogSyncInterval: status.catalogSyncInterval,
+      priceSyncInterval: status.priceSyncInterval,
+      farmId: farmInfo.farmId
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to load wholesale status', details: error.message });
+  }
+});
+
+/**
+ * POST /api/wholesale/enable
+ */
+router.post('/enable', async (_req, res) => {
+  const status = loadWholesaleStatus();
+  status.enabled = true;
+  saveWholesaleStatus(status);
+  return res.json({ success: true, enabled: true });
+});
+
+/**
+ * POST /api/wholesale/disable
+ */
+router.post('/disable', async (_req, res) => {
+  const status = loadWholesaleStatus();
+  status.enabled = false;
+  saveWholesaleStatus(status);
+  return res.json({ success: true, enabled: false });
+});
+
+/**
+ * POST /api/wholesale/sync/catalog
+ */
+router.post('/sync/catalog', async (_req, res) => {
+  try {
+    const groupsData = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8'));
+    const itemsSynced = Array.isArray(groupsData.groups) ? groupsData.groups.length : 0;
+    const status = loadWholesaleStatus();
+    status.lastCatalogSync = new Date().toISOString();
+    saveWholesaleStatus(status);
+
+    return res.json({
+      success: true,
+      result: {
+        itemsSynced,
+        timestamp: status.lastCatalogSync
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to sync catalog', details: error.message });
+  }
+});
+
+/**
+ * POST /api/wholesale/sync/pricing
+ */
+router.post('/sync/pricing', async (_req, res) => {
+  try {
+    const status = loadWholesaleStatus();
+    status.lastPriceSync = new Date().toISOString();
+    saveWholesaleStatus(status);
+
+    return res.json({
+      success: true,
+      result: {
+        itemsUpdated: 0,
+        timestamp: status.lastPriceSync
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to sync pricing', details: error.message });
+  }
+});
 
 /**
  * GET /api/wholesale/inventory

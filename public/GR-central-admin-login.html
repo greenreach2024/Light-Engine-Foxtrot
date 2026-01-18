@@ -271,10 +271,20 @@
         const isDemoMode = window.location.hostname.includes('s3-website') || 
                           window.location.hostname.includes('amazonaws.com') ||
                           window.location.search.includes('demo=true');
+        let demoAuthEnabled = false;
 
-        if (isDemoMode) {
-            console.log('🎭 Demo mode detected - enabling simplified authentication');
-        }
+        // Load runtime env flag for demo auth
+        fetch(`${API_BASE}/data/env.json`)
+            .then(res => res.json())
+            .then(env => {
+                demoAuthEnabled = !!env.demoAuthEnabled;
+                if (isDemoMode && demoAuthEnabled) {
+                    console.log('🎭 Demo mode detected - demo auth enabled');
+                }
+            })
+            .catch(() => {
+                demoAuthEnabled = false;
+            });
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -290,6 +300,12 @@
 
             // DEMO MODE: Client-side authentication for static hosting
             if (isDemoMode) {
+                if (!demoAuthEnabled) {
+                    showAlert('Demo login is disabled. Contact an administrator.', 'error');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = 'Login to Admin Portal';
+                    return;
+                }
                 // Check demo credentials
                 if (email === 'info@greenreachfarms.com' && password === 'Admin2025!') {
                     // Create demo token

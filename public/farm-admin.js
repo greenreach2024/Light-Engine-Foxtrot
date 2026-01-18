@@ -92,9 +92,15 @@ async function initDashboard() {
         }
     }
     
-    // AUTHENTICATION DISABLED - Direct access granted
-    // Create a default session for farm operations if no JWT exists
+    const allowLocalBypass = window.location.hostname.includes('localhost') || window.location.search.includes('demo=true');
+
+    // Create a default session only for local/demo environments
     if (!currentSession) {
+        if (!allowLocalBypass) {
+            window.location.href = '/farm-admin-login.html';
+            return;
+        }
+
         currentSession = {
             token: 'local-access',
             farmId: 'LOCAL-FARM',

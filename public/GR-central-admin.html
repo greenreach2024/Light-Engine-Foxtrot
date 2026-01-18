@@ -3318,7 +3318,7 @@
         }
 
         // ==================== GROWER MANAGEMENT FUNCTIONS ====================
-        const GROWER_API_URL = 'http://localhost:8000';
+        const GROWER_API_URL = API_BASE;
         let allGrowers = [];
 
         async function loadGrowerManagementDashboard() {
@@ -3788,9 +3788,20 @@ API URL: ${farm.api_url || 'Not configured'}
         // FARM MANAGEMENT FUNCTIONS
         // ============================================================================
 
-        const FARM_API_URL = window.location.origin;
+        const API_BASE = window.location.hostname.includes('greenreachgreens.com')
+            ? 'https://greenreachgreens.com'
+            : window.location.origin;
+        const FARM_API_URL = API_BASE;
         let allManagedFarms = [];
         let allManagedUsers = [];
+
+        async function adminFetch(url, options = {}) {
+            const token = localStorage.getItem('admin_token');
+            const headers = { ...(options.headers || {}) };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+            return fetch(url, { ...options, headers });
+        }
 
         /**
          * Load farm management dashboard
@@ -3798,12 +3809,12 @@ API URL: ${farm.api_url || 'Not configured'}
         async function loadFarmManagement() {
             try {
                 // Load farms
-                const farmsResponse = await fetch(`${FARM_API_URL}/api/admin/farms`);
+                const farmsResponse = await adminFetch(`${FARM_API_URL}/api/admin/farms`);
                 const farmsData = await farmsResponse.json();
                 allManagedFarms = farmsData.farms || [];
                 
                 // Load users
-                const usersResponse = await fetch(`${FARM_API_URL}/api/admin/users`);
+                const usersResponse = await adminFetch(`${FARM_API_URL}/api/admin/users`);
                 const usersData = await usersResponse.json();
                 allManagedUsers = usersData.users || [];
                 
@@ -3967,7 +3978,7 @@ API URL: ${farm.api_url || 'Not configured'}
             }
             
             try {
-                const response = await fetch(`${FARM_API_URL}/api/admin/farms/${farmId}/reset-credentials`, {
+                const response = await adminFetch(`${FARM_API_URL}/api/admin/farms/${farmId}/reset-credentials`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -3995,13 +4006,9 @@ API URL: ${farm.api_url || 'Not configured'}
             }
             
             try {
-                const token = localStorage.getItem('admin_token');
-                const response = await fetch(`${API_BASE}/api/admin/farms/reset-user-password`, {
+                const response = await adminFetch(`${API_BASE}/api/admin/farms/reset-user-password`, {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ farmId, email })
                 });
                 
@@ -4034,7 +4041,7 @@ API URL: ${farm.api_url || 'Not configured'}
             }
             
             try {
-                const response = await fetch(`${FARM_API_URL}/api/admin/farms/${farmId}/status`, {
+                const response = await adminFetch(`${FARM_API_URL}/api/admin/farms/${farmId}/status`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: newStatus })
@@ -4066,7 +4073,7 @@ API URL: ${farm.api_url || 'Not configured'}
             }
             
             try {
-                const response = await fetch(`${FARM_API_URL}/api/admin/users/${userId}/status`, {
+                const response = await adminFetch(`${FARM_API_URL}/api/admin/users/${userId}/status`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: newStatus })
@@ -4103,7 +4110,7 @@ API URL: ${farm.api_url || 'Not configured'}
             }
             
             try {
-                const response = await fetch(`${FARM_API_URL}/api/admin/users/${userId}/role`, {
+                const response = await adminFetch(`${FARM_API_URL}/api/admin/users/${userId}/role`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ role: newRole.toLowerCase() })
@@ -4132,7 +4139,7 @@ API URL: ${farm.api_url || 'Not configured'}
             }
             
             try {
-                const response = await fetch(`${FARM_API_URL}/api/admin/impersonate/${farmId}`, {
+                const response = await adminFetch(`${FARM_API_URL}/api/admin/impersonate/${farmId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
