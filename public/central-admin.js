@@ -4039,20 +4039,26 @@ function filterUsers() {
  * Open add user modal
  */
 function openAddUserModal() {
+    console.log('🔵 [openAddUserModal] Function called!');
     document.getElementById('user-modal-title').textContent = 'Add New Employee';
     document.getElementById('user-save-btn-text').textContent = 'Create Employee';
     document.getElementById('user-form').reset();
     document.getElementById('user-id').value = '';
     document.getElementById('password-field').style.display = 'block';
     document.getElementById('user-modal').style.display = 'flex';
+    console.log('🔵 [openAddUserModal] Modal should now be visible');
 }
 
 /**
  * Edit user
  */
 function editUser(userId) {
+    console.log('🟡 [editUser] Function called with userId:', userId);
     const user = allUsers.find(u => u.user_id === userId);
-    if (!user) return;
+    if (!user) {
+        console.error('🟡 [editUser] User not found:', userId);
+        return;
+    }
     
     document.getElementById('user-modal-title').textContent = 'Edit Employee';
     document.getElementById('user-save-btn-text').textContent = 'Save Changes';
@@ -4132,9 +4138,11 @@ async function saveUser(event) {
  * Delete user (show confirmation)
  */
 function deleteUser(userId, userName) {
+    console.log('🔴 [deleteUser] Function called with userId:', userId, 'userName:', userName);
     deleteUserId = userId;
     document.getElementById('delete-user-name').textContent = userName;
     document.getElementById('delete-user-modal').style.display = 'flex';
+    console.log('🔴 [deleteUser] Delete modal should now be visible');
 }
 
 /**
@@ -4178,20 +4186,35 @@ console.log('Central Admin loaded');
 
 // Bind user management actions (fallback for inline handler issues)
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('📌 [DOM] DOMContentLoaded fired, setting up user management event listeners...');
+    
     const addUserBtn = document.getElementById('add-user-btn');
     if (addUserBtn) {
-        addUserBtn.addEventListener('click', () => openAddUserModal());
+        console.log('📌 [DOM] Found add-user-btn, attaching click listener');
+        addUserBtn.addEventListener('click', () => {
+            console.log('📌 [DOM] Add user button CLICKED via event listener');
+            openAddUserModal();
+        });
+    } else {
+        console.warn('📌 [DOM] ⚠️ add-user-btn element not found!');
     }
 
     const usersTbody = document.getElementById('users-tbody');
     if (usersTbody) {
+        console.log('📌 [DOM] Found users-tbody, attaching delegated click listener');
         usersTbody.addEventListener('click', (event) => {
+            console.log('📌 [DOM] Click detected in users-tbody:', event.target);
             const actionEl = event.target.closest('[data-action]');
-            if (!actionEl) return;
+            if (!actionEl) {
+                console.log('📌 [DOM] No data-action element found in click path');
+                return;
+            }
 
             const action = actionEl.getAttribute('data-action');
             const userId = parseInt(actionEl.getAttribute('data-user-id'), 10);
             const userName = actionEl.getAttribute('data-user-name') || '';
+            
+            console.log('📌 [DOM] Action triggered:', action, 'userId:', userId, 'userName:', userName);
 
             if (action === 'edit-user') {
                 editUser(userId);
@@ -4200,7 +4223,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteUser(userId, userName);
             }
         });
+    } else {
+        console.warn('📌 [DOM] ⚠️ users-tbody element not found!');
     }
+    
+    console.log('📌 [DOM] User management event listeners setup complete');
 });
 
 // ============================================================================
