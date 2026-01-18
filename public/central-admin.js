@@ -22,15 +22,14 @@ function checkAuth() {
     console.log('========================================');
     
     if (!token) {
-        console.error('[checkAuth] ❌ NO TOKEN - STOPPING HERE');
-        console.log('[checkAuth] Waiting 30 seconds before redirect... Copy console output now!');
-        alert(`NO TOKEN FOUND!\n\nHostname: ${window.location.hostname}\nURL: ${window.location.href}\nAPI_BASE: ${API_BASE}\n\nWAITING 30 SECONDS - Copy console output now!\n\nClick OK to see console.`);
+        console.error('[checkAuth] ❌ NO TOKEN - Redirecting immediately');
+        console.log('[checkAuth] Current hostname:', window.location.hostname);
+        console.log('[checkAuth] Current URL:', window.location.href);
+        console.log('[checkAuth] API_BASE:', API_BASE);
+        console.log('[checkAuth] LocalStorage keys:', Object.keys(localStorage));
         
-        // Wait 30 seconds before redirecting
-        setTimeout(() => {
-            console.log('[checkAuth] Now redirecting to:', `${API_BASE}/GR-central-admin-login.html`);
-            window.location.href = `${API_BASE}/GR-central-admin-login.html`;
-        }, 30000);
+        // Immediate redirect - no delay
+        window.location.href = `${API_BASE}/GR-central-admin-login.html`;
         return null;
     }
     console.log('[checkAuth] ✅ Token found, proceeding to verifySession...');
@@ -69,34 +68,29 @@ async function verifySession() {
         console.log('[verifySession] Response data:', responseData);
         
         if (!response.ok) {
-            console.error('[verifySession] ❌ VERIFICATION FAILED');
-            console.log('[verifySession] Waiting 30 seconds before redirect... Copy console output now!');
-            alert(`SESSION VERIFICATION FAILED!\n\nStatus: ${response.status}\nURL: ${verifyUrl}\nAPI_BASE: ${API_BASE}\nCurrent URL: ${window.location.href}\n\nWAITING 30 SECONDS - Copy console output now!\n\nClick OK to see console.`);
+            console.error('[verifySession] ❌ VERIFICATION FAILED - Status:', response.status);
+            console.log('[verifySession] Response data:', responseData);
+            console.log('[verifySession] Redirecting to login...');
             
-            // Wait 30 seconds before redirecting
-            setTimeout(() => {
-                localStorage.removeItem('admin_token');
-                localStorage.removeItem('admin_email');
-                localStorage.removeItem('admin_name');
-                window.location.href = `${API_BASE}/GR-central-admin-login.html?error=session_expired`;
-            }, 30000);
+            // Immediate redirect
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_email');
+            localStorage.removeItem('admin_name');
+            window.location.href = `${API_BASE}/GR-central-admin-login.html?error=session_expired`;
             return false;
         }
         
         console.log('[verifySession] ✅ VERIFICATION SUCCESSFUL');
         return true;
     } catch (error) {
-        console.error('[verifySession] ❌ EXCEPTION:', error);
-        console.log('[verifySession] Waiting 30 seconds before redirect... Copy console output now!');
-        alert(`SESSION VERIFICATION EXCEPTION!\n\nError: ${error.message}\nURL: ${verifyUrl}\nAPI_BASE: ${API_BASE}\n\nWAITING 30 SECONDS - Copy console output now!\n\nClick OK to see console.`);
+        console.error('[verifySession] ❌ EXCEPTION:', error.message);
+        console.log('[verifySession] Redirecting to login...');
         
-        // Wait 30 seconds before redirecting
-        setTimeout(() => {
-            localStorage.removeItem('admin_token');
-            localStorage.removeItem('admin_email');
-            localStorage.removeItem('admin_name');
-            window.location.href = `${API_BASE}/GR-central-admin-login.html?error=verification_failed`;
-        }, 30000);
+        // Immediate redirect
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_email');
+        localStorage.removeItem('admin_name');
+        window.location.href = `${API_BASE}/GR-central-admin-login.html?error=verification_failed`;
         return false;
     }
 }
