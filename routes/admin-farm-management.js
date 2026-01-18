@@ -349,6 +349,81 @@ router.post('/auth/logout', requireAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/analytics/aggregate
+ * Get aggregated statistics across all farms for dashboard KPIs
+ */
+router.get('/analytics/aggregate', requireAdmin, async (req, res) => {
+  try {
+    const db = await initDatabase();
+    
+    // Initialize default stats
+    const stats = {
+      totalFarms: 0,
+      totalRooms: 0,
+      totalZones: 0,
+      totalDevices: 0,
+      totalTrays: 0,
+      totalPlants: 0
+    };
+    
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Analytics] Database not available, returning demo stats');
+      // Return sample stats for demo mode
+      return res.json({
+        success: true,
+        totalFarms: 1,
+        totalRooms: 0,
+        totalZones: 0,
+        totalDevices: 0,
+        totalTrays: 0,
+        totalPlants: 0,
+        mode: 'demo'
+      });
+    }
+    
+    // PostgreSQL mode: Query actual aggregated data
+    try {
+      // Count total active farms
+      const farmsResult = await dbQuery(`
+        SELECT COUNT(*) as count FROM farms WHERE status = 'active'
+      `);
+      stats.totalFarms = parseInt(farmsResult.rows[0]?.count) || 0;
+      
+      // Get aggregated room/zone/device data from farm_metadata
+      const aggregateResult = await dbQuery(`
+        SELECT 
+          COALESCE(SUM((metadata->>'room_count')::int), 0) as total_rooms,
+          COALESCE(SUM((metadata->>'zone_count')::int), 0) as total_zones,
+          COALESCE(SUM((metadata->>'device_count')::int), 0) as total_devices,
+          COALESCE(SUM((metadata->>'tray_count')::int), 0) as total_trays,
+          COALESCE(SUM((metadata->>'plant_count')::int), 0) as total_plants
+        FROM farm_metadata
+        WHERE farm_id IN (SELECT farm_id FROM farms WHERE status = 'active')
+      `);
+      
+      if (aggregateResult.rows.length > 0) {
+        const row = aggregateResult.rows[0];
+        stats.totalRooms = parseInt(row.total_rooms) || 0;
+        stats.totalZones = parseInt(row.total_zones) || 0;
+        stats.totalDevices = parseInt(row.total_devices) || 0;
+        stats.totalTrays = parseInt(row.total_trays) || 0;
+        stats.totalPlants = parseInt(row.total_plants) || 0;
+      }
+      
+      res.json({ success: true, ...stats, mode: 'database' });
+    } catch (queryError) {
+      console.error('[Analytics] Query error, returning zeroed stats:', queryError.message);
+      // If query fails (table doesn't exist, etc.), return zeroed stats
+      res.json({ success: true, ...stats, mode: 'database-fallback' });
+    }
+  } catch (error) {
+    console.error('[Analytics] Error getting aggregate stats:', error);
+    res.status(500).json({ error: 'Failed to get analytics', details: error.message });
+  }
+});
+
+/**
  * GET /api/admin/farms
  * List all registered farms
  */
