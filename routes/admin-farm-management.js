@@ -35,7 +35,7 @@ async function requireAdmin(req, res, next) {
     console.log('[REQUIRE ADMIN] ✅ Token decoded successfully');
     console.log('[REQUIRE ADMIN] Email:', decoded.email, 'Role:', decoded.role);
     
-    if (decoded.role !== 'admin') {
+    if (!['admin', 'super_admin'].includes(decoded.role)) {
       console.warn('[REQUIRE ADMIN] User does not have admin role:', decoded.role);
       return res.status(403).json({ error: 'Admin access required' });
     }
