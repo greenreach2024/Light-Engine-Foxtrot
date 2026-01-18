@@ -48,9 +48,15 @@ export async function generateAdminToken(admin) {
  */
 export async function verifyAdminToken(token) {
   try {
+    console.log('[verifyAdminToken] Verifying token...');
     const secret = await initJwtSecret();
-    return jwt.verify(token, secret);
+    console.log('[verifyAdminToken] Secret loaded, length:', secret?.length);
+    const decoded = jwt.verify(token, secret);
+    console.log('[verifyAdminToken] Token valid, decoded:', decoded);
+    return decoded;
   } catch (error) {
+    console.error('[verifyAdminToken] Verification FAILED:', error.message);
+    console.error('[verifyAdminToken] Error name:', error.name);
     return null;
   }
 }
@@ -68,9 +74,15 @@ export function hashToken(token) {
  */
 export async function adminAuthMiddleware(req, res, next) {
   try {
+    console.log('[adminAuthMiddleware] Starting verification...');
+    console.log('[adminAuthMiddleware] DB_ENABLED:', process.env.DB_ENABLED);
+    
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
+    console.log('[adminAuthMiddleware] Auth header present:', !!authHeader);
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[adminAuthMiddleware] FAILED: No/invalid auth header');
       return res.status(401).json({
         success: false,
         error: 'Authentication required',
@@ -79,10 +91,16 @@ export async function adminAuthMiddleware(req, res, next) {
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    console.log('[adminAuthMiddleware] Token extracted, length:', token.length);
+    console.log('[adminAuthMiddleware] Token preview:', token.substring(0, 20) + '...');
     
     // Verify JWT
     const decoded = await verifyAdminToken(token);
+    console.log('[adminAuthMiddleware] Token decoded:', !!decoded);
+    console.log('[adminAuthMiddleware] Decoded payload:', decoded);
+    
     if (!decoded) {
+      console.log('[adminAuthMiddleware] FAILED: Token verification failed');
       return res.status(401).json({
         success: false,
         error: 'Invalid token',
@@ -92,8 +110,11 @@ export async function adminAuthMiddleware(req, res, next) {
 
     // Check if database is available
     const dbEnabled = String(process.env.DB_ENABLED || 'false').toLowerCase() === 'true';
+    console.log('[adminAuthMiddleware] dbEnabled:', dbEnabled);
+    console.log('[adminAuthMiddleware] req.db exists:', !!req.db);
     
     if (dbEnabled && req.db) {
+      console.log('[adminAuthMiddleware] Using DATABASE mode');
       // Database mode: Validate session exists and is not expired
       const tokenHash = hashToken(token);
       const sessionQuery = `
@@ -112,6 +133,7 @@ export async function adminAuthMiddleware(req, res, next) {
       const { rows } = await req.db.query(sessionQuery, [tokenHash]);
       
       if (rows.length === 0) {
+        console.log('[adminAuthMiddleware] FAILED: Session not found in database');
         return res.status(401).json({
           success: false,
           error: 'Invalid session',
@@ -123,6 +145,7 @@ export async function adminAuthMiddleware(req, res, next) {
 
       // Check if session is expired
       if (new Date(session.expires_at) < new Date()) {
+        console.log('[adminAuthMiddleware] FAILED: Session expired');
         return res.status(401).json({
           success: false,
           error: 'Session expired',
@@ -132,6 +155,7 @@ export async function adminAuthMiddleware(req, res, next) {
 
       // Check if account is active
       if (!session.active) {
+        console.log('[adminAuthMiddleware] FAILED: Account disabled');
         return res.status(401).json({
           success: false,
           error: 'Account disabled',
@@ -147,7 +171,9 @@ export async function adminAuthMiddleware(req, res, next) {
         role: 'admin',
         session_id: session.session_id
       };
+      console.log('[adminAuthMiddleware] SUCCESS: Database session validated');
     } else {
+      console.log('[adminAuthMiddleware] Using JWT-ONLY mode (no database)');
       // JWT-only mode (no database): Trust the JWT token payload
       req.admin = {
         id: decoded.adminId,
@@ -155,6 +181,7 @@ export async function adminAuthMiddleware(req, res, next) {
         name: decoded.name,
         role: decoded.role || 'admin'
       };
+      console.log('[adminAuthMiddleware] SUCCESS: JWT token accepted');
     }
 
     next();
