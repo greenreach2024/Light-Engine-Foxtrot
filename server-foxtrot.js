@@ -13984,6 +13984,64 @@ app.get('/api/admin/analytics/farms/:farmId/metrics', adminAuthMiddleware, async
 }));
 
 /**
+ * GET /api/admin/fleet/monitoring
+ * Returns Light Engine fleet monitoring data
+ * PROTECTED: Requires admin authentication
+ */
+app.get('/api/admin/fleet/monitoring', adminAuthMiddleware, asyncHandler(async (req, res) => {
+  console.log('[admin] GET /api/admin/fleet/monitoring');
+  
+  // TODO: Query actual fleet data from database
+  // For now, return structured placeholder data
+  res.json({
+    summary: {
+      connectedFarms: 24,
+      monthlyRecurringRevenue: 4847,
+      totalZones: 312,
+      connectedSensors: 1247,
+      fleetHealthScore: 87,
+      activeAlerts: 12
+    },
+    deployments: [
+      {
+        farmId: 'sandbox-test-tenant',
+        farmName: 'Sandbox Test Farm',
+        plan: 'Starter',
+        status: 'TRIAL',
+        sensors: { current: 5, limit: 10 },
+        apiCalls30d: 2847,
+        dataStorageMB: 128,
+        healthScore: 92,
+        lastSeen: new Date(Date.now() - 2 * 60 * 1000).toISOString() // 2 min ago
+      },
+      {
+        farmId: 'urban-greens-123',
+        farmName: 'Urban Greens Co.',
+        plan: 'Pro',
+        status: 'ACTIVE',
+        sensors: { current: 47, limit: 50 },
+        apiCalls30d: 18392,
+        dataStorageMB: 2457,
+        healthScore: 94,
+        lastSeen: new Date(Date.now() - 5 * 1000).toISOString() // 5 sec ago
+      },
+      {
+        farmId: 'vertifarm-456',
+        farmName: 'VertiFarm Solutions',
+        plan: 'Enterprise',
+        status: 'ACTIVE',
+        sensors: { current: 312, limit: 500 },
+        apiCalls30d: 127684,
+        dataStorageMB: 19148,
+        healthScore: 89,
+        lastSeen: new Date(Date.now() - 12 * 1000).toISOString() // 12 sec ago
+      }
+    ],
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
  * GET /api/admin/energy/dashboard
  * Returns platform-wide energy consumption data
  * PROTECTED: Requires admin authentication

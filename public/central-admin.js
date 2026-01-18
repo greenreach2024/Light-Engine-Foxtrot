@@ -428,6 +428,7 @@ function renderContextualSidebar() {
                     title: 'Overview',
                     items: [
                         { label: 'Dashboard', view: 'overview', active: true },
+                        { label: 'LE Fleet Monitoring', view: 'platform-monitoring' },
                         { label: 'Anomalies', view: 'anomalies' },
                         { label: 'Alerts', view: 'alerts' }
                     ]
@@ -454,12 +455,6 @@ function renderContextualSidebar() {
                         { label: 'All Farms', view: 'farms' },
                         { label: 'Users', view: 'users' },
                         { label: 'Recipes', view: 'recipes' }
-                    ]
-                },
-                {
-                    title: 'Platform',
-                    items: [
-                        { label: 'LE Fleet Monitoring', view: 'platform-monitoring' }
                     ]
                 },
                 {
@@ -4143,15 +4138,65 @@ async function loadPlatformMonitoring() {
         // Update KPIs
         document.getElementById('platform-farms').textContent = '24';
         document.getElementById('platform-mrr').textContent = '$4,847';
-        document.getElementById('platform-zones').textContent = '312';
-        document.getElementById('platform-sensors').textContent = '1,247';
-        document.getElementById('platform-health').textContent = '87';
-        document.getElementById('platform-alerts').textContent = '12';
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/fleet/monitoring`);
+        if (!response.ok) {
+            throw new Error('Failed to load fleet monitoring data');
+        }
         
-        // Deployments table already has static data in HTML
-        // In production, fetch and render from API
+        const data = await response.json();
         
-        console.log('[Platform] Platform monitoring loaded');
+        // Update KPIs
+        document.getElementById('platform-farms').textContent = data.summary.connectedFarms;
+        document.getElementById('platform-mrr').textContent = `$${data.summary.monthlyRecurringRevenue.toLocaleString()}`;
+        document.getElementById('platform-zones').textContent = data.summary.totalZones;
+        document.getElementById('platform-sensors').textContent = data.summary.connectedSensors.toLocaleString();
+        document.getElementById('platform-health').textContent = data.summary.fleetHealthScore;
+        document.getElementById('platform-alerts').textContent = data.summary.activeAlerts;
+        
+        // Render deployments table
+        const tbody = document.getElementById('platform-deployments-tbody');
+        if (data.deployments && data.deployments.length > 0) {
+            tbody.innerHTML = data.deployments.map(d => {
+                const planBadge = {
+                    'Starter': '<span class="badge badge-info">Starter</span>',
+                    'Pro': '<span class="badge badge-primary">Pro</span>',
+                    'Enterprise': '<span class="badge badge-primary">Enterprise</span>'
+                }[d.plan] || `<span class="badge">${d.plan}</span>`;
+                
+                const statusBadge = d.status === 'ACTIVE' 
+                    ? '<span class="badge badge-success">ACTIVE</span>' 
+                    : '<span class="badge badge-warning">TRIAL</span>';
+                
+                const healthBadge = d.healthScore >= 90 
+                    ? `<span class="badge badge-success">${d.healthScore}%</span>`
+                    : d.healthScore >= 80
+                    ? `<span class="badge badge-warning">${d.healthScore}%</span>`
+                    : `<span class="badge badge-danger">${d.healthScore}%</span>`;
+                
+                const lastSeen = formatTimeAgo(new Date(d.lastSeen));
+                const storageMB = d.dataStorageMB < 1024 
+                    ? `${d.dataStorageMB} MB` 
+                    : `${(d.dataStorageMB / 1024).toFixed(1)} GB`;
+                
+                return `
+                    <tr>
+                        <td>
+                            <strong>${d.farmName}</strong><br>
+                            <small style="color: var(--text-muted);">${d.farmId}</small>
+                        </td>
+                        <td>${planBadge}</td>
+                        <td>${statusBadge}</td>
+                        <td>${d.sensors.current} / ${d.sensors.limit}</td>
+                        <td>${d.apiCalls30d.toLocaleString()}</td>
+                        <td>${storageMB}</td>
+                        <td>${healthBadge}</td>
+                        <td>${lastSeen}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        console.log('[Platform] Fleet monitoring loaded successfully');
     } catch (error) {
         console.error('[Platform] Error loading platform monitoring:', error);
         showToast('Failed to load platform monitoring data', 'error');
@@ -4159,9 +4204,15 @@ async function loadPlatformMonitoring() {
 }
 
 /**
- * ============================================
- * USER MANAGEMENT FUNCTIONS
- * ============================================
+ * Format time ago helper
+ */
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return `${seconds} sec ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`;
+    return `${Math.floor(seconds / 86400)} days ago`;==========================================
  */
 
 let allUsers = [];
