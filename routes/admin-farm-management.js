@@ -53,16 +53,26 @@ async function verifySESRecipient(email) {
     return { verified: true, already_verified: true };
   }
 
-  // Not verified - send verification email
-  try {
-    const command = new VerifyEmailIdentityCommand({ EmailAddress: email });
-    await sesClient.send(command);
-    console.log(`[SES] Verification email sent to ${email} - awaiting user confirmation`);
-    return { verified: false, verification_sent: true, needs_confirmation: true };
-  } catch (error) {
-    console.error(`[SES] ❌ Failed to send verification email to ${email}:`, error.message);
-    return { verified: false, error: error.message };
-  }
+  // ⚠️ DO NOT auto-verify new users - bad UX (they get AWS verification email first)
+  // Instead, just return unverified status and let admin manually share credentials
+  console.log(`[SES] ${email} is NOT verified - email will not be sent automatically`);
+  console.log(`[SES] Admin should manually share credentials with user`);
+  return { 
+    verified: false, 
+    needs_manual_setup: true,
+    reason: 'SES requires pre-verified recipients. Manually share temp password with user or request AWS SES production access.'
+  };
+  
+  // OLD CODE: This would send AWS verification email to user (confusing UX)
+  // try {
+  //   const command = new VerifyEmailIdentityCommand({ EmailAddress: email });
+  //   await sesClient.send(command);
+  //   console.log(`[SES] Verification email sent to ${email} - awaiting user confirmation`);
+  //   return { verified: false, verification_sent: true, needs_confirmation: true };
+  // } catch (error) {
+  //   console.error(`[SES] ❌ Failed to send verification email to ${email}:`, error.message);
+  //   return { verified: false, error: error.message };
+  // }
 }
 
 /**
@@ -1361,6 +1371,10 @@ router.post('/users', requireAdmin, async (req, res) => {
         emailError = `Email verification pending for: ${pendingEmails.join(', ')} - AWS sent verification email(s)`;
         console.log('[Admin] ⏳ Welcome email NOT sent - awaiting verification for:', pendingEmails.join(', '));
         console.log('[Admin] User(s) must click AWS verification link, then you can resend welcome email');
+      } else if (sesVerification.needs_manual_setup || ccVerification.needs_manual_setup) {
+        emailError = 'Email not sent - recipient email not verified in AWS SES. Manually share temp password with user.';
+        console.log('[Admin] ⚠️ Welcome email NOT sent - user email not pre-verified in SES');
+        console.log('[Admin] Share the temp_password manually with the new user');
       }
 
       return res.json({
@@ -1492,6 +1506,10 @@ router.post('/users', requireAdmin, async (req, res) => {
         emailError = `Email verification pending for: ${pendingEmails.join(', ')} - AWS sent verification email(s)`;
         console.log('[Admin] Welcome email NOT sent - awaiting verification for:', pendingEmails.join(', '));
         console.log('[Admin] User(s) must click AWS verification link, then you can resend welcome email');
+      } else if (sesVerification.needs_manual_setup || ccVerification.needs_manual_setup) {
+        emailError = 'Email not sent - recipient email not verified in AWS SES. Manually share temp password with user.';
+        console.log('[Admin] ⚠️ Welcome email NOT sent - user email not pre-verified in SES');
+        console.log('[Admin] Share the temp_password manually with the new user');
       } else {
         throw new Error(sesVerification.error || 'SES verification failed');
       }
