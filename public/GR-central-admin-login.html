@@ -248,6 +248,7 @@
         
         // Check if already logged in
         const existingToken = localStorage.getItem('admin_token');
+        const forceLogin = window.location.search.includes('forceLogin=true');
         console.log('========================================');
         console.log('[LOGIN PAGE] Checking for existing token');
         console.log('[LOGIN PAGE] Current hostname:', window.location.hostname);
@@ -257,7 +258,7 @@
         console.log('[LOGIN PAGE] LocalStorage keys:', Object.keys(localStorage));
         console.log('========================================');
         
-        if (existingToken) {
+        if (existingToken && !forceLogin) {
             console.log('[LOGIN PAGE] Token exists - will redirect in 5 seconds...');
             alert(`EXISTING TOKEN FOUND!\n\nHostname: ${window.location.hostname}\nURL: ${window.location.href}\nAPI_BASE: ${API_BASE}\nToken length: ${existingToken.length}\n\nWaiting 5 seconds - check console!\n\nClick OK to see console.`);
             setTimeout(() => {

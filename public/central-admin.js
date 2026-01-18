@@ -169,6 +169,15 @@ let navigationContext = {
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Initializing Central Operations...');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('forceLogin') === 'true') {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_email');
+        localStorage.removeItem('admin_name');
+        window.location.href = `${API_BASE}/GR-central-admin-login.html?forceLogin=true`;
+        return;
+    }
     
     // Verify authentication first
     const isAuthenticated = await verifySession();
