@@ -393,11 +393,11 @@ router.get('/analytics/aggregate', requireAdmin, async (req, res) => {
       // Get aggregated room/zone/device data from farm_metadata
       const aggregateResult = await dbQuery(`
         SELECT 
-          COALESCE(SUM((metadata->>'room_count')::int), 0) as total_rooms,
-          COALESCE(SUM((metadata->>'zone_count')::int), 0) as total_zones,
-          COALESCE(SUM((metadata->>'device_count')::int), 0) as total_devices,
-          COALESCE(SUM((metadata->>'tray_count')::int), 0) as total_trays,
-          COALESCE(SUM((metadata->>'plant_count')::int), 0) as total_plants
+          COALESCE(SUM(room_count), 0) as total_rooms,
+          COALESCE(SUM(zone_count), 0) as total_zones,
+          COALESCE(SUM(device_count), 0) as total_devices,
+          COALESCE(SUM(tray_count), 0) as total_trays,
+          COALESCE(SUM(plant_count), 0) as total_plants
         FROM farm_metadata
         WHERE farm_id IN (SELECT farm_id FROM farms WHERE status = 'active')
       `);
