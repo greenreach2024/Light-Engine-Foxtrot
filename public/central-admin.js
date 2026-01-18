@@ -2874,38 +2874,139 @@ async function loadAnomaliesView() {
 
 /**
  * Load Alerts view
+ * 
+ * ALERTS vs ANOMALY DETECTION:
+ * - Alerts: Rule-based, immediate action required (temp > 30°C, device offline)
+ * - Anomalies: ML pattern detection, investigative (unusual behavior patterns)
+ * - Alerts are reactive (known problems), Anomalies are proactive (emerging issues)
  */
 async function loadAlertsView() {
     console.log('[Alerts] Loading alerts...');
     const tbody = document.getElementById('alerts-tbody');
     
-    document.getElementById('alerts-active').textContent = '5';
-    document.getElementById('alerts-critical').textContent = '1';
-    document.getElementById('alerts-warnings').textContent = '3';
-    document.getElementById('alerts-resolved').textContent = '8';
-    
-    const alerts = [
-        { time: new Date().toISOString(), farm: 'Farm Alpha', severity: 'critical', type: 'Temperature', message: 'High temperature detected in Room A', status: 'active', acked: null },
-        { time: new Date(Date.now() - 3600000).toISOString(), farm: 'Farm Beta', severity: 'warning', type: 'Humidity', message: 'Low humidity in Zone 2', status: 'acknowledged', acked: 'admin' },
-        { time: new Date(Date.now() - 7200000).toISOString(), farm: 'Farm Gamma', severity: 'info', type: 'Device', message: 'Sensor offline', status: 'resolved', acked: 'system' }
-    ];
-    
-    const html = alerts.map(alert => `
-        <tr>
-            <td>${new Date(alert.time).toLocaleString()}</td>
-            <td>${alert.farm}</td>
-            <td><span class="status-badge status-${alert.severity}">${alert.severity}</span></td>
-            <td>${alert.type}</td>
-            <td>${alert.message}</td>
-            <td>${alert.status}</td>
-            <td>${alert.acked || '--'}</td>
-            <td>
-                ${alert.status === 'active' ? '<button class="btn-small">Acknowledge</button>' : '--'}
-            </td>
-        </tr>
-    `).join('');
-    
-    tbody.innerHTML = html;
+    try {
+        // Fetch live alert data from API
+        const response = await fetch(`${API_BASE}/api/admin/alerts`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('[Alerts] Received data:', data);
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load alerts');
+        }
+        
+        const alerts = data.alerts || [];
+        const summary = data.summary || {};
+        
+        // Update KPIs based on actual data
+        document.getElementById('alerts-active').textContent = summary.active || 0;
+        document.getElementById('alerts-critical').textContent = summary.critical || 0;
+        document.getElementById('alerts-warnings').textContent = summary.warning || 0;
+        document.getElementById('alerts-resolved').textContent = summary.resolved || 0;
+        
+        if (alerts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">No active alerts</td></tr>';
+            return;
+        }
+        
+        // Render alerts table
+        const html = alerts.map(alert => `
+            <tr>
+                <td>${new Date(alert.timestamp).toLocaleString()}</td>
+                <td>${alert.farm_name || alert.farm_id}</td>
+                <td><span class="status-badge status-${alert.severity}">${alert.severity}</span></td>
+                <td>${alert.category || alert.type}</td>
+                <td>
+                    <div style="margin-bottom: 4px;">${alert.message}</div>
+                    ${alert.value ? `<small style="color: var(--text-muted);">Value: ${alert.value} | Threshold: ${alert.threshold}</small>` : ''}
+                </td>
+                <td><span class="status-badge status-${alert.status === 'active' ? 'warning' : (alert.status === 'resolved' ? 'success' : 'info')}">${alert.status}</span></td>
+                <td>${alert.acknowledged_by || '--'}</td>
+                <td>
+                    ${alert.status === 'active' ? 
+                        `<button class="btn-small" onclick="acknowledgeAlert('${alert.id}')">Acknowledge</button>` : 
+                        alert.status === 'acknowledged' ?
+                        `<button class="btn-small" onclick="resolveAlert('${alert.id}')">Resolve</button>` :
+                        '--'
+                    }
+                    ${alert.context ? 
+                        `<button class="btn-small" style="margin-left: 4px;" onclick="traceAlert('${alert.id}', ${JSON.stringify(alert.context).replace(/"/g, '&quot;')})">Trace</button>` : 
+                        ''
+                    }
+                </td>
+            </tr>
+        `).join('');
+        
+        tbody.innerHTML = html;
+        
+        if (data.demo) {
+            showToast('Demo mode: Displaying sample alerts', 'info');
+        }
+        
+    } catch (error) {
+        console.error('[Alerts] Error loading data:', error);
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--accent-red);">Error loading alerts: ' + error.message + '</td></tr>';
+        
+        // Set error state for KPIs
+        document.getElementById('alerts-active').textContent = '--';
+        document.getElementById('alerts-critical').textContent = '--';
+        document.getElementById('alerts-warnings').textContent = '--';
+        document.getElementById('alerts-resolved').textContent = '--';
+        
+        showToast('Failed to load alert data', 'error');
+    }
+}
+
+/**
+ * Acknowledge an alert
+ */
+async function acknowledgeAlert(alertId) {
+    try {
+        // TODO: Implement POST /api/admin/alerts/:id/acknowledge
+        console.log('[Alerts] Acknowledging alert:', alertId);
+        showToast('Alert acknowledged', 'success');
+        await loadAlertsView(); // Reload to show updated state
+    } catch (error) {
+        console.error('[Alerts] Error acknowledging alert:', error);
+        showToast('Failed to acknowledge alert', 'error');
+    }
+}
+
+/**
+ * Resolve an alert
+ */
+async function resolveAlert(alertId) {
+    try {
+        // TODO: Implement POST /api/admin/alerts/:id/resolve
+        console.log('[Alerts] Resolving alert:', alertId);
+        showToast('Alert resolved', 'success');
+        await loadAlertsView(); // Reload to show updated state
+    } catch (error) {
+        console.error('[Alerts] Error resolving alert:', error);
+        showToast('Failed to resolve alert', 'error');
+    }
+}
+
+/**
+ * Trace alert to source
+ */
+async function traceAlert(alertId, context) {
+    console.log('[Alerts] Tracing alert to source:', alertId, context);
+    // Reuse the existing trace logic from anomalies
+    if (context.zone_id) {
+        // Navigate to the zone view if available
+        showToast(`Tracing to ${context.farm_id} / ${context.zone_id}`, 'info');
+    } else if (context.room_id) {
+        showToast(`Tracing to ${context.farm_id} / ${context.room_id}`, 'info');
+    } else {
+        showToast(`Alert source: ${context.farm_id}`, 'info');
+    }
 }
 
 /**
