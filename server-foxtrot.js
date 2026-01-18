@@ -9872,6 +9872,76 @@ app.use('/api/wholesale/catalog', wholesaleCatalogRouter);
 app.use('/api/wholesale/checkout', wholesaleCheckoutRouter);
 
 /**
+ * GreenReach: Wholesale Buyer Orders
+ * Buyer-facing order history and invoices
+ */
+
+// Buyer authentication middleware
+function requireBuyerAuth(req, res, next) {
+  const authHeader = req.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+  if (!token) {
+    return res.status(401).json({ status: 'error', message: 'Missing bearer token' });
+  }
+
+  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET || 'dev-greenreach-wholesale-secret';
+  if (!secret) {
+    return res.status(500).json({ status: 'error', message: 'Wholesale auth not configured' });
+  }
+
+  try {
+    const payload = jwt.verify(token, secret);
+    if (!payload?.sub) {
+      return res.status(401).json({ status: 'error', message: 'Invalid token' });
+    }
+
+    // Store buyer ID from token
+    req.wholesaleBuyer = { id: String(payload.sub) };
+    return next();
+  } catch (error) {
+    return res.status(401).json({ status: 'error', message: 'Invalid or expired token' });
+  }
+}
+
+// GET /api/wholesale/orders - List buyer's orders
+app.get('/api/wholesale/orders', requireBuyerAuth, asyncHandler(async (req, res) => {
+  const buyerId = req.wholesaleBuyer.id;
+  
+  // Query orders from database (or in-memory for now)
+  // For now, return empty array - will be populated from checkout executions
+  const orders = [];
+  
+  res.json({
+    status: 'ok',
+    data: { orders }
+  });
+}));
+
+// GET /api/wholesale/orders/:orderId/invoice - Get invoice for specific order
+app.get('/api/wholesale/orders/:orderId/invoice', requireBuyerAuth, asyncHandler(async (req, res) => {
+  const buyerId = req.wholesaleBuyer.id;
+  const orderId = req.params.orderId;
+  
+  // Query order from database
+  // For now, return 404
+  res.status(404).json({ 
+    status: 'error', 
+    message: 'Order not found' 
+  });
+}));
+
+// GET /api/wholesale/inventory/check-overselling - Validate inventory availability
+app.get('/api/wholesale/inventory/check-overselling', asyncHandler(async (req, res) => {
+  // This endpoint checks if any inventory is oversold across the network
+  // For now, return no issues
+  res.json({
+    status: 'ok',
+    oversold_items: [],
+    warnings: []
+  });
+}));
+
+/**
  * GreenReach: Wholesale Buyer Authentication and Management
  * - POST /api/wholesale/buyers/register: Register new wholesale buyer account
  * - POST /api/wholesale/buyers/login: Authenticate buyer and issue JWT
