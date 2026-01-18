@@ -4204,6 +4204,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================================
+// EXPOSE FUNCTIONS TO GLOBAL SCOPE FOR ONCLICK HANDLERS
+// ============================================================================
+window.openAddUserModal = openAddUserModal;
+window.editUser = editUser;
+window.closeUserModal = closeUserModal;
+window.saveUser = saveUser;
+window.deleteUser = deleteUser;
+window.closeDeleteUserModal = closeDeleteUserModal;
+window.confirmDeleteUser = confirmDeleteUser;
+window.filterUsers = filterUsers;
+
+// ============================================================================
 // AUTHENTICATION INITIALIZATION - Run auth check on page load
 // ============================================================================
 (async function initAuth() {
