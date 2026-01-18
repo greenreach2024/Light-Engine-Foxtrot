@@ -34,14 +34,28 @@ export function setupConsoleWrapper() {
   // Create silent versions that only log critical errors
   const noop = () => {};
   
-  console.log = noop;
+  // Create filtered log function that allows admin operations
+  const filteredLog = (...args) => {
+    const msg = args[0];
+    if (msg && typeof msg === 'string') {
+      // Allow admin-related logs (user creation, emails, auth)
+      if (msg.includes('[Admin]') || 
+          msg.includes('[SES]') || 
+          msg.includes('[email]') ||
+          msg.includes('Admin POST /users')) {
+        originalConsole.log(...args);
+      }
+    }
+  };
+  
+  console.log = filteredLog;
   console.info = noop;
   console.debug = noop;
   console.warn = noop;
   
   // Keep error logging but make it less verbose
   console.error = (...args) => {
-    // Only log critical startup/deployment errors
+    // Only log critical startup/deployment errors and admin operations
     const msg = args[0];
     if (msg && typeof msg === 'string') {
       // Allow critical errors that prevent server from starting
@@ -49,6 +63,12 @@ export function setupConsoleWrapper() {
           msg.includes('Cannot bind to port') ||
           msg.includes('EADDRINUSE') ||
           msg.includes('ECONNREFUSED') && msg.includes('database')) {
+        originalConsole.error(...args);
+      }
+      // Allow admin-related errors
+      if (msg.includes('[Admin]') || 
+          msg.includes('[SES]') || 
+          msg.includes('[email]')) {
         originalConsole.error(...args);
       }
       // Suppress common non-critical errors in demo mode
