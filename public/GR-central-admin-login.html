@@ -247,8 +247,24 @@
         const debugLogEl = document.getElementById('debug-log');
         
         // Check if already logged in
-        if (localStorage.getItem('admin_token')) {
-            window.location.href = `${API_BASE}/GR-central-admin.html`;
+        const existingToken = localStorage.getItem('admin_token');
+        console.log('========================================');
+        console.log('[LOGIN PAGE] Checking for existing token');
+        console.log('[LOGIN PAGE] Current hostname:', window.location.hostname);
+        console.log('[LOGIN PAGE] Current URL:', window.location.href);
+        console.log('[LOGIN PAGE] API_BASE:', API_BASE);
+        console.log('[LOGIN PAGE] Existing token:', existingToken ? existingToken.substring(0, 30) + '...' : 'NONE');
+        console.log('[LOGIN PAGE] LocalStorage keys:', Object.keys(localStorage));
+        console.log('========================================');
+        
+        if (existingToken) {
+            console.log('[LOGIN PAGE] Token exists - will redirect in 5 seconds...');
+            alert(`EXISTING TOKEN FOUND!\n\nHostname: ${window.location.hostname}\nURL: ${window.location.href}\nAPI_BASE: ${API_BASE}\nToken length: ${existingToken.length}\n\nWaiting 5 seconds - check console!\n\nClick OK to see console.`);
+            setTimeout(() => {
+                const redirectUrl = `${API_BASE}/GR-central-admin.html`;
+                console.log('[LOGIN PAGE] Redirecting to:', redirectUrl);
+                window.location.href = redirectUrl;
+            }, 5000);
         }
 
         // Demo mode detection (S3 static hosting or demo domain)
@@ -311,20 +327,33 @@
 
                 if (response.ok && data.success) {
                     // Store token
+                    console.log('========================================');
+                    console.log('[Login] STORING TOKEN');
+                    console.log('[Login] Current hostname:', window.location.hostname);
+                    console.log('[Login] Current URL:', window.location.href);
+                    console.log('[Login] API_BASE:', API_BASE);
+                    console.log('[Login] Token to store:', data.token.substring(0, 30) + '...');
+                    console.log('[Login] Token length:', data.token.length);
+                    console.log('========================================');
+                    
                     localStorage.setItem('admin_token', data.token);
                     localStorage.setItem('admin_email', data.admin.email);
                     localStorage.setItem('admin_name', data.admin.name);
                     
-                    console.log('[Login] Token stored, redirecting...');
-                    console.log('[Login] Current hostname:', window.location.hostname);
-                    console.log('[Login] API_BASE:', API_BASE);
+                    // Verify storage
+                    const storedToken = localStorage.getItem('admin_token');
+                    console.log('[Login] VERIFICATION: Token stored?', !!storedToken);
+                    console.log('[Login] VERIFICATION: Stored token matches?', storedToken === data.token);
+                    console.log('[Login] VERIFICATION: LocalStorage keys:', Object.keys(localStorage));
                     
-                    showAlert('Login successful! Redirecting...', 'success');
+                    showAlert('Login successful! Redirecting in 3 seconds...', 'success');
                     
-                    // Redirect to the same domain as API_BASE to ensure localStorage consistency
-                    const redirectUrl = `${API_BASE}/GR-central-admin.html`;
-                    console.log('[Login] Redirecting to:', redirectUrl);
-                    window.location.href = redirectUrl;
+                    // Wait 3 seconds before redirect to ensure storage completes
+                    setTimeout(() => {
+                        const redirectUrl = `${API_BASE}/GR-central-admin.html`;
+                        console.log('[Login] Redirecting to:', redirectUrl);
+                        window.location.href = redirectUrl;
+                    }, 3000);
                 } else {
                     // Handle specific error cases
                     let errorMessage = data.error || data.message || 'Login failed';
