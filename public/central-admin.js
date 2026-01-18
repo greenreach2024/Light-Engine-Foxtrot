@@ -4215,6 +4215,13 @@ window.closeDeleteUserModal = closeDeleteUserModal;
 window.confirmDeleteUser = confirmDeleteUser;
 window.filterUsers = filterUsers;
 
+console.log('✅ [Global Functions] User management functions exposed to window:', {
+    openAddUserModal: typeof window.openAddUserModal,
+    editUser: typeof window.editUser,
+    deleteUser: typeof window.deleteUser,
+    closeUserModal: typeof window.closeUserModal
+});
+
 // ============================================================================
 // AUTHENTICATION INITIALIZATION - Run auth check on page load
 // ============================================================================
