@@ -3889,7 +3889,7 @@ let deleteUserId = null;
  */
 async function loadUsersView() {
     try {
-        const response = await apiRequest('/api/admin/users', {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/users`, {
             method: 'GET'
         });
         
@@ -4054,11 +4054,12 @@ async function saveUser(event) {
     }
     
     try {
-        const url = userId ? `/api/admin/users/${userId}` : '/api/admin/users';
+        const url = userId ? `${API_BASE}/api/admin/users/${userId}` : `${API_BASE}/api/admin/users`;
         const method = userId ? 'PUT' : 'POST';
         
-        const response = await apiRequest(url, {
+        const response = await authenticatedFetch(url, {
             method: method,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData)
         });
         
@@ -4108,7 +4109,7 @@ async function confirmDeleteUser() {
     if (!deleteUserId) return;
     
     try {
-        const response = await apiRequest(`/api/admin/users/${deleteUserId}`, {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/users/${deleteUserId}`, {
             method: 'DELETE'
         });
         
