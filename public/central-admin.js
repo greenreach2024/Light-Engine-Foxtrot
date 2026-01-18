@@ -3955,10 +3955,10 @@ function renderUsers(users) {
                 <td>${statusBadge}</td>
                 <td>${lastLogin}</td>
                 <td>
-                    <button class="btn-icon" onclick="editUser(${user.user_id})" title="Edit">
+                    <button class="btn-icon" data-action="edit-user" data-user-id="${user.user_id}" title="Edit">
                         <span style="font-size: 18px;">✏️</span>
                     </button>
-                    <button class="btn-icon" onclick="deleteUser(${user.user_id}, '${user.first_name} ${user.last_name}')" title="Delete">
+                    <button class="btn-icon" data-action="delete-user" data-user-id="${user.user_id}" data-user-name="${user.first_name} ${user.last_name}" title="Delete">
                         <span style="font-size: 18px;">🗑️</span>
                     </button>
                 </td>
@@ -4133,4 +4133,31 @@ async function confirmDeleteUser() {
 
 // Initialize on load
 console.log('Central Admin loaded');
+
+// Bind user management actions (fallback for inline handler issues)
+document.addEventListener('DOMContentLoaded', () => {
+    const addUserBtn = document.getElementById('add-user-btn');
+    if (addUserBtn) {
+        addUserBtn.addEventListener('click', () => openAddUserModal());
+    }
+
+    const usersTbody = document.getElementById('users-tbody');
+    if (usersTbody) {
+        usersTbody.addEventListener('click', (event) => {
+            const actionEl = event.target.closest('[data-action]');
+            if (!actionEl) return;
+
+            const action = actionEl.getAttribute('data-action');
+            const userId = parseInt(actionEl.getAttribute('data-user-id'), 10);
+            const userName = actionEl.getAttribute('data-user-name') || '';
+
+            if (action === 'edit-user') {
+                editUser(userId);
+            }
+            if (action === 'delete-user') {
+                deleteUser(userId, userName);
+            }
+        });
+    }
+});
 
