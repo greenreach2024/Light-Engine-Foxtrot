@@ -10343,29 +10343,49 @@ app.use('/api/admin', adminFarmManagementRouter);
  */
 
 // Setup Wizard Status Check (login flow needs this)
-app.get('/api/setup-wizard/status', authenticateToken, async (req, res) => {
+// Note: This endpoint accepts tokens but doesn't require them to allow login flow to proceed
+app.get('/api/setup-wizard/status', async (req, res) => {
   try {
-    const { farmId } = req.user;
+    // Try to extract token if provided
+    const authHeader = req.headers.authorization;
+    let farmId = null;
+    let email = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+        const decoded = jwt.verify(token, jwtSecret);
+        farmId = decoded.farmId;
+        email = decoded.email;
+        console.log('[setup-wizard] Token decoded successfully for', farmId, email);
+      } catch (tokenError) {
+        console.warn('[setup-wizard] Token verification failed:', tokenError.message);
+        // Continue without token - return default
+      }
+    }
+    
     const pool = req.app.locals?.db;
     
-    if (!pool) {
-      // If no database, assume setup not completed (safe default)
-      console.warn('[setup-wizard] No database pool available');
+    if (!pool || !farmId || !email) {
+      // If no database or no valid token, assume setup not completed (safe default)
+      console.log('[setup-wizard] Returning default - no pool or token');
       return res.json({
         success: true,
         setupCompleted: false,
-        farmId: farmId
+        farmId: farmId || 'unknown'
       });
     }
     
     // Check if user has setup_completed flag
     const userResult = await pool.query(
       'SELECT setup_completed FROM users WHERE farm_id = $1 AND email = $2',
-      [farmId, req.user.email]
+      [farmId, email]
     );
     
     if (userResult.rows.length === 0) {
       // User not found - return default (new users haven't completed setup)
+      console.log('[setup-wizard] User not found, returning default');
       return res.json({
         success: true,
         setupCompleted: false,
@@ -10374,6 +10394,7 @@ app.get('/api/setup-wizard/status', authenticateToken, async (req, res) => {
     }
     
     const setupCompleted = userResult.rows[0].setup_completed || false;
+    console.log('[setup-wizard] Setup status:', setupCompleted, 'for', farmId);
     
     return res.json({
       success: true,
@@ -10386,7 +10407,7 @@ app.get('/api/setup-wizard/status', authenticateToken, async (req, res) => {
     return res.json({
       success: true,
       setupCompleted: false,
-      farmId: req.user?.farmId || 'unknown'
+      farmId: 'unknown'
     });
   }
 });
