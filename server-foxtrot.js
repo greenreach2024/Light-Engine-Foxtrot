@@ -10271,20 +10271,27 @@ import purchaseLeadsRouter from './routes/purchase-leads.js';
 import setupWizardRouter from './routes/setup-wizard.js';
 import pg from 'pg';
 
-// Initialize PostgreSQL pool for purchase flow
-const dbPool = new pg.Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
-});
+// Initialize PostgreSQL pool for purchase flow (Cloud deployments only)
+// Edge devices should not have DB credentials and will use NeDB instead
+let dbPool = null;
+if (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER) {
+  console.log('[Database] Initializing PostgreSQL pool for Cloud deployment');
+  dbPool = new pg.Pool({
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT) || 5432,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
+  });
+} else {
+  console.log('[Database] No PostgreSQL credentials found - using NeDB for Edge device');
+}
 
-// Store database pool in app.locals for routes
+// Store database pool in app.locals for routes (will be null on Edge devices)
 app.locals.db = dbPool;
 
 /**
