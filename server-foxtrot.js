@@ -19938,23 +19938,37 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
         const { stdout: wpaOut } = await execAsync('wpa_cli -i wlan0 scan_results');
         const lines = wpaOut.split('\n').slice(1); // Skip header
         const networks = [];
+        const seenSSIDs = new Map(); // Track best signal for each SSID
+        
         for (const line of lines) {
           const parts = line.trim().split(/\s+/);
           if (parts.length >= 5) {
             const [bssid, freq, signal, flags, ...ssidParts] = parts;
             const ssid = ssidParts.join(' ').trim();
-            if (ssid && ssid !== '') {
-              networks.push({
-                ssid: ssid,
-                signal: parseInt(signal, 10),
-                security: flags.includes('WPA') ? 'WPA' : flags.includes('WEP') ? 'WEP' : 'OPEN'
-              });
+            
+            // Filter out hidden networks (empty SSIDs or SSIDs with null bytes)
+            if (ssid && ssid !== '' && !ssid.includes('\\x00')) {
+              const signalStrength = parseInt(signal, 10);
+              
+              // Only keep the strongest signal for each SSID
+              if (!seenSSIDs.has(ssid) || seenSSIDs.get(ssid).signal < signalStrength) {
+                seenSSIDs.set(ssid, {
+                  ssid: ssid,
+                  signal: signalStrength,
+                  security: flags.includes('WPA') ? 'WPA' : flags.includes('WEP') ? 'WEP' : 'OPEN'
+                });
+              }
             }
           }
         }
-        if (networks.length > 0) {
-          console.log(`[WiFi Scan] wpa_cli found ${networks.length} networks`);
-          return res.json(networks);
+        
+        // Convert map to array and sort by signal strength
+        const uniqueNetworks = Array.from(seenSSIDs.values())
+          .sort((a, b) => b.signal - a.signal);
+        
+        if (uniqueNetworks.length > 0) {
+          console.log(`[WiFi Scan] wpa_cli found ${uniqueNetworks.length} unique networks`);
+          return res.json(uniqueNetworks);
         }
       } catch (wpaErr) {
         lastError = wpaErr;
