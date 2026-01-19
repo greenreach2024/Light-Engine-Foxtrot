@@ -1586,9 +1586,11 @@
       background: var(--surface);
       padding: 2rem;
       border-radius: 8px;
-      max-width: 420px;
+      max-width: 600px;
       width: 90%;
       box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      max-height: 90vh;
+      overflow-y: auto;
     }
 
     .auth-tabs {
@@ -2218,8 +2220,17 @@
   </div>
 
   <!-- Buyer Auth Modal -->
-  <div id="auth-modal" class="auth-modal">
+  <div id="auth-modal" class="auth-modal open">
     <div class="auth-modal-content">
+      <div class="welcome-description" style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg); border-radius: 6px; border-left: 4px solid var(--accent);">
+        <h3 style="color: var(--primary); margin-bottom: 0.75rem;">Welcome to GreenReach Wholesale!</h3>
+        <p style="font-size: 0.95rem; line-height: 1.6; color: var(--text);">
+          This portal provides a view of the unique, local produce available to you. To support you, we have included a <strong>Live Environmental Impact Score</strong> that compares local produce to imports. An <strong>AI Price Evaluation Tool</strong> that searches North America, looking for changes in pricing of popular produce and the impacts that caused the price change. And a <strong>Demand Tool</strong> that shows trends of locally grown produce. Tools to help you stay on top of your game!
+        </p>
+        <p style="font-size: 0.95rem; line-height: 1.6; color: var(--text); margin-top: 0.75rem;">
+          Don't see the produce you are looking for locally? Click the <strong>Request Product</strong> button. Hydroponic farms can grow almost anything. If they know, they grow!
+        </p>
+      </div>
       <h2>Business Access</h2>
       <div class="auth-tabs">
         <button class="auth-tab active" data-tab="sign-in" type="button">Sign In</button>
