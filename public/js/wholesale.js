@@ -216,26 +216,26 @@
       }
       
       try {
-        const response = await fetch('/api/wholesale/auth/me', {
+        const response = await fetch('/api/wholesale/buyers/me', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (response.ok) {
-          const data = await response.json();
-          this.currentBuyer = {
-            id: data.buyer_id,
-            businessName: data.business_name,
-            contactName: data.contact_name,
-            email: data.email,
-            buyerType: data.buyer_type,
-            verified: data.verified,
-            isActive: data.is_active,
-            phone: data.phone,
-            postalCode: data.postal_code,
-            province: data.province
-          };
-          this.updateBuyerProfile();
-          this.populateCheckoutForm();
+          const result = await response.json();
+          const buyer = result.data?.buyer;
+          if (buyer) {
+            this.currentBuyer = {
+              id: buyer.id,
+              businessName: buyer.business_name,
+              contactName: buyer.contact_name,
+              email: buyer.email,
+              buyerType: buyer.buyer_type,
+              phone: buyer.phone,
+              location: buyer.location || {}
+            };
+            this.updateBuyerProfile();
+            this.populateCheckoutForm();
+          }
         } else {
           // Token invalid, clear it
           localStorage.removeItem(STORAGE_TOKEN);
