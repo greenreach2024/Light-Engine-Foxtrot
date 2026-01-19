@@ -124,6 +124,7 @@ export async function adminAuthMiddleware(req, res, next) {
           s.expires_at,
           u.email,
           u.name,
+          u.role,
           u.active
         FROM admin_sessions s
         JOIN admin_users u ON s.admin_id = u.id
@@ -168,7 +169,7 @@ export async function adminAuthMiddleware(req, res, next) {
         id: session.admin_id,
         email: session.email,
         name: session.name,
-        role: 'admin',
+        role: session.role || 'admin',
         session_id: session.session_id
       };
       console.log('[adminAuthMiddleware] SUCCESS: Database session validated');
