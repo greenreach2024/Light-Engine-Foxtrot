@@ -10317,6 +10317,8 @@ if (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER) {
 
 // Store database pool in app.locals for routes (will be null on Edge devices)
 app.locals.db = dbPool;
+// Store wizardStatesDB for setup routes
+app.locals.wizardStatesDB = wizardStatesDB;
 
 /**
  * GreenReach Central - Farm Registration & Provisioning

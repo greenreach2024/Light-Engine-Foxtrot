@@ -503,7 +503,15 @@ router.get('/data', async (req, res) => {
     
     if (!pool) {
       // Edge device - read from NeDB
-      const { wizardStatesDB } = await import('../db.js');
+      const wizardStatesDB = req.app.locals?.wizardStatesDB;
+      
+      if (!wizardStatesDB) {
+        return res.status(500).json({
+          success: false,
+          error: 'Wizard database not initialized'
+        });
+      }
+      
       const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' });
       
       if (!setupConfig) {
