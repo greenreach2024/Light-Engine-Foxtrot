@@ -9934,12 +9934,16 @@ function requireBuyerAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, secret);
-    if (!payload?.sub) {
-      return res.status(401).json({ status: 'error', message: 'Invalid token' });
+    
+    // Support both token formats: { buyerId } from wholesale-buyers.js and { sub } from other sources
+    const buyerId = payload.buyerId || payload.sub;
+    
+    if (!buyerId) {
+      return res.status(401).json({ status: 'error', message: 'Invalid token format' });
     }
 
     // Store buyer ID from token
-    req.wholesaleBuyer = { id: String(payload.sub) };
+    req.wholesaleBuyer = { id: String(buyerId) };
     return next();
   } catch (error) {
     return res.status(401).json({ status: 'error', message: 'Invalid or expired token' });
