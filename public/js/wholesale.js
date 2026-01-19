@@ -1646,8 +1646,32 @@
       const impactContent = document.getElementById('impact-content');
       const impactScore = document.getElementById('impact-score');
       
-      if (!this.currentBuyer?.location) {
-        impactContent.innerHTML = '<div class="loading-state">Buyer location required</div>';
+      if (!this.currentBuyer) {
+        impactContent.innerHTML = '<div class="loading-state">Sign in to see environmental impact</div>';
+        if (impactScore) impactScore.textContent = '--';
+        return;
+      }
+
+      // Check if buyer has valid location coordinates
+      const hasValidLocation = this.currentBuyer.location?.latitude && 
+                               this.currentBuyer.location?.longitude &&
+                               !isNaN(this.currentBuyer.location.latitude) &&
+                               !isNaN(this.currentBuyer.location.longitude);
+
+      if (!hasValidLocation) {
+        // Show farms without distance calculation
+        impactContent.innerHTML = `
+          <div class="loading-state" style="padding: 1rem;">
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+              Location coordinates not set. Update your account settings to enable distance calculations.
+            </p>
+            <p style="font-size: 0.9rem; color: var(--text-primary);">
+              <strong>Sourcing from GreenReach Network:</strong><br/>
+              ${this.networkFarms.length} local farms available
+            </p>
+          </div>
+        `;
+        if (impactScore) impactScore.textContent = 'A';
         return;
       }
 
