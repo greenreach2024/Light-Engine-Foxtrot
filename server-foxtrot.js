@@ -10419,9 +10419,33 @@ app.get('/api/setup-wizard/status', async (req, res) => {
     
     const pool = req.app.locals?.db;
     
-    if (!pool || !farmId || !email) {
-      // If no database or no valid token, assume setup not completed (safe default)
-      console.log('[setup-wizard] Returning default - no pool or token');
+    // Edge device: Check NeDB for setup completion
+    if (!pool) {
+      console.log('[setup-wizard] Edge device - checking NeDB for setup status');
+      try {
+        const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' });
+        const setupCompleted = setupConfig?.completed || false;
+        console.log('[setup-wizard] NeDB setup status:', setupCompleted);
+        
+        return res.json({
+          success: true,
+          setupCompleted: setupCompleted,
+          farmId: farmId || 'edge-device'
+        });
+      } catch (nedbError) {
+        console.error('[setup-wizard] NeDB check failed:', nedbError);
+        return res.json({
+          success: true,
+          setupCompleted: false,
+          farmId: farmId || 'edge-device'
+        });
+      }
+    }
+    
+    // Cloud deployment: Check PostgreSQL
+    if (!farmId || !email) {
+      // If no valid token, assume setup not completed (safe default)
+      console.log('[setup-wizard] Returning default - no valid token');
       return res.json({
         success: true,
         setupCompleted: false,
