@@ -491,4 +491,57 @@ router.get('/status', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/setup/data
+ * Get real user setup data (replaces demo data)
+ * Returns the user's actual configuration saved during setup wizard
+ */
+router.get('/data', async (req, res) => {
+  try {
+    // Check if using NeDB (edge device)
+    const pool = req.app.locals?.db;
+    
+    if (!pool) {
+      // Edge device - read from NeDB
+      const { wizardStatesDB } = await import('../db.js');
+      const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' });
+      
+      if (!setupConfig) {
+        return res.status(404).json({
+          success: false,
+          error: 'No setup configuration found'
+        });
+      }
+      
+      // Return user's actual setup data
+      return res.json({
+        success: true,
+        setupCompleted: setupConfig.completed || false,
+        config: {
+          farmName: setupConfig.farmName,
+          ownerName: setupConfig.ownerName,
+          contactEmail: setupConfig.contactEmail,
+          contactPhone: setupConfig.contactPhone,
+          rooms: setupConfig.rooms || [],
+          setupCompletedAt: setupConfig.completedAt
+        }
+      });
+    }
+    
+    // Cloud device - read from PostgreSQL
+    // TODO: Query PostgreSQL for setup data when needed
+    return res.status(501).json({
+      success: false,
+      error: 'Cloud setup data not yet implemented'
+    });
+    
+  } catch (error) {
+    console.error('[api/setup/data] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load setup data'
+    });
+  }
+});
+
 export default router;
