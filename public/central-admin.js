@@ -4779,6 +4779,9 @@ function renderUsers(users) {
                     <button class="btn-icon" data-action="edit-user" data-user-id="${user.user_id}" title="Edit">
                         <span style="font-size: 18px;">✏️</span>
                     </button>
+                    <button class="btn-icon" data-action="reset-password" data-user-id="${user.user_id}" data-user-email="${user.email}" title="Reset Password">
+                        <span style="font-size: 18px;">🔑</span>
+                    </button>
                     <button class="btn-icon" data-action="delete-user" data-user-id="${user.user_id}" data-user-name="${user.first_name} ${user.last_name}" title="Delete">
                         <span style="font-size: 18px;">🗑️</span>
                     </button>
@@ -4914,6 +4917,37 @@ async function saveUser(event) {
 }
 
 /**
+ * Reset user password (Light Engine farm users)
+ */
+async function resetUserPassword(userId, userEmail) {
+    if (!confirm(`Reset password for ${userEmail}?\n\nA new temporary password will be generated.`)) {
+        return;
+    }
+    
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/users/${userId}/reset-password`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to reset password');
+        }
+        
+        // Show temporary password in alert
+        const tempPassword = data.temp_password;
+        const userInfo = data.user || {};
+        
+        alert(`✅ Password Reset Successful!\n\nUser: ${userInfo.email || userEmail}\nFarm ID: ${userInfo.farm_id || 'N/A'}\n\nTemporary Password:\n${tempPassword}\n\n⚠️ Copy this password now! The user must use this to log in at:\nhttps://greenreachgreens.com/login.html`);
+        
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        alert(`Failed to reset password: ${error.message}`);
+    }
+}
+
+/**
  * Delete user (show confirmation)
  */
 function deleteUser(userId, userName) {
@@ -4992,11 +5026,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const action = actionEl.getAttribute('data-action');
             const userId = parseInt(actionEl.getAttribute('data-user-id'), 10);
             const userName = actionEl.getAttribute('data-user-name') || '';
+            const userEmail = actionEl.getAttribute('data-user-email') || '';
             
             console.log('📌 [DOM] Action triggered:', action, 'userId:', userId, 'userName:', userName);
 
             if (action === 'edit-user') {
                 editUser(userId);
+            }
+            if (action === 'reset-password') {
+                resetUserPassword(userId, userEmail);
             }
             if (action === 'delete-user') {
                 deleteUser(userId, userName);
@@ -5014,6 +5052,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================================================
 window.openAddUserModal = openAddUserModal;
 window.editUser = editUser;
+window.resetUserPassword = resetUserPassword;
 window.closeUserModal = closeUserModal;
 window.saveUser = saveUser;
 window.deleteUser = deleteUser;
@@ -5024,6 +5063,7 @@ window.filterUsers = filterUsers;
 console.log('✅ [Global Functions] User management functions exposed to window:', {
     openAddUserModal: typeof window.openAddUserModal,
     editUser: typeof window.editUser,
+    resetUserPassword: typeof window.resetUserPassword,
     deleteUser: typeof window.deleteUser,
     closeUserModal: typeof window.closeUserModal
 });

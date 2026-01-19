@@ -1728,44 +1728,59 @@ router.post('/farms/:farmId/reset-credentials', requireAdmin, async (req, res) =
 
 /**
  * POST /api/admin/users/:userId/reset-password
- * Reset user password
+ * Reset Light Engine farm user password (PostgreSQL)
  */
 router.post('/users/:userId/reset-password', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
     const db = await initDatabase();
     
-    // Get user
-    const user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
-    if (!user) {
+    // Check if database is available (PostgreSQL mode)
+    if (!db || !db.pool || db.mode === 'nedb') {
+      console.log('[Admin] PostgreSQL database required for password reset');
+      return res.status(503).json({ 
+        error: 'Database not available',
+        message: 'PostgreSQL database required for farm user password resets'
+      });
+    }
+    
+    // Get user from PostgreSQL
+    const userResult = await db.query(
+      'SELECT user_id, email, name, farm_id FROM users WHERE user_id = $1',
+      [userId]
+    );
+    
+    if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+    
+    const user = userResult.rows[0];
     
     // Generate temporary password
     const tempPassword = crypto.randomBytes(8).toString('hex');
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     
-    // Update password
-    await db.run(
-      'UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?',
+    // Update password in PostgreSQL
+    await db.query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2',
       [passwordHash, userId]
     );
     
-    // Log action
-    await db.run(
-      `INSERT INTO admin_audit_log (admin_id, action, resource_type, resource_id, metadata, ip_address)
-       VALUES (?, 'RESET_PASSWORD', 'user', ?, ?, ?)`,
-      [req.admin.admin_id, userId, JSON.stringify({ user_id: userId, email: user.email }), req.ip]
-    );
+    console.log(`[Admin] Password reset for user ${user.email} (${user.farm_id})`);
     
     res.json({ 
       success: true, 
       temp_password: tempPassword,
-      message: 'Password reset successfully'
+      message: 'Password reset successfully',
+      user: {
+        email: user.email,
+        name: user.name,
+        farm_id: user.farm_id
+      }
     });
   } catch (error) {
     console.error('Error resetting password:', error);
-    res.status(500).json({ error: 'Failed to reset password' });
+    res.status(500).json({ error: 'Failed to reset password', details: error.message });
   }
 });
 
