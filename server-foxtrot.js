@@ -186,6 +186,7 @@ import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
 import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
 import wholesaleBuyersRouter from './routes/wholesale-buyers.js';
 import adminWholesaleBuyersRouter from './routes/admin-wholesale-buyers.js';
+import wholesaleProductRequestsRouter from './routes/wholesale-product-requests.js';
 import wholesaleWebhooksRouter from './routes/wholesale/webhooks.js';
 import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-webhooks.js';
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
@@ -9992,6 +9993,13 @@ app.get('/api/wholesale/inventory/check-overselling', asyncHandler(async (req, r
  * - GET /api/wholesale/buyers/me: Get current buyer profile
  */
 app.use('/api/wholesale', wholesaleBuyersRouter);
+
+/**
+ * GreenReach: Wholesale Product Requests
+ * - POST /api/wholesale/product-requests/create: Create product request (notifies all farms)
+ * - GET /api/wholesale/product-requests/buyer/:buyerId: Get buyer's requests
+ */
+app.use('/api/wholesale/product-requests', wholesaleProductRequestsRouter);
 
 /**
  * GreenReach: Admin Wholesale Buyer Management
