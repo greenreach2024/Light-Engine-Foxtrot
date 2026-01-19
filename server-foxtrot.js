@@ -116,6 +116,47 @@ function requireEdgeForControl(req, res, next) {
     next();
   }
 }
+
+// =====================================================
+// JWT Authentication Middleware
+// =====================================================
+// Verifies JWT token and attaches user info to req.user
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required'
+    });
+  }
+
+  const token = authHeader.substring(7);
+  
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const decoded = jwt.verify(token, jwtSecret);
+    
+    // Attach user info to request
+    req.user = {
+      farmId: decoded.farmId,
+      email: decoded.email,
+      role: decoded.role || 'admin',
+      userId: decoded.userId,
+      planType: decoded.planType || 'cloud'
+    };
+    
+    next();
+  } catch (error) {
+    console.error('[auth] Token verification failed:', error.message);
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid or expired token'
+    });
+  }
+}
+
 import AutomationRulesEngine from './lib/automation-engine.js';
 import { createPreAutomationLayer } from './automation/index.js';
 import {
@@ -10300,7 +10341,43 @@ app.use('/api/admin', adminFarmManagementRouter);
  * - POST /api/setup-wizard/zones: Configure zones within a room
  * - POST /api/setup-wizard/complete: Mark setup as complete
  */
-app.use('/api/setup-wizard', setupWizardRouter);
+
+// Setup Wizard Status Check (login flow needs this)
+app.get('/api/setup-wizard/status', authenticateToken, async (req, res) => {
+  try {
+    const { farmId } = req.user;
+    
+    // Check if user has setup_completed flag
+    const userResult = await pool.query(
+      'SELECT setup_completed FROM users WHERE farm_id = $1 AND email = $2',
+      [farmId, req.user.email]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const setupCompleted = userResult.rows[0].setup_completed || false;
+    
+    return res.json({
+      success: true,
+      setupCompleted: setupCompleted,
+      farmId: farmId
+    });
+  } catch (error) {
+    console.error('[setup-wizard] Status check error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to check setup status'
+    });
+  }
+});
+
+// Note: setupWizardRouter would go here if we had additional wizard routes
+// app.use('/api/setup-wizard', setupWizardRouter);
 
 /**
  * Farm Sales: Customer Management
