@@ -112,6 +112,7 @@ async function logout() {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_email');
     localStorage.removeItem('admin_name');
+    localStorage.removeItem('admin_role');
     window.location.href = `${API_BASE}/GR-central-admin-login.html`;
 }
 
@@ -214,6 +215,7 @@ async function authenticatedFetch(url, options = {}) {
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_email');
             localStorage.removeItem('admin_name');
+            localStorage.removeItem('admin_role');
             window.location.href = `${API_BASE}/GR-central-admin-login.html`;
             return null;
         }
@@ -224,6 +226,378 @@ async function authenticatedFetch(url, options = {}) {
         throw error;
     }
 }
+
+// Info Card Management for Viewer Role
+function shouldShowInfoCard() {
+    const params = new URLSearchParams(window.location.search);
+    const tipsToggle = params.has('tips') || params.get('viewer') === 'true';
+    const adminRole = (localStorage.getItem('admin_role') || '').toLowerCase();
+    const employeeRole = (localStorage.getItem('employee_role') || '').toLowerCase();
+    const isViewer = (r) => ['viewer', 'view', 'read-only', 'readonly'].includes(r);
+    return tipsToggle || isViewer(adminRole) || isViewer(employeeRole);
+}
+
+function createInfoCard(title, subtitle, sections) {
+    return `
+        <div class="info-card" id="pageInfoCard">
+            <button class="info-card-close" onclick="closeInfoCard()">×</button>
+            <div class="info-card-title">${title}</div>
+            <div class="info-card-subtitle">${subtitle}</div>
+            ${sections.map(section => `
+                <div class="info-card-section">
+                    <div class="info-card-section-title">
+                        <span class="info-card-icon">${section.icon}</span>
+                        ${section.title}
+                    </div>
+                    <div class="info-card-content">${section.content}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function showInfoCard(cardHtml) {
+    if (!shouldShowInfoCard()) return;
+    
+    // Remove existing info card
+    const existing = document.getElementById('pageInfoCard');
+    if (existing) existing.remove();
+    
+    // Add new info card
+    document.body.insertAdjacentHTML('beforeend', cardHtml);
+    
+    // Animate in
+    setTimeout(() => {
+        const card = document.getElementById('pageInfoCard');
+        if (card) card.classList.add('visible');
+    }, 100);
+}
+
+function closeInfoCard() {
+    const card = document.getElementById('pageInfoCard');
+    if (card) {
+        card.classList.remove('visible');
+        setTimeout(() => card.remove(), 300);
+    }
+}
+
+window.closeInfoCard = closeInfoCard;
+
+// Info Card Content for Each Page
+const INFO_CARDS = {
+    'platform-monitoring': {
+        title: 'Fleet Monitoring Dashboard',
+        subtitle: 'Real-time overview of all Light Engine deployments',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>Monthly Recurring Revenue (MRR) from all cloud-connected farms</li><li>Total number of connected farms and their operational status</li><li>System health metrics: uptime, storage usage, API performance</li><li>Real-time farm status updates (online, offline, warning, critical)</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Farmers can see their farm\'s connectivity status and ensure their Light Engine is operating correctly. This visibility helps them quickly identify and resolve technical issues that might impact production.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Wholesale buyers gain confidence in supply chain reliability by seeing the health and connectivity of their supplier network. Connected farms indicate consistent data flow and operational transparency.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Retail consumers benefit from this monitoring through improved product availability and quality. Real-time farm monitoring ensures consistent, fresh produce through proactive problem detection.'
+            }
+        ]
+    },
+    'farms': {
+        title: 'Farm Registry',
+        subtitle: 'Comprehensive directory of all registered farms in the network',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>Complete list of all farms with profile details</li><li>Farm locations, sizes, and capacity information</li><li>Subscription plans (Edge Local, Cloud Basic, Cloud Enterprise)</li><li>Registration dates and operational status</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Farmers can see their farm profile, verify their subscription details, and understand their place in the broader network. This helps them manage their account and compare capabilities with other farms.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Wholesale buyers can browse potential suppliers, view farm capabilities and locations, and make informed decisions about sourcing partners based on farm size, location, and operational capacity.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'This registry ensures product traceability. Consumers can know exactly where their produce comes from, supporting local agriculture and verifying the authenticity of "locally grown" claims.'
+            }
+        ]
+    },
+    'anomalies': {
+        title: 'AI-Powered Anomaly Detection',
+        subtitle: 'Machine learning identifies unusual patterns before they become problems',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>ML-detected anomalies in temperature, humidity, CO2, and other metrics</li><li>Severity ratings (low, medium, high) for each anomaly</li><li>Historical anomaly trends and patterns</li><li>Root cause analysis and recommended actions</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Early anomaly detection helps farmers prevent crop losses before they happen. By identifying unusual environmental patterns or equipment behavior, farmers can take proactive measures to protect their harvests.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Proactive problem detection means fewer supply disruptions. Buyers can trust that farms are actively monitoring and addressing issues that might impact order fulfillment or product quality.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Advanced monitoring ensures consistent product quality. Consumers benefit from produce grown in optimal conditions with minimal environmental stress, resulting in better taste and longer shelf life.'
+            }
+        ]
+    },
+    'alerts': {
+        title: 'Real-Time Alerts & Notifications',
+        subtitle: 'Immediate notifications for critical farm events requiring attention',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>Critical alerts for temperature extremes, equipment failures, and system issues</li><li>Alert severity levels (info, warning, critical, emergency)</li><li>Timestamp and affected farm/device information</li><li>Alert resolution status and response times</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Instant alerts enable rapid response to critical situations. Farmers receive immediate notifications about equipment failures, environmental extremes, or system issues that require urgent attention to protect crops.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Alert transparency gives buyers visibility into potential supply chain risks. If a critical alert occurs at a supplier farm, buyers can proactively adjust orders and communicate with customers.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'The alert system is part of quality assurance. Rapid response to environmental issues ensures produce is always grown in safe, optimal conditions with minimal risk of contamination or quality degradation.'
+            }
+        ]
+    },
+    'energy': {
+        title: 'Energy Consumption Dashboard',
+        subtitle: 'Track power usage and costs across all farm operations',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>Real-time and historical energy consumption (kWh)</li><li>Energy costs per farm and system-wide</li><li>Top energy consumers and efficiency rankings</li><li>Cost trends and optimization opportunities</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Energy monitoring helps farmers control operating costs and identify inefficient equipment. By tracking consumption patterns, farmers can optimize their grow operations for maximum profitability and sustainability.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Energy efficiency correlates with sustainable farming practices. Buyers can prioritize suppliers with strong energy performance, supporting their own sustainability goals and ESG reporting requirements.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Energy-efficient farms mean more sustainable food production. Environmentally conscious consumers can support farms that minimize their carbon footprint and prioritize renewable energy use.'
+            }
+        ]
+    },
+    'harvest': {
+        title: 'Harvest Forecast & Planning',
+        subtitle: 'Predict production timelines and optimize inventory',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>Upcoming harvests in 7, 14, 30, and 30+ day windows</li><li>Crop types, quantities, and expected harvest dates</li><li>Recipe performance: most popular crops and fastest cycles</li><li>Production planning and capacity forecasts</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Harvest forecasting helps farmers plan labor, packaging, and logistics. Understanding upcoming production helps optimize operations, reduce waste, and ensure they meet buyer commitments on time.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Accurate harvest forecasts enable precise order planning and inventory management. Buyers can anticipate supply, plan promotional activities, and ensure consistent product availability for their customers.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Production planning ensures fresh, consistent product availability. Consumers benefit from reliable access to their favorite produce varieties without unexpected shortages or price spikes.'
+            }
+        ]
+    },
+    'devices': {
+        title: 'Device & Equipment Registry',
+        subtitle: 'Monitor all sensors, controllers, and automation equipment',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>All registered devices: sensors, controllers, actuators</li><li>Device status, connectivity, and battery levels</li><li>Maintenance schedules and service history</li><li>Device performance metrics and calibration data</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Device monitoring helps farmers maintain equipment before failures occur. Tracking device health ensures reliable automation, accurate sensor readings, and minimal downtime in grow operations.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Well-maintained equipment indicates operational reliability. Buyers can trust that farms with properly maintained devices will deliver consistent quality and meet delivery commitments.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Modern automation and monitoring technology ensures food safety and quality. Consumers benefit from produce grown with precise environmental control and continuous quality monitoring.'
+            }
+        ]
+    },
+    'recipes': {
+        title: 'Growing Recipes & Protocols',
+        subtitle: 'Optimized crop-specific growing procedures and parameters',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>Complete growing recipes for all crop varieties</li><li>Environmental parameters: temperature, humidity, CO2, light schedules</li><li>Growth stages and expected cycle times</li><li>Recipe performance data and optimization history</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Recipes provide proven growing protocols that maximize yield and quality. Farmers can implement tested procedures, reduce trial-and-error, and achieve consistent results with each crop cycle.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Standardized recipes ensure consistent product quality across multiple farms. Buyers can expect uniform taste, texture, and appearance regardless of which farm fulfills their order.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Optimized growing recipes mean better-tasting produce. Scientific growing protocols maximize flavor, nutrition, and freshness while minimizing pesticides and chemical inputs.'
+            }
+        ]
+    },
+    'users': {
+        title: 'User & Team Management',
+        subtitle: 'Manage staff access, roles, and permissions',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>All registered users and their roles (Admin, Operations, Staff, Viewer)</li><li>Permission levels and access controls</li><li>User activity logs and login history</li><li>Team member contact information and assignments</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'User management helps farm owners control who can access their Light Engine system. Different permission levels ensure staff can do their jobs while protecting sensitive business data.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Proper access controls indicate professional operations. Buyers can trust that farms with organized team management will handle orders, communications, and data with appropriate security and accountability.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Security and access controls protect food safety data. Consumers benefit from knowing that only authorized personnel can modify growing parameters and access critical food safety information.'
+            }
+        ]
+    },
+    'rooms': {
+        title: 'Room & Space Management',
+        subtitle: 'Organize and monitor physical growing spaces',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>All growing rooms and their configurations</li><li>Room-level environmental data and trends</li><li>Space utilization and capacity planning</li><li>Room-specific equipment and sensor assignments</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Room management helps farmers organize their operation and track which crops are where. Understanding space utilization enables better planning, crop rotation, and capacity optimization.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Room-level tracking supports traceability requirements. Buyers can trace specific products to the exact growing space, supporting food safety compliance and quality investigations.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Physical space organization ensures hygienic growing conditions. Consumers benefit from produce grown in well-managed, separated spaces that prevent cross-contamination and maintain optimal growing conditions.'
+            }
+        ]
+    },
+    'zones': {
+        title: 'Zone Configuration & Control',
+        subtitle: 'Fine-grained environmental control within growing spaces',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>All environmental zones and their settings</li><li>Zone-specific temperature, humidity, and light controls</li><li>Crop assignments and zone configurations</li><li>Zone performance metrics and optimization data</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Zone-level control allows farmers to grow multiple crop types simultaneously with different environmental needs. This maximizes space utilization and enables diverse product offerings.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Fine-grained environmental control enables product variety. Buyers can source multiple crop types from a single farm, simplifying logistics and building stronger supplier relationships.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Precise environmental control means optimal flavor and nutrition. Each crop variety is grown in its ideal conditions, resulting in superior taste, texture, and nutrient density.'
+            }
+        ]
+    },
+    'environmental': {
+        title: 'Environmental Monitoring',
+        subtitle: 'Track temperature, humidity, CO2, and other conditions',
+        sections: [
+            {
+                icon: '📊',
+                title: 'What You\'ll Find Here',
+                content: '<ul><li>Real-time environmental data from all sensors</li><li>Historical trends and pattern analysis</li><li>Setpoint compliance and deviation alerts</li><li>Environmental optimization recommendations</li></ul>'
+            },
+            {
+                icon: '🌱',
+                title: 'Importance to Farmers',
+                content: 'Environmental monitoring is the foundation of precision agriculture. Farmers use this data to maintain ideal growing conditions, respond to changes quickly, and continuously improve their operations.'
+            },
+            {
+                icon: '📦',
+                title: 'Importance to Wholesale Buyers',
+                content: 'Documented environmental controls support quality claims and certifications. Buyers can verify that products are grown in controlled, optimal conditions that ensure consistent quality and food safety.'
+            },
+            {
+                icon: '🛒',
+                title: 'Importance to Retail Consumers',
+                content: 'Continuous environmental monitoring ensures food safety and quality. Consumers benefit from produce grown in precisely controlled conditions that maximize nutrition while minimizing contamination risks.'
+            }
+        ]
+    }
+};
 
 // Global variables
 let currentFarmId = null;
@@ -2093,6 +2467,10 @@ async function navigate(view, element) {
             } else {
                 await loadDashboardData();
             }
+            // Show info card on overview (use fleet monitoring card)
+            if (INFO_CARDS['platform-monitoring']) {
+                showInfoCard(createInfoCard(INFO_CARDS['platform-monitoring'].title, INFO_CARDS['platform-monitoring'].subtitle, INFO_CARDS['platform-monitoring'].sections));
+            }
             break;
             
         // Farm-specific views
@@ -2160,6 +2538,9 @@ async function navigate(view, element) {
                     farmsCard.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             }, 100);
+            if (INFO_CARDS['farms']) {
+                showInfoCard(createInfoCard(INFO_CARDS['farms'].title, INFO_CARDS['farms'].subtitle, INFO_CARDS['farms'].sections));
+            }
             break;
             
         case 'analytics':
@@ -2174,11 +2555,17 @@ async function navigate(view, element) {
         case 'rooms':
             document.getElementById('rooms-view').style.display = 'block';
             await loadRoomsView();
+            if (INFO_CARDS['rooms']) {
+                showInfoCard(createInfoCard(INFO_CARDS['rooms'].title, INFO_CARDS['rooms'].subtitle, INFO_CARDS['rooms'].sections));
+            }
             break;
             
         case 'zones':
             document.getElementById('zones-view').style.display = 'block';
             await loadZonesView();
+            if (INFO_CARDS['zones']) {
+                showInfoCard(createInfoCard(INFO_CARDS['zones'].title, INFO_CARDS['zones'].subtitle, INFO_CARDS['zones'].sections));
+            }
             break;
             
         case 'groups':
@@ -2188,31 +2575,49 @@ async function navigate(view, element) {
         case 'devices':
             document.getElementById('devices-view').style.display = 'block';
             await loadAllDevicesView();
+            if (INFO_CARDS['devices']) {
+                showInfoCard(createInfoCard(INFO_CARDS['devices'].title, INFO_CARDS['devices'].subtitle, INFO_CARDS['devices'].sections));
+            }
             break;
             
         case 'recipes':
             document.getElementById('recipes-view').style.display = 'block';
             await loadRecipes();
+            if (INFO_CARDS['recipes']) {
+                showInfoCard(createInfoCard(INFO_CARDS['recipes'].title, INFO_CARDS['recipes'].subtitle, INFO_CARDS['recipes'].sections));
+            }
             break;
             
         case 'users':
             document.getElementById('users-view').style.display = 'block';
             await loadUsersView();
+            if (INFO_CARDS['users']) {
+                showInfoCard(createInfoCard(INFO_CARDS['users'].title, INFO_CARDS['users'].subtitle, INFO_CARDS['users'].sections));
+            }
             break;
             
         case 'harvest':
             document.getElementById('harvest-view').style.display = 'block';
             await loadHarvestView();
+            if (INFO_CARDS['harvest']) {
+                showInfoCard(createInfoCard(INFO_CARDS['harvest'].title, INFO_CARDS['harvest'].subtitle, INFO_CARDS['harvest'].sections));
+            }
             break;
             
         case 'environmental':
             document.getElementById('environmental-view').style.display = 'block';
             await loadEnvironmentalView();
+            if (INFO_CARDS['environmental']) {
+                showInfoCard(createInfoCard(INFO_CARDS['environmental'].title, INFO_CARDS['environmental'].subtitle, INFO_CARDS['environmental'].sections));
+            }
             break;
             
         case 'energy':
             document.getElementById('energy-view').style.display = 'block';
             await loadEnergyDashboard();
+            if (INFO_CARDS['energy']) {
+                showInfoCard(createInfoCard(INFO_CARDS['energy'].title, INFO_CARDS['energy'].subtitle, INFO_CARDS['energy'].sections));
+            }
             break;
             
         case 'yield':
@@ -2222,16 +2627,25 @@ async function navigate(view, element) {
         case 'anomalies':
             document.getElementById('anomalies-view').style.display = 'block';
             await loadAnomaliesView();
+            if (INFO_CARDS['anomalies']) {
+                showInfoCard(createInfoCard(INFO_CARDS['anomalies'].title, INFO_CARDS['anomalies'].subtitle, INFO_CARDS['anomalies'].sections));
+            }
             break;
             
         case 'alerts':
             document.getElementById('alerts-view').style.display = 'block';
             await loadAlertsView();
+            if (INFO_CARDS['alerts']) {
+                showInfoCard(createInfoCard(INFO_CARDS['alerts'].title, INFO_CARDS['alerts'].subtitle, INFO_CARDS['alerts'].sections));
+            }
             break;
             
         case 'platform-monitoring':
             document.getElementById('platform-monitoring-view').style.display = 'block';
             await loadPlatformMonitoring();
+            if (INFO_CARDS['platform-monitoring']) {
+                showInfoCard(createInfoCard(INFO_CARDS['platform-monitoring'].title, INFO_CARDS['platform-monitoring'].subtitle, INFO_CARDS['platform-monitoring'].sections));
+            }
             break;
             
         case 'tenants':
