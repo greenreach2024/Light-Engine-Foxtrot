@@ -201,7 +201,7 @@ async function createTestFarm() {
       console.log(`  Password: ${FARM_CONFIG.adminUser.password}`);
       console.log('\nAccess URLs:');
       console.log(`  Farm Admin: http://localhost:8091/LE-farm-admin.html`);
-      console.log(`  Farm Sales: http://localhost:8091/Farmsales-pos.html`);
+      console.log(`  Farm Sales: http://localhost:8091/farm-sales-pos.html`);
       console.log(`  Wholesale: http://localhost:8091/GR-wholesale.html`);
       console.log('\n');
       
