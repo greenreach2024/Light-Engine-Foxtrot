@@ -5020,18 +5020,23 @@ async function loadRoomsFromBackend() {
 async function safeRoomsSave() {
   const rooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
   try {
-    const resp = await fetch('/data/rooms.json', {
+    // Try to save to the setup data endpoint (edge devices)
+    const resp = await fetch('/api/setup/save-rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rooms })
     });
-    if (resp.ok) return true;
+    if (resp.ok) {
+      const result = await resp.json();
+      if (result.success) return true;
+      throw new Error(result.message || 'Save failed');
+    }
     throw new Error('HTTP ' + resp.status);
   } catch (err) {
+    console.warn('[safeRoomsSave] Backend save failed, trying localStorage:', err);
     // Fallback: save to localStorage
     try {
       localStorage.setItem('gr.rooms', JSON.stringify({ rooms }));
-      console.warn('[safeRoomsSave] Backend failed, saved to localStorage:', err);
       return true;
     } catch (e) {
       console.error('[safeRoomsSave] Could not save rooms:', e);

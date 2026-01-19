@@ -552,4 +552,58 @@ router.get('/data', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/setup/save-rooms
+ * Save rooms data to edge device setup configuration
+ */
+router.post('/save-rooms', async (req, res) => {
+  try {
+    const { rooms } = req.body;
+    
+    if (!Array.isArray(rooms)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rooms must be an array'
+      });
+    }
+    
+    // Edge device - save to NeDB
+    const wizardStatesDB = req.app.locals?.wizardStatesDB;
+    
+    if (!wizardStatesDB) {
+      return res.status(500).json({
+        success: false,
+        message: 'Wizard database not initialized'
+      });
+    }
+    
+    // Get existing setup config
+    const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' }) || { key: 'setup_config' };
+    
+    // Update rooms in setup config
+    setupConfig.rooms = rooms;
+    setupConfig.updatedAt = new Date().toISOString();
+    
+    // Save back to NeDB
+    await wizardStatesDB.update(
+      { key: 'setup_config' },
+      setupConfig,
+      { upsert: true }
+    );
+    
+    return res.json({
+      success: true,
+      message: `${rooms.length} room(s) saved successfully`
+    });
+    
+  } catch (error) {
+    console.error('[api/setup/save-rooms] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save rooms',
+      error: error.message
+    });
+  }
+});
+
 export default router;
