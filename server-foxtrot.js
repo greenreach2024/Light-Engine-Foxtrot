@@ -72,6 +72,10 @@ import validator from 'validator';
 import rateLimit from 'express-rate-limit';
 import net from 'node:net';
 import mqtt from 'mqtt';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execAsync = promisify(exec);
 
 // =====================================================
 // Plan-Based Access Control Middleware
