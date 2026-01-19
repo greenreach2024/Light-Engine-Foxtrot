@@ -256,10 +256,10 @@
 
         /* Info Card for Viewer Role */
         .info-card {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
             width: 90%;
             max-width: 1200px;
             max-height: 85vh;
@@ -271,9 +271,13 @@
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             color: var(--text-primary);
             overflow-y: auto;
-            z-index: 2000;
+            z-index: 2000 !important;
             display: none;
-            animation: scaleIn 0.3s ease-out;
+        }
+
+        .info-card.visible {
+            display: block !important;
+            animation: scaleIn 0.3s ease-out forwards;
         }
 
         .info-card::before {
@@ -301,33 +305,30 @@
 
         @keyframes scaleIn {
             from {
-                transform: translate(-50%, -50%) scale(0.9);
+                transform: translate(-50%, -50%) scale(0.95) !important;
                 opacity: 0;
             }
             to {
-                transform: translate(-50%, -50%) scale(1);
+                transform: translate(-50%, -50%) scale(1) !important;
                 opacity: 1;
             }
         }
 
         .info-card-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
             background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(4px);
-            z-index: 1999;
+            z-index: 1999 !important;
             display: none;
         }
 
         .info-card-overlay.visible {
-            display: block;
+            display: block !important;
         }
-
-        .info-card.visible {
-            display: block;
         }
 
         .info-card-close {
