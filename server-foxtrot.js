@@ -16821,6 +16821,7 @@ if (!isControllerDisabled) {
       '/api/crop-pricing',   // Crop pricing configuration
       '/api/farm-auth/',     // Farm authentication for Sales Terminal
       '/api/farm/auth/',     // Farm authentication alternate path
+      '/api/auth/',          // Authentication endpoints (farm login, device tokens)
       '/api/farm-sales/',    // Farm Sales Terminal inventory and POS
       '/api/wholesale/'      // Wholesale inventory and catalog
     ];
