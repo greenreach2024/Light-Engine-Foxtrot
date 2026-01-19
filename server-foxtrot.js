@@ -14190,6 +14190,51 @@ app.get('/api/admin/energy/dashboard', adminAuthMiddleware, asyncHandler(async (
 }));
 
 /**
+ * GET /api/admin/alerts
+ * Returns platform-wide alerts from all farms
+ * PROTECTED: Requires admin authentication
+ * 
+ * ALERTS vs ANOMALY DETECTION:
+ * - Alerts: Rule-based thresholds (reactive, actionable)
+ * - Anomalies: ML pattern recognition (proactive, investigative)
+ */
+app.get('/api/admin/alerts', adminAuthMiddleware, asyncHandler(async (req, res) => {
+  console.log('[admin] GET /api/admin/alerts');
+  
+  try {
+    // For now, return empty structure until alert system is fully implemented
+    // TODO: Query actual alerts from farms, devices, business logic
+    
+    const mockAlerts = [];
+    
+    // Calculate summary
+    const summary = {
+      total: mockAlerts.length,
+      active: mockAlerts.filter(a => a.status === 'active').length,
+      critical: mockAlerts.filter(a => a.severity === 'critical').length,
+      warning: mockAlerts.filter(a => a.severity === 'warning').length,
+      resolved: mockAlerts.filter(a => a.status === 'resolved').length
+    };
+    
+    res.json({
+      success: true,
+      alerts: mockAlerts,
+      summary,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[admin] Error fetching alerts:', error);
+    console.error('[admin] Error stack:', error.stack);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch alerts',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+}));
+
+/**
  * GET /api/admin/harvest/forecast
  * Returns platform-wide harvest forecast data
  * PROTECTED: Requires admin authentication
