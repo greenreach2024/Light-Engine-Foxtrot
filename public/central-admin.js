@@ -234,6 +234,16 @@ function shouldShowInfoCard() {
     const adminRole = (localStorage.getItem('admin_role') || '').toLowerCase();
     const employeeRole = (localStorage.getItem('employee_role') || '').toLowerCase();
     const isViewer = (r) => ['viewer', 'view', 'read-only', 'readonly'].includes(r);
+    
+    console.log('[InfoCard] shouldShowInfoCard check:', {
+        tipsToggle,
+        adminRole,
+        employeeRole,
+        isViewerAdmin: isViewer(adminRole),
+        isViewerEmployee: isViewer(employeeRole),
+        result: tipsToggle || isViewer(adminRole) || isViewer(employeeRole)
+    });
+    
     return tipsToggle || isViewer(adminRole) || isViewer(employeeRole);
 }
 
@@ -257,8 +267,10 @@ function createInfoCard(title, subtitle, sections) {
 }
 
 function showInfoCard(cardHtml) {
+    console.log('[InfoCard] showInfoCard called, shouldShow:', shouldShowInfoCard());
     if (!shouldShowInfoCard()) return;
     
+    console.log('[InfoCard] Displaying card');
     // Remove existing info card
     const existing = document.getElementById('pageInfoCard');
     if (existing) existing.remove();
