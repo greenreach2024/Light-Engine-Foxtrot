@@ -7736,7 +7736,24 @@ class FarmWizard {
       // Fetch and show weather
       await this.loadWeather(lat, lng);
     } catch (e) {
-      if (status) { status.textContent = 'Unable to get your location.'; status.style.color = '#EF4444'; }
+      console.error('[useMyLocation] Error:', e);
+      let errorMsg = 'Unable to get your location.';
+      
+      // Provide specific error messages based on GeolocationPositionError codes
+      if (e?.code === 1) {
+        errorMsg = 'Location permission denied. Please allow location access in your browser settings.';
+      } else if (e?.code === 2) {
+        errorMsg = 'Location unavailable. Check your device location settings.';
+      } else if (e?.code === 3) {
+        errorMsg = 'Location request timed out. Please try again.';
+      } else if (e?.message) {
+        errorMsg = `Location error: ${e.message}`;
+      }
+      
+      if (status) { 
+        status.textContent = errorMsg; 
+        status.style.color = '#EF4444'; 
+      }
     }
   }
 
