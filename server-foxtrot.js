@@ -23803,13 +23803,12 @@ async function startServer() {
   });
 }
 
-// Start the server after all routes are defined when executed directly
-if (process.argv[1] === __filename) {
-  startServer().catch((error) => {
-    console.error('[charlie] Unexpected startup failure:', error?.message || error);
-    process.exit(1);
-  });
-}
+// Start the server after all routes are defined
+// Always start server (works with PM2, node, and direct execution)
+startServer().catch((error) => {
+  console.error('[charlie] Unexpected startup failure:', error?.message || error);
+  process.exit(1);
+});
 
 export { app };
 export function __resetWizardSystemForTests() {
