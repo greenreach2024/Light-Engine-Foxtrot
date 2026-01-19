@@ -4976,12 +4976,45 @@ async function safeRoomsDelete(roomId) {
 // Helper to reload rooms from backend
 async function loadRoomsFromBackend() {
   try {
-    const resp = await fetch('/data/rooms.json');
+    // Try to load from real setup data API first
+    const token = localStorage.getItem('token');
+    
+    const resp = await fetch('/api/setup/data', {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
+    
     if (resp.ok) {
       const data = await resp.json();
-      STATE.rooms = data.rooms || [];
+      if (data.success && data.config) {
+        // Store farm metadata
+        STATE.farm = STATE.farm || {};
+        STATE.farm.name = data.config.farmName;
+        STATE.farm.ownerName = data.config.ownerName;
+        STATE.farm.contactEmail = data.config.contactEmail;
+        STATE.farm.contactPhone = data.config.contactPhone;
+        
+        // Load user's actual rooms
+        STATE.rooms = data.config.rooms || [];
+        
+        console.log('[loadRoomsFromBackend] Loaded real user data:', 
+                    STATE.rooms.length, 'rooms from', data.config.farmName);
+        
+        // Update header with farm name
+        if (data.config.farmName) {
+          updateFarmNameInHeader(data.config.farmName);
+        }
+        return;
+      }
     }
-  } catch (e) { console.warn('Failed to reload rooms:', e); }
+    
+    // If no setup data found, start with empty rooms
+    console.log('[loadRoomsFromBackend] No setup data found, starting with empty state');
+    STATE.rooms = [];
+    
+  } catch (e) {
+    console.error('[loadRoomsFromBackend] Failed to load setup data:', e);
+    STATE.rooms = [];
+  }
 }
 
 async function safeRoomsSave() {

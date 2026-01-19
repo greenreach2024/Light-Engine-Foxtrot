@@ -16,7 +16,6 @@
   <link rel="stylesheet" href="./styles/switchbot-manager.css?v={{BUILD_TIME}}">
   <link rel="stylesheet" href="./styles/iot-manager.css?v={{BUILD_TIME}}">
   <link rel="stylesheet" href="/css/pwa.css?v={{BUILD_TIME}}">
-  <!-- Console wrapper for demo mode - loaded FIRST to suppress all console output -->
   <script src="/js/console-wrapper.js?v={{BUILD_TIME}}"></script>
   <script>
     // Use current page protocol (HTTPS in production, HTTP in local dev)
@@ -2370,7 +2369,7 @@
   </div>
 
   <script>
-    // Show intro card sequence when page loads (only in demo mode)
+    // Show intro card sequence when page loads
     window.addEventListener('DOMContentLoaded', () => {
       // First card: Welcome to Light Engine
       setTimeout(() => {
@@ -2419,7 +2418,7 @@
           
           try {
             const token = localStorage.getItem('token');
-            const response = await fetch('/api/farm/auth/change-password', {
+            const response = await fetch('/api/auth/change-password', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -2555,7 +2554,7 @@
       // TODO: Call backend API to initiate Square OAuth flow
       alert('Square OAuth integration will redirect you to Square to authorize the connection. This feature is being configured.');
       
-      // Simulate successful connection for demo
+      // Temporary: auto-populate demo values (remove when OAuth implemented)
       setTimeout(() => {
         paymentWizardData.squareConnected = true;
         paymentWizardData.merchantId = 'MERCHANT_' + Date.now();
@@ -2836,7 +2835,7 @@
       
       // Open the store in a new tab
       const storeUrl = storeWizardData.domainType === 'subdomain'
-        ? 'http://localhost:8091/Farmsales-store.html' // For demo
+        ? 'http://localhost:8091/Farmsales-store.html'
         : storeWizardData.customDomain;
       window.open(storeUrl, '_blank');
     }
