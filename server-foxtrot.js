@@ -19888,7 +19888,10 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
       }
       // No macOS methods yielded networks; continue to Linux/return 503
     } else if (platform === 'linux') {
-      // Linux: prefer nmcli, fallback to iwlist (requires sudo for some distros)
+      // Linux: try multiple methods for WiFi scanning
+      let lastError = null;
+      
+      // Method 1: Try nmcli (NetworkManager)
       try {
         stdout = await execAsync('nmcli -t -f SSID,SIGNAL,SECURITY dev wifi list');
         const networks = stdout
@@ -19899,9 +19902,52 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
             return { ssid: ssid || '', signal: parseInt(signal || '-60', 10), security: (security || 'OPEN').toUpperCase() };
           })
           .filter(n => n.ssid);
-        return res.json(networks);
-      } catch (e) {
-        // Try iwlist as a last resort
+        if (networks.length > 0) {
+          console.log(`[WiFi Scan] nmcli found ${networks.length} networks`);
+          return res.json(networks);
+        }
+      } catch (nmcliErr) {
+        lastError = nmcliErr;
+        console.log('[WiFi Scan] nmcli failed:', nmcliErr.message);
+        errors.push(`nmcli: ${nmcliErr.message}`);
+      }
+      
+      // Method 2: Try wpa_cli (common on Raspberry Pi)
+      try {
+        // First trigger a scan
+        await execAsync('wpa_cli -i wlan0 scan').catch(() => {});
+        // Wait a moment for scan to complete
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Get scan results
+        stdout = await execAsync('wpa_cli -i wlan0 scan_results');
+        const lines = stdout.split('\n').slice(1); // Skip header
+        const networks = [];
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 5) {
+            const [bssid, freq, signal, flags, ...ssidParts] = parts;
+            const ssid = ssidParts.join(' ').trim();
+            if (ssid && ssid !== '') {
+              networks.push({
+                ssid: ssid,
+                signal: parseInt(signal, 10),
+                security: flags.includes('WPA') ? 'WPA' : flags.includes('WEP') ? 'WEP' : 'OPEN'
+              });
+            }
+          }
+        }
+        if (networks.length > 0) {
+          console.log(`[WiFi Scan] wpa_cli found ${networks.length} networks`);
+          return res.json(networks);
+        }
+      } catch (wpaErr) {
+        lastError = wpaErr;
+        console.log('[WiFi Scan] wpa_cli failed:', wpaErr.message);
+        errors.push(`wpa_cli: ${wpaErr.message}`);
+      }
+      
+      // Method 3: Try iwlist as last resort
+      try {
         stdout = await execAsync("/sbin/iwlist wlan0 scan | grep -E 'ESSID|Signal level|Quality' -A1");
         const lines = stdout.split('\n');
         const networks = [];
@@ -19917,7 +19963,21 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
           if (signalMatch) current.signal = parseInt(signalMatch[1], 10);
         }
         if (current.ssid) networks.push(current);
-        return res.json(networks.filter(n => n.ssid));
+        const filteredNetworks = networks.filter(n => n.ssid);
+        if (filteredNetworks.length > 0) {
+          console.log(`[WiFi Scan] iwlist found ${filteredNetworks.length} networks`);
+          return res.json(filteredNetworks);
+        }
+      } catch (iwlistErr) {
+        lastError = iwlistErr;
+        console.log('[WiFi Scan] iwlist failed:', iwlistErr.message);
+        errors.push(`iwlist: ${iwlistErr.message}`);
+      }
+      
+      // If all methods failed but we have an error, log it
+      if (lastError) {
+        console.error('[WiFi Scan] All Linux scan methods failed');
+        console.error('[WiFi Scan] Last error:', lastError.message);
       }
     }
     } catch (osScanErr) {
