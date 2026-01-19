@@ -13957,6 +13957,9 @@ function getAllEquipment() {
   const rooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
   
   rooms.forEach(room => {
+    // Skip null or undefined rooms
+    if (!room) return;
+    
     const roomId = room.id || room.name;
     const roomName = room.name || room.location || 'Unnamed Room';
     
@@ -16581,7 +16584,7 @@ async function pollHealthz() {
       
       if (reason === 'unconfigured') {
         tooltip = ` System Degraded\n\nThe server is running but no controller is configured. Light control features may be unavailable.\n\nController: Not configured\nAction: Configure controller target in settings\nImpact: Limited functionality - some features unavailable`;
-      } else if (reason === 'timeout' || reason.includes('timeout')) {
+      } else if (reason === 'timeout' || (typeof reason === 'string' && reason.includes('timeout'))) {
         tooltip = ` System Degraded\n\nThe Code3 controller is not responding within the timeout period (1.5s). Network issues or controller may be offline.\n\nController: ${controllerTarget}\nStatus: Connection timeout\nAction: Check controller power and network connectivity\nImpact: Light control unavailable`;
       } else {
         tooltip = ` System Degraded\n\nThe Code3 controller is unreachable or returning errors. Some features may be limited.\n\nController: ${controllerTarget}\nStatus: ${reason}\nResponse time: ${responseTime}\nImpact: Light control may be unavailable`;
