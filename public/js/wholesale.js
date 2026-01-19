@@ -1591,52 +1591,60 @@
     },
 
     /**
-     * Load price anomaly alerts with news summaries
+     * Load price anomaly alerts with real market data from North American retailers
      */
     async loadPriceAlerts() {
       const priceContent = document.getElementById('price-content');
       
-      // Generate demo price alerts with AI-style news summaries
-      const alerts = [
-        {
-          product: 'Tomatoes',
-          change: '+18%',
-          type: 'increase',
-          currentPrice: 3.95,
-          previousPrice: 3.35,
-          summary: 'Unseasonable frost in California\'s Central Valley has reduced tomato yields by 30%. Supply chain disruptions from recent storms continue to impact distribution. Prices expected to normalize in 2-3 weeks as alternative sources come online.'
-        },
-        {
-          product: 'Lettuce (Iceberg)',
-          change: '-12%',
-          type: 'decrease',
-          currentPrice: 2.20,
-          previousPrice: 2.50,
-          summary: 'Increased Ontario farm production has improved availability. Consistent growing conditions have extended production season. Competitive pricing as regional farms increase capacity.'
-        }
-      ];
-
-      const html = alerts.map(alert => {
-        const alertClass = `anomaly-${alert.type}`;
-        const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+      try {
+        // Call market intelligence API for real-time price alerts
+        const response = await fetch('/api/market-intelligence/price-alerts?threshold=7');
+        const result = await response.json();
         
-        return `
-          <div class="price-alert ${alertClass}">
-            <div class="price-alert-header">
-              <span class="price-alert-product">${alert.product}</span>
-              <span class="price-change" style="${changeColor}">${alert.change}</span>
+        if (!response.ok || !result.ok) {
+          throw new Error('Failed to load market data');
+        }
+        
+        const alerts = result.alerts || [];
+        
+        if (alerts.length === 0) {
+          priceContent.innerHTML = '<div class="loading-state">✓ All monitored prices stable (no significant changes detected)</div>';
+          return;
+        }
+        
+        const html = alerts.map(alert => {
+          const alertClass = `anomaly-${alert.type}`;
+          const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+          
+          return `
+            <div class="price-alert ${alertClass}">
+              <div class="price-alert-header">
+                <span class="price-alert-product">${alert.product}</span>
+                <span class="price-change" style="${changeColor}">${alert.change}</span>
+              </div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                $${alert.previousPrice.toFixed(2)} → $${alert.currentPrice.toFixed(2)} ${alert.priceUnit}
+              </div>
+              <div class="price-alert-summary">
+                ${alert.summary}
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
+                <strong>Data Sources:</strong> ${alert.retailers.join(', ')} (${alert.dataPoints} retailers monitored)<br/>
+                <strong>Last Updated:</strong> ${alert.lastUpdated} • <strong>Confidence:</strong> ${alert.confidence}
+                ${alert.articles && alert.articles.length > 0 ? `<br/><strong>News References:</strong> ${alert.articles.map(a => `<a href="${a.url}" target="_blank" style="color: var(--primary);">${a.title} (${a.source})</a>`).join(', ')}` : ''}
+              </div>
             </div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-              $${alert.previousPrice.toFixed(2)} → $${alert.currentPrice.toFixed(2)} per unit
-            </div>
-            <div class="price-alert-summary">
-              ${alert.summary}
-            </div>
-          </div>
-        `;
-      }).join('');
+          `;
+        }).join('');
 
-      priceContent.innerHTML = html || '<div class="loading-state">All prices stable</div>';
+        priceContent.innerHTML = html;
+        
+        console.log(`[Price Watch] Loaded ${alerts.length} market alerts from ${result.totalProductsMonitored} monitored products`);
+        
+      } catch (error) {
+        console.error('Price Watch error:', error);
+        priceContent.innerHTML = '<div class="loading-state" style="color: var(--error);">Unable to load market data. Please try again later.</div>';
+      }
     },
 
     /**

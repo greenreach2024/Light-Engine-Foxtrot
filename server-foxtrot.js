@@ -187,6 +187,7 @@ import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
 import wholesaleBuyersRouter from './routes/wholesale-buyers.js';
 import adminWholesaleBuyersRouter from './routes/admin-wholesale-buyers.js';
 import wholesaleProductRequestsRouter from './routes/wholesale-product-requests.js';
+import marketIntelligenceRouter from './routes/market-intelligence.js';
 import wholesaleWebhooksRouter from './routes/wholesale/webhooks.js';
 import wholesaleFulfillmentWebhooksRouter from './routes/wholesale/fulfillment-webhooks.js';
 import wholesaleRefundsRouter from './routes/wholesale/refunds.js';
@@ -10000,6 +10001,14 @@ app.use('/api/wholesale', wholesaleBuyersRouter);
  * - GET /api/wholesale/product-requests/buyer/:buyerId: Get buyer's requests
  */
 app.use('/api/wholesale/product-requests', wholesaleProductRequestsRouter);
+
+/**
+ * Market Intelligence API
+ * - GET /api/market-intelligence/price-alerts: Real-time price anomaly alerts
+ * - GET /api/market-intelligence/market-overview: Market overview with trends
+ * - GET /api/market-intelligence/product/:productName: Detailed product pricing
+ */
+app.use('/api/market-intelligence', marketIntelligenceRouter);
 
 /**
  * GreenReach: Admin Wholesale Buyer Management
