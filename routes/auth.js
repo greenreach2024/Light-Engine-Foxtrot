@@ -155,7 +155,7 @@ router.post('/login', async (req, res) => {
     
     // Query user from database
     const result = await client.query(
-      `SELECT user_id, email, name, password_hash, role, status 
+      `SELECT user_id, email, name, password_hash, role, is_active 
        FROM users 
        WHERE email = $1 AND farm_id = $2`,
       [email, farm_id]
@@ -169,8 +169,8 @@ router.post('/login', async (req, res) => {
     const user = result.rows[0];
 
     // Check if account is active
-    if (user.status !== 'active') {
-      console.log(`[Auth] ❌ Account not active: ${email} (status: ${user.status})`);
+    if (!user.is_active) {
+      console.log(`[Auth] ❌ Account not active: ${email}`);
       return res.status(401).json({ error: 'Account is not active' });
     }
 
