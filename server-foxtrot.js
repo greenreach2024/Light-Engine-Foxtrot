@@ -6669,9 +6669,10 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
           console.error('[setup-wizard] Room error detail:', roomError.detail);
         }
       }
-    } else if (db) {
+    } else {
       // For Edge device: use NeDB
-      await db.update(
+      console.log('[setup-wizard] Saving setup config to NeDB for edge device');
+      await wizardStatesDB.updateAsync(
         { key: 'setup_config' },
         { ...setupConfig, key: 'setup_config' },
         { upsert: true }
