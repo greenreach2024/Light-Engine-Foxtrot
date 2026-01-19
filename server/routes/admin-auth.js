@@ -51,7 +51,6 @@ router.post('/login', async (req, res) => {
           email,
           password_hash,
           name,
-          role,
           active,
           mfa_enabled,
           mfa_secret,
@@ -212,7 +211,7 @@ router.post('/login', async (req, res) => {
       admin: {
         email: user.email,
         name: user.name,
-        role: user.role || 'admin'
+        role: 'admin' // TODO: Fetch from database after migration applied
       }
     });
 
