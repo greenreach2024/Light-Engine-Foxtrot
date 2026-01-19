@@ -19783,9 +19783,21 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
       });
       if (response && response.ok) {
         const body = await response.json();
-        const networks = body?.networks || body || [];
-        console.log(`[WiFi Scan] Network bridge returned ${Array.isArray(networks) ? networks.length : 0} networks`);
-        return res.json(Array.isArray(networks) ? networks : []);
+        // Check if controller actually succeeded (some controllers return success:false)
+        if (body?.success === false || (Array.isArray(body?.networks) && body.networks.length === 0 && body?.message)) {
+          console.log('[WiFi Scan] Network bridge returned success:false or 0 networks with message, trying local scan');
+          console.log('[WiFi Scan] Bridge message:', body?.message);
+          errors.push(`Network bridge: ${body?.message || 'returned no networks'}`);
+          // Don't return here - fall through to local scan
+        } else {
+          const networks = body?.networks || body || [];
+          console.log(`[WiFi Scan] Network bridge returned ${Array.isArray(networks) ? networks.length : 0} networks`);
+          if (Array.isArray(networks) && networks.length > 0) {
+            return res.json(networks);
+          }
+          // If 0 networks but no error message, fall through to local scan
+          console.log('[WiFi Scan] Network bridge returned 0 networks, trying local scan');
+        }
       } else if (response && response.status === 404) {
         // Controller exists but doesn't support WiFi scanning - skip to manual entry
         console.log('[WiFi Scan] Network bridge does not support WiFi scanning (404), use manual entry');
