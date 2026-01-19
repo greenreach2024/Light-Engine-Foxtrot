@@ -16610,14 +16610,15 @@ async function pollHealthz() {
       state = 'ok';
       tooltip = ` System Healthy\n\nAll systems operational. The Light Engine Charlie server is running and can communicate with the Code3 controller.\n\nController: ${controllerTarget}\nResponse time: ${responseTime}\nStatus: All connections active`;
     } else if (status === 'degraded' || !controllerReachable) {
-      const reason = body?.controller?.status || 'unknown';
+      const rawReason = body?.controller?.status;
+      const reason = typeof rawReason === 'string' ? rawReason : 'unknown';
       displayText = 'System Degraded';
       color = '#f59e0b'; // amber/orange
       state = 'degraded';
       
       if (reason === 'unconfigured') {
         tooltip = ` System Degraded\n\nThe server is running but no controller is configured. Light control features may be unavailable.\n\nController: Not configured\nAction: Configure controller target in settings\nImpact: Limited functionality - some features unavailable`;
-      } else if (reason === 'timeout' || (typeof reason === 'string' && reason.includes('timeout'))) {
+      } else if (reason === 'timeout' || reason.includes('timeout')) {
         tooltip = ` System Degraded\n\nThe Code3 controller is not responding within the timeout period (1.5s). Network issues or controller may be offline.\n\nController: ${controllerTarget}\nStatus: Connection timeout\nAction: Check controller power and network connectivity\nImpact: Light control unavailable`;
       } else {
         tooltip = ` System Degraded\n\nThe Code3 controller is unreachable or returning errors. Some features may be limited.\n\nController: ${controllerTarget}\nStatus: ${reason}\nResponse time: ${responseTime}\nImpact: Light control may be unavailable`;
