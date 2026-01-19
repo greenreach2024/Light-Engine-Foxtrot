@@ -1587,6 +1587,11 @@ router.put('/users/:userId', requireAdmin, async (req, res) => {
       values.push(email.toLowerCase());
     }
     if (role !== undefined) {
+      // Update the role column directly
+      updates.push(`role = $${paramIndex++}`);
+      values.push(role);
+      
+      // Also update permissions JSON for backward compatibility
       const permissions = {
         role,
         scopes: role === 'admin'
