@@ -7707,7 +7707,15 @@ class FarmWizard {
     try {
       if (status) { status.textContent = 'Requesting your location…'; status.style.color = '#666'; }
       const pos = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 });
+        navigator.geolocation.getCurrentPosition(
+          resolve, 
+          reject, 
+          { 
+            enableHighAccuracy: false, // Don't require GPS, use network location
+            timeout: 10000,
+            maximumAge: 300000 // Cache location for 5 minutes
+          }
+        );
       });
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
