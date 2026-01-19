@@ -10346,6 +10346,17 @@ app.use('/api/admin', adminFarmManagementRouter);
 app.get('/api/setup-wizard/status', authenticateToken, async (req, res) => {
   try {
     const { farmId } = req.user;
+    const pool = req.app.locals?.db;
+    
+    if (!pool) {
+      // If no database, assume setup not completed (safe default)
+      console.warn('[setup-wizard] No database pool available');
+      return res.json({
+        success: true,
+        setupCompleted: false,
+        farmId: farmId
+      });
+    }
     
     // Check if user has setup_completed flag
     const userResult = await pool.query(
@@ -10354,9 +10365,11 @@ app.get('/api/setup-wizard/status', authenticateToken, async (req, res) => {
     );
     
     if (userResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
+      // User not found - return default (new users haven't completed setup)
+      return res.json({
+        success: true,
+        setupCompleted: false,
+        farmId: farmId
       });
     }
     
@@ -10369,9 +10382,11 @@ app.get('/api/setup-wizard/status', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('[setup-wizard] Status check error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to check setup status'
+    // On error, return safe default to allow login to proceed
+    return res.json({
+      success: true,
+      setupCompleted: false,
+      farmId: req.user?.farmId || 'unknown'
     });
   }
 });
