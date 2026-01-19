@@ -249,6 +249,7 @@ function shouldShowInfoCard() {
 
 function createInfoCard(title, subtitle, sections) {
     return `
+        <div class="info-card-overlay" id="pageInfoOverlay" onclick="closeInfoCard()"></div>
         <div class="info-card" id="pageInfoCard">
             <button class="info-card-close" onclick="closeInfoCard()">×</button>
             <div class="info-card-title">${title}</div>
@@ -272,26 +273,41 @@ function showInfoCard(cardHtml) {
     if (!shouldShowInfoCard()) return;
     
     console.log('[InfoCard] Displaying card');
-    // Remove existing info card
-    const existing = document.getElementById('pageInfoCard');
-    if (existing) existing.remove();
+    // Remove existing info card and overlay
+    const existingCard = document.getElementById('pageInfoCard');
+    const existingOverlay = document.getElementById('pageInfoOverlay');
+    if (existingCard) existingCard.remove();
+    if (existingOverlay) existingOverlay.remove();
     
-    // Add new info card
+    // Add new info card (includes overlay)
     document.body.insertAdjacentHTML('beforeend', cardHtml);
+    
+    // Prevent body scroll when card is open
+    document.body.style.overflow = 'hidden';
     
     // Animate in
     setTimeout(() => {
+        const overlay = document.getElementById('pageInfoOverlay');
         const card = document.getElementById('pageInfoCard');
+        if (overlay) overlay.classList.add('visible');
         if (card) card.classList.add('visible');
-    }, 100);
+    }, 50);
 }
 
 function closeInfoCard() {
     const card = document.getElementById('pageInfoCard');
-    if (card) {
-        card.classList.remove('visible');
-        setTimeout(() => card.remove(), 300);
-    }
+    const overlay = document.getElementById('pageInfoOverlay');
+    
+    if (card) card.classList.remove('visible');
+    if (overlay) overlay.classList.remove('visible');
+    
+    // Restore body scroll
+    document.body.style.overflow = '';
+    
+    setTimeout(() => {
+        if (card) card.remove();
+        if (overlay) overlay.remove();
+    }, 300);
 }
 
 window.closeInfoCard = closeInfoCard;
