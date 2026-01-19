@@ -303,20 +303,20 @@ const INFO_CARDS = {
         subtitle: 'Real-time overview of all Light Engine deployments',
         sections: [
             {
-                title: 'What You\'ll Find Here',
-                content: '<ul><li>Monthly Recurring Revenue (MRR) from all cloud-connected farms</li><li>Total number of connected farms and their operational status</li><li>System health metrics: uptime, storage usage, API performance</li><li>Real-time farm status updates (online, offline, warning, critical)</li></ul>'
+                title: 'What This Page Shows',
+                content: '<ul><li>Monthly Recurring Revenue (MRR) from cloud-connected farms</li><li>Total connected farms and operational status by tier</li><li>System health: uptime, storage, API performance, database health</li><li>Real-time farm connectivity status (online, offline, warning, critical)</li></ul>'
             },
             {
-                title: 'Importance to Farmers',
-                content: 'Farmers can see their farm\'s connectivity status and ensure their Light Engine is operating correctly. This visibility helps them quickly identify and resolve technical issues that might impact production.'
+                title: 'Why We Monitor This',
+                content: 'Fleet-level monitoring gives GreenReach operations visibility into the entire network\'s health and revenue performance. Early detection of connectivity issues, performance degradation, or farm offline status allows proactive support before customers report problems.'
             },
             {
-                title: 'Importance to Wholesale Buyers',
-                content: 'Wholesale buyers gain confidence in supply chain reliability by seeing the health and connectivity of their supplier network. Connected farms indicate consistent data flow and operational transparency.'
+                title: 'What To Look For',
+                content: '<ul><li>Farms showing critical or warning status require immediate investigation</li><li>Declining MRR or farm count indicates churn or subscription issues</li><li>Storage usage approaching limits needs capacity planning</li><li>API response times degrading suggest infrastructure scaling needs</li></ul>'
             },
             {
-                title: 'Importance to Retail Consumers',
-                content: 'Retail consumers benefit from this monitoring through improved product availability and quality. Real-time farm monitoring ensures consistent, fresh produce through proactive problem detection.'
+                title: 'Common Actions',
+                content: 'Contact farms showing offline or critical status. Escalate infrastructure issues to engineering if system-wide metrics degrade. Track MRR trends for business reporting. Monitor storage to prevent service disruptions.'
             }
         ]
     },
@@ -325,42 +325,42 @@ const INFO_CARDS = {
         subtitle: 'Comprehensive directory of all registered farms in the network',
         sections: [
             {
-                title: 'What You\'ll Find Here',
-                content: '<ul><li>Complete list of all farms with profile details</li><li>Farm locations, sizes, and capacity information</li><li>Subscription plans (Edge Local, Cloud Basic, Cloud Enterprise)</li><li>Registration dates and operational status</li></ul>'
+                title: 'What This Page Shows',
+                content: '<ul><li>Complete farm directory with profile details and contact information</li><li>Farm locations, facility sizes, and production capacity</li><li>Subscription tiers (Edge Local, Cloud Basic, Cloud Enterprise)</li><li>Registration dates, account status, and billing information</li></ul>'
             },
             {
-                title: 'Importance to Farmers',
-                content: 'Farmers can see their farm profile, verify their subscription details, and understand their place in the broader network. This helps them manage their account and compare capabilities with other farms.'
+                title: 'Why We Monitor This',
+                content: 'The farm registry is GreenReach\'s customer database and subscription management system. Operations and support staff use this to verify account details, troubleshoot access issues, manage billing, and track customer onboarding status.'
             },
             {
-                title: 'Importance to Wholesale Buyers',
-                content: 'Wholesale buyers can browse potential suppliers, view farm capabilities and locations, and make informed decisions about sourcing partners based on farm size, location, and operational capacity.'
+                title: 'What To Look For',
+                content: '<ul><li>New farm registrations requiring onboarding assistance</li><li>Inactive or suspended accounts that may need follow-up</li><li>Subscription tier mismatches with actual farm capabilities</li><li>Missing or incomplete profile information affecting service delivery</li></ul>'
             },
             {
-                title: 'Importance to Retail Consumers',
-                content: 'This registry ensures product traceability. Consumers can know exactly where their produce comes from, supporting local agriculture and verifying the authenticity of "locally grown" claims.'
+                title: 'Common Actions',
+                content: 'Update farm profiles after customer communications. Verify billing details for subscription changes. Assist farms with upgrading to higher tiers. Coordinate with technical support for access issues or device provisioning.'
             }
         ]
     },
     'anomalies': {
         title: 'AI-Powered Anomaly Detection',
-        subtitle: 'Machine learning identifies unusual patterns before they become problems',
+        subtitle: 'Machine learning identifies unusual patterns across farm networks',
         sections: [
             {
-                title: 'What You\'ll Find Here',
-                content: '<ul><li>ML-detected anomalies in temperature, humidity, CO2, and other metrics</li><li>Severity ratings (low, medium, high) for each anomaly</li><li>Historical anomaly trends and patterns</li><li>Root cause analysis and recommended actions</li></ul>'
+                title: 'What This Page Shows',
+                content: '<ul><li>ML-detected anomalies in environmental metrics (temp, humidity, CO2)</li><li>Severity ratings (low, medium, high, critical) with confidence scores</li><li>Historical anomaly patterns and frequency trends</li><li>Root cause analysis suggestions and recommended interventions</li></ul>'
             },
             {
-                title: 'Importance to Farmers',
-                content: 'Early anomaly detection helps farmers prevent crop losses before they happen. By identifying unusual environmental patterns or equipment behavior, farmers can take proactive measures to protect their harvests.'
+                title: 'Why We Monitor This',
+                content: 'Anomaly detection provides early warning of equipment failures, sensor malfunctions, or environmental control issues before they cause crop losses. GreenReach staff use this to proactively reach out to farms experiencing issues, often before the farm notices the problem.'
             },
             {
-                title: 'Importance to Wholesale Buyers',
-                content: 'Proactive problem detection means fewer supply disruptions. Buyers can trust that farms are actively monitoring and addressing issues that might impact order fulfillment or product quality.'
+                title: 'What To Look For',
+                content: '<ul><li>High-severity anomalies requiring immediate farm contact</li><li>Recurring anomalies suggesting equipment needing replacement</li><li>Anomaly clusters across multiple farms indicating systemic issues</li><li>False positives that need ML model tuning</li></ul>'
             },
             {
-                title: 'Importance to Retail Consumers',
-                content: 'Advanced monitoring ensures consistent product quality. Consumers benefit from produce grown in optimal conditions with minimal environmental stress, resulting in better taste and longer shelf life.'
+                title: 'Common Actions',
+                content: 'Contact farms with critical or high-severity anomalies. Log recurring issues for warranty/support claims. Escalate systemic patterns to engineering. Document false positives to improve ML accuracy.'
             }
         ]
     },
