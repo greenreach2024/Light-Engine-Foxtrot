@@ -4,9 +4,22 @@
  */
 
 import express from 'express';
+import bcrypt from 'bcrypt';
+import pg from 'pg';
 import { generateFarmToken, verifyFarmToken, FARM_ROLES } from '../lib/farm-auth.js';
 
 const router = express.Router();
+const { Client } = pg;
+
+// PostgreSQL connection configuration
+const createDbClient = () => new Client({
+  host: process.env.RDS_HOSTNAME || 'light-engine-db.c8rq44ew6swb.us-east-1.rds.amazonaws.com',
+  port: parseInt(process.env.RDS_PORT || '5432'),
+  database: process.env.RDS_DB_NAME || 'lightengine',
+  user: process.env.RDS_USERNAME || 'lightengine',
+  password: process.env.RDS_PASSWORD || 'LePphcacxDs35ciLLhnkhaXr7',
+  ssl: { rejectUnauthorized: false }
+});
 
 /**
  * POST /api/auth/generate-device-token
@@ -101,6 +114,8 @@ router.post('/validate-device-token', async (req, res) => {
  * Returns: { success: true, token, role, farm_id, email }
  */
 router.post('/login', async (req, res) => {
+  const client = createDbClient();
+  
   try {
     const { farm_id, email, password } = req.body;
 
@@ -113,33 +128,90 @@ router.post('/login', async (req, res) => {
                        email === 'admin@demo.farm' && 
                        password === 'demo123';
 
-    // TODO: Add real database authentication here
-    // For now, accept demo credentials only
-    if (!isDemoLogin) {
+    if (isDemoLogin) {
+      // Generate JWT token for demo login
+      const token = generateFarmToken({
+        farm_id,
+        user_id: 'demo-user-001',
+        role: FARM_ROLES.ADMIN,
+        name: 'Demo Admin',
+        email
+      });
+
+      return res.json({
+        success: true,
+        token,
+        farm_id,
+        email,
+        role: FARM_ROLES.ADMIN,
+        expires_in: '24h'
+      });
+    }
+
+    // Real database authentication
+    console.log(`[Auth] Login attempt for ${email} at farm ${farm_id}`);
+    
+    await client.connect();
+    
+    // Query user from database
+    const result = await client.query(
+      `SELECT user_id, email, name, password_hash, role, status 
+       FROM users 
+       WHERE email = $1 AND farm_id = $2`,
+      [email, farm_id]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(`[Auth] ❌ User not found: ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    const user = result.rows[0];
+
+    // Check if account is active
+    if (user.status !== 'active') {
+      console.log(`[Auth] ❌ Account not active: ${email} (status: ${user.status})`);
+      return res.status(401).json({ error: 'Account is not active' });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    
+    if (!isValidPassword) {
+      console.log(`[Auth] ❌ Invalid password for: ${email}`);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    console.log(`[Auth] ✅ Login successful: ${email} (${user.role})`);
 
     // Generate JWT token for successful login
     const token = generateFarmToken({
       farm_id,
-      user_id: 'demo-user-001',
-      role: FARM_ROLES.ADMIN,
-      name: 'Demo Admin',
-      email
+      user_id: user.user_id,
+      role: user.role || FARM_ROLES.ADMIN,
+      name: user.name,
+      email: user.email
     });
 
     res.json({
       success: true,
       token,
       farm_id,
-      email,
-      role: FARM_ROLES.ADMIN,
+      email: user.email,
+      name: user.name,
+      role: user.role || FARM_ROLES.ADMIN,
       expires_in: '24h'
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[Auth] Login error:', error);
     res.status(500).json({ error: 'Login failed' });
+  } finally {
+    try {
+      await client.end();
+    } catch (err) {
+      console.error('[Auth] Error closing database connection:', err);
+    }
   }
 });
 
