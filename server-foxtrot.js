@@ -6358,6 +6358,14 @@ app.get('/recipes', async (req, res) => {
     setApiCors(res);
     const { search, category, limit = 10 } = req.query;
     
+    const pool = req.app.locals?.db;
+    if (!pool) {
+      return res.status(503).json({ 
+        ok: false, 
+        error: 'Recipe database not available on edge devices. Use local recipe files.' 
+      });
+    }
+    
     let whereClause = [];
     let params = [];
     let paramIndex = 1;
@@ -6375,7 +6383,7 @@ app.get('/recipes', async (req, res) => {
     const whereSQL = whereClause.length > 0 ? 'WHERE ' + whereClause.join(' AND ') : '';
     
     // Get total count
-    const countResult = await dbPool.query(
+    const countResult = await pool.query(
       `SELECT COUNT(*) as total FROM recipes ${whereSQL}`,
       params
     );
@@ -6383,7 +6391,7 @@ app.get('/recipes', async (req, res) => {
     
     // Get recipes (name and basic info only for listing)
     params.push(parseInt(limit));
-    const result = await dbPool.query(
+    const result = await pool.query(
       `SELECT id, name, category, description, total_days
        FROM recipes
        ${whereSQL}
@@ -6420,7 +6428,15 @@ app.get('/recipes/:crop', async (req, res) => {
     setApiCors(res);
     const cropName = decodeURIComponent(req.params.crop);
     
-    const result = await dbPool.query(
+    const pool = req.app.locals?.db;
+    if (!pool) {
+      return res.status(503).json({ 
+        ok: false, 
+        error: 'Recipe database not available on edge devices. Use local recipe files.' 
+      });
+    }
+    
+    const result = await pool.query(
       'SELECT * FROM recipes WHERE name = $1',
       [cropName]
     );
@@ -6672,11 +6688,17 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
     } else {
       // For Edge device: use NeDB
       console.log('[setup-wizard] Saving setup config to NeDB for edge device');
-      await wizardStatesDB.updateAsync(
-        { key: 'setup_config' },
-        { ...setupConfig, key: 'setup_config' },
-        { upsert: true }
-      );
+      try {
+        await wizardStatesDB.updateAsync(
+          { key: 'setup_config' },
+          { ...setupConfig, key: 'setup_config' },
+          { upsert: true }
+        );
+        console.log('[setup-wizard] Successfully saved to NeDB');
+      } catch (nedbError) {
+        console.error('[setup-wizard] NeDB save failed:', nedbError);
+        throw new Error(`Failed to save setup configuration: ${nedbError.message}`);
+      }
     }
 
     // If connected to GreenReach Central, sync certifications
@@ -13947,8 +13969,16 @@ app.get('/api/admin/farms/:farmId', adminAuthMiddleware, createDemoModeHandler()
 app.get('/api/admin/farms/db', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log('[admin] GET /api/admin/farms/db called');
   
+  const pool = req.app.locals?.db;
+  if (!pool) {
+    return res.status(503).json({
+      status: 'error',
+      message: 'Database not available on edge devices. Admin panel requires cloud deployment.'
+    });
+  }
+  
   try {
-    const result = await dbPool.query(`
+    const result = await pool.query(`
       SELECT 
         farm_id as "farmId",
         name,
@@ -13993,14 +14023,22 @@ app.delete('/api/admin/farms/:email', adminAuthMiddleware, asyncHandler(async (r
     });
   }
   
+  const pool = req.app.locals?.db;
+  if (!pool) {
+    return res.status(503).json({
+      status: 'error',
+      message: 'Database not available on edge devices. Admin operations require cloud deployment.'
+    });
+  }
+  
   try {
     // Find all farms and users with this email
-    const farmsResult = await dbPool.query(
+    const farmsResult = await pool.query(
       'SELECT farm_id, name FROM farms WHERE email = $1',
       [email]
     );
     
-    const usersResult = await dbPool.query(
+    const usersResult = await pool.query(
       'SELECT user_id FROM users WHERE email = $1',
       [email]
     );
@@ -14017,13 +14055,13 @@ app.delete('/api/admin/farms/:email', adminAuthMiddleware, asyncHandler(async (r
     
     // Delete users first (foreign key constraint)
     if (usersResult.rows.length > 0) {
-      await dbPool.query('DELETE FROM users WHERE email = $1', [email]);
+      await pool.query('DELETE FROM users WHERE email = $1', [email]);
       console.log(`[admin] Deleted ${usersResult.rows.length} users`);
     }
     
     // Delete farms
     if (farmsResult.rows.length > 0) {
-      await dbPool.query('DELETE FROM farms WHERE email = $1', [email]);
+      await pool.query('DELETE FROM farms WHERE email = $1', [email]);
       console.log(`[admin] Deleted ${farmsResult.rows.length} farms`);
     }
     
@@ -14475,6 +14513,8 @@ app.get('/api/admin/harvest/forecast', adminAuthMiddleware, asyncHandler(async (
 /**
  * POST /api/farm/auth/login
  * Farm admin login endpoint
+ * DEPRECATED: Use /api/auth/login instead (routes/auth.js)
+ * This endpoint is maintained for backward compatibility only
  * DEMO MODE: Bypasses authentication when DEMO_MODE=true
  */
 
@@ -14510,6 +14550,7 @@ const loginRateLimiter = rateLimit({
 
 app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res) => {
   console.log('[farm-auth] POST /api/farm/auth/login called');
+  console.warn('[farm-auth] ⚠️  DEPRECATED: Use /api/auth/login instead. This endpoint will be removed in a future version.');
   const { farmId, email, password } = req.body;
   
   // DEMO MODE BYPASS: Grant full access without credentials

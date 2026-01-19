@@ -174,12 +174,12 @@ async function handleLogin(e) {
     
     try {
         // Call authentication API
-        const response = await fetch(`${API_BASE}/api/farm/auth/login`, {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ farmId, email, password })
+            body: JSON.stringify({ farm_id: farmId, email, password })
         });
         
         const data = await response.json();

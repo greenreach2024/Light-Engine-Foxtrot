@@ -455,13 +455,13 @@
                 alertEl.innerHTML = '🎭 Demo Mode: Granting full access...';
                 
                 try {
-                    const response = await fetch('/api/farm/auth/login', {
+                    const response = await fetch('/api/auth/login', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            farmId: 'GR-00001',
+                            farm_id: 'GR-00001',
                             email: 'admin@demo-farm.com',
                             password: 'demo123'
                         })

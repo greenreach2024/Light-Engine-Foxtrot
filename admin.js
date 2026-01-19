@@ -37,7 +37,7 @@ async function autoAuthenticate() {
     };
     
     try {
-        const response = await fetch(`${window.location.origin}/api/farm/auth/login`, {
+        const response = await fetch(`${window.location.origin}/api/auth/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

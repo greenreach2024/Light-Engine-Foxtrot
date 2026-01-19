@@ -48,13 +48,13 @@ async function autoAuthenticateLocal() {
     console.log('🔐 Auto-authenticating in local development mode...');
     
     const credentials = {
-        farmId: 'GR-00001',
+        farm_id: 'GR-00001',
         email: 'admin@demo-farm.com',
         password: 'demo123'
     };
     
     try {
-        const response = await fetch(`${window.location.origin}/api/farm/auth/login`, {
+        const response = await fetch(`${window.location.origin}/api/auth/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
