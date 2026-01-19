@@ -314,6 +314,28 @@ window.closeInfoCard = closeInfoCard;
 
 // Info Card Content for Each Page
 const INFO_CARDS = {
+    'overview': {
+        title: 'GreenReach Central Admin Dashboard',
+        subtitle: 'Your command center for the entire Light Engine network',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Real-time metrics across all connected Light Engine systems</li><li>Fleet-wide KPIs: active farms, total production, revenue, system health</li><li>Top performers and farms requiring attention</li><li>AI-powered insights and anomaly detection summaries</li></ul>'
+            },
+            {
+                title: 'Why We Monitor This',
+                content: 'The dashboard provides a single pane of glass for GreenReach operations to monitor the entire Light Engine ecosystem. AI continuously analyzes data from every farm to surface issues before they impact production. This allows staff to proactively support farms, optimize network performance, and demonstrate the value of Light Engine technology to stakeholders.'
+            },
+            {
+                title: 'What To Look For',
+                content: '<ul><li>Farms showing degraded connectivity or critical alerts</li><li>AI anomaly detection flagging equipment or environmental issues</li><li>Production trends declining across multiple farms</li><li>Revenue metrics deviating from forecasts</li></ul>'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Investigate AI-flagged anomalies and contact affected farms. Review fleet health trends for infrastructure planning. Drill into specific farms showing issues. Use AI insights to identify optimization opportunities across the network.'
+            }
+        ]
+    },
     'platform-monitoring': {
         title: 'Fleet Monitoring Dashboard',
         subtitle: 'Real-time overview of all Light Engine deployments',
@@ -377,6 +399,72 @@ const INFO_CARDS = {
             {
                 title: 'Common Actions',
                 content: 'Contact farms with critical or high-severity anomalies. Log recurring issues for warranty/support claims. Escalate systemic patterns to engineering. Document false positives to improve ML accuracy.'
+            }
+        ]
+    },
+    'wholesale-buyers': {
+        title: 'Wholesale Buyer Management',
+        subtitle: 'Manage restaurants, retailers, and distributors purchasing from the network',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Complete directory of all registered wholesale buyers</li><li>Buyer profiles: business type, order history, subscription status</li><li>Active orders, delivery schedules, and fulfillment tracking</li><li>Payment status, credit limits, and billing information</li></ul>'
+            },
+            {
+                title: 'Why We Monitor This',
+                content: 'Buyer management is critical to the GreenReach wholesale marketplace success. Staff use this to support buyer onboarding, troubleshoot order issues, manage account relationships, and ensure smooth marketplace operations. Understanding buyer behavior helps optimize the Light Engine network to meet market demand.'
+            },
+            {
+                title: 'What To Look For',
+                content: '<ul><li>New buyer registrations needing onboarding assistance</li><li>Payment issues or expired payment methods</li><li>Large orders requiring special fulfillment coordination</li><li>Inactive buyers who may need re-engagement</li></ul>'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Assist new buyers with first orders and platform training. Resolve payment and billing issues. Coordinate with farms for special order fulfillment. Track buyer satisfaction and marketplace engagement metrics.'
+            }
+        ]
+    },
+    'wholesale-buyer': {
+        title: 'Buyer Portal View',
+        subtitle: 'Experience the marketplace from the buyer perspective',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>The buyer-facing GreenReach Wholesale marketplace interface</li><li>Product catalog, pricing, and availability from network farms</li><li>Shopping cart, checkout flow, and order management</li><li>Delivery scheduling and order tracking</li></ul>'
+            },
+            {
+                title: 'Why We Monitor This',
+                content: 'Viewing the buyer portal helps GreenReach staff understand the customer experience, troubleshoot reported issues, and provide effective support. Staff can walk buyers through the ordering process, verify pricing and product availability, and ensure the marketplace operates smoothly. This view connects to real-time Light Engine inventory data across all farms.'
+            },
+            {
+                title: 'What To Look For',
+                content: '<ul><li>UI/UX issues that may confuse buyers or block orders</li><li>Pricing or inventory discrepancies from farm data</li><li>Checkout flow problems or payment errors</li><li>Delivery date or fulfillment coordination issues</li></ul>'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Test ordering workflows to verify functionality. Assist buyers who report problems by replicating their experience. Coordinate with engineering to fix bugs or improve usability. Verify that Light Engine inventory syncs correctly to marketplace.'
+            }
+        ]
+    },
+    'analytics': {
+        title: 'AI Insights & Predictive Analytics',
+        subtitle: 'Machine learning and artificial intelligence powering the Light Engine network',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>AI-powered predictions: harvest timing, yield forecasts, equipment failures</li><li>Machine learning model performance and confidence scores</li><li>Pattern recognition across environmental, energy, and production data</li><li>Optimization recommendations generated by AI algorithms</li></ul>'
+            },
+            {
+                title: 'Why We Monitor This',
+                content: 'AI is the brain of the Light Engine system. Machine learning models continuously analyze sensor data from every farm to predict issues, optimize growing conditions, and maximize yields. GreenReach staff use AI insights to deliver proactive support - contacting farms before equipment fails, recommending recipe adjustments for better yields, and identifying systemic patterns across the network. This is a key differentiator for Light Engine technology.'
+            },
+            {
+                title: 'What To Look For',
+                content: '<ul><li>High-confidence AI predictions requiring immediate action</li><li>Model accuracy trends - declining accuracy may indicate sensor drift</li><li>Cross-farm patterns suggesting optimization opportunities</li><li>AI recommendations that could significantly improve farm performance</li></ul>'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Share AI-generated insights with farms to help them optimize operations. Investigate high-confidence failure predictions and coordinate preventive maintenance. Document AI accuracy to demonstrate Light Engine value. Use pattern recognition to identify best practices and share across network.'
             }
         ]
     },
@@ -2432,9 +2520,15 @@ async function navigate(view, element) {
             break;
         case 'wholesale-buyers':
             document.getElementById('wholesale-buyers-view').style.display = 'block';
+            if (INFO_CARDS['wholesale-buyers']) {
+                showInfoCard(createInfoCard(INFO_CARDS['wholesale-buyers'].title, INFO_CARDS['wholesale-buyers'].subtitle, INFO_CARDS['wholesale-buyers'].sections));
+            }
             break;
         case 'wholesale-buyer':
             document.getElementById('wholesale-buyer-view').style.display = 'block';
+            if (INFO_CARDS['wholesale-buyer']) {
+                showInfoCard(createInfoCard(INFO_CARDS['wholesale-buyer'].title, INFO_CARDS['wholesale-buyer'].subtitle, INFO_CARDS['wholesale-buyer'].sections));
+            }
             break;
         case 'overview':
             document.getElementById('overview-view').style.display = 'block';
@@ -2448,9 +2542,9 @@ async function navigate(view, element) {
             } else {
                 await loadDashboardData();
             }
-            // Show info card on overview (use fleet monitoring card)
-            if (INFO_CARDS['platform-monitoring']) {
-                showInfoCard(createInfoCard(INFO_CARDS['platform-monitoring'].title, INFO_CARDS['platform-monitoring'].subtitle, INFO_CARDS['platform-monitoring'].sections));
+            // Show info card on overview
+            if (INFO_CARDS['overview']) {
+                showInfoCard(createInfoCard(INFO_CARDS['overview'].title, INFO_CARDS['overview'].subtitle, INFO_CARDS['overview'].sections));
             }
             break;
             
@@ -2527,6 +2621,9 @@ async function navigate(view, element) {
         case 'analytics':
             document.getElementById('analytics-view').style.display = 'block';
             await loadAnalytics();
+            if (INFO_CARDS['analytics']) {
+                showInfoCard(createInfoCard(INFO_CARDS['analytics'].title, INFO_CARDS['analytics'].subtitle, INFO_CARDS['analytics'].sections));
+            }
             break;
             
         case 'inventory':
