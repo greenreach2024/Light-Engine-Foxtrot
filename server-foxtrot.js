@@ -19909,8 +19909,8 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
       
       // Method 1: Try nmcli (NetworkManager)
       try {
-        stdout = await execAsync('nmcli -t -f SSID,SIGNAL,SECURITY dev wifi list');
-        const networks = stdout
+        const { stdout: nmcliOut } = await execAsync('nmcli -t -f SSID,SIGNAL,SECURITY dev wifi list');
+        const networks = nmcliOut
           .split('\n')
           .filter(Boolean)
           .map((line) => {
@@ -19935,8 +19935,8 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
         // Wait a moment for scan to complete
         await new Promise(resolve => setTimeout(resolve, 2000));
         // Get scan results
-        stdout = await execAsync('wpa_cli -i wlan0 scan_results');
-        const lines = stdout.split('\n').slice(1); // Skip header
+        const { stdout: wpaOut } = await execAsync('wpa_cli -i wlan0 scan_results');
+        const lines = wpaOut.split('\n').slice(1); // Skip header
         const networks = [];
         for (const line of lines) {
           const parts = line.trim().split(/\s+/);
@@ -19964,8 +19964,8 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
       
       // Method 3: Try iwlist as last resort
       try {
-        stdout = await execAsync("/sbin/iwlist wlan0 scan | grep -E 'ESSID|Signal level|Quality' -A1");
-        const lines = stdout.split('\n');
+        const { stdout: iwOut } = await execAsync("/sbin/iwlist wlan0 scan | grep -E 'ESSID|Signal level|Quality' -A1");
+        const lines = iwOut.split('\n');
         const networks = [];
         let current = {};
         for (const raw of lines) {
