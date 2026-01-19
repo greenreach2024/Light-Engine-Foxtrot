@@ -6726,7 +6726,8 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
 app.get('/api/setup/status', asyncHandler(async (req, res) => {
   try {
     // Check if using PostgreSQL (Cloud plan) or NeDB (Edge device)
-    if (dbPool) {
+    const pool = req.app.locals?.db;
+    if (pool) {
       // For Cloud plan: check farm status and if rooms exist
       // Get farmId from query or authenticated session
       const farmId = req.query.farmId || req.session?.farmId || req.user?.farmId;
@@ -6740,7 +6741,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       }
       
       // Check if farm exists and is active
-      const farmResult = await dbPool.query(
+      const farmResult = await pool.query(
         'SELECT status FROM farms WHERE farm_id = $1',
         [farmId]
       );
@@ -6749,7 +6750,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       const isActive = farm && farm.status === 'active';
       
       // Also check if rooms exist (more thorough)
-      const roomResult = await dbPool.query(
+      const roomResult = await pool.query(
         'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
         [farmId]
       );
@@ -6767,7 +6768,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       });
     } else {
       // For Edge device: use NeDB
-      const setupConfig = await db.findOne({ key: 'setup_config' });
+      const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' });
       
       if (setupConfig && setupConfig.completed) {
         res.json({
