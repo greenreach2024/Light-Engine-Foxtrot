@@ -1806,9 +1806,22 @@ async function saveGroupsV2Group(status = 'draft') {
   const room = roomSelect.value;
   
   console.log('[groups-v2] Form values:', { groupName, zone, room });
+  console.log('[groups-v2] Form validation:', { 
+    hasName: !!groupName, 
+    hasZone: !!zone, 
+    hasRoom: !!room,
+    zoneOptions: zoneSelect.options.length,
+    roomOptions: roomSelect.options.length
+  });
   
   if (!groupName || !zone || !room) {
-    alert('Enter a group name, select a room, and select a zone.');
+    const missing = [];
+    if (!groupName) missing.push('group name');
+    if (!room) missing.push('room');
+    if (!zone) missing.push('zone');
+    const msg = `Please provide: ${missing.join(', ')}`;
+    console.warn('[groups-v2] Save blocked:', msg);
+    alert(msg);
     return null;
   }
   
@@ -4143,6 +4156,40 @@ function getPlanDayData(plan, dayNumber) {
     }
   }
   
+  // Convert band targets to channels if needed
+  if (bandTargets) {
+    const cw = Number(spectrum.cw || 0);
+    const ww = Number(spectrum.ww || 0);
+    const needsConversion = (cw === 0 && ww === 0);
+    
+    if (needsConversion) {
+      if (typeof window.solveChannelsFromBands === 'function' && window.STATE && window.STATE.calibrationMatrix) {
+        // Use full solver if calibration matrix available
+        try {
+          const solverResult = window.solveChannelsFromBands(bandTargets, window.STATE.calibrationMatrix, {tolerance: 0.05, maxPower: 100});
+          if (solverResult?.channels) {
+            spectrum.cw = Number(solverResult.channels.cw || 0);
+            spectrum.ww = Number(solverResult.channels.ww || 0);
+            spectrum.bl = Number(solverResult.channels.bl || 0);
+            spectrum.rd = Number(solverResult.channels.rd || 0);
+            console.log('[getPlanDayData] Converted bands to channels:', spectrum);
+          }
+        } catch (err) {
+          console.warn('[getPlanDayData] Solver failed:', err);
+        }
+      } else {
+        // Fallback heuristic: Green from whites, blue/red stay on BL/RD
+        const greenFraction = bandTargets.G / 100;
+        const whitePower = greenFraction * 100;
+        spectrum.cw = whitePower * 0.5;
+        spectrum.ww = whitePower * 0.5;
+        spectrum.bl = bandTargets.B;
+        spectrum.rd = bandTargets.R;
+        console.log('[getPlanDayData] Fallback conversion:', spectrum);
+      }
+    }
+  }
+  
   const ppfd = dayData.ppfd || dayData.intensity || 0;
   const photoperiodHours = dayData.hours || dayData.photoperiod || plan.photoperiod || derived?.photoperiod || 0;
   const dli = dayData.dli || ((ppfd && photoperiodHours) ? (ppfd * photoperiodHours * 3600 / 1000000) : 0);
@@ -4417,15 +4464,27 @@ function renderGroupsV2PlanCard(plan, dayNumber) {
   let rdPct = Number(spectrum.rd || 0);
   let frPct = Number(spectrum.fr || 0);
 
-  // If this day is band-based (B/G/R/FR) with no whites, use the spectrum solver to compute channel mix
-  // This ensures mid-spectrum (green) appears by allocating CW/WW appropriately
+  // Check if spectrum needs conversion from bands to channels
+  // Use solver if: 1) dayBandTargets exist, OR 2) spectrum has band data but no/minimal channel data
   const dayBandTargets = dayData && dayData.bandTargets ? dayData.bandTargets : null;
+  const hasBands = (blPct > 0 || gnPct > 0 || rdPct > 0 || frPct > 0);
+  const hasChannels = (cwPct > 0 || wwPct > 0);
+  const needsConversion = dayBandTargets || (hasBands && !hasChannels);
+  
   let solvedChannels = null;
-  if (dayBandTargets && typeof window.solveChannelsFromBands === 'function' && window.STATE && window.STATE.calibrationMatrix) {
+  if (needsConversion && typeof window.solveChannelsFromBands === 'function' && window.STATE && window.STATE.calibrationMatrix) {
     try {
       const intensity = 100; // percentage; can be extended later if dayData includes intensity
+      // Use dayBandTargets if available, otherwise use spectrum bands
+      const bands = dayBandTargets ? dayBandTargets : {
+        B: blPct,
+        G: gnPct,
+        R: rdPct,
+        FR: frPct
+      };
+      console.log('[Groups V2] Converting spectral bands to channel mix:', bands);
       const solverResult = window.solveChannelsFromBands(
-        { B: dayBandTargets.B || 0, G: dayBandTargets.G || 0, R: dayBandTargets.R || 0, FR: dayBandTargets.FR || 0 },
+        { B: bands.B || 0, G: bands.G || 0, R: bands.R || 0, FR: bands.FR || 0 },
         window.STATE.calibrationMatrix,
         { tolerance: 0.05, maxPower: 100 }
       );
@@ -4435,10 +4494,34 @@ function renderGroupsV2PlanCard(plan, dayNumber) {
         wwPct = Number(solvedChannels.ww || 0);
         blPct = Number(solvedChannels.bl || 0);
         rdPct = Number(solvedChannels.rd || 0);
+        console.log('[Groups V2] Solved channel mix:', { cw: cwPct, ww: wwPct, bl: blPct, rd: rdPct });
       }
     } catch (err) {
       console.warn('[Groups V2] Spectrum solver failed, falling back to plan mix:', err);
     }
+  } else if (needsConversion) {
+    // FALLBACK: Use heuristic conversion when calibration matrix unavailable
+    console.log('[Groups V2] Using fallback heuristic (no calibration matrix)');
+    const bands = dayBandTargets ? dayBandTargets : {
+      B: blPct,
+      G: gnPct,
+      R: rdPct,
+      FR: frPct
+    };
+    
+    // Heuristic assumptions:
+    // - Green primarily from whites (CW + WW split evenly)
+    // - Blue stays on BL channel (minimal white contribution)
+    // - Red stays on RD channel (minimal white contribution)
+    const greenFraction = bands.G / 100;
+    const whitePower = greenFraction * 100;
+    
+    cwPct = whitePower * 0.5;
+    wwPct = whitePower * 0.5;
+    blPct = bands.B;
+    rdPct = bands.R;
+    
+    console.log('[Groups V2] Fallback channels:', {cw: cwPct, ww: wwPct, bl: blPct, rd: rdPct});
   }
   
   // Card HTML
@@ -4657,12 +4740,25 @@ function updatePlanCardForDay(plan, dayNumber) {
   let frPct = Number(spectrum.fr || 0);
   console.log(`[updatePlanCardForDay] Extracted: CW=${cwPct}, WW=${wwPct}, BL=${blPct}, GN=${gnPct}, RD=${rdPct}, FR=${frPct}`);
 
-  // If band targets exist for this day, compute channels using the spectrum solver for display
+  // Check if spectrum needs conversion from bands to channels
+  // Use solver if: 1) dayBandTargets exist, OR 2) spectrum has band data but no/minimal channel data
   const dayBandTargets = dayData && dayData.bandTargets ? dayData.bandTargets : null;
-  if (dayBandTargets && typeof window.solveChannelsFromBands === 'function' && window.STATE && window.STATE.calibrationMatrix) {
+  const hasBands = (blPct > 0 || gnPct > 0 || rdPct > 0 || frPct > 0);
+  const hasChannels = (cwPct > 0 || wwPct > 0);
+  const needsConversion = dayBandTargets || (hasBands && !hasChannels);
+  
+  if (needsConversion && typeof window.solveChannelsFromBands === 'function' && window.STATE && window.STATE.calibrationMatrix) {
     try {
+      // Use dayBandTargets if available, otherwise use spectrum bands
+      const bands = dayBandTargets ? dayBandTargets : {
+        B: blPct,
+        G: gnPct,
+        R: rdPct,
+        FR: frPct
+      };
+      console.log('[updatePlanCardForDay] Converting spectral bands to channel mix:', bands);
       const solverResult = window.solveChannelsFromBands(
-        { B: dayBandTargets.B || 0, G: dayBandTargets.G || 0, R: dayBandTargets.R || 0, FR: dayBandTargets.FR || 0 },
+        { B: bands.B || 0, G: bands.G || 0, R: bands.R || 0, FR: bands.FR || 0 },
         window.STATE.calibrationMatrix,
         { tolerance: 0.05, maxPower: 100 }
       );
@@ -4671,10 +4767,34 @@ function updatePlanCardForDay(plan, dayNumber) {
         wwPct = Number(solverResult.channels.ww || 0);
         blPct = Number(solverResult.channels.bl || 0);
         rdPct = Number(solverResult.channels.rd || 0);
+        console.log('[updatePlanCardForDay] Solved channel mix:', { cw: cwPct, ww: wwPct, bl: blPct, rd: rdPct });
       }
     } catch (err) {
       console.warn('[updatePlanCardForDay] Spectrum solver failed:', err);
     }
+  } else if (needsConversion) {
+    // FALLBACK: Use heuristic conversion when calibration matrix unavailable
+    console.log('[updatePlanCardForDay] Using fallback heuristic (no calibration matrix)');
+    const bands = dayBandTargets ? dayBandTargets : {
+      B: blPct,
+      G: gnPct,
+      R: rdPct,
+      FR: frPct
+    };
+    
+    // Heuristic assumptions:
+    // - Green primarily from whites (CW + WW split evenly)
+    // - Blue stays on BL channel (minimal white contribution)
+    // - Red stays on RD channel (minimal white contribution)
+    const greenFraction = bands.G / 100;
+    const whitePower = greenFraction * 100;
+    
+    cwPct = whitePower * 0.5;
+    wwPct = whitePower * 0.5;
+    blPct = bands.B;
+    rdPct = bands.R;
+    
+    console.log('[updatePlanCardForDay] Fallback channels:', {cw: cwPct, ww: wwPct, bl: blPct, rd: rdPct});
   }
   
   const cwEl = document.getElementById('groupsV2PlanCw');
@@ -5608,6 +5728,12 @@ function populateGroupsV2LoadGroupDropdown() {
   
   // Get groups from window.STATE.groups
   const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
+  console.log('[Groups V2] Load dropdown - STATE.groups:', groups.length, 'total groups');
+  if (groups.length > 0) {
+    console.log('[Groups V2] Load dropdown - First group:', groups[0]);
+  } else {
+    console.warn('[Groups V2] Load dropdown - No groups in STATE! Check if groups.json loaded.');
+  }
   
   // Filter groups by selected room and zone
   const filteredGroups = groups.filter(group => {

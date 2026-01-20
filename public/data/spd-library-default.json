@@ -1,0 +1,30 @@
+{
+  "wavelengths": [400, 420, 440, 450, 460, 480, 500, 520, 540, 560, 580, 600, 620, 640, 660, 680, 700, 720, 740],
+  "channels": {
+    "cw": {
+      "description": "Cool White 5000K",
+      "peak": 5000,
+      "values": [0.02, 0.08, 0.15, 0.20, 0.22, 0.25, 0.30, 0.35, 0.38, 0.40, 0.35, 0.28, 0.20, 0.12, 0.08, 0.05, 0.03, 0.01, 0.00]
+    },
+    "ww": {
+      "description": "Warm White 3000K",
+      "peak": 3000,
+      "values": [0.01, 0.05, 0.10, 0.15, 0.18, 0.20, 0.25, 0.30, 0.35, 0.38, 0.40, 0.35, 0.30, 0.22, 0.15, 0.10, 0.06, 0.03, 0.01]
+    },
+    "bl": {
+      "description": "Blue 450nm",
+      "peak": 450,
+      "values": [0.10, 0.30, 0.60, 1.00, 0.80, 0.40, 0.15, 0.05, 0.02, 0.01, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00]
+    },
+    "rd": {
+      "description": "Red 660nm",
+      "peak": 660,
+      "values": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.01, 0.02, 0.03, 0.05, 0.10, 0.25, 0.60, 1.00, 0.70, 0.35, 0.10, 0.02]
+    }
+  },
+  "metadata": {
+    "source": "Default approximation",
+    "created": "2026-01-20",
+    "note": "These are typical spectral distributions for horticultural LEDs. Replace with actual measured data from PAR sensor for accuracy."
+  }
+}

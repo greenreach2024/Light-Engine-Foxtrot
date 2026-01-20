@@ -12208,6 +12208,10 @@ async function loadAllData() {
     ]);
 
     STATE.groups = groups?.groups || [];
+    console.log(`[loadAllData] Loaded STATE.groups: ${STATE.groups.length} groups`);
+    if (STATE.groups.length > 0) {
+      console.log('[loadAllData] First group:', STATE.groups[0]);
+    }
     const iotDevicesData = Array.isArray(storedIotDevices) ? storedIotDevices : [];
     
     // Merge SwitchBot devices from switchbot-devices.json into IoT devices

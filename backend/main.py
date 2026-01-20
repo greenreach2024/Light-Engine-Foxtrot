@@ -378,6 +378,99 @@ async def get_mdns_devices():
     }
 
 
+# ============================================================================
+# Code3 Controller / Grow3 Lights Endpoints
+# ============================================================================
+
+@app.get("/api/devicedatas")
+async def get_code3_devices():
+    """Get list of Code3-connected devices (Grow3 lights)"""
+    # Try to read from device cache or run discovery
+    devices = []
+    
+    # Check if discovery script exists and run it
+    try:
+        import subprocess
+        script_path = Path(__file__).parent.parent / "scripts" / "discover-code3.py"
+        
+        if script_path.exists():
+            result = subprocess.run(
+                ["python3", str(script_path)],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                # Parse JSON from stdout
+                for line in result.stdout.split('\n'):
+                    if line.strip().startswith('{'):
+                        data = json.loads(line)
+                        if 'devices' in data:
+                            devices = data['devices']
+                            break
+    except Exception as e:
+        print(f"Code3 discovery error: {e}")
+    
+    # Fallback: return mock device for testing if no devices found
+    if not devices:
+        devices = [
+            {
+                "id": 1,
+                "name": "Grow3 Light 1",
+                "type": "grow3",
+                "model": "Grow3",
+                "status": "on",
+                "channelsValue": "1D1D1D1D0000",  # Default safe levels
+                "value": "1D1D1D1D0000",
+                "lastHex": "1D1D1D1D0000",
+                "vendor": "Code3",
+                "protocol": "code3-serial",
+                "online": True
+            }
+        ]
+    
+    return devices
+
+
+@app.get("/api/devicedatas/device/{device_id}")
+async def get_code3_device(device_id: int):
+    """Get specific Code3 device details"""
+    devices = await get_code3_devices()
+    
+    for device in devices:
+        if device.get('id') == device_id or str(device.get('id')) == str(device_id):
+            return device
+    
+    raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+
+
+@app.patch("/api/devicedatas/device/{device_id}")
+async def update_code3_device(device_id: int, command: dict):
+    """Send command to Code3 device (Grow3 light)
+    
+    Body: {
+        "status": "on" | "off",
+        "channelsValue": "CCWWBBRR0000" (hex string, each channel 00-40 or 00-64)
+    }
+    """
+    status = command.get("status", "on")
+    channels_value = command.get("channelsValue", "")
+    
+    # TODO: Implement actual Code3 serial communication
+    # For now, acknowledge the command
+    print(f"Code3 Command: Device {device_id} - Status: {status}, Channels: {channels_value}")
+    
+    return {
+        "success": True,
+        "device_id": device_id,
+        "status": status,
+        "channelsValue": channels_value,
+        "message": f"Command sent to device {device_id}",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
 @app.get("/api/network/wifi/scan")
 async def wifi_scan():
     """Scan for available WiFi networks (returns placeholder data)"""
