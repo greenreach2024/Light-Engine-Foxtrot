@@ -79,9 +79,9 @@ async function initDashboard() {
             const payload = JSON.parse(atob(existingToken.split('.')[1]));
             currentSession = {
                 token: existingToken,
-                farmId: payload.farmId || existingFarmId,
-                userId: payload.userId,
-                farmName: localStorage.getItem('farm_name') || payload.farmName || 'Light Engine Farm',
+                farmId: payload.farm_id || payload.farmId || existingFarmId,
+                userId: payload.user_id || payload.userId,
+                farmName: localStorage.getItem('farm_name') || payload.name || payload.farmName || 'Light Engine Farm',
                 email: payload.email || existingEmail || 'admin@farm.com',
                 role: payload.role || 'admin'
             };

@@ -15675,7 +15675,7 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     // First decode JWT without verification to get farmId
     const decoded = jwt.decode(token);
     
-    if (!decoded || !decoded.farmId) {
+    if (!decoded || (!decoded.farmId && !decoded.farm_id)) {
       console.error('[/api/farm/profile] JWT decode failed or missing farmId');
       return res.status(403).json({
         status: 'error',
@@ -15683,7 +15683,7 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
       });
     }
     
-    const farmId = decoded.farmId;
+    const farmId = decoded.farm_id || decoded.farmId;
     const db = req.app.locals.db;
     
     if (!db) {
