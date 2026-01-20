@@ -215,8 +215,10 @@ create_backup() {
     ssh -o StrictHostKeyChecking=no "$EDGE_HOST" bash << EOF
         cd ~
         if [ -d "$REMOTE_DIR" ]; then
-            echo "Creating backup: $BACKUP_DIR"
-            cp -a "$REMOTE_DIR" "$BACKUP_DIR"
+            echo "Creating backup: $BACKUP_DIR (excluding node_modules)"
+            # Use rsync to exclude large directories
+            rsync -a --exclude 'node_modules' --exclude 'venv' --exclude '__pycache__' \
+                "$REMOTE_DIR/" "$BACKUP_DIR/"
             echo "✅ Backup created successfully"
         else
             echo "⚠️  No existing installation to backup"
