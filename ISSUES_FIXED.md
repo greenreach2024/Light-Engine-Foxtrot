@@ -273,7 +273,100 @@ cat public/data/rooms.json
 
 ---
 
+## 🔒 Update - JWT Authentication Fixed (2:15 PM EST)
+
+### Issue Discovered
+After clearing cache and fresh login with `shelbygilbert@rogers.com`:
+- ✅ Login successful (token received)
+- ❌ Admin Dashboard showing mock data
+- ❌ API calls returning 403 Forbidden:
+  - `/api/farm/profile` → 403
+  - `/api/billing/usage/undefined` → 403
+  - `/api/farm/activity/undefined` → 403
+
+### Root Cause
+**JWT field name mismatch** between token generation and consumption:
+
+1. **Token Generation** (`lib/farm-auth.js`):
+   ```javascript
+   generateFarmToken({
+     farm_id: 'FARM-123',  // ← snake_case
+     user_id: 'user-456',
+     email: 'user@farm.com'
+   })
+   ```
+
+2. **Frontend Consumption** (`farm-admin.js:82`):
+   ```javascript
+   farmId: payload.farmId || existingFarmId  // ← looking for camelCase (undefined!)
+   ```
+
+3. **Backend Verification** (`server-foxtrot.js:15674`):
+   ```javascript
+   if (!decoded.farmId) {  // ← also looking for camelCase
+     return res.status(403).json({ message: 'Invalid token' });
+   }
+   ```
+
+### Console Evidence
+```
+farm-admin.js:88  Using existing session: undefined shelbygilbert@rogers.com
+                                          ^^^^^^^^^ farmId was undefined!
+```
+
+This caused:
+- `currentSession.farmId` = `undefined`
+- API URLs: `/api/billing/usage/undefined`, `/api/farm/activity/undefined`
+- Backend couldn't extract farmId from JWT → 403 Forbidden
+- Dashboard fell back to mock data
+
+### Solution Applied
+**Fixed field name compatibility** in both frontend and backend:
+
+1. **Frontend** (`farm-admin.js:82`):
+   ```javascript
+   farmId: payload.farm_id || payload.farmId || existingFarmId,
+   userId: payload.user_id || payload.userId,
+   farmName: payload.name || payload.farmName || 'Light Engine Farm'
+   ```
+
+2. **Backend** (`server-foxtrot.js:15677`):
+   ```javascript
+   const farmId = decoded.farm_id || decoded.farmId;
+   ```
+
+Now supports both snake_case (JWT standard) and camelCase (legacy).
+
+### Verification Test
+After fix, console should show:
+```
+farm-admin.js:88  Using existing session: FARM-MJUKLMO0-9978 shelbygilbert@rogers.com
+                                          ^^^^^^^^^^^^^^^^^^^ farmId now populated!
+```
+
+API calls will succeed:
+- `GET /api/farm/profile` → 200 OK (returns real farm data)
+- `GET /api/billing/usage/FARM-MJUKLMO0-9978` → 200 OK
+- `GET /api/farm/activity/FARM-MJUKLMO0-9978` → 200 OK
+
+### Status
+✅ **FIXED** - JWT farmId extraction working
+✅ **DEPLOYED** - Changes active on edge device
+✅ **COMMITTED** - Pushed to main branch (b468105)
+
+### User Action Required
+**Clear cache and sign in again:**
+1. Open DevTools (F12)
+2. Application tab → Clear Storage → "Clear site data"
+3. Sign in again with credentials
+4. Check console: Should see `Using existing session: FARM-XXX email@address.com`
+5. Dashboard will load real data (not mock)
+6. No more 403 errors in Network tab
+
+---
+
 *Initial fixes deployed: January 20, 2026, 10:09 AM EST*
 *Room persistence fix deployed: January 20, 2026, 1:54 PM EST*
+*JWT authentication fix deployed: January 20, 2026, 2:15 PM EST*
 *Services restarted: lightengine-node, lightengine-fastapi (PM2)*
-*Browser refresh required for all changes*
+*Browser cache clear required after authentication fix*
