@@ -98,15 +98,22 @@ class Code3Controller:
         
         try:
             # For Grow3 lights, each device has a DMX address offset
-            # Device 1 (F00001) uses channels 1-4
-            # Device 2 (F00001) uses channels 1-4 (same physical light)
-            # Device 3 (F00002) uses channels 5-8
-            # Device 4 (F00003) uses channels 9-12, etc.
+            # According to protocol.json mapping:
+            # Device 2 → F00001 (first physical light) → DMX channels 1-4
+            # Device 3 → F00002 (second light) → DMX channels 5-8
+            # Device 4 → F00003 (third light) → DMX channels 9-12, etc.
             
-            # Calculate DMX channel offset based on device ID
-            # According to protocol.json, devices 2-6 map to F00001-F00005
-            # For now, use device_id to determine channel offset
-            dmx_start_channel = (device_id - 1) * 4
+            # Map device IDs to DMX start channels
+            # Device 2 (F00001) should use DMX channels 1-4
+            device_to_dmx_offset = {
+                1: 0,  # Channels 1-4 (in 0-indexed array: 0-3)
+                2: 0,  # F00001 - Channels 1-4 (in 0-indexed array: 0-3)
+                3: 4,  # F00002 - Channels 5-8 (in 0-indexed array: 4-7)
+                4: 8,  # F00003 - Channels 9-12 (in 0-indexed array: 8-11)
+                5: 12, # F00005 - Channels 13-16 (in 0-indexed array: 12-15)
+                6: 16  # F00004 - Channels 17-20 (in 0-indexed array: 16-19)
+            }
+            dmx_start_channel = device_to_dmx_offset.get(device_id, 0)
             
             # Build DMX packet with all 512 channels (start with zeros)
             dmx_channels = [0] * 512
