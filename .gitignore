@@ -50,6 +50,21 @@ public/data/wholesale-order-events.json
 public/data/wholesale-reservations.json
 public/data/wholesale-orders-status.json
 
+# Edge device runtime data (user-specific configuration)
+# These files are modified during edge device operation and should not be committed
+public/data/env.json
+public/data/farm.json
+public/data/rooms.json
+public/data/schedules.json
+public/data/groups.json
+public/data/room-map*.json
+public/data/farm-api-keys.json
+public/data/calibration.json
+public/data/controller.json
+public/data/iot-devices.json
+public/data/switchbot-devices.json
+public/data/system-alerts.json
+
 # Database files (runtime only)
 *.db
 *.sqlite
