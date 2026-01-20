@@ -1,4 +1,4 @@
-
+/**
  * Audit Logging System
  * 
  * Provides structured logging for security-sensitive events:
