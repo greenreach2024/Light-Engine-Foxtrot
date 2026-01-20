@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Check authentication - redirect if not authenticated
     if (!isAuthenticated()) {
         console.warn('⚠️ Not authenticated, redirecting to login...');
-        window.location.href = '/LE-login.html?redirect=' + encodeURIComponent(window.location.pathname);
+        window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
         return;
     }
     

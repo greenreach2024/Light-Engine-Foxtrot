@@ -177,7 +177,7 @@ router.post('/purchase', async (req, res) => {
       temp_password,
       farm_id,
       plan,
-      login_url: `${req.protocol}://${req.get('host')}/LE-login.html`
+      login_url: `${req.protocol}://${req.get('host')}/login.html`
     });
 
     // Use existing email service or mock
@@ -209,7 +209,7 @@ router.post('/purchase', async (req, res) => {
       message: 'Account created successfully',
       farm_id,
       email,
-      login_url: `${req.protocol}://${req.get('host')}/LE-login.html`,
+      login_url: `${req.protocol}://${req.get('host')}/login.html`,
       setup_url: `${req.protocol}://${req.get('host')}/setup-wizard.html`,
       // Don't send API keys in response - only via email
       instructions: 'Check your email for login credentials and setup instructions'
@@ -797,7 +797,7 @@ function generateWelcomeEmail({ farm_name, contact_name, email, temp_password, f
         <p>Contact our support team:</p>
         <ul>
           <li>Email: <a href="mailto:support@greenreach.io">support@greenreach.io</a></li>
-          <li>Documentation: <a href="${login_url.replace('LE-login.html', 'docs/index.html')}">Quick Start Guide</a></li>
+          <li>Documentation: <a href="${login_url.replace('login.html', 'docs/index.html')}">Quick Start Guide</a></li>
         </ul>
         
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
@@ -831,7 +831,7 @@ Next Steps:
 
 Need Help?
 Email: support@greenreach.io
-Documentation: ${login_url.replace('LE-login.html', 'docs/index.html')}
+Documentation: ${login_url.replace('login.html', 'docs/index.html')}
 
 © 2025 Light Engine. All rights reserved.
     `,
