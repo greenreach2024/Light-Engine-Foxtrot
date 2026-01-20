@@ -189,7 +189,7 @@ preflight_checks() {
     log "Checking critical files..."
     local missing_files=()
     
-    for file in "server-foxtrot.js" "package.json" "public/index.html"; do
+    for file in "server-foxtrot.js" "package.json" "public/LE-dashboard.html"; do
         if [ ! -f "$file" ]; then
             missing_files+=("$file")
         fi
