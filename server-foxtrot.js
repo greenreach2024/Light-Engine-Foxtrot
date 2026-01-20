@@ -6906,6 +6906,53 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
   }
 }));
 
+// Save rooms endpoint (for Room Mapper and Grow Room Setup)
+app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
+  try {
+    const { rooms } = req.body;
+    
+    if (!Array.isArray(rooms)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Rooms must be an array' 
+      });
+    }
+    
+    console.log(`[save-rooms] Saving ${rooms.length} rooms to disk`);
+    
+    // Save to rooms.json file
+    const roomsFilePath = path.join(__dirname, 'public', 'data', 'rooms.json');
+    const roomsData = { rooms };
+    
+    await fs.promises.writeFile(
+      roomsFilePath, 
+      JSON.stringify(roomsData, null, 2),
+      'utf8'
+    );
+    
+    console.log(`[save-rooms] Successfully saved to ${roomsFilePath}`);
+    
+    // Also dispatch event to notify other systems
+    if (typeof io !== 'undefined') {
+      io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Saved ${rooms.length} rooms`,
+      count: rooms.length
+    });
+    
+  } catch (error) {
+    console.error('[save-rooms] Error saving rooms:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to save rooms',
+      message: error.message 
+    });
+  }
+}));
+
 // Sync service routes
 let syncServiceInstance = null;
 

@@ -8,12 +8,15 @@
  * All endpoints return JSON responses
  */
 
-const express = require('express');
+import express from 'express';
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 const router = express.Router();
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
 
 // Import logger
 const logger = require('../lib/logger.cjs');
@@ -452,4 +455,4 @@ router.get('/version', (req, res) => {
   });
 });
 
-module.exports = router;
+export default router;
