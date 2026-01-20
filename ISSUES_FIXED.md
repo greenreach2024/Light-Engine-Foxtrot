@@ -200,6 +200,80 @@ pm2 restart lightengine-fastapi
 
 ---
 
-*Fixes deployed: January 20, 2026, 10:09 AM EST*
-*Services restarted: lightengine-fastapi (PM2)*
-*Browser refresh required for frontend changes*
+## 🔄 Update - Room/Zone Persistence Fixed (1:54 PM EST)
+
+### Issue Discovered
+After fixing Groups V2 loading:
+- ✅ Group V2 now shows groups correctly
+- ✅ Group V2 shows room and zone
+- ❌ Room Mapper does not show room or zone
+- ❌ Grow Room Setup no longer shows room
+
+### Root Cause
+The `/api/setup/save-rooms` endpoint was **missing** from server-foxtrot.js. When users saved rooms via Room Wizard or Room Mapper:
+1. Rooms saved to `STATE.rooms` (in-memory) ✅
+2. Backend API call failed (404 Not Found) ❌
+3. Fallback to `localStorage` only ⚠️
+4. File `public/data/rooms.json` never updated ❌
+
+### Solution Applied
+1. **Added `/api/setup/save-rooms` endpoint** (server-foxtrot.js:6909)
+   - Accepts POST with `{rooms: [...]}`
+   - Writes to `public/data/rooms.json`
+   - Returns success confirmation
+   
+2. **Fixed routes/system.js ES module compatibility**
+   - Converted from CommonJS (`require`) to ES modules (`import`)
+   - Added missing `export default router`
+   
+3. **Deployed lib/ directory**
+   - Added missing `lib/logger.cjs` dependency
+   - Deployed 38 support library files
+
+### Verification Test
+```bash
+# Test save-rooms endpoint
+curl -X POST http://localhost:8091/api/setup/save-rooms \
+  -H "Content-Type: application/json" \
+  -d '{"rooms":[{"id":"GreenReach-room","name":"GreenReach","zones":[{"id":"1","name":"Zone 1"}]}]}'
+
+# Response:
+{
+  "success": true,
+  "message": "Saved 1 rooms",
+  "count": 1
+}
+
+# Verify file written:
+cat public/data/rooms.json
+{
+  "rooms": [
+    {
+      "id": "GreenReach-room",
+      "name": "GreenReach",
+      "zones": [{"id": "1", "name": "Zone 1"}]
+    }
+  ]
+}
+```
+
+### Status
+✅ **FIXED** - Rooms now persist to disk
+✅ **DEPLOYED** - Endpoint active on edge device
+✅ **COMMITTED** - Changes pushed to main branch (c05b79b)
+
+### User Action Required
+**Refresh browser** and re-save room in Room Mapper:
+1. Open Room Mapper
+2. Click existing "GreenReach" room or create new
+3. Click "Save" button
+4. Room will now persist to rooms.json
+5. Room Mapper dropdown will populate correctly
+6. Grow Room Setup will show the room
+
+---
+
+*Initial fixes deployed: January 20, 2026, 10:09 AM EST*
+*Room persistence fix deployed: January 20, 2026, 1:54 PM EST*
+*Services restarted: lightengine-node, lightengine-fastapi (PM2)*
+*Browser refresh required for all changes*
