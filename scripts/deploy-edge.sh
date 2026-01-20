@@ -26,6 +26,7 @@ DEPLOYMENT_LOG="/tmp/edge-deploy-${TIMESTAMP}.log"
 
 # Options
 SKIP_TESTS=false
+SKIP_BACKUP=false
 ROLLBACK=false
 EDGE_HOST=""
 REMOTE_DIR="Light-Engine-Foxtrot"
@@ -72,12 +73,14 @@ Arguments:
 
 Options:
   --skip-tests      Skip pre-flight validation tests
+  --skip-backup     Skip backup creation (faster, riskier)
   --rollback        Rollback to previous deployment
   -h, --help        Show this help message
 
 Examples:
   $0 greenreach@192.168.2.222
   $0 greenreach@192.168.2.222 --skip-tests
+  $0 greenreach@192.168.2.222 --skip-backup
   $0 greenreach@192.168.2.222 --rollback
 
 EOF
@@ -97,6 +100,9 @@ parse_args() {
         case "$1" in
             --skip-tests)
                 SKIP_TESTS=true
+                ;;
+            --skip-backup)
+                SKIP_BACKUP=true
                 ;;
             --rollback)
                 ROLLBACK=true
@@ -483,7 +489,13 @@ main() {
     fi
     
     preflight_checks
-    create_backup
+    
+    if [ "$SKIP_BACKUP" = false ]; then
+        create_backup
+    else
+        log_warn "⏭️  Skipping backup (--skip-backup)"
+    fi
+    
     deploy_code
     install_dependencies
     restart_services
