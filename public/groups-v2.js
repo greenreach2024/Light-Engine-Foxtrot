@@ -5600,11 +5600,30 @@ function populateGroupsV2LoadGroupDropdown() {
   // Remove all except the first (none)
   while (select.options.length > 1) select.remove(1);
   
+  // Get currently selected room and zone
+  const roomSelect = document.getElementById('groupsV2RoomSelect');
+  const zoneSelect = document.getElementById('groupsV2ZoneSelect');
+  const selectedRoom = roomSelect ? roomSelect.value : '';
+  const selectedZone = zoneSelect ? zoneSelect.value : '';
+  
   // Get groups from window.STATE.groups
   const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
   
+  // Filter groups by selected room and zone
+  const filteredGroups = groups.filter(group => {
+    const groupRoom = group.room || group.roomName || '';
+    const groupZone = group.zone || '';
+    
+    // Match room (case-insensitive)
+    const roomMatches = !selectedRoom || groupRoom.toLowerCase() === selectedRoom.toLowerCase();
+    // Match zone (case-insensitive)
+    const zoneMatches = !selectedZone || groupZone.toLowerCase() === selectedZone.toLowerCase();
+    
+    return roomMatches && zoneMatches;
+  });
+  
   // Sort: deployed first, then drafts; within each category, alphabetically
-  const sortedGroups = [...groups].sort((a, b) => {
+  const sortedGroups = [...filteredGroups].sort((a, b) => {
     const statusA = a.status || 'draft';
     const statusB = b.status || 'draft';
     
@@ -5621,7 +5640,7 @@ function populateGroupsV2LoadGroupDropdown() {
   sortedGroups.forEach(group => {
     const label = formatGroupsV2GroupLabel(group);
     const status = group.status || 'draft';
-    const statusIcon = status === 'deployed' ? '' : '';
+    const statusIcon = status === 'deployed' ? '✓' : '•';
     
     const opt = document.createElement('option');
     opt.value = group.id || label;
@@ -5646,6 +5665,9 @@ function populateGroupsV2LoadGroupDropdown() {
       select.value = currentValue;
     }
   }
+  
+  // Log for debugging
+  console.log(`[Groups V2] Load dropdown: ${sortedGroups.length} groups for room="${selectedRoom}", zone="${selectedZone}"`);
 }
 
 function requestGroupsV2LoadGroupRefresh() {
@@ -5692,6 +5714,24 @@ document.addEventListener('DOMContentLoaded', () => {
   populateGroupsV2RoomDropdown();
   // If rooms can change dynamically, listen for a custom event to refresh
   document.addEventListener('rooms-updated', populateGroupsV2RoomDropdown);
+  
+  // Add event listeners to room and zone selects to filter the load group dropdown
+  const roomSelect = document.getElementById('groupsV2RoomSelect');
+  const zoneSelect = document.getElementById('groupsV2ZoneSelect');
+  
+  if (roomSelect) {
+    roomSelect.addEventListener('change', () => {
+      console.log('[Groups V2] Room changed:', roomSelect.value);
+      populateGroupsV2LoadGroupDropdown();
+    });
+  }
+  
+  if (zoneSelect) {
+    zoneSelect.addEventListener('change', () => {
+      console.log('[Groups V2] Zone changed:', zoneSelect.value);
+      populateGroupsV2LoadGroupDropdown();
+    });
+  }
 });
 // Wire up Groups V2 sidebar button to open Group V2 Setup card
 document.addEventListener('DOMContentLoaded', () => {

@@ -962,10 +962,96 @@ function cloneSamplePlanDocument() {
   return JSON.parse(JSON.stringify(SAMPLE_PLAN_DOCUMENT));
 }
 
-function loadPlansDocument() {
+async function loadPlansDocument() {
   ensureDataDir();
   
-  // Load plans from lighting-recipes.json (single source of truth)
+  // Try to load from database first (if available)
+  try {
+    const db = await initDatabase();
+    const dbMode = getDatabaseMode();
+    
+    if (db && db.pool && dbMode === 'postgresql') {
+      console.log('[plans] Loading recipes from PostgreSQL database...');
+      const result = await db.query(
+        `SELECT id, name, category, description, total_days, data
+         FROM recipes
+         ORDER BY category, name`
+      );
+      
+      if (result.rows && result.rows.length > 0) {
+        const slugify = (str) => String(str || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        
+        // Convert database recipes to plan format
+        const plans = result.rows.map(recipe => {
+          const schedule = recipe.data?.schedule || [];
+          const id = `crop-${slugify(recipe.name)}`;
+          
+          // Convert schedule to light.days format
+          const lightDays = schedule.map(row => ({
+            day: Number(row.day),
+            stage: String(row.stage || ''),
+            ppfd: Number(row.ppfd || row.ppfd_target || 0),
+            dli: Number(row.dli || row.dli_target || 0),
+            mix: {
+              cw: 0,
+              ww: 0,
+              bl: Number(row.blue || 0),
+              gn: Number(row.green || 0),
+              rd: Number(row.red || 0),
+              fr: Number(row.far_red || 0)
+            }
+          }));
+          
+          // Convert schedule to env.days format
+          const envDays = schedule
+            .filter(row => row.temperature != null || row.temp_target != null)
+            .map(row => ({
+              day: Number(row.day),
+              tempC: Number(row.temperature || row.temp_target || 20),
+              vpd: Number(row.vpd || row.vpd_target || 0),
+              maxHumidity: Number(row.max_humidity || 0)
+            }));
+          
+          return {
+            id,
+            key: id,
+            name: recipe.name,
+            crop: recipe.name,
+            kind: 'recipe',
+            category: recipe.category || 'Unknown',
+            description: recipe.description || `Lighting recipe for ${recipe.name}`,
+            totalDays: recipe.total_days || lightDays.length,
+            light: { days: lightDays },
+            ...(envDays.length ? { env: { days: envDays } } : {}),
+            meta: {
+              source: 'database',
+              category: recipe.category,
+              appliesTo: { category: ['Crop'], varieties: [] }
+            },
+            defaults: { photoperiod: 12 }
+          };
+        });
+        
+        console.log(`[plans] Loaded ${plans.length} recipes from database`);
+        return {
+          plans,
+          meta: {
+            source: 'database',
+            loadedAt: new Date().toISOString(),
+            count: plans.length
+          }
+        };
+      }
+    }
+  } catch (dbErr) {
+    console.log('[plans] Database not available or query failed:', dbErr.message);
+    console.log('[plans] Falling back to lighting-recipes.json file');
+  }
+  
+  // Fallback: Load plans from lighting-recipes.json
   const RECIPES_PATH = path.join(DATA_DIR, 'lighting-recipes.json');
   
   try {
@@ -1031,13 +1117,14 @@ function loadPlansDocument() {
       });
     }
     
-    console.log(`[plans] Loaded ${plans.length} plans from lighting-recipes.json`);
+    console.log(`[plans] Loaded ${plans.length} plans from lighting-recipes.json (FALLBACK - database preferred)`);
     return { 
       plans, 
       meta: { 
         source: 'lighting-recipes',
         loadedAt: new Date().toISOString(),
-        count: plans.length
+        count: plans.length,
+        warning: 'Using fallback JSON file - connect to database for full recipe library (50 recipes)'
       } 
     };
     
@@ -18976,7 +19063,7 @@ app.put('/groups/:id', pinGuard, async (req, res) => {
 });
 
 app.options('/plans', (req, res) => { setCors(req, res); res.status(204).end(); });
-app.get('/plans', (req, res) => {
+app.get('/plans', async (req, res) => {
   try {
     setCors(req, res);
     
@@ -19395,7 +19482,7 @@ app.get('/plans', (req, res) => {
       });
     }
     
-    const doc = loadPlansDocument();
+    const doc = await loadPlansDocument();
     const plans = Array.isArray(doc.plans) ? doc.plans : [];
     const envelope = sanitizePlansEnvelope(doc);
 
