@@ -9886,6 +9886,20 @@ app.use('/api', licenseRouter);
 app.use('/api/health', healthRouter);
 
 /**
+ * System Management API Routes (Edge Device Remote Management)
+ * Requires SYSTEM_TOKEN authentication for security
+ * - GET /api/system/health: Detailed system health & diagnostics
+ * - GET /api/system/logs: Stream recent logs (with filtering)
+ * - GET /api/system/diagnostics: Comprehensive diagnostic bundle
+ * - GET /api/system/version: Get current version info
+ * - POST /api/system/restart: Restart services gracefully
+ * - POST /api/system/update: Trigger git pull & restart
+ * - POST /api/system/config: Update environment configuration
+ */
+const systemRouter = await import('./routes/system.js').then(m => m.default);
+app.use('/api/system', systemRouter);
+
+/**
  * Farm Purchase & Onboarding Routes (Removed - now using ES module import below at line ~9757)
  * - POST /api/farms/create-checkout-session: Create Square payment link
  * - POST /api/farms/purchase: Complete purchase and create account
