@@ -14716,12 +14716,7 @@ const loginRateLimiter = rateLimit({
   message: { status: 'error', message: 'Too many login attempts. Please try again in 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
-  // Use keyGenerator to get IP from X-Forwarded-For (trust proxy must be enabled)
-  keyGenerator: (req) => {
-    const ip = req.ip || req.connection.remoteAddress;
-    console.log('[farm-auth] Rate limit key for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
-    return ip;
-  },
+  // Let express-rate-limit handle IPv6 addresses properly
   handler: (req, res) => {
     const ip = req.ip || req.connection.remoteAddress;
     console.error('[farm-auth] ✗ Rate limit exceeded for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
