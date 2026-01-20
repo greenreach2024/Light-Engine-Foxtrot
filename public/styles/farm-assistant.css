@@ -14,7 +14,7 @@
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   width: 380px;
-  max-height: 600px;
+  max-height: 700px;
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
@@ -54,7 +54,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: pointer;
+  cursor: move;
+  user-select: none;
 }
 
 .header-content {
@@ -112,7 +113,7 @@
 .assistant-body {
   display: flex;
   flex-direction: column;
-  height: 540px;
+  height: 640px;
   overflow: hidden;
 }
 

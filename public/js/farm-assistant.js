@@ -240,7 +240,118 @@ class FarmAssistant {
       if (e.key === 'Enter') this.handleUserInput();
     });
     
-    minimizeBtn.addEventListener('click', () => this.toggleMinimize());
+    minimizeBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent drag when clicking minimize
+      this.toggleMinimize();
+    });
+
+    // Make the widget draggable
+    this.makeDraggable();
+  }
+
+  makeDraggable() {
+    const widget = document.getElementById('farm-assistant');
+    const header = widget.querySelector('.assistant-header');
+    
+    let isDragging = false;
+    let currentX;
+    let currentY;
+    let initialX;
+    let initialY;
+    let xOffset = 0;
+    let yOffset = 0;
+
+    // Get initial position from CSS (bottom-right)
+    const rect = widget.getBoundingClientRect();
+    xOffset = rect.left;
+    yOffset = rect.top;
+
+    header.addEventListener('mousedown', dragStart);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', dragEnd);
+
+    // Touch events for mobile
+    header.addEventListener('touchstart', dragStart);
+    document.addEventListener('touchmove', drag);
+    document.addEventListener('touchend', dragEnd);
+
+    function dragStart(e) {
+      // Don't drag if clicking on minimize button
+      if (e.target.closest('.minimize-btn')) {
+        return;
+      }
+
+      if (e.type === 'touchstart') {
+        initialX = e.touches[0].clientX - xOffset;
+        initialY = e.touches[0].clientY - yOffset;
+      } else {
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+      }
+
+      isDragging = true;
+      widget.style.transition = 'none';
+    }
+
+    function drag(e) {
+      if (isDragging) {
+        e.preventDefault();
+
+        if (e.type === 'touchmove') {
+          currentX = e.touches[0].clientX - initialX;
+          currentY = e.touches[0].clientY - initialY;
+        } else {
+          currentX = e.clientX - initialX;
+          currentY = e.clientY - initialY;
+        }
+
+        xOffset = currentX;
+        yOffset = currentY;
+
+        // Keep widget within viewport bounds
+        const maxX = window.innerWidth - widget.offsetWidth;
+        const maxY = window.innerHeight - widget.offsetHeight;
+        
+        xOffset = Math.max(0, Math.min(xOffset, maxX));
+        yOffset = Math.max(0, Math.min(yOffset, maxY));
+
+        // Remove fixed positioning and use absolute
+        widget.style.position = 'fixed';
+        widget.style.left = xOffset + 'px';
+        widget.style.top = yOffset + 'px';
+        widget.style.bottom = 'auto';
+        widget.style.right = 'auto';
+      }
+    }
+
+    function dragEnd() {
+      isDragging = false;
+      widget.style.transition = 'all 0.3s ease';
+      
+      // Save position to localStorage
+      localStorage.setItem('farmAssistantPosition', JSON.stringify({
+        x: xOffset,
+        y: yOffset
+      }));
+    }
+
+    // Restore saved position
+    const savedPosition = localStorage.getItem('farmAssistantPosition');
+    if (savedPosition) {
+      try {
+        const pos = JSON.parse(savedPosition);
+        xOffset = pos.x;
+        yOffset = pos.y;
+        
+        widget.style.position = 'fixed';
+        widget.style.left = pos.x + 'px';
+        widget.style.top = pos.y + 'px';
+        widget.style.bottom = 'auto';
+        widget.style.right = 'auto';
+      } catch (e) {
+        console.warn('Could not restore Farm Assistant position:', e);
+      }
+    }
   }
 
   initVoiceRecognition() {
