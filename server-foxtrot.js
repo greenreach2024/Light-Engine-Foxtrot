@@ -13630,6 +13630,9 @@ app.use('/py', async (req, res) => {
 
 // Global trace middleware - catches ALL requests before any routing
 app.use((req, res, next) => {
+  // Log ALL requests to debug routing
+  console.log(`[DEBUG TRACE] ${req.method} ${req.path} (originalUrl: ${req.originalUrl})`);
+  
   if (req.path.startsWith('/grow3')) {
     console.log(`[GLOBAL TRACE] Request intercepted: ${req.method} ${req.path} (originalUrl: ${req.originalUrl})`);
     console.log(`[GLOBAL TRACE] Headers:`, req.headers);
@@ -13654,9 +13657,15 @@ grow3Router.all('*', async (req, res) => {
   const fullPath = `${req.baseUrl}${req.path}`;
   console.log(`[Grow3 Proxy] Handler executing for ${req.method} ${fullPath}`);
   try {
-    // Transform /grow3/devicedatas/device/2 → /api/devicedatas/device/2
+    // req.path already has /grow3 stripped by Express router
+    // e.g., request to /grow3/api/devicedatas gives req.path = /api/devicedatas
+    // But request to /grow3/devicedatas gives req.path = /devicedatas (missing /api)
+    // Ensure path starts with /api for controller
     const controllerBase = getController().replace(/\/+$/, '');
-    const targetPath = fullPath.replace(/^\/grow3/, '/api');
+    let targetPath = req.path;
+    if (!targetPath.startsWith('/api')) {
+      targetPath = `/api${targetPath}`;
+    }
     const targetUrl = `${controllerBase}${targetPath}`;
     
     console.log(`[Grow3 Proxy] ${req.method} ${fullPath} → ${targetUrl}`);
@@ -13664,19 +13673,25 @@ grow3Router.all('*', async (req, res) => {
       console.log(`[Grow3 Proxy] Payload:`, JSON.stringify(req.body, null, 2));
     }
     
-    // Check if this is a device control request (use channelsValue field)
+    // Check if this is a device control request and transform channelsValue → value
     const deviceMatch = targetPath.match(/^\/api\/devicedatas\/device\/(\d+)$/);
-    if (deviceMatch && req.method === 'PATCH') {
-      const { status, channelsValue } = req.body || {};
+    let requestBody = req.body;
+    if (deviceMatch && req.method === 'PATCH' && req.body) {
+      const { status, channelsValue } = req.body;
       console.log(`[Grow3 Proxy] Device control request: device=${deviceMatch[1]}, status=${status}, channelsValue=${channelsValue}`);
+      // Transform channelsValue → value for Code3 controller
+      if (channelsValue !== undefined) {
+        requestBody = { status, value: channelsValue };
+        console.log(`[Grow3 Proxy] Transformed to: value=${channelsValue}`);
+      }
     }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     
     try {
-      const bodyString = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.body !== undefined
-        ? JSON.stringify(req.body)
+      const bodyString = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && requestBody !== undefined
+        ? JSON.stringify(requestBody)
         : undefined;
       
       const response = await fetch(targetUrl, {
