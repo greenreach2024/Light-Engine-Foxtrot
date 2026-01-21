@@ -354,6 +354,18 @@
                     throw new Error(data.message || data.error || 'Login failed');
                 }
                 
+                // Clear stale localStorage to prevent cached farm identity issues
+                localStorage.removeItem('token');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('farmId');
+                localStorage.removeItem('farm_id');
+                localStorage.removeItem('farmName');
+                localStorage.removeItem('farm_name');
+                localStorage.removeItem('planType');
+                localStorage.removeItem('plan_type');
+                localStorage.removeItem('role');
+                localStorage.removeItem('email');
+                
                 // Store token and farm info (standardized to 'token' key)
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('farmId', data.farmId);

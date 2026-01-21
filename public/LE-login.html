@@ -342,6 +342,18 @@
         const data = await response.json();
 
         if (response.ok && data.status === 'success') {
+          // Clear stale localStorage to prevent cached farm identity issues
+          localStorage.removeItem('token');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('farmId');
+          localStorage.removeItem('farm_id');
+          localStorage.removeItem('farmName');
+          localStorage.removeItem('farm_name');
+          localStorage.removeItem('planType');
+          localStorage.removeItem('plan_type');
+          localStorage.removeItem('role');
+          localStorage.removeItem('email');
+          
           localStorage.setItem('auth_token', data.token);
           localStorage.setItem('farm_id', data.farmId);
           localStorage.setItem('farm_name', data.farmName || '');

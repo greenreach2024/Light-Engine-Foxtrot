@@ -185,6 +185,16 @@ router.post('/login', async (req, res) => {
 
     console.log(`[Auth] ✅ Login successful: ${email} (${user.role})`);
 
+    // Query farm details for response
+    const farmResult = await client.query(
+      `SELECT farm_id, name, plan_type FROM farms WHERE farm_id = $1`,
+      [farm_id]
+    );
+
+    const farm = farmResult.rows[0] || {};
+    const farmName = farm.name || user.name || 'Unknown Farm';
+    const planType = farm.plan_type || 'edge';
+
     // Generate JWT token for successful login
     const token = generateFarmToken({
       farm_id,
@@ -195,12 +205,16 @@ router.post('/login', async (req, res) => {
     });
 
     res.json({
+      status: 'success',
       success: true,
       token,
+      farmId: farm_id,
       farm_id,
+      farmName,
       email: user.email,
       name: user.name,
       role: user.role || FARM_ROLES.ADMIN,
+      planType,
       expires_in: '24h'
     });
 
