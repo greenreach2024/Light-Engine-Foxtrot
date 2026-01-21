@@ -161,7 +161,6 @@ router.post('/login', async (req, res) => {
       [email, farm_id]
     );
 
-    console.log(`[Auth] DB lookup: farm_id=${farm_id} email=${email} rows=${result.rows.length}`);
 
     if (result.rows.length === 0) {
       console.log(`[Auth] ❌ User not found: ${email}`);
@@ -178,7 +177,6 @@ router.post('/login', async (req, res) => {
 
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
-    console.log(`[Auth] Password match: ${isValidPassword}`);
     
     if (!isValidPassword) {
       console.log(`[Auth] ❌ Invalid password for: ${email}`);
