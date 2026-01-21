@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activity Hub Setup - Light Engine</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 800px;
+      width: 100%;
+      background: rgba(30, 41, 59, 0.95);
+      border: 2px solid rgba(52, 211, 153, 0.3);
+      border-radius: 16px;
+      padding: 3rem;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+    }
+
+    .farm-info {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .farm-info strong {
+      color: #10b981;
+    }
+
+    .qr-section {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      margin: 2rem 0;
+      text-align: center;
+    }
+
+    #qr-code {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 240px;
+      margin: 1.5rem 0;
+    }
+
+    .instructions {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 2rem 0;
+    }
+
+    .instructions h3 {
+      color: #60a5fa;
+      margin-bottom: 1rem;
+    }
+
+    .instructions ol {
+      margin-left: 1.5rem;
+      line-height: 1.8;
+    }
+
+    .instructions li {
+      margin-bottom: 0.5rem;
+    }
+
+    .url-section {
+      background: rgba(100, 116, 139, 0.2);
+      border: 1px solid rgba(100, 116, 139, 0.3);
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .url-text {
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      word-break: break-all;
+      padding: 0.75rem;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 4px;
+      margin-top: 0.5rem;
+    }
+
+    .tip {
+      background: rgba(245, 158, 11, 0.1);
+      border-left: 4px solid #f59e0b;
+      padding: 1rem;
+      margin: 1.5rem 0;
+      border-radius: 4px;
+    }
+
+    .tip-icon {
+      color: #fbbf24;
+      margin-right: 0.5rem;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 0.875rem 2rem;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      margin: 0.5rem;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-secondary {
+      background: rgba(100, 116, 139, 0.3);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(100, 116, 139, 0.5);
+    }
+
+    .actions {
+      text-align: center;
+      margin-top: 2rem;
+    }
+
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 1rem 0;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 1rem;
+      }
+
+      .container {
+        padding: 1.5rem;
+      }
+
+      h1 {
+        font-size: 2rem;
+      }
+    }
+
+    @media print {
+      body {
+        background: white;
+      }
+
+      .container {
+        border: 2px solid #333;
+        box-shadow: none;
+      }
+
+      .btn {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📱 Activity Hub Setup</h1>
+      <p class="subtitle">Scan this QR code with your iPad to access the Activity Hub</p>
+      <div class="farm-info" id="farm-info">
+        <strong>Farm:</strong> <span id="farm-name">Loading...</span><br>
+        <strong>Farm ID:</strong> <span id="farm-id">Loading...</span>
+      </div>
+    </div>
+
+    <div class="qr-section">
+      <h2 style="color: #1e293b; margin-bottom: 1rem;">QR Code</h2>
+      <div id="qr-code">
+        <div style="color: #64748b;">Generating QR code...</div>
+      </div>
+      <div class="url-section">
+        <strong style="color: #e2e8f0;">Activity Hub URL:</strong>
+        <div class="url-text" id="activity-hub-url">Generating...</div>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <h3>🔷 How to Setup Your iPad</h3>
+      <ol>
+        <li><strong>Open Safari</strong> on your iPad</li>
+        <li><strong>Scan this QR code</strong> with your iPad camera app</li>
+        <li><strong>Tap the notification</strong> that appears at the top of the screen</li>
+        <li><strong>Bookmark the page</strong> in Safari for easy access</li>
+        <li><strong>Optional:</strong> Tap the "Share" button → "Add to Home Screen" for app-like access</li>
+      </ol>
+    </div>
+
+    <div class="tip">
+      <span class="tip-icon">💡</span>
+      <strong>Pro Tip:</strong> Multiple volunteers can each scan this QR code to access the Activity Hub on their own devices. Each person will be authenticated automatically.
+    </div>
+
+    <div class="actions">
+      <button class="btn" onclick="window.print()">🖨️ Print This Page</button>
+      <a href="/farm-admin.html" class="btn btn-secondary">← Back to Dashboard</a>
+      <button class="btn btn-secondary" onclick="regenerateQR()">🔄 Regenerate QR</button>
+    </div>
+
+    <div id="error-message" class="error" style="display: none;"></div>
+  </div>
+
+  <script>
+    // Get farm credentials from localStorage
+    const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id');
+    const farmName = localStorage.getItem('farmName') || localStorage.getItem('farm_name');
+    const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+
+    // Update farm info display
+    document.getElementById('farm-name').textContent = farmName || 'Unknown Farm';
+    document.getElementById('farm-id').textContent = farmId || 'Unknown';
+
+    // Function to generate QR code
+    function generateQRCode() {
+      const qrContainer = document.getElementById('qr-code');
+      const urlDisplay = document.getElementById('activity-hub-url');
+      const errorMessage = document.getElementById('error-message');
+
+      // Validate credentials
+      if (!farmId || !token) {
+        qrContainer.innerHTML = '<div style="color: #ef4444;">❌ Error: Not logged in</div>';
+        urlDisplay.textContent = 'Please log in first';
+        errorMessage.textContent = 'You must be logged in to generate an Activity Hub QR code. Please return to the login page.';
+        errorMessage.style.display = 'block';
+        return;
+      }
+
+      // Clear previous content
+      qrContainer.innerHTML = '';
+      errorMessage.style.display = 'none';
+
+      // Construct Activity Hub URL with authentication
+      const activityHubUrl = `${window.location.origin}/views/tray-inventory.html?farmId=${farmId}&token=${encodeURIComponent(token)}`;
+      
+      // Display URL
+      urlDisplay.textContent = activityHubUrl;
+
+      // Generate QR code using QRCode library
+      try {
+        if (typeof QRCode !== 'undefined') {
+          new QRCode(qrContainer, {
+            text: activityHubUrl,
+            width: 200,
+            height: 200,
+            colorDark: '#1a2332',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+          });
+          console.log('[ActivityHub] QR code generated successfully');
+        } else {
+          // Fallback to API-based QR code generation
+          const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activityHubUrl)}`;
+          qrContainer.innerHTML = `<img src="${qrApiUrl}" alt="Activity Hub QR Code" style="width: 200px; height: 200px; border: 4px solid #10b981; border-radius: 8px;">`;
+          console.log('[ActivityHub] QR code generated via API fallback');
+        }
+      } catch (error) {
+        console.error('[ActivityHub] QR generation failed:', error);
+        qrContainer.innerHTML = '<div style="color: #ef4444;">❌ Failed to generate QR code</div>';
+        errorMessage.textContent = `Error generating QR code: ${error.message}`;
+        errorMessage.style.display = 'block';
+      }
+    }
+
+    // Function to regenerate QR code (useful if token refreshed)
+    function regenerateQR() {
+      console.log('[ActivityHub] Regenerating QR code...');
+      generateQRCode();
+      
+      // Show feedback
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.textContent = '✓ Regenerated';
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }, 2000);
+    }
+
+    // Generate QR code on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      generateQRCode();
+    });
+
+    // Auto-regenerate if credentials change (useful during development)
+    setInterval(() => {
+      const currentToken = localStorage.getItem('token') || localStorage.getItem('auth_token');
+      if (currentToken !== token && currentToken) {
+        console.log('[ActivityHub] Token changed, regenerating QR...');
+        generateQRCode();
+      }
+    }, 5000);
+  </script>
+</body>
+</html>

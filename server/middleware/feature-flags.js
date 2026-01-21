@@ -22,14 +22,14 @@ const FEATURE_DEFINITIONS = {
   'reporting': { tiers: ['inventory-only', 'full', 'enterprise'], name: 'Reporting' },
   
   // Automation features (full tier and above)
-  'automation': { tiers: ['full', 'enterprise'], name: 'Automation Control' },
-  'climate_control': { tiers: ['full', 'enterprise'], name: 'Climate Control' },
-  'sensors': { tiers: ['full', 'enterprise'], name: 'Sensor Monitoring' },
+  'automation': { tiers: ['full', 'edge', 'enterprise'], name: 'Automation Control' },
+  'climate_control': { tiers: ['full', 'edge', 'enterprise'], name: 'Climate Control' },
+  'sensors': { tiers: ['full', 'edge', 'enterprise'], name: 'Sensor Monitoring' },
   
-  // Advanced features (enterprise only)
-  'analytics': { tiers: ['enterprise'], name: 'Advanced Analytics' },
-  'ml': { tiers: ['enterprise'], name: 'Machine Learning' },
-  'api_access': { tiers: ['enterprise'], name: 'API Access' },
+  // Advanced features (edge devices and full deployments)
+  'analytics': { tiers: ['full', 'edge', 'enterprise'], name: 'Advanced Analytics' },
+  'ml': { tiers: ['full', 'edge', 'enterprise'], name: 'Machine Learning' },
+  'api_access': { tiers: ['full', 'edge', 'enterprise'], name: 'API Access' },
 };
 
 /**
@@ -66,18 +66,33 @@ const ENDPOINT_FEATURES = {
 
 /**
  * Get deployment mode from environment or license
- * Priority: DEPLOYMENT_MODE env var > License tier
+ * Priority: DEPLOYMENT_MODE env var > EDGE_MODE check > License tier
  */
 async function getDeploymentMode() {
+  // Debug logging
+  console.log('[FeatureFlags] getDeploymentMode() called:', {
+    DEPLOYMENT_MODE: process.env.DEPLOYMENT_MODE,
+    EDGE_MODE: process.env.EDGE_MODE,
+    NODE_ENV: process.env.NODE_ENV
+  });
+  
   // Check environment variable first
   const envMode = process.env.DEPLOYMENT_MODE;
   if (envMode && ['inventory-only', 'full', 'edge', 'enterprise'].includes(envMode)) {
+    console.log('[FeatureFlags] Using DEPLOYMENT_MODE:', envMode);
     return envMode;
+  }
+  
+  // Edge devices get full ML/AI capabilities
+  if (process.env.EDGE_MODE === 'true' || process.env.EDGE_MODE === true) {
+    console.log('[FeatureFlags] Edge device detected - enabling edge tier features (ML, AI, analytics)');
+    return 'edge';
   }
   
   // Fall back to license tier
   try {
     const tier = await getLicenseTier();
+    console.log('[FeatureFlags] Using license tier:', tier);
     return tier || 'inventory-only'; // Default to most restrictive
   } catch (err) {
     console.warn('[FeatureFlags] Failed to get license tier:', err.message);

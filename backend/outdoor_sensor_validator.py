@@ -6,6 +6,8 @@ when outdoor sensor is offline, stale, or providing invalid readings.
 """
 
 import logging
+import json
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 import requests
@@ -21,6 +23,24 @@ RH_MAX = 100.0
 # Stale data threshold (minutes)
 STALE_THRESHOLD_MINUTES = 15
 
+def load_farm_coordinates() -> Dict:
+    """Load farm coordinates from farm.json config file"""
+    try:
+        farm_json_path = Path(__file__).parent.parent / "public" / "data" / "farm.json"
+        if farm_json_path.exists():
+            with open(farm_json_path, 'r') as f:
+                farm_data = json.load(f)
+                coords = farm_data.get('coordinates', {})
+                if coords.get('lat') and coords.get('lng'):
+                    logger.info(f"✓ Loaded farm coordinates: {coords['lat']}, {coords['lng']} from farm.json")
+                    return {'lat': coords['lat'], 'lng': coords['lng']}
+    except Exception as e:
+        logger.warning(f"Failed to load farm coordinates from farm.json: {e}")
+    
+    # Fallback to Kingston, ON
+    logger.info("Using default coordinates: Kingston, ON (44.258679, -76.372517)")
+    return {'lat': 44.258679, 'lng': -76.372517}
+
 class OutdoorSensorValidator:
     """Validates outdoor sensor data quality and manages fallback to weather API"""
     
@@ -30,10 +50,11 @@ class OutdoorSensorValidator:
         
         Args:
             weather_api_url: Base URL for weather API (e.g., '/api/weather')
-            farm_coords: Dict with 'lat' and 'lng' keys for farm location
+            farm_coords: Dict with 'lat' and 'lng' keys for farm location (if None, loads from farm.json)
         """
         self.weather_api_url = weather_api_url or 'http://localhost:8091/api/weather'
-        self.farm_coords = farm_coords or {'lat': 44.258679, 'lng': -76.372517}  # Kingston, ON
+        # Load farm coordinates from farm.json if not explicitly provided
+        self.farm_coords = farm_coords or load_farm_coordinates()
         self.last_validation = None
         self.validation_cache_seconds = 60
     

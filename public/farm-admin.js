@@ -3190,6 +3190,18 @@ function downloadAllReceipts() {
  */
 async function loadSettings() {
     try {
+        // Load farm data from /data/farm.json (source of truth for edge devices)
+        let farmData = {};
+        try {
+            const farmResponse = await fetch('/data/farm.json');
+            if (farmResponse.ok) {
+                farmData = await farmResponse.json();
+                console.log('[Farm Settings] Loaded farm data from /data/farm.json:', farmData);
+            }
+        } catch (error) {
+            console.warn('[Farm Settings] Failed to load /data/farm.json:', error);
+        }
+        
         // Try to load setup configuration from API
         let setupData = {};
         try {
@@ -3205,15 +3217,15 @@ async function loadSettings() {
             console.log('Setup API not available, using fallback data');
         }
         
-        // Use API data if available, otherwise fallback to session/localStorage data
+        // Use fallback data sources (localStorage, session)
         const storedFarmData = JSON.parse(localStorage.getItem('farmData') || '{}');
         const authFarmId = localStorage.getItem('farm_id');
         const authFarmName = localStorage.getItem('farm_name');
         
-        // Farm Profile - populate from available sources
-        const farmId = setupData.farmId || storedFarmData.farm_id || authFarmId || currentSession?.farmId || 'FARM-MJUKLMO0-9978';
-        const registrationCode = setupData.registrationCode || storedFarmData.registration_code || 'GR-2025-001';
-        const networkType = setupData.network?.type || storedFarmData.network_type || 'Cloud';
+        // Farm Profile - populate from available sources (prioritize /data/farm.json)
+        const farmId = farmData.farmId || setupData.farmId || storedFarmData.farm_id || authFarmId || currentSession?.farmId || 'UNKNOWN';
+        const registrationCode = farmData.registrationCode || setupData.registrationCode || storedFarmData.registration_code || 'UNKNOWN';
+        const networkType = setupData.network?.type || storedFarmData.network_type || 'Edge Device';
         
         document.getElementById('settings-farm-id').value = farmId;
         document.getElementById('settings-registration-code').value = registrationCode;

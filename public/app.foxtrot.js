@@ -3701,10 +3701,12 @@ document.addEventListener('DOMContentLoaded', function() {
     universalScanBtn.addEventListener('click', window.runUniversalScan);
   }
   
-  // Auto-check Grow3 controller status on page load
+  // Auto-check Grow3 controller status on page load and every 30 seconds
   const grow3StatusEl = document.getElementById('grow3Status');
   if (grow3StatusEl) {
     window.checkGrow3Status();
+    // Continuously monitor controller status
+    setInterval(() => window.checkGrow3Status(), 30000);
   }
   
   // Initialize GROW3 Pro 640 fixtures on page load (add to STATE.lights for Groups V2)
@@ -4214,7 +4216,7 @@ window.checkGrow3Status = async function() {
     // Most Grow3 controllers don't expose /healthz; using /api/devicedatas avoids a noisy 404
     const response = await fetch(`${GROW3_BASE_URL}/api/devicedatas`, {
       method: 'GET',
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(3000)  // 3 second timeout for faster offline detection
     });
     
     if (response.ok) {
@@ -4274,7 +4276,7 @@ window.testGrow3Connection = async function() {
     // Note: Grow3 controller doesn't have /healthz, so we use /api/devicedatas as health check
     const devicesResponse = await fetch(`${GROW3_BASE_URL}/api/devicedatas`, {
       method: 'GET',
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(5000)  // 5 second timeout for manual test
     });
     
     if (!devicesResponse.ok) {
