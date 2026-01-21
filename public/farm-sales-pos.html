@@ -819,8 +819,8 @@
         const response = await fetch('/api/config/app');
         const config = await response.json();
         
-        farmId = config.farmId || 'FARM-001';
-        farmName = config.farmName || 'Demo Farm';
+        farmId = config.farmId || config.farm_id || 'FARM-LOCAL';
+        farmName = config.farmName || config.farm_name || 'Light Engine Farm';
         userRole = selectedRole;
         
         // Try to get demo tokens (works in dev/demo mode)
@@ -912,7 +912,7 @@
     // Check if already logged in
     window.addEventListener('DOMContentLoaded', async () => {
       const urlParams = new URLSearchParams(window.location.search);
-      const isDemoMode = urlParams.get('demo') !== '0'; // Demo by default
+      const isDemoMode = urlParams.get('demo') === '1' || urlParams.get('demo') === 'true';
       
       const savedToken = localStorage.getItem('farm_token');
       const savedFarmId = localStorage.getItem('farm_id');
@@ -933,7 +933,7 @@
           
           token = savedToken;
           farmId = savedFarmId;
-          farmName = savedFarmName || config.farmName || 'Demo Farm';
+          farmName = savedFarmName || config.farmName || config.farm_name || 'Light Engine Farm';
           userRole = savedRole;
           
           // Check if token expired and refresh
@@ -963,8 +963,8 @@
           const response = await fetch('/api/config/app');
           const config = await response.json();
           
-          farmId = config.farmId || 'GR-00001';
-          farmName = config.farmName || 'Demo Farm';
+          farmId = config.farmId || config.farm_id || 'FARM-LOCAL';
+          farmName = config.farmName || config.farm_name || 'Light Engine Farm';
           userRole = 'manager';
           
           const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
