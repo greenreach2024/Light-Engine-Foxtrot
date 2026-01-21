@@ -65,7 +65,7 @@ router.get('/:farmId', async (req, res, next) => {
  * POST /api/farms/:farmId/heartbeat
  * Receive heartbeat from edge device
  */
-router.post('/:farmId/heartbeat', express.json(), async (req, res, next) => {
+router.post('/:farmId/heartbeat', async (req, res, next) => {
   try {
     const { farmId } = req.params;
     const { cpu_usage, memory_usage, disk_usage, metadata } = req.body;
@@ -125,7 +125,7 @@ router.post('/:farmId/heartbeat', express.json(), async (req, res, next) => {
  * POST /api/farms/register
  * Register a new farm
  */
-router.post('/register', express.json(), async (req, res, next) => {
+router.post('/register', async (req, res, next) => {
   try {
     const { farmId, name, location, contact } = req.body;
     
