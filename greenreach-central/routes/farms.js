@@ -4,7 +4,6 @@
  */
 
 import express from 'express';
-import { query } from '../config/database.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -13,9 +12,24 @@ const router = express.Router();
 const inMemoryFarms = new Map();
 const inMemoryHeartbeats = [];
 
+// Lazy-load database functions to avoid import errors when DB unavailable
+let queryFn = null;
+async function getQueryFunction() {
+  if (!queryFn) {
+    try {
+      const db = await import('../config/database.js');
+      queryFn = db.query;
+    } catch (error) {
+      logger.warn('Database module not available, using in-memory storage');
+      queryFn = null;
+    }
+  }
+  return queryFn;
+}
+
 // Helper to check if database is available
 function isDatabaseAvailable(req) {
-  return req.app.locals.databaseReady === true;
+  return req.app.locals.databaseReady === true && queryFn !== null;
 }
 
 /**
@@ -36,6 +50,7 @@ router.get('/', async (req, res, next) => {
       return res.json({ farms });
     }
     
+    const query = await getQueryFunction();
     const result = await query(
       `SELECT * FROM farms ORDER BY name ASC`
     );
@@ -78,6 +93,7 @@ router.get('/:farmId', async (req, res, next) => {
       });
     }
     
+    const query = await getQueryFunction();
     const result = await query(
       `SELECT * FROM farms WHERE farm_id = $1`,
       [farmId]
@@ -157,6 +173,8 @@ router.post('/:farmId/heartbeat', express.json(), async (req, res, next) => {
       });
     }
     
+    const query = await getQueryFunction();
+    
     // Check if farm exists
     const existingFarm = await query(
       `SELECT farm_id FROM farms WHERE farm_id = $1`,
@@ -212,6 +230,28 @@ router.post('/:farmId/heartbeat', express.json(), async (req, res, next) => {
 router.post('/register', express.json(), async (req, res, next) => {
   try {
     const { farmId, name, location, contact } = req.body;
+    
+    if (!isDatabaseAvailable(req)) {
+      // Use in-memory storage
+      const now = new Date().toISOString();
+      inMemoryFarms.set(farmId, {
+        farm_id: farmId,
+        name: name || farmId,
+        status: 'online',
+        last_heartbeat: now,
+        metadata: { location, contact },
+        created_at: now,
+        updated_at: now
+      });
+      logger.info(`Farm registered (in-memory): ${farmId}`);
+      return res.status(201).json({
+        success: true,
+        farmId,
+        message: 'Farm registered successfully'
+      });
+    }
+    
+    const query = await getQueryFunction();
     
     // Check if farm already exists
     const existing = await query(
