@@ -104,9 +104,19 @@ export function getDatabase() {
 }
 
 /**
+ * Check if database is available
+ */
+export function isDatabaseAvailable() {
+  return pool !== null;
+}
+
+/**
  * Execute a query with automatic connection management
  */
 export async function query(text, params) {
+  if (!pool) {
+    throw new Error('Database not available');
+  }
   const client = await pool.connect();
   try {
     const result = await client.query(text, params);
