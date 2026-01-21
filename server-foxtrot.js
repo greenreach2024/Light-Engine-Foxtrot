@@ -16231,6 +16231,8 @@ app.get('/api/demo/intro-cards', (req, res) => {
  */
 app.get('/api/inventory/current', (req, res) => {
   try {
+    const farmId = process.env.FARM_ID || 'FARM-LOCAL';
+    const farmName = process.env.FARM_NAME || 'Light Engine Farm';
     // Load from groups.json (real crop data)
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
     if (!fs.existsSync(groupsPath)) {
@@ -16294,8 +16296,8 @@ app.get('/api/inventory/current', (req, res) => {
       farmCount: 1,
       byFarm: [
         {
-          farmId: 'GR-00001',
-          name: 'Demo Vertical Farm',
+          farmId,
+          name: farmName,
           activeTrays: totalTrays,
           totalPlants: totalPlants,
           trays: allTrays
