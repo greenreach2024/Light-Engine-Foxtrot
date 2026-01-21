@@ -17059,7 +17059,10 @@ if (!isControllerDisabled) {
       '/api/farm/auth/',     // Farm authentication alternate path
       '/api/auth/',          // Authentication endpoints (farm login, device tokens)
       '/api/farm-sales/',    // Farm Sales Terminal inventory and POS
-      '/api/wholesale/'      // Wholesale inventory and catalog
+      '/api/wholesale/',     // Wholesale inventory and catalog
+      '/api/groups',         // Groups management (handled by Node.js)
+      '/api/rooms',          // Rooms management
+      '/api/zones'           // Zones management
     ];
     
     // Also check without /api prefix (in case pathname is just the path without /api)
