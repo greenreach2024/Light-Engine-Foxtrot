@@ -932,8 +932,10 @@
           }
           
           token = savedToken;
-          farmId = savedFarmId;
-          farmName = savedFarmName || config.farmName || config.farm_name || 'Light Engine Farm';
+          farmId = config.farmId || config.farm_id || savedFarmId;
+          farmName = config.farmName || config.farm_name || savedFarmName || 'Light Engine Farm';
+          localStorage.setItem('farm_id', farmId);
+          localStorage.setItem('farm_name', farmName);
           userRole = savedRole;
           
           // Check if token expired and refresh

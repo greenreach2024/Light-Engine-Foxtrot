@@ -15698,9 +15698,24 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     
     if (!db) {
       console.error('[/api/farm/profile] Database not available');
-      return res.status(500).json({
-        status: 'error',
-        message: 'Database connection not available'
+      const farmData = readJSONSafe(FARM_PATH, null);
+      const roomsData = readJSONSafe(path.join(DATA_DIR, 'rooms.json'), null);
+      const fallbackFarmId = farmData?.farmId || process.env.FARM_ID || farmId;
+      const fallbackName = farmData?.name || process.env.FARM_NAME || 'Light Engine Farm';
+      return res.json({
+        status: 'success',
+        farm: {
+          farmId: fallbackFarmId,
+          name: fallbackName,
+          planType: 'edge',
+          email: farmData?.contact?.email || '',
+          contactName: farmData?.contact?.name || '',
+          location: farmData?.coordinates || null,
+          timezone: farmData?.timezone || 'America/New_York',
+          posInstanceId: null,
+          storeSubdomain: null,
+          rooms: Array.isArray(roomsData?.rooms) ? roomsData.rooms : []
+        }
       });
     }
     
