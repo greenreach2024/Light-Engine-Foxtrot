@@ -17028,6 +17028,7 @@ if (!isControllerDisabled) {
     // Don't proxy these paths - they're handled by Node.js server
     // Note: pathname may or may not include /api prefix depending on middleware order
     const fullPath = req.originalUrl || pathname;
+    const normalizedFullPath = String(fullPath).replace(/^\/api\/api\//, '/api/');
     const excludePaths = [
       '/api/env',
       '/api/automation/',
@@ -17071,6 +17072,7 @@ if (!isControllerDisabled) {
     
     // Check if full path or pathname starts with any excluded pattern
     const shouldExclude = excludePaths.some(excluded => 
+      normalizedFullPath.startsWith(excluded) || 
       fullPath.startsWith(excluded) || 
       pathname.startsWith(excluded) ||
       withApiPrefix.startsWith(excluded) ||
@@ -17078,7 +17080,7 @@ if (!isControllerDisabled) {
     );
     
     if (shouldExclude) {
-      console.log(`[Proxy Filter] Skipping ${fullPath} - handled by Node.js server`);
+      console.log(`[Proxy Filter] Skipping ${normalizedFullPath} - handled by Node.js server`);
       return false;
     }
     
@@ -23797,8 +23799,8 @@ app.post('/api/channels/:channelId/identify', asyncHandler(async (req, res) => {
 
 // Get list of groups for assignment
 app.get('/api/groups', asyncHandler(async (req, res) => {
-  const groups = await readJson('groups.json', []);
-  
+  const groups = loadGroupsFile();
+
   const formatted = groups.map(g => ({
     id: g.id || g.name,
     name: g.name,
