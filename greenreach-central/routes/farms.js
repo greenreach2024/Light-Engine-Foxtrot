@@ -120,13 +120,6 @@ router.post('/:farmId/heartbeat', express.json(), async (req, res, next) => {
     next(error);
   }
 });
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Error processing heartbeat:', error);
-    next(error);
-  }
-});
 
 /**
  * POST /api/farms/register
@@ -136,51 +129,18 @@ router.post('/register', express.json(), async (req, res, next) => {
   try {
     const { farmId, name, location, contact } = req.body;
     
-    if (!isDatabaseAvailable(req)) {
-      // Use in-memory storage
-      const now = new Date().toISOString();
-      inMemoryFarms.set(farmId, {
-        farm_id: farmId,
-        name: name || farmId,
-        status: 'online',
-        last_heartbeat: now,
-        metadata: { location, contact },
-        created_at: now,
-        updated_at: now
-      });
-      logger.info(`Farm registered (in-memory): ${farmId}`);
-      return res.status(201).json({
-        success: true,
-        farmId,
-        message: 'Farm registered successfully'
-      });
-    }
-    
-    const query = await getQueryFunction();
-    
-    // Check if farm already exists
-    const existing = await query(
-      `SELECT farm_id FROM farms WHERE farm_id = $1`,
-      [farmId]
-    );
-    
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ error: 'Farm already registered' });
-    }
-    
-    await query(
-      `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        farmId,
-        name || farmId,
-        'online',
-        new Date().toISOString(),
-        JSON.stringify({ location, contact })
-      ]
-    );
-    
-    logger.info(`Farm registered: ${farmId}`);
+    // Use in-memory storage only
+    const now = new Date().toISOString();
+    inMemoryFarms.set(farmId, {
+      farm_id: farmId,
+      name: name || farmId,
+      status: 'online',
+      last_heartbeat: now,
+      metadata: { location, contact },
+      created_at: now,
+      updated_at: now
+    });
+    logger.info(`Farm registered (in-memory): ${farmId}`);
     
     res.status(201).json({
       success: true,
