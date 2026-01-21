@@ -9,7 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Import routes
-import farmRoutes from './routes/farms.js';
+import farmRoutes from './routes/farms-test.js';
 import monitoringRoutes from './routes/monitoring.js';
 import inventoryRoutes from './routes/inventory.js';
 import ordersRoutes from './routes/orders.js';
