@@ -1031,16 +1031,6 @@
                     </div>
                 </div>
 
-                <div class="tab-nav">
-                    <button class="tab-btn active" onclick="switchDetailTab('overview', this)">Overview</button>
-                    <button class="tab-btn" onclick="switchDetailTab('rooms', this)">Rooms</button>
-                    <button class="tab-btn" onclick="switchDetailTab('devices', this)">Devices</button>
-                    <button class="tab-btn" onclick="switchDetailTab('inventory', this)">Inventory</button>
-                    <button class="tab-btn" onclick="switchDetailTab('environmental', this)">Environmental</button>
-                    <button class="tab-btn" onclick="switchDetailTab('energy', this)">Energy</button>
-                    <button class="tab-btn" onclick="switchDetailTab('recipes', this)">Recipes</button>
-                </div>
-
                 <div id="detail-overview" class="tab-content active">
                     <div class="grid-2col">
                         <div class="card">
@@ -4546,7 +4536,7 @@ API URL: ${farm.api_url || 'Not configured'}
                     
                     <div id="password-field" style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 6px; color: var(--text-primary); font-weight: 500;">Password</label>
-                        <input type="password" id="user-password" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                        <input type="text" id="user-password" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
                         <small style="color: var(--text-muted); display: block; margin-top: 4px;">Leave blank to auto-generate</small>
                     </div>
                     
@@ -4594,18 +4584,18 @@ API URL: ${farm.api_url || 'Not configured'}
                 <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 14px;">Current Password</label>
-                        <input type="password" id="currentPassword" required 
+                        <input type="text" id="currentPassword" required 
                                style="width: 100%; padding: 10px 12px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 14px;">
                     </div>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 14px;">New Password</label>
-                        <input type="password" id="newPassword" required minlength="8"
+                        <input type="text" id="newPassword" required minlength="8"
                                style="width: 100%; padding: 10px 12px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 14px;">
                         <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Minimum 8 characters</div>
                     </div>
                     <div style="margin-bottom: 24px;">
                         <label style="display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 14px;">Confirm New Password</label>
-                        <input type="password" id="confirmPassword" required minlength="8"
+                        <input type="text" id="confirmPassword" required minlength="8"
                                style="width: 100%; padding: 10px 12px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 14px;">
                     </div>
                     <div id="passwordChangeError" style="display: none; padding: 12px; background: #fee; border: 1px solid #fcc; border-radius: 6px; color: #c00; margin-bottom: 16px; font-size: 14px;"></div>

@@ -53,7 +53,7 @@
   // Redirect to login page
   function redirectToLogin() {
     const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/login.html?return=${returnUrl}`;
+    window.location.href = `/LE-login.html?return=${returnUrl}`;
   }
 
   // Main authentication check
