@@ -17008,6 +17008,20 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Ensure Node.js handlers win for groups before proxy middleware
+app.get('/api/groups', asyncHandler(async (req, res) => {
+  const groups = loadGroupsFile();
+
+  const formatted = groups.map(g => ({
+    id: g.id || g.name,
+    name: g.name,
+    zone: g.zone,
+    devices: g.devices?.length || 0
+  }));
+
+  res.json(formatted);
+}));
+
 // Only set up proxy middleware if controller is not explicitly disabled
 const isControllerDisabled = process.env.CTRL === 'DISABLED' || process.env.CTRL === 'disabled' || process.env.CTRL === 'false';
 if (!isControllerDisabled) {
@@ -23795,20 +23809,6 @@ app.post('/api/channels/:channelId/identify', asyncHandler(async (req, res) => {
     action: 'identify',
     message: 'Channel identification command sent'
   });
-}));
-
-// Get list of groups for assignment
-app.get('/api/groups', asyncHandler(async (req, res) => {
-  const groups = loadGroupsFile();
-
-  const formatted = groups.map(g => ({
-    id: g.id || g.name,
-    name: g.name,
-    zone: g.zone,
-    devices: g.devices?.length || 0
-  }));
-
-  res.json(formatted);
 }));
 
 // Get all bus mappings
