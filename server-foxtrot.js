@@ -16976,8 +16976,8 @@ app.get('/api/config/app', async (req, res) => {
     // Return configuration with fallback
     const config = {
       ok: true,
-      farmId: (farmData && farmData.farmId) ? farmData.farmId : 'light-engine-demo',
-      farmName: (farmData && farmData.name) ? farmData.name : 'GreenReach Demo Farm',
+      farmId: (farmData && farmData.farmId) ? farmData.farmId : (process.env.FARM_ID || 'light-engine-demo'),
+      farmName: (farmData && farmData.name) ? farmData.name : (process.env.FARM_NAME || 'GreenReach Demo Farm'),
       farmSlug: subdomain !== 'default' ? subdomain : 'demo',
       storeUrl: subdomain !== 'default' ? `https://${subdomain}.greenreachgreens.com` : null,
       region: (farmData && farmData.region) ? farmData.region : 'Pacific Northwest',
@@ -16991,8 +16991,8 @@ app.get('/api/config/app', async (req, res) => {
     // Even on error, return valid config with defaults
     res.json({
       ok: true,
-      farmId: 'light-engine-demo',
-      farmName: 'GreenReach Demo Farm',
+      farmId: process.env.FARM_ID || 'light-engine-demo',
+      farmName: process.env.FARM_NAME || 'GreenReach Demo Farm',
       farmSlug: 'demo',
       region: 'Pacific Northwest',
       status: 'online'
