@@ -48,8 +48,11 @@ async function autoAuthenticate() {
         if (response.ok) {
             const data = await response.json();
             localStorage.setItem('adminAuthToken', data.token);
-            localStorage.setItem('adminFarmId', data.farmId);
+            localStorage.setItem('farm_id', data.farmId);
             localStorage.setItem('adminEmail', data.email);
+            // Clean up legacy keys
+            localStorage.removeItem('adminFarmId');
+            localStorage.removeItem('farmId');
             console.log(' Auto-authentication successful');
         } else {
             console.warn(' Auto-authentication failed, continuing in demo mode');

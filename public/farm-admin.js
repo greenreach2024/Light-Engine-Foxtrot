@@ -112,7 +112,9 @@ async function initDashboard() {
         // Store token in localStorage for wizard check
         if (!localStorage.getItem('token')) {
             localStorage.setItem('token', 'local-access');
-            localStorage.setItem('farmId', 'LOCAL-FARM');
+            localStorage.setItem('farm_id', 'LOCAL-FARM');
+            localStorage.removeItem('farmId');
+            localStorage.removeItem('adminFarmId');
             localStorage.setItem('farm_id', 'LOCAL-FARM');
         }
         console.log(' Using local default session');

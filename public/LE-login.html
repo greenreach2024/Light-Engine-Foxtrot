@@ -358,6 +358,9 @@
           localStorage.setItem('farm_id', data.farmId);
           localStorage.setItem('farm_name', data.farmName || '');
           localStorage.setItem('plan_type', data.planType || 'cloud');
+          // Clean up legacy keys
+          localStorage.removeItem('farmId');
+          localStorage.removeItem('adminFarmId');
           
           // Check if this is first-time login
           if (data.firstLogin) {

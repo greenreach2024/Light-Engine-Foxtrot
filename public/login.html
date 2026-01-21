@@ -366,13 +366,16 @@
                 localStorage.removeItem('role');
                 localStorage.removeItem('email');
                 
-                // Store token and farm info (standardized to 'token' key)
+                // Store token and farm info (standardized to 'token' and 'farm_id' keys)
                 localStorage.setItem('token', data.token);
-                localStorage.setItem('farmId', data.farmId);
-                localStorage.setItem('farmName', data.farmName || '');
+                localStorage.setItem('farm_id', data.farmId); // Use farm_id consistently
+                localStorage.setItem('farm_name', data.farmName || '');
                 localStorage.setItem('email', email);
                 localStorage.setItem('role', data.role || 'admin');
                 localStorage.setItem('planType', data.planType || 'cloud'); // Store plan type for wizard
+                // Clean up legacy keys
+                localStorage.removeItem('farmId');
+                localStorage.removeItem('adminFarmId');
                 
                 console.log('[Login] Stored planType:', data.planType);
                 
