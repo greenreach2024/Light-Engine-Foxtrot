@@ -354,13 +354,14 @@
           localStorage.removeItem('role');
           localStorage.removeItem('email');
           
-          localStorage.setItem('auth_token', data.token);
+          localStorage.setItem('token', data.token);
           localStorage.setItem('farm_id', data.farmId);
           localStorage.setItem('farm_name', data.farmName || '');
           localStorage.setItem('plan_type', data.planType || 'cloud');
           // Clean up legacy keys
           localStorage.removeItem('farmId');
           localStorage.removeItem('adminFarmId');
+          localStorage.removeItem('auth_token'); // Clean up old key
           
           // Check if this is first-time login
           if (data.firstLogin) {

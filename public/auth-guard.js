@@ -35,7 +35,17 @@
 
   // Check if user has valid token
   function hasValidToken() {
-    const token = localStorage.getItem('token');
+    let token = localStorage.getItem('token');
+    // Also check legacy auth_token key
+    if (!token) {
+      token = localStorage.getItem('auth_token');
+      // Migrate to standard 'token' key
+      if (token) {
+        localStorage.setItem('token', token);
+        localStorage.removeItem('auth_token');
+      }
+    }
+    
     if (!token) return false;
     
     // Token is JWT from server - basic validation
@@ -47,6 +57,7 @@
     
     // If token format is invalid, remove it
     localStorage.removeItem('token');
+    localStorage.removeItem('auth_token');
     return false;
   }
 
