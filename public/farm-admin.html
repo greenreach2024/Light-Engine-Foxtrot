@@ -2304,12 +2304,16 @@
                                     <!-- Loaded from setup wizard -->
                                 </div>
                             </div>
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Farm Attributes</h3>
-                                <div id="attributes-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                    <!-- Loaded from setup wizard -->
-                                </div>
-                            </div>
+                            <!-- 
+                                FARM ATTRIBUTES SECTION REMOVED - DO NOT RE-ADD
+                                
+                                Removed: Woman-Owned, Veteran-Owned, Minority-Owned, Family Farm, Sustainable
+                                Reason: These demographic/business classifications are not relevant for farm operations
+                                Decision: Permanently removed per user request on 2026-01-22
+                                
+                                Focus: Keep only technical certifications (GAP, USDA Organic, Food Safety, Greenhouse)
+                                       and operational practices (Pesticide Free, Non-GMO, Hydroponic, Local, Year-Round)
+                            -->
                         </div>
                     </div>
 
@@ -2719,32 +2723,33 @@
                             </div>
                         </div>
                         
-                        <!-- Farm Attributes -->
-                        <div style="margin-bottom: 25px;">
-                            <h3 style="color: var(--accent-purple); margin-bottom: 15px; font-size: 16px;">Farm Attributes</h3>
-                            <div style="display: flex; flex-direction: column; gap: 10px;">
-                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
-                                    <input type="checkbox" name="attributes" value="Woman Owned" style="width: 20px; height: 20px;">
-                                    <span>Woman-Owned Business</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
-                                    <input type="checkbox" name="attributes" value="Veteran Owned" style="width: 20px; height: 20px;">
-                                    <span>Veteran-Owned Business</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
-                                    <input type="checkbox" name="attributes" value="Minority Owned" style="width: 20px; height: 20px;">
-                                    <span>Minority-Owned Business</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
-                                    <input type="checkbox" name="attributes" value="Family Farm" style="width: 20px; height: 20px;">
-                                    <span>🏡 Family Farm</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
-                                    <input type="checkbox" name="attributes" value="Sustainable" style="width: 20px; height: 20px;">
-                                    <span>♻️ Sustainable Practices</span>
-                                </label>
-                            </div>
-                        </div>
+                        <!-- 
+                            ============================================================================
+                            FARM ATTRIBUTES SECTION PERMANENTLY REMOVED - DO NOT RE-ADD
+                            ============================================================================
+                            
+                            Removed items:
+                            - Woman-Owned Business
+                            - Veteran-Owned Business  
+                            - Minority-Owned Business
+                            - Family Farm (with emoji)
+                            - Sustainable Practices (with emoji)
+                            
+                            Reason for removal:
+                            These demographic/business attributes are not relevant for technical farm
+                            operations or wholesale produce transactions. Farms are selected based on
+                            certifications (GAP, USDA Organic, Food Safety) and growing methods
+                            (Pesticide Free, Hydroponic, etc.), not business ownership structure.
+                            
+                            History:
+                            - Removed multiple times but kept getting re-added
+                            - Final removal: 2026-01-22 per user directive
+                            
+                            Policy:
+                            Do not re-add these fields under any circumstances. No emojis in UI.
+                            Focus only on technical certifications and operational practices.
+                            ============================================================================
+                        -->
                         
                         <div style="display: flex; gap: 10px; justify-content: flex-end;">
                             <button type="button" class="btn-secondary" onclick="closeEditCertificationsModal()" style="padding: 10px 20px;">Cancel</button>

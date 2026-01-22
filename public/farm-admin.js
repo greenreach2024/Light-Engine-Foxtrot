@@ -3266,15 +3266,9 @@ async function loadSettings() {
                     practicesList.appendChild(badge);
                 });
                 
-                const attrList = document.getElementById('attributes-list');
-                attrList.innerHTML = '';
-                (setupData.certifications.attributes || []).forEach(attr => {
-                    const badge = document.createElement('span');
-                    badge.className = 'badge';
-                    badge.style.cssText = 'background: rgba(139, 92, 246, 0.1); color: var(--accent-purple); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-purple);';
-                    badge.textContent = attr;
-                    attrList.appendChild(badge);
-                });
+                // ATTRIBUTES DISPLAY REMOVED - DO NOT RE-ADD
+                // Section removed: Woman-Owned, Veteran-Owned, Minority-Owned, Family Farm, Sustainable
+                // Reason: Not relevant for farm operations. Focus on certifications and practices only.
                 
                 // Show placeholder if no data
                 if (!setupData.certifications.certifications?.length) {
@@ -3283,9 +3277,7 @@ async function loadSettings() {
                 if (!setupData.certifications.practices?.length) {
                     practicesList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No practices selected</span>';
                 }
-                if (!setupData.certifications.attributes?.length) {
-                    attrList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No attributes selected</span>';
-                }
+                // ATTRIBUTES PLACEHOLDER REMOVED - section permanently deleted
             }
         }
         
@@ -3509,11 +3501,9 @@ async function openEditCertificationsModal() {
             if (checkbox) checkbox.checked = true;
         });
         
-        // Check attributes
-        certifications.attributes?.forEach(attr => {
-            const checkbox = form.querySelector(`input[name="attributes"][value="${attr}"]`);
-            if (checkbox) checkbox.checked = true;
-        });
+        // ATTRIBUTES SECTION REMOVED - DO NOT RE-ADD
+        // Removed: Woman-Owned, Veteran-Owned, Minority-Owned, Family Farm, Sustainable
+        // Decision: Not relevant for farm operations (2026-01-22)
         
         // Show modal
         document.getElementById('editCertificationsModal').style.display = 'block';
@@ -3544,13 +3534,14 @@ async function saveEditCertifications(event) {
             .map(cb => cb.value);
         const practices = Array.from(form.querySelectorAll('input[name="practices"]:checked'))
             .map(cb => cb.value);
-        const attributes = Array.from(form.querySelectorAll('input[name="attributes"]:checked'))
-            .map(cb => cb.value);
+        
+        // ATTRIBUTES REMOVED - DO NOT RE-ADD (Woman-Owned, Veteran-Owned, etc.)
+        // Only certifications and practices are relevant for farm operations
         
         const updatedCertifications = {
             certifications,
             practices,
-            attributes
+            attributes: [] // Always empty - attributes section removed permanently
         };
         
         // Save to API
