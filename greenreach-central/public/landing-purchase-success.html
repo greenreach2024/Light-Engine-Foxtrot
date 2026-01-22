@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Complete - Light Engine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 48px;
+            text-align: center;
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            background: #10b981;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        .success-icon svg {
+            width: 48px;
+            height: 48px;
+            stroke: white;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        @keyframes scaleIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        h1 {
+            color: #1a202c;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .subtitle {
+            color: #4a5568;
+            font-size: 18px;
+            margin-bottom: 32px;
+        }
+
+        .info-box {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+            text-align: left;
+        }
+
+        .info-box h2 {
+            color: #2d3748;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+
+        .info-box p {
+            color: #4a5568;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .info-box strong {
+            color: #1a202c;
+        }
+
+        .alert {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 24px 0;
+            text-align: left;
+        }
+
+        .alert strong {
+            color: #92400e;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .alert p {
+            color: #78350f;
+            line-height: 1.5;
+        }
+
+        .button {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 16px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            margin-top: 24px;
+        }
+
+        .button:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);
+        }
+
+        .spinner {
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .support {
+            margin-top: 32px;
+            padding-top: 32px;
+            border-top: 1px solid #e2e8f0;
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .support a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .support a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loading">
+            <div class="spinner"></div>
+            <p style="color: #4a5568; margin-top: 16px;">Verifying payment and creating your account...</p>
+        </div>
+
+        <!-- Success State -->
+        <div id="success" class="hidden">
+            <div class="success-icon">
+                <svg viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+
+            <h1>Payment Successful!</h1>
+            <p class="subtitle">Your Light Engine account is being created</p>
+
+            <div class="info-box">
+                <h2>What happens next?</h2>
+                <p><strong>1. Check your email</strong> - We've sent your login credentials and setup instructions.</p>
+                <p><strong>2. Verify your account</strong> - Click the login link in the email.</p>
+                <p><strong>3. Complete setup</strong> - Follow the guided setup wizard.</p>
+                <p><strong>4. Start growing!</strong> - Begin managing your farm operations.</p>
+            </div>
+
+            <div class="alert">
+                <strong>⚠️ Important</strong>
+                <p>Your welcome email contains sensitive login information. Please keep it secure and change your password after first login.</p>
+            </div>
+
+            <a href="/login.html" class="button" id="loginButton">Go to Login</a>
+
+            <div class="support">
+                <p>Didn't receive the email? Check your spam folder or <a href="mailto:info@greenreachfarms.com">contact support</a></p>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="hidden">
+            <div style="width: 80px; height: 80px; margin: 0 auto 24px; background: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                <svg viewBox="0 0 24 24" style="width: 48px; height: 48px; stroke: white; stroke-width: 3; fill: none;">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </div>
+
+            <h1>Oops! Something went wrong</h1>
+            <p class="subtitle" id="errorMessage">Unable to verify payment</p>
+
+            <div class="info-box">
+                <h2>What to do:</h2>
+                <p>1. Check if payment was charged to your card</p>
+                <p>2. Wait 5 minutes and check your email</p>
+                <p>3. If issue persists, contact support with your order ID</p>
+            </div>
+
+            <a href="/landing-purchase.html" class="button" style="background: #6b7280;">Try Again</a>
+            <a href="mailto:info@greenreachfarms.com" class="button" style="background: #3b82f6;">Contact Support</a>
+        </div>
+    </div>
+
+    <script>
+        // Get session ID from URL or localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        let sessionId = urlParams.get('session_id');
+        
+        // If not in URL, try to get from localStorage (Square doesn't append it to redirect)
+        if (!sessionId) {
+            const pendingPurchase = localStorage.getItem('pendingPurchase');
+            if (pendingPurchase) {
+                try {
+                    const purchase = JSON.parse(pendingPurchase);
+                    sessionId = purchase.sessionId;
+                    console.log('Retrieved session ID from localStorage:', sessionId);
+                } catch (e) {
+                    console.error('Failed to parse pendingPurchase from localStorage:', e);
+                }
+            }
+        }
+
+        if (!sessionId) {
+            showError('No payment session found. This page should only be accessed after completing payment on Square. Please return to the purchase page to start a new order.');
+        } else {
+            verifyPayment(sessionId);
+        }
+
+        async function verifyPayment(sessionId) {
+            try {
+                const response = await fetch(`/api/farms/verify-session/${sessionId}`);
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Clear pending purchase from localStorage
+                    localStorage.removeItem('pendingPurchase');
+                    
+                    // Account created successfully
+                    setTimeout(() => {
+                        document.getElementById('loading').classList.add('hidden');
+                        document.getElementById('success').classList.remove('hidden');
+                    }, 1500); // Small delay for better UX
+                } else {
+                    // Show specific error message from server
+                    const errorMsg = data.message || data.error || 'Payment verification failed';
+                    showError(errorMsg + (data.status ? ` (Status: ${data.status})` : ''));
+                }
+            } catch (error) {
+                console.error('Verification error:', error);
+                showError('Unable to connect to server. Please try again.');
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('error').classList.remove('hidden');
+        }
+
+        // Auto-redirect to login after 10 seconds
+        document.getElementById('success').addEventListener('DOMNodeInserted', () => {
+            setTimeout(() => {
+                const button = document.getElementById('loginButton');
+                if (button && !button.classList.contains('hidden')) {
+                    // Show countdown
+                    let countdown = 10;
+                    const originalText = button.textContent;
+                    const interval = setInterval(() => {
+                        button.textContent = `${originalText} (${countdown}s)`;
+                        countdown--;
+                        if (countdown < 0) {
+                            clearInterval(interval);
+                            window.location.href = '/login.html?new=1';
+                        }
+                    }, 1000);
+                }
+            }, 2000);
+        });
+    </script>
+</body>
+</html>

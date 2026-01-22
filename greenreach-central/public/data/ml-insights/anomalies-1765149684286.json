@@ -1,0 +1,15 @@
+{
+  "job": "anomalies",
+  "timestamp": "2025-12-07T23:21:24.286Z",
+  "data": {
+    "error": "Outdoor sensor validation failed",
+    "reason": "no_outdoor_sensor",
+    "outdoor_sensor": null,
+    "timestamp": "2025-12-07T23:21:24.286Z",
+    "ml_gated": true
+  },
+  "metadata": {
+    "generatedAt": "2025-12-07T23:21:24.286Z",
+    "validUntil": "2025-12-08T23:21:24.286Z"
+  }
+}

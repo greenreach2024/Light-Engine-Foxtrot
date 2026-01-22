@@ -1,0 +1,526 @@
+/* PWA Styles - Mobile optimizations and install UI */
+
+/* ===========================================
+   Mobile-First Responsive Design
+   =========================================== */
+
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  
+  /* Touch-friendly buttons */
+  button,
+  .btn,
+  a.button {
+    min-height: 44px;
+    min-width: 44px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+  
+  /* Form inputs */
+  input,
+  select,
+  textarea {
+    font-size: 16px; /* Prevents iOS zoom */
+    padding: 12px;
+  }
+  
+  /* Tables scroll horizontally */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Cards stack vertically */
+  .card-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Navigation */
+  .nav-menu {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    background: var(--bg-secondary);
+    padding: 8px;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+  }
+  
+  .nav-menu a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+  
+  .nav-menu a.active {
+    color: var(--primary);
+  }
+  
+  .nav-menu svg {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 4px;
+  }
+}
+
+/* iPad and tablet optimizations */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .container {
+    max-width: 90%;
+  }
+  
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  /* Split view support */
+  @supports (width: max(20vw, 100px)) {
+    .sidebar {
+      width: max(20vw, 200px);
+    }
+  }
+}
+
+/* Landscape mode optimizations */
+@media (orientation: landscape) and (max-height: 500px) {
+  .header {
+    padding: 8px 16px;
+  }
+  
+  .nav-menu {
+    flex-direction: row;
+  }
+}
+
+/* ===========================================
+   PWA Install Button
+   =========================================== */
+
+.pwa-install-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.pwa-install-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
+}
+
+.pwa-install-button:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .pwa-install-button {
+    bottom: 80px; /* Above bottom nav */
+    right: 16px;
+    padding: 10px 20px;
+    font-size: 13px;
+  }
+}
+
+/* ===========================================
+   Online Status Indicator
+   =========================================== */
+
+.pwa-online-status {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9998;
+  
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: opacity 0.3s;
+}
+
+.pwa-online-status.online {
+  background: rgba(16, 185, 129, 0.9);
+}
+
+.pwa-online-status.offline {
+  background: rgba(239, 68, 68, 0.9);
+}
+
+.pwa-online-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ===========================================
+   Update Notification
+   =========================================== */
+
+.pwa-update-notification {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  padding: 16px 20px;
+  min-width: 300px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateX(-50%) translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+}
+
+.pwa-update-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pwa-update-content span {
+  flex: 1;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.pwa-update-content button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.pwa-update-content button:first-of-type {
+  background: #10b981;
+  color: white;
+}
+
+.pwa-update-content button:first-of-type:hover {
+  background: #059669;
+}
+
+.pwa-update-content button:last-of-type {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.pwa-update-content button:last-of-type:hover {
+  background: #d1d5db;
+}
+
+/* ===========================================
+   iOS Install Instructions Modal
+   =========================================== */
+
+.pwa-ios-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  padding: 20px;
+}
+
+.pwa-ios-content {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.pwa-ios-content h3 {
+  margin: 0 0 16px 0;
+  font-size: 24px;
+  color: #1a202c;
+}
+
+.pwa-ios-content p {
+  margin: 0 0 16px 0;
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+.pwa-ios-content ol {
+  margin: 0 0 24px 0;
+  padding-left: 24px;
+  color: #2d3748;
+}
+
+.pwa-ios-content li {
+  margin: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pwa-ios-content li svg {
+  color: #10b981;
+}
+
+.pwa-ios-content button {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.pwa-ios-content button:hover {
+  transform: translateY(-2px);
+}
+
+/* ===========================================
+   Offline Mode Styles
+   =========================================== */
+
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9997;
+  
+  background: #fbbf24;
+  color: #78350f;
+  padding: 12px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.offline-content {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.offline-indicator {
+  position: relative;
+}
+
+.offline-indicator::after {
+  content: '(Offline)';
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: #ef4444;
+  color: white;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* ===========================================
+   Touch Gestures
+   =========================================== */
+
+.swipeable {
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.pull-to-refresh {
+  position: relative;
+  overflow: hidden;
+}
+
+.pull-to-refresh-indicator {
+  position: absolute;
+  top: -60px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s;
+}
+
+.pull-to-refresh-indicator.pulling {
+  transform: translateY(60px);
+}
+
+.pull-to-refresh-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===========================================
+   Safe Area Insets (iPhone notch, etc.)
+   =========================================== */
+
+@supports (padding: max(0px)) {
+  .safe-top {
+    padding-top: max(20px, env(safe-area-inset-top));
+  }
+  
+  .safe-bottom {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+  
+  .safe-left {
+    padding-left: max(20px, env(safe-area-inset-left));
+  }
+  
+  .safe-right {
+    padding-right: max(20px, env(safe-area-inset-right));
+  }
+}
+
+/* ===========================================
+   Print Styles
+   =========================================== */
+
+@media print {
+  .pwa-install-button,
+  .pwa-online-status,
+  .pwa-update-notification,
+  .nav-menu {
+    display: none !important;
+  }
+  
+  body {
+    background: white;
+    color: black;
+  }
+  
+  a {
+    text-decoration: underline;
+  }
+  
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+  }
+}
+
+/* ===========================================
+   Accessibility
+   =========================================== */
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .pwa-install-button {
+    border: 2px solid white;
+  }
+  
+  .pwa-online-status {
+    border: 1px solid currentColor;
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .pwa-update-notification {
+    background: #1a202c;
+  }
+  
+  .pwa-update-content span {
+    color: #e5e7eb;
+  }
+  
+  .pwa-ios-content {
+    background: #1a202c;
+    color: #e5e7eb;
+  }
+  
+  .pwa-ios-content h3 {
+    color: #f3f4f6;
+  }
+  
+  .pwa-ios-content p,
+  .pwa-ios-content li {
+    color: #d1d5db;
+  }
+}

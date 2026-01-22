@@ -1,0 +1,79 @@
+{
+  "version": "2025-12-17-v1",
+  "farmId": "light-engine-demo",
+  "lastUpdated": "2025-12-17T17:30:00Z",
+  "crops": [
+    {
+      "crop": "Mei Qing Pak Choi",
+      "unit": "lb",
+      "retailPrice": 5.50,
+      "wholesalePrice": 3.85,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Lacinato Kale",
+      "unit": "lb",
+      "retailPrice": 6.50,
+      "wholesalePrice": 4.55,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Bibb Butterhead",
+      "unit": "lb",
+      "retailPrice": 5.00,
+      "wholesalePrice": 3.50,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Frisée Endive",
+      "unit": "lb",
+      "retailPrice": 8.00,
+      "wholesalePrice": 5.60,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Red Russian Kale",
+      "unit": "lb",
+      "retailPrice": 6.50,
+      "wholesalePrice": 4.55,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Buttercrunch Lettuce",
+      "unit": "lb",
+      "retailPrice": 5.00,
+      "wholesalePrice": 3.50,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Tatsoi",
+      "unit": "lb",
+      "retailPrice": 6.00,
+      "wholesalePrice": 4.20,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Watercress",
+      "unit": "lb",
+      "retailPrice": 7.00,
+      "wholesalePrice": 4.90,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    }
+  ]
+}

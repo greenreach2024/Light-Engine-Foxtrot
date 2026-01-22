@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Light Engine Setup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0f1e;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --border: #2d3748;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .wizard-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .wizard-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #60a5fa;
+            margin-bottom: 0.5rem;
+        }
+
+        .wizard-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .progress-bar {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 2rem 0;
+        }
+
+        .progress-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--border);
+            transition: all 0.3s;
+        }
+
+        .progress-dot.active {
+            background: var(--accent-blue);
+            transform: scale(1.3);
+        }
+
+        .progress-dot.completed {
+            background: var(--accent-green);
+        }
+
+        .step {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .step-content {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .step-title {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .step-description {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .form-label.required::after {
+            content: " *";
+            color: var(--accent-red);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .room-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .room-title {
+            font-size: 1.2rem;
+            color: var(--accent-blue);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card);
+        }
+
+        .btn-danger {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .btn-success {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .footer-nav {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .footer-nav .btn {
+            flex: 1;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="wizard-header">
+            <div class="wizard-title">Light Engine Setup</div>
+            <div class="wizard-subtitle">Complete your farm profile to get started</div>
+            <div class="progress-bar">
+                <div class="progress-dot active" id="dot-0"></div>
+                <div class="progress-dot" id="dot-1"></div>
+                <div class="progress-dot" id="dot-2"></div>
+            </div>
+        </div>
+
+        <!-- Step 1: Welcome -->
+        <div class="step active" id="step-0">
+            <div class="step-content">
+                <h2 class="step-title">Welcome to Light Engine</h2>
+                <p class="step-description">
+                    Thank you for purchasing Light Engine. Let's set up your farm profile and monitoring dashboard. This will only take a few minutes.
+                </p>
+                <button class="btn btn-primary" onclick="nextStep()">Get Started</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Farm Profile -->
+        <div class="step" id="step-1">
+            <div class="step-content">
+                <h2 class="step-title">Farm Profile</h2>
+                <p class="step-description">
+                    Enter your farm's basic information
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label required">Farm Name</label>
+                    <input type="text" class="form-input" id="farm-name" placeholder="e.g., Green Valley Farms" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label required">Contact Name</label>
+                    <input type="text" class="form-input" id="contact-name" placeholder="e.g., John Smith" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label required">Contact Email</label>
+                    <input type="email" class="form-input" id="contact-email" placeholder="e.g., john@greenvalley.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Phone Number</label>
+                    <input type="tel" class="form-input" id="contact-phone" placeholder="e.g., (555) 123-4567">
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Grow Rooms -->
+        <div class="step" id="step-2">
+            <div class="step-content">
+                <h2 class="step-title">Grow Rooms</h2>
+                <p class="step-description">
+                    Add the growing spaces in your farm. You need at least one room to continue.
+                </p>
+
+                <div id="rooms-container"></div>
+
+                <button type="button" class="btn btn-secondary" onclick="addRoom()" style="width: 100%;">
+                    Add Room
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 4: Activity Hub Setup -->
+        <div class="step" id="step-3">
+            <div class="step-content">
+                <h2 class="step-title">📱 Activity Hub</h2>
+                <p class="step-description">
+                    Install the Activity Hub on your iPad for easy farm floor operations.
+                </p>
+
+                <div class="card" style="margin-bottom: 1.5rem; text-align: center;">
+                    <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">Quick Install with QR Code</h3>
+                    <div id="activity-hub-qr" style="display: flex; justify-content: center; margin: 1.5rem 0;">
+                        <!-- QR code will be generated here -->
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">
+                        Scan this code with your iPad camera to open Activity Hub in Safari
+                    </p>
+                </div>
+
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">📝 Manual Setup</h3>
+                    <ol style="padding-left: 1.5rem; color: var(--text-secondary); line-height: 1.8;">
+                        <li>Open Safari on your iPad</li>
+                        <li>Navigate to: <code id="activity-hub-url" style="background: var(--bg-secondary); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-blue); cursor: pointer;" onclick="copyHubUrl()">Loading...</code></li>
+                        <li>Tap the Share button <span style="font-size: 1.2rem;">⎋</span></li>
+                        <li>Select "Add to Home Screen"</li>
+                        <li>Tap "Add" to install</li>
+                    </ol>
+                </div>
+
+                <div class="alert" style="background: rgba(59, 130, 246, 0.1); border-left: 3px solid var(--accent-blue);">
+                    <strong>✨ Pro Tip:</strong> Once installed, Activity Hub works offline and loads instantly - perfect for the farm floor!
+                </div>
+
+                <div style="margin-top: 1.5rem; text-align: center;">
+                    <button class="btn btn-secondary" onclick="skipActivityHub()" style="margin-right: 1rem;">
+                        Skip for Now
+                    </button>
+                    <button class="btn btn-primary" onclick="activityHubComplete()">
+                        I've Installed It
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: Complete -->
+        <div class="step" id="step-4">
+            <div class="step-content">
+                <h2 class="step-title">Setup Complete</h2>
+                <p class="step-description">
+                    Your Light Engine monitoring dashboard is ready!
+                </p>
+
+                <div id="complete-message" class="alert alert-success">
+                    Your farm profile has been saved. You can now access your monitoring dashboard.
+                </div>
+
+                <button type="button" class="btn btn-success" onclick="goToDashboard()" style="width: 100%;">
+                    Go to Dashboard
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="footer-nav">
+            <button type="button" class="btn btn-secondary" id="back-btn" onclick="prevStep()" disabled>Back</button>
+            <button type="button" class="btn btn-primary" id="next-btn" onclick="nextStep()">Next</button>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        const totalSteps = 5;
+        let roomCounter = 0;
+
+        // Extract farmId from JWT token
+        function getFarmIdFromToken() {
+            const token = localStorage.getItem('token');
+            if (!token) return null;
+            
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.farmId;
+            } catch (e) {
+                console.error('Failed to decode token:', e);
+                return null;
+            }
+        }
+
+        const farmData = {
+            farmId: getFarmIdFromToken() || localStorage.getItem('farmId'),
+            farmName: '',
+            contactName: '',
+            contactEmail: '',
+            contactPhone: '',
+            rooms: []
+        };
+
+        function updateUI() {
+            // Hide all steps
+            document.querySelectorAll('.step').forEach(step => step.classList.remove('active'));
+            
+            // Show current step
+            document.getElementById(`step-${currentStep}`).classList.add('active');
+
+            // Update progress dots
+            for (let i = 0; i < totalSteps; i++) {
+                const dot = document.getElementById(`dot-${i}`);
+                if (!dot) continue;
+                
+                if (i < currentStep) {
+                    dot.classList.add('completed');
+                    dot.classList.remove('active');
+                } else if (i === currentStep) {
+                    dot.classList.add('active');
+                    dot.classList.remove('completed');
+                } else {
+                    dot.classList.remove('active', 'completed');
+                }
+            }
+
+            // Update nav buttons
+            document.getElementById('back-btn').disabled = currentStep === 0;
+            document.getElementById('next-btn').style.display = currentStep === totalSteps - 1 ? 'none' : 'block';
+        }
+
+        async function nextStep() {
+            // Validate current step
+            if (currentStep === 1) {
+                if (!validateFarmProfile()) return;
+            } else if (currentStep === 2) {
+                if (!validateRooms()) return;
+            }
+
+            // Save and complete on last data collection step
+            if (currentStep === 2) {
+                await saveSetup();
+            }
+
+            if (currentStep < totalSteps - 1) {
+                currentStep++;
+                if (currentStep === 2 && farmData.rooms.length === 0) {
+                    addRoom(); // Add default room
+                }
+                updateUI();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 0) {
+                currentStep--;
+                updateUI();
+            }
+        }
+
+        function validateFarmProfile() {
+            const farmName = document.getElementById('farm-name').value.trim();
+            const contactName = document.getElementById('contact-name').value.trim();
+            const contactEmail = document.getElementById('contact-email').value.trim();
+
+            if (!farmName || !contactName || !contactEmail) {
+                alert('Please fill in all required fields');
+                return false;
+            }
+
+            farmData.farmName = farmName;
+            farmData.contactName = contactName;
+            farmData.contactEmail = contactEmail;
+            farmData.contactPhone = document.getElementById('contact-phone').value.trim();
+
+            return true;
+        }
+
+        function validateRooms() {
+            collectRooms();
+            if (farmData.rooms.length === 0) {
+                alert('Please add at least one grow room');
+                return false;
+            }
+            return true;
+        }
+
+        function addRoom() {
+            roomCounter++;
+            const roomId = `room-${roomCounter}`;
+            const roomsContainer = document.getElementById('rooms-container');
+
+            const roomCard = document.createElement('div');
+            roomCard.className = 'room-card';
+            roomCard.id = roomId;
+            roomCard.innerHTML = `
+                <div class="room-header">
+                    <div class="room-title">Room ${roomCounter}</div>
+                    <button type="button" class="btn btn-danger" onclick="removeRoom('${roomId}')" style="padding: 0.5rem 1rem;">Remove</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label required">Room Name</label>
+                    <input type="text" class="form-input" data-field="name" placeholder="e.g., North Growing Room" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Room Type</label>
+                    <select class="form-select" data-field="type">
+                        <option value="grow">Growing Room</option>
+                        <option value="nursery">Nursery</option>
+                        <option value="harvest">Harvest/Processing</option>
+                        <option value="storage">Storage</option>
+                    </select>
+                </div>
+            `;
+            roomsContainer.appendChild(roomCard);
+        }
+
+        function removeRoom(roomId) {
+            const element = document.getElementById(roomId);
+            if (element) element.remove();
+        }
+
+        function collectRooms() {
+            farmData.rooms = [];
+            const roomCards = document.querySelectorAll('#rooms-container .room-card');
+            
+            roomCards.forEach(card => {
+                const name = card.querySelector('[data-field="name"]').value.trim();
+                const type = card.querySelector('[data-field="type"]').value;
+
+                if (name) {
+                    farmData.rooms.push({
+                        name,
+                        type
+                    });
+                }
+            });
+        }
+
+        async function saveSetup() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    alert('Authentication token not found. Please log in again.');
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                if (!farmData.farmId) {
+                    alert('Farm ID not found. Please log in again.');
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                console.log('Saving setup for farm:', farmData.farmId);
+                
+                const response = await fetch('/api/setup/complete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        farmId: farmData.farmId,
+                        farmName: farmData.farmName,
+                        ownerName: farmData.contactName,
+                        contactEmail: farmData.contactEmail,
+                        contactPhone: farmData.contactPhone,
+                        rooms: farmData.rooms
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Server error:', errorData);
+                    const errorMsg = errorData.detail || errorData.message || errorData.error || `Server returned ${response.status}`;
+                    throw new Error(errorMsg);
+                }
+
+                const data = await response.json();
+                console.log('Setup saved successfully:', data);
+
+            } catch (error) {
+                console.error('Setup save error:', error);
+                alert(`Failed to save setup: ${error.message}. Please try again.`);
+                throw error;
+            }
+        }
+
+        function goToDashboard() {
+            window.location.href = '/farm-admin.html';
+        }
+
+        // Activity Hub functions
+        function generateActivityHubQR() {
+            const baseUrl = window.location.origin;
+            const hubUrl = `${baseUrl}/views/tray-inventory.html`;
+            
+            // Display URL
+            document.getElementById('activity-hub-url').textContent = hubUrl;
+            
+            // Generate QR code using Google Charts API
+            const qrContainer = document.getElementById('activity-hub-qr');
+            const qrSize = 200;
+            const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=${qrSize}x${qrSize}&chl=${encodeURIComponent(hubUrl)}&choe=UTF-8`;
+            
+            qrContainer.innerHTML = `
+                <img src="${qrUrl}" alt="Activity Hub QR Code" style="border: 2px solid var(--border); border-radius: 8px; padding: 10px; background: white;" />
+            `;
+        }
+
+        function copyHubUrl() {
+            const url = document.getElementById('activity-hub-url').textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                const elem = document.getElementById('activity-hub-url');
+                const originalText = elem.textContent;
+                elem.textContent = 'Copied!';
+                elem.style.color = 'var(--accent-green)';
+                setTimeout(() => {
+                    elem.textContent = originalText;
+                    elem.style.color = 'var(--accent-blue)';
+                }, 2000);
+            });
+        }
+
+        function skipActivityHub() {
+            nextStep();
+        }
+
+        function activityHubComplete() {
+            nextStep();
+        }
+
+        // Initialize
+        updateUI();
+        
+        // Generate Activity Hub QR when step loads
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.target.classList.contains('active')) {
+                    const stepId = mutation.target.id;
+                    if (stepId === 'step-3') {
+                        generateActivityHubQR();
+                    }
+                }
+            });
+        });
+        
+        document.querySelectorAll('.step').forEach(step => {
+            observer.observe(step, { attributes: true, attributeFilter: ['class'] });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - GreenReach Central</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0f1e;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --border: #2d3748;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            font-size: 24px;
+            color: var(--accent-blue);
+            margin-bottom: 8px;
+        }
+
+        .logo p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .button {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--accent-blue);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .button:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .security-notice {
+            margin-top: 30px;
+            padding: 16px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid var(--accent-blue);
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .security-notice strong {
+            color: var(--accent-blue);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>🔐 GreenReach Central</h1>
+            <p>Administrative Portal</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    placeholder="info@greenreachfarms.com" 
+                    required 
+                    autocomplete="email"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input 
+                    type="text" 
+                    id="password" 
+                    name="password" 
+                    placeholder="Enter your password" 
+                    required 
+                    autocomplete="current-password"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="mfa_code">Two-Factor Code (Optional)</label>
+                <input 
+                    type="text" 
+                    id="mfa_code" 
+                    name="mfa_code" 
+                    placeholder="000000" 
+                    maxlength="6"
+                    pattern="[0-9]{6}"
+                    autocomplete="one-time-code"
+                >
+                <div class="help-text">Enter 6-digit code from your authenticator app (if 2FA is enabled)</div>
+            </div>
+
+            <button type="submit" class="button" id="login-button">
+                Login to Admin Portal
+            </button>
+        </form>
+
+        <div class="security-notice">
+            <strong>🛡️ Security Notice:</strong> This is a restricted area. All access is logged and monitored. Unauthorized access attempts will be reported.
+        </div>
+    </div>
+
+    <script>
+        // Use the main domain consistently (without www)
+        const API_BASE = window.location.hostname.includes('greenreachgreens.com')
+            ? 'https://greenreachgreens.com'
+            : window.location.origin.replace(/^http:/i, 'https:');
+        const form = document.getElementById('login-form');
+        const alertDiv = document.getElementById('alert');
+        const loginButton = document.getElementById('login-button');
+        const debugLogEl = document.getElementById('debug-log');
+        
+        // Check if already logged in
+        const existingToken = localStorage.getItem('admin_token');
+        const forceLogin = window.location.search.includes('forceLogin=true');
+        console.log('========================================');
+        console.log('[LOGIN PAGE] Checking for existing token');
+        console.log('[LOGIN PAGE] Current hostname:', window.location.hostname);
+        console.log('[LOGIN PAGE] Current URL:', window.location.href);
+        console.log('[LOGIN PAGE] API_BASE:', API_BASE);
+        console.log('[LOGIN PAGE] Existing token:', existingToken ? existingToken.substring(0, 30) + '...' : 'NONE');
+        console.log('[LOGIN PAGE] LocalStorage keys:', Object.keys(localStorage));
+        console.log('========================================');
+        
+        if (existingToken && !forceLogin) {
+            console.log('[LOGIN PAGE] Token exists - will redirect in 5 seconds...');
+            alert(`EXISTING TOKEN FOUND!\n\nHostname: ${window.location.hostname}\nURL: ${window.location.href}\nAPI_BASE: ${API_BASE}\nToken length: ${existingToken.length}\n\nWaiting 5 seconds - check console!\n\nClick OK to see console.`);
+            setTimeout(() => {
+                const redirectUrl = `${API_BASE}/GR-central-admin.html?debug=true`;
+                console.log('[LOGIN PAGE] Redirecting to:', redirectUrl);
+                window.location.href = redirectUrl;
+            }, 5000);
+        }
+
+        // Demo mode detection (S3 static hosting or demo domain)
+        const isDemoMode = window.location.hostname.includes('s3-website') || 
+                          window.location.hostname.includes('amazonaws.com') ||
+                          window.location.search.includes('demo=true');
+        let demoAuthEnabled = false;
+
+        // Load runtime env flag for demo auth
+        fetch(`${API_BASE}/data/env.json`)
+            .then(res => res.json())
+            .then(env => {
+                demoAuthEnabled = !!env.demoAuthEnabled;
+                if (isDemoMode && demoAuthEnabled) {
+                    console.log('🎭 Demo mode detected - demo auth enabled');
+                }
+            })
+            .catch(() => {
+                demoAuthEnabled = false;
+            });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const mfa_code = document.getElementById('mfa_code').value.trim();
+
+            // Disable button and show loading
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<span class="loading-spinner"></span>Authenticating...';
+            hideAlert();
+
+            // DEMO MODE: Client-side authentication for static hosting
+            if (isDemoMode) {
+                if (!demoAuthEnabled) {
+                    showAlert('Demo login is disabled. Contact an administrator.', 'error');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = 'Login to Admin Portal';
+                    return;
+                }
+                // Check demo credentials
+                if (email === 'info@greenreachfarms.com' && password === 'Admin2025!') {
+                    // Create demo token
+                    const demoToken = 'demo-admin-token-' + Date.now();
+                    
+                    localStorage.setItem('admin_token', demoToken);
+                    localStorage.setItem('admin_email', email);
+                    localStorage.setItem('admin_name', 'Demo Administrator');
+                    localStorage.setItem('admin_role', 'admin');
+                    
+                    showAlert('Login successful! Redirecting...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = `${API_BASE}/GR-central-admin.html`;
+                    }, 500);
+                    return;
+                } else {
+                    showAlert('Invalid credentials. Use: info@greenreachfarms.com / Admin2025!', 'error');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = 'Login to Admin Portal';
+                    return;
+                }
+            }
+
+            // PRODUCTION MODE: Server-side authentication
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password, mfa_code })
+                });
+                
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Store token
+                    console.log('========================================');
+                    console.log('[Login] STORING TOKEN');
+                    console.log('[Login] Current hostname:', window.location.hostname);
+                    console.log('[Login] Current URL:', window.location.href);
+                    console.log('[Login] API_BASE:', API_BASE);
+                    console.log('[Login] Token to store:', data.token.substring(0, 30) + '...');
+                    console.log('[Login] Token length:', data.token.length);
+                    console.log('========================================');
+                    
+                    localStorage.setItem('admin_token', data.token);
+                    localStorage.setItem('admin_email', data.admin.email);
+                    localStorage.setItem('admin_name', data.admin.name);
+                    localStorage.setItem('admin_role', data.admin.role || 'admin');
+                    
+                    // Verify storage
+                    const storedToken = localStorage.getItem('admin_token');
+                    console.log('[Login] VERIFICATION: Token stored?', !!storedToken);
+                    console.log('[Login] VERIFICATION: Stored token matches?', storedToken === data.token);
+                    console.log('[Login] VERIFICATION: LocalStorage keys:', Object.keys(localStorage));
+                    
+                    showAlert('Login successful! Redirecting in 3 seconds...', 'success');
+                    
+                    // Wait 3 seconds before redirect to ensure storage completes
+                    setTimeout(() => {
+                        const redirectUrl = `${API_BASE}/GR-central-admin.html?debug=true`;
+                        console.log('[Login] Redirecting to:', redirectUrl);
+                        window.location.href = redirectUrl;
+                    }, 3000);
+                } else {
+                    // Handle specific error cases
+                    let errorMessage = data.error || data.message || 'Login failed';
+                    
+                    if (response.status === 423) {
+                        errorMessage = `Account locked: ${data.message}`;
+                    } else if (response.status === 401) {
+                        errorMessage = 'Invalid email, password, or 2FA code';
+                    } else if (data.requires_2fa) {
+                        errorMessage = 'Two-factor authentication code required';
+                        document.getElementById('mfa_code').focus();
+                    }
+                    
+                    showAlert(errorMessage, 'error');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = 'Login to Admin Portal';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showAlert('Network error. Please check your connection and try again.', 'error');
+                loginButton.disabled = false;
+                loginButton.innerHTML = 'Login to Admin Portal';
+            }
+        });
+
+        function showAlert(message, type) {
+            alertDiv.textContent = message;
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.style.display = 'block';
+        }
+
+        function hideAlert() {
+            alertDiv.style.display = 'none';
+        }
+
+        // Auto-focus email field
+        document.getElementById('email').focus();
+
+        // Format MFA code input (only allow numbers)
+        document.getElementById('mfa_code').addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+        });
+    </script>
+</body>
+</html>

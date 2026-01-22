@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title id="page-title">Farm Fresh Produce | Local & Sustainable</title>
+  <meta name="description" content="Shop fresh, locally grown produce directly from our farm. Sustainable farming practices, delivered to your door.">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://greenreachgreens.com/farm-sales-landing.html">
+  <meta property="og:title" content="Fresh Local Farm Produce - Shop Direct">
+  <meta property="og:description" content="Buy fresh, locally grown produce directly from our farm. Sustainable vertical farming with zero pesticides and 95% less water.">
+  <meta property="og:image" content="https://greenreachgreens.com/images/plant-farm/IMG_4981.jpeg">
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://greenreachgreens.com/farm-sales-landing.html">
+  <meta property="twitter:title" content="Fresh Local Farm Produce - Shop Direct">
+  <meta property="twitter:description" content="Buy fresh, locally grown produce directly from our farm. Sustainable vertical farming with zero pesticides and 95% less water.">
+  <meta property="twitter:image" content="https://greenreachgreens.com/images/plant-farm/IMG_4981.jpeg">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 22px;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-logo img {
+      height: 28px;
+      width: auto;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+    }
+
+    .nav-cta {
+      background: var(--primary);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 400;
+      transition: background 0.3s;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent);
+      color: var(--primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 100px 22px 50px;
+      background: linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(130, 195, 65, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(45, 80, 22, 0.06) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      max-width: 980px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-eyebrow {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 8px;
+      letter-spacing: 0.02em;
+    }
+
+    .hero-title {
+      font-size: 80px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 28px;
+      line-height: 1.14286;
+      font-weight: 400;
+      color: var(--text-light);
+      margin-bottom: 24px;
+      letter-spacing: -0.01em;
+    }
+
+    .hero-description {
+      font-size: 21px;
+      line-height: 1.381;
+      color: var(--text-light);
+      max-width: 700px;
+      margin: 0 auto 40px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 60px;
+    }
+
+    .btn-primary, .btn-secondary {
+      padding: 14px 32px;
+      border-radius: 980px;
+      font-size: 17px;
+      font-weight: 500;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent);
+      color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(45, 80, 22, 0.3);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+    }
+
+    .btn-secondary:hover {
+      background: var(--primary);
+      color: white;
+      transform: translateY(-2px);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 60px;
+      justify-content: center;
+      margin-top: 60px;
+      padding-top: 40px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 56px;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--text-light);
+      font-weight: 500;
+    }
+
+    /* Feature Sections */
+    .feature-section {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 100px 22px;
+      position: relative;
+    }
+
+    .feature-section:nth-child(even) {
+      background: var(--surface);
+    }
+
+    .feature-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .feature-section:nth-child(even) .feature-content {
+      direction: rtl;
+    }
+
+    .feature-section:nth-child(even) .feature-text {
+      direction: ltr;
+    }
+
+    .feature-text {
+      padding: 40px 0;
+    }
+
+    .feature-eyebrow {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+
+    .feature-title {
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1.05;
+      margin-bottom: 20px;
+      letter-spacing: -0.015em;
+      color: var(--text);
+    }
+
+    .feature-description {
+      font-size: 24px;
+      line-height: 1.5;
+      color: var(--text-light);
+      margin-bottom: 32px;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin-bottom: 32px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: start;
+      gap: 16px;
+      margin-bottom: 20px;
+      font-size: 19px;
+      color: var(--text);
+    }
+
+    .feature-list li::before {
+      content: '✓';
+      color: var(--accent);
+      font-size: 24px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .feature-visual {
+      background: linear-gradient(135deg, rgba(130, 195, 65, 0.1) 0%, rgba(45, 80, 22, 0.05) 100%);
+      border-radius: 24px;
+      padding: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 500px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-visual img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      position: relative;
+      z-index: 2;
+    }
+
+    .feature-visual::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(130, 195, 65, 0.2) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .feature-icon {
+      font-size: 120px;
+      z-index: 1;
+      filter: drop-shadow(0 4px 16px rgba(45, 80, 22, 0.2));
+    }
+
+    /* CTA Section */
+    .cta-section {
+      padding: 120px 22px;
+      background: linear-gradient(135deg, var(--primary) 0%, #3d6821 100%);
+      color: white;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(130, 195, 65, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(130, 195, 65, 0.15) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .cta-content {
+      max-width: 800px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .cta-title {
+      font-size: 72px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+    }
+
+    .cta-description {
+      font-size: 24px;
+      margin-bottom: 48px;
+      opacity: 0.9;
+    }
+
+    /* Footer */
+    footer {
+      background: var(--text);
+      color: white;
+      padding: 80px 22px 40px;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+
+    .footer-about h3 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    .footer-about p {
+      font-size: 15px;
+      line-height: 1.6;
+      opacity: 0.8;
+    }
+
+    .footer-links h4 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    .footer-links ul {
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
+      opacity: 0.7;
+      transition: opacity 0.3s;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .footer-links a:hover {
+      opacity: 1;
+    }
+
+    .footer-bottom {
+      text-align: center;
+      padding-top: 40px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+      opacity: 0.6;
+    }
+
+    /* Loading State */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: var(--accent);
+      animation: spinner 1s ease-in-out infinite;
+    }
+
+    @keyframes spinner {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 1068px) {
+      .hero-title {
+        font-size: 56px;
+      }
+
+      .hero-subtitle {
+        font-size: 24px;
+      }
+
+      .feature-title {
+        font-size: 48px;
+      }
+
+      .feature-content {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .feature-section:nth-child(even) .feature-content {
+        direction: ltr;
+      }
+    }
+
+    @media (max-width: 734px) {
+      .hero-title {
+        font-size: 40px;
+      }
+
+      .hero-subtitle {
+        font-size: 21px;
+      }
+
+      .hero-description {
+        font-size: 19px;
+      }
+
+      .hero-stats {
+        flex-direction: column;
+        gap: 32px;
+      }
+
+      .feature-title {
+        font-size: 40px;
+      }
+
+      .feature-description {
+        font-size: 21px;
+      }
+
+      .cta-title {
+        font-size: 40px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in-up {
+      animation: fadeInUp 0.8s ease-out;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/greenreach-org.html" class="nav-logo"><img src="images/greenreach-clr.png" alt="GreenReach" /></a>
+      <ul class="nav-links">
+        <li><a href="/greenreach-org.html">Home</a></li>
+        <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+        <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
+        <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+      </ul>
+      <a href="/farm-sales-shop.html" class="nav-cta">Start Shopping</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content fade-in-up">
+      <div class="hero-eyebrow" id="farm-eyebrow">Loading...</div>
+      <h1 class="hero-title">Farm Fresh.<br>Locally Grown.</h1>
+      <p class="hero-subtitle">Sustainable produce, delivered to your door</p>
+      <p class="hero-description">
+        Shop directly from our farm and enjoy the freshest produce grown with care using 
+        sustainable indoor farming powered by Light Engine technology. Every order supports 
+        local agriculture and reduces food miles.
+      </p>
+
+      <div class="cta-buttons">
+        <a href="/farm-sales-shop.html" class="btn-primary">Shop Now →</a>
+      </div>
+      
+      <div class="hero-stats">
+        <div class="stat">
+          <div class="stat-number">100%</div>
+          <div class="stat-label">Local & Fresh</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">365</div>
+          <div class="stat-label">Days a Year</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">0</div>
+          <div class="stat-label">Pesticides</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 1: Fresh Produce -->
+  <section class="feature-section" id="products">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Year-Round Harvest</div>
+        <h2 class="feature-title">Fresh greens, herbs & more</h2>
+        <p class="feature-description">
+          Our indoor vertical farm produces premium leafy greens, herbs, and microgreens 365 days a year—
+          regardless of weather. Harvested at peak freshness and delivered within hours.
+        </p>
+        <ul class="feature-list">
+          <li>Lettuce, kale, arugula, and specialty greens</li>
+          <li>Fresh herbs: basil, cilantro, parsley, and more</li>
+          <li>Nutrient-dense microgreens</li>
+          <li>Harvested to order for maximum freshness</li>
+          <li>No pesticides or harmful chemicals</li>
+        </ul>
+        <a href="/farm-sales-shop.html" class="btn-secondary">Browse Products →</a>
+      </div>
+      <div class="feature-visual">
+        <img src="/images/plant-farm/IMG_4981.jpeg" alt="Fresh Leafy Greens">
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 2: Sustainability -->
+  <section class="feature-section" id="sustainability">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Sustainable Growing</div>
+        <h2 class="feature-title">Better for you. Better for the planet.</h2>
+        <p class="feature-description">
+          Our Light Engine controlled environment uses 95% less water than traditional farming, 
+          zero pesticides, and delivers the perfect growing conditions for every crop.
+        </p>
+        <ul class="feature-list">
+          <li>95% less water than field farming</li>
+          <li>Zero pesticide or herbicide use</li>
+          <li>Reduced carbon footprint with local delivery</li>
+          <li>Year-round production eliminates seasonal gaps</li>
+          <li>AI-optimized lighting and climate control</li>
+        </ul>
+      </div>
+      <div class="feature-visual">
+        <img src="/images/plant-farm/8x19IMG_4919.JPG" alt="Vertical Farm Growing Systems">
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 3: About Farm -->
+  <section class="feature-section" id="about">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Our Story</div>
+        <h2 class="feature-title">Grown with care, delivered with pride</h2>
+        <p class="feature-description">
+          We're passionate about sustainable food production and supporting our local community. 
+          Using Light Engine technology, we grow the freshest produce year-round while minimizing 
+          our environmental impact.
+        </p>
+        <ul class="feature-list">
+          <li>Family-owned and operated</li>
+          <li>Committed to sustainable practices</li>
+          <li>Supporting local food security</li>
+          <li>Premium quality, fair prices</li>
+        </ul>
+      </div>
+      <div class="feature-visual">
+        <img src="/images/plant-farm/IMG_6028.jpeg" alt="Farm Fresh Produce">
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta-section">
+    <div class="cta-content">
+      <h2 class="cta-title">Ready to taste the difference?</h2>
+      <p class="cta-description">
+        Start shopping for fresh, locally-grown produce today. Same-day delivery available.
+      </p>
+      <div class="cta-buttons">
+        <a href="/farm-sales-shop.html" class="btn-primary" style="background: var(--accent); color: var(--primary); font-size: 21px; padding: 18px 48px;">
+          Shop Now →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-about">
+        <h3>GreenReach</h3>
+        <p>
+          Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.
+        </p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Main Sites</h4>
+        <ul>
+          <li><a href="/greenreach-org.html">Home</a></li>
+          <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+          <li><a href="/grow-and-sell.html">Buying/Selling Made Easy</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Light Engine</h4>
+        <ul>
+          <li><a href="/purchase.html">Light Engine Home</a></li>
+          <li><a href="/landing-edge.html">Edge Device</a></li>
+          <li><a href="/landing-cloud.html">Cloud Service</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Wholesale</h4>
+        <ul>
+          <li><a href="/wholesale-landing.html">Buyer Portal</a></li>
+          <li><a href="/wholesale-learn-more.html">Learn More</a></li>
+          <li><a href="/GR-wholesale.html">Buyer Login</a></li>
+          <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Admin Access</h4>
+        <ul>
+          <li><a href="/GR-central-admin-login.html">Central Admin Login</a></li>
+          <li><a href="/farm-admin.html">Farm Admin</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Dynamic farm information loading
+    async function loadFarmInfo() {
+      try {
+        const response = await fetch('/api/config/app');
+        const config = await response.json();
+        
+        const farmName = config.farmName || 'Demo Farm';
+        const farmId = config.farmId || 'FARM-001';
+        
+        // Update page title
+        document.getElementById('page-title').textContent = `${farmName} | Fresh Local Produce`;
+        document.title = `${farmName} | Fresh Local Produce`;
+        
+        // Update nav logo
+        document.getElementById('farm-logo').textContent = farmName;
+        
+        // Update hero eyebrow
+        document.getElementById('farm-eyebrow').textContent = farmName;
+        
+        // Update footer
+        document.getElementById('footer-farm-name').textContent = farmName;
+        document.getElementById('footer-farm-name-2').textContent = farmName;
+        document.getElementById('footer-description').textContent = 
+          `Fresh, sustainable produce grown locally by ${farmName} with Light Engine technology.`;
+        
+        // Set current year
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+        
+      } catch (error) {
+        console.error('Failed to load farm config:', error);
+        // Fallback to generic text
+        document.getElementById('farm-logo').textContent = 'Farm Shop';
+        document.getElementById('farm-eyebrow').textContent = 'Local Farm';
+        document.getElementById('footer-farm-name').textContent = 'Farm Shop';
+        document.getElementById('footer-farm-name-2').textContent = 'Farm';
+      }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadFarmInfo();
+    });
+  </script>
+
+</body>
+</html>

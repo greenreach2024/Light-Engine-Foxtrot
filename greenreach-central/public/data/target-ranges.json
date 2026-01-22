@@ -1,0 +1,70 @@
+{
+  "zones": {
+    "zone-1": {
+      "name": "Grow Room 1, Zone A",
+      "temp_min": 20,
+      "temp_max": 24,
+      "rh_min": 50,
+      "rh_max": 65,
+      "vpd_min": 0.8,
+      "vpd_max": 1.2,
+      "co2_min": 400,
+      "co2_max": 1200
+    },
+    "zone-2": {
+      "name": "Grow Room 1, Zone B",
+      "temp_min": 20,
+      "temp_max": 24,
+      "rh_min": 50,
+      "rh_max": 65,
+      "vpd_min": 0.8,
+      "vpd_max": 1.2,
+      "co2_min": 400,
+      "co2_max": 1200
+    },
+    "zone-3": {
+      "name": "Vegetative Room",
+      "temp_min": 22,
+      "temp_max": 26,
+      "rh_min": 60,
+      "rh_max": 70,
+      "vpd_min": 0.6,
+      "vpd_max": 1.0,
+      "co2_min": 800,
+      "co2_max": 1400
+    }
+  },
+  "defaults": {
+    "temp_min": 18,
+    "temp_max": 26,
+    "rh_min": 45,
+    "rh_max": 70,
+    "vpd_min": 0.6,
+    "vpd_max": 1.4,
+    "co2_min": 400,
+    "co2_max": 1500
+  },
+  "severity_thresholds": {
+    "temperature": {
+      "critical_deviation": 3,
+      "warning_deviation": 2
+    },
+    "humidity": {
+      "critical_deviation": 15,
+      "warning_deviation": 10
+    },
+    "vpd": {
+      "critical_deviation": 0.4,
+      "warning_deviation": 0.2
+    },
+    "co2": {
+      "critical_deviation": 300,
+      "warning_deviation": 200
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "last_updated": "2025-12-15T12:00:00Z",
+    "description": "Target environmental ranges for AI health monitoring"
+  }
+}

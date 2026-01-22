@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About GreenReach - Research & Food Security Solutions</title>
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://greenreachgreens.com/about.html">
+    <meta property="og:title" content="About GreenReach - Research & Food Security Solutions">
+    <meta property="og:description" content="Multidisciplinary research organization advancing food security through practical studies, pilot projects, and validated solutions with Canadian universities.">
+    <meta property="og:image" content="https://greenreachgreens.com/images/plant-farm/IMG_5581.jpeg">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://greenreachgreens.com/about.html">
+    <meta property="twitter:title" content="About GreenReach - Research & Food Security Solutions">
+    <meta property="twitter:description" content="Multidisciplinary research organization advancing food security through practical studies, pilot projects, and validated solutions with Canadian universities.">
+    <meta property="twitter:image" content="https://greenreachgreens.com/images/plant-farm/IMG_5581.jpeg">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #1d1d1f;
+            background: #f8f9fb;
+        }
+
+        header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 20px 40px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        nav {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #10b981;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: #6e6e73;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #10b981;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white;
+            padding: 100px 20px;
+            text-align: center;
+        }
+
+        .hero-intro {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+        }
+
+        .hero p {
+            font-size: 1.35rem;
+            font-weight: 400;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.5;
+            opacity: 0.95;
+        }
+
+        .content-section {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 80px 20px;
+        }
+
+        .mission-statement {
+            background: white;
+            border-radius: 20px;
+            padding: 50px;
+            margin-bottom: 80px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border-left: 6px solid #10b981;
+        }
+
+        .mission-statement p {
+            font-size: 1.25rem;
+            line-height: 1.8;
+            color: #374151;
+        }
+
+        .timeline-section {
+            margin-bottom: 60px;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            margin-bottom: 50px;
+            color: #1d1d1f;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .timeline-item {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            border-left: 5px solid #10b981;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-item:hover {
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transform: translateX(5px);
+        }
+
+        .timeline-year {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 8px 20px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .timeline-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin-bottom: 20px;
+        }
+
+        .timeline-description {
+            font-size: 1.1rem;
+            line-height: 1.7;
+            color: #4b5563;
+            margin-bottom: 20px;
+        }
+
+        .timeline-highlights {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .timeline-highlights li {
+            padding-left: 30px;
+            position: relative;
+            margin-bottom: 12px;
+            font-size: 1.05rem;
+            color: #374151;
+            line-height: 1.6;
+        }
+
+        .timeline-highlights li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        .current-focus {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-radius: 20px;
+            padding: 50px;
+            margin-top: 60px;
+            border: 2px solid #10b981;
+        }
+
+        .current-focus h2 {
+            font-size: 2rem;
+            color: #065f46;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .current-focus p {
+            font-size: 1.2rem;
+            line-height: 1.8;
+            color: #047857;
+        }
+
+        footer {
+            background: #1d1d1f;
+            color: white;
+            padding: 60px 40px 30px;
+            margin-top: 80px;
+        }
+
+        .footer-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .footer-column h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: white;
+        }
+
+        .footer-column ul {
+            list-style: none;
+        }
+
+        .footer-column ul li {
+            margin-bottom: 10px;
+        }
+
+        .footer-column ul li a {
+            color: #9ca3af;
+            text-decoration: none;
+            transition: color 0.3s;
+            font-size: 0.9rem;
+        }
+
+        .footer-column ul li a:hover {
+            color: #10b981;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid #374151;
+            padding-top: 30px;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 0.85rem;
+        }
+
+        .footer-bottom a {
+            color: #9ca3af;
+            text-decoration: none;
+        }
+
+        .footer-bottom a:hover {
+            color: #10b981;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1.1rem;
+            }
+
+            .mission-statement {
+                padding: 30px;
+            }
+
+            .timeline-item {
+                padding: 25px;
+            }
+
+            .current-focus {
+                padding: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/purchase.html" class="logo">GreenReach</a>
+            <div class="nav-links">
+                <a href="/purchase.html">Products</a>
+                <a href="/about.html">About</a>
+                <a href="/landing.html">Solutions</a>
+                <a href="/contact">Contact</a>
+                <a href="/">Sign In</a>
+            </div>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <div class="hero-intro">Our Mission</div>
+        <h1>About GreenReach</h1>
+        <p>Building practical solutions for food security and food sovereignty through research, collaboration, and real-world validation.</p>
+    </section>
+
+    <div class="content-section">
+        <div class="mission-statement">
+            <p>
+                GreenReach is a multidisciplinary, research-first solution development organization, focused on building and validating practical tools and business models that advance food security and food sovereignty.
+            </p>
+            <p style="margin-top: 20px;">
+                We lead applied studies and pilot projects with support from a diverse network of faculty and students across Canadian colleges and universities—bringing together expertise in agriculture, engineering, data, and operations to test what works in the real world.
+            </p>
+        </div>
+
+        <section class="timeline-section">
+            <h2 class="section-title">Our Journey</h2>
+
+            <div class="timeline-item">
+                <span class="timeline-year">2022</span>
+                <h3 class="timeline-title">Farm-to-Table "Kitchen Table" Study</h3>
+                <p class="timeline-description">
+                    In 2022, GreenReach led a farm-to-table "kitchen table" study, meeting with contributors across the food ecosystem—including indoor, greenhouse, and traditional growers, major grocers, and produce wholesalers.
+                </p>
+                <p class="timeline-description">
+                    This work highlighted several consistent themes:
+                </p>
+                <ul class="timeline-highlights">
+                    <li>The need to better support small-to-medium growers</li>
+                    <li>The importance of greater market access through independent grocer channels</li>
+                    <li>The opportunity to improve growers' operational efficiency</li>
+                    <li>The need to better understand how four-season agriculture can fit within the broader agri-supply system</li>
+                </ul>
+            </div>
+
+            <div class="timeline-item">
+                <span class="timeline-year">2024</span>
+                <h3 class="timeline-title">"Living Grocer" Pilot Farm</h3>
+                <p class="timeline-description">
+                    In 2024, GreenReach led a "living grocer" pilot farm designed to study the impact of operating a commercial farm inside a downtown commercial center.
+                </p>
+                <p class="timeline-description">
+                    The pilot explored:
+                </p>
+                <ul class="timeline-highlights">
+                    <li>Environmental performance and operational conditions within a dense urban setting</li>
+                    <li>Local infrastructure impacts, including wastewater and electrical demand</li>
+                    <li>Community engagement and purchasing behaviour—what people bought, who bought it, and why</li>
+                    <li>The economic viability of the living grocer business model</li>
+                </ul>
+            </div>
+        </section>
+
+        <div class="current-focus">
+            <h2>Where we are today</h2>
+            <p>
+                Today, GreenReach is focused on turning insights from these studies—especially the Living Grocer pilot—into scalable, validated solutions that help communities grow more food locally, efficiently, and reliably.
+            </p>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-column">
+                <h4>GreenReach</h4>
+                <ul>
+                    <li><a href="/purchase.html">Products</a></li>
+                    <li><a href="/about.html">About</a></li>
+                    <li><a href="/landing.html">Solutions</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Light Engine</h4>
+                <ul>
+                    <li><a href="/purchase.html">Cloud Platform</a></li>
+                    <li><a href="/purchase.html">Edge Device</a></li>
+                    <li><a href="/landing.html">Features</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="/docs">Documentation</a></li>
+                    <li><a href="/wholesale-landing.html">GreenReach Wholesale</a></li>
+                    <li><a href="/landing.html">About</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="mailto:info@greenreachfarms.com">Email Support</a></li>
+                    <li><a href="/status">System Status</a></li>
+                    <li><a href="/security">Security</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 GreenReach. All rights reserved. | <a href="/privacy">Privacy</a> | <a href="/terms">Terms</a></p>
+            <p style="margin-top: 10px;">Research & Solutions for Food Security and Food Sovereignty</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Light Engine - Farm Management Solutions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #1d1d1f;
+            background: #f8f9fb;
+        }
+
+        .hero {
+            background: #fafbfc;
+            color: #1d1d1f;
+            padding: 80px 20px;
+            text-align: center;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .hero-intro {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #6e6e73;
+            margin-bottom: 15px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+            color: #1d1d1f;
+        }
+
+        .hero h2 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin: 60px auto 20px;
+            color: #1d1d1f;
+        }
+
+        .hero p {
+            font-size: 1.75rem;
+            font-weight: 400;
+            max-width: 700px;
+            margin: 0 auto 60px;
+            color: #6e6e73;
+            line-height: 1.4;
+        }
+
+        .hero img {
+            max-width: 800px;
+            width: 100%;
+            height: auto;
+            margin: 40px auto 0;
+            display: block;
+            border-radius: 10px;
+        }
+
+        .hero-images {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            align-items: flex-start;
+            margin: 40px auto 0;
+            max-width: 2200px;
+            padding: 0 20px;
+        }
+
+        .hero-images img {
+            flex: 1;
+            max-width: 1000px;
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .hero-image-container {
+            position: relative;
+            flex: 1;
+            max-width: 1000px;
+        }
+
+        .hero-image-container img {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-image-container img:hover {
+            transform: scale(1.5);
+            transform-origin: center center;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+
+        .hero-image-title {
+            text-align: center;
+            font-size: 3rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin: 0 0 20px 0;
+        }
+
+        .hero-image-description {
+            font-size: 0.95rem;
+            color: #6e6e73;
+            line-height: 1.6;
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .hero-image-description ul {
+            list-style-type: disc;
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        .hero-image-description li {
+            margin-bottom: 12px;
+        }
+
+        .hero-mission {
+            max-width: 900px;
+            margin: 80px auto 0;
+            padding: 0 20px;
+            text-align: center;
+        }
+
+        .hero-mission h2 {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 30px;
+        }
+
+        .hero-mission p {
+            font-size: 1.1rem;
+            color: #6e6e73;
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+
+        .screenshot-gallery {
+            max-width: 1200px;
+            margin: 80px auto;
+            padding: 0 20px;
+        }
+
+        .screenshot-gallery-images {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        .screenshot-item {
+            display: flex;
+            align-items: flex-end;
+            gap: 30px;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e5e7eb;
+        }
+
+        .screenshot-image-column {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .screenshot-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 15px;
+        }
+
+        .screenshot-body {
+            display: flex;
+            align-items: flex-start;
+            gap: 30px;
+        }
+
+        .screenshot-gallery-images img {
+            width: 350px;
+            min-width: 350px;
+            height: auto;
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .screenshot-gallery-images img:hover {
+            transform: scale(2.5);
+            transform-origin: center left;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+
+        .screenshot-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: flex-start;
+        }
+
+        .screenshot-description {
+            font-size: 1rem;
+            color: #6e6e73;
+            line-height: 1.6;
+            text-align: left;
+        }
+
+        .screenshot-list {
+            list-style-type: disc;
+            padding-left: 20px;
+            margin: 15px 0 0 0;
+            text-align: left;
+        }
+
+        .screenshot-list li {
+            font-size: 1rem;
+            color: #6e6e73;
+            line-height: 1.6;
+            margin-bottom: 8px;
+            text-align: left;
+        }
+
+        @media (max-width: 768px) {
+            .hero-images {
+                flex-direction: column;
+            }
+
+            .hero-image-title {
+                font-size: 2rem;
+                margin-bottom: 15px;
+            }
+
+            .screenshot-gallery-images {
+                flex-direction: column;
+            }
+        }
+
+        .features {
+            max-width: 1200px;
+            margin: 80px auto;
+            padding: 0 20px;
+        }
+
+        .features h2 {
+            text-align: center;
+            font-size: 2.5r20px;
+            color: #1d1d1f;
+            font-weight: 600;
+        }
+
+        .features-subtitle {
+            text-align: center;
+            font-size: 1.15rem;
+            color: #6e6e73;
+            max-width: 800px;
+            margin: 0 auto 60px;
+            line-height: 1.7 60px;
+            color: #1d1d1f;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 100px;
+        }
+
+        .feature-card {
+            background: #f5f5f7;
+            border-radius: 18px;
+            padding: 30px;
+            text-align: left;
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .badge-inventory {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .badge-quality {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+
+        .badge-payments {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .badge-online {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        }
+
+        .badge-network {
+            background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+        }
+
+        .badge-partner {
+            background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+        }
+
+        .feature-card p {
+            color: #6e6e73;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .feature-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: #1d1d1f;
+        }
+
+        @media (max-width: 900px) {
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .comparison {
+            max-width: 1400px;
+            margin: 0 auto 100px;
+            padding: 0 20px;
+        }
+
+        .comparison h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 60px;
+            color: #1d1d1f;
+        }
+
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .product-card {
+            border-radius: 20px;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .product-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+
+        .card-dark {
+            background: white;
+            color: #1d1d1f;
+            border: 3px solid #10b981;
+            box-shadow: 0 4px 30px rgba(16, 185, 129, 0.6), 0 0 50px rgba(16, 185, 129, 0.4);
+        }
+
+        .card-dark:hover {
+            box-shadow: 0 12px 50px rgba(16, 185, 129, 0.8), 0 0 70px rgba(16, 185, 129, 0.6);
+        }
+
+        .card-dark .card-main-title {
+            color: #1d1d1f;
+        }
+
+        .card-dark .card-title {
+            color: #1d1d1f;
+        }
+
+        .card-dark .card-subtitle {
+            color: #6e6e73;
+        }
+
+        .card-dark .card-features {
+            color: #1d1d1f;
+        }
+
+        .card-light {
+            background: white;
+            color: #1d1d1f;
+            border: 3px solid #3b82f6;
+            box-shadow: 0 4px 30px rgba(59, 130, 246, 0.6), 0 0 50px rgba(59, 130, 246, 0.4);
+        }
+
+        .card-light:hover {
+            box-shadow: 0 12px 50px rgba(59, 130, 246, 0.8), 0 0 70px rgba(59, 130, 246, 0.6);
+        }
+
+        .card-content {
+            padding: 70px 40px;
+        }
+
+        .card-main-title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            letter-spacing: -1px;
+            color: #1d1d1f;
+        }
+
+        .card-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card-dark .card-badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .card-light .card-badge {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .card-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+        }
+
+        .card-subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            opacity: 0.8;
+        }
+
+        .card-features {
+            list-style: none;
+            margin: 30px 0;
+        }
+
+        .card-features li {
+            padding: 12px 0;
+            font-size: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card-light .card-features li {
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .card-features li:last-child {
+            border-bottom: none;
+        }
+
+        .card-features li::before {
+            content: "✓";
+            margin-right: 12px;
+            font-weight: bold;
+            color: #10b981;
+        }
+
+        .card-light .card-features li::before {
+            color: #3b82f6;
+        }
+
+        .cta-button {
+            display: inline-block;
+            padding: 16px 40px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-top: 30px;
+        }
+
+        .card-dark .cta-button {
+            background: #10b981;
+            color: white;
+        }
+
+        .card-dark .cta-button:hover {
+            background: #059669;
+            transform: scale(1.05);
+        }
+
+        .card-light .cta-button {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .card-light .cta-button:hover {
+            background: #2563eb;
+            transform: scale(1.05);
+        }
+
+        .secondary-link {
+            display: block;
+            margin-top: 20px;
+            color: inherit;
+            text-decoration: none;
+            font-size: 1rem;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+
+        .secondary-link:hover {
+            opacity: 1;
+        }
+
+        .card-image {
+            width: 100%;
+            height: auto;
+            max-height: 500px;
+            object-fit: contain;
+            margin: 30px 0;
+            border-radius: 10px;
+        }
+
+        .image-placeholder {
+            height: 300px;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            opacity: 0.5;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+
+        .card-light .image-placeholder {
+            background: rgba(0,0,0,0.05);
+        }
+
+        footer {
+            background: #1e293b;
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        footer p {
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1.2rem;
+            }
+
+            .cards-container {
+                grid-template-columns: 1fr;
+            }
+
+            .card-title {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <section class="hero">
+        <p class="hero-intro">UrbanYield presents</p>
+        <h1>The foundation for smarter farms.</h1>
+        <h2>Everything you need to grow, sell, and succeed.</h2>
+        <p class="features-subtitle">Light Engine helps growers manage operations, inventory and connect with customers. From Seed to sales — all in one place.</p>
+        <p style="font-size: 1rem; margin-top: 20px; opacity: 0.8;">Powered by GreenReach Monitoring & Wholesale Platform</p>
+        <div class="hero-images">
+            <div class="hero-image-container">
+                <h2 class="hero-image-title">The Edge</h2>
+                <img src="images/edge-device.png" alt="Light Engine Edge Device">
+                <div class="hero-image-description">
+                    <ul>
+                        <li>Complete on-premises control with integrated environmental automation. Control lights, climate, and irrigation automatically</li>
+                        <li>Real-time local and decentralized sensor monitoring</li>
+                        <li>Recipe-based growing programs evolves the growing environment matching the needs of your crops</li>
+                        <li>Complete environment, inventory and sales managed, through smart integrations and artificial intelligence, not user inputs</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="hero-image-container">
+                <h2 class="hero-image-title">The Cloud</h2>
+                <img src="images/cloud.png" alt="Light Engine Cloud Service">
+                <div class="hero-image-description">
+                    <ul>
+                        <li>Complete seed to sale inventory management. One click update crop, location, current and future inventory</li>
+                        <li>Local Point of Sale, On-line stores and wholesale portal automatically updated to reflect inventory</li>
+                        <li>AI assistant pricing validation</li>
+                        <li>AI assisted local and regional demand analysis and future planting recommendations</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="hero-mission">
+            <h2>The Light Engine: Empowering Growers, Creating Opportunities</h2>
+            <p>The Light Engine is a cutting-edge platform designed to empower growers by creating new opportunities and fostering sustainable growth. It's a system built with one goal in mind: to meet the unique needs of communities, coast to coast, through innovative, adaptable technology.</p>
+            <p>Through meticulous research and development, we've crafted the most intuitive growing system ever conceived. This platform allows community growers to rise to the challenge of sustainable agriculture, equipped with grow-anywhere technology that is as versatile as it is powerful.</p>
+            <p>The Light Engine isn't just a tool—it's a catalyst for change. It enables local growers to meet evolving demands, making sustainable food production accessible in any environment, and driving growth that reflects the values and needs of their communities.</p>
+        </div>
+        
+        <div class="screenshot-gallery">
+            <div class="screenshot-gallery-images">
+                <div class="screenshot-item">
+                    <div class="screenshot-image-column">
+                        <h3 class="screenshot-title">Dashboard</h3>
+                        <img src="images/farm-admin-dashboard.png" alt="Farm Admin Dashboard">
+                    </div>
+                    <div class="screenshot-content">
+                        <p class="screenshot-description">Everything a farm needs to know, at their fingertips.</p>
+                        <ul class="screenshot-list">
+                            <li>Inventory snapshot</li>
+                            <li>Farms environmental health</li>
+                            <li>Recent AI and automation activity</li>
+                            <li>Traceability labels</li>
+                            <li>AI Assisted planting schedules</li>
+                            <li>Wholesale orders and logistics</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="screenshot-item">
+                    <div class="screenshot-image-column">
+                        <h3 class="screenshot-title">Inventory Dashboard</h3>
+                        <img src="images/inventory-overview.png" alt="Inventory Overview">
+                    </div>
+                    <div class="screenshot-content">
+                        <p class="screenshot-description">Current, and future. Where and when. Farm inventory has never been easier to manage. Sort by Room, zone, group and tray. Maturity date and crop variety.</p>
+                    </div>
+                </div>
+                <div class="screenshot-item">
+                    <div class="screenshot-image-column">
+                        <h3 class="screenshot-title">Inventory updates</h3>
+                        <img src="images/nutrient-inventory.png" alt="Nutrient Inventory Management">
+                    </div>
+                    <div class="screenshot-content">
+                        <p class="screenshot-description">A single click or scan updates current and future inventory, farm crop value, Local Point of Sale, On-line store, and wholesale platforms.</p>
+                    </div>
+                </div>
+                <div class="screenshot-item">
+                    <div class="screenshot-image-column">
+                        <h3 class="screenshot-title">Nutrient Monitoring<br>Nutrient Inventory Monitoring</h3>
+                        <img src="images/nutrient-monitoring.png" alt="Nutrient Inventory Monitoring">
+                    </div>
+                    <div class="screenshot-content">
+                        <p class="screenshot-description">Multi nutrient tank control and monitoring. Live nutrient concentrate inventory and quick order features. Anomaly detection. Nutrient management is automated based on researched plant requirement. One click seed selection updates nutrient and lighting recipes.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-badge badge-inventory">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 11H15M12 8V14M20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12C4 7.58172 7.58172 4 12 4C16.4183 4 20 7.58172 20 12Z" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h3>Track every crop</h3>
+                <p>From seed to sale, know exactly what you have and where it is</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-badge badge-quality">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h3>Prove your quality</h3>
+                <p>Complete traceability for certifications and customer trust</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-badge badge-payments">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M2 8H22M2 12H22M10 16H14M6 20H18C19.1046 20 20 19.1046 20 18V6C20 4.89543 19.1046 4 18 4H6C4.89543 4 4 4.89543 4 6V18C4 19.1046 4.89543 20 6 20Z" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h3>Accept payments anywhere</h3>
+                <p>Integrated point of sale for farm stands and wholesale orders</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-badge badge-online">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3.055 11H5C6.105 11 7 10.105 7 9V5C7 3.895 6.105 3 5 3H3.055M3.055 11A9 9 0 0112 3M3.055 11C3.019 11.329 3 11.663 3 12C3 12.337 3.019 12.671 3.055 13M12 3C16.97 3 21 7.03 21 12M21 12C21 16.97 16.97 21 12 21M21 12H19C17.895 12 17 12.895 17 14V18C17 19.105 17.895 20 19 20H20.945M12 21C7.03 21 3 16.97 3 12M12 21V19C12 17.895 12.895 17 14 17H18C19.105 17 20 17.895 20 19V20.945M3 12H20.945" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h3>Sell online</h3>
+                <p>Your own store for direct sales and CSA subscriptions</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-badge badge-network">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 17L17 7M17 7H8M17 7V16" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h3>Reach new buyers</h3>
+                <p>Join the GreenReach wholesale network of grocers and restaurants</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-badge badge-partner">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17 20H22V18C22 16.3431 20.6569 15 19 15C18.0444 15 17.1931 15.4468 16.6438 16.1429M17 20H7M17 20V18C17 17.3438 16.8736 16.717 16.6438 16.1429M7 20H2V18C2 16.3431 3.34315 15 5 15C5.95561 15 6.80686 15.4468 7.35625 16.1429M7 20V18C7 17.3438 7.12642 16.717 7.35625 16.1429M7.35625 16.1429C8.0935 14.301 9.89482 13 12 13C14.1052 13 15.9065 14.301 16.6438 16.1429M15 7C15 8.65685 13.6569 10 12 10C10.3431 10 9 8.65685 9 7C9 5.34315 10.3431 4 12 4C13.6569 4 15 5.34315 15 7ZM21 10C21 11.1046 20.1046 12 19 12C17.8954 12 17 11.1046 17 10C17 8.89543 17.8954 8 19 8C20.1046 8 21 8.89543 21 10ZM7 10C7 11.1046 6.10457 12 5 12C3.89543 12 3 11.1046 3 10C3 8.89543 3.89543 8 5 8C6.10457 8 7 8.89543 7 10Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h3>Partner with local grocers</h3>
+                <p>Built for collaboration between farms and stores</p>
+            </div>
+        </div>
+    </section>
+    
+    <section class="comparison">
+        <h2>Two ways to farm smarter.</h2>
+        <p class="features-subtitle">Choose the solution that fits your operation — both include all the features you need to succeed.</p>
+        
+        <div class="cards-container">
+            <!-- Edge Device Card (Dark) -->
+            <div class="product-card card-dark">
+                <div class="card-content">
+                    <h1 class="card-main-title">The Edge</h1>
+                    <span class="card-badge">Complete farm monitoring, automation, inventory management and sales platform</span>
+                    <p class="card-subtitle">Complete on-premises control with integrated environmental automation</p>
+                    
+                    <img src="images/edge-device.png" alt="Light Engine Edge Device" class="card-image">
+                    
+                    <ul class="card-features">
+                        <li>Control lights, climate, and irrigation automatically</li>
+                        <li>Works even when internet is down</li>
+                        <li>Real-time sensor monitoring</li>
+                        <li>Recipe-based growing programs</li>
+                        <li>All management and sales features included</li>
+                        <li>Optional cloud backup</li>
+                    </ul>
+                    
+                    <a href="/purchase.html?product=edge" class="cta-button">Purchase Edge - $1</a>
+                    <a href="landing-edge.html" class="secondary-link">Learn more →</a>
+                </div>
+            </div>
+
+            <!-- Cloud Service Card (Light) -->
+            <div class="product-card card-light">
+                <div class="card-content">
+                    <h1 class="card-main-title">The Cloud</h1>
+                    <span class="card-badge">Cloud based inventory management and sales platform</span>
+                    <p class="card-subtitle">Manage your farm operations from anywhere with our cloud-based platform</p>
+                    
+                    <img src="images/cloud.png" alt="Light Engine Cloud Service" class="card-image">
+                    
+                    <ul class="card-features">
+                        <li>Access from any device, anywhere</li>
+                        <li>Manage from phone, tablet, or computer</li>
+                        <li>Quick setup, no hardware needed</li>
+                        <li>Automatic updates and backups</li>
+                        <li>Run multiple farm locations</li>
+                        <li>Scale as your business grows</li>
+                        <li>All management and sales features included</li>
+                    </ul>
+                    
+                    <a href="/purchase.html?product=cloud" class="cta-button">Start Cloud - $1/mo</a>
+                    <a href="landing-cloud.html" class="secondary-link">Learn more →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content" style="max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 48px; margin-bottom: 40px; padding: 0 20px;">
+            <div class="footer-column">
+                <h4 style="font-size: 16px; margin-bottom: 20px; color: #1d1d1f;">Product</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin-bottom: 12px;"><a href="/landing-cloud.html" style="color: #6e6e73; text-decoration: none; font-size: 14px; transition: color 0.3s;">Cloud Solution</a></li>
+                    <li style="margin-bottom: 12px;"><a href="/landing-edge.html" style="color: #6e6e73; text-decoration: none; font-size: 14px;">Edge Device</a></li>
+                    <li style="margin-bottom: 12px;"><a href="/downloads.html" style="color: #6e6e73; text-decoration: none; font-size: 14px;">Downloads</a></li>
+                    <li style="margin-bottom: 12px;"><a href="/purchase.html" style="color: #6e6e73; text-decoration: none; font-size: 14px;">Pricing</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4 style="font-size: 16px; margin-bottom: 20px; color: #1d1d1f;">Resources</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin-bottom: 12px;"><a href="/docs/quickstart.html" style="color: #6e6e73; text-decoration: none; font-size: 14px;">Quick Start Guide</a></li>
+                    <li style="margin-bottom: 12px;"><a href="/docs/first-run-setup.html" style="color: #6e6e73; text-decoration: none; font-size: 14px;">First Run Guide</a></li>
+                    <li style="margin-bottom: 12px;"><a href="/docs/index.html" style="color: #6e6e73; text-decoration: none; font-size: 14px;">Documentation</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4 style="font-size: 16px; margin-bottom: 20px; color: #1d1d1f;">Company</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin-bottom: 12px;"><a href="/contact" style="color: #6e6e73; text-decoration: none; font-size: 14px;">Contact</a></li>
+                    <li style="margin-bottom: 12px;"><a href="/landing.html" style="color: #6e6e73; text-decoration: none; font-size: 14px;">About</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4 style="font-size: 16px; margin-bottom: 20px; color: #1d1d1f;">Support</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin-bottom: 12px;"><a href="mailto:info@greenreachfarms.com" style="color: #6e6e73; text-decoration: none; font-size: 14px;">Email Support</a></li>
+                    <li style="margin-bottom: 12px;"><a href="/status" style="color: #6e6e73; text-decoration: none; font-size: 14px;">System Status</a></li>
+                    <li style="margin-bottom: 12px;"><a href="/security" style="color: #6e6e73; text-decoration: none; font-size: 14px;">Security</a></li>
+                </ul>
+            </div>
+        </div>
+        <div style="max-width: 1400px; margin: 0 auto; padding: 30px 20px 0; border-top: 1px solid #e5e7eb; text-align: center;">
+            <p>&copy; 2025 Light Engine. Powered by GreenReach. All rights reserved. | <a href="/privacy" style="color: #6e6e73; text-decoration: none;">Privacy</a> | <a href="/terms" style="color: #6e6e73; text-decoration: none;">Terms</a></p>
+            <p style="margin-top: 10px; font-size: 0.9rem; color: #6e6e73;">Software & Hardware by Light Engine | Monitoring & Wholesale by GreenReach</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,70 @@
+{
+  "products": [
+    {
+      "sku_id": "E2E-TOMATO-001",
+      "product_name": "Organic Cherry Tomatoes",
+      "quantity_available": 20,
+      "unit": "lb",
+      "price_per_unit": 8.5,
+      "organic": true,
+      "category": "vegetables",
+      "farm_id": "TEST-FARM-E2E",
+      "farm_name": "End-to-End Test Farm"
+    },
+    {
+      "sku_id": "E2E-LETTUCE-001",
+      "product_name": "Butter Lettuce",
+      "quantity_available": 15,
+      "unit": "head",
+      "price_per_unit": 3.75,
+      "organic": true,
+      "category": "vegetables",
+      "farm_id": "TEST-FARM-E2E",
+      "farm_name": "End-to-End Test Farm"
+    },
+    {
+      "sku_id": "E2E-EGGS-001",
+      "product_name": "Free Range Eggs",
+      "quantity_available": 30,
+      "unit": "dozen",
+      "price_per_unit": 7,
+      "organic": false,
+      "category": "eggs",
+      "farm_id": "TEST-FARM-E2E",
+      "farm_name": "End-to-End Test Farm"
+    },
+    {
+      "sku_id": "E2E-TOMATO-001",
+      "product_name": "Organic Cherry Tomatoes",
+      "quantity_available": 20,
+      "unit": "lb",
+      "price_per_unit": 8.5,
+      "organic": true,
+      "category": "vegetables",
+      "farm_id": "TEST-FARM-E2E",
+      "farm_name": "End-to-End Test Farm"
+    },
+    {
+      "sku_id": "E2E-LETTUCE-001",
+      "product_name": "Butter Lettuce",
+      "quantity_available": 15,
+      "unit": "head",
+      "price_per_unit": 3.75,
+      "organic": true,
+      "category": "vegetables",
+      "farm_id": "TEST-FARM-E2E",
+      "farm_name": "End-to-End Test Farm"
+    },
+    {
+      "sku_id": "E2E-EGGS-001",
+      "product_name": "Free Range Eggs",
+      "quantity_available": 30,
+      "unit": "dozen",
+      "price_per_unit": 7,
+      "organic": false,
+      "category": "eggs",
+      "farm_id": "TEST-FARM-E2E",
+      "farm_name": "End-to-End Test Farm"
+    }
+  ]
+}

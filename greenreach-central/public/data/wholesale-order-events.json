@@ -1,0 +1,41 @@
+{
+  "events": [
+    {
+      "received_at": "2025-12-20T14:05:03.972Z",
+      "type": "unknown",
+      "order_id": "GRC-ORDER-1766239503",
+      "farm_id": null,
+      "delivery_date": null,
+      "items": [
+        {
+          "sku_id": "SKU-LACINATO-KALE-5LB",
+          "product_name": "Lacinato Kale",
+          "quantity": 2,
+          "price_per_unit": 45
+        },
+        {
+          "sku_id": "SKU-BIBB-BUTTERHEAD-5LB",
+          "product_name": "Bibb Butterhead",
+          "quantity": 1,
+          "price_per_unit": 66.5
+        }
+      ]
+    },
+    {
+      "received_at": "2025-12-20T13:37:10.619Z",
+      "type": "wholesale_order_created",
+      "order_id": "wo-2ff52438-0c42-45a6-9182-90d38b2a71b1",
+      "farm_id": "light-engine-demo",
+      "delivery_date": "2026-01-05",
+      "items": [
+        {
+          "sku_id": "SKU-MEI-QING-PAK-CHOI-5LB",
+          "product_name": "Mei Qing Pak Choi, 5lb case",
+          "quantity": 1,
+          "unit": "case"
+        }
+      ]
+    }
+  ],
+  "updated_at": "2025-12-20T14:05:03.972Z"
+}

@@ -17,6 +17,22 @@
     farmPerformance: {},
     currentBuyer: null,
     authTab: 'sign-in',
+    productRequests: [],
+
+    normalizeBuyer(buyer) {
+      if (!buyer) return null;
+      const location = buyer.location || buyer.location_json || {};
+      return {
+        id: buyer.id,
+        businessName: buyer.businessName || buyer.business_name,
+        contactName: buyer.contactName || buyer.contact_name,
+        email: buyer.email,
+        buyerType: buyer.buyerType || buyer.buyer_type,
+        phone: buyer.phone || location.phone || buyer.contact_phone,
+        location,
+        createdAt: buyer.createdAt || buyer.created_at
+      };
+    },
 
     get token() {
       return localStorage.getItem(STORAGE_TOKEN) || '';
@@ -34,12 +50,9 @@
       else if (params.get('demo') === '0') this.demoMode = false;
       else this.demoMode = false;
 
-      this.loadAuthState();
-
-      // Only auto-create a demo profile when demo mode is explicitly requested
-      if (this.demoMode && !this.currentBuyer) {
-        this.createDemoProfile();
-      }
+      await this.loadAuthState();
+      
+      // No auto-login - require real authentication
       
       this.setupEventListeners();
       this.setDefaultDeliveryDate();
@@ -63,10 +76,10 @@
         businessName: 'GreenLeaf Restaurant Group',
         contactName: 'Demo User',
         email: 'demo@greenleaf.ca',
-        phone: '(613) 555-0100',
+        phone: '(604) 555-0100',
         buyerType: 'restaurant',
         location: {
-          street: '1234 Princess Street',
+          street: '123 Princess Street',
           city: 'Kingston',
           province: 'ON',
           postalCode: 'K7L 1A1',
@@ -127,6 +140,16 @@
         this.handleRegister();
       });
 
+      document.getElementById('account-form')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        this.saveAccountSettings();
+      });
+
+      document.getElementById('password-form')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        this.updatePassword();
+      });
+
       const authModal = document.getElementById('auth-modal');
       authModal?.addEventListener('click', (event) => {
         if (event.target && event.target.id === 'auth-modal') {
@@ -185,21 +208,49 @@
       this.deliveryDate = dateStr;
     },
 
-    loadAuthState() {
+    async loadAuthState() {
+      const token = localStorage.getItem(STORAGE_TOKEN);
+      if (!token) {
+        this.currentBuyer = null;
+        return;
+      }
+      
       try {
-        const buyerRaw = localStorage.getItem(STORAGE_BUYER);
-        this.currentBuyer = buyerRaw ? JSON.parse(buyerRaw) : null;
-      } catch {
+        const response = await fetch('/api/wholesale/buyers/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          const buyer = result.data?.buyer;
+          if (buyer) {
+            this.currentBuyer = {
+              id: buyer.id,
+              businessName: buyer.business_name,
+              contactName: buyer.contact_name,
+              email: buyer.email,
+              buyerType: buyer.buyer_type,
+              phone: buyer.phone,
+              location: buyer.location || {}
+            };
+            this.updateBuyerProfile();
+            this.populateCheckoutForm();
+          }
+        } else {
+          // Token invalid, clear it
+          localStorage.removeItem(STORAGE_TOKEN);
+          this.currentBuyer = null;
+        }
+      } catch (error) {
+        console.error('Error loading auth state:', error);
         this.currentBuyer = null;
       }
-
-      this.updateBuyerProfile();
-      this.populateCheckoutForm();
     },
 
     setActiveBuyer({ buyer, token }) {
-      this.currentBuyer = buyer;
-      localStorage.setItem(STORAGE_BUYER, JSON.stringify(buyer));
+      const normalized = this.normalizeBuyer(buyer);
+      this.currentBuyer = normalized;
+      localStorage.setItem(STORAGE_BUYER, JSON.stringify(normalized));
       this.token = token;
       this.updateBuyerProfile();
       this.populateCheckoutForm();
@@ -277,28 +328,36 @@
       const province = document.getElementById('register-province')?.value?.trim() || '';
       const latitudeRaw = document.getElementById('register-lat')?.value;
       const longitudeRaw = document.getElementById('register-lng')?.value;
-      const latitude = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
-      const longitude = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
-
-      const location = {
-        postalCode,
-        province,
-        latitude: Number.isFinite(latitude) ? latitude : null,
-        longitude: Number.isFinite(longitude) ? longitude : null,
-        country: 'Canada'
-      };
+      const lat = latitudeRaw !== undefined && latitudeRaw !== '' ? Number(latitudeRaw) : null;
+      const lng = longitudeRaw !== undefined && longitudeRaw !== '' ? Number(longitudeRaw) : null;
 
       try {
-        const { response, json } = await this.apiFetch('/api/wholesale/buyers/register', {
+        const response = await fetch('/api/wholesale/buyers/register', {
           method: 'POST',
-          body: JSON.stringify({ businessName, contactName, email, password, buyerType, location })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName,
+            contactName,
+            email,
+            password,
+            buyerType,
+            location: {
+              postalCode,
+              province,
+              latitude: lat,
+              longitude: lng
+            }
+          })
         });
+
+        const json = await response.json();
 
         if (!response.ok || json?.status !== 'ok') {
           this.showToast(json?.message || 'Registration failed', 'error');
           return;
         }
 
+        // Registration successful - set buyer and token
         this.setActiveBuyer({ buyer: json.data.buyer, token: json.data.token });
         this.hideAuthModal();
         this.showToast('Account created. Welcome to GreenReach!', 'success');
@@ -313,16 +372,20 @@
       const password = document.getElementById('sign-in-password').value;
 
       try {
-        const { response, json } = await this.apiFetch('/api/wholesale/buyers/login', {
+        const response = await fetch('/api/wholesale/buyers/login', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
+
+        const json = await response.json();
 
         if (!response.ok || json?.status !== 'ok') {
           this.showToast(json?.message || 'Invalid email or password', 'error');
           return;
         }
 
+        // Login successful - set buyer and token
         this.setActiveBuyer({ buyer: json.data.buyer, token: json.data.token });
         this.hideAuthModal();
         this.showToast('Signed in successfully', 'success');
@@ -332,9 +395,21 @@
       }
     },
 
-    signOut() {
+    async signOut() {
+      try {
+        const token = localStorage.getItem(STORAGE_TOKEN);
+        if (token) {
+          await fetch('/api/wholesale/auth/logout', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        }
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+      
       this.currentBuyer = null;
-      this.token = '';
+      localStorage.removeItem(STORAGE_TOKEN);
       localStorage.removeItem(STORAGE_BUYER);
 
       this.updateBuyerProfile();
@@ -354,7 +429,7 @@
     },
 
     navigateTo(view) {
-      if ((view === 'checkout' || view === 'orders') && !this.currentBuyer) {
+      if ((view === 'checkout' || view === 'orders' || view === 'account') && !this.currentBuyer) {
         this.showToast('Please sign in to access buyer-only tools', 'info');
         this.showAuthModal('sign-in');
         return;
@@ -372,6 +447,102 @@
 
       if (view === 'checkout') this.previewAllocation();
       if (view === 'orders') this.loadOrders();
+      if (view === 'account') this.loadAccountSettings();
+    },
+
+    async loadAccountSettings() {
+      if (!this.currentBuyer) return;
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me');
+        if (response.ok && json?.status === 'ok') {
+          const buyer = this.normalizeBuyer(json.data.buyer);
+          this.currentBuyer = buyer;
+          localStorage.setItem(STORAGE_BUYER, JSON.stringify(buyer));
+        }
+      } catch (error) {
+        console.error('Load account settings error:', error);
+      }
+
+      const b = this.currentBuyer;
+      document.getElementById('account-business-name').value = b?.businessName || '';
+      document.getElementById('account-contact-name').value = b?.contactName || '';
+      document.getElementById('account-email').value = b?.email || '';
+      document.getElementById('account-phone').value = b?.phone || '';
+      document.getElementById('account-address').value = b?.location?.street || '';
+      document.getElementById('account-city').value = b?.location?.city || '';
+      document.getElementById('account-province').value = b?.location?.province || '';
+      document.getElementById('account-postal').value = b?.location?.postalCode || '';
+      document.getElementById('account-buyer-type').value = b?.buyerType || 'restaurant';
+    },
+
+    async saveAccountSettings() {
+      if (!this.currentBuyer) return this.showAuthModal('sign-in');
+
+      const payload = {
+        businessName: document.getElementById('account-business-name').value,
+        contactName: document.getElementById('account-contact-name').value,
+        email: document.getElementById('account-email').value,
+        phone: document.getElementById('account-phone').value,
+        address: document.getElementById('account-address').value,
+        city: document.getElementById('account-city').value,
+        province: document.getElementById('account-province').value,
+        postalCode: document.getElementById('account-postal').value,
+        buyerType: document.getElementById('account-buyer-type').value,
+        country: 'Canada'
+      };
+
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/me', {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok && json?.status === 'ok') {
+          const buyer = this.normalizeBuyer(json.data.buyer);
+          this.currentBuyer = buyer;
+          localStorage.setItem(STORAGE_BUYER, JSON.stringify(buyer));
+          this.updateBuyerProfile();
+          this.populateCheckoutForm();
+          this.showToast('Account updated', 'success');
+        } else {
+          this.showToast(json?.message || 'Failed to update account', 'error');
+        }
+      } catch (error) {
+        console.error('Save account error:', error);
+        this.showToast('Network error updating account', 'error');
+      }
+    },
+
+    async updatePassword() {
+      if (!this.currentBuyer) return this.showAuthModal('sign-in');
+
+      const currentPassword = document.getElementById('current-password').value;
+      const newPassword = document.getElementById('new-password').value;
+      const confirmPassword = document.getElementById('confirm-password').value;
+
+      if (newPassword !== confirmPassword) {
+        this.showToast('New passwords do not match', 'error');
+        return;
+      }
+
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/buyers/change-password', {
+          method: 'POST',
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        if (response.ok && json?.status === 'ok') {
+          this.showToast('Password updated', 'success');
+          document.getElementById('current-password').value = '';
+          document.getElementById('new-password').value = '';
+          document.getElementById('confirm-password').value = '';
+        } else {
+          this.showToast(json?.message || 'Failed to update password', 'error');
+        }
+      } catch (error) {
+        console.error('Update password error:', error);
+        this.showToast('Network error updating password', 'error');
+      }
     },
 
     async loadCatalog() {
@@ -399,25 +570,29 @@
           const response = await fetch(`/api/wholesale/catalog?${params.toString()}`);
           const data = await response.json();
 
-          // Accept both central (status/data.skus) and edge (ok/items) shapes
-          if (data.status === 'ok' && data.data?.skus) {
-            this.catalog = data.data.skus;
+          // API returns { ok: true, items: [], farms: [] }
+          if (data.ok) {
+            this.catalog = Array.isArray(data.items) ? data.items : [];
+            this.farms = Array.isArray(data.farms) ? data.farms : [];
             this.renderCatalog();
-            this.updateDemoBanner();
-            return;
-          }
-          if (data.ok && Array.isArray(data.items)) {
-            this.catalog = data.items;
-            this.renderCatalog();
+            this.renderFarmList(); // Show farms even if no inventory
             this.updateDemoBanner();
             return;
           }
 
-          await this.enableDemoMode('Live catalog unavailable. Showing demo farms.');
+          // If API returns error, show empty catalog with error message
+          console.error('Catalog API error:', data);
+          this.catalog = [];
+          this.farms = [];
+          this.renderCatalog();
+          this.showToast('Unable to load catalog. Please try again later.', 'error');
           return;
         } catch (error) {
           console.error('Live catalog error:', error);
-          await this.enableDemoMode('Network issue detected. Showing demo farms.');
+          // Show empty catalog instead of switching to demo mode
+          this.catalog = [];
+          this.renderCatalog();
+          this.showToast('Network error loading catalog. Please check your connection.', 'error');
           return;
         }
       }
@@ -431,7 +606,7 @@
           const response = await fetch('/data/wholesale-demo-catalog.json');
           if (!response.ok) {
             console.warn('Demo catalog not available');
-            // Flip back to live mode when demo assets are missing
+            // Fall back to live mode when demo assets are missing
             this.demoMode = false;
             this.updateDemoBanner();
             await this.loadCatalog();
@@ -450,6 +625,7 @@
         this.updateDemoBanner();
       } catch (error) {
         console.warn('Demo catalog unavailable:', error.message);
+        // Fallback to live catalog if demo assets are missing
         this.demoMode = false;
         this.updateDemoBanner();
         await this.loadCatalog();
@@ -578,6 +754,7 @@
                   <span class="farm-tag">${f.farm_name}</span>
                   <span class="farm-qty">${f.qty_available} ${sku.unit}</span>
                   <div class="farm-badges">
+                    ${this.getFarmCertificationBadges(f.farm_id)}
                     ${this.getFarmQualityBadge(f.farm_id)}
                     ${this.getFarmResponseTime(f.farm_id)}
                     ${this.getFarmReliability(f.farm_id)}
@@ -593,6 +770,33 @@
         `
         )
         .join('');
+      
+      // If no products but we have farms, show farm info
+      if (this.catalog.length === 0 && this.farms && this.farms.length > 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+            <h3 style="color: var(--primary); margin-bottom: 1rem;">No Products Available Yet</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+              We have ${this.farms.length} farm${this.farms.length !== 1 ? 's' : ''} registered, but they haven't added inventory yet.
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center;">
+              ${this.farms.map(f => `
+                <div style="background: var(--bg); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                  <strong style="color: var(--primary);">${f.farm_name}</strong>
+                  <span style="color: var(--text-secondary); font-size: 0.875rem; margin-left: 0.5rem;">(${f.status})</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+    },
+
+    renderFarmList() {
+      // Additional function for displaying farm info in sidebar or header
+      if (!this.farms || this.farms.length === 0) return;
+      
+      console.log(`[Wholesale] ${this.farms.length} active farms:`, this.farms.map(f => f.farm_name).join(', '));
     },
 
     addToCart(skuId) {
@@ -620,6 +824,25 @@
       this.renderCart();
       this.showToast(`Added ${sku.product_name} to cart`, 'success');
       if (qtyInput) qtyInput.value = '1';
+      
+      // Pulse animation on cart badge
+      const badge = document.querySelector('.cart-badge');
+      if (badge) {
+        badge.classList.remove('pulse');
+        void badge.offsetWidth; // Force reflow
+        badge.classList.add('pulse');
+      }
+      
+      // Auto-open cart panel briefly (3 seconds)
+      const cartPanel = document.getElementById('cart-panel');
+      if (cartPanel && !cartPanel.classList.contains('open')) {
+        cartPanel.classList.add('open');
+        setTimeout(() => {
+          if (cartPanel.classList.contains('open')) {
+            cartPanel.classList.remove('open');
+          }
+        }, 3000);
+      }
     },
 
     removeFromCart(skuId) {
@@ -647,12 +870,22 @@
       const itemsContainer = document.getElementById('cart-items');
       if (!itemsContainer) return;
 
+      const headerCart = document.getElementById('header-cart');
+      const headerCartItems = document.getElementById('header-cart-items');
+      const headerCartTotal = document.getElementById('header-cart-total');
+
       if (this.cart.length === 0) {
         itemsContainer.innerHTML = '<div class="cart-empty">Your cart is empty</div>';
         document.getElementById('cart-total').textContent = '$0.00';
         document.getElementById('cart-count').textContent = '0';
+        
+        // Hide header cart when empty
+        if (headerCart) headerCart.style.display = 'none';
         return;
       }
+
+      // Show header cart when items present
+      if (headerCart) headerCart.style.display = 'flex';
 
       itemsContainer.innerHTML = this.cart
         .map(
@@ -678,8 +911,16 @@
         .join('');
 
       const total = this.cart.reduce((sum, item) => sum + Number(item.price_per_unit) * Number(item.quantity), 0);
-      document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
-      document.getElementById('cart-count').textContent = this.cart.length.toString();
+      const totalStr = `$${total.toFixed(2)}`;
+      const itemCount = this.cart.length;
+      const itemsText = itemCount === 1 ? '1 item' : `${itemCount} items`;
+      
+      // Update all cart displays
+      document.getElementById('cart-total').textContent = totalStr;
+      document.getElementById('cart-count').textContent = itemCount.toString();
+      
+      if (headerCartItems) headerCartItems.textContent = itemsText;
+      if (headerCartTotal) headerCartTotal.textContent = totalStr;
     },
 
     toggleCart() {
@@ -712,9 +953,9 @@
             delivery_date: this.deliveryDate || this.getDefaultDeliveryDate(),
             delivery_address: {
               street: document.getElementById('delivery-address')?.value || 'TBD',
-              city: document.getElementById('delivery-city')?.value || 'Kingston',
+              city: document.getElementById('delivery-city')?.value || 'TBD',
               province: document.getElementById('delivery-province')?.value || 'ON',
-              postalCode: document.getElementById('delivery-postal')?.value || 'K7L 1A1',
+              postalCode: document.getElementById('delivery-postal')?.value || 'TBD',
               country: 'Canada',
               instructions: document.getElementById('delivery-instructions')?.value || ''
             },
@@ -858,6 +1099,7 @@
         if (response.ok && json?.status === 'ok') {
           this.orders = json.data.orders || [];
           this.renderOrders();
+          this.updatePayAllButton();
           return;
         }
       } catch (error) {
@@ -865,6 +1107,7 @@
       }
 
       this.renderOrders();
+      this.updatePayAllButton();
     },
 
     renderOrders() {
@@ -1237,6 +1480,27 @@
       return `<span class="farm-reliability ${className}" title="Order fulfillment rate">${rate.toFixed(0)}% reliable</span>`;
     },
 
+    getFarmCertificationBadges(farmId) {
+      // Get farm data from directory
+      const farm = this.farmDirectory[farmId] || this.networkFarms.find(f => f.farm_id === farmId);
+      if (!farm || !farm.certifications) return '';
+
+      // Check for food safety certification
+      const foodSafetyCerts = ['CanadaGAP', 'GlobalGAP', 'HACCP', 'SQF', 'BRC', 'FSSC 22000'];
+      const hasFoodSafety = farm.certifications.some(cert => 
+        foodSafetyCerts.some(fs => cert.toLowerCase().includes(fs.toLowerCase()))
+      );
+
+      if (!hasFoodSafety) return '';
+
+      // Get the actual cert name
+      const cert = farm.certifications.find(c => 
+        foodSafetyCerts.some(fs => c.toLowerCase().includes(fs.toLowerCase()))
+      );
+
+      return `<span class="farm-cert-badge food-safety-cert" title="Food Safety Certified: ${cert}">🛡️ Food Safety</span>`;
+    },
+
     /**
      * Load buyer insights dashboard
      */
@@ -1327,52 +1591,60 @@
     },
 
     /**
-     * Load price anomaly alerts with news summaries
+     * Load price anomaly alerts with real market data from North American retailers
      */
     async loadPriceAlerts() {
       const priceContent = document.getElementById('price-content');
       
-      // Generate demo price alerts with AI-style news summaries
-      const alerts = [
-        {
-          product: 'Tomatoes',
-          change: '+18%',
-          type: 'increase',
-          currentPrice: 3.95,
-          previousPrice: 3.35,
-          summary: 'Unseasonable frost in California\'s Central Valley has reduced tomato yields by 30%. Supply chain disruptions from recent storms continue to impact distribution. Prices expected to normalize in 2-3 weeks as alternative sources come online.'
-        },
-        {
-          product: 'Lettuce (Iceberg)',
-          change: '-12%',
-          type: 'decrease',
-          currentPrice: 2.20,
-          previousPrice: 2.50,
-          summary: 'Increased Ontario farm production has improved availability. Mild weather conditions have extended growing season. Competitive pricing as multiple farms increase capacity.'
-        }
-      ];
-
-      const html = alerts.map(alert => {
-        const alertClass = `anomaly-${alert.type}`;
-        const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+      try {
+        // Call market intelligence API for real-time price alerts
+        const response = await fetch('/api/market-intelligence/price-alerts?threshold=7');
+        const result = await response.json();
         
-        return `
-          <div class="price-alert ${alertClass}">
-            <div class="price-alert-header">
-              <span class="price-alert-product">${alert.product}</span>
-              <span class="price-change" style="${changeColor}">${alert.change}</span>
+        if (!response.ok || !result.ok) {
+          throw new Error('Failed to load market data');
+        }
+        
+        const alerts = result.alerts || [];
+        
+        if (alerts.length === 0) {
+          priceContent.innerHTML = '<div class="loading-state">✓ All monitored prices stable (no significant changes detected)</div>';
+          return;
+        }
+        
+        const html = alerts.map(alert => {
+          const alertClass = `anomaly-${alert.type}`;
+          const changeColor = alert.type === 'increase' ? 'color: var(--warning)' : 'color: var(--info)';
+          
+          return `
+            <div class="price-alert ${alertClass}">
+              <div class="price-alert-header">
+                <span class="price-alert-product">${alert.product}</span>
+                <span class="price-change" style="${changeColor}">${alert.change}</span>
+              </div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                $${alert.previousPrice.toFixed(2)} → $${alert.currentPrice.toFixed(2)} ${alert.priceUnit}
+              </div>
+              <div class="price-alert-summary">
+                ${alert.summary}
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
+                <strong>Data Sources:</strong> ${alert.retailers.join(', ')} (${alert.dataPoints} retailers monitored)<br/>
+                <strong>Last Updated:</strong> ${alert.lastUpdated} • <strong>Confidence:</strong> ${alert.confidence}
+                ${alert.articles && alert.articles.length > 0 ? `<br/><strong>News References:</strong> ${alert.articles.map(a => `<a href="${a.url}" target="_blank" style="color: var(--primary);">${a.title} (${a.source})</a>`).join(', ')}` : ''}
+              </div>
             </div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-              $${alert.previousPrice.toFixed(2)} → $${alert.currentPrice.toFixed(2)} per unit
-            </div>
-            <div class="price-alert-summary">
-              ${alert.summary}
-            </div>
-          </div>
-        `;
-      }).join('');
+          `;
+        }).join('');
 
-      priceContent.innerHTML = html || '<div class="loading-state">All prices stable</div>';
+        priceContent.innerHTML = html;
+        
+        console.log(`[Price Watch] Loaded ${alerts.length} market alerts from ${result.totalProductsMonitored} monitored products`);
+        
+      } catch (error) {
+        console.error('Price Watch error:', error);
+        priceContent.innerHTML = '<div class="loading-state" style="color: var(--error);">Unable to load market data. Please try again later.</div>';
+      }
     },
 
     /**
@@ -1382,8 +1654,32 @@
       const impactContent = document.getElementById('impact-content');
       const impactScore = document.getElementById('impact-score');
       
-      if (!this.currentBuyer?.location) {
-        impactContent.innerHTML = '<div class="loading-state">Buyer location required</div>';
+      if (!this.currentBuyer) {
+        impactContent.innerHTML = '<div class="loading-state">Sign in to see environmental impact</div>';
+        if (impactScore) impactScore.textContent = '--';
+        return;
+      }
+
+      // Check if buyer has valid location coordinates
+      const hasValidLocation = this.currentBuyer.location?.latitude && 
+                               this.currentBuyer.location?.longitude &&
+                               !isNaN(this.currentBuyer.location.latitude) &&
+                               !isNaN(this.currentBuyer.location.longitude);
+
+      if (!hasValidLocation) {
+        // Show farms without distance calculation
+        impactContent.innerHTML = `
+          <div class="loading-state" style="padding: 1rem;">
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+              Location coordinates not set. Update your account settings to enable distance calculations.
+            </p>
+            <p style="font-size: 0.9rem; color: var(--text-primary);">
+              <strong>Sourcing from GreenReach Network:</strong><br/>
+              ${this.networkFarms.length} local farms available
+            </p>
+          </div>
+        `;
+        if (impactScore) impactScore.textContent = 'A';
         return;
       }
 
@@ -1546,10 +1842,488 @@
         Math.sin(dLon/2) * Math.sin(dLon/2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       return R * c;
+    },
+
+    /**
+     * Initialize Stripe and mount card element
+     */
+    stripeInstance: null,
+    cardElement: null,
+    
+    initializeStripe() {
+      // Use test publishable key (should be from environment variable in production)
+      const stripe = Stripe('pk_test_51QWImID4okxjlqBc8bv5vXnvqSaZqmqH5YhN2sE0WM4qnC0VHjZPSQfBQ4XFB9DW8K6QMvd0cQs3xPBCqb3WjxhT00xT5zJZKL');
+      this.stripeInstance = stripe;
+      
+      const elements = stripe.elements();
+      this.cardElement = elements.create('card', {
+        style: {
+          base: {
+            fontSize: '16px',
+            color: '#1a1a1a',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            '::placeholder': {
+              color: '#999',
+            },
+          },
+          invalid: {
+            color: '#c53030',
+          },
+        },
+      });
+      
+      const cardElementContainer = document.getElementById('card-element');
+      if (cardElementContainer) {
+        this.cardElement.mount('#card-element');
+        
+        this.cardElement.on('change', (event) => {
+          const displayError = document.getElementById('card-errors');
+          if (event.error) {
+            displayError.textContent = event.error.message;
+          } else {
+            displayError.textContent = '';
+          }
+        });
+      }
+    },
+
+    /**
+     * Create payment method with Stripe
+     */
+    async createPaymentMethod() {
+      if (!this.stripeInstance || !this.cardElement) {
+        throw new Error('Stripe not initialized');
+      }
+      
+      const billingDetails = {
+        name: document.getElementById('buyer-name')?.value,
+        email: document.getElementById('buyer-email')?.value,
+        address: {
+          line1: document.getElementById('delivery-address')?.value,
+          city: document.getElementById('delivery-city')?.value,
+          state: document.getElementById('delivery-province')?.value,
+          postal_code: document.getElementById('delivery-postal')?.value,
+        },
+      };
+      
+      const { error, paymentMethod } = await this.stripeInstance.createPaymentMethod({
+        type: 'card',
+        card: this.cardElement,
+        billing_details: billingDetails,
+      });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      return paymentMethod.id;
+    },
+
+    /**
+     * Place wholesale order with payment authorization
+     */
+    async placeOrder() {
+      const placeOrderBtn = document.getElementById('place-order-btn');
+      const placeOrderText = document.getElementById('place-order-text');
+      const placeOrderSpinner = document.getElementById('place-order-spinner');
+      
+      if (!placeOrderBtn) return;
+      
+      try {
+        // Disable button
+        placeOrderBtn.disabled = true;
+        placeOrderText.style.display = 'none';
+        placeOrderSpinner.style.display = 'inline';
+        
+        // Validate cart
+        if (this.cart.length === 0) {
+          throw new Error('Your cart is empty');
+        }
+        
+        // Validate form
+        const form = document.getElementById('checkout-form');
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          throw new Error('Please fill in all required fields');
+        }
+        
+        // Create payment method
+        const paymentMethodId = await this.createPaymentMethod();
+        
+        // Prepare order data
+        const orderData = {
+          buyer_id: this.currentBuyer?.id || 'demo-buyer-001',
+          buyer_name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName,
+          buyer_email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
+          buyer_phone: this.currentBuyer?.phone || '',
+          delivery_address: document.getElementById('delivery-address')?.value,
+          delivery_city: document.getElementById('delivery-city')?.value,
+          delivery_province: document.getElementById('delivery-province')?.value,
+          delivery_postal_code: document.getElementById('delivery-postal')?.value,
+          delivery_instructions: document.getElementById('delivery-instructions')?.value || null,
+          delivery_time_slot: document.getElementById('delivery-time-slot')?.value || 'flexible',
+          fulfillment_cadence: document.getElementById('fulfillment-cadence')?.value || 'one_time',
+          cart_items: this.cart.map(item => ({
+            sku_id: item.sku_id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit: item.unit,
+            price_per_unit: item.price_per_unit,
+            farm_id: item.farm_id
+          })),
+          payment_method_id: paymentMethodId
+        };
+        
+        // Submit order to backend
+        const response = await fetch('/api/wholesale/orders/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {})
+          },
+          body: JSON.stringify(orderData)
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message || 'Failed to place order');
+        }
+        
+        // Success!
+        this.showToast('Order placed successfully!', 'success');
+        
+        // Clear cart
+        this.cart = [];
+        this.renderCart();
+        
+        // Show success message and order details
+        const successMessage = `
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: var(--success); margin-bottom: 1rem;">✓</div>
+            <h2>Order Placed Successfully!</h2>
+            <p style="margin: 1rem 0;">Order #${result.order_id}</p>
+            <p style="margin: 1rem 0; color: var(--text-secondary);">
+              Your payment has been authorized but <strong>not charged yet</strong>.
+              <br/>Farms have 24 hours to confirm their portions.
+              <br/>You'll receive an email when farms respond.
+            </p>
+            <p style="margin: 1.5rem 0;">
+              <strong>Total Authorized:</strong> $${result.total_amount.toFixed(2)}
+            </p>
+            <button class="btn btn-primary" onclick="app.navigateTo('orders')">View My Orders</button>
+          </div>
+        `;
+        
+        document.querySelector('.checkout-container').innerHTML = successMessage;
+        
+      } catch (error) {
+        console.error('Order placement error:', error);
+        this.showToast(error.message || 'Failed to place order', 'error');
+        const cardErrors = document.getElementById('card-errors');
+        if (cardErrors) {
+          cardErrors.textContent = error.message;
+        }
+      } finally {
+        // Re-enable button
+        placeOrderBtn.disabled = false;
+        placeOrderText.style.display = 'inline';
+        placeOrderSpinner.style.display = 'none';
+      }
+    },
+
+    // === PRODUCT REQUESTS ===
+    
+    openProductRequestModal() {
+      const modal = document.getElementById('product-request-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        // Set minimum date to tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const minDate = tomorrow.toISOString().split('T')[0];
+        document.getElementById('request-needed-by').min = minDate;
+      }
+    },
+
+    closeProductRequestModal() {
+      const modal = document.getElementById('product-request-modal');
+      if (modal) {
+        modal.style.display = 'none';
+        document.getElementById('product-request-form').reset();
+      }
+    },
+
+    async submitProductRequest(e) {
+      e.preventDefault();
+      
+      if (!this.currentBuyer) {
+        this.showToast('Please sign in to submit a product request', 'error');
+        return;
+      }
+
+      const formData = {
+        buyer_id: this.currentBuyer.id,
+        product_name: document.getElementById('request-product-name').value,
+        quantity: parseFloat(document.getElementById('request-quantity').value),
+        unit: document.getElementById('request-unit').value,
+        needed_by_date: document.getElementById('request-needed-by').value,
+        description: document.getElementById('request-description').value || null,
+        max_price_per_unit: parseFloat(document.getElementById('request-max-price').value) || null,
+        certifications_required: document.getElementById('request-organic').checked ? ['Organic'] : []
+      };
+
+      try {
+        const response = await fetch('/api/wholesale/product-requests/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+          },
+          body: JSON.stringify(formData)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message || 'Failed to submit request');
+        }
+
+        this.showToast(`Request submitted! ${result.matched_farms} farms notified`, 'success');
+        this.closeProductRequestModal();
+        
+        // Reload requests if on that view
+        if (this.currentView === 'requests') {
+          await this.loadProductRequests();
+        }
+
+      } catch (error) {
+        console.error('Product request error:', error);
+        this.showToast(error.message || 'Failed to submit request', 'error');
+      }
+    },
+
+    async loadProductRequests() {
+      if (!this.currentBuyer) return;
+
+      try {
+        const response = await fetch(`/api/wholesale/product-requests/buyer/${this.currentBuyer.id}`, {
+          headers: {
+            'Authorization': `Bearer ${this.token}`
+          }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.ok) {
+          this.productRequests = result.requests || [];
+          this.renderProductRequests();
+        }
+
+      } catch (error) {
+        console.error('Failed to load product requests:', error);
+      }
+    },
+
+    renderProductRequests() {
+      // This would be called when viewing the "My Requests" tab
+      // For now, we'll add a view later
+      console.log('Product requests:', this.productRequests);
+    },
+
+    // === BATCH PAYMENTS ===
+    
+    openBatchPaymentModal() {
+      // Get all unpaid orders
+      const unpaidOrders = this.orders.filter(order => 
+        order.payment_status === 'authorized' || order.payment_status === 'pending'
+      );
+
+      if (unpaidOrders.length === 0) {
+        this.showToast('No outstanding invoices to pay', 'info');
+        return;
+      }
+
+      // Group by farm and calculate totals
+      const farmTotals = {};
+      let grandTotal = 0;
+
+      unpaidOrders.forEach(order => {
+        const farmId = order.farm_id || 'MULTIPLE';
+        if (!farmTotals[farmId]) {
+          farmTotals[farmId] = {
+            farm_name: order.farm_name || 'Multiple Farms',
+            orders: [],
+            total: 0
+          };
+        }
+        farmTotals[farmId].orders.push(order);
+        farmTotals[farmId].total += order.total_amount || 0;
+        grandTotal += order.total_amount || 0;
+      });
+
+      // Render summary
+      const summaryHtml = Object.values(farmTotals).map(farm => `
+        <div style="padding: 0.75rem; border-bottom: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong>${farm.farm_name}</strong>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                ${farm.orders.length} order${farm.orders.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+            <div style="font-weight: 600; color: var(--primary);">
+              $${farm.total.toFixed(2)}
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('batch-payment-summary').innerHTML = summaryHtml;
+      document.getElementById('batch-payment-total').textContent = `$${grandTotal.toFixed(2)}`;
+      
+      const modal = document.getElementById('batch-payment-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+      }
+    },
+
+    closeBatchPaymentModal() {
+      const modal = document.getElementById('batch-payment-modal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    },
+
+    async processBatchPayment() {
+      const btn = document.getElementById('process-batch-payment-btn');
+      if (!btn) return;
+
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = 'Processing...';
+
+      try {
+        const unpaidOrders = this.orders.filter(order => 
+          order.payment_status === 'authorized' || order.payment_status === 'pending'
+        );
+
+        const orderIds = unpaidOrders.map(o => o.order_id);
+
+        // In production, this would call the backend API
+        const response = await fetch('/api/wholesale/orders/batch-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+          },
+          body: JSON.stringify({ order_ids: orderIds })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message || 'Payment failed');
+        }
+
+        this.showToast(`Successfully paid ${orderIds.length} invoice${orderIds.length !== 1 ? 's' : ''}`, 'success');
+        this.closeBatchPaymentModal();
+        
+        // Reload orders
+        await this.loadOrders();
+
+      } catch (error) {
+        console.error('Batch payment error:', error);
+        this.showToast(error.message || 'Payment failed', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    },
+
+    updatePayAllButton() {
+      const payAllBtn = document.getElementById('pay-all-btn');
+      if (!payAllBtn) return;
+
+      const unpaidOrders = this.orders.filter(order => 
+        order.payment_status === 'authorized' || order.payment_status === 'pending'
+      );
+
+      if (unpaidOrders.length > 0) {
+        const total = unpaidOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+        payAllBtn.textContent = `Pay All Outstanding ($${total.toFixed(2)})`;
+        payAllBtn.style.display = 'inline-block';
+      } else {
+        payAllBtn.style.display = 'none';
+      }
     }
   };
 
   document.addEventListener('DOMContentLoaded', () => {
     app.init();
+    
+    // Initialize Stripe when navigating to checkout
+    const checkoutNavBtn = document.querySelector('[data-view="checkout"]');
+    if (checkoutNavBtn) {
+      checkoutNavBtn.addEventListener('click', () => {
+        setTimeout(() => {
+          if (!app.stripeInstance) {
+            app.initializeStripe();
+          }
+        }, 100);
+      });
+    }
+    
+    // Handle place order button
+    const placeOrderBtn = document.getElementById('place-order-btn');
+    if (placeOrderBtn) {
+      placeOrderBtn.addEventListener('click', () => {
+        app.placeOrder();
+      });
+    }
+
+    // Product request modal handlers
+    const requestProductBtn = document.getElementById('request-product-btn');
+    if (requestProductBtn) {
+      requestProductBtn.addEventListener('click', () => {
+        app.openProductRequestModal();
+      });
+    }
+
+    const closeRequestBtns = document.querySelectorAll('[data-action="close-product-request"]');
+    closeRequestBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        app.closeProductRequestModal();
+      });
+    });
+
+    const productRequestForm = document.getElementById('product-request-form');
+    if (productRequestForm) {
+      productRequestForm.addEventListener('submit', (e) => {
+        app.submitProductRequest(e);
+      });
+    }
+
+    // Batch payment handlers
+    const payAllBtn = document.getElementById('pay-all-btn');
+    if (payAllBtn) {
+      payAllBtn.addEventListener('click', () => {
+        app.openBatchPaymentModal();
+      });
+    }
+
+    const closeBatchPaymentBtns = document.querySelectorAll('[data-action="close-batch-payment"]');
+    closeBatchPaymentBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        app.closeBatchPaymentModal();
+      });
+    });
+
+    const processBatchPaymentBtn = document.getElementById('process-batch-payment-btn');
+    if (processBatchPaymentBtn) {
+      processBatchPaymentBtn.addEventListener('click', () => {
+        app.processBatchPayment();
+      });
+    }
   });
 })();

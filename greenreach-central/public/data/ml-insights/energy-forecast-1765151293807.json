@@ -1,0 +1,167 @@
+{
+  "job": "energy-forecast",
+  "timestamp": "2025-12-07T23:48:13.807Z",
+  "data": {
+    "success": true,
+    "predictions": [
+      {
+        "timestamp": "2025-12-07T19:48:10.174400",
+        "energy_kwh": 7.05,
+        "confidence_lower": 6.76,
+        "confidence_upper": 7.34
+      },
+      {
+        "timestamp": "2025-12-07T20:48:10.174400",
+        "energy_kwh": 6.98,
+        "confidence_lower": 6.69,
+        "confidence_upper": 7.27
+      },
+      {
+        "timestamp": "2025-12-07T21:48:10.174400",
+        "energy_kwh": 6.78,
+        "confidence_lower": 6.49,
+        "confidence_upper": 7.07
+      },
+      {
+        "timestamp": "2025-12-07T22:48:10.174400",
+        "energy_kwh": 6.56,
+        "confidence_lower": 6.27,
+        "confidence_upper": 6.85
+      },
+      {
+        "timestamp": "2025-12-07T23:48:10.174400",
+        "energy_kwh": 6.26,
+        "confidence_lower": 5.98,
+        "confidence_upper": 6.55
+      },
+      {
+        "timestamp": "2025-12-08T00:48:10.174400",
+        "energy_kwh": 2.09,
+        "confidence_lower": 1.8,
+        "confidence_upper": 2.38
+      },
+      {
+        "timestamp": "2025-12-08T01:48:10.174400",
+        "energy_kwh": 1.91,
+        "confidence_lower": 1.62,
+        "confidence_upper": 2.2
+      },
+      {
+        "timestamp": "2025-12-08T02:48:10.174400",
+        "energy_kwh": 2.17,
+        "confidence_lower": 1.88,
+        "confidence_upper": 2.46
+      },
+      {
+        "timestamp": "2025-12-08T03:48:10.174400",
+        "energy_kwh": 2.36,
+        "confidence_lower": 2.07,
+        "confidence_upper": 2.65
+      },
+      {
+        "timestamp": "2025-12-08T04:48:10.174400",
+        "energy_kwh": 2.58,
+        "confidence_lower": 2.3,
+        "confidence_upper": 2.87
+      },
+      {
+        "timestamp": "2025-12-08T05:48:10.174400",
+        "energy_kwh": 2.68,
+        "confidence_lower": 2.39,
+        "confidence_upper": 2.97
+      },
+      {
+        "timestamp": "2025-12-08T06:48:10.174400",
+        "energy_kwh": 6.75,
+        "confidence_lower": 6.46,
+        "confidence_upper": 7.04
+      },
+      {
+        "timestamp": "2025-12-08T07:48:10.174400",
+        "energy_kwh": 6.97,
+        "confidence_lower": 6.68,
+        "confidence_upper": 7.26
+      },
+      {
+        "timestamp": "2025-12-08T08:48:10.174400",
+        "energy_kwh": 6.85,
+        "confidence_lower": 6.56,
+        "confidence_upper": 7.14
+      },
+      {
+        "timestamp": "2025-12-08T09:48:10.174400",
+        "energy_kwh": 6.74,
+        "confidence_lower": 6.45,
+        "confidence_upper": 7.03
+      },
+      {
+        "timestamp": "2025-12-08T10:48:10.174400",
+        "energy_kwh": 6.52,
+        "confidence_lower": 6.23,
+        "confidence_upper": 6.81
+      },
+      {
+        "timestamp": "2025-12-08T11:48:10.174400",
+        "energy_kwh": 6.21,
+        "confidence_lower": 5.92,
+        "confidence_upper": 6.5
+      },
+      {
+        "timestamp": "2025-12-08T12:48:10.174400",
+        "energy_kwh": 6.08,
+        "confidence_lower": 5.79,
+        "confidence_upper": 6.37
+      },
+      {
+        "timestamp": "2025-12-08T13:48:10.174400",
+        "energy_kwh": 6.17,
+        "confidence_lower": 5.88,
+        "confidence_upper": 6.46
+      },
+      {
+        "timestamp": "2025-12-08T14:48:10.174400",
+        "energy_kwh": 6.48,
+        "confidence_lower": 6.19,
+        "confidence_upper": 6.77
+      },
+      {
+        "timestamp": "2025-12-08T15:48:10.174400",
+        "energy_kwh": 6.75,
+        "confidence_lower": 6.46,
+        "confidence_upper": 7.04
+      },
+      {
+        "timestamp": "2025-12-08T16:48:10.174400",
+        "energy_kwh": 6.94,
+        "confidence_lower": 6.65,
+        "confidence_upper": 7.23
+      },
+      {
+        "timestamp": "2025-12-08T17:48:10.174400",
+        "energy_kwh": 7.09,
+        "confidence_lower": 6.8,
+        "confidence_upper": 7.38
+      },
+      {
+        "timestamp": "2025-12-08T18:48:10.174400",
+        "energy_kwh": 7.09,
+        "confidence_lower": 6.8,
+        "confidence_upper": 7.38
+      }
+    ],
+    "forecast_hours": 24,
+    "total_daily_kwh": 134.06,
+    "model": {
+      "type": "SARIMAX",
+      "order": "(1,0,1)x(1,0,1,24)",
+      "aic": -601.6,
+      "bic": -551.68,
+      "training_samples": 717
+    },
+    "generated_at": "2025-12-07T18:48:13.750392"
+  },
+  "metadata": {
+    "generatedAt": "2025-12-07T23:48:13.807Z",
+    "validUntil": "2025-12-08T23:48:13.807Z"
+  }
+}

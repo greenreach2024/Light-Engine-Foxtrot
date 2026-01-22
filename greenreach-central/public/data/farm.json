@@ -1,0 +1,16 @@
+{
+  "farmId": "light-engine-demo",
+  "name": "GreenReach Demo Farm",
+  "status": "online",
+  "region": "Pacific Northwest",
+  "url": "http://light-engine-demo-env2.eba-vypvd5rj.us-east-1.elasticbeanstalk.com",
+  "contact": {
+    "name": "Demo Farm Manager",
+    "email": "demo@greenreach.farm",
+    "phone": "+1 (555) 436-7324"
+  },
+  "coordinates": {
+    "lat": 47.6062,
+    "lng": -122.3321
+  }
+}

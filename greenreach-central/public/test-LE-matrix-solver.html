@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matrix Solver Test</title>
+  <style>
+    :root {
+      --gr-bg: #F7FAFA;
+      --gr-surface: #FFFFFF;
+      --gr-border: #DCE5E5;
+      --gr-text: #0B1220;
+      --gr-primary: #0D7D7D;
+      --gr-accent: #64C7C7;
+      --gr-primary-hover: #0c6f6f;
+      --gr-muted: #64748B;
+      --gr-border-subtle: #e5ecec;
+      --gr-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+      --gr-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background: var(--gr-bg);
+      color: var(--gr-text);
+      line-height: 1.6;
+    }
+    
+    h1 {
+      color: var(--gr-primary);
+      border-bottom: 2px solid var(--gr-border);
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+    
+    .test-section {
+      background: var(--gr-surface);
+      border: 1px solid var(--gr-border);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+      box-shadow: var(--gr-shadow);
+    }
+    
+    .test-section h2 {
+      color: var(--gr-primary);
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    
+    .test-section p {
+      color: var(--gr-muted);
+      margin: 0 0 16px 0;
+      font-size: 14px;
+    }
+    
+    .input-group {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+    
+    .input-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .input-field label {
+      color: var(--gr-text);
+      font-size: 13px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .input-field input {
+      background: var(--gr-surface);
+      border: 1px solid var(--gr-border);
+      border-radius: 6px;
+      color: var(--gr-text);
+      padding: 10px 12px;
+      font-size: 15px;
+      transition: all 0.2s;
+    }
+    
+    .input-field input:focus {
+      outline: none;
+      border-color: var(--gr-primary);
+      box-shadow: 0 0 0 3px rgba(13, 125, 125, 0.1);
+    }
+    
+    button {
+      background: var(--gr-primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    
+    button:hover {
+      background: var(--gr-primary-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--gr-shadow);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    .results {
+      background: var(--gr-surface);
+      border: 1px solid var(--gr-border);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      font-family: 'SF Mono', Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    
+    .results h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      color: var(--gr-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .matrix-display {
+      display: grid;
+      grid-template-columns: auto repeat(4, 1fr);
+      gap: 8px;
+      margin: 20px 0;
+      font-family: 'SF Mono', Consolas, monospace;
+      font-size: 13px;
+    }
+    
+    .matrix-cell {
+      background: var(--gr-surface);
+      border: 1px solid var(--gr-border-subtle);
+      padding: 12px 8px;
+      text-align: center;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    
+    .matrix-cell:hover {
+      border-color: var(--gr-border);
+      box-shadow: var(--gr-shadow);
+    }
+    
+    .matrix-header {
+      background: var(--gr-primary);
+      color: white;
+      font-weight: 600;
+      border-color: var(--gr-primary);
+    }
+    
+    .matrix-row-label {
+      background: var(--gr-bg);
+      color: var(--gr-primary);
+      font-weight: 600;
+      text-align: right;
+      padding-right: 16px;
+      border: none;
+    }
+    
+    .status {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .status.success {
+      background: #22C55E;
+      color: white;
+    }
+    
+    .status.warning {
+      background: #EAB308;
+      color: white;
+    }
+    
+    .status.error {
+      background: #EF4444;
+      color: white;
+    }
+    
+    pre {
+      background: var(--gr-bg);
+      border: 1px solid var(--gr-border-subtle);
+      border-radius: 6px;
+      padding: 12px;
+      overflow-x: auto;
+      color: var(--gr-text);
+      margin: 8px 0;
+    }
+    
+    .results div {
+      margin: 12px 0;
+    }
+    
+    .results strong {
+      color: var(--gr-primary);
+    }
+  </style>
+</head>
+<body>
+  <h1>Matrix Solver Test Suite</h1>
+  
+  <div class="test-section">
+    <h2>Calibration Matrix</h2>
+    <p>Fractional contribution of each LED channel to each spectral band (integrated from SPD curves)</p>
+    <div id="matrixDisplay">Loading...</div>
+  </div>
+  
+  <div class="test-section">
+    <h2>Interactive Solver</h2>
+    <p>Enter target spectral band fractions (must sum to ~1.0):</p>
+    
+    <div class="input-group">
+      <div class="input-field">
+        <label>Blue (B)</label>
+        <input type="number" id="targetB" value="0.20" step="0.01" min="0" max="1">
+      </div>
+      <div class="input-field">
+        <label>Green (G)</label>
+        <input type="number" id="targetG" value="0.30" step="0.01" min="0" max="1">
+      </div>
+      <div class="input-field">
+        <label>Red (R)</label>
+        <input type="number" id="targetR" value="0.50" step="0.01" min="0" max="1">
+      </div>
+      <div class="input-field">
+        <label>Far-Red (FR)</label>
+        <input type="number" id="targetFR" value="0.00" step="0.01" min="0" max="1">
+      </div>
+    </div>
+    
+    <button onclick="runSolver()">Solve for Channels</button>
+    
+    <div id="solverResults"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>Test Scenarios</h2>
+    <p>Pre-configured test cases for common spectrum configurations:</p>
+    <button onclick="runTestScenario('balanced')">Balanced Spectrum</button>
+    <button onclick="runTestScenario('vegetative')">Vegetative (Blue-Heavy)</button>
+    <button onclick="runTestScenario('flowering')">Flowering (Red-Heavy)</button>
+    <button onclick="runTestScenario('green')">Green-Only (Edge Case)</button>
+    
+    <div id="scenarioResults"></div>
+  </div>
+  
+  <script type="module">
+    // Import from app.charlie.js (we'll load SPD library directly here for testing)
+    
+    // Load SPD library and build matrix
+    let calibrationMatrix = null;
+    
+    async function init() {
+      try {
+        const spdResponse = await fetch('/data/spd-library.json');
+        const spdLibrary = await spdResponse.json();
+        
+        // Build calibration matrix (inline copy of function from app.charlie.js)
+        calibrationMatrix = buildCalibrationMatrix(spdLibrary);
+        
+        displayMatrix(calibrationMatrix);
+        
+        console.log('Matrix solver initialized');
+      } catch (err) {
+        console.error('Failed to initialize:', err);
+        document.getElementById('matrixDisplay').innerHTML = 
+          `<div class="status error">Error: ${err.message}</div>`;
+      }
+    }
+    
+    function buildCalibrationMatrix(spdLib, opts = {}) {
+      const bands = opts.bands || ['B', 'G', 'R', 'FR'];
+      const bandRanges = opts.bandRanges || {
+        B: [400, 500],
+        G: [500, 600],
+        R: [600, 700],
+        FR: [700, 800],
+      };
+      
+      const channels = ['cw', 'ww', 'bl', 'rd'];
+      const wavelengths = spdLib.wavelengths || [];
+      const matrix = {};
+      
+      for (const band of bands) {
+        matrix[band] = {};
+        const [minWL, maxWL] = bandRanges[band];
+        
+        for (const ch of channels) {
+          const spdValues = spdLib.channels?.[ch]?.values || [];
+          if (spdValues.length === 0) {
+            matrix[band][ch] = 0;
+            continue;
+          }
+          
+          let bandIntegral = 0;
+          let totalIntegral = 0;
+          
+          for (let i = 0; i < wavelengths.length; i++) {
+            const wl = wavelengths[i];
+            const value = spdValues[i] || 0;
+            
+            totalIntegral += value;
+            if (wl >= minWL && wl < maxWL) {
+              bandIntegral += value;
+            }
+          }
+          
+          matrix[band][ch] = totalIntegral > 0 ? bandIntegral / totalIntegral : 0;
+        }
+      }
+      
+      return { matrix, bands, channels, bandRanges };
+    }
+    
+    function solveChannelsFromBands(targets, calibMatrix, opts = {}) {
+      const maxPower = opts.maxPower || 100;
+      const tolerance = opts.tolerance || 0.05;
+      
+      const M = calibMatrix.matrix;
+      const bands = calibMatrix.bands;
+      const channels = calibMatrix.channels;
+      
+      const targetSum = Object.values(targets).reduce((s, v) => s + v, 0);
+      const t = {};
+      for (const b of bands) {
+        t[b] = targetSum > 0 ? (targets[b] || 0) / targetSum : 0;
+      }
+      
+      const x = { cw: 0, ww: 0, bl: 0, rd: 0 };
+      
+      const targetGreen = t.G || 0;
+      const cwGreenEff = M.G.cw / (M.B.cw + M.R.cw + 0.001);
+      const wwGreenEff = M.G.ww / (M.B.ww + M.R.ww + 0.001);
+      
+      const totalGreenPerUnit = M.G.cw + M.G.ww;
+      if (totalGreenPerUnit > 0.001) {
+        const greenUnits = targetGreen / totalGreenPerUnit;
+        x.cw = greenUnits * (M.G.cw / totalGreenPerUnit) * 100;
+        x.ww = greenUnits * (M.G.ww / totalGreenPerUnit) * 100;
+      }
+      
+      const achievedFromWhites = {
+        B: (x.cw / 100) * M.B.cw + (x.ww / 100) * M.B.ww,
+        G: (x.cw / 100) * M.G.cw + (x.ww / 100) * M.G.ww,
+        R: (x.cw / 100) * M.R.cw + (x.ww / 100) * M.R.ww,
+        FR: (x.cw / 100) * M.FR.cw + (x.ww / 100) * M.FR.ww,
+      };
+      
+      const residualBlue = Math.max(0, (t.B || 0) - achievedFromWhites.B);
+      const residualRed = Math.max(0, (t.R || 0) - achievedFromWhites.R);
+      
+      if (M.B.bl > 0.001) {
+        x.bl = (residualBlue / M.B.bl) * 100;
+      }
+      if (M.R.rd > 0.001) {
+        x.rd = (residualRed / M.R.rd) * 100;
+      }
+      
+      for (const ch of channels) {
+        x[ch] = Math.max(0, Math.min(100, x[ch]));
+      }
+      
+      const totalPower = x.cw + x.ww + x.bl + x.rd;
+      if (totalPower > maxPower) {
+        const scale = maxPower / totalPower;
+        for (const ch of channels) {
+          x[ch] *= scale;
+        }
+      }
+      
+      const achieved = {};
+      for (const b of bands) {
+        achieved[b] = 0;
+        for (const ch of channels) {
+          achieved[b] += (x[ch] / 100) * M[b][ch];
+        }
+      }
+      
+      let errorSum = 0;
+      for (const b of bands) {
+        const diff = (t[b] || 0) - achieved[b];
+        errorSum += diff * diff;
+      }
+      const error = Math.sqrt(errorSum / bands.length);
+      
+      return {
+        channels: {
+          cw: Math.round(x.cw * 10) / 10,
+          ww: Math.round(x.ww * 10) / 10,
+          bl: Math.round(x.bl * 10) / 10,
+          rd: Math.round(x.rd * 10) / 10,
+        },
+        achieved: {
+          B: Math.round(achieved.B * 1000) / 1000,
+          G: Math.round(achieved.G * 1000) / 1000,
+          R: Math.round(achieved.R * 1000) / 1000,
+          FR: Math.round(achieved.FR * 1000) / 1000,
+        },
+        targets: t,
+        error: Math.round(error * 1000) / 1000,
+        withinTolerance: error <= tolerance,
+        totalPower: Math.round((x.cw + x.ww + x.bl + x.rd) * 10) / 10,
+      };
+    }
+    
+    function displayMatrix(calibMatrix) {
+      const M = calibMatrix.matrix;
+      const bands = calibMatrix.bands;
+      const channels = calibMatrix.channels;
+      
+      let html = '<div class="matrix-display">';
+      
+      // Header row
+      html += '<div class="matrix-cell matrix-header"></div>';
+      for (const ch of channels) {
+        html += `<div class="matrix-cell matrix-header">${ch.toUpperCase()}</div>`;
+      }
+      
+      // Data rows
+      for (const band of bands) {
+        html += `<div class="matrix-cell matrix-row-label">${band}</div>`;
+        for (const ch of channels) {
+          const value = M[band][ch];
+          const percent = (value * 100).toFixed(1);
+          html += `<div class="matrix-cell">${percent}%</div>`;
+        }
+      }
+      
+      html += '</div>';
+      
+      document.getElementById('matrixDisplay').innerHTML = html;
+    }
+    
+    function displayResults(result, containerId) {
+      const statusClass = result.withinTolerance ? 'success' : 
+                         result.error > 0.1 ? 'error' : 'warning';
+      
+      const html = `
+        <div class="results">
+          <h3>Solver Results <span class="status ${statusClass}">${result.withinTolerance ? 'GOOD FIT' : 'POOR FIT'}</span></h3>
+          
+          <div><strong>Target Bands:</strong></div>
+          <pre>B: ${(result.targets.B * 100).toFixed(1)}%  G: ${(result.targets.G * 100).toFixed(1)}%  R: ${(result.targets.R * 100).toFixed(1)}%  FR: ${(result.targets.FR * 100).toFixed(1)}%</pre>
+          
+          <div><strong>Output Channels:</strong></div>
+          <pre>CW: ${result.channels.cw}%  WW: ${result.channels.ww}%  BL: ${result.channels.bl}%  RD: ${result.channels.rd}%</pre>
+          
+          <div><strong>Achieved Bands:</strong></div>
+          <pre>B: ${(result.achieved.B * 100).toFixed(1)}%  G: ${(result.achieved.G * 100).toFixed(1)}%  R: ${(result.achieved.R * 100).toFixed(1)}%  FR: ${(result.achieved.FR * 100).toFixed(1)}%</pre>
+          
+          <div><strong>Error (RMS): ${result.error.toFixed(3)}</strong> | <strong>Total Power: ${result.totalPower}%</strong></div>
+        </div>
+      `;
+      
+      document.getElementById(containerId).innerHTML = html;
+    }
+    
+    window.runSolver = function() {
+      if (!calibrationMatrix) {
+        alert('Calibration matrix not loaded yet!');
+        return;
+      }
+      
+      const targets = {
+        B: parseFloat(document.getElementById('targetB').value),
+        G: parseFloat(document.getElementById('targetG').value),
+        R: parseFloat(document.getElementById('targetR').value),
+        FR: parseFloat(document.getElementById('targetFR').value),
+      };
+      
+      const result = solveChannelsFromBands(targets, calibrationMatrix);
+      displayResults(result, 'solverResults');
+    };
+    
+    window.runTestScenario = function(scenario) {
+      if (!calibrationMatrix) {
+        alert('Calibration matrix not loaded yet!');
+        return;
+      }
+      
+      const scenarios = {
+        balanced: { B: 0.33, G: 0.33, R: 0.34, FR: 0.00 },
+        vegetative: { B: 0.40, G: 0.35, R: 0.25, FR: 0.00 },
+        flowering: { B: 0.15, G: 0.25, R: 0.60, FR: 0.00 },
+        green: { B: 0.00, G: 1.00, R: 0.00, FR: 0.00 },
+      };
+      
+      const targets = scenarios[scenario];
+      const result = solveChannelsFromBands(targets, calibrationMatrix);
+      
+      displayResults(result, 'scenarioResults');
+    };
+    
+    // Initialize on load
+    init();
+  </script>
+</body>
+</html>

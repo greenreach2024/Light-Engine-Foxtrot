@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud to Edge Migration - Light Engine</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+
+    .wizard-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 40px;
+    }
+
+    .progress-steps {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 40px;
+      position: relative;
+    }
+
+    .progress-steps::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #e0e0e0;
+      z-index: 0;
+    }
+
+    .step {
+      flex: 1;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #e0e0e0;
+      margin: 0 auto 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #666;
+      transition: all 0.3s;
+    }
+
+    .step.active .step-circle {
+      background: #667eea;
+      color: white;
+      transform: scale(1.1);
+    }
+
+    .step.completed .step-circle {
+      background: #4caf50;
+      color: white;
+    }
+
+    .step.completed .step-circle::after {
+      content: '✓';
+    }
+
+    .step-label {
+      font-size: 0.9em;
+      color: #666;
+    }
+
+    .step.active .step-label {
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .wizard-content {
+      min-height: 300px;
+    }
+
+    .wizard-step {
+      display: none;
+    }
+
+    .wizard-step.active {
+      display: block;
+      animation: fadeIn 0.3s;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h2 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 1.8em;
+    }
+
+    .info-box {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border-left: 4px solid #667eea;
+    }
+
+    .info-box h3 {
+      color: #667eea;
+      margin-bottom: 10px;
+    }
+
+    .info-box ul {
+      margin-left: 20px;
+      line-height: 1.8;
+    }
+
+    .warning-box {
+      background: #fff3cd;
+      border-left-color: #ffc107;
+      color: #856404;
+    }
+
+    .success-box {
+      background: #d4edda;
+      border-left-color: #4caf50;
+      color: #155724;
+    }
+
+    .error-box {
+      background: #f8d7da;
+      border-left-color: #dc3545;
+      color: #721c24;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    input[type="text"],
+    input[type="file"],
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 1em;
+      transition: border-color 0.3s;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .file-upload {
+      border: 2px dashed #667eea;
+      border-radius: 8px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .file-upload:hover {
+      background: #f5f5f5;
+    }
+
+    .file-upload.dragging {
+      background: #e3f2fd;
+      border-color: #2196f3;
+    }
+
+    .file-upload-icon {
+      font-size: 3em;
+      margin-bottom: 10px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2em;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 0.9em;
+      opacity: 0.9;
+    }
+
+    .validation-list {
+      list-style: none;
+      margin-top: 15px;
+    }
+
+    .validation-item {
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+    }
+
+    .validation-item.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .validation-item.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .validation-item.warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .validation-item::before {
+      margin-right: 10px;
+      font-weight: bold;
+    }
+
+    .validation-item.success::before {
+      content: '✓';
+    }
+
+    .validation-item.error::before {
+      content: '✗';
+    }
+
+    .validation-item.warning::before {
+      content: '⚠';
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #e0e0e0;
+      border-radius: 15px;
+      overflow: hidden;
+      margin: 20px 0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+
+    .wizard-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 2px solid #e0e0e0;
+    }
+
+    button {
+      padding: 12px 30px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #666;
+    }
+
+    .btn-secondary:hover {
+      background: #d0d0d0;
+    }
+
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #c82333;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .completion-icon {
+      font-size: 5em;
+      text-align: center;
+      margin: 30px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🌱 Cloud to Edge Migration</h1>
+      <p>Migrate your Light Engine farm from cloud to edge deployment</p>
+    </div>
+
+    <div class="wizard-card">
+      <!-- Progress Steps -->
+      <div class="progress-steps">
+        <div class="step active" data-step="1">
+          <div class="step-circle">1</div>
+          <div class="step-label">Export</div>
+        </div>
+        <div class="step" data-step="2">
+          <div class="step-circle">2</div>
+          <div class="step-label">Validate</div>
+        </div>
+        <div class="step" data-step="3">
+          <div class="step-circle">3</div>
+          <div class="step-label">Import</div>
+        </div>
+        <div class="step" data-step="4">
+          <div class="step-circle">4</div>
+          <div class="step-label">Complete</div>
+        </div>
+      </div>
+
+      <!-- Wizard Content -->
+      <div class="wizard-content">
+        <!-- Step 1: Export from Cloud -->
+        <div class="wizard-step active" data-step="1">
+          <h2>Step 1: Export Data from Cloud</h2>
+          
+          <div class="info-box">
+            <h3>What will be exported?</h3>
+            <ul>
+              <li>Farm configuration and settings</li>
+              <li>All users and permissions</li>
+              <li>Complete inventory and products</li>
+              <li>Order history (last 12 months)</li>
+              <li>Wholesale relationships and buyers</li>
+              <li>Automation recipes and zones</li>
+              <li>Sensor data (last 90 days)</li>
+              <li>Analytics and reports</li>
+            </ul>
+          </div>
+
+          <div class="warning-box info-box">
+            <h3>⚠️ Important Notes</h3>
+            <ul>
+              <li>Export may take several minutes for large farms</li>
+              <li>Your cloud deployment will remain active</li>
+              <li>User passwords are not exported (users will reset)</li>
+              <li>Save the export file securely - it contains sensitive data</li>
+            </ul>
+          </div>
+
+          <div id="export-status" class="hidden"></div>
+          <div id="export-stats" class="hidden"></div>
+        </div>
+
+        <!-- Step 2: Validate Export -->
+        <div class="wizard-step" data-step="2">
+          <h2>Step 2: Validate Export Data</h2>
+
+          <div class="info-box">
+            <h3>Upload Export File</h3>
+            <p>Upload the export file from your cloud deployment or drag and drop it below.</p>
+          </div>
+
+          <div class="file-upload" id="file-upload-zone">
+            <div class="file-upload-icon">📁</div>
+            <p><strong>Click to select</strong> or drag and drop your export file</p>
+            <p style="font-size: 0.9em; color: #666; margin-top: 10px;">Accepted: .json files up to 500MB</p>
+            <input type="file" id="file-input" accept=".json" style="display: none;">
+          </div>
+
+          <div id="validation-results" class="hidden"></div>
+        </div>
+
+        <!-- Step 3: Import to Edge -->
+        <div class="wizard-step" data-step="3">
+          <h2>Step 3: Import to Edge Device</h2>
+
+          <div class="info-box">
+            <h3>Review Import Details</h3>
+            <p>Please review the data below before importing to your edge device.</p>
+          </div>
+
+          <div id="import-preview" class="stats-grid"></div>
+
+          <div class="warning-box info-box">
+            <h3>⚠️ Before You Continue</h3>
+            <ul>
+              <li>Ensure your edge device has sufficient storage space</li>
+              <li>A backup will be created automatically for rollback</li>
+              <li>Import process may take 5-10 minutes</li>
+              <li>Do not close this window during import</li>
+            </ul>
+          </div>
+
+          <div id="import-progress" class="hidden">
+            <div class="progress-bar">
+              <div class="progress-fill" id="import-progress-bar">0%</div>
+            </div>
+            <p id="import-status-text" style="text-align: center; margin-top: 10px;"></p>
+          </div>
+        </div>
+
+        <!-- Step 4: Complete -->
+        <div class="wizard-step" data-step="4">
+          <h2>Migration Complete! 🎉</h2>
+
+          <div class="completion-icon">✅</div>
+
+          <div class="success-box info-box">
+            <h3>Successfully Migrated</h3>
+            <p>Your farm data has been successfully migrated to this edge device.</p>
+          </div>
+
+          <div id="completion-stats" class="stats-grid"></div>
+
+          <div class="info-box">
+            <h3>Next Steps</h3>
+            <ul>
+              <li>Configure your hardware devices and sensors</li>
+              <li>Set up automation recipes for your grow zones</li>
+              <li>Test wholesale ordering and inventory sync</li>
+              <li>All users should log in and reset their passwords</li>
+              <li>Your cloud deployment remains active for reference</li>
+            </ul>
+          </div>
+
+          <div class="info-box">
+            <h3>Rollback Information</h3>
+            <p>Rollback ID: <strong id="rollback-id"></strong></p>
+            <p style="margin-top: 10px;">If you need to undo this migration, use the rollback feature within 30 days.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wizard Actions -->
+      <div class="wizard-actions">
+        <button id="btn-back" class="btn-secondary" style="display: none;">← Back</button>
+        <div style="display: flex; gap: 10px;">
+          <button id="btn-rollback" class="btn-danger hidden">Rollback</button>
+          <button id="btn-next" class="btn-primary">Export Data →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    let exportData = null;
+    let rollbackId = null;
+
+    // Step navigation
+    function goToStep(step) {
+      // Hide all steps
+      document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.step').forEach(s => {
+        s.classList.remove('active', 'completed');
+      });
+
+      // Show current step
+      document.querySelector(`.wizard-step[data-step="${step}"]`).classList.add('active');
+      document.querySelector(`.step[data-step="${step}"]`).classList.add('active');
+
+      // Mark completed steps
+      for (let i = 1; i < step; i++) {
+        document.querySelector(`.step[data-step="${i}"]`).classList.add('completed');
+      }
+
+      currentStep = step;
+      updateButtons();
+    }
+
+    function updateButtons() {
+      const btnBack = document.getElementById('btn-back');
+      const btnNext = document.getElementById('btn-next');
+      const btnRollback = document.getElementById('btn-rollback');
+
+      btnBack.style.display = currentStep > 1 && currentStep < 4 ? 'block' : 'none';
+      btnRollback.classList.toggle('hidden', currentStep !== 4);
+
+      if (currentStep === 1) {
+        btnNext.textContent = 'Export Data →';
+      } else if (currentStep === 2) {
+        btnNext.textContent = 'Validate & Continue →';
+        btnNext.disabled = !exportData;
+      } else if (currentStep === 3) {
+        btnNext.textContent = 'Start Import →';
+      } else if (currentStep === 4) {
+        btnNext.textContent = 'Go to Dashboard';
+      }
+    }
+
+    // Step 1: Export
+    async function exportData() {
+      const btnNext = document.getElementById('btn-next');
+      const statusDiv = document.getElementById('export-status');
+      const statsDiv = document.getElementById('export-stats');
+
+      btnNext.disabled = true;
+      btnNext.innerHTML = '<span class="spinner"></span> Exporting...';
+      statusDiv.className = 'info-box';
+      statusDiv.innerHTML = '<p>Exporting your farm data from cloud...</p>';
+      statusDiv.classList.remove('hidden');
+
+      try {
+        const response = await fetch('/api/migration/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) throw new Error('Export failed');
+
+        const result = await response.json();
+        exportData = result.data;
+
+        statusDiv.className = 'success-box info-box';
+        statusDiv.innerHTML = '<h3>✓ Export Successful</h3><p>Your data has been exported and is ready for validation.</p>';
+
+        // Show stats
+        statsDiv.className = 'stats-grid';
+        statsDiv.innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${result.stats.userCount}</div>
+            <div class="stat-label">Users</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${result.stats.productCount}</div>
+            <div class="stat-label">Products</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${result.stats.inventoryCount}</div>
+            <div class="stat-label">Inventory Items</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${result.stats.orderCount}</div>
+            <div class="stat-label">Orders</div>
+          </div>
+        `;
+        statsDiv.classList.remove('hidden');
+
+        // Auto-advance after 2 seconds
+        setTimeout(() => goToStep(2), 2000);
+
+      } catch (error) {
+        statusDiv.className = 'error-box info-box';
+        statusDiv.innerHTML = `<h3>✗ Export Failed</h3><p>${error.message}</p>`;
+        btnNext.disabled = false;
+        btnNext.textContent = 'Retry Export';
+      }
+    }
+
+    // Step 2: File upload and validation
+    const fileUploadZone = document.getElementById('file-upload-zone');
+    const fileInput = document.getElementById('file-input');
+
+    fileUploadZone.addEventListener('click', () => fileInput.click());
+
+    fileUploadZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      fileUploadZone.classList.add('dragging');
+    });
+
+    fileUploadZone.addEventListener('dragleave', () => {
+      fileUploadZone.classList.remove('dragging');
+    });
+
+    fileUploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fileUploadZone.classList.remove('dragging');
+      handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      handleFile(e.target.files[0]);
+    });
+
+    async function handleFile(file) {
+      if (!file || !file.name.endsWith('.json')) {
+        alert('Please select a valid JSON export file');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          exportData = JSON.parse(e.target.result);
+          await validateExport();
+        } catch (error) {
+          alert('Invalid export file format');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    async function validateExport() {
+      const resultsDiv = document.getElementById('validation-results');
+      resultsDiv.className = 'info-box';
+      resultsDiv.innerHTML = '<p>Validating export data...</p>';
+      resultsDiv.classList.remove('hidden');
+
+      try {
+        const response = await fetch('/api/migration/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(exportData)
+        });
+
+        const result = await response.json();
+
+        let html = '<h3>Validation Results</h3><ul class="validation-list">';
+
+        if (result.valid) {
+          html += '<li class="validation-item success">Export data is valid and ready to import</li>';
+          html += `<li class="validation-item success">Checksum verified</li>`;
+          html += `<li class="validation-item success">Data size: ${result.estimatedSize}</li>`;
+        }
+
+        result.errors?.forEach(err => {
+          html += `<li class="validation-item error">${err}</li>`;
+        });
+
+        result.warnings?.forEach(warn => {
+          html += `<li class="validation-item warning">${warn}</li>`;
+        });
+
+        html += '</ul>';
+
+        resultsDiv.className = result.valid ? 'success-box info-box' : 'error-box info-box';
+        resultsDiv.innerHTML = html;
+
+        document.getElementById('btn-next').disabled = !result.valid;
+
+      } catch (error) {
+        resultsDiv.className = 'error-box info-box';
+        resultsDiv.innerHTML = `<h3>✗ Validation Failed</h3><p>${error.message}</p>`;
+      }
+    }
+
+    // Step 3: Import
+    async function importData() {
+      const previewDiv = document.getElementById('import-preview');
+      const progressDiv = document.getElementById('import-progress');
+      const progressBar = document.getElementById('import-progress-bar');
+      const statusText = document.getElementById('import-status-text');
+      const btnNext = document.getElementById('btn-next');
+
+      // Show preview
+      previewDiv.innerHTML = `
+        <div class="stat-card">
+          <div class="stat-value">${exportData.stats.userCount}</div>
+          <div class="stat-label">Users to Import</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${exportData.stats.productCount}</div>
+          <div class="stat-label">Products</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${exportData.stats.inventoryCount}</div>
+          <div class="stat-label">Inventory Items</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${exportData.stats.orderCount}</div>
+          <div class="stat-label">Orders</div>
+        </div>
+      `;
+
+      // Wait for user confirmation
+      if (btnNext.textContent.includes('Start Import')) {
+        btnNext.textContent = 'Confirm Import';
+        return;
+      }
+
+      // Start import
+      btnNext.disabled = true;
+      progressDiv.classList.remove('hidden');
+      progressBar.style.width = '10%';
+      progressBar.textContent = '10%';
+      statusText.textContent = 'Creating backup...';
+
+      try {
+        // Simulate progress updates
+        const progressSteps = [
+          { progress: 20, text: 'Importing farm configuration...' },
+          { progress: 35, text: 'Importing users...' },
+          { progress: 50, text: 'Importing products and inventory...' },
+          { progress: 65, text: 'Importing orders...' },
+          { progress: 80, text: 'Importing wholesale data...' },
+          { progress: 90, text: 'Finalizing import...' }
+        ];
+
+        for (const step of progressSteps) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          progressBar.style.width = step.progress + '%';
+          progressBar.textContent = step.progress + '%';
+          statusText.textContent = step.text;
+        }
+
+        const response = await fetch('/api/migration/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(exportData)
+        });
+
+        if (!response.ok) throw new Error('Import failed');
+
+        const result = await response.json();
+        rollbackId = result.rollbackId;
+
+        progressBar.style.width = '100%';
+        progressBar.textContent = '100%';
+        statusText.textContent = 'Import completed successfully!';
+
+        // Show completion stats
+        document.getElementById('completion-stats').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${result.stats.usersImported}</div>
+            <div class="stat-label">Users Imported</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${result.stats.productsImported}</div>
+            <div class="stat-label">Products Imported</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${result.stats.inventoryImported}</div>
+            <div class="stat-label">Inventory Imported</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${result.stats.ordersImported}</div>
+            <div class="stat-label">Orders Imported</div>
+          </div>
+        `;
+
+        document.getElementById('rollback-id').textContent = rollbackId;
+
+        setTimeout(() => goToStep(4), 2000);
+
+      } catch (error) {
+        statusText.textContent = 'Import failed: ' + error.message;
+        progressBar.style.background = '#dc3545';
+        btnNext.disabled = false;
+        btnNext.textContent = 'Retry Import';
+      }
+    }
+
+    // Rollback
+    async function rollbackMigration() {
+      if (!confirm('Are you sure you want to rollback this migration? This will restore your previous data.')) {
+        return;
+      }
+
+      const btnRollback = document.getElementById('btn-rollback');
+      btnRollback.disabled = true;
+      btnRollback.innerHTML = '<span class="spinner"></span> Rolling back...';
+
+      try {
+        const response = await fetch(`/api/migration/rollback/${rollbackId}`, {
+          method: 'POST'
+        });
+
+        if (!response.ok) throw new Error('Rollback failed');
+
+        alert('Migration rolled back successfully');
+        window.location.href = '/';
+
+      } catch (error) {
+        alert('Rollback failed: ' + error.message);
+        btnRollback.disabled = false;
+        btnRollback.textContent = 'Rollback';
+      }
+    }
+
+    // Button handlers
+    document.getElementById('btn-back').addEventListener('click', () => {
+      goToStep(currentStep - 1);
+    });
+
+    document.getElementById('btn-next').addEventListener('click', async () => {
+      if (currentStep === 1) {
+        await exportData();
+      } else if (currentStep === 2) {
+        goToStep(3);
+      } else if (currentStep === 3) {
+        await importData();
+      } else if (currentStep === 4) {
+        window.location.href = '/';
+      }
+    });
+
+    document.getElementById('btn-rollback').addEventListener('click', rollbackMigration);
+
+    // Initialize
+    updateButtons();
+  </script>
+</body>
+</html>
