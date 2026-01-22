@@ -1,0 +1,1962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Room Mapper - Light Engine Charlie</title>
+  <link rel="stylesheet" href="../styles.foxtrot.css?v=1761427245">
+  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e7;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .mapper-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+      z-index: 100;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: 2px solid;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: #3b82f6;
+      color: #93c5fd;
+    }
+
+    .btn-primary:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: scale(1.05);
+    }
+
+    .btn-secondary {
+      background: rgba(100, 116, 139, 0.2);
+      border-color: #64748b;
+      color: #cbd5e1;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(100, 116, 139, 0.3);
+      transform: scale(1.05);
+    }
+
+    .btn-success {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: #10b981;
+      color: #6ee7b7;
+    }
+
+    .btn-success:hover {
+      background: rgba(16, 185, 129, 0.35);
+      transform: scale(1.05);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+      color: #fca5a5;
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.35);
+      transform: scale(1.05);
+    }
+
+    .main-content {
+      display: grid;
+      grid-template-columns: 240px 1fr 260px;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      flex: 1;
+      overflow-y: auto; overflow-x: hidden;
+    }
+
+    .sidebar, .details-panel {
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      overflow-y: auto;
+    }
+
+    .sidebar h2, .details-panel h2 {
+      margin: 0 0 1.5rem 0;
+      font-size: 1.25rem;
+      color: #60a5fa;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      padding-bottom: 0.75rem;
+      font-weight: 700;
+    }
+
+    .tool-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .tool-section h3 {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      margin: 0 0 0.75rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .tool-palette {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .tool-item {
+      padding: 1rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 2px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      text-align: center;
+      cursor: grab;
+      transition: all 0.2s;
+      user-select: none;
+      color: #e4e4e7;
+    }
+
+    .tool-item:hover {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: #3b82f6;
+      transform: scale(1.05);
+    }
+
+    .tool-item.active {
+      background: rgba(59, 130, 246, 0.3);
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    .tool-item:active {
+      cursor: grabbing;
+    }
+
+    .tool-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .tool-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    .canvas-wrapper {
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .canvas-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .canvas-header h2 {
+      margin: 0;
+      font-size: 1.25rem;
+      color: #60a5fa;
+      font-weight: 700;
+    }
+
+    .canvas-controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .canvas-controls label {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 500;
+    }
+
+    .canvas-controls input[type="number"] {
+      width: 60px;
+      padding: 0.375rem 0.5rem;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.8);
+      color: #e4e4e7;
+      font-size: 0.875rem;
+    }
+
+    .canvas-hint {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      background: rgba(14, 116, 144, 0.18);
+      color: #cffafe;
+      font-size: 0.85rem;
+    }
+
+    .canvas-hint strong {
+      color: #e0f2fe;
+    }
+
+    .canvas-hint button {
+      margin-left: auto;
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.6);
+      color: #bfdbfe;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: background 0.2s ease;
+    }
+
+    .canvas-hint button:hover {
+      background: rgba(59, 130, 246, 0.35);
+    }
+
+    #mapCanvas {
+      border: 2px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      cursor: crosshair;
+      display: block;
+      background: rgba(15, 23, 42, 0.6);
+      background-image: 
+        linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    .device-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .device-item {
+      padding: 0.75rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #e4e4e7;
+    }
+
+    .device-item:hover {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: #3b82f6;
+    }
+
+    .device-item.placed {
+      opacity: 0.5;
+    }
+
+    .device-info {
+      flex: 1;
+    }
+
+    .device-name {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #e4e4e7;
+      margin-bottom: 0.125rem;
+    }
+
+    .device-type {
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+
+    .device-icon-small {
+      font-size: 1.25rem;
+      margin-right: 0.5rem;
+    }
+
+    .zone-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .zone-item {
+      padding: 0.75rem;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.875rem;
+      font-weight: 600;
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .details-empty {
+      text-align: center;
+      color: #94a3b8;
+      padding: 2.5rem 1.5rem;
+      font-size: 0.875rem;
+    }
+
+    .details-content {
+      font-size: 0.875rem;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .detail-label {
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .detail-value {
+      color: #e4e4e7;
+      font-weight: 600;
+    }
+
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .telemetry-card {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0.75rem;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .telemetry-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .telemetry-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1.25rem;
+    }
+
+    .action-buttons button {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 0.75rem;
+    }
+
+    .stats-bar {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0.75rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+      color: #94a3b8;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .stats-bar strong {
+      color: #e4e4e7;
+    }
+
+    .legend {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: rgba(15, 23, 42, 0.4);
+      border-radius: 8px;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .legend-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #60a5fa;
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.875rem;
+      color: #cbd5e1;
+    }
+
+    .legend-icon {
+      font-size: 1.25rem;
+      color: #60a5fa;
+      width: 24px;
+      text-align: center;
+    }
+
+  </style>
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+</head>
+<body class="le-theme">
+  <div class="mapper-container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>Room Mapper <span style="font-size: 0.5em; color: #10b981;">v7 EQUIP</span> <span id="vp" style="font-size: 0.4em; color: #f59e0b;"></span></h1>
+        <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 0.875rem;">Visual layout of sensors, lights, and zones</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="window.location.href='../index.charlie.html'">← Back to Setup/Update</button>
+        <button class="btn btn-success" onclick="saveMap()">Save Map</button>
+        <button class="btn btn-primary" onclick="loadMap()">Load Map</button>
+        <button class="btn btn-danger" onclick="clearMap()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Left Sidebar: Tools -->
+      <div class="sidebar">
+        <h2>Tools & Equipment</h2>
+        
+        <!-- Drawing Tools -->
+        <div class="tool-section">
+          <h3>Drawing Tools</h3>
+          <div class="tool-palette">
+            <div class="tool-item active" data-tool="select" onclick="selectTool('select')">
+              <div class="tool-icon">⌘</div>
+              <div class="tool-label">Select</div>
+            </div>
+            <div class="tool-item" data-tool="zone" onclick="selectTool('zone')">
+              <div class="tool-icon">▢</div>
+              <div class="tool-label">Draw Zone</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Available Sensors -->
+        <div class="tool-section">
+          <h3>Sensors</h3>
+          <div class="device-list" id="deviceList">
+            <div style="text-align: center; padding: 20px; color: #94a3b8;">
+              Loading sensors...
+            </div>
+          </div>
+        </div>
+
+        <!-- Available Equipment -->
+        <div class="tool-section">
+          <h3>Equipment</h3>
+          <div class="device-list" id="equipmentList">
+            <div style="text-align: center; padding: 20px; color: #94a3b8;">
+              Loading equipment...
+            </div>
+          </div>
+        </div>
+
+        <!-- Zones -->
+        <div class="tool-section">
+          <h3>Zones</h3>
+          <div class="zone-list" id="zoneList">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+          <div class="legend-title">Legend</div>
+          <div class="legend-item">
+            <span class="legend-icon">◉</span>
+            <span>Temperature/Humidity Sensor</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-icon">◆</span>
+            <span>Grow Light / Fixture</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-icon">◈</span>
+            <span>Equipment (HVAC, Dehumidifier)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-icon">●</span>
+            <span>Smart Plug / Controller</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Canvas -->
+      <div class="canvas-wrapper">
+        <div class="canvas-header">
+          <h2 id="roomLayoutTitle">Room Layout</h2>
+          <div class="canvas-controls">
+            <label>
+              Room:
+              <select id="roomSelect" onchange="changeRoom()" style="padding: 0.375rem 0.75rem; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; background: rgba(15, 23, 42, 0.8); color: #e4e4e7; font-size: 0.875rem; min-width: 150px; margin-right: 1rem;">
+                <option value="">Loading rooms...</option>
+              </select>
+            </label>
+            <label>
+              Grid:
+              <input type="number" id="gridSize" value="30" min="10" max="50" onchange="updateGridSize()">
+            </label>
+            <label>
+              Cell Size:
+              <input type="number" id="cellSize" value="40" min="20" max="80" onchange="updateCellSize()">
+            </label>
+          </div>
+        </div>
+        <div id="selectToolHint" class="canvas-hint" hidden>
+          <strong>Tip:</strong> Use the Select tool to drag sensors and equipment, grab zone edges or corners to resize, and drag inside a zone to reposition it.
+          <button type="button" onclick="dismissSelectHint()">Got it</button>
+        </div>
+        <canvas id="mapCanvas" width="800" height="600"></canvas>
+        <div class="stats-bar">
+          <strong>Grid:</strong> <span id="gridInfo">20×15 cells</span> | 
+          <strong>Devices:</strong> <span id="deviceCount">0</span> | 
+          <strong>Zones:</strong> <span id="zoneCount">0</span>
+        </div>
+      </div>
+
+      <!-- Right Sidebar: Details -->
+      <div class="details-panel">
+        <h2>Selection Details</h2>
+        <div id="detailsContent" class="details-empty">
+          Click on a device or zone<br>to view details
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Debug viewport
+    const vpSpan = document.getElementById("vp");
+    if (vpSpan) vpSpan.textContent = `${window.innerWidth}×${window.innerHeight}px`;
+    console.log("[Room Mapper] Viewport:", window.innerWidth, "x", window.innerHeight);
+    // Global state
+    const STATE = {
+      canvas: null,
+      ctx: null,
+      gridSize: 30,
+      cellSize: 40,
+      currentTool: 'select',
+      devices: [],
+      iotDevices: [],
+      equipment: [],
+      placedDevices: [],
+      zones: [],
+      selectedItem: null,
+      isDragging: false,
+      draggedItem: null,
+      dragMode: null, // 'device' | 'zone-resize' | 'zone-move'
+      zoneDrag: null, // { zone, edge: 'left'|'right'|'top'|'bottom'|'inside', startX, startY }
+      zoneStart: null,
+      rooms: [],
+      currentRoomId: null
+    };
+
+    const SELECT_HINT_KEY = 'roomMapper.selectHintDismissed';
+
+    // Device type icons (using simple text symbols instead of emojis)
+    const DEVICE_ICONS = {
+      sensor: '◉',
+      woiosensor: '◉',
+      light: '◆',
+      plug: '●',
+      equipment: '◈',
+      switch: '●',
+      default: '○'
+    };
+
+    // Zone colors
+    const ZONE_COLORS = [
+      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+      '#ec4899', '#06b6d4', '#84cc16', '#f97316'
+    ];
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', async () => {
+      console.log("[Room Mapper] DOMContentLoaded - Starting initialization");
+      STATE.canvas = document.getElementById('mapCanvas');
+      STATE.ctx = STATE.canvas.getContext('2d');
+      console.log("[Room Mapper] Canvas element:", STATE.canvas);
+      
+      console.log("[Room Mapper] Canvas context:", STATE.ctx);
+      setupCanvas();
+      await loadRooms();
+      await loadIoTDevices();
+      await loadEquipment();
+      await loadExistingMap();
+      setupEventListeners();
+      draw();
+      maybeShowSelectHint();
+    });
+
+    function setupCanvas() {
+      const width = STATE.gridSize * STATE.cellSize;
+      const height = Math.floor(STATE.gridSize * 0.75) * STATE.cellSize;
+      STATE.canvas.width = width;
+      STATE.canvas.height = height;
+      updateGridInfo();
+    }
+
+  function setupEventListeners() {
+      // Improve Chrome compatibility: prefer Pointer Events when available
+      try {
+        // Prevent default touch scrolling/gesture interference (esp. Chrome)
+        STATE.canvas.style.touchAction = 'none';
+      } catch {}
+      if (window.PointerEvent) {
+        STATE.canvas.addEventListener('pointerdown', handleMouseDown, { passive: false });
+        STATE.canvas.addEventListener('pointermove', handleMouseMove, { passive: false });
+        STATE.canvas.addEventListener('pointerup', handleMouseUp, { passive: false });
+        STATE.canvas.addEventListener('click', handleClick, { passive: true });
+      } else {
+        STATE.canvas.addEventListener('mousedown', handleMouseDown, { passive: false });
+        STATE.canvas.addEventListener('mousemove', handleMouseMove, { passive: false });
+        STATE.canvas.addEventListener('mouseup', handleMouseUp, { passive: false });
+        STATE.canvas.addEventListener('click', handleClick, { passive: true });
+      }
+      // Passive hover cursor feedback
+      STATE.canvas.addEventListener('mousemove', updateCursorForHover, { passive: true });
+    }
+
+    function getCanvasEventPosition(e) {
+      const rect = STATE.canvas.getBoundingClientRect();
+      const scaleX = rect.width ? (STATE.canvas.width / rect.width) : 1;
+      const scaleY = rect.height ? (STATE.canvas.height / rect.height) : 1;
+      const px = (e.clientX - rect.left) * scaleX;
+      const py = (e.clientY - rect.top) * scaleY;
+      const x = Math.floor(px / STATE.cellSize);
+      const y = Math.floor(py / STATE.cellSize);
+      return { px, py, x, y };
+    }
+
+    function hasDismissedSelectHint() {
+      try {
+        return localStorage.getItem(SELECT_HINT_KEY) === 'true';
+      } catch (err) {
+        console.warn('[Room Mapper] Unable to read select hint flag:', err);
+        return false;
+      }
+    }
+
+    function maybeShowSelectHint() {
+      const hintEl = document.getElementById('selectToolHint');
+      if (!hintEl) return;
+      if (STATE.currentTool !== 'select') {
+        hintEl.hidden = true;
+        return;
+      }
+      if (hasDismissedSelectHint()) {
+        hintEl.hidden = true;
+        return;
+      }
+      hintEl.hidden = false;
+    }
+
+    window.dismissSelectHint = function dismissSelectHint() {
+      const hintEl = document.getElementById('selectToolHint');
+      if (hintEl) hintEl.hidden = true;
+      try {
+        localStorage.setItem(SELECT_HINT_KEY, 'true');
+      } catch (err) {
+        console.warn('[Room Mapper] Unable to persist select hint flag:', err);
+      }
+    };
+
+    async function loadRooms() {
+      try {
+        const response = await fetch('/data/rooms.json');
+        const roomsData = await response.json();
+        
+        // Extract rooms array from the response
+        STATE.rooms = roomsData.rooms || roomsData || [];
+        
+        console.log("[Room Mapper] Loaded", STATE.rooms.length, "rooms");
+        
+        // Populate room dropdown
+        const roomSelect = document.getElementById('roomSelect');
+        if (!STATE.rooms.length) {
+          roomSelect.innerHTML = '<option value="">No rooms found</option>';
+          return;
+        }
+        
+        roomSelect.innerHTML = STATE.rooms.map(room => {
+          const roomId = room.id || room.name;
+          const roomName = room.name || room.location || 'Unnamed Room';
+          return `<option value="${roomId}">${roomName}</option>`;
+        }).join('');
+        
+        // Set current room to first room if not already set
+        if (!STATE.currentRoomId && STATE.rooms.length > 0) {
+          STATE.currentRoomId = STATE.rooms[0].id || STATE.rooms[0].name;
+          roomSelect.value = STATE.currentRoomId;
+          updateRoomTitle();
+        }
+        
+      } catch (error) {
+        console.error('Failed to load rooms:', error);
+        document.getElementById('roomSelect').innerHTML = '<option value="">Error loading rooms</option>';
+      }
+    }
+
+    window.changeRoom = async function() {
+      const roomSelect = document.getElementById('roomSelect');
+      const newRoomId = roomSelect.value;
+      
+      if (!newRoomId || newRoomId === STATE.currentRoomId) {
+        return;
+      }
+      
+      console.log("[Room Mapper] Changing room from", STATE.currentRoomId, "to", newRoomId);
+      
+      // Ask to save current room if there are unsaved changes
+      if (STATE.placedDevices.length > 0 || STATE.zones.length > 0) {
+        const shouldSave = confirm('Save current room layout before switching?');
+        if (shouldSave) {
+          await saveMap();
+        }
+      }
+      
+      // Update current room
+      STATE.currentRoomId = newRoomId;
+      
+      // Update room title
+      updateRoomTitle();
+      
+      // Clear current map
+      STATE.placedDevices = [];
+      STATE.zones = [];
+      STATE.selectedItem = null;
+      document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
+      
+      // Load map for new room
+      await loadExistingMap();
+      
+      // Refresh displays
+      renderDeviceList();
+      renderEquipmentList();
+      updateZoneList();
+      draw();
+      updateStats();
+    }
+
+    function updateRoomTitle() {
+      const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
+      const roomName = currentRoom ? (currentRoom.name || currentRoom.location || 'Unknown Room') : 'Room Layout';
+      document.getElementById('roomLayoutTitle').textContent = roomName;
+    }
+
+    async function loadIoTDevices() {
+      try {
+        // Load sensors from iot-devices.json (filter for sensors only)
+        const sensorResponse = await fetch('/data/iot-devices.json');
+        const allDevices = await sensorResponse.json();
+        
+        console.log(`[Room Mapper] Fetched ${allDevices.length} total devices from iot-devices.json`);
+        
+        // Filter for sensors only - devices with type containing 'sensor' or category 'sensor'
+        const sensors = allDevices.filter(d => {
+          const type = (d.type || '').toLowerCase();
+          const category = (d.category || '').toLowerCase();
+          return type.includes('sensor') || category === 'sensor';
+        });
+        
+        console.log(`[Room Mapper] Filtered to ${sensors.length} sensors`);
+        console.log('[Room Mapper] Sample sensors:', sensors.slice(0, 3).map(s => ({ 
+          id: s.id, 
+          name: s.name, 
+          type: s.type, 
+          category: s.category 
+        })));
+        
+        STATE.iotDevices = sensors;
+        renderDeviceList();
+      } catch (error) {
+        console.error('[Room Mapper] Failed to load sensors:', error);
+        STATE.iotDevices = [];
+        document.getElementById('deviceList').innerHTML = 
+          '<div style="text-align: center; padding: 20px; color: #ef4444;">Failed to load sensors</div>';
+      }
+    }
+
+    const SIMPLE_EQUIPMENT_CATEGORIES = ['fans', 'vents', 'controllers', 'energy-monitor', 'other'];
+
+    async function fetchEquipmentMetadata() {
+      let metadata = {};
+      try {
+        let res = await fetch('/data/equipment-metadata');
+        if (!res.ok) {
+          res = await fetch('/data/equipment-metadata.json');
+        }
+        if (res.ok) {
+          metadata = await res.json();
+        } else {
+          console.log('[Room Mapper] No equipment metadata found (optional)');
+        }
+      } catch (error) {
+        console.log('[Room Mapper] Failed to load equipment metadata:', error);
+      }
+      return metadata || {};
+    }
+
+    function aggregateEquipmentFromRooms(rooms, metadata) {
+      const equipment = [];
+      const roomList = Array.isArray(rooms) ? rooms : [];
+      const meta = metadata || {};
+
+      roomList.forEach(room => {
+        const roomId = (room && (room.id || room.name)) || 'room';
+        const roomName = (room && (room.name || room.location)) || 'Unnamed Room';
+
+        if (Array.isArray(room?.equipment)) {
+          room.equipment.forEach(eq => {
+            const count = eq?.count || 1;
+            for (let i = 0; i < count; i++) {
+              equipment.push({
+                ...eq,
+                id: eq?.id ? `${eq.id}-${i}` : `${roomId}-${eq?.vendor || eq?.model || eq?.category || 'Equipment'}-${i}`.replace(/\s+/g, '-'),
+                count: 1,
+                roomId,
+                roomName
+              });
+            }
+          });
+        }
+
+        const categoryProgress = room?._categoryProgress || room?.categoryProgress;
+        if (categoryProgress && typeof categoryProgress === 'object') {
+          Object.values(categoryProgress).forEach(progress => {
+            if (Array.isArray(progress?.selectedEquipment)) {
+              progress.selectedEquipment.forEach(eq => {
+                const count = eq?.count || 1;
+                for (let i = 0; i < count; i++) {
+                  equipment.push({
+                    ...eq,
+                    id: eq?.id ? `${eq.id}-${i}` : `${roomId}-${eq?.vendor || eq?.model || eq?.category || 'Equipment'}-${i}`.replace(/\s+/g, '-'),
+                    count: 1,
+                    roomId,
+                    roomName
+                  });
+                }
+              });
+            }
+          });
+
+          SIMPLE_EQUIPMENT_CATEGORIES.forEach(catKey => {
+            const catData = categoryProgress[catKey];
+            if (catData && catData.count && catData.count > 0) {
+              for (let i = 0; i < catData.count; i++) {
+                equipment.push({
+                  id: `${roomId}-${catKey}-${i}`.replace(/\s+/g, '-'),
+                  category: catKey,
+                  vendor: catData.manufacturer || 'Unknown',
+                  model: catData.model || catKey,
+                  count: 1,
+                  control: catData.control || null,
+                  roomId,
+                  roomName,
+                  wifi: catData.wifi || false,
+                  wired: catData.wired || false,
+                  notes: catData.notes || ''
+                });
+              }
+            }
+          });
+        }
+
+        if (room?.category && typeof room.category === 'object') {
+          SIMPLE_EQUIPMENT_CATEGORIES.forEach(catKey => {
+            const catData = room.category[catKey];
+            if (catData && catData.count && catData.count > 0) {
+              for (let i = 0; i < catData.count; i++) {
+                equipment.push({
+                  id: `${roomId}-${catKey}-${i}`.replace(/\s+/g, '-'),
+                  category: catKey,
+                  vendor: catData.manufacturer || 'Unknown',
+                  model: catData.model || catKey,
+                  count: 1,
+                  control: catData.control || null,
+                  roomId,
+                  roomName,
+                  wifi: catData.wifi || false,
+                  wired: catData.wired || false,
+                  notes: catData.notes || ''
+                });
+              }
+            }
+          });
+        }
+      });
+
+      equipment.forEach(eq => {
+        if (meta[eq.id]) {
+          Object.assign(eq, meta[eq.id]);
+        }
+      });
+
+      const equipmentIds = new Set(equipment.map(eq => eq.id));
+      Object.keys(meta).forEach(metaId => {
+        if (!equipmentIds.has(metaId)) {
+          const metaItem = meta[metaId];
+          equipment.push({
+            id: metaId,
+            name: metaItem?.name || 'Equipment',
+            category: metaItem?.category || 'Other',
+            vendor: metaItem?.vendor || 'Unknown',
+            model: metaItem?.model || 'Unknown',
+            count: 1,
+            control: metaItem?.control || null,
+            roomId: metaItem?.roomId || '',
+            roomName: metaItem?.roomName || '—',
+            isStandalone: true,
+            wifi: metaItem?.wifi,
+            wired: metaItem?.wired,
+            notes: metaItem?.notes,
+            capacity: metaItem?.capacity
+          });
+        }
+      });
+
+      return equipment;
+    }
+
+    async function loadEquipment() {
+      try {
+        const roomsResponse = await fetch('/data/rooms.json');
+        const roomsData = await roomsResponse.json();
+        const rooms = roomsData.rooms || roomsData || [];
+
+        console.log(`[Room Mapper] Fetched ${rooms.length} rooms from rooms.json`);
+
+        const metadata = await fetchEquipmentMetadata();
+        console.log(`[Room Mapper] Loaded ${Object.keys(metadata).length} equipment metadata entries`);
+        
+        const equipment = aggregateEquipmentFromRooms(rooms, metadata);
+
+        console.log(`[Room Mapper] Aggregated ${equipment.length} equipment items`);
+        console.log('[Room Mapper] Sample equipment:', equipment.slice(0, 3).map(e => ({ 
+          id: e.id, 
+          name: e.name, 
+          category: e.category, 
+          vendor: e.vendor, 
+          model: e.model,
+          control: e.control,
+          roomName: e.roomName 
+        })));
+
+        STATE.equipment = equipment;
+        renderEquipmentList();
+      } catch (error) {
+        console.error('[Room Mapper] Failed to load equipment:', error);
+        STATE.equipment = [];
+        document.getElementById('equipmentList').innerHTML = 
+          '<div style="text-align: center; padding: 20px; color: #ef4444;">Failed to load equipment</div>';
+      }
+    }
+
+    function renderDeviceList() {
+      const list = document.getElementById('deviceList');
+      console.log("[Room Mapper] renderDeviceList - Sensor count:", STATE.iotDevices.length, "List element:", list);
+      if (!STATE.iotDevices.length) {
+        list.innerHTML = '<div style="text-align: center; padding: 20px; color: #94a3b8;">No sensors found</div>';
+        return;
+      }
+
+      list.innerHTML = '';
+      STATE.iotDevices.forEach(device => {
+        const isPlaced = STATE.placedDevices.some(p => p.deviceId === (device.id || device.model));
+        const item = document.createElement('div');
+        item.className = `device-item ${isPlaced ? 'placed' : ''}`;
+        item.dataset.deviceId = device.id || device.model;
+        
+        const icon = getDeviceIcon(device);
+        // For sensors, prefer name field over vendor/model
+        const displayName = device.name || (device.vendor ? `${device.vendor} ${device.model}` : 'Unknown');
+        const displayType = device.category || device.type || 'Unknown';
+        
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; flex: 1;">
+            <span class="device-icon-small">${icon}</span>
+            <div class="device-info">
+              <div class="device-name">${displayName}</div>
+              <div class="device-type">${displayType}${device.zone ? ` • Zone ${device.zone}` : ''}</div>
+            </div>
+          </div>
+        `;
+        
+        item.addEventListener('click', () => placeDeviceFromList(device));
+        list.appendChild(item);
+      });
+    }
+
+    function renderEquipmentList() {
+      const list = document.getElementById('equipmentList');
+      console.log("[Room Mapper] renderEquipmentList - Equipment count:", STATE.equipment.length, "List element:", list);
+      if (!STATE.equipment.length) {
+        list.innerHTML = '<div style="text-align: center; padding: 20px; color: #94a3b8;">No equipment found</div>';
+        return;
+      }
+
+      list.innerHTML = '';
+      STATE.equipment.forEach(equip => {
+        const isPlaced = STATE.placedDevices.some(p => p.deviceId === equip.id);
+        const item = document.createElement('div');
+        item.className = `device-item ${isPlaced ? 'placed' : ''}`;
+        item.dataset.deviceId = equip.id;
+        item.dataset.equipmentControl = equip.control || ''; // Store controller link
+        
+        const icon = getEquipmentIcon(equip);
+        
+        // Display Name (primary line)
+        const displayName = equip.name || (equip.vendor && equip.model ? `${equip.vendor} ${equip.model}` : equip.category || 'Equipment');
+        
+        // Display Category and Model (secondary line) - show both for clarity
+        const categoryText = equip.category || 'Unknown';
+        const modelText = equip.model || '';
+        const displayInfo = modelText ? `${categoryText} • ${modelText}` : categoryText;
+        
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; flex: 1;">
+            <span class="device-icon-small">${icon}</span>
+            <div class="device-info">
+              <div class="device-name">${displayName}</div>
+              <div class="device-type">${displayInfo}</div>
+            </div>
+          </div>
+        `;
+        
+        item.addEventListener('click', () => placeEquipmentFromList(equip));
+        list.appendChild(item);
+      });
+    }
+
+    function getDeviceIcon(device) {
+      const type = (device.type || '').toLowerCase();
+      const category = (device.category || '').toLowerCase();
+      const model = (device.model || '').toLowerCase();
+      
+      // Equipment
+      if (category.includes('dehumidifier') || model.includes('dehumidifier')) return DEVICE_ICONS.equipment;
+      if (category.includes('equipment') || device.vendor) return DEVICE_ICONS.equipment;
+      
+      // Sensors
+      if (type.includes('sensor') || category.includes('sensor')) return DEVICE_ICONS.sensor;
+      
+      // Lights and switches
+      if (type.includes('light') || category.includes('light')) return DEVICE_ICONS.light;
+      if (type.includes('plug') || category.includes('plug')) return DEVICE_ICONS.plug;
+      if (type.includes('switch')) return DEVICE_ICONS.switch;
+      
+      return DEVICE_ICONS.default;
+    }
+
+    function getEquipmentIcon(equipment) {
+      // All equipment uses the same icon - no emojis for reTerminal compatibility
+      return DEVICE_ICONS.equipment;
+    }
+
+    function placeDeviceFromList(device) {
+      if (STATE.currentTool !== 'select') {
+        selectTool('select');
+      }
+      
+      // Place in center if not already placed
+      const isPlaced = STATE.placedDevices.some(p => p.deviceId === device.id);
+      if (!isPlaced) {
+        const centerX = Math.floor(STATE.gridSize / 2);
+        const centerY = Math.floor((STATE.gridSize * 0.75) / 2);
+        
+        STATE.placedDevices.push({
+          deviceId: device.id,
+          device: device,
+          x: centerX,
+          y: centerY,
+          icon: getDeviceIcon(device)
+        });
+        
+        renderDeviceList();
+        draw();
+        updateStats();
+        showDetails(STATE.placedDevices[STATE.placedDevices.length - 1]);
+      }
+    }
+
+    function placeEquipmentFromList(equipment) {
+      if (STATE.currentTool !== 'select') {
+        selectTool('select');
+      }
+      
+      // Place in center if not already placed
+      const isPlaced = STATE.placedDevices.some(p => p.deviceId === equipment.id);
+      if (!isPlaced) {
+        const centerX = Math.floor(STATE.gridSize / 2);
+        const centerY = Math.floor((STATE.gridSize * 0.75) / 2);
+        
+        // Critical: preserve controller link for automation
+        STATE.placedDevices.push({
+          deviceId: equipment.id,
+          device: equipment,
+          control: equipment.control, // Maintain controller association
+          x: centerX,
+          y: centerY,
+          icon: getEquipmentIcon(equipment),
+          isEquipment: true // Flag to distinguish from sensors
+        });
+        
+        renderEquipmentList();
+        draw();
+        updateStats();
+        showDetails(STATE.placedDevices[STATE.placedDevices.length - 1]);
+      }
+    }
+
+    window.selectTool = function(tool) {
+      STATE.currentTool = tool;
+      console.log("[Room Mapper] Tool selected:", tool, "Current tool now:", STATE.currentTool);
+      document.querySelectorAll('.tool-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      document.querySelector(`[data-tool="${tool}"]`)?.classList.add('active');
+      
+      STATE.canvas.style.cursor = tool === 'zone' ? 'crosshair' : 'default';
+      maybeShowSelectHint();
+    }
+
+  function handleMouseDown(e) {
+    // Improve reliability on Chrome: prevent default and capture pointer if available
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    try { if (e.pointerId != null && STATE.canvas.setPointerCapture) STATE.canvas.setPointerCapture(e.pointerId); } catch {}
+    const { px, py, x, y } = getCanvasEventPosition(e);
+      console.log("[Room Mapper] Mouse down - Tool:", STATE.currentTool, "Position:", x, y);
+      
+      if (STATE.currentTool === 'select') {
+        // 1) Hit test for device: prefer exact cell match, then nearest within tolerance
+        let device = STATE.placedDevices.find(d => d.x === x && d.y === y) || null;
+        if (!device && STATE.placedDevices.length) {
+          let best = null;
+          let bestDist = Infinity;
+          for (const d of STATE.placedDevices) {
+            const cx = d.x * STATE.cellSize + STATE.cellSize / 2;
+            const cy = d.y * STATE.cellSize + STATE.cellSize / 2;
+            const dx = cx - px;
+            const dy = cy - py;
+            const dist = Math.hypot(dx, dy);
+            if (dist < bestDist) { best = d; bestDist = dist; }
+          }
+          // Accept if within 0.8 cell diagonal (~0.8 * cellSize) for easier grabbing
+          if (bestDist <= STATE.cellSize * 0.8) device = best;
+        }
+        if (device) {
+          STATE.isDragging = true;
+          STATE.dragMode = 'device';
+          STATE.draggedItem = device;
+          return;
+        }
+
+        // 2) Hit test for zone borders and inside
+        const hit = hitTestZones(px, py);
+        if (hit) {
+          STATE.isDragging = true;
+          STATE.dragMode = hit.edge === 'inside' ? 'zone-move' : 'zone-resize';
+          STATE.zoneDrag = { zone: hit.zone, edge: hit.edge, startX: x, startY: y };
+          return;
+        }
+      } else if (STATE.currentTool === 'zone') {
+        STATE.zoneStart = { x, y };
+      }
+    }
+
+    function handleMouseMove(e) {
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (!STATE.isDragging) return;
+      
+    const { px, py, x, y } = getCanvasEventPosition(e);
+      
+      const maxX = STATE.gridSize - 1;
+      const maxY = Math.floor(STATE.gridSize * 0.75) - 1;
+      
+      if (STATE.dragMode === 'device' && STATE.draggedItem) {
+        STATE.draggedItem.x = Math.max(0, Math.min(x, maxX));
+        STATE.draggedItem.y = Math.max(0, Math.min(y, maxY));
+        draw();
+        return;
+      }
+      
+      if (STATE.dragMode === 'zone-resize' && STATE.zoneDrag && STATE.zoneDrag.zone) {
+        const z = STATE.zoneDrag.zone;
+        // Support edge and corner resizing
+        if (STATE.zoneDrag.edge === 'left' || STATE.zoneDrag.edge === 'nw' || STATE.zoneDrag.edge === 'sw') z.x1 = Math.max(0, Math.min(x, z.x2));
+        if (STATE.zoneDrag.edge === 'right' || STATE.zoneDrag.edge === 'ne' || STATE.zoneDrag.edge === 'se') z.x2 = Math.min(maxX, Math.max(x, z.x1));
+        if (STATE.zoneDrag.edge === 'top' || STATE.zoneDrag.edge === 'nw' || STATE.zoneDrag.edge === 'ne') z.y1 = Math.max(0, Math.min(y, z.y2));
+        if (STATE.zoneDrag.edge === 'bottom' || STATE.zoneDrag.edge === 'sw' || STATE.zoneDrag.edge === 'se') z.y2 = Math.min(maxY, Math.max(y, z.y1));
+        draw();
+        return;
+      }
+      
+      if (STATE.dragMode === 'zone-move' && STATE.zoneDrag && STATE.zoneDrag.zone) {
+        const z = STATE.zoneDrag.zone;
+        const dx = x - STATE.zoneDrag.startX;
+        const dy = y - STATE.zoneDrag.startY;
+        if (dx !== 0 || dy !== 0) {
+          const width = z.x2 - z.x1;
+          const height = z.y2 - z.y1;
+          let nx1 = Math.max(0, Math.min(z.x1 + dx, maxX - width));
+          let ny1 = Math.max(0, Math.min(z.y1 + dy, maxY - height));
+          z.x2 = nx1 + width;
+          z.y2 = ny1 + height;
+          z.x1 = nx1;
+          z.y1 = ny1;
+          STATE.zoneDrag.startX = x;
+          STATE.zoneDrag.startY = y;
+          draw();
+        }
+        return;
+      }
+    }
+
+    function handleMouseUp(e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (STATE.currentTool === 'zone' && STATE.zoneStart) {
+        const { x, y } = getCanvasEventPosition(e);
+        
+        if (x !== STATE.zoneStart.x && y !== STATE.zoneStart.y) {
+          const zoneNum = STATE.zones.length + 1;
+          if (zoneNum <= 9) {
+            STATE.zones.push({
+              zone: zoneNum,
+              name: `Zone ${zoneNum}`,
+              color: ZONE_COLORS[(zoneNum - 1) % ZONE_COLORS.length],
+              x1: Math.min(STATE.zoneStart.x, x),
+              y1: Math.min(STATE.zoneStart.y, y),
+              x2: Math.max(STATE.zoneStart.x, x),
+              y2: Math.max(STATE.zoneStart.y, y),
+              tempSetpoint: { min: 20, max: 24 },
+              rhSetpoint: { min: 58, max: 65 },
+              rhDelta: 5
+            });
+            updateZoneList();
+            draw();
+            updateStats();
+          }
+        }
+        
+        STATE.zoneStart = null;
+      }
+      
+      STATE.isDragging = false;
+      STATE.draggedItem = null;
+      STATE.dragMode = null;
+      STATE.zoneDrag = null;
+      try { if (e.pointerId != null && STATE.canvas.releasePointerCapture) STATE.canvas.releasePointerCapture(e.pointerId); } catch {}
+    }
+
+    function handleClick(e) {
+    if (STATE.isDragging) return;
+      
+    const { x, y } = getCanvasEventPosition(e);
+      
+      // Check for device click
+      const device = STATE.placedDevices.find(d => d.x === x && d.y === y);
+      if (device) {
+        showDetails(device);
+        return;
+      }
+      
+      // Check for zone click
+      const zone = STATE.zones.find(z => 
+        x >= z.x1 && x <= z.x2 && y >= z.y1 && y <= z.y2
+      );
+      if (zone) {
+        showDetails(zone);
+      }
+    }
+
+    function hitTestZones(px, py) {
+      // Return { zone, edge } if near an edge or corner; edge='inside' if inside but not near edges
+      const tol = Math.max(10, Math.floor(STATE.cellSize * 0.35)); // pixels tolerance (easier to grab)
+      for (const z of STATE.zones) {
+        const x1 = z.x1 * STATE.cellSize;
+        const y1 = z.y1 * STATE.cellSize;
+        const x2 = (z.x2 + 1) * STATE.cellSize; // exclusive
+        const y2 = (z.y2 + 1) * STATE.cellSize; // exclusive
+        const inside = (px >= x1 && px <= x2 && py >= y1 && py <= y2);
+        if (!inside) continue;
+        const distLeft = Math.abs(px - x1);
+        const distRight = Math.abs(px - x2);
+        const distTop = Math.abs(py - y1);
+        const distBottom = Math.abs(py - y2);
+        // Check corners first
+        const nearLeft = distLeft <= tol;
+        const nearRight = distRight <= tol;
+        const nearTop = distTop <= tol;
+        const nearBottom = distBottom <= tol;
+        if (nearLeft && nearTop) return { zone: z, edge: 'nw' };
+        if (nearRight && nearTop) return { zone: z, edge: 'ne' };
+        if (nearLeft && nearBottom) return { zone: z, edge: 'sw' };
+        if (nearRight && nearBottom) return { zone: z, edge: 'se' };
+        // Then edges
+        if (nearLeft) return { zone: z, edge: 'left' };
+        if (nearRight) return { zone: z, edge: 'right' };
+        if (nearTop) return { zone: z, edge: 'top' };
+        if (nearBottom) return { zone: z, edge: 'bottom' };
+        // Inside but far from edges → move whole zone
+        return { zone: z, edge: 'inside' };
+      }
+      return null;
+    }
+
+    function draw() {
+      const ctx = STATE.ctx;
+      ctx.clearRect(0, 0, STATE.canvas.width, STATE.canvas.height);
+      
+      // Draw zones first (background)
+      STATE.zones.forEach(zone => {
+        ctx.fillStyle = zone.color + '20'; // 20% opacity
+        ctx.strokeStyle = zone.color;
+        ctx.lineWidth = 2;
+        
+        const x = zone.x1 * STATE.cellSize;
+        const y = zone.y1 * STATE.cellSize;
+        const width = (zone.x2 - zone.x1 + 1) * STATE.cellSize;
+        const height = (zone.y2 - zone.y1 + 1) * STATE.cellSize;
+        
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeRect(x, y, width, height);
+        
+        // Draw zone label
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(zone.name, x + 10, y + 25);
+
+        // Draw resize handles when in select tool
+        if (STATE.currentTool === 'select') {
+          const handleSize = Math.max(6, Math.floor(STATE.cellSize * 0.25));
+          const half = Math.floor(handleSize / 2);
+          const points = [
+            { key: 'nw', cx: x, cy: y },
+            { key: 'ne', cx: x + width, cy: y },
+            { key: 'sw', cx: x, cy: y + height },
+            { key: 'se', cx: x + width, cy: y + height },
+            { key: 'top', cx: x + width / 2, cy: y },
+            { key: 'bottom', cx: x + width / 2, cy: y + height },
+            { key: 'left', cx: x, cy: y + height / 2 },
+            { key: 'right', cx: x + width, cy: y + height / 2 },
+          ];
+          ctx.fillStyle = zone.color;
+          points.forEach(p => {
+            ctx.fillRect(p.cx - half, p.cy - half, handleSize, handleSize);
+          });
+        }
+      });
+      
+      // Draw devices (foreground)
+      STATE.placedDevices.forEach(device => {
+        const x = device.x * STATE.cellSize + STATE.cellSize / 2;
+        const y = device.y * STATE.cellSize + STATE.cellSize / 2;
+        
+        // Draw device icon
+        ctx.font = '32px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillText(device.icon, x, y);
+        
+    // Draw device name below
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(device.device.name || device.device.model || device.device.category || 'Unknown', x, y + 25);
+        
+        // Draw zone indicator if assigned
+        if (device.device.zone) {
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillText(`Z${device.device.zone}`, x, y - 20);
+        }
+      });
+    }
+
+    function updateCursorForHover(e) {
+      if (STATE.isDragging) return;
+      if (STATE.currentTool !== 'select') {
+        STATE.canvas.style.cursor = 'crosshair';
+        return;
+      }
+    const { px, py } = getCanvasEventPosition(e);
+
+      // Check device hover first
+      const nearest = (() => {
+        let best = null, bestDist = Infinity;
+        for (const d of STATE.placedDevices) {
+          const cx = d.x * STATE.cellSize + STATE.cellSize / 2;
+          const cy = d.y * STATE.cellSize + STATE.cellSize / 2;
+          const dist = Math.hypot(cx - px, cy - py);
+          if (dist < bestDist) { best = d; bestDist = dist; }
+        }
+        return { d: best, dist: bestDist };
+      })();
+      if (nearest.d && nearest.dist <= STATE.cellSize * 0.8) {
+        STATE.canvas.style.cursor = 'grab';
+        return;
+      }
+
+      // Check zone edges/corners
+      const hit = hitTestZones(px, py);
+      if (hit) {
+        const map = {
+          left: 'ew-resize', right: 'ew-resize', top: 'ns-resize', bottom: 'ns-resize',
+          nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', inside: 'move'
+        };
+        STATE.canvas.style.cursor = map[hit.edge] || 'move';
+        return;
+      }
+      STATE.canvas.style.cursor = 'default';
+    }
+
+    function showDetails(item) {
+      STATE.selectedItem = item;
+      const content = document.getElementById('detailsContent');
+      
+      if (item.device) {
+        const device = item.device;
+        
+        // Check if this is equipment (not a sensor)
+        if (item.isEquipment) {
+          // Equipment details
+          let html = `
+            <div class="details-content">
+              <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: #8b5cf6;">${item.icon}</div>
+              <div class="detail-row">
+                <span class="detail-label">Name</span>
+                <span class="detail-value">${device.name || 'Unknown'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Category</span>
+                <span class="detail-value">${device.category || 'Unknown'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Vendor</span>
+                <span class="detail-value">${device.vendor || 'Unknown'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Model</span>
+                <span class="detail-value">${device.model || 'Unknown'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Room</span>
+                <span class="detail-value">${device.roomName || '—'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Control</span>
+                <span class="detail-value">${device.control || item.control || 'None'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Position</span>
+                <span class="detail-value">(${item.x}, ${item.y})</span>
+              </div>
+              <div class="action-buttons">
+                <button class="btn btn-danger" onclick="removeDevice('${device.id}')">Remove</button>
+              </div>
+            </div>
+          `;
+          content.innerHTML = html;
+        } else {
+          // Sensor/IoT device details
+          const telemetry = device.telemetry || {};
+          
+          let html = `
+            <div class="details-content">
+              <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: #60a5fa;">${item.icon}</div>
+              <div class="detail-row">
+                <span class="detail-label">Name</span>
+                <span class="detail-value">${device.name || 'Unknown'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Type</span>
+                <span class="detail-value">${device.type || 'Unknown'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Protocol</span>
+                <span class="detail-value">${device.protocol || 'Unknown'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Position</span>
+                <span class="detail-value">(${item.x}, ${item.y})</span>
+              </div>
+              ${device.zone ? `
+              <div class="detail-row">
+                <span class="detail-label">Zone</span>
+                <span class="detail-value">Zone ${device.zone}</span>
+              </div>
+              ` : ''}
+          `;
+          
+          // Add telemetry if available
+          if (telemetry.temperature || telemetry.humidity) {
+            html += `<div class="telemetry-grid">`;
+            if (telemetry.temperature) {
+              html += `
+                <div class="telemetry-card">
+                  <div class="telemetry-label">Temperature</div>
+                  <div class="telemetry-value">${telemetry.temperature}°C</div>
+                </div>
+              `;
+            }
+            if (telemetry.humidity) {
+              html += `
+                <div class="telemetry-card">
+                  <div class="telemetry-label">Humidity</div>
+                  <div class="telemetry-value">${telemetry.humidity}%</div>
+                </div>
+              `;
+            }
+            html += `</div>`;
+          }
+          
+          html += `
+              <div class="action-buttons">
+                <button class="btn btn-danger" onclick="removeDevice('${device.id}')">Remove</button>
+              </div>
+            </div>
+          `;
+          
+          content.innerHTML = html;
+        }
+      } else if (item.zone) {
+        // Zone details with setpoint controls
+        const tempMin = item.tempSetpoint?.min ?? 20;
+        const tempMax = item.tempSetpoint?.max ?? 24;
+        const rhMin = item.rhSetpoint?.min ?? 58;
+        const rhMax = item.rhSetpoint?.max ?? 65;
+        
+        const html = `
+          <div class="details-content">
+            <div style="width: 100%; height: 60px; background: ${item.color}; border-radius: 8px; margin-bottom: 15px;"></div>
+            <div class="detail-row">
+              <span class="detail-label">Zone</span>
+              <span class="detail-value">${item.name}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Position</span>
+              <span class="detail-value">(${item.x1}, ${item.y1}) to (${item.x2}, ${item.y2})</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Size</span>
+              <span class="detail-value">${item.x2 - item.x1 + 1} × ${item.y2 - item.y1 + 1} cells</span>
+            </div>
+            
+            <div style="margin: 1rem 0; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
+              <div style="font-size: 0.75rem; font-weight: 600; color: #93c5fd; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Environmental Setpoints</div>
+              
+              <div style="margin-bottom: 0.75rem;">
+                <label style="display: block; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.25rem;">Temperature (°C)</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                  <input type="number" id="tempMin_${item.zone}" value="${tempMin}" min="15" max="30" step="0.5" 
+                    style="padding: 0.375rem 0.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #e4e4e7; font-size: 0.875rem;"
+                    placeholder="Min"
+                    onchange="updateZoneSetpoint(${item.zone}, 'tempMin', this.value)">
+                  <input type="number" id="tempMax_${item.zone}" value="${tempMax}" min="15" max="30" step="0.5"
+                    style="padding: 0.375rem 0.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #e4e4e7; font-size: 0.875rem;"
+                    placeholder="Max"
+                    onchange="updateZoneSetpoint(${item.zone}, 'tempMax', this.value)">
+                </div>
+                <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 0.25rem;">Range: ${tempMin}–${tempMax}°C</div>
+              </div>
+              
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.25rem;">Humidity (%)</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                  <input type="number" id="rhMin_${item.zone}" value="${rhMin}" min="30" max="90" step="1"
+                    style="padding: 0.375rem 0.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #e4e4e7; font-size: 0.875rem;"
+                    placeholder="Min"
+                    onchange="updateZoneSetpoint(${item.zone}, 'rhMin', this.value)">
+                  <input type="number" id="rhMax_${item.zone}" value="${rhMax}" min="30" max="90" step="1"
+                    style="padding: 0.375rem 0.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #e4e4e7; font-size: 0.875rem;"
+                    placeholder="Max"
+                    onchange="updateZoneSetpoint(${item.zone}, 'rhMax', this.value)">
+                </div>
+                <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 0.25rem;">Range: ${rhMin}–${rhMax}%</div>
+              </div>
+              
+              <div style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 6px; font-size: 0.7rem; color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3);">
+                💡 These setpoints drive automation rules
+              </div>
+            </div>
+            
+            <div class="action-buttons">
+              <button class="btn btn-danger" onclick="removeZone(${item.zone})">Remove</button>
+            </div>
+          </div>
+        `;
+        content.innerHTML = html;
+      }
+    }
+
+    window.removeDevice = function(deviceId) {
+      STATE.placedDevices = STATE.placedDevices.filter(d => d.deviceId !== deviceId);
+      STATE.selectedItem = null;
+      document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
+      renderDeviceList();
+      draw();
+      updateStats();
+    }
+
+    window.removeZone = function(zoneNum) {
+      STATE.zones = STATE.zones.filter(z => z.zone !== zoneNum);
+      STATE.selectedItem = null;
+      document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
+      updateZoneList();
+      draw();
+      updateStats();
+    }
+
+    window.updateZoneSetpoint = function(zoneNum, field, value) {
+      const zone = STATE.zones.find(z => z.zone === zoneNum);
+      if (!zone) return;
+      
+      // Ensure setpoint objects exist
+      if (!zone.tempSetpoint) zone.tempSetpoint = { min: 20, max: 24 };
+      if (!zone.rhSetpoint) zone.rhSetpoint = { min: 58, max: 65 };
+      
+      // Update the appropriate field
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        if (field === 'tempMin') zone.tempSetpoint.min = numValue;
+        else if (field === 'tempMax') zone.tempSetpoint.max = numValue;
+        else if (field === 'rhMin') zone.rhSetpoint.min = numValue;
+        else if (field === 'rhMax') zone.rhSetpoint.max = numValue;
+        
+        // Refresh the details panel to show updated ranges
+        showDetails(zone);
+        
+        console.log(`[Room Mapper] Updated ${field} for Zone ${zoneNum} to ${numValue}`);
+      }
+    }
+
+    function updateZoneList() {
+      const list = document.getElementById('zoneList');
+      if (!STATE.zones.length) {
+        list.innerHTML = '<div style="text-align: center; padding: 10px; color: #94a3b8; font-size: 12px;">No zones defined</div>';
+        return;
+      }
+      
+      list.innerHTML = '';
+      STATE.zones.forEach(zone => {
+        const item = document.createElement('div');
+        item.className = 'zone-item';
+        item.style.background = zone.color + '20';
+        item.style.borderLeft = `4px solid ${zone.color}`;
+        item.innerHTML = `
+          <span>${zone.name}</span>
+          <span style="font-size: 11px; font-weight: 400;">${(zone.x2 - zone.x1 + 1) * (zone.y2 - zone.y1 + 1)} cells</span>
+        `;
+        item.addEventListener('click', () => showDetails(zone));
+        list.appendChild(item);
+      });
+    }
+
+    function updateStats() {
+      document.getElementById('deviceCount').textContent = STATE.placedDevices.length;
+      document.getElementById('zoneCount').textContent = STATE.zones.length;
+    }
+
+    function updateGridInfo() {
+      const width = STATE.gridSize;
+      const height = Math.floor(STATE.gridSize * 0.75);
+      document.getElementById('gridInfo').textContent = `${width}x${height} cells`;
+    }
+
+    function updateGridSize() {
+      STATE.gridSize = parseInt(document.getElementById('gridSize').value);
+      setupCanvas();
+      draw();
+    }
+
+    function updateCellSize() {
+      STATE.cellSize = parseInt(document.getElementById('cellSize').value);
+      setupCanvas();
+      draw();
+    }
+
+    window.saveMap = async function() {
+      if (!STATE.currentRoomId) {
+        alert('No room selected. Please select a room first.');
+        return;
+      }
+      
+      // Find current room data
+      const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
+      const roomName = currentRoom ? (currentRoom.name || currentRoom.location || 'Unknown Room') : 'Unknown Room';
+      
+      const mapData = {
+        roomId: STATE.currentRoomId,
+        name: roomName,
+        gridSize: STATE.gridSize,
+        cellSize: STATE.cellSize,
+        version: 2,
+        devices: STATE.placedDevices.map(d => ({
+          deviceId: d.deviceId,
+          x: d.x,
+          y: d.y,
+          snapshot: {
+            name: d.device?.name || null,
+            type: d.device?.type || null,
+            protocol: d.device?.protocol || null,
+            category: d.device?.category || null,
+            zone: d.device?.zone ?? null,
+            room: roomName,
+            icon: d.icon || null
+          }
+        })),
+        zones: STATE.zones,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      try {
+        // Save to room-specific file: room-map-{roomId}.json
+        const fileName = `room-map-${STATE.currentRoomId}.json`;
+        const response = await fetch(`/data/${fileName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mapData)
+        });
+        
+        if (response.ok) {
+          alert(`Map saved successfully for room: ${roomName}`);
+        } else {
+          throw new Error('Save failed');
+        }
+      } catch (error) {
+        console.error('Failed to save map:', error);
+        alert('Failed to save map. See console for details.');
+      }
+    }
+
+    window.loadMap = async function() {
+      if (!STATE.currentRoomId) {
+        alert('No room selected. Please select a room first.');
+        return;
+      }
+      
+      try {
+        const fileName = `room-map-${STATE.currentRoomId}.json`;
+        const response = await fetch(`/data/${fileName}`);
+        if (!response.ok) throw new Error('No saved map found for this room');
+        
+        const mapData = await response.json();
+        await loadExistingMapData(mapData);
+        
+        const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
+        const roomName = currentRoom ? (currentRoom.name || 'Unknown') : 'Unknown';
+        alert(`Map loaded successfully for room: ${roomName}`);
+      } catch (error) {
+        console.error('Failed to load map:', error);
+        alert('No saved map found for this room or error loading map.');
+      }
+    }
+
+    async function loadExistingMap() {
+      if (!STATE.currentRoomId) {
+        console.log('[Room Mapper] No room selected yet, skipping map load');
+        return;
+      }
+      
+      try {
+        // Try to load room-specific map first
+        const fileName = `room-map-${STATE.currentRoomId}.json`;
+        const response = await fetch(`/data/${fileName}`);
+        if (response.ok) {
+          const mapData = await response.json();
+          await loadExistingMapData(mapData);
+          console.log(`[Room Mapper] Loaded existing map for room: ${STATE.currentRoomId}`);
+          return;
+        }
+        
+        // Fallback: try legacy room-map.json if it exists and matches current room
+        const legacyResponse = await fetch('/data/room-map.json');
+        if (legacyResponse.ok) {
+          const legacyData = await legacyResponse.json();
+          if (legacyData.roomId === STATE.currentRoomId || legacyData.roomId === 'default') {
+            await loadExistingMapData(legacyData);
+            console.log('[Room Mapper] Loaded legacy room-map.json');
+            return;
+          }
+        }
+        
+        console.log('[Room Mapper] No existing map found for this room, starting fresh');
+      } catch (error) {
+        console.log('[Room Mapper] No existing map found, starting fresh:', error.message);
+      }
+    }
+
+    async function loadExistingMapData(mapData) {
+      if (!STATE.iotDevices.length) {
+        await loadIoTDevices();
+      }
+
+      STATE.gridSize = mapData.gridSize || 20;
+      STATE.cellSize = mapData.cellSize || 40;
+      STATE.zones = mapData.zones || [];
+      
+      document.getElementById('gridSize').value = STATE.gridSize;
+      document.getElementById('cellSize').value = STATE.cellSize;
+      
+      setupCanvas();
+      
+      // Restore placed devices
+      STATE.placedDevices = [];
+      if (mapData.devices) {
+        for (const devicePos of mapData.devices) {
+          const snapshot = devicePos.snapshot || devicePos.metadata || null;
+          let device = STATE.iotDevices.find(d => d.id === devicePos.deviceId);
+
+          if (!device && snapshot) {
+            device = {
+              id: devicePos.deviceId,
+              name: snapshot.name || 'Unknown Device',
+              type: snapshot.type || 'Unknown',
+              protocol: snapshot.protocol || 'Unknown',
+              category: snapshot.category || null,
+              zone: snapshot.zone ?? null
+            };
+          }
+
+          const devicePayload = {
+            deviceId: devicePos.deviceId,
+            device: device || {
+              id: devicePos.deviceId,
+              name: snapshot?.name || 'Unregistered Device',
+              type: snapshot?.type || 'Unknown',
+              protocol: snapshot?.protocol || 'Unknown',
+              category: snapshot?.category || null,
+              zone: snapshot?.zone ?? null
+            },
+            x: devicePos.x,
+            y: devicePos.y,
+            icon: snapshot?.icon || (device ? getDeviceIcon(device) : DEVICE_ICONS.default)
+          };
+
+          if (!devicePayload.icon) {
+            devicePayload.icon = DEVICE_ICONS.default;
+          }
+
+          STATE.placedDevices.push(devicePayload);
+        }
+      }
+      
+      updateZoneList();
+      renderDeviceList();
+      draw();
+      updateStats();
+    }
+
+    window.clearMap = function() {
+      if (!confirm('Are you sure you want to clear the entire map?')) return;
+      
+      STATE.placedDevices = [];
+      STATE.zones = [];
+      STATE.selectedItem = null;
+      
+      document.getElementById('detailsContent').innerHTML = '<div class="details-empty">Click on a device or zone<br>to view details</div>';
+      
+      renderDeviceList();
+      updateZoneList();
+      draw();
+      updateStats();
+    }
+  </script>
+
+  <!-- Intro Card Component -->
+  <script src="/js/intro-card.js?v=5"></script>
+  <script>
+    // Show intro card when page loads (only in demo mode)
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        showIntroCard('room-mapper');
+      }, 500);
+    });
+  </script>
+  <script src="/js/farm-assistant.js"></script>
+</body>
+</html>

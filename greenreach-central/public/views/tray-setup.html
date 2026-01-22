@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tray Setup - Light Engine</title>
+  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e7;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+      margin-bottom: 2rem;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .nav-link {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .nav-link:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: scale(1.05);
+    }
+
+    .nav-link.active {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 1rem;
+      margin: 0 2rem 2rem 2rem;
+      flex-wrap: wrap;
+    }
+
+    .tab-button {
+      padding: 0.75rem 1.5rem;
+      background: rgba(26, 35, 50, 0.8);
+      border: 2px solid #2d3748;
+      border-radius: 8px;
+      font-size: 1rem;
+      color: #e4e4e7;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .tab-button:hover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .tab-button.active {
+      background: rgba(59, 130, 246, 0.3);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 16px;
+      padding: 2rem;
+      margin: 0 2rem 1.5rem 2rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: #60a5fa;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      padding-bottom: 0.75rem;
+      line-height: 1.4;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 2px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      font-size: 1rem;
+      color: #e4e4e7;
+      transition: all 0.2s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .form-group select {
+      cursor: pointer;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: auto;
+    }
+
+    .button {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .button-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      border: none;
+    }
+
+    .button-primary:hover {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    .button-secondary {
+      background: rgba(45, 55, 72, 0.8);
+      color: #e4e4e7;
+      border: 1px solid #2d3748;
+    }
+
+    .button-secondary:hover {
+      background: rgba(45, 55, 72, 1);
+      border-color: #3b82f6;
+      transform: translateY(-2px);
+    }
+
+    .button-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+      border: none;
+    }
+
+    .button-danger:hover {
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+
+    .formats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .format-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .format-card:hover {
+      border-color: rgba(59, 130, 246, 0.5);
+      background: rgba(15, 23, 42, 0.8);
+      transform: translateY(-4px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .format-card h3 {
+      color: #e4e4e7;
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .format-card .meta {
+      display: flex;
+      gap: 1rem;
+      margin: 0.5rem 0;
+      font-size: 0.875rem;
+      color: #9ca3af;
+    }
+
+    .format-card .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .format-card .badge.custom {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border-color: rgba(245, 158, 11, 0.3)e-block;
+      padding: 0.25rem 0.5rem;
+      background: #dbeafe;
+      color: #1e40af;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .format-card .badge.custom {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .format-card .actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .format-card .actions button {
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+    }
+
+    .trays-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    .trays-table th,
+    .trays-table td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .trays-table th {
+      background: rgba(0, 0, 0, 0.3);
+      font-weight: 600;
+      color: #9ca3af;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .trays-table td {
+      color: #e4e4e7;
+    }
+
+    .trays-table tr:hover {
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .status-badge.active {
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-badge.idle {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .status-badge.retired {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .info-box {
+      background: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid #3b82f6;
+      padding: 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+      color: #e4e4e7;
+    }
+
+    .info-box.success {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: #10b981;
+    }
+
+    .info-box.warning {
+      background: rgba(245, 158, 11, 0.1);
+      border-color: #f59e0b;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #2d3748;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      padding: 1rem;
+      overflow-y: auto;
+    }
+
+    .modal.active {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 2rem;
+    }
+
+    .modal-content {
+      background: rgba(26, 35, 50, 0.98);
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(10px);
+    }
+
+    .modal-content h2 {
+      color: #60a5fa;
+      margin-bottom: 1.5rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+      justify-content: flex-end;
+    }
+
+    @media (max-width: 768px) {
+      .header-nav {
+        flex-direction: column;
+      }
+
+      .tabs {
+        flex-direction: column;
+      }
+
+      .formats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .trays-table {
+        font-size: 0.875rem;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+</head>
+<body class="le-theme">
+  <div class="container">
+    <div class="header">
+      <h1>Tray Setup</h1>
+      <div class="header-nav">
+        <a href="/LE-farm-admin.html" class="nav-link">Admin</a>
+        <a href="/views/farm-summary.html" class="nav-link">Farm Summary</a>
+        <a href="/views/tray-inventory.html" class="nav-link" target="_blank">Activity Hub</a>
+        <a href="/views/tray-setup.html" class="nav-link active">Tray Setup</a>
+        <a href="/farm-sales-pos.html" class="nav-link">Lot Traceability</a>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-button active" onclick="switchTab('formats')">Tray Formats</button>
+      <button class="tab-button" onclick="switchTab('register')">Register Tray</button>
+      <button class="tab-button" onclick="switchTab('inventory')">Tray Inventory</button>
+    </div>
+
+    <!-- Tab 1: Tray Formats -->
+    <div id="formats-tab" class="tab-content active">
+      <div class="card">
+        <h2>Standard Tray Formats</h2>
+        <div class="info-box">
+          <strong>Info:</strong> Weight-based formats (microgreens) forecast yield in lbs/oz. Head-based formats (lettuce, herbs) forecast by plant count.
+        </div>
+        <div id="formats-list" class="formats-grid">
+          <div style="text-align: center; padding: 2rem; color: #9ca3af;">
+            <div class="loading"></div>
+            <p style="margin-top: 1rem;">Loading formats...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Create Custom Tray Format</h2>
+        <form id="create-format-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Format Name *</label>
+              <input type="text" id="format-name" placeholder="e.g., Custom 16-Hole Microgreen" required>
+            </div>
+            <div class="form-group">
+              <label>Plant Sites *</label>
+              <input type="number" id="format-sites" min="1" placeholder="Number of planting locations" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>System Type</label>
+              <select id="format-system">
+                <option value="">Select system...</option>
+                <option value="soil">Soil / Microgreens</option>
+                <option value="nft">NFT (Nutrient Film Technique)</option>
+                <option value="aeroponics">Aeroponics</option>
+                <option value="dwc">DWC (Deep Water Culture)</option>
+                <option value="zipgrow">ZipGrow Tower</option>
+                <option value="low_pressure_aero">Low Pressure Aeroponics</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Tray Material</label>
+              <select id="format-material">
+                <option value="">Select material...</option>
+                <option value="plastic">Plastic</option>
+                <option value="metal">Metal</option>
+                <option value="tower">Tower</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group checkbox-group">
+            <input type="checkbox" id="format-weight-based" onchange="toggleWeightFields()">
+            <label for="format-weight-based" style="margin-bottom: 0;">Sold by Weight (microgreens, herbs)</label>
+          </div>
+
+          <div id="weight-fields" style="display: none;">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Target Weight per Site</label>
+                <input type="number" step="0.1" id="format-weight" placeholder="e.g., 2.5">
+              </div>
+              <div class="form-group">
+                <label>Weight Unit</label>
+                <select id="format-unit">
+                  <option value="oz">Ounces (oz)</option>
+                  <option value="lbs">Pounds (lbs)</option>
+                  <option value="g">Grams (g)</option>
+                  <option value="kg">Kilograms (kg)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="format-description" placeholder="Describe this tray format..."></textarea>
+          </div>
+
+          <button type="submit" class="button button-primary">Create Format</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tab 2: Register Tray -->
+    <div id="register-tab" class="tab-content">
+      <div class="card">
+        <h2>Register Physical Tray</h2>
+        <div class="info-box warning">
+          <strong>Note:</strong> Each physical tray must be registered and assigned a format before use in the scanning tool.
+        </div>
+        <form id="register-tray-form">
+          <div class="form-group">
+            <label>Tray QR Code *</label>
+            <input type="text" id="tray-qr" placeholder="Scan or enter tray QR code" required>
+          </div>
+
+          <div class="form-group">
+            <label>Tray Format *</label>
+            <select id="tray-format" required>
+              <option value="">Select format...</option>
+            </select>
+          </div>
+
+          <button type="submit" class="button button-primary">Register Tray</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tab 3: Tray Inventory -->
+    <div id="inventory-tab" class="tab-content">
+      <div class="card">
+        <h2>Registered Trays</h2>
+        <table class="trays-table">
+          <thead>
+            <tr>
+              <th>QR Code</th>
+              <th>Format</th>
+              <th>Sites</th>
+              <th>Status</th>
+              <th>Current Crop</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trays-table-body">
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 2rem; color: #9ca3af;">
+                <div class="loading"></div>
+                <p style="margin-top: 1rem;">Loading trays...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Format Modal -->
+  <div id="edit-modal" class="modal">
+    <div class="modal-content">
+      <h2>Edit Tray Format</h2>
+      <form id="edit-format-form">
+        <input type="hidden" id="edit-format-id">
+        
+        <div class="form-group">
+          <label>Format Name</label>
+          <input type="text" id="edit-format-name" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Plant Sites</label>
+            <input type="number" id="edit-format-sites" min="1" required>
+          </div>
+          <div class="form-group">
+            <label>System Type</label>
+            <select id="edit-format-system">
+              <option value="">Select...</option>
+              <option value="soil">Soil / Microgreens</option>
+              <option value="nft">NFT</option>
+              <option value="aeroponics">Aeroponics</option>
+              <option value="dwc">DWC</option>
+              <option value="zipgrow">ZipGrow</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <input type="checkbox" id="edit-format-weight-based" onchange="toggleEditWeightFields()">
+          <label for="edit-format-weight-based" style="margin-bottom: 0;">Weight-based</label>
+        </div>
+
+        <div id="edit-weight-fields" style="display: none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Weight per Site</label>
+              <input type="number" step="0.1" id="edit-format-weight">
+            </div>
+            <div class="form-group">
+              <label>Unit</label>
+              <select id="edit-format-unit">
+                <option value="oz">oz</option>
+                <option value="lbs">lbs</option>
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="edit-format-description"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="button button-secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="button button-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+
+    // Tab switching
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+      
+      document.getElementById(`${tabName}-tab`).classList.add('active');
+      event.target.classList.add('active');
+
+      if (tabName === 'formats') {
+        loadFormats();
+      } else if (tabName === 'register') {
+        loadFormatsForDropdown();
+      } else if (tabName === 'inventory') {
+        loadTrays();
+      }
+    }
+
+    // Toggle weight fields
+    function toggleWeightFields() {
+      const isWeightBased = document.getElementById('format-weight-based').checked;
+      document.getElementById('weight-fields').style.display = isWeightBased ? 'block' : 'none';
+    }
+
+    function toggleEditWeightFields() {
+      const isWeightBased = document.getElementById('edit-format-weight-based').checked;
+      document.getElementById('edit-weight-fields').style.display = isWeightBased ? 'block' : 'none';
+    }
+
+    // Load formats
+    async function loadFormats() {
+      try {
+        const response = await fetch(`${API_BASE}/api/tray-formats`);
+        const formats = await response.json();
+        
+        const container = document.getElementById('formats-list');
+        if (formats.length === 0) {
+          container.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 2rem;">No formats found. Create one below!</p>';
+          return;
+        }
+
+        container.innerHTML = formats.map(format => `
+          <div class="format-card">
+            <h3>${format.name}</h3>
+            <div class="meta">
+              <span>${format.plantSiteCount} sites</span>
+              ${format.systemType ? `<span>${format.systemType}</span>` : ''}
+            </div>
+            <p style="color: #6b7280; font-size: 0.875rem; margin: 0.5rem 0;">${format.description || 'No description'}</p>
+            ${format.isWeightBased ? `
+              <div style="margin: 0.5rem 0;">
+                <span class="badge">${format.targetWeightPerSite || '0'} ${format.weightUnit || 'oz'}/site</span>
+                <span class="badge">${(format.plantSiteCount * (format.targetWeightPerSite || 0)).toFixed(1)} ${format.weightUnit}/tray</span>
+              </div>
+            ` : ''}
+            ${format.isCustom ? '<span class="badge custom">Custom</span>' : ''}
+            <div class="actions">
+              <button class="button button-secondary" onclick="editFormat('${format.trayFormatId}')">Edit</button>
+              ${format.isCustom ? `<button class="button button-danger" onclick="deleteFormat('${format.trayFormatId}')">Delete</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Load formats error:', error);
+        document.getElementById('formats-list').innerHTML = '<p style="color: #ef4444; text-align: center;">Error loading formats</p>';
+      }
+    }
+
+    // Load formats for dropdown
+    async function loadFormatsForDropdown() {
+      try {
+        const response = await fetch(`${API_BASE}/api/tray-formats`);
+        const formats = await response.json();
+        
+        const select = document.getElementById('tray-format');
+        select.innerHTML = '<option value="">Select format...</option>' + 
+          formats.map(f => `<option value="${f.trayFormatId}">${f.name} (${f.plantSiteCount} sites)</option>`).join('');
+      } catch (error) {
+        console.error('Load dropdown error:', error);
+      }
+    }
+
+    // Load registered trays
+    async function loadTrays() {
+      try {
+        const response = await fetch(`${API_BASE}/api/trays`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const trays = await response.json();
+        const tbody = document.getElementById('trays-table-body');
+        
+        if (trays.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #9ca3af;">No trays registered yet</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = trays.map(tray => `
+          <tr style="background: #1f2937; border-bottom: 1px solid #374151;">
+            <td style="padding: 1rem; color: #f9fafb;">${tray.qrCode || 'N/A'}</td>
+            <td style="padding: 1rem; color: #f9fafb;">${tray.formatName || 'Unknown'}</td>
+            <td style="padding: 1rem; color: #f9fafb;">${tray.plantSiteCount || 'N/A'}</td>
+            <td style="padding: 1rem; color: #f9fafb;">${tray.forecastedYield || 'N/A'}</td>
+            <td style="padding: 1rem;">
+              <span style="
+                padding: 0.25rem 0.75rem;
+                border-radius: 9999px;
+                font-size: 0.875rem;
+                font-weight: 600;
+                ${tray.status === 'active' ? 'background: #10b981; color: #fff;' : ''}
+                ${tray.status === 'harvested' ? 'background: #6b7280; color: #fff;' : ''}
+                ${tray.status === 'available' ? 'background: #3b82f6; color: #fff;' : ''}
+              ">
+                ${tray.status.charAt(0).toUpperCase() + tray.status.slice(1)}
+              </span>
+            </td>
+            <td style="padding: 1rem; color: #9ca3af;">
+              ${tray.status === 'active' && tray.daysSinceSeeding ? `Day ${tray.daysSinceSeeding}` : '—'}
+              ${tray.currentLocation ? `<br><small>${tray.currentLocation}</small>` : ''}
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Load trays error:', error);
+        const tbody = document.getElementById('trays-table-body');
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #ef4444;">Error loading trays: ${error.message}</td></tr>`;
+      }
+    }
+
+    // Create format
+    document.getElementById('create-format-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = {
+        name: document.getElementById('format-name').value,
+        plantSiteCount: parseInt(document.getElementById('format-sites').value),
+        systemType: document.getElementById('format-system').value || null,
+        trayMaterial: document.getElementById('format-material').value || null,
+        description: document.getElementById('format-description').value || null,
+        isWeightBased: document.getElementById('format-weight-based').checked,
+        targetWeightPerSite: document.getElementById('format-weight-based').checked ? 
+          parseFloat(document.getElementById('format-weight').value) || null : null,
+        weightUnit: document.getElementById('format-weight-based').checked ?
+          document.getElementById('format-unit').value : 'heads'
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/api/tray-formats`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) throw new Error('Failed to create format');
+
+        alert('Format created successfully!');
+        e.target.reset();
+        loadFormats();
+      } catch (error) {
+        console.error('Create format error:', error);
+        alert('Error creating format: ' + error.message);
+      }
+    });
+
+    // Register tray
+    document.getElementById('register-tray-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = {
+        qrCodeValue: document.getElementById('tray-qr').value,
+        trayFormatId: document.getElementById('tray-format').value
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/api/trays/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) throw new Error('Failed to register tray');
+
+        alert('Tray registered successfully!');
+        e.target.reset();
+      } catch (error) {
+        console.error('Register tray error:', error);
+        alert('Error: ' + error.message);
+      }
+    });
+
+    // Edit format
+    function editFormat(formatId) {
+      // Load format data and open modal
+      fetch(`${API_BASE}/api/tray-formats`)
+        .then(r => r.json())
+        .then(formats => {
+          const format = formats.find(f => f.trayFormatId === formatId);
+          if (!format) return;
+
+          document.getElementById('edit-format-id').value = format.trayFormatId;
+          document.getElementById('edit-format-name').value = format.name;
+          document.getElementById('edit-format-sites').value = format.plantSiteCount;
+          document.getElementById('edit-format-system').value = format.systemType || '';
+          document.getElementById('edit-format-weight-based').checked = format.isWeightBased;
+          document.getElementById('edit-format-weight').value = format.targetWeightPerSite || '';
+          document.getElementById('edit-format-unit').value = format.weightUnit || 'oz';
+          document.getElementById('edit-format-description').value = format.description || '';
+
+          toggleEditWeightFields();
+          document.getElementById('edit-modal').classList.add('active');
+        });
+    }
+
+    // Edit form submit
+    document.getElementById('edit-format-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formatId = document.getElementById('edit-format-id').value;
+      
+      const formData = {
+        name: document.getElementById('edit-format-name').value,
+        plantSiteCount: parseInt(document.getElementById('edit-format-sites').value),
+        systemType: document.getElementById('edit-format-system').value || null,
+        isWeightBased: document.getElementById('edit-format-weight-based').checked,
+        targetWeightPerSite: document.getElementById('edit-format-weight-based').checked ?
+          parseFloat(document.getElementById('edit-format-weight').value) || null : null,
+        weightUnit: document.getElementById('edit-format-unit').value,
+        description: document.getElementById('edit-format-description').value || null
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/api/tray-formats/${formatId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) throw new Error('Failed to update format');
+
+        alert('Format updated!');
+        closeModal();
+        loadFormats();
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    });
+
+    // Delete format
+    async function deleteFormat(formatId) {
+      if (!confirm('Are you sure? This cannot be undone.')) return;
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/tray-formats/${formatId}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) throw new Error('Failed to delete');
+
+        alert('Format deleted');
+        loadFormats();
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('edit-modal').classList.remove('active');
+    }
+
+    // Close modal on background click
+    document.getElementById('edit-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'edit-modal') closeModal();
+    });
+
+    // Initialize
+    loadFormats();
+  </script>
+  <script src="/js/farm-assistant.js"></script>
+</body>
+</html>

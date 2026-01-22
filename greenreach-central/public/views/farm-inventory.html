@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farm Inventory | Light Engine</title>
+  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+      margin-bottom: 2rem;
+      margin: -1rem -1rem 2rem -1rem;
+      position: relative;
+      z-index: 1001;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .nav-btn {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .nav-btn:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: scale(1.05);
+    }
+
+    /* Dropdown Navigation Menu */
+    .nav-menu {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .nav-item {
+      position: relative;
+    }
+
+    .nav-button, .nav-link-button {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .nav-button:hover, .nav-link-button:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .nav-button.active {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .nav-arrow {
+      font-size: 0.7rem;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-item:hover .nav-arrow {
+      transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 0.5rem;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 2000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .dropdown-menu.dropdown-right {
+      left: auto;
+      right: 0;
+    }
+
+    .nav-item:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: block;
+      padding: 0.75rem 1rem;
+      color: #93c5fd;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .dropdown-item.active {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+      font-weight: 600;
+    }
+
+    .nav-btn.refresh {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: #22c55e;
+      color: #86efac;
+    }
+
+    .nav-btn.refresh:hover {
+      background: rgba(34, 197, 94, 0.35);
+    }
+
+    .nav-btn.close {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+      color: #fca5a5;
+    }
+
+    .nav-btn.close:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .nav-btn.admin {
+      background: rgba(168, 85, 247, 0.2);
+      border-color: #a855f7;
+      color: #e9d5ff;
+    }
+
+    .nav-btn.admin:hover {
+      background: rgba(168, 85, 247, 0.35);
+    }
+
+    .back-link {
+      display: none;
+    }
+
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .summary-card {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .summary-card .icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .summary-card .label {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .summary-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+
+    .summary-card .subvalue {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .forecast-section {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .forecast-section h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .forecast-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .forecast-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+
+    .forecast-card .period {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .forecast-card .count {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #34d399;
+      margin-bottom: 0.25rem;
+    }
+
+    .forecast-card .label {
+      color: #cbd5e1;
+      font-size: 0.9rem;
+    }
+
+    .inventory-tree {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    .inventory-tree h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .view-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .view-tab {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s ease;
+    }
+
+    .view-tab:hover {
+      color: #cbd5e1;
+    }
+
+    .view-tab.active {
+      color: #60a5fa;
+      border-bottom-color: #3b82f6;
+    }
+
+    .inventory-view {
+      display: none;
+    }
+
+    .inventory-view.active {
+      display: block;
+    }
+
+    .tree-node {
+      margin-bottom: 1rem;
+    }
+
+    .tree-header {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      padding: 1rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .tree-header:hover {
+      background: rgba(15, 23, 42, 0.8);
+      border-color: rgba(96, 165, 250, 0.5);
+    }
+
+    .tree-header .name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .tree-header .stats {
+      display: flex;
+      gap: 1.5rem;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .tree-header .stats span {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .tree-header .stats .value {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .tree-children {
+      margin-left: 2rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+
+    .tree-node.expanded .tree-children {
+      display: block;
+    }
+
+    .tree-node.expanded .tree-header .toggle::before {
+      content: '▼';
+    }
+
+    .tree-header .toggle::before {
+      content: '▶';
+      margin-right: 0.5rem;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #94a3b8;
+    }
+
+    .empty-state .icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+      margin-bottom: 1.5rem;
+    }
+
+    .empty-state button {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .empty-state button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #94a3b8;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(148, 163, 184, 0.3);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="le-theme">
+  <div class="header">
+    <div>
+      <h1>Farm Inventory Dashboard</h1>
+    </div>
+    <div class="header-actions">
+      <nav class="nav-menu">
+        <div class="nav-item">
+          <button class="nav-button active">
+            Inventory Management
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
+            <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
+            <a href="farm-inventory.html" class="dropdown-item active">Farm Inventory</a>
+            <a href="tray-inventory.html" class="dropdown-item" target="_blank">Activity Hub</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Farm Monitoring
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+            <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Admin
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
+            <a href="/" class="dropdown-item">Setup/Update</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Sales
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu dropdown-right">
+            <a href="/farm-sales-pos.html" class="dropdown-item" target="_blank">Farm Sales Terminal</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div id="summaryCards" class="summary-cards">
+      <!-- Dynamic summary cards -->
+    </div>
+
+    <div id="forecastSection" class="forecast-section">
+      <h2>Harvest Forecast</h2>
+      <div id="forecastGrid" class="forecast-grid">
+        <!-- Dynamic forecast cards -->
+      </div>
+    </div>
+
+    <div id="inventoryTree" class="inventory-tree">
+      <h2>Inventory Views</h2>
+      <div class="view-tabs">
+        <button class="view-tab active" onclick="switchView('location')">By Location</button>
+        <button class="view-tab" onclick="switchView('crop')">By Crop</button>
+        <button class="view-tab" onclick="switchView('harvest')">By Harvest Time</button>
+      </div>
+      <div id="locationView" class="inventory-view active">
+        <!-- Dynamic location tree -->
+      </div>
+      <div id="cropView" class="inventory-view">
+        <!-- Dynamic crop grouping -->
+      </div>
+      <div id="harvestView" class="inventory-view">
+        <!-- Dynamic harvest timeline -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Wrap in IIFE to prevent API_BASE conflicts when loaded in iframe
+    (function() {
+      // Use current server origin for API calls (works on localhost and AWS)
+      const API_BASE = window.location.origin;
+
+      // Detect if we're on Central server or Farm server
+      const isCentralServer = window.location.hostname.includes('greenreachgreens.com') || 
+                             window.location.hostname.includes('greenreach.farm');
+
+    async function loadInventory() {
+      console.log('[loadInventory] Starting...');
+      console.log('[loadInventory] API_BASE:', API_BASE);
+      console.log('[loadInventory] isCentralServer:', isCentralServer);
+      console.log('[loadInventory] window.location:', window.location.href);
+      showLoading();
+
+      try {
+        // If on Central server, show message that this page is for farm view only
+        if (isCentralServer) {
+          hideLoading();
+          showError('This inventory view is designed for individual farm servers. Please access this page from your farm\'s Light Engine dashboard.');
+          return;
+        }
+
+        console.log('[loadInventory] Fetching data from:', API_BASE);
+        console.log('[loadInventory] Endpoint 1:', `${API_BASE}/api/inventory/current`);
+        console.log('[loadInventory] Endpoint 2:', `${API_BASE}/api/inventory/forecast`);
+        console.log('[loadInventory] Endpoint 3:', `${API_BASE}/data/groups.json`);
+        
+        // Fetch with timeout and better error handling
+        const fetchWithTimeout = (url, timeout = 5000) => {
+          return Promise.race([
+            fetch(url),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Request timeout')), timeout)
+            )
+          ]);
+        };
+        
+        const [currentResp, forecastResp, groupsResp] = await Promise.all([
+          fetchWithTimeout(`${API_BASE}/api/inventory/current`).catch(err => {
+            console.error('[loadInventory] Fetch error (current):', err.message || err);
+            // Return mock response
+            return { ok: false, status: 0, error: err.message };
+          }),
+          fetchWithTimeout(`${API_BASE}/api/inventory/forecast`).catch(err => {
+            console.error('[loadInventory] Fetch error (forecast):', err.message || err);
+            return { ok: false, status: 0, error: err.message };
+          }),
+          fetchWithTimeout(`${API_BASE}/data/groups.json`).catch(err => {
+            console.error('[loadInventory] Fetch error (groups):', err.message || err);
+            return { ok: false, status: 0, error: err.message };
+          })
+        ]);
+
+        console.log('[loadInventory] Response status:', {
+          current: currentResp.status,
+          forecast: forecastResp.status,
+          groups: groupsResp.status
+        });
+
+        // If all requests failed, show helpful error
+        if (!currentResp.ok && !forecastResp.ok && !groupsResp.ok) {
+          console.error('[loadInventory] All fetch requests failed');
+          hideLoading();
+          showError('Unable to connect to server. Please check your connection and try again.');
+          return;
+        }
+
+        if (!currentResp.ok || !forecastResp.ok || !groupsResp.ok) {
+          console.warn('[loadInventory] Some data sources failed, continuing with available data');
+          // Continue with partial data instead of throwing
+        }
+
+        const currentData = currentResp.ok ? await currentResp.json() : { crops: [], summary: {} };
+        const forecastData = forecastResp.ok ? await forecastResp.json() : { forecast: [] };
+        const groupsResponse = groupsResp.ok ? await groupsResp.json() : { groups: [] };
+        const groupsData = groupsResponse.groups || [];
+
+        console.log('[loadInventory] Data loaded:', {
+          currentData: !!currentData,
+          forecastData: !!forecastData,
+          groupsCount: groupsData.length
+        });
+
+        // Calculate unique crops
+        const uniqueCrops = new Set(groupsData.map(g => g.crop).filter(Boolean));
+
+        console.log('[loadInventory] Rendering...');
+        renderSummaryCards(currentData, uniqueCrops.size);
+        renderForecast(forecastData);
+        renderInventoryByLocation(currentData, groupsData, forecastData);
+        renderInventoryByCrop(currentData, groupsData, forecastData);
+        renderInventoryByHarvest(currentData, groupsData, forecastData);
+        console.log('[loadInventory] Rendering complete!');
+      } catch (error) {
+        console.error('[loadInventory] Error:', error);
+        console.error('[loadInventory] Error stack:', error.stack);
+        showError('Failed to load inventory data. Please try again.');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function switchView(viewName) {
+      // Update tabs
+      document.querySelectorAll('.view-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      event.target.classList.add('active');
+      
+      // Update views
+      document.querySelectorAll('.inventory-view').forEach(view => {
+        view.classList.remove('active');
+      });
+      document.getElementById(`${viewName}View`).classList.add('active');
+    }
+
+    function showLoading() {
+      document.getElementById('summaryCards').innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading inventory...</p></div>';
+      document.getElementById('forecastGrid').innerHTML = '';
+      document.getElementById('locationView').innerHTML = '';
+      document.getElementById('cropView').innerHTML = '';
+      document.getElementById('harvestView').innerHTML = '';
+    }
+
+    function hideLoading() {
+      // Clear loading state - content will be populated by render functions
+      const loadingElements = document.querySelectorAll('.loading');
+      loadingElements.forEach(el => el.remove());
+    }
+
+    function showError(message) {
+      document.getElementById('summaryCards').innerHTML = `
+        <div class="empty-state">
+          <div class="icon">!</div>
+          <h3>Error</h3>
+          <p>${message}</p>
+          <button onclick="loadInventory()">Try Again</button>
+        </div>
+      `;
+    }
+
+    function renderSummaryCards(data, cropCount) {
+      // API returns: {activeTrays, totalPlants, farmCount}
+      const totalTrays = data.activeTrays || 0;
+      const totalPlants = data.totalPlants || 0;
+      const farmCount = data.farmCount || 0;
+      const crops = cropCount || 0;
+
+      document.getElementById('summaryCards').innerHTML = `
+        <div class="summary-card">
+          <div class="label">Active Trays</div>
+          <div class="value">${totalTrays}</div>
+          <div class="subvalue">Seeded and growing</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Total Plants</div>
+          <div class="value">${totalPlants.toLocaleString()}</div>
+          <div class="subvalue">Across all trays</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Crop Varieties</div>
+          <div class="value">${crops}</div>
+          <div class="subvalue">Different crops</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Farms</div>
+          <div class="value">${farmCount}</div>
+          <div class="subvalue">Active locations</div>
+        </div>
+      `;
+    }
+
+    function renderForecast(data) {
+      // API returns: {next7Days: {count, trays}, next14Days: {...}, next30Days: {...}, beyond30Days: {...}}
+      if (!data) {
+        document.getElementById('forecastGrid').innerHTML = `
+          <div class="empty-state">
+            <p>No harvest data available</p>
+          </div>
+        `;
+        return;
+      }
+
+      const buckets = [
+        { label: '7 Days', data: data.next7Days },
+        { label: '14 Days', data: data.next14Days },
+        { label: '30 Days', data: data.next30Days },
+        { label: '30+ Days', data: data.beyond30Days }
+      ];
+
+      document.getElementById('forecastGrid').innerHTML = buckets.map(bucket => {
+        const count = bucket.data?.count || 0;
+        const trayCount = bucket.data?.trays?.length || 0;
+        return `
+          <div class="forecast-card">
+            <div class="period">${bucket.label}</div>
+            <div class="count">${count}</div>
+            <div class="label">${trayCount} trays ready</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderInventoryByLocation(currentData, groupsData, forecastData) {
+      console.log('[renderInventoryByLocation] Called with:', {
+        currentData,
+        groupsDataLength: groupsData?.length,
+        forecastData: forecastData ? Object.keys(forecastData) : null
+      });
+      
+      // Create map of trays by group
+      const traysByGroup = {};
+      const allTrays = [
+        ...(forecastData.next7Days?.trays || []),
+        ...(forecastData.next14Days?.trays || []),
+        ...(forecastData.next30Days?.trays || []),
+        ...(forecastData.beyond30Days?.trays || [])
+      ];
+      
+      console.log('[renderInventoryByLocation] Total trays:', allTrays.length);
+      
+      allTrays.forEach(tray => {
+        if (!traysByGroup[tray.groupId]) {
+          traysByGroup[tray.groupId] = [];
+        }
+        traysByGroup[tray.groupId].push(tray);
+      });
+      
+      // Organize groups by location (from tray.location which is "ROOM-X - ZONE-Y")
+      const locationMap = {};
+      groupsData.forEach(group => {
+        const groupId = group.id || group.groupId; // Groups use 'id' field
+        const trays = traysByGroup[groupId] || [];
+        if (trays.length > 0) {
+          const location = trays[0].location; // e.g., "ROOM-A - ROOM-A-Z1"
+          const [roomId, zoneId] = location.split(' - ');
+          
+          if (!locationMap[roomId]) {
+            locationMap[roomId] = {};
+          }
+          if (!locationMap[roomId][zoneId]) {
+            locationMap[roomId][zoneId] = [];
+          }
+          locationMap[roomId][zoneId].push({ group, trays });
+        }
+      });
+      
+      const locationKeys = Object.keys(locationMap);
+      console.log('[renderInventoryByLocation] Location map keys:', locationKeys, 'count:', locationKeys.length);
+      console.log('[renderInventoryByLocation] Location map structure:', JSON.stringify(locationMap, null, 2));
+      
+      // Render location hierarchy
+      const html = Object.keys(locationMap).sort().map(roomId => {
+        const zones = locationMap[roomId];
+        const roomTrays = Object.values(zones).flat().reduce((sum, item) => sum + item.trays.length, 0);
+        const roomPlants = Object.values(zones).flat().reduce((sum, item) => {
+          return sum + item.trays.reduce((s, t) => s + (t.plantCount || 0), 0);
+        }, 0);
+        
+        return `
+          <div class="location-section" style="background: rgba(30, 41, 59, 0.6); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <div class="location-header" style="cursor: pointer; margin-bottom: 1rem;" onclick="toggleLocation('${roomId}')">
+              <h3 style="color: #60a5fa; font-size: 1.3rem; margin-bottom: 0.5rem;">
+                ${roomId}
+                <span id="arrow-loc-${roomId}" style="font-size: 0.9rem; color: #94a3b8; margin-left: 0.5rem;">▼ Click to expand</span>
+              </h3>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.95rem;">
+                <div>
+                  <span style="color: #64748b;">Trays:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${roomTrays}</span>
+                </div>
+                <div>
+                  <span style="color: #64748b;">Plants:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${roomPlants}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div id="loc-${roomId}" style="display: none;">
+              ${Object.keys(zones).sort().map(zoneId => {
+                const zoneGroups = zones[zoneId];
+                const zoneTrays = zoneGroups.reduce((sum, item) => sum + item.trays.length, 0);
+                const zonePlants = zoneGroups.reduce((sum, item) => {
+                  return sum + item.trays.reduce((s, t) => s + (t.plantCount || 0), 0);
+                }, 0);
+                
+                return `
+                  <div style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; margin-left: 1.5rem;">
+                    <div style="cursor: pointer;" onclick="toggleZone('${roomId}-${zoneId}')">
+                      <h4 style="color: #34d399; font-size: 1.1rem; margin-bottom: 0.5rem;">
+                        ${zoneId}
+                        <span id="arrow-zone-${roomId}-${zoneId}" style="font-size: 0.85rem; color: #94a3b8; margin-left: 0.5rem;">▼ ${zoneGroups.length} groups</span>
+                      </h4>
+                      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.9rem;">
+                        <div>
+                          <span style="color: #64748b;">Trays:</span>
+                          <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${zoneTrays}</span>
+                        </div>
+                        <div>
+                          <span style="color: #64748b;">Plants:</span>
+                          <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${zonePlants}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div id="zone-${roomId}-${zoneId}" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(148, 163, 184, 0.1);">
+                      ${zoneGroups.map(({group, trays}) => {
+                        const totalPlants = trays.reduce((sum, t) => sum + (t.plantCount || 0), 0);
+                        const groupId = group.id || group.groupId;
+                        
+                        return `
+                          <div class="group-card" style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem;">
+              <div class="group-header" style="cursor: pointer;" onclick="toggleGroupTrays('${groupId}')" title="Click to view trays">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <h3 style="font-size: 1.1rem; font-weight: 600; color: #60a5fa;">
+                    ${group.name || groupId}
+                    <span id="arrow-${groupId}" style="font-size: 0.9rem; color: #94a3b8; margin-left: 0.5rem;">▼ Click for trays</span>
+                  </h3>
+                  <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                    <span style="background: rgba(52, 211, 153, 0.2); color: #34d399; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+                      ${group.crop || 'Unknown'}
+                    </span>
+                  </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.9rem;">
+                  <div>
+                    <div style="color: #64748b;">Trays</div>
+                    <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${trays.length}</div>
+                  </div>
+                  <div>
+                    <div style="color: #64748b;">Plants</div>
+                    <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${totalPlants}</div>
+                  </div>
+                  <div>
+                    <div style="color: #64748b;">Days to Harvest</div>
+                    <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${trays[0]?.daysToHarvest || '-'}</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div id="trays-${groupId}" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(148, 163, 184, 0.2);">
+                ${trays.map(tray => `
+                  <div style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 3px solid #3b82f6;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                      <div style="font-weight: 600; color: #f8fafc; font-size: 1rem;">${tray.trayId}</div>
+                      <div style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem;">
+                        Day ${tray.currentDay}
+                      </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; color: #94a3b8; font-size: 0.9rem;">
+                      <div>
+                        <div style="color: #64748b; font-size: 0.85rem;">Variety</div>
+                        <div style="color: #f8fafc; font-weight: 500;">${tray.recipe}</div>
+                      </div>
+                      <div>
+                        <div style="color: #64748b; font-size: 0.85rem;">Plant Count</div>
+                        <div style="color: #f8fafc; font-weight: 500;">${tray.plantCount} plants</div>
+                      </div>
+                      <div>
+                        <div style="color: #64748b; font-size: 0.85rem;">Harvest Date</div>
+                        <div style="color: #f8fafc; font-weight: 500;">${tray.estimatedHarvestDate}</div>
+                      </div>
+                      <div>
+                        <div style="color: #64748b; font-size: 0.85rem;">Countdown</div>
+                        <div style="color: ${tray.daysToHarvest <= 7 ? '#34d399' : tray.daysToHarvest <= 14 ? '#fbbf24' : '#94a3b8'}; font-weight: 600;">
+                          ${tray.daysToHarvest} days
+                        </div>
+                      </div>
+                    </div>
+                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(148, 163, 184, 0.1);">
+                      <div style="color: #64748b; font-size: 0.85rem;">Location</div>
+                      <div style="color: #f8fafc; font-weight: 500; font-size: 0.9rem;">${tray.location}</div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      console.log('[renderInventoryByLocation] Generated HTML length:', html.length);
+      
+      document.getElementById('locationView').innerHTML = html || `
+        <div class="empty-state">
+          <h3>No Inventory Data</h3>
+          <p>No groups found in the system.</p>
+        </div>
+      `;
+    }
+
+    function renderInventoryByCrop(currentData, groupsData, forecastData) {
+      console.log('[renderInventoryByCrop] Called');
+      
+      // Create map of trays by group
+      const traysByGroup = {};
+      const allTrays = [
+        ...(forecastData.next7Days?.trays || []),
+        ...(forecastData.next14Days?.trays || []),
+        ...(forecastData.next30Days?.trays || []),
+        ...(forecastData.beyond30Days?.trays || [])
+      ];
+      
+      allTrays.forEach(tray => {
+        if (!traysByGroup[tray.groupId]) {
+          traysByGroup[tray.groupId] = [];
+        }
+        traysByGroup[tray.groupId].push(tray);
+      });
+      
+      // Organize by crop type
+      const cropMap = {};
+      groupsData.forEach(group => {
+        const groupId = group.id || group.groupId;
+        const trays = traysByGroup[groupId] || [];
+        if (trays.length > 0) {
+          const crop = group.crop || 'Unknown';
+          if (!cropMap[crop]) {
+            cropMap[crop] = [];
+          }
+          cropMap[crop].push({ group, trays });
+        }
+      });
+      
+      // Render by crop
+      const html = Object.keys(cropMap).sort().map(cropName => {
+        const cropGroups = cropMap[cropName];
+        const totalTrays = cropGroups.reduce((sum, item) => sum + item.trays.length, 0);
+        const totalPlants = cropGroups.reduce((sum, item) => {
+          return sum + item.trays.reduce((s, t) => s + (t.plantCount || 0), 0);
+        }, 0);
+        const avgDaysToHarvest = Math.round(
+          cropGroups.reduce((sum, item) => {
+            const avgDays = item.trays.reduce((s, t) => s + (t.daysToHarvest || 0), 0) / item.trays.length;
+            return sum + avgDays;
+          }, 0) / cropGroups.length
+        );
+        
+        return `
+          <div class="location-section" style="background: rgba(30, 41, 59, 0.6); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <div class="location-header" style="cursor: pointer; margin-bottom: 1rem;" onclick="toggleCrop('${cropName}')">
+              <h3 style="color: #34d399; font-size: 1.4rem; margin-bottom: 0.5rem;">
+                ${cropName}
+                <span id="arrow-crop-${cropName}" style="font-size: 0.9rem; color: #94a3b8; margin-left: 0.5rem;">▼ ${cropGroups.length} varieties</span>
+              </h3>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.95rem;">
+                <div>
+                  <span style="color: #64748b;">Trays:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${totalTrays}</span>
+                </div>
+                <div>
+                  <span style="color: #64748b;">Plants:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${totalPlants}</span>
+                </div>
+                <div>
+                  <span style="color: #64748b;">Avg Days:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${avgDaysToHarvest}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div id="crop-${cropName}" style="display: none;">
+              ${cropGroups.map(({group, trays}) => {
+                const totalPlants = trays.reduce((sum, t) => sum + (t.plantCount || 0), 0);
+                const groupId = group.id || group.groupId;
+                const location = trays[0]?.location || 'Unknown';
+                
+                return `
+                  <div class="group-card" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; margin-left: 1.5rem;">
+                    <div class="group-header" style="cursor: pointer;" onclick="toggleGroupTrays('crop-${groupId}')" title="Click to view trays">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <h3 style="font-size: 1.1rem; font-weight: 600; color: #60a5fa;">
+                          ${group.name || groupId}
+                          <span id="arrow-crop-${groupId}" style="font-size: 0.9rem; color: #94a3b8; margin-left: 0.5rem;">▼ Click for trays</span>
+                        </h3>
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                          <span style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+                            ${trays[0]?.recipe || 'Unknown'}
+                          </span>
+                        </div>
+                      </div>
+                      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.9rem;">
+                        <div>
+                          <div style="color: #64748b;">Trays</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${trays.length}</div>
+                        </div>
+                        <div>
+                          <div style="color: #64748b;">Plants</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${totalPlants}</div>
+                        </div>
+                        <div>
+                          <div style="color: #64748b;">Days to Harvest</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${trays[0]?.daysToHarvest || '-'}</div>
+                        </div>
+                        <div>
+                          <div style="color: #64748b;">Location</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${location.split(' - ')[0]}</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div id="trays-crop-${groupId}" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(148, 163, 184, 0.2);">
+                      ${trays.map(tray => `
+                        <div style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 3px solid #34d399;">
+                          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <div style="font-weight: 600; color: #f8fafc; font-size: 1rem;">${tray.trayId}</div>
+                            <div style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem;">
+                              Day ${tray.currentDay}
+                            </div>
+                          </div>
+                          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; color: #94a3b8; font-size: 0.9rem;">
+                            <div>
+                              <div style="color: #64748b; font-size: 0.85rem;">Plant Count</div>
+                              <div style="color: #f8fafc; font-weight: 500;">${tray.plantCount} plants</div>
+                            </div>
+                            <div>
+                              <div style="color: #64748b; font-size: 0.85rem;">Harvest Date</div>
+                              <div style="color: #f8fafc; font-weight: 500;">${tray.estimatedHarvestDate}</div>
+                            </div>
+                            <div>
+                              <div style="color: #64748b; font-size: 0.85rem;">Countdown</div>
+                              <div style="color: ${tray.daysToHarvest <= 7 ? '#34d399' : tray.daysToHarvest <= 14 ? '#fbbf24' : '#94a3b8'}; font-weight: 600;">
+                                ${tray.daysToHarvest} days
+                              </div>
+                            </div>
+                            <div>
+                              <div style="color: #64748b; font-size: 0.85rem;">Location</div>
+                              <div style="color: #f8fafc; font-weight: 500; font-size: 0.9rem;">${tray.location}</div>
+                            </div>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      document.getElementById('cropView').innerHTML = html || `
+        <div class="empty-state">
+          <h3>No Crop Data</h3>
+          <p>No crops found in the system.</p>
+        </div>
+      `;
+    }
+
+    function renderInventoryByHarvest(currentData, groupsData, forecastData) {
+      console.log('[renderInventoryByHarvest] Called');
+      
+      // Create map of trays by group
+      const traysByGroup = {};
+      const allTrays = [
+        ...(forecastData.next7Days?.trays || []),
+        ...(forecastData.next14Days?.trays || []),
+        ...(forecastData.next30Days?.trays || []),
+        ...(forecastData.beyond30Days?.trays || [])
+      ];
+      
+      allTrays.forEach(tray => {
+        if (!traysByGroup[tray.groupId]) {
+          traysByGroup[tray.groupId] = [];
+        }
+        traysByGroup[tray.groupId].push(tray);
+      });
+      
+      // Organize by harvest timeframe
+      const timeframes = [
+        { key: 'next7Days', label: 'Harvesting in 0-7 Days', color: '#34d399', trays: forecastData.next7Days?.trays || [] },
+        { key: 'next14Days', label: 'Harvesting in 8-14 Days', color: '#fbbf24', trays: forecastData.next14Days?.trays || [] },
+        { key: 'next30Days', label: 'Harvesting in 15-30 Days', color: '#60a5fa', trays: forecastData.next30Days?.trays || [] },
+        { key: 'beyond30Days', label: 'Harvesting Beyond 30 Days', color: '#94a3b8', trays: forecastData.beyond30Days?.trays || [] }
+      ];
+      
+      const html = timeframes.map(timeframe => {
+        if (timeframe.trays.length === 0) return '';
+        
+        // Group trays by group within timeframe
+        const groupMap = {};
+        timeframe.trays.forEach(tray => {
+          if (!groupMap[tray.groupId]) {
+            const group = groupsData.find(g => (g.id || g.groupId) === tray.groupId);
+            groupMap[tray.groupId] = {
+              group: group || { name: tray.groupId, crop: 'Unknown' },
+              trays: []
+            };
+          }
+          groupMap[tray.groupId].trays.push(tray);
+        });
+        
+        const totalPlants = timeframe.trays.reduce((sum, t) => sum + (t.plantCount || 0), 0);
+        const groupCount = Object.keys(groupMap).length;
+        
+        return `
+          <div class="location-section" style="background: rgba(30, 41, 59, 0.6); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border-left: 4px solid ${timeframe.color};">
+            <div class="location-header" style="cursor: pointer; margin-bottom: 1rem;" onclick="toggleHarvest('${timeframe.key}')">
+              <h3 style="color: ${timeframe.color}; font-size: 1.3rem; margin-bottom: 0.5rem;">
+                ${timeframe.label}
+                <span id="arrow-harvest-${timeframe.key}" style="font-size: 0.9rem; color: #94a3b8; margin-left: 0.5rem;">▼ ${groupCount} groups</span>
+              </h3>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.95rem;">
+                <div>
+                  <span style="color: #64748b;">Trays:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${timeframe.trays.length}</span>
+                </div>
+                <div>
+                  <span style="color: #64748b;">Plants:</span>
+                  <span style="color: #f8fafc; font-weight: 600; margin-left: 0.5rem;">${totalPlants}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div id="harvest-${timeframe.key}" style="display: none;">
+              ${Object.keys(groupMap).sort((a, b) => {
+                const aDays = groupMap[a].trays[0]?.daysToHarvest || 999;
+                const bDays = groupMap[b].trays[0]?.daysToHarvest || 999;
+                return aDays - bDays;
+              }).map(groupId => {
+                const { group, trays } = groupMap[groupId];
+                const totalPlants = trays.reduce((sum, t) => sum + (t.plantCount || 0), 0);
+                const location = trays[0]?.location || 'Unknown';
+                
+                return `
+                  <div class="group-card" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; margin-left: 1.5rem;">
+                    <div class="group-header" style="cursor: pointer;" onclick="toggleGroupTrays('harvest-${groupId}')" title="Click to view trays">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <h3 style="font-size: 1.1rem; font-weight: 600; color: #60a5fa;">
+                          ${group.name || groupId}
+                          <span id="arrow-harvest-${groupId}" style="font-size: 0.9rem; color: #94a3b8; margin-left: 0.5rem;">▼ Click for trays</span>
+                        </h3>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                          <span style="background: rgba(52, 211, 153, 0.2); color: #34d399; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+                            ${group.crop || 'Unknown'}
+                          </span>
+                          <span style="background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+                            ${trays[0]?.daysToHarvest || 0} days
+                          </span>
+                        </div>
+                      </div>
+                      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.9rem;">
+                        <div>
+                          <div style="color: #64748b;">Trays</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${trays.length}</div>
+                        </div>
+                        <div>
+                          <div style="color: #64748b;">Plants</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${totalPlants}</div>
+                        </div>
+                        <div>
+                          <div style="color: #64748b;">Harvest Date</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${trays[0]?.estimatedHarvestDate || '-'}</div>
+                        </div>
+                        <div>
+                          <div style="color: #64748b;">Location</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${location.split(' - ')[0]}</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div id="trays-harvest-${groupId}" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(148, 163, 184, 0.2);">
+                      ${trays.sort((a, b) => (a.daysToHarvest || 999) - (b.daysToHarvest || 999)).map(tray => `
+                        <div style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 3px solid ${timeframe.color};">
+                          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <div style="font-weight: 600; color: #f8fafc; font-size: 1rem;">${tray.trayId}</div>
+                            <div style="background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+                              ${tray.daysToHarvest} days
+                            </div>
+                          </div>
+                          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; color: #94a3b8; font-size: 0.9rem;">
+                            <div>
+                              <div style="color: #64748b; font-size: 0.85rem;">Variety</div>
+                              <div style="color: #f8fafc; font-weight: 500;">${tray.recipe}</div>
+                            </div>
+                            <div>
+                              <div style="color: #64748b; font-size: 0.85rem;">Plant Count</div>
+                              <div style="color: #f8fafc; font-weight: 500;">${tray.plantCount} plants</div>
+                            </div>
+                            <div>
+                              <div style="color: #64748b; font-size: 0.85rem;">Harvest Date</div>
+                              <div style="color: #f8fafc; font-weight: 500;">${tray.estimatedHarvestDate}</div>
+                            </div>
+                            <div>
+                              <div style="color: #64748b; font-size: 0.85rem;">Current Day</div>
+                              <div style="color: #60a5fa; font-weight: 600;">Day ${tray.currentDay}</div>
+                            </div>
+                          </div>
+                          <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(148, 163, 184, 0.1);">
+                            <div style="color: #64748b; font-size: 0.85rem;">Location</div>
+                            <div style="color: #f8fafc; font-weight: 500; font-size: 0.9rem;">${tray.location}</div>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).filter(Boolean).join('');
+      
+      document.getElementById('harvestView').innerHTML = html || `
+        <div class="empty-state">
+          <h3>No Harvest Data</h3>
+          <p>No trays scheduled for harvest.</p>
+        </div>
+      `;
+    }
+
+    function toggleCrop(cropName) {
+      const contentElement = document.getElementById(`crop-${cropName}`);
+      const arrowElement = document.getElementById(`arrow-crop-${cropName}`);
+      
+      const isHidden = contentElement.style.display === 'none';
+      const groupCount = arrowElement.textContent.match(/\d+/)?.[0] || '0';
+      contentElement.style.display = isHidden ? 'block' : 'none';
+      arrowElement.textContent = isHidden ? `▲ ${groupCount} varieties` : `▼ ${groupCount} varieties`;
+    }
+
+    function toggleHarvest(timeframeKey) {
+      const contentElement = document.getElementById(`harvest-${timeframeKey}`);
+      const arrowElement = document.getElementById(`arrow-harvest-${timeframeKey}`);
+      
+      const isHidden = contentElement.style.display === 'none';
+      const groupCount = arrowElement.textContent.match(/\d+/)?.[0] || '0';
+      contentElement.style.display = isHidden ? 'block' : 'none';
+      arrowElement.textContent = isHidden ? `▲ ${groupCount} groups` : `▼ ${groupCount} groups`;
+    }
+
+    function toggleNode(element) {
+      const node = element.closest('.tree-node');
+      node.classList.toggle('expanded');
+    }
+
+    function toggleLocation(roomId) {
+      const contentElement = document.getElementById(`loc-${roomId}`);
+      const arrowElement = document.getElementById(`arrow-loc-${roomId}`);
+      
+      const isHidden = contentElement.style.display === 'none';
+      contentElement.style.display = isHidden ? 'block' : 'none';
+      arrowElement.textContent = isHidden ? '▲ Click to collapse' : '▼ Click to expand';
+    }
+
+    function toggleZone(zoneKey) {
+      const contentElement = document.getElementById(`zone-${zoneKey}`);
+      const arrowElement = document.getElementById(`arrow-zone-${zoneKey}`);
+      
+      const isHidden = contentElement.style.display === 'none';
+      const groupCount = arrowElement.textContent.match(/\d+/)?.[0] || '0';
+      contentElement.style.display = isHidden ? 'block' : 'none';
+      arrowElement.textContent = isHidden ? `▲ ${groupCount} groups` : `▼ ${groupCount} groups`;
+    }
+
+    function toggleGroupTrays(groupId) {
+      const traysElement = document.getElementById(`trays-${groupId}`);
+      const arrowElement = document.getElementById(`arrow-${groupId}`);
+      
+      const isHidden = traysElement.style.display === 'none';
+      traysElement.style.display = isHidden ? 'block' : 'none';
+      arrowElement.textContent = isHidden ? '▲ Click to hide' : '▼ Click for trays';
+    }
+
+    // Load inventory on page load
+    loadInventory();
+
+    // ESC key handler
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        window.history.back();
+      }
+    });
+    })(); // End of IIFE wrapper
+  </script>
+
+  <!-- Intro Card Component -->
+  <script src="/js/intro-card.js?v=5"></script>
+  <script>
+    // Show intro card when page loads (only in demo mode)
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        showIntroCard('farm-inventory');
+      }, 500);
+    });
+  </script>
+  <script src="/js/farm-assistant.js"></script>
+</body>
+</html>
