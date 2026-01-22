@@ -10143,12 +10143,9 @@ import('./routes/qr-generator.js').then(module => {
  * - POST /api/printer/test: Test printer connection
  * - GET /api/printer/list: List available USB printers
  */
-import('./routes/thermal-printer.js')
-  .then(module => {
-    app.use('/api/printer', module.router);
-    console.log('✓ Thermal printer routes loaded');
-  })
-  .catch(err => console.warn('[Printer] Routes not available:', err.message));
+// TODO: Move this import to top of file
+// import { router as printerRouter } from './routes/thermal-printer.js';
+// app.use('/api/printer', printerRouter);
 
 /**
  * Edge Device Setup & Activation Routes
@@ -10558,316 +10555,116 @@ console.log(' Audit logging initialized - capturing all wholesale operations');
  * - Cannot access farm management systems or other farms' data
  */
 
-// Load farm authentication and all farm-sales routes dynamically
-Promise.all([
-  import('./lib/farm-auth.js'),
-  import('./routes/farm-sales/orders.js'),
-  import('./routes/farm-sales/inventory.js'),
-  import('./routes/farm-sales/payments.js'),
-  import('./routes/farm-sales/pos.js'),
-  import('./routes/farm-sales/delivery.js'),
-  import('./routes/farm-sales/subscriptions.js'),
-  import('./routes/farm-sales/donations.js'),
-  import('./routes/farm-sales/customers.js'),
-  import('./routes/farm-sales/programs.js'),
-  import('./routes/farm-sales/fulfillment.js'),
-  import('./routes/farm-sales/reports.js'),
-  import('./routes/farm-sales/quickbooks.js'),
-  import('./routes/farm-sales/lot-tracking.js'),
-  import('./routes/farm-sales/ai-agent.js'),
-  import('./routes/auth.js'),
-  import('./routes/farms.js'),
-  import('./routes/purchase.js'),
-  import('./routes/purchase-leads.js'),
-  import('./routes/setup-wizard.js'),
-  import('pg')
-]).then(([
-  authModule,
-  ordersModule,
-  inventoryModule,
-  paymentsModule,
-  posModule,
-  deliveryModule,
-  subscriptionsModule,
-  donationsModule,
-  customersModule,
-  programsModule,
-  fulfillmentModule,
-  reportsModule,
-  quickbooksModule,
-  lotTrackingModule,
-  aiAgentModule,
-  authRouterModule,
-  farmsRouterModule,
-  purchaseRouterModule,
-  purchaseLeadsRouterModule,
-  setupWizardRouterModule,
-  pgModule
-]) => {
-  const { createAuthRoutes, farmAuthMiddleware, blockFarmManagementEndpoints } = authModule;
-  const farmSalesOrdersRouter = ordersModule.default;
-  const farmSalesInventoryRouter = inventoryModule.default;
-  const farmSalesPaymentsRouter = paymentsModule.default;
-  const farmSalesPOSRouter = posModule.default;
-  const farmSalesDeliveryRouter = deliveryModule.default;
-  const farmSalesSubscriptionsRouter = subscriptionsModule.default;
-  const farmSalesDonationsRouter = donationsModule.default;
-  const farmSalesCustomersRouter = customersModule.default;
-  const farmSalesProgramsRouter = programsModule.default;
-  const farmSalesFulfillmentRouter = fulfillmentModule.default;
-  const farmSalesReportsRouter = reportsModule.default;
-  const farmSalesQuickBooksRouter = quickbooksModule.default;
-  const farmSalesLotTrackingRouter = lotTrackingModule.default;
-  const farmSalesAIAgentRouter = aiAgentModule.default;
-  const authRouter = authRouterModule.default;
-  const farmsRouter = farmsRouterModule.default;
-  const purchaseRouter = purchaseRouterModule.default;
-  const purchaseLeadsRouter = purchaseLeadsRouterModule.default;
-  const setupWizardRouter = setupWizardRouterModule.default;
-  const pg = pgModule.default;
-  
-  /**
-   * Farm Sales: Authentication & Authorization
-   * JWT-based multi-tenant authentication system
-   * - POST /api/farm-auth/login: Login and get JWT token
-   * - GET /api/farm-auth/verify: Verify token validity
-   * - GET /api/farm-auth/demo-tokens: Get test tokens (dev only)
-   */
-  app.use('/api/farm-auth', createAuthRoutes());
+// TODO: ES MODULE FIX REQUIRED - These mid-file imports violate ES module rules
+// All imports must be at the top of the file. These routes are temporarily disabled
+// until the imports are moved to the top of the file.
+// See CLOUD_EDGE_SYNC_DEPLOYMENT_STATUS.md for resolution steps.
 
-  // Apply security isolation middleware
-  app.use(blockFarmManagementEndpoints);
+// // Import farm authentication
+// import { createAuthRoutes, farmAuthMiddleware, blockFarmManagementEndpoints } from './lib/farm-auth.js';
+// 
+// /**
+//  * Farm Sales: Authentication & Authorization
+//  * JWT-based multi-tenant authentication system
+//  * - POST /api/farm-auth/login: Login and get JWT token
+//  * - GET /api/farm-auth/verify: Verify token validity
+//  * - GET /api/farm-auth/demo-tokens: Get test tokens (dev only)
+//  */
+// app.use('/api/farm-auth', createAuthRoutes());
+// 
+// // Apply security isolation middleware
+// app.use(blockFarmManagementEndpoints);
+// 
+// console.log(' Farm authentication system initialized - multi-tenant JWT with security isolation');
+// 
+// // Import farm-sales routes
+// import farmSalesOrdersRouter from './routes/farm-sales/orders.js';
+// import farmSalesInventoryRouter from './routes/farm-sales/inventory.js';
+// import farmSalesPaymentsRouter from './routes/farm-sales/payments.js';
+// import farmSalesPOSRouter from './routes/farm-sales/pos.js';
+// import farmSalesDeliveryRouter from './routes/farm-sales/delivery.js';
+// import farmSalesSubscriptionsRouter from './routes/farm-sales/subscriptions.js';
+// import farmSalesDonationsRouter from './routes/farm-sales/donations.js';
+// import farmSalesCustomersRouter from './routes/farm-sales/customers.js';
+// import farmSalesProgramsRouter from './routes/farm-sales/programs.js';
+// import farmSalesFulfillmentRouter from './routes/farm-sales/fulfillment.js';
+// import farmSalesReportsRouter from './routes/farm-sales/reports.js';
+// import farmSalesQuickBooksRouter from './routes/farm-sales/quickbooks.js';
+// import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
+// import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
+// import authRouter from './routes/auth.js';
+// import farmsRouter from './routes/farms.js';
+// import purchaseRouter from './routes/purchase.js';
+// import purchaseLeadsRouter from './routes/purchase-leads.js';
+// import setupWizardRouter from './routes/setup-wizard.js';
+// import pg from 'pg';
 
-  console.log('✓ Farm authentication system initialized - multi-tenant JWT with security isolation');
-  
-  // Initialize PostgreSQL pool for purchase flow (Cloud deployments only)
-  // Edge devices should not have DB credentials and will use NeDB instead
-  let dbPool = null;
-  if (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER) {
-    console.log('[Database] Initializing PostgreSQL pool for Cloud deployment');
-    dbPool = new pg.Pool({
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT) || 5432,
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000
-    });
-  } else {
-    console.log('[Database] No PostgreSQL credentials found - using NeDB for Edge device');
-  }
+console.log('[WARNING] Farm-sales routes temporarily disabled due to ES module syntax errors');
+console.log('[WARNING] See CLOUD_EDGE_SYNC_DEPLOYMENT_STATUS.md for fix instructions');
+// const pg = null; // Placeholder
 
-  // Store database pool in app.locals for routes (will be null on Edge devices)
-  app.locals.db = dbPool;
+// Initialize PostgreSQL pool for purchase flow (Cloud deployments only)
+// Edge devices should not have DB credentials and will use NeDB instead
+let dbPool = null;
+// if (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER) {
+//   console.log('[Database] Initializing PostgreSQL pool for Cloud deployment');
+//   dbPool = new pg.Pool({
+//     host: process.env.DB_HOST,
+//     port: parseInt(process.env.DB_PORT) || 5432,
+//     database: process.env.DB_NAME,
+//     user: process.env.DB_USER,
+//     password: process.env.DB_PASSWORD,
+//     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+//     max: 20,
+//     idleTimeoutMillis: 30000,
+//     connectionTimeoutMillis: 10000
+//   });
+// } else {
+  console.log('[Database] PostgreSQL pool disabled (farm-sales routes disabled)');
+// }
 
-  /**
-   * GreenReach Central - Farm Registration & Provisioning
-   * Central registration service operated by GreenReach (SaaS provider)
-   * - POST /api/farms/register: Farm edge device registration with code validation
-   * - POST /api/farms/generate-code: Admin generates registration codes
-   * - GET /api/farms/:farmId: Get farm information
-   * - GET /api/farms/list: List all registered farms (admin)
-   * - GET /api/farms/codes/list: List all registration codes (admin)
-   */
-  app.use('/api/farms', farmsRouter);
+// Store database pool in app.locals for routes (will be null on Edge devices)
+app.locals.db = dbPool;
 
-  /**
-   * Purchase & Onboarding Flow
-   * Square payment processing, account creation, and welcome emails
-   * - POST /api/farms/purchase: Complete purchase and create account
-   * - POST /api/farms/create-checkout-session: Create Square payment link
-   * - GET /api/farms/verify-session/:session_id: Verify payment and create account
-   */
-  app.use('/api/farms', purchaseRouter);
+/**
+ * GreenReach Central - Farm Registration & Provisioning
+ * Central registration service operated by GreenReach (SaaS provider)
+ * - POST /api/farms/register: Farm edge device registration with code validation
+ * - POST /api/farms/generate-code: Admin generates registration codes
+ * - GET /api/farms/:farmId: Get farm information
+ * - GET /api/farms/list: List all registered farms (admin)
+ * - GET /api/farms/codes/list: List all registration codes (admin)
+ */
+// app.use('/api/farms', farmsRouter); // Disabled - router undefined
 
-  /**
-   * Purchase Leads CRM
-   * Capture pre-order interest and schedule calls
-   * - POST /api/purchase/leads: Create new lead
-   * - GET /api/purchase/leads: List all leads (admin)
-   * - GET /api/purchase/leads/:leadId: Get specific lead
-   * - PUT /api/purchase/leads/:leadId/status: Update lead status
-   */
-  app.use('/api/purchase', purchaseLeadsRouter);
+/**
+ * Purchase & Onboarding Flow
+ * Square payment processing, account creation, and welcome emails
+ * - POST /api/farms/purchase: Complete purchase and create account
+ * - POST /api/farms/create-checkout-session: Create Square payment link
+ * - GET /api/farms/verify-session/:session_id: Verify payment and create account
+ */
+// app.use('/api/farms', purchaseRouter); // Disabled - router undefined
 
-  /**
-   * Authentication & Device Pairing
-   * JWT token generation and validation for Activity Hub tablets
-   * - POST /api/auth/generate-device-token: Generate pairing token for tablet
-   * - POST /api/auth/validate-device-token: Validate scanned QR code token
-   * - POST /api/auth/login: Authenticate user with credentials
-   * - GET /api/ping: Health check for edge device availability
-   */
-  app.use('/api/auth', authRouter);
+/**
+ * Purchase Leads CRM
+ * Capture pre-order interest and schedule calls
+ * - POST /api/purchase/leads: Create new lead
+ * - GET /api/purchase/leads: List all leads (admin)
+ * - GET /api/purchase/leads/:leadId: Get specific lead
+ * - PUT /api/purchase/leads/:leadId/status: Update lead status
+ */
+// app.use('/api/purchase', purchaseLeadsRouter); // Disabled - router undefined
 
-  /**
-   * Farm Sales: Customer Management
-   * Customer accounts, store credits, and preferences
-   * - GET /api/farm-sales/customers: List customers
-   * - POST /api/farm-sales/customers: Create customer
-   * - GET /api/farm-sales/customers/:customerId: Get customer details
-   * - PATCH /api/farm-sales/customers/:customerId: Update customer
-   * - POST /api/farm-sales/customers/:customerId/add-credits: Add store credits
-   * - POST /api/farm-sales/customers/:customerId/use-credits: Use store credits
-   * - GET /api/farm-sales/customers/:customerId/credit-history: Get credit history
-   */
-  app.use('/api/farm-sales/customers', farmSalesCustomersRouter);
-
-  /**
-   * Farm Sales: Order Management
-   * Unified order system for all sales channels
-   * - POST /api/farm-sales/orders: Create order (POS, D2C, B2B, donation)
-   * - GET /api/farm-sales/orders: List orders with filters
-   * - GET /api/farm-sales/orders/:orderId: Get order details
-   * - PATCH /api/farm-sales/orders/:orderId: Update order status/fulfillment
-   * - GET /api/farm-sales/orders/stats/summary: Order statistics
-   */
-  app.use('/api/farm-sales/orders', farmSalesOrdersRouter);
-
-  /**
-   * Farm Sales: Inventory Management
-   * Real-time inventory tracking for farm products
-   * - GET /api/farm-sales/inventory: Get current inventory
-   * - GET /api/farm-sales/inventory/:skuId: Get product details
-   * - POST /api/farm-sales/inventory/reserve: Reserve inventory (TTL hold)
-   * - POST /api/farm-sales/inventory/release: Release reservation
-   * - POST /api/farm-sales/inventory/confirm: Confirm and decrement inventory
-   * - PATCH /api/farm-sales/inventory/:skuId: Update product (restock, pricing)
-   * - GET /api/farm-sales/inventory/categories/list: Get product categories
-   */
-  app.use('/api/farm-sales/inventory', farmSalesInventoryRouter);
-
-  /**
-   * Farm Sales: Payment Processing
-   * Multi-method payment processing for all channels
-   * - POST /api/farm-sales/payments: Process payment (cash, card, invoice, grant)
-   * - GET /api/farm-sales/payments/:paymentId: Get payment status
-   * - GET /api/farm-sales/payments: List payments with filters
-   * - POST /api/farm-sales/payments/:paymentId/refund: Issue refund
-   * - PATCH /api/farm-sales/payments/:paymentId: Update payment status
-   */
-  app.use('/api/farm-sales/payments', farmSalesPaymentsRouter);
-
-  /**
-   * Farm Sales: Point of Sale (POS) Terminal
-   * Quick checkout for walk-up farm stand sales
-   * - POST /api/farm-sales/pos/checkout: Express checkout (order + payment)
-   * - POST /api/farm-sales/pos/cash: Process cash payment with change
-   * - POST /api/farm-sales/pos/card: Process card payment via Square
-   * - GET /api/farm-sales/pos/session/summary: Get cashier session summary
-   */
-  app.use('/api/farm-sales/pos', farmSalesPOSRouter);
-
-  /**
-   * Farm Sales: Delivery Management
-   * Route planning and delivery scheduling for D2C orders
-   * - GET /api/farm-sales/delivery/windows: Get available delivery windows
-   * - POST /api/farm-sales/delivery/schedule: Schedule delivery
-   * - GET /api/farm-sales/delivery/routes/:date: Get delivery routes
-   * - PATCH /api/farm-sales/delivery/:deliveryId: Update delivery status
-   */
-  app.use('/api/farm-sales/delivery', farmSalesDeliveryRouter);
-
-  /**
-   * Farm Sales: Subscription Management
-   * Recurring orders with auto-billing (CSA boxes, weekly deliveries)
-   * - POST /api/farm-sales/subscriptions: Create subscription
-   * - GET /api/farm-sales/subscriptions: List subscriptions
-   * - GET /api/farm-sales/subscriptions/:subscriptionId: Get subscription details
-   * - PATCH /api/farm-sales/subscriptions/:subscriptionId: Update subscription
-   * - POST /api/farm-sales/subscriptions/:subscriptionId/pause: Pause subscription
-   * - POST /api/farm-sales/subscriptions/:subscriptionId/resume: Resume subscription
-   * - DELETE /api/farm-sales/subscriptions/:subscriptionId: Cancel subscription
-   */
-  app.use('/api/farm-sales/subscriptions', farmSalesSubscriptionsRouter);
-
-  /**
-   * Farm Sales: Food Security Programs
-   * SNAP, WIC, and donation program integration
-   * - POST /api/farm-sales/programs/snap: Process SNAP transaction
-   * - POST /api/farm-sales/programs/wic: Process WIC transaction
-   * - GET /api/farm-sales/programs/eligible: Check product eligibility
-   * - GET /api/farm-sales/programs/balances: Check SNAP/WIC balance
-   */
-  app.use('/api/farm-sales/programs', farmSalesProgramsRouter);
-
-  /**
-   * Farm Sales: Fulfillment Management
-   * Pick, pack, and ship workflow for all order types
-   * - GET /api/farm-sales/fulfillment/pending: Get orders pending fulfillment
-   * - POST /api/farm-sales/fulfillment/:orderId/pick: Mark order picked
-   * - POST /api/farm-sales/fulfillment/:orderId/pack: Generate packing slip
-   * - POST /api/farm-sales/fulfillment/:orderId/ship: Mark shipped and notify customer
-   */
-  app.use('/api/farm-sales/fulfillment', farmSalesFulfillmentRouter);
-
-  /**
-   * Farm Sales: Reports & Analytics
-   * Sales reports, inventory reports, customer insights
-   * - GET /api/farm-sales/reports/sales: Sales report with date range
-   * - GET /api/farm-sales/reports/inventory: Inventory report
-   * - GET /api/farm-sales/reports/customers: Customer analytics
-   * - GET /api/farm-sales/reports/products: Product performance
-   */
-  app.use('/api/farm-sales/reports', farmSalesReportsRouter);
-
-  /**
-   * Farm Sales: QuickBooks Integration
-   * Sync sales data to QuickBooks Online
-   * - POST /api/farm-sales/quickbooks/connect: Initiate OAuth connection
-   * - GET /api/farm-sales/quickbooks/callback: OAuth callback handler
-   * - POST /api/farm-sales/quickbooks/sync: Manual sync trigger
-   * - GET /api/farm-sales/quickbooks/status: Get connection status
-   */
-  app.use('/api/farm-sales/quickbooks', farmSalesQuickBooksRouter);
-
-  /**
-   * Farm Sales: Lot Tracking & Traceability
-   * Harvest lot tracking for food safety compliance
-   * - POST /api/farm-sales/lots: Create harvest lot
-   * - GET /api/farm-sales/lots: List lots with filters
-   * - GET /api/farm-sales/lots/:lotId: Get lot details and trace
-   * - POST /api/farm-sales/lots/:lotId/recall: Initiate lot recall
-   */
-  app.use('/api/farm-sales/lots', farmSalesLotTrackingRouter);
-
-  /**
-   * Farm Sales: Donation Management
-   * Food rescue and donation program tracking
-   * - POST /api/farm-sales/donations: Record donation
-   * - GET /api/farm-sales/donations: List donations
-   * - GET /api/farm-sales/donations/:donationId: Get donation details
-   * - GET /api/farm-sales/donations/stats: Donation statistics
-   */
-  app.use('/api/farm-sales/donations', farmSalesDonationsRouter);
-
-  /**
-   * Farm Sales: AI Agent Assistant
-   * Natural language commands for farm operations
-   * - POST /api/farm-sales/ai-agent/chat: Send command, get parsed intent & execute action
-   * - GET /api/farm-sales/ai-agent/capabilities: List available AI agent capabilities
-   * - GET /api/farm-sales/ai-agent/status: Check AI agent status and configuration
-   * - POST /api/farm-sales/ai-agent/feedback: Submit feedback about AI responses
-   * 
-   * Capabilities:
-   * - Lighting control (turn on/off, set brightness, get status)
-   * - Environment monitoring (temperature, humidity, sensor readings)
-   * - Inventory management (list products, low stock alerts, update stock)
-   * - Order management (list orders, order details, recent orders)
-   * - Automation control (list rules, enable/disable rules)
-   * - Reports generation (sales reports, inventory reports)
-   * - System health checks (status, health check)
-   */
-  app.use('/api/farm-sales/ai-agent', farmSalesAIAgentRouter);
-
-  console.log('\u2713 Farm sales terminal initialized - POS, D2C, B2B, food security programs, lot traceability, and AI agent enabled');
-}).catch(err => {
-  console.error('[Farm Sales] Failed to load modules:', err.message);
-  console.error('Farm sales routes will not be available');
-});
+/**
+ * Authentication & Device Pairing
+ * JWT token generation and validation for Activity Hub tablets
+ * - POST /api/auth/generate-device-token: Generate pairing token for tablet
+ * - POST /api/auth/validate-device-token: Validate scanned QR code token
+ * - POST /api/auth/login: Authenticate user with credentials
+ * - GET /api/ping: Health check for edge device availability
+ */
+// app.use('/api/auth', authRouter); // Disabled - router undefined
 
 /**
  * Email Service Routes
@@ -11001,6 +10798,185 @@ app.get('/api/setup-wizard/status', async (req, res) => {
 
 // Note: setupWizardRouter would go here if we had additional wizard routes
 // app.use('/api/setup-wizard', setupWizardRouter);
+
+/**
+ * Farm Sales: Customer Management
+ * Customer accounts, store credits, and preferences
+ * - GET /api/farm-sales/customers: List customers
+ * - POST /api/farm-sales/customers: Create customer
+ * - GET /api/farm-sales/customers/:customerId: Get customer details
+ * - PATCH /api/farm-sales/customers/:customerId: Update customer
+ * - POST /api/farm-sales/customers/:customerId/add-credits: Add store credits
+ * - POST /api/farm-sales/customers/:customerId/use-credits: Use store credits
+ * - GET /api/farm-sales/customers/:customerId/credit-history: Get credit history
+ */
+// app.use('/api/farm-sales/customers', farmSalesCustomersRouter);
+
+/**
+ * Farm Sales: Order Management
+ * Unified order system for all sales channels
+ * - POST /api/farm-sales/orders: Create order (POS, D2C, B2B, donation)
+ * - GET /api/farm-sales/orders: List orders with filters
+ * - GET /api/farm-sales/orders/:orderId: Get order details
+ * - PATCH /api/farm-sales/orders/:orderId: Update order status/fulfillment
+ * - GET /api/farm-sales/orders/stats/summary: Order statistics
+ */
+// app.use('/api/farm-sales/orders', farmSalesOrdersRouter);
+
+/**
+ * Farm Sales: Inventory Management
+ * Real-time inventory tracking for farm products
+ * - GET /api/farm-sales/inventory: Get current inventory
+ * - GET /api/farm-sales/inventory/:skuId: Get product details
+ * - POST /api/farm-sales/inventory/reserve: Reserve inventory (TTL hold)
+ * - POST /api/farm-sales/inventory/release: Release reservation
+ * - POST /api/farm-sales/inventory/confirm: Confirm and decrement inventory
+ * - PATCH /api/farm-sales/inventory/:skuId: Update product (restock, pricing)
+ * - GET /api/farm-sales/inventory/categories/list: Get product categories
+ */
+// app.use('/api/farm-sales/inventory', farmSalesInventoryRouter);
+
+/**
+ * Farm Sales: Payment Processing
+ * Multi-method payment processing for all channels
+ * - POST /api/farm-sales/payments: Process payment (cash, card, invoice, grant)
+ * - GET /api/farm-sales/payments/:paymentId: Get payment status
+ * - GET /api/farm-sales/payments: List payments with filters
+ * - POST /api/farm-sales/payments/:paymentId/refund: Issue refund
+ * - PATCH /api/farm-sales/payments/:paymentId: Update payment status
+ */
+// app.use('/api/farm-sales/payments', farmSalesPaymentsRouter);
+
+/**
+ * Farm Sales: Point of Sale (POS) Terminal
+ * Quick checkout for walk-up farm stand sales
+ * - POST /api/farm-sales/pos/checkout: Express checkout (order + payment)
+ * - POST /api/farm-sales/pos/cash: Process cash payment with change
+ * - POST /api/farm-sales/pos/card: Process card payment via Square
+ * - GET /api/farm-sales/pos/session/summary: Get cashier session summary
+ */
+// app.use('/api/farm-sales/pos', farmSalesPOSRouter);
+
+/**
+ * Farm Sales: Delivery Management
+ * Route planning and delivery scheduling for D2C orders
+ * - GET /api/farm-sales/delivery/windows: Get available delivery windows
+ * - POST /api/farm-sales/delivery/schedule: Schedule delivery for order
+ * - GET /api/farm-sales/delivery/:deliveryId: Get delivery status/tracking
+ * - PATCH /api/farm-sales/delivery/:deliveryId: Update delivery status
+ * - POST /api/farm-sales/delivery/routes/optimize: Generate optimized routes
+ * - GET /api/farm-sales/delivery/routes: List delivery routes
+ * - GET /api/farm-sales/delivery/zones: Get delivery zones and fees
+ */
+// app.use('/api/farm-sales/delivery', farmSalesDeliveryRouter);
+
+/**
+ * Farm Sales: Subscription Management
+ * Recurring orders and CSA (Community Supported Agriculture) boxes
+ * - GET /api/farm-sales/subscriptions/plans: List subscription plans
+ * - POST /api/farm-sales/subscriptions: Create subscription
+ * - GET /api/farm-sales/subscriptions: List subscriptions
+ * - GET /api/farm-sales/subscriptions/:subscriptionId: Get subscription details
+ * - PATCH /api/farm-sales/subscriptions/:subscriptionId: Update subscription
+ * - POST /api/farm-sales/subscriptions/:subscriptionId/skip: Skip upcoming delivery
+ * - POST /api/farm-sales/subscriptions/generate-orders: Generate orders (cron job)
+ */
+// app.use('/api/farm-sales/subscriptions', farmSalesSubscriptionsRouter);
+
+/**
+ * Farm Sales: Programs Management
+ * Food security programs and CSA box builders
+ * - GET /api/farm-sales/programs: List programs
+ * - POST /api/farm-sales/programs: Create program
+ * - GET /api/farm-sales/programs/:programId: Get program details
+ * - PATCH /api/farm-sales/programs/:programId: Update program
+ * - GET /api/farm-sales/programs/:programId/box-options: Get box builder options
+ * - POST /api/farm-sales/programs/:programId/box-selections: Save customer box selections
+ * - GET /api/farm-sales/programs/:programId/box-selections/:customerId: Get customer selections
+ */
+// app.use('/api/farm-sales/programs', farmSalesProgramsRouter);
+
+/**
+ * Farm Sales: Fulfillment & Operations
+ * Pick lists, pack lists, and delivery manifests
+ * - GET /api/farm-sales/fulfillment/pick-list: Generate pick list (by product)
+ * - GET /api/farm-sales/fulfillment/pack-list: Generate pack list (by customer)
+ * - GET /api/farm-sales/fulfillment/delivery-manifest: Generate delivery manifest
+ */
+// app.use('/api/farm-sales/fulfillment', farmSalesFulfillmentRouter);
+
+/**
+ * Farm Sales: Reports & Analytics
+ * Business intelligence and performance metrics
+ * - GET /api/farm-sales/reports/dashboard: Combined dashboard metrics
+ * - GET /api/farm-sales/reports/sales-summary: Sales overview and trends
+ * - GET /api/farm-sales/reports/inventory-turnover: Inventory performance
+ * - GET /api/farm-sales/reports/customer-analytics: Customer insights
+ * - GET /api/farm-sales/reports/product-performance: Product analysis
+ */
+// app.use('/api/farm-sales/reports', farmSalesReportsRouter);
+
+/**
+ * Farm Sales: QuickBooks Integration
+ * Sync invoices and payments with QuickBooks Online
+ * - GET /api/farm-sales/quickbooks/auth: Initiate OAuth flow
+ * - GET /api/farm-sales/quickbooks/callback: OAuth callback handler
+ * - GET /api/farm-sales/quickbooks/status: Check connection status
+ * - POST /api/farm-sales/quickbooks/disconnect: Disconnect integration
+ * - POST /api/farm-sales/quickbooks/sync-invoices: Sync orders to QuickBooks
+ * - POST /api/farm-sales/quickbooks/sync-payments: Sync payments to QuickBooks
+ * - POST /api/farm-sales/quickbooks/webhook: Handle QuickBooks webhooks
+ */
+// app.use('/api/farm-sales/quickbooks', farmSalesQuickBooksRouter);
+
+/**
+ * Farm Sales: Lot Code Traceability System
+ * FDA-compliant lot tracking for food safety and recall management
+ * - POST /api/farm-sales/lots/generate: Generate new lot code (ZONE-CROP-YYMMDD-BATCH)
+ * - GET /api/farm-sales/lots: List all lots with filters
+ * - GET /api/farm-sales/lots/:lotCode: Get lot details
+ * - POST /api/farm-sales/lots/:lotCode/assign: Link lot to order/customer
+ * - GET /api/farm-sales/lots/:lotCode/recall: Generate recall report (lot → customers)
+ * - GET /api/farm-sales/lots/:lotCode/barcode: Generate barcode image (CODE128, CODE93, GS1)
+ * - PATCH /api/farm-sales/lots/:lotCode: Update lot status (consumed, expired, recalled)
+ * - DELETE /api/farm-sales/lots/:lotCode: Delete unassigned lot
+ */
+// app.use('/api/farm-sales/lots', farmSalesLotTrackingRouter);
+
+/**
+ * Farm Sales: Donations & Food Security Programs
+ * Food bank donations, SNAP/EBT, and grant-funded programs
+ * - GET /api/farm-sales/donations/programs: List food security programs
+ * - GET /api/farm-sales/donations/programs/:programId: Get program details
+ * - POST /api/farm-sales/donations: Record donation or subsidized order
+ * - GET /api/farm-sales/donations: List donations
+ * - GET /api/farm-sales/donations/:donationId: Get donation details
+ * - POST /api/farm-sales/donations/:donationId/deliver: Mark as delivered
+ * - GET /api/farm-sales/donations/reports/impact: Generate impact report
+ * - PATCH /api/farm-sales/donations/programs/:programId: Update program
+ */
+// app.use('/api/farm-sales/donations', farmSalesDonationsRouter);
+
+/**
+ * Farm Sales: AI Agent Assistant
+ * Intelligent assistant with action capabilities using OpenAI function calling
+ * - POST /api/farm-sales/ai-agent/chat: Send command, get parsed intent & execute action
+ * - GET /api/farm-sales/ai-agent/capabilities: List available AI agent capabilities
+ * - GET /api/farm-sales/ai-agent/status: Check AI agent status and configuration
+ * - POST /api/farm-sales/ai-agent/feedback: Submit feedback about AI responses
+ * 
+ * Capabilities:
+ * - Lighting control (turn on/off, set brightness, get status)
+ * - Environment monitoring (temperature, humidity, sensor readings)
+ * - Inventory management (list products, low stock alerts, update stock)
+ * - Order management (list orders, order details, recent orders)
+ * - Automation control (list rules, enable/disable rules)
+ * - Reports generation (sales reports, inventory reports)
+ * - System health checks (status, health check)
+ */
+// app.use('/api/farm-sales/ai-agent', farmSalesAIAgentRouter);
+
+console.log(' Farm sales terminal initialized - POS, D2C, B2B, food security programs, lot traceability, and AI agent enabled');
 
 /**
  * ML Predictive Forecasting Endpoint
