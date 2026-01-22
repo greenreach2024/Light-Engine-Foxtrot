@@ -6918,6 +6918,42 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
         success: false, 
         message: 'Rooms must be an array' 
       });
+    }
+    
+    console.log(`[save-rooms] Saving ${rooms.length} rooms to disk`);
+    
+    // Save to rooms.json file
+    const roomsFilePath = path.join(__dirname, 'public', 'data', 'rooms.json');
+    const roomsData = { rooms };
+    
+    await fs.promises.writeFile(
+      roomsFilePath, 
+      JSON.stringify(roomsData, null, 2),
+      'utf8'
+    );
+    
+    console.log(`[save-rooms] Successfully saved to ${roomsFilePath}`);
+    
+    // Also dispatch event to notify other systems
+    if (typeof io !== 'undefined') {
+      io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Saved ${rooms.length} rooms`,
+      count: rooms.length
+    });
+    
+  } catch (error) {
+    console.error('[save-rooms] Error saving rooms:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to save rooms',
+      message: error.message 
+    });
+  }
+}));
 
 // Save certifications endpoint
 app.post('/api/setup/certifications', asyncHandler(async (req, res) => {
@@ -24327,14 +24363,6 @@ startServer().catch((error) => {
   console.error('[charlie] Unexpected startup failure:', error?.message || error);
   process.exit(1);
 });
-
-// Force-close any unclosed scopes (pre-existing file structure issue)
-// These blocks balance 4 extra opening braces from earlier in the file
-// Analysis showed depth was 4 at end of file, should be 0
-}  // Close scope 1
-} catch (e) { /* auto-close try */ }  // Close scope 2 (was a try block)
-}  // Close scope 3
-}  // Close scope 4
 
 export { app };
 export function __resetWizardSystemForTests() {
