@@ -48,9 +48,23 @@ app.locals.databaseReady = false;
 
 // Security middleware
 // Note: the current standalone UI pages include inline <script> and inline event handlers.
-// Helmet's default CSP blocks those, so we disable CSP in local/dev to allow the UI to run.
+// Configure CSP to allow inline scripts for public pages while maintaining security.
 const isProduction = process.env.NODE_ENV === 'production';
-app.use(helmet(isProduction ? undefined : { contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https:"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+}));
 
 // Static UI (Wholesale portal + Central Admin UI)
 app.use(express.static(path.join(__dirname, 'public')));
