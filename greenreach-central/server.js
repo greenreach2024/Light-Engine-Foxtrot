@@ -129,6 +129,11 @@ app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to f
 app.use('/api/admin', adminRoutes); // Admin dashboard API
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
 
+// Root route - redirect to main landing page
+app.get('/', (req, res) => {
+  res.redirect('/greenreach-org.html');
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
