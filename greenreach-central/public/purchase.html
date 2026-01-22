@@ -1451,20 +1451,6 @@
             }
         }
 
-        // Close modal on outside click
-        document.addEventListener('DOMContentLoaded', () => {
-            const modal = document.getElementById('purchaseModal');
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    closePurchaseModal();
-                }
-            });
-
-            // Initialize countdown timer
-            updateCountdown();
-            setInterval(updateCountdown, 1000);
-        });
-
         // Countdown timer to April 22, 2026
         function updateCountdown() {
             const launchDate = new Date('April 22, 2026 00:00:00').getTime();
@@ -1486,6 +1472,20 @@
             document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
             document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
         }
+
+        // Close modal on outside click and initialize countdown
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('purchaseModal');
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closePurchaseModal();
+                }
+            });
+
+            // Initialize countdown timer
+            updateCountdown();
+            setInterval(updateCountdown, 1000);
+        });
 
         async function purchaseProduct(plan) {
             // Open the modal with the selected plan
