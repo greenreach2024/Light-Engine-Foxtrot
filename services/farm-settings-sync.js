@@ -154,7 +154,7 @@ export class FarmSettingsSyncClient {
         }
         
         // Acknowledge successful sync
-        await this.acknowledgeSyncgenerate(changeType, true);
+        await this.acknowledgeSync(changeType, true);
         
         results.push({ changeType, success: true });
         this.state.appliedChanges.push({
