@@ -107,7 +107,7 @@ app.use('/api/inventory', authMiddleware, inventoryRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
-app.use('/api/wholesale', wholesaleRoutes); // Public catalog API
+// app.use('/api/wholesale', wholesaleRoutes); // TEMP DISABLED - agent error
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
 app.use('/api/admin', adminRoutes); // Admin dashboard API
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
