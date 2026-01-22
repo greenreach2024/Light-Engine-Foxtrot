@@ -2548,36 +2548,11 @@
                             <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: var(--accent-blue);">Integration Settings</h3>
                             <div style="display: grid; gap: 15px;">
                                 <div>
-                                    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                        <input type="checkbox" id="enable-square" checked>
-                                        <span style="font-weight: 500;">Square Payment Integration</span>
-                                    </label>
-                                    <div style="margin-left: 24px;">
-                                        <input type="text" id="square-location-id" value="TC4Z3ZEBKRXRH" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 12px; margin-bottom: 5px;" placeholder="Square Location ID">
-                                        <small style="color: var(--text-muted);">Location ID from Square Dashboard</small>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                        <input type="checkbox" id="enable-email" checked>
-                                        <span style="font-weight: 500;">Email Notifications (AWS SES)</span>
-                                    </label>
-                                    <div style="margin-left: 24px;">
-                                        <input type="email" id="sender-email" value="noreply@lightengine.farm" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 12px; margin-bottom: 5px;" placeholder="Sender Email">
-                                        <small style="color: var(--text-muted);">Verified sender email address</small>
-                                    </div>
-                                </div>
-                                <div>
                                     <label style="display: flex; align-items: center; gap: 8px;">
                                         <input type="checkbox" id="enable-greenreach">
                                         <span style="font-weight: 500;">GreenReach Central Monitoring</span>
                                     </label>
-                                </div>
-                                <div>
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="enable-webhooks">
-                                        <span style="font-weight: 500;">Custom Webhooks</span>
-                                    </label>
+                                    <small style="color: var(--text-muted); display: block; margin-top: 5px;">Real-time farm monitoring and cloud backup</small>
                                 </div>
                             </div>
                         </div>
@@ -2660,16 +2635,6 @@
                         <h2 style="margin-bottom: 20px;">Farm Operations Defaults</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default Wholesale Markup (%)</label>
-                                <input type="number" id="default-wholesale-markup" value="40" min="0" max="100" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                <small style="color: var(--text-muted);">Applied to new products</small>
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Default Retail Markup (%)</label>
-                                <input type="number" id="default-retail-markup" value="100" min="0" max="300" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                <small style="color: var(--text-muted);">Applied to new products</small>
-                            </div>
-                            <div>
                                 <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Low Stock Threshold</label>
                                 <input type="number" id="low-stock-threshold" value="10" min="0" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                 <small style="color: var(--text-muted);">Trigger low inventory alerts</small>
@@ -2683,34 +2648,7 @@
                         </div>
                     </div>
 
-                    <!-- API & Webhooks -->
-                    <div class="card">
-                        <h2 style="margin-bottom: 20px;">API & Webhooks</h2>
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Webhook URL</label>
-                                <input type="url" id="webhook-url" placeholder="https://yourapp.com/webhook" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                <small style="color: var(--text-muted);">Receive real-time event notifications</small>
-                            </div>
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Webhook Events</h3>
-                                <div style="display: flex; flex-direction: column; gap: 8px;">
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="webhook-orders">
-                                        <span>Order events</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="webhook-inventory">
-                                        <span>Inventory updates</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="webhook-harvest">
-                                        <span>Harvest events</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+
                 </div>
 
                 <!-- Save Button -->
