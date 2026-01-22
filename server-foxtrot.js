@@ -10125,8 +10125,10 @@ app.use('/api/migration', migrationRouter);
  * - GET /api/qr-generator/available-range: Get next available code range
  * - POST /api/qr-generator/validate: Check if codes already exist
  */
-import { router as qrGeneratorRouter } from './routes/qr-generator.js';
-app.use('/api/qr-generator', qrGeneratorRouter);
+// Dynamic import to avoid syntax error (ES modules require imports at top)
+import('./routes/qr-generator.js').then(module => {
+  app.use('/api/qr-generator', module.router);
+}).catch(err => console.warn('[QR Generator] Routes not available:', err.message));
 
 /**
  * Thermal Printer API Routes
@@ -24245,9 +24247,9 @@ async function startServer() {
             import('./services/farm-settings-sync.js').then((module) => {
               const { initializeSettingsSync } = module;
               const settingsSync = initializeSettingsSync({
-                centralUrl: edgeConfig.getCentralApiUrl(),
-                farmId: edgeConfig.getFarmId(),
-                apiKey: edgeConfig.getApiKey(),
+                centralUrl: process.env.GREENREACH_CENTRAL_URL,
+                farmId: process.env.FARM_ID,
+                apiKey: process.env.GREENREACH_API_KEY,
                 pollInterval: 30000, // 30 seconds
                 farmDataPath: path.join(__dirname, 'data', 'farm.json')
               });
