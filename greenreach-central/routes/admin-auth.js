@@ -6,7 +6,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { generateAdminToken, hashToken, verifyAdminToken, adminAuthMiddleware } from '../middleware/admin-auth.js';
+import { generateAdminToken, hashToken, verifyAdminToken, adminAuthMiddleware } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 const SALT_ROUNDS = 12;
