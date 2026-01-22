@@ -6954,6 +6954,42 @@ app.post('/api/setup/certifications', asyncHandler(async (req, res) => {
     
     console.log('[Certifications] Updated certifications:', farmData.certifications);
     
+    // Bidirectional sync: Push changes to cloud (if connected)
+    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY && process.env.FARM_ID) {
+      try {
+        const centralUrl = process.env.GREENREACH_CENTRAL_URL;
+        const farmId = process.env.FARM_ID;
+        const apiKey = process.env.GREENREACH_API_KEY;
+        
+        const fetch = (await import('node-fetch')).default;
+        const syncResponse = await fetch(
+          `${centralUrl}/api/farm-settings/${farmId}/certifications`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': apiKey,
+              'X-Farm-ID': farmId
+            },
+            body: JSON.stringify({
+              certifications: certifications || [],
+              practices: practices || []
+            }),
+            timeout: 5000
+          }
+        );
+        
+        if (syncResponse.ok) {
+          console.log('[Certifications] ✓ Synced to cloud');
+        } else {
+          console.warn('[Certifications] ⚠️  Cloud sync failed:', syncResponse.statusText);
+        }
+      } catch (syncError) {
+        // Non-fatal: Log warning but don't fail the request
+        console.warn('[Certifications] ⚠️  Cloud sync error:', syncError.message);
+      }
+    }
+    
     res.json({ 
       success: true, 
       message: 'Certifications updated successfully',
@@ -7083,6 +7119,50 @@ app.post('/api/sync/process-queue', asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('[sync] Process queue error:', error);
     res.status(500).json({ error: 'Failed to process queue' });
+  }
+}));
+
+// Get farm settings sync status
+app.get('/api/sync/settings/status', asyncHandler(async (req, res) => {
+  try {
+    if (!global.settingsSync) {
+      return res.json({
+        enabled: false,
+        message: 'Farm settings sync not initialized (edge mode required)'
+      });
+    }
+    
+    const status = global.settingsSync.getStatus();
+    res.json({
+      enabled: true,
+      ...status,
+      farmId: process.env.FARM_ID,
+      centralUrl: process.env.GREENREACH_CENTRAL_URL
+    });
+  } catch (error) {
+    console.error('[settings-sync] Status error:', error);
+    res.status(500).json({ error: 'Failed to get settings sync status' });
+  }
+}));
+
+// Manually trigger settings sync poll
+app.post('/api/sync/settings/poll', asyncHandler(async (req, res) => {
+  try {
+    if (!global.settingsSync) {
+      return res.status(400).json({ error: 'Settings sync not initialized' });
+    }
+    
+    await global.settingsSync.pollForChanges();
+    const status = global.settingsSync.getStatus();
+    
+    res.json({ 
+      success: true, 
+      lastSync: status.lastSync,
+      recentChanges: status.recentChanges 
+    });
+  } catch (error) {
+    console.error('[settings-sync] Manual poll error:', error);
+    res.status(500).json({ error: 'Failed to poll for changes' });
   }
 }));
 
@@ -24160,6 +24240,25 @@ async function startServer() {
             // Start wholesale inventory sync service
             wholesaleService = new EdgeWholesaleService(db);
             wholesaleService.start();
+            
+            // Start farm settings sync service (cloud-to-edge bidirectional sync)
+            import('./services/farm-settings-sync.js').then((module) => {
+              const { initializeSettingsSync } = module;
+              const settingsSync = initializeSettingsSync({
+                centralUrl: edgeConfig.getCentralApiUrl(),
+                farmId: edgeConfig.getFarmId(),
+                apiKey: edgeConfig.getApiKey(),
+                pollInterval: 30000, // 30 seconds
+                farmDataPath: path.join(__dirname, 'data', 'farm.json')
+              });
+              
+              // Make globally available for API routes
+              global.settingsSync = settingsSync;
+              
+              console.log('[EdgeMode] ✓ Farm settings sync started (30s polling)');
+            }).catch((error) => {
+              console.warn('[EdgeMode] ⚠️  Farm settings sync unavailable:', error?.message || error);
+            });
             
             // Make services globally available for API routes
             global.syncService = syncService;

@@ -19,6 +19,7 @@ import wholesaleRoutes from './routes/wholesale.js';
 import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 import adminRoutes from './routes/admin.js';
 import reportsRoutes from './routes/reports.js';
+import farmSettingsRoutes from './routes/farm-settings.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -107,6 +108,7 @@ app.use('/api/inventory', authMiddleware, inventoryRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
+app.use('/api/farm-settings', farmSettingsRoutes); // Cloud-to-edge settings sync (API key auth)
 app.use('/api/wholesale', wholesaleRoutes); // Re-enabled with stubbed Square service
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
 app.use('/api/admin', adminRoutes); // Admin dashboard API
