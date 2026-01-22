@@ -3472,6 +3472,121 @@ async function saveSettings() {
 }
 
 /**
+ * Open edit certifications modal
+ */
+async function openEditCertificationsModal() {
+    try {
+        // Load current certifications from farm data
+        let certifications = { certifications: [], practices: [], attributes: [] };
+        
+        try {
+            const farmResponse = await fetch('/data/farm.json');
+            if (farmResponse.ok) {
+                const farmData = await farmResponse.json();
+                if (farmData.certifications) {
+                    certifications = farmData.certifications;
+                }
+            }
+        } catch (error) {
+            console.warn('Could not load certifications from /data/farm.json:', error);
+        }
+        
+        // Populate checkboxes with current values
+        const form = document.getElementById('editCertificationsForm');
+        
+        // Clear all checkboxes first
+        form.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        
+        // Check certifications
+        certifications.certifications?.forEach(cert => {
+            const checkbox = form.querySelector(`input[name="certifications"][value="${cert}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+        
+        // Check practices
+        certifications.practices?.forEach(practice => {
+            const checkbox = form.querySelector(`input[name="practices"][value="${practice}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+        
+        // Check attributes
+        certifications.attributes?.forEach(attr => {
+            const checkbox = form.querySelector(`input[name="attributes"][value="${attr}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+        
+        // Show modal
+        document.getElementById('editCertificationsModal').style.display = 'block';
+    } catch (error) {
+        console.error('Error opening certifications modal:', error);
+        showToast('Error loading certifications', 'error');
+    }
+}
+
+/**
+ * Close edit certifications modal
+ */
+function closeEditCertificationsModal() {
+    document.getElementById('editCertificationsModal').style.display = 'none';
+}
+
+/**
+ * Save edited certifications
+ */
+async function saveEditCertifications(event) {
+    event.preventDefault();
+    
+    try {
+        const form = document.getElementById('editCertificationsForm');
+        
+        // Collect selected values
+        const certifications = Array.from(form.querySelectorAll('input[name="certifications"]:checked'))
+            .map(cb => cb.value);
+        const practices = Array.from(form.querySelectorAll('input[name="practices"]:checked'))
+            .map(cb => cb.value);
+        const attributes = Array.from(form.querySelectorAll('input[name="attributes"]:checked'))
+            .map(cb => cb.value);
+        
+        const updatedCertifications = {
+            certifications,
+            practices,
+            attributes
+        };
+        
+        // Save to API
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentSession?.token) {
+            headers['Authorization'] = `Bearer ${currentSession.token}`;
+        }
+        
+        const response = await fetch('/api/setup/certifications', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(updatedCertifications)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save certifications');
+        }
+        
+        // Close modal and reload settings to show updates
+        closeEditCertificationsModal();
+        showToast('Certifications updated successfully', 'success');
+        
+        // Reload settings to show updated badges
+        await loadSettings();
+        
+    } catch (error) {
+        console.error('Error saving certifications:', error);
+        showToast('Error saving certifications. Changes saved locally only.', 'warning');
+        
+        // Even if API fails, update the display
+        closeEditCertificationsModal();
+        await loadSettings();
+    }
+}
+
+/**
  * Save operation defaults (wholesale discounts and inventory thresholds)
  */
 async function saveOperationDefaults() {

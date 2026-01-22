@@ -6918,6 +6918,68 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
         success: false, 
         message: 'Rooms must be an array' 
       });
+
+// Save certifications endpoint
+app.post('/api/setup/certifications', asyncHandler(async (req, res) => {
+  try {
+    const { certifications, practices, attributes } = req.body;
+    
+    // Load current farm data
+    const farmDataPath = path.join(process.cwd(), 'data', 'farm.json');
+    let farmData = {};
+    
+    try {
+      if (fs.existsSync(farmDataPath)) {
+        const fileContent = fs.readFileSync(farmDataPath, 'utf8');
+        farmData = JSON.parse(fileContent);
+      }
+    } catch (error) {
+      console.warn('[Certifications] Could not load existing farm.json:', error.message);
+    }
+    
+    // Update certifications
+    farmData.certifications = {
+      certifications: certifications || [],
+      practices: practices || [],
+      attributes: attributes || []
+    };
+    
+    // Save back to farm.json
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(farmDataPath, JSON.stringify(farmData, null, 2));
+    
+    console.log('[Certifications] Updated certifications:', farmData.certifications);
+    
+    res.json({ 
+      success: true, 
+      message: 'Certifications updated successfully',
+      certifications: farmData.certifications
+    });
+    
+  } catch (error) {
+    console.error('[Certifications] Error saving:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to save certifications',
+      message: error.message 
+    });
+  }
+}));
+
+// Save rooms endpoint (for Room Mapper and Grow Room Setup)
+app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
+  try {
+    const { rooms } = req.body;
+    
+    if (!Array.isArray(rooms)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Rooms must be an array' 
+      });
     }
     
     console.log(`[save-rooms] Saving ${rooms.length} rooms to disk`);

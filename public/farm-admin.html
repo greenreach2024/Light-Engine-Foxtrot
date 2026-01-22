@@ -2287,7 +2287,10 @@
 
                     <!-- Certifications & Practices -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px;">Certifications & Practices</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Certifications & Practices</h2>
+                            <button class="btn-secondary" onclick="openEditCertificationsModal()" style="padding: 8px 16px; background: rgba(59, 130, 246, 0.2); border: 1px solid var(--accent-blue); color: var(--accent-blue); border-radius: 6px; cursor: pointer; font-size: 14px;">Edit</button>
+                        </div>
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
@@ -2655,6 +2658,99 @@
                 <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
                     <button class="btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
                     <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+                </div>
+            </div>
+
+            <!-- Edit Certifications Modal -->
+            <div id="editCertificationsModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; overflow-y: auto; padding: 20px;">
+                <div class="card" style="max-width: 700px; margin: 40px auto; background: var(--bg-card);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
+                        <h2 style="font-size: 20px; color: var(--text-primary);">Edit Certifications & Practices</h2>
+                        <button onclick="closeEditCertificationsModal()" style="background: none; border: none; font-size: 24px; color: var(--text-secondary); cursor: pointer;">&times;</button>
+                    </div>
+                    <form id="editCertificationsForm" onsubmit="saveEditCertifications(event)">
+                        <!-- Certifications -->
+                        <div style="margin-bottom: 25px;">
+                            <h3 style="color: var(--accent-green); margin-bottom: 15px; font-size: 16px;">Certifications</h3>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="certifications" value="GAP" style="width: 20px; height: 20px;">
+                                    <span>GAP Certified (Good Agricultural Practices)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="certifications" value="USDA Organic" style="width: 20px; height: 20px;">
+                                    <span>USDA Organic Certified</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="certifications" value="Food Safety" style="width: 20px; height: 20px;">
+                                    <span>Food Safety Certified (GFSI, SQF)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="certifications" value="Greenhouse" style="width: 20px; height: 20px;">
+                                    <span>Greenhouse Grown Certified</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Growing Practices -->
+                        <div style="margin-bottom: 25px;">
+                            <h3 style="color: var(--accent-blue); margin-bottom: 15px; font-size: 16px;">Growing Practices</h3>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="practices" value="Pesticide Free" style="width: 20px; height: 20px;">
+                                    <span>Pesticide Free</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="practices" value="Non-GMO" style="width: 20px; height: 20px;">
+                                    <span>Non-GMO</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="practices" value="Hydroponic" style="width: 20px; height: 20px;">
+                                    <span>Hydroponic Growing</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="practices" value="Local" style="width: 20px; height: 20px;">
+                                    <span>Local (within 100 miles)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="practices" value="Year-Round" style="width: 20px; height: 20px;">
+                                    <span>Year-Round Production</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Farm Attributes -->
+                        <div style="margin-bottom: 25px;">
+                            <h3 style="color: var(--accent-purple); margin-bottom: 15px; font-size: 16px;">Farm Attributes</h3>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="attributes" value="Woman Owned" style="width: 20px; height: 20px;">
+                                    <span>Woman-Owned Business</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="attributes" value="Veteran Owned" style="width: 20px; height: 20px;">
+                                    <span>Veteran-Owned Business</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="attributes" value="Minority Owned" style="width: 20px; height: 20px;">
+                                    <span>Minority-Owned Business</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="attributes" value="Family Farm" style="width: 20px; height: 20px;">
+                                    <span>🏡 Family Farm</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="attributes" value="Sustainable" style="width: 20px; height: 20px;">
+                                    <span>♻️ Sustainable Practices</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                            <button type="button" class="btn-secondary" onclick="closeEditCertificationsModal()" style="padding: 10px 20px;">Cancel</button>
+                            <button type="submit" class="btn-primary" style="padding: 10px 20px;">Save Changes</button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
