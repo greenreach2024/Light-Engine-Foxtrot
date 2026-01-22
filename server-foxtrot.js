@@ -5147,14 +5147,16 @@ app.get('/env', async (req, res) => {
     // If cloud returned empty zones but we have scopes, use zonesFromScopes as fallback
     const hasCloudZones = Array.isArray(zonesPayload.zones) && zonesPayload.zones.length > 0;
     
-    // FILTER OUT MOCK DEVICES AND SENSOR-AS-ZONE: Only keep real zones (zone-1, zone-2, zone-3)
+    // FILTER OUT MOCK DEVICES AND SENSOR-AS-ZONE: Only keep real zones
     const mockDeviceIds = ['E8F9A2B4C6D1', 'D7C3B9A5E8F2', 'D5B8E1C4F7A2'];
-    const realZonePattern = /^zone-[123]$/; // Only zone-1, zone-2, zone-3 are real zones
+    // Allow: zone-1, zone-2, zone-3, OR just numeric zone IDs like "1", "2", "3"
+    // Block: long hex IDs like zone-CE2A, zone-C3343 (sensor IDs being treated as zones)
+    const realZonePattern = /^(zone-[0-9]+|[0-9]+)$/;
     
     const filterRealZones = (zones) => zones.filter(zone => {
       // Exclude mock devices
       if (mockDeviceIds.some(mockId => zone.id.includes(mockId))) return false;
-      // Only include real zones (zone-1, zone-2, zone-3)
+      // Include real zones (zone-1, zone-2, zone-3, OR numeric 1, 2, 3)
       // Exclude sensor IDs being treated as zones (zone-CE2A..., zone-C3343..., etc.)
       return realZonePattern.test(zone.id);
     });
@@ -17029,14 +17031,9 @@ app.use('/api', (req, res, next) => {
 app.get('/api/groups', asyncHandler(async (req, res) => {
   const groups = loadGroupsFile();
 
-  const formatted = groups.map(g => ({
-    id: g.id || g.name,
-    name: g.name,
-    zone: g.zone,
-    devices: g.devices?.length || 0
-  }));
-
-  res.json(formatted);
+  // Return full group data including plan, lights, schedule, etc.
+  // Group v2 needs this complete data to populate the load group dropdown
+  res.json(groups);
 }));
 
 // Only set up proxy middleware if controller is not explicitly disabled
