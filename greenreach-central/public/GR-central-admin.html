@@ -36,11 +36,11 @@
         })();
         
         // Global API_BASE for all scripts - declared once at the top
-        const API_BASE = window.location.hostname.includes('greenreachgreens.com')
+        window.API_BASE = window.location.hostname.includes('greenreachgreens.com')
             ? 'https://greenreachgreens.com'
             : window.location.origin;
     </script>
-    <link rel="stylesheet" href="/styles.foxtrot.css">
+    <link rel="stylesheet" href="./styles.foxtrot.css">
     <style>
         * {
             margin: 0;

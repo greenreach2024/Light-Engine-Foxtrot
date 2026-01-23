@@ -57,15 +57,15 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://web.squarecdn.com"],
       scriptSrcAttr: ["'unsafe-inline'"],  // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https:"],
+      connectSrc: ["'self'", "https:", "https://connect.squareup.com", "https://pci-connect.squareup.com"],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'self'"],  // Allow same-origin iframes for admin dashboard
+      frameSrc: ["'self'", "https://web.squarecdn.com"],  // Allow Square payment iframes
     },
   },
 }));

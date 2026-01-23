@@ -3,9 +3,8 @@
  * Enterprise-grade farm management and monitoring system
  */
 
-// Use API_BASE from global scope (set in GR-central-admin.html)
-// If not available, fallback to window.location.origin with HTTPS
-const API_BASE = window.API_BASE || window.location.origin.replace(/^http:/i, 'https:');
+// API_BASE is defined globally in GR-central-admin.html
+// No need to redeclare to avoid duplicate variable error
 let currentFarmId = null;
 let farmsData = [];
 let roomsData = [];
