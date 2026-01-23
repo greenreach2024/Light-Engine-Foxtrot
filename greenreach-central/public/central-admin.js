@@ -616,43 +616,6 @@ async function loadFarms(page = 1) {
 }
 
 /**
- * Generate sample farm data
- */
-function generateSampleFarms(count) {
-    const statuses = ['online', 'online', 'online', 'warning', 'offline'];
-    const regions = ['west', 'east', 'central'];
-    const farms = [];
-    
-    for (let i = 1; i <= count; i++) {
-        const farmId = `GR-${String(i).padStart(5, '0')}`;
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-        const rooms = Math.floor(Math.random() * 8) + 2;
-        const zones = rooms * (Math.floor(Math.random() * 3) + 2);
-        const devices = zones * (Math.floor(Math.random() * 5) + 3);
-        const trays = zones * (Math.floor(Math.random() * 12) + 5);
-        const energy = Math.floor(Math.random() * 200) + 50;
-        const alerts = status === 'critical' ? Math.floor(Math.random() * 5) + 1 : 
-                      status === 'warning' ? Math.floor(Math.random() * 3) : 0;
-        
-        farms.push({
-            farmId,
-            name: `Farm Site ${i}`,
-            status,
-            region: regions[Math.floor(Math.random() * regions.length)],
-            rooms,
-            zones,
-            devices,
-            trays,
-            energy,
-            alerts,
-            lastUpdate: generateRandomTime()
-        });
-    }
-    
-    return farms;
-}
-
-/**
  * Render farms table
  */
 function renderFarmsTable(farms) {
@@ -801,21 +764,21 @@ async function loadFarmDetails(farmId, farmData) {
         }
         
         // Update metrics (handle both API response structure and local data)
-        document.getElementById('detail-uptime').textContent = '99.8%';
+        document.getElementById('detail-uptime').textContent = farm.uptime || 'N/A';
         document.getElementById('detail-last-seen').textContent = farm.lastUpdate || 'Unknown';
-        document.getElementById('detail-api-calls').textContent = `${Math.floor(Math.random() * 10000)}`;
-        document.getElementById('detail-storage').textContent = `${Math.floor(Math.random() * 50)} GB`;
+        document.getElementById('detail-api-calls').textContent = farm.apiCalls || 'N/A';
+        document.getElementById('detail-storage').textContent = farm.storage || 'N/A';
         
         // Get counts from farm data
         const rooms = farm.rooms || farm.environmental?.zones?.length || 0;
         const devices = farm.devices || (Array.isArray(farm.devices) ? farm.devices.length : 0);
         const zones = farm.zones || farm.environmental?.zones?.length || 0;
         
-        // Update equipment status
-        document.getElementById('detail-lights').textContent = `${Math.floor(devices * 0.6)}/${Math.floor(devices * 0.6)}`;
-        document.getElementById('detail-sensors').textContent = `${Math.floor(devices * 0.25)}/${Math.floor(devices * 0.25)}`;
-        document.getElementById('detail-hvac').textContent = `${Math.floor(rooms * 0.8)}/${rooms}`;
-        document.getElementById('detail-irrigation').textContent = `${Math.floor(zones * 0.3)}/${Math.floor(zones * 0.5)}`;
+        // Update equipment status - use real data if available
+        document.getElementById('detail-lights').textContent = farm.equipment?.lights || 'N/A';
+        document.getElementById('detail-sensors').textContent = farm.equipment?.sensors || 'N/A';
+        document.getElementById('detail-hvac').textContent = farm.equipment?.hvac || 'N/A';
+        document.getElementById('detail-irrigation').textContent = farm.equipment?.irrigation || 'N/A';
         
         // Load rooms for this farm
         await loadFarmRooms(farmId, rooms);
@@ -875,25 +838,14 @@ async function viewRoomDetail(farmId, roomId) {
         }
     } catch (error) {
         console.error('[room-detail] Failed to load room data:', error);
+        showToast('Failed to load room data', 'error');
+        return;
     }
     
-    // Fallback to mock data if API call failed
+    // If no room data, show error
     if (!roomData) {
-        roomData = {
-            roomId,
-            name: `Room ${roomId}`,
-            temperature: (Math.random() * 4 + 22).toFixed(1),
-            humidity: (Math.random() * 20 + 60).toFixed(0),
-            co2: Math.floor(Math.random() * 400 + 800),
-            vpd: (Math.random() * 0.5 + 0.8).toFixed(2),
-            zones: [{ zoneId: 'zone-1' }, { zoneId: 'zone-2' }],
-            devices: [],
-            trays: Math.floor(Math.random() * 30) + 15,
-            energyToday: Math.floor(Math.random() * 50) + 40,
-            energyWeek: Math.floor(Math.random() * 300) + 250,
-            energyTrend: 'down',
-            energyTrendPercent: 4.2
-        };
+        showToast('Room data not found', 'error');
+        return;
     }
     
     const zoneCount = Array.isArray(roomData.zones) ? roomData.zones.length : 2;
@@ -954,26 +906,10 @@ async function loadRoomZones(farmId, roomId, zonesData, totalTrays) {
             status: zone.status || 'online'
         }));
     } else {
-        // Generate mock data
-        const count = Array.isArray(zonesData) ? zonesData.length : 2;
-        for (let i = 1; i <= count; i++) {
-            const zoneId = `zone-${i}`;
-            const temp = (Math.random() * 4 + 22).toFixed(1);
-            const humidity = (Math.random() * 20 + 60).toFixed(0);
-            const status = Math.random() > 0.9 ? 'warning' : 'online';
-            const groups = Math.floor(Math.random() * 3) + 2;
-            const trays = Math.floor(totalTrays / count) + Math.floor(Math.random() * 3);
-            
-            zones.push({
-                zoneId,
-                name: `Zone ${i}`,
-                groups,
-                trays,
-                temperature: `${temp}°F`,
-                humidity: `${humidity}%`,
-                status
-            });
-        }
+        // No zone data available
+        countEl.textContent = '0 zones';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">No zone data available from API</td></tr>';
+        return;
     }
     
     countEl.textContent = `${zones.length} zones`;
@@ -1010,21 +946,10 @@ async function loadRoomDevices(farmId, roomId, devicesData) {
             lastSeen: device.lastSeen ? new Date(device.lastSeen).toLocaleString() : generateRandomTime()
         }));
     } else {
-        // Generate mock data
-        const count = Array.isArray(devicesData) ? devicesData.length : 20;
-        for (let i = 1; i <= count; i++) {
-            const type = deviceTypes[Math.floor(Math.random() * deviceTypes.length)];
-            const status = Math.random() > 0.9 ? 'offline' : 'online';
-            const zoneNum = Math.floor(Math.random() * 4) + 1;
-            
-            devices.push({
-                deviceId: `DEV-${String(i).padStart(4, '0')}`,
-                type,
-                zone: `Zone ${zoneNum}`,
-                status,
-                lastSeen: generateRandomTime()
-            });
-        }
+        // No device data available
+        countEl.textContent = '0 devices';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No device data available from API</td></tr>';
+        return;
     }
     
     tbody.innerHTML = devices.map(device => `
@@ -1069,28 +994,10 @@ async function loadRoomTrays(farmId, roomId, zonesData, totalTrays) {
             });
         });
     } else {
-        // Generate mock data
-        const count = totalTrays || 140;
-        const zoneCount = Array.isArray(zonesData) ? zonesData.length : 2;
-        
-        for (let i = 1; i <= count; i++) {
-            const crop = crops[Math.floor(Math.random() * crops.length)];
-            const zoneNum = Math.floor(Math.random() * zoneCount) + 1;
-            const daysOld = Math.floor(Math.random() * 20) + 5;
-            const harvestIn = Math.floor(Math.random() * 15) + 3;
-            const health = Math.random() > 0.15 ? 'healthy' : (Math.random() > 0.5 ? 'warning' : 'attention');
-            const plants = Math.floor(Math.random() * 50) + 150;
-            
-            trays.push({
-                trayId: `T-${String(i).padStart(3, '0')}`,
-                crop,
-                zone: `Zone ${zoneNum}`,
-                plants,
-                daysOld,
-                harvestIn,
-                health
-            });
-        }
+        // No tray data available
+        countEl.textContent = '0 trays';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No tray data available from API</td></tr>';
+        return;
     }
     
     countEl.textContent = `${trays.length} trays`;
@@ -2082,20 +1989,21 @@ async function loadRoomsView() {
         
         let rooms = [];
         for (const farm of farmsData.farms || []) {
-            // Mock room data - in production, fetch from farm details
-            const roomCount = farm.rooms || Math.floor(Math.random() * 5) + 1;
-            for (let i = 1; i <= roomCount; i++) {
-                rooms.push({
-                    name: `Room ${String.fromCharCode(64 + i)}`,
-                    farmName: farm.name,
-                    temperature: (70 + Math.random() * 10).toFixed(1),
-                    humidity: (55 + Math.random() * 15).toFixed(0),
-                    co2: (800 + Math.random() * 400).toFixed(0),
-                    vpd: (0.7 + Math.random() * 0.4).toFixed(2),
-                    zones: Math.floor(Math.random() * 4) + 2,
-                    devices: Math.floor(Math.random() * 20) + 10,
-                    status: Math.random() > 0.8 ? 'warning' : 'optimal'
-                });
+            // Only use actual room data from API
+            if (farm.rooms && Array.isArray(farm.rooms)) {
+                for (const room of farm.rooms) {
+                    rooms.push({
+                        name: room.name || room.roomId,
+                        farmName: farm.name,
+                        temperature: room.temperature || 'N/A',
+                        humidity: room.humidity || 'N/A',
+                        co2: room.co2 || 'N/A',
+                        vpd: room.vpd || 'N/A',
+                        zones: room.zones || 0,
+                        devices: room.devices || 0,
+                        status: room.status || 'unknown'
+                    });
+                }
             }
         }
         
