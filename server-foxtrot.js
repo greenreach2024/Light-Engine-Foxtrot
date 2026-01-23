@@ -10633,31 +10633,35 @@ console.log(' Audit logging initialized - capturing all wholesale operations');
 // import purchaseRouter from './routes/purchase.js';
 // import purchaseLeadsRouter from './routes/purchase-leads.js';
 // import setupWizardRouter from './routes/setup-wizard.js';
-// import pg from 'pg';
+import pg from 'pg';
 
 console.log('[WARNING] Farm-sales routes temporarily disabled due to ES module syntax errors');
 console.log('[WARNING] See CLOUD_EDGE_SYNC_DEPLOYMENT_STATUS.md for fix instructions');
 // const pg = null; // Placeholder
 
-// Initialize PostgreSQL pool for purchase flow (Cloud deployments only)
-// Edge devices should not have DB credentials and will use NeDB instead
+// Initialize PostgreSQL pool for purchase flow (Cloud deployments AND edge devices with DB credentials)
+// Edge devices can optionally have DB credentials for authentication against central database
 let dbPool = null;
-// if (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER) {
-//   console.log('[Database] Initializing PostgreSQL pool for Cloud deployment');
-//   dbPool = new pg.Pool({
-//     host: process.env.DB_HOST,
-//     port: parseInt(process.env.DB_PORT) || 5432,
-//     database: process.env.DB_NAME,
-//     user: process.env.DB_USER,
-//     password: process.env.DB_PASSWORD,
-//     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-//     max: 20,
-//     idleTimeoutMillis: 30000,
-//     connectionTimeoutMillis: 10000
-//   });
-// } else {
-  console.log('[Database] PostgreSQL pool disabled (farm-sales routes disabled)');
-// }
+const dbHost = process.env.DB_HOST || process.env.RDS_HOSTNAME;
+const dbName = process.env.DB_NAME || process.env.RDS_DB_NAME;
+const dbUser = process.env.DB_USER || process.env.RDS_USERNAME;
+
+if (dbHost && dbName && dbUser) {
+  console.log('[Database] Initializing PostgreSQL pool (RDS connection)');
+  dbPool = new pg.Pool({
+    host: dbHost,
+    port: parseInt(process.env.DB_PORT || process.env.RDS_PORT) || 5432,
+    database: dbName,
+    user: dbUser,
+    password: process.env.DB_PASSWORD || process.env.RDS_PASSWORD,
+    ssl: process.env.DB_SSL === 'true' || process.env.RDS_HOSTNAME ? { rejectUnauthorized: false } : false,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
+  });
+} else {
+  console.log('[Database] PostgreSQL pool disabled (no DB credentials)');
+}
 
 // Store database pool in app.locals for routes (will be null on Edge devices)
 app.locals.db = dbPool;
@@ -14939,10 +14943,10 @@ app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res)
     console.log('[farm-auth] Edge device mode - proxying to central server:', centralUrl);
     
     try {
-      const authResponse = await fetch(`${centralUrl}/api/farm/auth/login`, {
+      const authResponse = await fetch(`${centralUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ farmId, email, password })
+        body: JSON.stringify({ farm_id: farmId, email, password })
       });
       
       const authData = await authResponse.json();
