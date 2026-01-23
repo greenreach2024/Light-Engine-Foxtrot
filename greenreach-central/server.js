@@ -44,6 +44,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const WS_PORT = process.env.WS_PORT || 3001;
+
+// Trust proxy for AWS ALB/ELB (required for rate limiting and client IP detection)
+app.set('trust proxy', 1);
 app.locals.databaseReady = false;
 
 // Security middleware
@@ -72,14 +75,22 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Fallback to root public directory for shared assets
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// CORS configuration
+// CORS configuration - Allow same-origin requests and configured origins
 const corsOptions = {
   origin: (origin, callback) => {
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow same-origin requests (no origin header) or configured origins
+    if (!origin) {
+      return callback(null, true);
+    }
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+      'http://localhost:3000',
+      'https://greenreachgreens.com'
+    ];
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.warn('[CORS] Rejected origin:', origin);
+      callback(null, false); // Reject but don't throw error
     }
   },
   credentials: true,
