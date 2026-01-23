@@ -386,8 +386,8 @@ async function traceAnomaly(anomalyId, context) {
     
     if (!anomalyContext) {
         try {
-            const response = await fetch(`${API_BASE}/api/admin/anomalies/${anomalyId}/context`);
-            if (response.ok) {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/anomalies/${anomalyId}/context`);
+            if (response && response.ok) {
                 anomalyContext = await response.json();
             } else {
                 console.error('Failed to fetch anomaly context');
@@ -471,9 +471,9 @@ async function loadDashboardData() {
 async function loadKPIs() {
     try {
         // Fetch from aggregation API endpoint
-        const response = await fetch(`${API_BASE}/api/admin/analytics/aggregate`);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/aggregate`);
+        if (!response || !response.ok) {
+            throw new Error(`HTTP ${response?.status || 'No response'}`);
         }
         const data = await response.json();
         
@@ -756,9 +756,9 @@ async function viewFarmDetail(farmId) {
     
     try {
         // Fetch detailed farm data from API
-        const response = await fetch(`${API_BASE}/api/admin/farms/${farmId}`);
-        if (!response.ok) {
-            console.error('Failed to load farm details:', response.status);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        if (!response || !response.ok) {
+            console.error('Failed to load farm details:', response?.status);
             alert('Unable to load farm details. Please try again.');
             return;
         }
@@ -847,8 +847,8 @@ async function viewRoomDetail(farmId, roomId) {
     let roomData = null;
     
     try {
-        const response = await fetch(`/api/admin/farms/${farmId}`);
-        if (response.ok) {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        if (response && response.ok) {
             const farmData = await response.json();
             // Find the specific room in the farm data
             const room = farmData.rooms?.find(r => r.roomId === roomId);
@@ -2076,8 +2076,8 @@ async function loadRoomsView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading room data...</td></tr>';
     
     try {
-        const farmsRes = await fetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes.ok) throw new Error('Failed to load farms');
+        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
         const farmsData = await farmsRes.json();
         
         let rooms = [];
@@ -2135,8 +2135,8 @@ async function loadZonesView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading zone data...</td></tr>';
     
     try {
-        const farmsRes = await fetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes.ok) throw new Error('Failed to load farms');
+        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
         const farmsData = await farmsRes.json();
         
         let zones = [];
@@ -2196,8 +2196,8 @@ async function loadAllDevicesView() {
     tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading device inventory...</td></tr>';
     
     try {
-        const farmsRes = await fetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes.ok) throw new Error('Failed to load farms');
+        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
         const farmsData = await farmsRes.json();
         
         let allDevices = [];
