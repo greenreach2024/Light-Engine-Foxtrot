@@ -14931,6 +14931,39 @@ app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res)
   console.warn('[farm-auth] ⚠️  DEPRECATED: Use /api/auth/login instead. This endpoint will be removed in a future version.');
   const { farmId, email, password } = req.body;
   
+  // EDGE DEVICE: Proxy authentication to central server if no local database
+  const dbPool = req.app.locals?.db;
+  const centralUrl = process.env.GREENREACH_CENTRAL_URL;
+  
+  if (!dbPool && centralUrl) {
+    console.log('[farm-auth] Edge device mode - proxying to central server:', centralUrl);
+    
+    try {
+      const authResponse = await fetch(`${centralUrl}/api/farm/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ farmId, email, password })
+      });
+      
+      const authData = await authResponse.json();
+      
+      if (!authResponse.ok) {
+        return res.status(authResponse.status).json(authData);
+      }
+      
+      console.log('[farm-auth] ✅ Central auth successful');
+      return res.json(authData);
+      
+    } catch (error) {
+      console.error('[farm-auth] ❌ Central auth failed:', error.message);
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to authenticate with central server',
+        error: error.message
+      });
+    }
+  }
+  
   // DEMO MODE BYPASS: Grant full access without credentials
   if (isDemoMode()) {
     const demoToken = crypto.randomBytes(32).toString('hex');
