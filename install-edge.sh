@@ -22,8 +22,8 @@ FARM_ID=${FARM_ID:-"EDGE-$(hostname)"}
 read -p "Enter Farm Name [default: $(hostname) Farm]: " FARM_NAME
 FARM_NAME=${FARM_NAME:-"$(hostname) Farm"}
 
-read -p "Enter Central Server URL [default: https://light-engine-foxtrot-prod-v2.us-east-1.elasticbeanstalk.com]: " CENTRAL_URL
-CENTRAL_URL=${CENTRAL_URL:-"https://light-engine-foxtrot-prod-v2.us-east-1.elasticbeanstalk.com"}
+read -p "Enter Central Server URL [default: https://greenreachgreens.com]: " CENTRAL_URL
+CENTRAL_URL=${CENTRAL_URL:-"https://greenreachgreens.com"}
 
 read -p "Port [default: 8091]: " PORT
 PORT=${PORT:-8091}
