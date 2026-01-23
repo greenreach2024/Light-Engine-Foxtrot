@@ -103,18 +103,33 @@ router.get('/farms', async (req, res) => {
  */
 router.get('/kpis', async (req, res) => {
     try {
-        // Query real data from database
-        const farmsResult = await query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = $1) as active FROM farms', ['online']);
-        const ordersResult = await query('SELECT COUNT(*) as total, COALESCE(SUM((order_data->>\'total\')::numeric), 0) as revenue FROM orders WHERE status != $1', ['cancelled']);
+        // Query real data from database - handle missing tables gracefully
+        let totalFarms = 0, activeFarms = 0, totalOrders = 0, revenue = 0;
+        
+        try {
+            const farmsResult = await query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = $1) as active FROM farms', ['online']);
+            totalFarms = parseInt(farmsResult.rows[0].total);
+            activeFarms = parseInt(farmsResult.rows[0].active);
+        } catch (e) {
+            console.warn('[Admin API] Farms table query failed:', e.message);
+        }
+        
+        try {
+            const ordersResult = await query('SELECT COUNT(*) as total, COALESCE(SUM((order_data->>\'total\')::numeric), 0) as revenue FROM orders WHERE status != $1', ['cancelled']);
+            totalOrders = parseInt(ordersResult.rows[0].total);
+            revenue = parseFloat(ordersResult.rows[0].revenue);
+        } catch (e) {
+            console.warn('[Admin API] Orders table query failed:', e.message);
+        }
         
         res.json({
             success: true,
             kpis: {
-                totalFarms: parseInt(farmsResult.rows[0].total),
-                activeFarms: parseInt(farmsResult.rows[0].active),
-                totalOrders: parseInt(ordersResult.rows[0].total),
-                revenue: parseFloat(ordersResult.rows[0].revenue),
-                alerts: 0  // TODO: Query alerts table when implemented
+                totalFarms,
+                activeFarms,
+                totalOrders,
+                revenue,
+                alerts: 0
             }
         });
     } catch (error) {
@@ -122,6 +137,51 @@ router.get('/kpis', async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch KPIs',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/admin/analytics/aggregate
+ * Get aggregated analytics data
+ */
+router.get('/analytics/aggregate', async (req, res) => {
+    try {
+        // Query real data from database - handle missing tables gracefully
+        let totalFarms = 0, activeFarms = 0, totalOrders = 0, revenue = 0;
+        
+        try {
+            const farmsResult = await query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = $1) as active FROM farms', ['online']);
+            totalFarms = parseInt(farmsResult.rows[0].total);
+            activeFarms = parseInt(farmsResult.rows[0].active);
+        } catch (e) {
+            console.warn('[Admin API] Farms table query failed:', e.message);
+        }
+        
+        try {
+            const ordersResult = await query('SELECT COUNT(*) as total, COALESCE(SUM((order_data->>\'total\')::numeric), 0) as revenue FROM orders WHERE status != $1', ['cancelled']);
+            totalOrders = parseInt(ordersResult.rows[0].total);
+            revenue = parseFloat(ordersResult.rows[0].revenue);
+        } catch (e) {
+            console.warn('[Admin API] Orders table query failed:', e.message);
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                totalFarms,
+                activeFarms,
+                totalOrders,
+                revenue,
+                alerts: 0
+            }
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching analytics:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch analytics',
             message: error.message
         });
     }
