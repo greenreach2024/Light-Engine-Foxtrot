@@ -339,8 +339,8 @@
             alertDiv.style.display = 'none';
             
             try {
-                // Call backend authentication API
-                const response = await fetch('/api/auth/login', {
+                // Call backend authentication API (farm login endpoint)
+                const response = await fetch('/api/farm/auth/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
