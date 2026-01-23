@@ -1,6 +1,7 @@
 import express from 'express';
 import { adminAuthMiddleware } from '../middleware/adminAuth.js';
 import adminAuthRoutes from './admin-auth.js';
+import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
 
@@ -18,29 +19,72 @@ router.get('/farms', async (req, res) => {
     try {
         const { page = 1, limit = 50, status, region, search } = req.query;
         
-        // Mock data for now - in production this would query the database
-        const mockFarms = [
-            {
-                id: 1,
-                name: 'GreenReach Farms',
-                location: { city: 'Brooklyn', state: 'NY', zip: '11201' },
-                status: 'active',
-                type: 'Vertical Farm',
-                capacity: '10,000 heads/week',
-                certifications: ['Organic', 'GAP'],
-                lastSync: new Date().toISOString(),
-                health: 'good'
-            }
-        ];
+        // Query actual farms from database
+        let sqlQuery = 'SELECT * FROM farms WHERE 1=1';
+        const params = [];
+        let paramCount = 0;
+        
+        // Add filters
+        if (status) {
+            paramCount++;
+            sqlQuery += ` AND status = $${paramCount}`;
+            params.push(status);
+        }
+        
+        if (search) {
+            paramCount++;
+            sqlQuery += ` AND (name ILIKE $${paramCount} OR farm_id ILIKE $${paramCount})`;
+            params.push(`%${search}%`);
+        }
+        
+        // Add pagination
+        sqlQuery += ` ORDER BY created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+        params.push(parseInt(limit));
+        params.push((parseInt(page) - 1) * parseInt(limit));
+        
+        // Get farms
+        const result = await query(sqlQuery, params);
+        
+        // Get total count
+        let countQuery = 'SELECT COUNT(*) FROM farms WHERE 1=1';
+        const countParams = [];
+        let countParamCount = 0;
+        
+        if (status) {
+            countParamCount++;
+            countQuery += ` AND status = $${countParamCount}`;
+            countParams.push(status);
+        }
+        
+        if (search) {
+            countParamCount++;
+            countQuery += ` AND (name ILIKE $${countParamCount} OR farm_id ILIKE $${countParamCount})`;
+            countParams.push(`%${search}%`);
+        }
+        
+        const countResult = await query(countQuery, countParams);
+        const total = parseInt(countResult.rows[0].count);
+        
+        // Format farms data
+        const farms = result.rows.map(farm => ({
+            id: farm.id,
+            farmId: farm.farm_id,
+            name: farm.name,
+            status: farm.status,
+            lastUpdate: farm.last_heartbeat,
+            metadata: farm.metadata || {},
+            createdAt: farm.created_at,
+            updatedAt: farm.updated_at
+        }));
         
         res.json({
             success: true,
-            farms: mockFarms,
+            farms: farms,
             pagination: {
                 page: parseInt(page),
                 limit: parseInt(limit),
-                total: mockFarms.length,
-                pages: 1
+                total: total,
+                pages: Math.ceil(total / parseInt(limit))
             }
         });
     } catch (error) {
@@ -59,14 +103,18 @@ router.get('/farms', async (req, res) => {
  */
 router.get('/kpis', async (req, res) => {
     try {
+        // Query real data from database
+        const farmsResult = await query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = $1) as active FROM farms', ['online']);
+        const ordersResult = await query('SELECT COUNT(*) as total, COALESCE(SUM((order_data->>\'total\')::numeric), 0) as revenue FROM orders WHERE status != $1', ['cancelled']);
+        
         res.json({
             success: true,
             kpis: {
-                totalFarms: 1,
-                activeFarms: 1,
-                totalOrders: 0,
-                revenue: 0,
-                alerts: 0
+                totalFarms: parseInt(farmsResult.rows[0].total),
+                activeFarms: parseInt(farmsResult.rows[0].active),
+                totalOrders: parseInt(ordersResult.rows[0].total),
+                revenue: parseFloat(ordersResult.rows[0].revenue),
+                alerts: 0  // TODO: Query alerts table when implemented
             }
         });
     } catch (error) {
