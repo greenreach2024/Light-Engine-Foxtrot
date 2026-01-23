@@ -3,9 +3,9 @@
  * Enterprise-grade farm management and monitoring system
  */
 
-// Use window.location.origin for admin API (port 8091)
-// Force HTTPS to prevent mixed-content blocks when served securely
-const API_BASE = window.location.origin.replace(/^http:/i, 'https:');
+// Use API_BASE from global scope (set in GR-central-admin.html)
+// If not available, fallback to window.location.origin with HTTPS
+const API_BASE = window.API_BASE || window.location.origin.replace(/^http:/i, 'https:');
 let currentFarmId = null;
 let farmsData = [];
 let roomsData = [];
