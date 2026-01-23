@@ -1,6 +1,6 @@
 branch-defaults:
   default:
-    environment: greenreach-central-prod-v3
+    environment: greenreach-central-prod-lb
     group_suffix: null
 global:
   application_name: greenreach-central
