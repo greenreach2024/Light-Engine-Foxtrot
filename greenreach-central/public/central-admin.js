@@ -522,6 +522,44 @@ async function loadKPIs() {
 }
 
 /**
+ * Make authenticated API request with admin token
+ */
+async function authenticatedFetch(url, options = {}) {
+    const token = localStorage.getItem('admin_token');
+    if (!token) {
+        console.error('[Auth] No admin token found');
+        window.location.href = `${window.API_BASE || window.location.origin}/GR-central-admin-login.html`;
+        return null;
+    }
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...options.headers
+    };
+    
+    try {
+        const response = await fetch(url, { ...options, headers });
+        
+        // Handle 401 Unauthorized - token expired or invalid
+        if (response.status === 401) {
+            console.warn('[Auth] Authentication failed (401), redirecting to login');
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_email');
+            localStorage.removeItem('admin_name');
+            localStorage.removeItem('admin_role');
+            window.location.href = `${window.API_BASE || window.location.origin}/GR-central-admin-login.html`;
+            return null;
+        }
+        
+        return response;
+    } catch (error) {
+        console.error('[Auth] Fetch error:', error);
+        throw error;
+    }
+}
+
+/**
  * Load farms data
  */
 async function loadFarms(page = 1) {
@@ -537,9 +575,9 @@ async function loadFarms(page = 1) {
         
         if (status) params.append('status', status);
         
-        const response = await fetch(`${API_BASE}/api/admin/farms?${params}`);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms?${params}`);
+        if (!response || !response.ok) {
+            throw new Error(`HTTP ${response?.status || 'No response'}`);
         }
         
         const data = await response.json();
