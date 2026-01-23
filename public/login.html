@@ -345,7 +345,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ farm_id: farmId, email, password })
+                    body: JSON.stringify({ farmId, email, password })
                 });
                 
                 const data = await response.json();
