@@ -98,6 +98,63 @@ router.get('/farms', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/farms/:farmId
+ * Get detailed information for a specific farm
+ */
+router.get('/farms/:farmId', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        console.log(`[Admin API] Fetching farm details for: ${farmId}`);
+        
+        // Query farm from database - support both UUID id and string farm_id
+        const result = await query(
+            'SELECT * FROM farms WHERE farm_id = $1 OR id::text = $1',
+            [farmId]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Farm not found',
+                message: `No farm found with ID: ${farmId}`
+            });
+        }
+        
+        const farmRow = result.rows[0];
+        
+        // Format farm data
+        const farm = {
+            id: farmRow.id,
+            farmId: farmRow.farm_id,
+            name: farmRow.name,
+            status: farmRow.status,
+            lastHeartbeat: farmRow.last_heartbeat,
+            metadata: farmRow.metadata || {},
+            createdAt: farmRow.created_at,
+            updatedAt: farmRow.updated_at,
+            // Additional fields that might be in metadata
+            url: farmRow.metadata?.url || null,
+            location: farmRow.metadata?.location || null,
+            contact: farmRow.metadata?.contact || null,
+            capabilities: farmRow.metadata?.capabilities || [],
+            telemetry: farmRow.metadata?.telemetry || {}
+        };
+        
+        res.json({
+            success: true,
+            farm: farm
+        });
+    } catch (error) {
+        console.error(`[Admin API] Error fetching farm ${req.params.farmId}:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch farm details',
+            message: error.message
+        });
+    }
+});
+
+/**
  * GET /api/admin/kpis
  * Get platform-wide KPIs
  */

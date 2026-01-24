@@ -726,10 +726,17 @@ async function viewFarmDetail(farmId) {
             return;
         }
         
-        const farm = await response.json();
-        if (!farm || farm.error) {
-            console.error('Farm not found:', farmId, farm);
+        const responseData = await response.json();
+        if (!responseData || !responseData.success || responseData.error) {
+            console.error('Farm not found:', farmId, responseData);
             alert('Farm not found or unavailable.');
+            return;
+        }
+        
+        const farm = responseData.farm;
+        if (!farm) {
+            console.error('Farm data missing:', farmId);
+            alert('Farm data unavailable.');
             return;
         }
     
