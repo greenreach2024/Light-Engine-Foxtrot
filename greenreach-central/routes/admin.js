@@ -106,9 +106,9 @@ router.get('/farms/:farmId', async (req, res) => {
         const { farmId } = req.params;
         console.log(`[Admin API] Fetching farm details for: ${farmId}`);
         
-        // Query farm from database - support both UUID id and string farm_id
+        // Query farm from database by farm_id
         const result = await query(
-            'SELECT * FROM farms WHERE farm_id = $1 OR id::text = $1',
+            'SELECT * FROM farms WHERE farm_id = $1',
             [farmId]
         );
         
@@ -122,22 +122,16 @@ router.get('/farms/:farmId', async (req, res) => {
         
         const farmRow = result.rows[0];
         
-        // Format farm data
+        // Format farm data - only include fields that exist in DB
         const farm = {
-            id: farmRow.id,
             farmId: farmRow.farm_id,
-            name: farmRow.name,
-            status: farmRow.status,
-            lastHeartbeat: farmRow.last_heartbeat,
-            metadata: farmRow.metadata || {},
-            createdAt: farmRow.created_at,
-            updatedAt: farmRow.updated_at,
-            // Additional fields that might be in metadata
-            url: farmRow.metadata?.url || null,
-            location: farmRow.metadata?.location || null,
-            contact: farmRow.metadata?.contact || null,
-            capabilities: farmRow.metadata?.capabilities || [],
-            telemetry: farmRow.metadata?.telemetry || {}
+            name: farmRow.name || 'Unknown Farm',
+            status: farmRow.status || 'unknown',
+            lastHeartbeat: farmRow.last_heartbeat || null,
+            createdAt: farmRow.created_at || null,
+            updatedAt: farmRow.updated_at || null,
+            // Include all raw data
+            ...farmRow
         };
         
         res.json({
