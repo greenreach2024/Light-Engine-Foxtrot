@@ -10,6 +10,9 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import requests
 
+# Initialize logger first
+LOGGER = logging.getLogger(__name__)
+
 # Lazy imports for optional dependencies
 KASA_AVAILABLE = False
 BLEAK_AVAILABLE = False
@@ -20,35 +23,29 @@ try:
     import paho.mqtt.client as mqtt
     MQTT_AVAILABLE = True
 except ImportError:
-    LOGGER = logging.getLogger(__name__)
     LOGGER.warning("paho-mqtt not available. MQTT discovery disabled.")
 
 try:
     from kasa import Discover  # type: ignore
     KASA_AVAILABLE = True
 except ImportError:
-    LOGGER = logging.getLogger(__name__)
     LOGGER.warning("python-kasa not available. Kasa discovery disabled.")
 
 try:
     from bleak import BleakScanner
     BLEAK_AVAILABLE = True
 except ImportError:
-    LOGGER = logging.getLogger(__name__)
     LOGGER.warning("bleak not available. Bluetooth LE discovery disabled.")
 
 try:
     from zeroconf import ServiceBrowser, ServiceListener, Zeroconf
     ZEROCONF_AVAILABLE = True
 except ImportError:
-    LOGGER = logging.getLogger(__name__)
     LOGGER.warning("zeroconf not available. mDNS discovery disabled.")
 
 from .config import MQTTConfig, SwitchBotConfig
 from .device_models import Device, SensorEvent
 from .state import DeviceRegistry, SensorEventBuffer
-
-LOGGER = logging.getLogger(__name__)
 
 
 def _log_future_exception(future: Future) -> None:
@@ -373,43 +370,50 @@ async def discover_ble_devices(registry: DeviceRegistry, scan_duration: float = 
     return devices
 
 
-class mDNSListener(ServiceListener):
-    """Service listener for mDNS device discovery."""
-    
-    def __init__(self, registry: DeviceRegistry):
-        self.registry = registry
-        self.discovered_devices: List[Device] = []
-    
-    def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        info = zc.get_service_info(type_, name)
-        if info:
-            device = Device(
-                device_id=f"mdns:{name}",
-                name=name.split('.')[0],  # Remove service type from name
-                category="network-service",
-                protocol="mdns",
-                online=True,
-                capabilities={
-                    "service_type": type_,
-                    "port": info.port,
-                },
-                details={
-                    "addresses": [addr for addr in info.parsed_addresses()],
-                    "port": info.port,
-                    "service_type": type_,
-                    "properties": {
-                        (k.decode('utf-8') if k is not None else ""): (v.decode('utf-8') if v is not None else "")
-                        for k, v in info.properties.items()
+if ZEROCONF_AVAILABLE:
+    class mDNSListener(ServiceListener):
+        """Service listener for mDNS device discovery."""
+        
+        def __init__(self, registry: DeviceRegistry):
+            self.registry = registry
+            self.discovered_devices: List[Device] = []
+        
+        def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
+            info = zc.get_service_info(type_, name)
+            if info:
+                device = Device(
+                    device_id=f"mdns:{name}",
+                    name=name.split('.')[0],  # Remove service type from name
+                    category="network-service",
+                    protocol="mdns",
+                    online=True,
+                    capabilities={
+                        "service_type": type_,
+                        "port": info.port,
                     },
-                },
-            )
-            self.registry.upsert(device)
-            self.discovered_devices.append(device)
-            LOGGER.info("Discovered mDNS service %s (%s)", device.name, type_)
+                    details={
+                        "addresses": [addr for addr in info.parsed_addresses()],
+                        "port": info.port,
+                        "service_type": type_,
+                        "properties": {
+                            (k.decode('utf-8') if k is not None else ""): (v.decode('utf-8') if v is not None else "")
+                            for k, v in info.properties.items()
+                        },
+                    },
+                )
+                self.registry.upsert(device)
+                self.discovered_devices.append(device)
+                LOGGER.info("Discovered mDNS service %s (%s)", device.name, type_)
 
-    def update_service(self, zc, type_, name):
-        # No-op implementation to avoid NotImplementedError
-        pass
+        def update_service(self, zc, type_, name):
+            # No-op implementation to avoid NotImplementedError
+            pass
+else:
+    # Dummy class when zeroconf not available
+    class mDNSListener:
+        def __init__(self, registry: DeviceRegistry):
+            self.registry = registry
+            self.discovered_devices: List[Device] = []
 
 
 async def discover_mdns_devices(registry: DeviceRegistry, scan_duration: float = 10.0) -> List[Device]:
@@ -504,12 +508,139 @@ async def full_discovery_cycle(
             log.error("Discovery task raised error: %s", result)
 
 
+async def discover_serial_devices(registry: DeviceRegistry) -> List[Device]:
+    """Discover USB serial devices (ESP32, Arduino sensors).
+    
+    Scans USB serial ports for environmental sensors and other serial devices.
+    Detects ESP32 BME680 sensors and similar devices by attempting to read
+    JSON-formatted sensor data.
+    """
+    
+    devices: List[Device] = []
+    
+    try:
+        import serial.tools.list_ports
+        import serial
+        import time
+    except ImportError:
+        LOGGER.warning("pyserial not available - USB serial discovery disabled")
+        return []
+    
+    LOGGER.debug("Starting USB serial device discovery")
+    
+    try:
+        # Scan for USB serial ports
+        ports = serial.tools.list_ports.comports()
+        
+        for port in ports:
+            # Filter for USB serial devices (ESP32, Arduino, FTDI)
+            description = port.description.lower() if port.description else ""
+            manufacturer = str(port.manufacturer).lower() if port.manufacturer else ""
+            
+            # Skip non-USB serial devices
+            if not any(x in description + manufacturer for x in [
+                'cp210', 'ch340', 'ftdi', 'uart', 'usb', 'serial', 'arduino', 'esp32'
+            ]):
+                continue
+            
+            LOGGER.debug(f"Checking serial port: {port.device} - {port.description}")
+            
+            try:
+                # Try to read device info
+                ser = serial.Serial(port.device, 115200, timeout=2)
+                time.sleep(0.5)  # Give device time to send data
+                
+                # Read a few lines to determine device type
+                capabilities = {}
+                device_type = "serial_sensor"  # Default type for USB serial devices
+                device_name = f"USB Serial Device ({port.device.split('/')[-1]})"
+                
+                # If it's a CP2102, likely an ESP32
+                if 'cp210' in description:
+                    device_name = f"ESP32 Sensor ({port.device.split('/')[-1]})"
+                    device_type = "environmental_sensor"
+                
+                for _ in range(5):
+                    if ser.in_waiting > 0:
+                        line = ser.readline().decode('utf-8', errors='ignore').strip()
+                        
+                        if line.startswith('{'):
+                            try:
+                                data = json.loads(line)
+                                
+                                # Detect BME680 sensor (ESP32)
+                                if 'bme680' in data or ('averaged' in data and 'temperature_c' in data.get('averaged', {})):
+                                    device_type = "environmental_sensor"
+                                    device_name = f"ESP32 Environmental Sensor ({port.device.split('/')[-1]})"
+                                    
+                                    # Determine capabilities from data
+                                    if 'bme680' in data:
+                                        bme_data = data['bme680']
+                                        if 'temperature_c' in bme_data:
+                                            capabilities["temperature"] = True
+                                        if 'humidity' in bme_data:
+                                            capabilities["humidity"] = True
+                                        if 'pressure_hpa' in bme_data:
+                                            capabilities["pressure"] = True
+                                        if 'gas_kohms' in bme_data:
+                                            capabilities["gas_resistance"] = True
+                                    
+                                    if 'averaged' in data:
+                                        avg_data = data['averaged']
+                                        if 'temperature_c' in avg_data:
+                                            capabilities["temperature"] = True
+                                        if 'humidity' in avg_data:
+                                            capabilities["humidity"] = True
+                                        if 'pressure_hpa' in avg_data:
+                                            capabilities["pressure"] = True
+                                    
+                                    break
+                                
+                            except json.JSONDecodeError:
+                                pass
+                    time.sleep(0.2)
+                
+                ser.close()
+                
+                # Always add USB serial devices we can open
+                device_obj = Device(
+                    device_id=f"serial-{port.serial_number or port.device.split('/')[-1]}",
+                    name=device_name,
+                    category=device_type,
+                    protocol="usb-serial",
+                    online=True,
+                    capabilities=capabilities if capabilities else {"serial": True},
+                    details={
+                        "port": port.device,
+                        "baud": 115200,
+                        "manufacturer": port.manufacturer or "Unknown",
+                        "serial_number": port.serial_number,
+                        "vid": f"0x{port.vid:04X}" if port.vid else None,
+                        "pid": f"0x{port.pid:04X}" if port.pid else None,
+                        "description": port.description,
+                    }
+                )
+                registry.upsert(device_obj)
+                devices.append(device_obj)
+                LOGGER.info(f"Discovered serial device: {device_name}")
+                
+            except (serial.SerialException, OSError) as e:
+                LOGGER.debug(f"Could not read from serial port {port.device}: {e}")
+                continue
+    
+    except Exception as exc:
+        LOGGER.error(f"Serial device discovery failed: {exc}")
+    
+    return devices
+
+
 __all__ = [
     "discover_kasa_devices",
     "discover_mqtt_devices", 
     "discover_switchbot_devices",
     "discover_ble_devices",
     "discover_mdns_devices",
+    "discover_serial_devices",
     "fetch_switchbot_status",
     "full_discovery_cycle",
 ]

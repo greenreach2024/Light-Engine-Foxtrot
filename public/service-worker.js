@@ -3,21 +3,15 @@
  * Provides offline support and caching
  */
 
-const CACHE_VERSION = 'v1.0.0';
+const CACHE_VERSION = 'v1.0.3';
 const CACHE_NAME = `light-engine-${CACHE_VERSION}`;
 
-// Files to cache immediately on install
+// Files to cache immediately on install - only actual files that exist
 const STATIC_CACHE = [
-  '/',
-  '/index.html',
   '/LE-dashboard.html',
-  '/inventory.html',
-  '/GR-wholesale.html',
   '/manifest.json',
-  '/css/main.css',
-  '/js/app.js',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/app.foxtrot.js',
+  '/styles.foxtrot.css'
 ];
 
 // API routes that should be network-first

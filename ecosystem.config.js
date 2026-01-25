@@ -8,12 +8,15 @@ module.exports = {
       instances: 1,
       env: {
         NODE_ENV: 'production',
+        PORT: '8091',
+        EDGE_MODE: 'true',
         DEMO_MODE: 'true',
         DEMO_FARM_ID: 'GR-00001',
-        DEMO_REALTIME: 'true'
-        DEMO_MODE: 'true',
-        DEMO_FARM_ID: 'GR-00001',
-        DEMO_REALTIME: 'true'
+        DEMO_REALTIME: 'true',
+        // Cloud sync configuration
+        GREENREACH_CENTRAL_URL: 'https://greenreachgreens.com',
+        GREENREACH_API_KEY: 'b0bc5dbb5cc038533141651efc52df3f5de5c4570b14c7e13abf124f17b38f15',
+        FARM_ID: 'FARM-MKLOMAT3-A9D8'
       },
       time: true,
       kill_timeout: 5000,

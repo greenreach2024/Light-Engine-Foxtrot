@@ -9,10 +9,24 @@ from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 import json
 import os
+import asyncio
+import logging
 from pathlib import Path
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Import inventory routes
 from .inventory_routes import router as inventory_router
+
+# Import device discovery (if available)
+try:
+    from .device_discovery import (
+        discover_serial_devices,
+    )
+    DISCOVERY_AVAILABLE = True
+except ImportError:
+    DISCOVERY_AVAILABLE = False
 
 # Create FastAPI app
 app = FastAPI(
@@ -357,25 +371,154 @@ async def get_mqtt_devices():
 
 
 @app.get("/api/devices/ble")
-async def get_ble_devices():
-    """Get raw BLE discovery payload for debugging"""
-    return {
-        "protocol": "ble",
-        "devices": [],
-        "count": 0,
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+async def get_ble_devices(timeout: int = 5):
+    """Get BLE devices via discovery scan"""
+    from backend.device_discovery import discover_ble_devices, BLEAK_AVAILABLE
+    from backend.state import DeviceRegistry
+    
+    if not BLEAK_AVAILABLE:
+        return {
+            "protocol": "ble",
+            "devices": [],
+            "count": 0,
+            "error": "Bleak library not available",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    try:
+        registry = DeviceRegistry()
+        discovered_devices = await discover_ble_devices(registry, scan_duration=timeout)
+        
+        devices_list = []
+        for device in discovered_devices:
+            devices_list.append({
+                "device_id": device.device_id,
+                "name": device.name,
+                "protocol": device.protocol,
+                "address": device.details.get('address') if hasattr(device, 'details') else device.device_id,
+                "vendor": getattr(device, 'vendor', 'Unknown'),
+                "rssi": device.details.get('rssi') if hasattr(device, 'details') else None,
+                "category": device.category
+            })
+        
+        return {
+            "protocol": "ble",
+            "devices": devices_list,
+            "count": len(devices_list),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"BLE discovery failed: {e}")
+        return {
+            "protocol": "ble",
+            "devices": [],
+            "count": 0,
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
 
 
 @app.get("/api/devices/mdns")
-async def get_mdns_devices():
-    """Get raw mDNS discovery payload for debugging"""
-    return {
-        "protocol": "mdns",
-        "devices": [],
-        "count": 0,
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+async def get_mdns_devices(timeout: int = 5):
+    """Get mDNS/Zeroconf devices via discovery scan"""
+    from backend.device_discovery import discover_mdns_devices, ZEROCONF_AVAILABLE
+    from backend.state import DeviceRegistry
+    
+    if not ZEROCONF_AVAILABLE:
+        return {
+            "protocol": "mdns",
+            "devices": [],
+            "count": 0,
+            "error": "Zeroconf library not available",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    try:
+        registry = DeviceRegistry()
+        discovered_devices = await discover_mdns_devices(registry, scan_duration=timeout)
+        
+        devices_list = []
+        for device in discovered_devices:
+            devices_list.append({
+                "device_id": device.device_id,
+                "name": device.name,
+                "protocol": device.protocol,
+                "address": device.details.get('addresses', ['Unknown'])[0] if hasattr(device, 'details') else 'Unknown',
+                "vendor": getattr(device, 'vendor', 'Unknown'),
+                "category": device.category
+            })
+        
+        return {
+            "protocol": "mdns",
+            "devices": devices_list,
+            "count": len(devices_list),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"mDNS discovery failed: {e}")
+        return {
+            "protocol": "mdns",
+            "devices": [],
+            "count": 0,
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+
+@app.post("/discovery/scan")
+async def universal_device_scan():
+    """
+    Universal device scanner - discovers USB serial devices (ESP32 sensors).
+    Returns discovered devices immediately.
+    """
+    all_devices = []
+    
+    if not DISCOVERY_AVAILABLE:
+        return {
+            "status": "error",
+            "message": "Discovery module not available",
+            "devices": [],
+            "count": 0,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    try:
+        # Import registry on demand
+        from .state import DeviceRegistry
+        registry = DeviceRegistry()
+        
+        # Discover USB serial devices (ESP32, Arduino, etc.)
+        serial_devices = await discover_serial_devices(registry)
+        
+        for device in serial_devices:
+            device_dict = device.__dict__ if hasattr(device, '__dict__') else {}
+            all_devices.append({
+                "name": device_dict.get('name', 'Serial Device'),
+                "brand": device_dict.get('details', {}).get('manufacturer', 'Unknown'),
+                "vendor": "Espressif" if 'ESP32' in device_dict.get('name', '') else device_dict.get('details', {}).get('manufacturer', 'Unknown'),
+                "protocol": "usb-serial",
+                "comm_type": "USB Serial",
+                "deviceId": device_dict.get('device_id'),
+                "port": device_dict.get('details', {}).get('port'),
+                "capabilities": device_dict.get('capabilities', {}),
+                "category": device_dict.get('category', 'sensor')
+            })
+        
+        return {
+            "status": "success",
+            "devices": all_devices,
+            "count": len(all_devices),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "devices": [],
+            "count": 0,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
 
 
 # ============================================================================
@@ -384,37 +527,29 @@ async def get_mdns_devices():
 
 @app.get("/api/devicedatas")
 async def get_code3_devices():
-    """Get list of Code3-connected devices (Grow3 lights)"""
-    from .code3_controller import get_controller
+    """Get list of Code3-connected devices (Grow3 lights) via HTTP API"""
+    import httpx
+    
+    code3_url = "http://10.42.0.30:3000/api/devicedatas"
     
     try:
-        controller = get_controller()
-        devices = controller.get_device_list()
-        
-        # Add legacy fields for compatibility
-        for device in devices:
-            device["value"] = device["channelsValue"]
-            device["lastHex"] = device["channelsValue"]
-        
-        return devices
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(code3_url)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract devices from response
+            if isinstance(data, dict) and "data" in data:
+                return data["data"]
+            elif isinstance(data, list):
+                return data
+            else:
+                return data
+                
     except Exception as e:
-        print(f"[Code3] Error getting devices: {e}")
-        # Fallback to mock device
-        return [
-            {
-                "id": 1,
-                "name": "Grow3 Light 1",
-                "type": "grow3",
-                "model": "Grow3",
-                "status": "on",
-                "channelsValue": "1D1D1D1D0000",
-                "value": "1D1D1D1D0000",
-                "lastHex": "1D1D1D1D0000",
-                "vendor": "Code3",
-                "protocol": "code3-serial",
-                "online": True
-            }
-        ]
+        print(f"[Code3] Error getting devices from {code3_url}: {e}")
+        # Fallback to empty list
+        return []
 
 
 @app.get("/api/devicedatas/device/{device_id}")
@@ -431,34 +566,44 @@ async def get_code3_device(device_id: int):
 
 @app.patch("/api/devicedatas/device/{device_id}")
 async def update_code3_device(device_id: int, command: dict):
-    """Send command to Code3 device (Grow3 light)
+    """Send command to Code3 device (Grow3 light) via HTTP API
     
     Body: {
         "status": "on" | "off",
         "channelsValue": "CCWWBBRR0000" (hex string, each channel 00-40 for Grow3)
     }
     """
-    from .code3_controller import get_controller
+    import httpx
     
     status = command.get("status", "on")
     channels_value = command.get("channelsValue", "1D1D1D1D0000")
     
-    print(f"[Code3] Device {device_id} - Status: {status}, Channels: {channels_value}")
+    # Transform channelsValue to value for CODE3 API
+    value = command.get("value", channels_value)
+    
+    print(f"[Code3] Device {device_id} - Status: {status}, Value: {value}")
+    
+    # CODE3 controller HTTP API endpoint
+    code3_url = f"http://10.42.0.30:3000/api/devicedatas/device/{device_id}"
     
     try:
-        controller = get_controller()
-        controller.set_device(device_id, status, channels_value)
-        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.patch(
+                code3_url,
+                json={"status": status, "value": value}
+            )
+            response.raise_for_status()
+            
         return {
             "success": True,
             "device_id": device_id,
             "status": status,
-            "channelsValue": channels_value,
+            "value": value,
             "message": f"Command sent to device {device_id}",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
-        print(f"[Code3] Error sending command: {e}")
+        print(f"[Code3] Error sending command to {code3_url}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to send command: {str(e)}")
 
 

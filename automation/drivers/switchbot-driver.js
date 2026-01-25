@@ -17,7 +17,8 @@ class SwitchBotDriver {
 
   async getDevices(refresh = false) {
     if (!this.hasCredentials()) {
-      throw new Error('SwitchBot credentials are not configured');
+      // Silently return empty array when SwitchBot is not configured
+      return [];
     }
     
     // Return cached data if still fresh (unless forced refresh)
@@ -42,7 +43,7 @@ class SwitchBotDriver {
 
   _getAuthHeaders() {
     if (!this.hasCredentials()) {
-      throw new Error('SwitchBot credentials are not configured');
+      return null;
     }
     const t = Date.now().toString();
     const nonce = crypto.randomUUID().replace(/-/g, '');
@@ -121,7 +122,8 @@ class SwitchBotDriver {
    */
   async getState(plugId) {
     if (!this.hasCredentials()) {
-      throw new Error('SwitchBot credentials are not configured');
+      // Return offline state when SwitchBot not configured
+      return { on: false, online: false, error: 'SwitchBot not configured' };
     }
 
     const deviceId = this._extractDeviceId(plugId);
@@ -163,7 +165,8 @@ class SwitchBotDriver {
    */
   async setOn(plugId, on) {
     if (!this.hasCredentials()) {
-      throw new Error('SwitchBot credentials are not configured');
+      // Return failure state when SwitchBot not configured
+      return { on: false, online: false, error: 'SwitchBot not configured' };
     }
 
     const deviceId = this._extractDeviceId(plugId);

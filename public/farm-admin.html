@@ -925,7 +925,7 @@
             <small id="headerFarmId" style="color: var(--text-muted); font-family: monospace; font-size: 12px; display: block; margin-top: 4px;"></small>
         </div>
         <div class="header-actions">
-            <a href="/" class="nav-btn">Dashboard</a>
+            <a href="/LE-dashboard.html" class="nav-btn">Dashboard</a>
             <a href="/views/farm-summary.html" class="nav-btn farm-summary">Farm Summary</a>
             <a href="/views/farm-inventory.html" class="nav-btn inventory">Farm Inventory</a>
             <a href="/views/nutrient-management.html" class="nav-btn nutrient">Nutrient Management</a>
@@ -946,11 +946,11 @@
                         <span class="nav-item-icon">■</span>
                         Dashboard
                     </a>
-                    <a href="/views/farm-summary.html" class="nav-item" target="_blank">
+                    <a href="/views/farm-summary.html" class="nav-item">
                         <span class="nav-item-icon">■</span>
                         Farm Summary
                     </a>
-                    <a href="/views/farm-inventory.html" class="nav-item" target="_blank">
+                    <a href="/views/farm-inventory.html" class="nav-item">
                         <span class="nav-item-icon">■</span>
                         Inventory
                     </a>
@@ -1089,7 +1089,7 @@
                 <div class="card">
                     <h2>Quick Actions</h2>
                     <div class="quick-actions">
-                        <a href="/views/farm-summary.html" class="action-card" target="_blank">
+                        <a href="/views/farm-summary.html" class="action-card">
                             <div class="action-icon">FS</div>
                             <div class="action-title">View Farm</div>
                             <div class="action-desc">Monitor zones, groups & growth</div>
@@ -3541,8 +3541,116 @@
             alert('Event recording UI coming soon. This will allow you to record:\n- Germination\n- Transplant\n- Growth checks\n- Harvest\n- Packing\n- Sales\n\nWith photos and notes at each stage.');
         }
 
+        // Load real farm KPIs from groups and devices
+        async function loadFarmKPIs() {
+            try {
+                // Load groups data
+                const groupsRes = await fetch('/api/groups');
+                const groups = await groupsRes.json();
+                
+                // Calculate real metrics from CODE3/GROW3 controllers
+                let totalTrays = 0;
+                let totalPlants = 0;
+                let totalDevices = 0;
+                let offlineDevices = 0;
+                
+                groups.forEach(group => {
+                    totalTrays += group.trays || 0;
+                    totalPlants += group.plants || 0;
+                    const lights = group.lights || [];
+                    totalDevices += lights.length;
+                    
+                    // Check device status if available
+                    if (group.controller && group.controller.status === 'offline') {
+                        offlineDevices += lights.length;
+                    }
+                });
+                
+                // Update KPI cards
+                const kpiTrays = document.getElementById('kpi-trays');
+                const kpiPlants = document.getElementById('kpi-plants');
+                const kpiDevices = document.getElementById('kpi-devices');
+                const kpiHarvest = document.getElementById('kpi-harvest');
+                
+                if (kpiTrays) kpiTrays.textContent = totalTrays || groups.length;
+                if (kpiPlants) kpiPlants.textContent = totalPlants || '--';
+                if (kpiDevices) kpiDevices.textContent = totalDevices;
+                
+                // Update change indicators with real status
+                const kpiTraysChange = document.getElementById('kpi-trays-change');
+                const kpiPlantsChange = document.getElementById('kpi-plants-change');
+                const kpiDevicesChange = document.getElementById('kpi-devices-change');
+                const kpiHarvestChange = document.getElementById('kpi-harvest-change');
+                
+                if (kpiTraysChange) {
+                    kpiTraysChange.textContent = totalTrays > 0 
+                        ? `${groups.length} active group${groups.length !== 1 ? 's' : ''}` 
+                        : `${groups.length} group${groups.length !== 1 ? 's' : ''} configured`;
+                }
+                
+                if (kpiPlantsChange) {
+                    kpiPlantsChange.textContent = totalPlants > 0 
+                        ? `${totalTrays || groups.length} tray${(totalTrays || groups.length) !== 1 ? 's' : ''}` 
+                        : 'Set tray count in group config';
+                }
+                
+                if (kpiDevicesChange) {
+                    if (offlineDevices > 0) {
+                        kpiDevicesChange.textContent = `${offlineDevices} offline`;
+                        kpiDevicesChange.parentElement.classList.remove('positive');
+                        kpiDevicesChange.parentElement.classList.add('negative');
+                    } else {
+                        kpiDevicesChange.textContent = `${totalDevices} light${totalDevices !== 1 ? 's' : ''} online`;
+                        kpiDevicesChange.parentElement.classList.remove('negative');
+                    }
+                }
+                
+                // Calculate next harvest from crop plans
+                if (kpiHarvest && groups.length > 0) {
+                    const groupsWithDates = groups.filter(g => g.planConfig && g.planConfig.anchor && g.planConfig.anchor.seedDate);
+                    if (groupsWithDates.length > 0) {
+                        // Find earliest harvest (assuming 30-day cycle as default)
+                        const harvestDays = 30; // TODO: Get from crop plan
+                        const seedDates = groupsWithDates.map(g => new Date(g.planConfig.anchor.seedDate));
+                        const earliestSeed = new Date(Math.min(...seedDates));
+                        const harvestDate = new Date(earliestSeed);
+                        harvestDate.setDate(harvestDate.getDate() + harvestDays);
+                        
+                        const daysUntil = Math.ceil((harvestDate - new Date()) / (1000 * 60 * 60 * 24));
+                        
+                        if (daysUntil > 0) {
+                            kpiHarvest.textContent = `${daysUntil}d`;
+                            if (kpiHarvestChange) kpiHarvestChange.textContent = harvestDate.toLocaleDateString();
+                        } else {
+                            kpiHarvest.textContent = 'Ready';
+                            if (kpiHarvestChange) kpiHarvestChange.textContent = 'Harvest ready';
+                        }
+                    } else {
+                        kpiHarvest.textContent = '--';
+                        if (kpiHarvestChange) kpiHarvestChange.textContent = 'Set seed dates';
+                    }
+                }
+                
+                console.log('[Farm KPIs] Loaded:', { totalTrays, totalPlants, totalDevices, offlineDevices, groups: groups.length });
+            } catch (error) {
+                console.error('[Farm KPIs] Error loading real data:', error);
+                // Fallback to showing zeros instead of mock data
+                const kpiTrays = document.getElementById('kpi-trays');
+                const kpiPlants = document.getElementById('kpi-plants');
+                const kpiDevices = document.getElementById('kpi-devices');
+                
+                if (kpiTrays) kpiTrays.textContent = '0';
+                if (kpiPlants) kpiPlants.textContent = '0';
+                if (kpiDevices) kpiDevices.textContent = '0';
+            }
+        }
+
         // Initialize traceability section when it becomes active
         document.addEventListener('DOMContentLoaded', () => {
+            // Load real farm KPIs on page load
+            loadFarmKPIs();
+            
+            // Listen for section changes
             // Listen for section changes
             document.querySelectorAll('[data-section="traceability"]').forEach(link => {
                 link.addEventListener('click', () => {

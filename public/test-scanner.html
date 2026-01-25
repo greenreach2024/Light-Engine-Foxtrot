@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Scanner Test</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; max-width: 800px; margin: 0 auto; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 10px; overflow: auto; }
+    .error { color: red; }
+    .success { color: green; }
+  </style>
+</head>
+<body>
+  <h1>Device Scanner Test</h1>
+  <button id="testScan">Test Scanner</button>
+  <div id="results"></div>
+
+  <script>
+    document.getElementById('testScan').addEventListener('click', async () => {
+      const results = document.getElementById('results');
+      results.innerHTML = '<p>Scanning...</p>';
+      
+      try {
+        console.log('Calling /discovery/scan...');
+        const response = await fetch('/discovery/scan', { method: 'POST' });
+        console.log('Response:', response);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Data:', data);
+        
+        results.innerHTML = `
+          <p class="success">✓ Scan successful!</p>
+          <p>Found ${data.count} devices:</p>
+          <pre>${JSON.stringify(data, null, 2)}</pre>
+        `;
+      } catch (error) {
+        console.error('Error:', error);
+        results.innerHTML = `
+          <p class="error">✗ Scan failed!</p>
+          <p>Error: ${error.message}</p>
+          <pre>${error.stack}</pre>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>

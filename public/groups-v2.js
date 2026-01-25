@@ -235,10 +235,37 @@ function flushGroupsV2PendingRefresh() {
   }
 }
 
+// Initialize window.STATE.groups from server
+async function initializeGroupsV2State() {
+  try {
+    console.log('[Groups V2] Loading groups from /api/groups...');
+    const response = await fetch('/api/groups');
+    if (!response.ok) {
+      console.warn('[Groups V2] Failed to load groups:', response.status);
+      return;
+    }
+    
+    const groups = await response.json();
+    console.log('[Groups V2] Loaded', groups.length, 'groups from server');
+    
+    // Initialize STATE if needed
+    if (!window.STATE) window.STATE = {};
+    window.STATE.groups = groups;
+    
+    // Trigger dropdown refresh
+    document.dispatchEvent(new Event('groups-updated'));
+  } catch (error) {
+    console.error('[Groups V2] Error loading groups:', error);
+  }
+}
+
 function markGroupsV2DomReady() {
   if (groupsV2DomReady) return;
   groupsV2DomReady = true;
   flushGroupsV2PendingRefresh();
+  
+  // Load groups from server after DOM is ready
+  initializeGroupsV2State();
 }
 
 if (document.readyState === 'loading') {
@@ -5737,7 +5764,7 @@ function populateGroupsV2LoadGroupDropdown() {
   
   // Filter groups by selected room and zone
   const filteredGroups = groups.filter(group => {
-    const groupRoom = group.room || group.roomName || '';
+    const groupRoom = group.roomId || group.room || group.roomName || '';
     const groupZone = group.zone || '';
     
     // Match room (case-insensitive)
@@ -5817,23 +5844,26 @@ document.addEventListener('groups-updated', () => {
 document.addEventListener('lights-updated', () => {
   renderGroupsV2LightCard(getGroupsV2SelectedPlan());
 });
-// Populate Groups V2 Room dropdown with 'GreenReach' and rooms from STATE.rooms
+// Populate Groups V2 Room dropdown from STATE.rooms only
 function populateGroupsV2RoomDropdown() {
   const select = document.getElementById('groupsV2RoomSelect');
   if (!select) return;
-  // Remove all except the first (GreenReach)
-  while (select.options.length > 1) select.remove(1);
-  const seen = new Set(['GreenReach']);
+  
+  // Clear ALL options
+  select.innerHTML = '<option value="">(select room)</option>';
+  
+  // Populate from STATE.rooms
   if (window.STATE && Array.isArray(window.STATE.rooms)) {
     window.STATE.rooms.forEach(room => {
-      if (!room || !room.name || seen.has(room.name)) return;
+      if (!room || !room.name) return;
       const opt = document.createElement('option');
       opt.value = room.name;
       opt.textContent = room.name;
       select.appendChild(opt);
-      seen.add(room.name);
     });
   }
+  
+  console.log('[Groups V2] Room dropdown populated with', select.options.length - 1, 'rooms');
 }
 
 document.addEventListener('DOMContentLoaded', () => {

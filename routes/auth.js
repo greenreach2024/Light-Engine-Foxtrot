@@ -119,8 +119,38 @@ router.post('/login', async (req, res) => {
   try {
     const { farm_id, email, password } = req.body;
 
-    if (!farm_id || !email || !password) {
-      return res.status(400).json({ error: 'farm_id, email, and password are required' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'email and password are required' });
+    }
+
+    // Edge device / Demo mode: Accept any login if farm_id not provided
+    const isEdgeDevice = process.env.EDGE_MODE === 'true';
+    const isDemoMode = process.env.DEMO_MODE === 'true';
+    
+    if ((isEdgeDevice || isDemoMode) && !farm_id) {
+      console.log(`[Auth] Edge/Demo login for ${email}`);
+      // Generate JWT token for edge device login
+      const token = generateFarmToken({
+        farm_id: process.env.FARM_ID || 'edge-device',
+        user_id: 'local-user',
+        role: FARM_ROLES.ADMIN,
+        name: email.split('@')[0],
+        email
+      });
+
+      return res.json({
+        success: true,
+        token,
+        farm_id: process.env.FARM_ID || 'edge-device',
+        email,
+        role: FARM_ROLES.ADMIN,
+        planType: 'edge',
+        expires_in: '24h'
+      });
+    }
+
+    if (!farm_id) {
+      return res.status(400).json({ error: 'farm_id is required for cloud authentication' });
     }
 
     // Demo credentials for testing

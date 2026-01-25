@@ -109,6 +109,65 @@
 .wizard-test-area {background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:1.5rem;margin:1.5rem 0;}
 .wizard-test-area h4 {margin:0 0 1rem 0;}
   </style>
+  
+  <!-- Inline Diagnostic Script - runs immediately to show what's happening -->
+  <script>
+    (function() {
+      const log = [];
+      const updateDiagnostic = (msg) => {
+        log.push(msg);
+        const el = document.getElementById('diagnosticStatus');
+        if (el) el.innerHTML = log.join('<br>');
+      };
+      
+      log.push('[' + new Date().toLocaleTimeString() + '] Page loaded');
+      
+      document.addEventListener('DOMContentLoaded', async () => {
+        updateDiagnostic('[' + new Date().toLocaleTimeString() + '] DOMContentLoaded fired');
+        
+        const iotList = document.getElementById('iotDevicesList');
+        updateDiagnostic('iotDevicesList element: ' + (iotList ? 'FOUND' : 'NOT FOUND'));
+        
+        try {
+          updateDiagnostic('Fetching /data/iot-devices.json...');
+          const resp = await fetch('/data/iot-devices.json');
+          updateDiagnostic('Response status: ' + resp.status);
+          
+          if (resp.ok) {
+            const devices = await resp.json();
+            const deviceArray = Array.isArray(devices) ? devices : (devices.devices || []);
+            updateDiagnostic('✓ Loaded ' + deviceArray.length + ' devices');
+            updateDiagnostic('Device IDs: ' + deviceArray.map(d => d.id || d.deviceId).join(', '));
+            
+            // Set STATE and LAST_IOT_SCAN, then call render
+            window.LAST_IOT_SCAN = deviceArray;
+            if (!window.STATE) window.STATE = {};
+            window.STATE.iotDevices = deviceArray;
+            
+            setTimeout(() => {
+              updateDiagnostic('renderIoTDeviceCards: ' + (typeof window.renderIoTDeviceCards));
+              updateDiagnostic('STATE.iotDevices length: ' + (window.STATE?.iotDevices?.length || 'STATE not set'));
+              updateDiagnostic('LAST_IOT_SCAN length: ' + (window.LAST_IOT_SCAN?.length || 'not set'));
+              
+              // Actually call the render function
+              if (typeof window.renderIoTDeviceCards === 'function') {
+                updateDiagnostic('Calling renderIoTDeviceCards with ' + deviceArray.length + ' devices...');
+                window.renderIoTDeviceCards(deviceArray);
+                updateDiagnostic('Render complete');
+              } else {
+                updateDiagnostic('ERROR: renderIoTDeviceCards not found!');
+              }
+            }, 2000);
+          } else {
+            updateDiagnostic('✗ Fetch failed: ' + resp.status);
+          }
+        } catch (e) {
+          updateDiagnostic('✗ Error: ' + e.message);
+        }
+      });
+    })();
+  </script>
+  
   <script src="/app.foxtrot.js?v={{BUILD_TIME}}" defer></script>
   <!-- Groups V2 module: handles plan dropdown, anchor toggle, and schedule UI -->
   <script src="/groups-v2.js?v={{BUILD_TIME}}" defer></script>
@@ -163,7 +222,7 @@
           Equipment Overview
         </button>
 
-        <a class="sidebar-link" href="./views/room-mapper.html" target="_blank" rel="noopener" role="menuitem" data-room-mapper-link>
+        <a class="sidebar-link" href="./views/room-mapper.html" role="menuitem" data-room-mapper-link>
           Room Mapper
         </a>
       </div>
@@ -190,7 +249,7 @@
         <span class="sidebar-group__icon" aria-hidden="true"></span>
       </button>
       <div class="sidebar-group__items" role="menu" hidden>
-        <a class="sidebar-link" href="/downloads.html" target="_blank" rel="noopener" role="menuitem">
+        <a class="sidebar-link" href="/downloads.html" role="menuitem">
           Desktop App Downloads
         </a>
       </div>
@@ -240,7 +299,6 @@
                     <!-- Farm Summary Button -->
                     <a 
                       href="/views/farm-summary.html" 
-                      target="_blank" 
                       rel="noopener"
                       class="btn btn--primary" 
                       style="margin-top: 0.75rem; margin-right: 0.5rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
@@ -251,7 +309,6 @@
                     <!-- Farm Admin Button -->
                     <a 
                       href="/login.html" 
-                      target="_blank" 
                       rel="noopener"
                       class="btn btn--secondary" 
                       style="margin-top: 0.75rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
@@ -445,6 +502,9 @@
           <!-- IoT Devices List (for renderIoTDeviceCards function) -->
           <div id="iotDevicesList"></div>
           
+          <!-- Diagnostic Status Display -->
+          <div id="diagnosticStatus" style="margin-top: 12px; padding: 12px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; font-family: monospace; font-size: 12px; color: #0c4a6e;"></div>
+          
         </div>
         
         <!-- Generic IoT Ecosystem Modal -->
@@ -534,7 +594,7 @@
               <label class="tiny" style="display:flex;flex-direction:column;min-width:180px;">
                 Room
                 <select id="groupsV2RoomSelect" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
-                  <option value="GreenReach">GreenReach</option>
+                  <option value="">(select room)</option>
                 </select>
               </label>
               <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">

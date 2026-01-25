@@ -58,44 +58,12 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [
-    {
-      "src": "/screenshots/dashboard.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
-    },
-    {
-      "src": "/screenshots/inventory.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ],
+  "screenshots": [],
   "categories": [
     "business",
     "productivity",
     "utilities"
   ],
-  "shortcuts": [
-    {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "url": "/",
-      "icons": [{ "src": "/icons/shortcut-dashboard.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Inventory",
-      "short_name": "Inventory",
-      "url": "/inventory",
-      "icons": [{ "src": "/icons/shortcut-inventory.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Wholesale",
-      "short_name": "Wholesale",
-      "url": "/wholesale.html",
-      "icons": [{ "src": "/icons/shortcut-wholesale.png", "sizes": "96x96" }]
-    }
-  ],
+  "shortcuts": [],
   "prefer_related_applications": false
 }

@@ -61,6 +61,7 @@ from backend.device_discovery import (
     discover_ble_devices,
     discover_kasa_devices,
     discover_mdns_devices,
+    discover_serial_devices,
     discover_switchbot_devices,
     fetch_switchbot_status,
     full_discovery_cycle,
@@ -2500,6 +2501,7 @@ async def universal_scan() -> dict:
             discover_kasa_devices(registry, timeout=5),
             discover_ble_devices(registry, scan_duration=5.0),
             discover_mdns_devices(registry, scan_duration=3.0),
+            discover_serial_devices(registry),
             return_exceptions=True
         )
         
@@ -2555,6 +2557,25 @@ async def universal_scan() -> dict:
                 LOGGER.info(f"[UniversalScan] Found mDNS: {device_dict.get('name', 'Unknown')}")
         elif isinstance(results[2], Exception):
             LOGGER.warning(f"[UniversalScan] mDNS discovery failed: {results[2]}")
+        
+        # Process USB serial devices
+        if isinstance(results[3], list):
+            for device in results[3]:
+                device_dict = device.__dict__ if hasattr(device, '__dict__') else {}
+                all_devices.append({
+                    "name": device_dict.get('name', 'Serial Device'),
+                    "brand": device_dict.get('details', {}).get('manufacturer', 'Unknown'),
+                    "vendor": "Espressif" if 'ESP32' in device_dict.get('name', '') else device_dict.get('details', {}).get('manufacturer', 'Unknown'),
+                    "protocol": "usb-serial",
+                    "comm_type": "USB Serial",
+                    "deviceId": device_dict.get('device_id'),
+                    "port": device_dict.get('details', {}).get('port'),
+                    "capabilities": device_dict.get('capabilities', {}),
+                    "category": device_dict.get('category', 'sensor')
+                })
+                LOGGER.info(f"[UniversalScan] Found Serial: {device_dict.get('name', 'Unknown')}")
+        elif isinstance(results[3], Exception):
+            LOGGER.warning(f"[UniversalScan] Serial discovery failed: {results[3]}")
         
         # Also include MQTT devices from registry
         mqtt_devices = [d for d in registry.list() if d.protocol == "mqtt"]

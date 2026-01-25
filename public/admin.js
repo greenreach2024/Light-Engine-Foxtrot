@@ -74,11 +74,11 @@ async function autoAuthenticateLocal() {
         } else {
             console.warn('⚠️ Auto-authentication failed');
             // Redirect to login if auto-auth fails
-            window.location.href = '/LE-login.html';
+            window.location.href = '/login.html';
         }
     } catch (error) {
         console.warn('⚠️ Auto-authentication error:', error.message);
-        window.location.href = '/LE-login.html';
+        window.location.href = '/login.html';
     }
 }
 

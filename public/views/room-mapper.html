@@ -572,10 +572,11 @@
           <div class="canvas-controls">
             <label>
               Room:
-              <select id="roomSelect" onchange="changeRoom()" style="padding: 0.375rem 0.75rem; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; background: rgba(15, 23, 42, 0.8); color: #e4e4e7; font-size: 0.875rem; min-width: 150px; margin-right: 1rem;">
+              <select id="roomSelect" onchange="changeRoom()" style="padding: 0.375rem 0.75rem; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; background: rgba(15, 23, 42, 0.8); color: #e4e4e7; font-size: 0.875rem; min-width: 150px; margin-right: 0.5rem;">
                 <option value="">Loading rooms...</option>
               </select>
             </label>
+            <button class="btn btn-primary" onclick="createRoom()" style="padding: 0.375rem 0.75rem; font-size: 0.875rem; margin-right: 1rem;">+ New Room</button>
             <label>
               Grid:
               <input type="number" id="gridSize" value="30" min="10" max="50" onchange="updateGridSize()">
@@ -778,6 +779,59 @@
       } catch (error) {
         console.error('Failed to load rooms:', error);
         document.getElementById('roomSelect').innerHTML = '<option value="">Error loading rooms</option>';
+      }
+    }
+
+    window.createRoom = async function() {
+      const roomName = prompt('Enter room name:');
+      if (!roomName || !roomName.trim()) {
+        return;
+      }
+
+      const roomId = roomName.trim().replace(/\s+/g, '-').toLowerCase();
+
+      // Check if room already exists
+      if (STATE.rooms.some(r => (r.id || r.name) === roomId)) {
+        alert(`Room "${roomName}" already exists`);
+        return;
+      }
+
+      const newRoom = {
+        id: roomId,
+        name: roomName.trim(),
+        zones: []
+      };
+
+      STATE.rooms.push(newRoom);
+
+      try {
+        // Save to rooms.json
+        const response = await fetch('/api/room-mapper/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rooms: STATE.rooms })
+        });
+
+        if (!response.ok) throw new Error('Failed to save room');
+
+        console.log('[Room Mapper] Room created:', roomId);
+        
+        // Refresh dropdown and select new room
+        await loadRooms();
+        STATE.currentRoomId = roomId;
+        document.getElementById('roomSelect').value = roomId;
+        updateRoomTitle();
+        
+        // Clear map for new room
+        STATE.placedDevices = [];
+        STATE.zones = [];
+        draw();
+
+        alert(`Room "${roomName}" created successfully! Now place devices and zones, then click Save Map.`);
+      } catch (error) {
+        console.error('Failed to create room:', error);
+        alert('Failed to create room. See console for details.');
+        STATE.rooms.pop(); // Remove the room we just added
       }
     }
 
@@ -1804,6 +1858,12 @@
         
         if (response.ok) {
           alert(`Map saved successfully for room: ${roomName}`);
+          
+          // Refresh Groups v2 zone dropdown if it exists
+          if (typeof window.refreshGroupsV2Zones === 'function') {
+            console.log('[Room Mapper] Refreshing Groups v2 zones...');
+            window.refreshGroupsV2Zones();
+          }
         } else {
           throw new Error('Save failed');
         }
@@ -1822,17 +1882,21 @@
       try {
         const fileName = `room-map-${STATE.currentRoomId}.json`;
         const response = await fetch(`/data/${fileName}`);
-        if (!response.ok) throw new Error('No saved map found for this room');
-        
+        if (response.status === 404) {
+          console.log('[Room Mapper] No saved map for this room, starting fresh');
+          return;
+        }
+        if (!response.ok) throw new Error('Failed to load saved map');
+
         const mapData = await response.json();
         await loadExistingMapData(mapData);
-        
+
         const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
         const roomName = currentRoom ? (currentRoom.name || 'Unknown') : 'Unknown';
         alert(`Map loaded successfully for room: ${roomName}`);
       } catch (error) {
         console.error('Failed to load map:', error);
-        alert('No saved map found for this room or error loading map.');
+        alert('Failed to load map. See console for details.');
       }
     }
 

@@ -6841,8 +6841,11 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
 app.get('/api/setup/status', asyncHandler(async (req, res) => {
   try {
     // Check if using PostgreSQL (Cloud plan) or NeDB (Edge device)
+    // Edge devices always use NeDB regardless of pool availability
+    const isEdgeDevice = process.env.EDGE_MODE === 'true';
     const pool = req.app.locals?.db;
-    if (pool) {
+    
+    if (!isEdgeDevice && pool) {
       // For Cloud plan: check farm status and if rooms exist
       // Get farmId from query or authenticated session
       const farmId = req.query.farmId || req.session?.farmId || req.user?.farmId;
@@ -6950,6 +6953,132 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'Failed to save rooms',
+      message: error.message 
+    });
+  }
+}));
+
+// Room Mapper save rooms endpoint (alias for setup/save-rooms)
+app.post('/api/room-mapper/save', asyncHandler(async (req, res) => {
+  try {
+    const { rooms } = req.body;
+    
+    if (!Array.isArray(rooms)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Rooms must be an array' 
+      });
+    }
+    
+    console.log(`[room-mapper] Saving ${rooms.length} rooms to disk`);
+    
+    // Save to rooms.json file
+    const roomsFilePath = path.join(__dirname, 'public', 'data', 'rooms.json');
+    const roomsData = { rooms };
+    
+    await fs.promises.writeFile(
+      roomsFilePath, 
+      JSON.stringify(roomsData, null, 2),
+      'utf8'
+    );
+    
+    console.log(`[room-mapper] Successfully saved to ${roomsFilePath}`);
+    
+    // Dispatch event to notify other systems
+    if (typeof io !== 'undefined') {
+      io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
+    }
+    
+    // Sync to cloud if configured
+    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY && process.env.FARM_ID) {
+      try {
+        const syncService = getSyncService();
+        await syncService.syncRooms(rooms);
+        console.log('[room-mapper] Synced rooms to GreenReach Central');
+      } catch (syncError) {
+        console.error('[room-mapper] Failed to sync rooms to cloud:', syncError.message);
+        // Don't fail the save if sync fails
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Saved ${rooms.length} rooms`,
+      count: rooms.length,
+      synced: !!(process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY)
+    });
+    
+  } catch (error) {
+    console.error('[room-mapper] Error saving rooms:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to save rooms',
+      message: error.message 
+    });
+  }
+}));
+
+// Groups V2 save groups endpoint
+app.post('/data/groups.json', asyncHandler(async (req, res) => {
+  try {
+    const { groups } = req.body;
+    
+    if (!Array.isArray(groups)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Groups must be an array' 
+      });
+    }
+    
+    console.log(`[groups-v2] Saving ${groups.length} groups to disk`);
+    
+    // Save to groups.json file
+    const groupsFilePath = path.join(__dirname, 'public', 'data', 'groups.json');
+    const groupsData = {
+      groups,
+      metadata: {
+        lastUpdated: new Date().toISOString(),
+        version: '1.0'
+      }
+    };
+    
+    await fs.promises.writeFile(
+      groupsFilePath, 
+      JSON.stringify(groupsData, null, 2),
+      'utf8'
+    );
+    
+    console.log(`[groups-v2] Successfully saved to ${groupsFilePath}`);
+    
+    // Dispatch event to notify other systems
+    if (typeof io !== 'undefined') {
+      io.emit('farmDataChanged', { type: 'groups', count: groups.length });
+    }
+    
+    // Sync to cloud if configured
+    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY && process.env.FARM_ID) {
+      try {
+        const syncService = getSyncService();
+        await syncService.syncGroups(groups);
+        console.log('[groups-v2] Synced groups to GreenReach Central');
+      } catch (syncError) {
+        console.error('[groups-v2] Failed to sync groups to cloud:', syncError.message);
+        // Don't fail the save if sync fails
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Saved ${groups.length} groups`,
+      count: groups.length,
+      synced: !!(process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY)
+    });
+    
+  } catch (error) {
+    console.error('[groups-v2] Error saving groups:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to save groups',
       message: error.message 
     });
   }
@@ -10628,7 +10757,7 @@ console.log(' Audit logging initialized - capturing all wholesale operations');
 // import farmSalesQuickBooksRouter from './routes/farm-sales/quickbooks.js';
 // import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
 // import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
-// import authRouter from './routes/auth.js';
+import authRouter from './routes/auth.js';
 // import farmsRouter from './routes/farms.js';
 // import purchaseRouter from './routes/purchase.js';
 // import purchaseLeadsRouter from './routes/purchase-leads.js';
@@ -10704,7 +10833,7 @@ app.locals.db = dbPool;
  * - POST /api/auth/login: Authenticate user with credentials
  * - GET /api/ping: Health check for edge device availability
  */
-// app.use('/api/auth', authRouter); // Disabled - router undefined
+app.use('/api/auth', authRouter);
 
 /**
  * Email Service Routes
@@ -10746,18 +10875,38 @@ app.use('/api/admin', adminFarmManagementRouter);
 // Note: This endpoint accepts tokens but doesn't require them to allow login flow to proceed
 app.get('/api/setup-wizard/status', async (req, res) => {
   try {
+    const pool = req.app.locals?.db;
+    const isEdgeDevice = process.env.EDGE_MODE === 'true';
+    
     // Try to extract token if provided
     const authHeader = req.headers.authorization;
     let farmId = null;
     let email = null;
     
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    // Only try to verify token if on cloud (not edge device)
+    if (!isEdgeDevice && authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       try {
-        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
-        const decoded = jwt.verify(token, jwtSecret);
-        farmId = decoded.farmId;
-        email = decoded.email;
+        // First decode without verification to get farmId
+        const decoded = jwt.decode(token);
+        farmId = decoded?.farmId;
+        
+        // Fetch farm's JWT secret from database
+        let jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+        
+        if (pool && farmId) {
+          const farmResult = await pool.query(
+            'SELECT jwt_secret FROM farms WHERE farm_id = $1',
+            [farmId]
+          );
+          if (farmResult.rows.length > 0) {
+            jwtSecret = farmResult.rows[0].jwt_secret || jwtSecret;
+          }
+        }
+        
+        // Now verify with the correct secret
+        const verified = jwt.verify(token, jwtSecret);
+        email = verified.email;
         console.log('[setup-wizard] Token decoded successfully for', farmId, email);
       } catch (tokenError) {
         console.warn('[setup-wizard] Token verification failed:', tokenError.message);
@@ -10765,10 +10914,8 @@ app.get('/api/setup-wizard/status', async (req, res) => {
       }
     }
     
-    const pool = req.app.locals?.db;
-    
     // Edge device: Check NeDB for setup completion
-    if (!pool) {
+    if (isEdgeDevice || !pool) {
       console.log('[setup-wizard] Edge device - checking NeDB for setup status');
       try {
         const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' });
@@ -10801,15 +10948,15 @@ app.get('/api/setup-wizard/status', async (req, res) => {
       });
     }
     
-    // Check if user has setup_completed flag
-    const userResult = await pool.query(
-      'SELECT setup_completed FROM users WHERE farm_id = $1 AND email = $2',
-      [farmId, email]
+    // Check farm's setup_completed flag
+    const farmResult = await pool.query(
+      'SELECT setup_completed FROM farms WHERE farm_id = $1',
+      [farmId]
     );
     
-    if (userResult.rows.length === 0) {
-      // User not found - return default (new users haven't completed setup)
-      console.log('[setup-wizard] User not found, returning default');
+    if (farmResult.rows.length === 0) {
+      // Farm not found - return default (new farms haven't completed setup)
+      console.log('[setup-wizard] Farm not found, returning default');
       return res.json({
         success: true,
         setupCompleted: false,
@@ -10817,7 +10964,7 @@ app.get('/api/setup-wizard/status', async (req, res) => {
       });
     }
     
-    const setupCompleted = userResult.rows[0].setup_completed || false;
+    const setupCompleted = farmResult.rows[0].setup_completed || false;
     console.log('[setup-wizard] Setup status:', setupCompleted, 'for', farmId);
     
     return res.json({
@@ -10832,6 +10979,72 @@ app.get('/api/setup-wizard/status', async (req, res) => {
       success: true,
       setupCompleted: false,
       farmId: 'unknown'
+    });
+  }
+});
+
+// Mark setup wizard as complete
+app.post('/api/setup-wizard/complete', async (req, res) => {
+  try {
+    console.log('[setup-wizard] Marking setup as complete');
+    
+    const pool = req.app.locals?.db;
+    
+    // Edge device: Update NeDB (no auth required)
+    if (!pool) {
+      console.log('[setup-wizard] Edge device - updating NeDB');
+      await wizardStatesDB.updateAsync(
+        { key: 'setup_config' },
+        { key: 'setup_config', completed: true, completedAt: new Date().toISOString() },
+        { upsert: true }
+      );
+      
+      console.log('[setup-wizard] ✅ NeDB setup marked as complete');
+      return res.json({
+        success: true,
+        message: 'Setup marked as complete',
+        setupCompleted: true
+      });
+    }
+    
+    // Cloud deployment: Update PostgreSQL (requires auth)
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+    
+    const token = authHeader.substring(7);
+    const decoded = jwt.decode(token);
+    const farmId = decoded?.farmId;
+    
+    if (!farmId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Farm ID required'
+      });
+    }
+    
+    await pool.query(
+      'UPDATE farms SET setup_completed = true, updated_at = NOW() WHERE farm_id = $1',
+      [farmId]
+    );
+    
+    console.log('[setup-wizard] Setup marked as complete for farm:', farmId);
+    return res.json({
+      success: true,
+      message: 'Setup marked as complete',
+      farmId,
+      setupCompleted: true
+    });
+  } catch (error) {
+    console.error('[setup-wizard] Error marking setup as complete:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to mark setup as complete',
+      message: error.message
     });
   }
 });
@@ -15087,17 +15300,24 @@ app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res)
       });
     }
 
-    // Generate JWT token
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    // Fetch farm's JWT secret for token signing
+    const farmSecretResult = await pool.query(
+      'SELECT jwt_secret FROM farms WHERE farm_id = $1',
+      [farmId]
+    );
+    
+    const farmJwtSecret = farmSecretResult.rows[0]?.jwt_secret || process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    
+    // Generate JWT token using farm-specific secret
     const jwtToken = jwt.sign(
       {
         farmId: farm.farm_id,
         email: user.email,
         role: user.role || 'admin',
         userId: user.user_id,
-        planType: farm.plan_type || 'cloud'
+        planType: farm.plan_type || 'edge'
       },
-      jwtSecret,
+      farmJwtSecret,
       { expiresIn: '24h' }
     );
 
@@ -17502,7 +17722,77 @@ app.get('/data/farm.json', (req, res, next) => {
 
 app.get('/data/rooms.json', (req, res, next) => {
   const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
+  if (!farm) {
+    try {
+      const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
+      if (fs.existsSync(roomsPath)) {
+        const raw = fs.readFileSync(roomsPath, 'utf8');
+        const payload = raw ? JSON.parse(raw) : { rooms: [] };
+        const rooms = payload.rooms || payload || [];
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.json({ rooms: Array.isArray(rooms) ? rooms : [] });
+      }
+
+      // Derive rooms from groups.json if rooms.json is missing
+      const groupsPath = path.join(__dirname, 'public', 'data', 'groups.json');
+      if (fs.existsSync(groupsPath)) {
+        const raw = fs.readFileSync(groupsPath, 'utf8');
+        const payload = raw ? JSON.parse(raw) : { groups: [] };
+        const groups = Array.isArray(payload.groups) ? payload.groups : [];
+        const roomMap = new Map();
+        const zoneMap = new Map();
+        
+        groups.forEach(group => {
+          const roomId = group.roomId || group.room || 'Unknown';
+          const zoneName = group.zone || 'Zone 1';
+          const zoneId = group.zoneId || `${roomId}:1`;
+          
+          // Extract zone number from zoneId (e.g., "GreenReach:1" -> "1")
+          const zoneMatch = zoneId.match(/:(\d+)$/);
+          const zoneNumber = zoneMatch ? zoneMatch[1] : '1';
+          
+          if (!roomMap.has(roomId)) {
+            roomMap.set(roomId, {
+              id: roomId,
+              roomId,
+              name: roomId,
+              type: group.roomType || 'grow',
+              zones: []
+            });
+          }
+          
+          // Track zones per room
+          const zoneKey = `${roomId}:${zoneNumber}`;
+          if (!zoneMap.has(zoneKey)) {
+            zoneMap.set(zoneKey, {
+              id: zoneNumber,
+              name: zoneName,
+              groups: []
+            });
+            roomMap.get(roomId).zones.push(zoneMap.get(zoneKey));
+          }
+          
+          // Add group to zone
+          zoneMap.get(zoneKey).groups.push(group.id);
+        });
+        
+        const rooms = Array.from(roomMap.values());
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.json({ rooms });
+      }
+
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ rooms: [] });
+    } catch (err) {
+      console.warn('[rooms] Failed to load rooms.json:', err?.message || err);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ rooms: [] });
+    }
+  }
   
   // Transform rooms to include fixtures
   const lights = farm.devices?.lights || [];
@@ -17542,7 +17832,26 @@ app.get('/data/rooms.json', (req, res, next) => {
 // IoT devices (sensors)
 app.get('/data/iot-devices.json', (req, res, next) => {
   const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
+  if (!farm) {
+    try {
+      const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
+      if (fs.existsSync(iotDevicesPath)) {
+        const raw = fs.readFileSync(iotDevicesPath, 'utf8');
+        const payload = raw ? JSON.parse(raw) : [];
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.json(Array.isArray(payload) ? payload : []);
+      }
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json([]);
+    } catch (err) {
+      console.warn('[IoT] Failed to load iot-devices.json:', err?.message || err);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json([]);
+    }
+  }
   
   // Transform sensor data from demo format to IoT device format
   const sensors = (farm.devices?.sensors || []).map(sensor => ({
@@ -17574,9 +17883,94 @@ app.get('/data/iot-devices.json', (req, res, next) => {
   return res.json(sensors);
 });
 
+// Persist IoT devices list (non-demo)
+app.post('/data/iot-devices.json', (req, res) => {
+  try {
+    const payload = Array.isArray(req.body) ? req.body : [];
+    const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
+    fs.writeFileSync(iotDevicesPath, JSON.stringify(payload, null, 2));
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.json({ ok: true, count: payload.length });
+  } catch (err) {
+    console.warn('[IoT] Failed to persist iot-devices.json:', err?.message || err);
+    return res.status(500).json({ ok: false, error: 'Failed to persist IoT devices' });
+  }
+});
+
+// Generic JSON persistence for /data/*.json (non-demo only)
+app.post('/data/:filename', (req, res) => {
+  try {
+    const fileName = String(req.params.filename || '');
+    if (!fileName.endsWith('.json')) {
+      return res.status(400).json({ ok: false, error: 'Only .json files are supported' });
+    }
+    if (!/^[a-zA-Z0-9._-]+\.json$/.test(fileName)) {
+      return res.status(400).json({ ok: false, error: 'Invalid file name' });
+    }
+
+    const targetPath = path.join(__dirname, 'public', 'data', fileName);
+    const payload = req.body ?? null;
+    fs.writeFileSync(targetPath, JSON.stringify(payload, null, 2));
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.json({ ok: true, file: fileName });
+  } catch (err) {
+    console.warn('[data] Failed to persist JSON:', err?.message || err);
+    return res.status(500).json({ ok: false, error: 'Failed to persist JSON' });
+  }
+});
+
+// IoT devices API (used by IoT Devices Manager)
+app.get('/iot/devices', (req, res) => {
+  try {
+    const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
+    if (!fs.existsSync(iotDevicesPath)) {
+      return res.json({ devices: [] });
+    }
+    const raw = fs.readFileSync(iotDevicesPath, 'utf8');
+    const payload = raw ? JSON.parse(raw) : [];
+    return res.json({ devices: Array.isArray(payload) ? payload : [] });
+  } catch (err) {
+    console.warn('[IoT] Failed to load /iot/devices:', err?.message || err);
+    return res.json({ devices: [] });
+  }
+});
+
+app.post('/iot/devices/scan', async (req, res) => {
+  try {
+    const response = await fetch('http://127.0.0.1:8091/discovery/scan', { method: 'POST' });
+    const data = await response.json();
+    return res.json({ devices: Array.isArray(data?.devices) ? data.devices : [] });
+  } catch (err) {
+    console.warn('[IoT] Scan failed:', err?.message || err);
+    return res.json({ devices: [] });
+  }
+});
+
 app.get('/data/groups.json', (req, res, next) => {
   const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
+  if (!farm) {
+    try {
+      const groupsPath = path.join(__dirname, 'data', 'groups.json');
+      if (fs.existsSync(groupsPath)) {
+        const raw = fs.readFileSync(groupsPath, 'utf8');
+        const payload = raw ? JSON.parse(raw) : { groups: [] };
+        const groups = Array.isArray(payload.groups) ? payload.groups : (Array.isArray(payload) ? payload : []);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.json({ groups });
+      }
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ groups: [] });
+    } catch (err) {
+      console.warn('[groups] Failed to load groups.json:', err?.message || err);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ groups: [] });
+    }
+  }
   const groups = [];
   (farm.rooms || []).forEach((room) => {
     (room.zones || []).forEach((zone) => {
@@ -17867,7 +18261,80 @@ app.get('/data/equipment-metadata.json', (req, res, next) => {
 // Room map for farm summary view
 app.get('/data/room-map.json', (req, res, next) => {
   const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
+  
+  // Non-demo mode: Aggregate zones from all room-map files
+  if (!farm) {
+    try {
+      const dataDir = path.join(__dirname, 'public', 'data');
+      const zones = [];
+      
+      // Load rooms.json to know which rooms exist
+      const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
+      let rooms = [];
+      if (fs.existsSync(roomsPath)) {
+        const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+        rooms = roomsData.rooms || [];
+      }
+      
+      // For each room, try to load its room-map file
+      rooms.forEach(room => {
+        const roomId = room.id || room.name;
+        const roomMapFile = `room-map-${roomId}.json`;
+        const roomMapPath = path.join(dataDir, roomMapFile);
+        
+        if (fs.existsSync(roomMapPath)) {
+          try {
+            const roomMapData = JSON.parse(fs.readFileSync(roomMapPath, 'utf8'));
+            if (roomMapData.zones && Array.isArray(roomMapData.zones)) {
+              roomMapData.zones.forEach(zone => {
+                zones.push({
+                  zone: `${roomMapData.roomId}:${zone.zone}`,
+                  name: zone.name || `Zone ${zone.zone}`,
+                  room: roomMapData.roomId,
+                  roomName: roomMapData.name,
+                  crop: null
+                });
+              });
+            }
+          } catch (err) {
+            console.warn(`[room-map] Failed to parse ${roomMapFile}:`, err.message);
+          }
+        }
+      });
+      
+      // Fallback: also check generic room-map.json if no room-specific files found
+      if (zones.length === 0) {
+        const genericMapPath = path.join(dataDir, 'room-map.json');
+        if (fs.existsSync(genericMapPath)) {
+          try {
+            const roomMapData = JSON.parse(fs.readFileSync(genericMapPath, 'utf8'));
+            if (roomMapData.zones && Array.isArray(roomMapData.zones)) {
+              roomMapData.zones.forEach(zone => {
+                zones.push({
+                  zone: `${roomMapData.roomId}:${zone.zone}`,
+                  name: zone.name || `Zone ${zone.zone}`,
+                  room: roomMapData.roomId,
+                  roomName: roomMapData.name,
+                  crop: null
+                });
+              });
+            }
+          } catch (err) {
+            console.warn('[room-map] Failed to parse room-map.json:', err.message);
+          }
+        }
+      }
+      
+      console.log(`[room-map] Serving ${zones.length} zones from ${rooms.length} rooms`);
+      
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ zones });
+    } catch (error) {
+      console.error('[room-map] Error aggregating zones:', error);
+      return res.json({ zones: [] });
+    }
+  }
   
   // Demo mode: Return comprehensive room map with positioned sensors
   if (isDemoMode()) {
@@ -18181,9 +18648,11 @@ app.use(express.static(PUBLIC_DIR, {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     }
-    // Cache JS/CSS for 1 hour but allow revalidation
+    // Disable caching for JS/CSS during active development
     else if (path.endsWith('.js') || path.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     }
     // Cache images/fonts longer
     else if (path.match(/\.(jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot)$/)) {
@@ -21285,6 +21754,70 @@ app.post('/discovery/scan', async (req, res) => {
       })));
     } catch (e) {
       console.warn('Kasa direct discovery failed:', e.message);
+    }
+    
+    // BLE device discovery
+    try {
+      const controller = getController();
+      if (controller) {
+        const bleResponse = await fetch(`${controller}/api/devices/ble?timeout=8`);
+        if (bleResponse.ok) {
+          const bleData = await bleResponse.json();
+          if (bleData.devices && Array.isArray(bleData.devices)) {
+            bleData.devices.forEach(device => {
+              allDevices.push({
+                name: device.name,
+                brand: device.vendor || 'Unknown',
+                model: device.category,
+                ip: '—',
+                mac: device.device_id,
+                protocol: 'Bluetooth LE',
+                confidence: 0.8,
+                category: 'BLE Device',
+                deviceId: device.device_id,
+                comm_type: 'ble',
+                rssi: device.rssi
+              });
+            });
+            console.log(` Found ${bleData.devices.length} BLE devices`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('BLE discovery failed:', e.message);
+    }
+    
+    // USB/Serial device discovery (ESP32 sensors)
+    try {
+      const controller = getController();
+      if (controller) {
+        const serialResponse = await fetch(`${controller}/discovery/scan`, {
+          method: 'POST'
+        });
+        if (serialResponse.ok) {
+          const serialData = await serialResponse.json();
+          if (serialData.devices && Array.isArray(serialData.devices)) {
+            serialData.devices.forEach(device => {
+              allDevices.push({
+                name: device.name,
+                brand: device.brand || device.vendor || 'Unknown',
+                model: device.category || 'USB Serial',
+                ip: '—',
+                mac: device.port || device.deviceId,
+                protocol: device.protocol || 'USB Serial',
+                confidence: 0.95,
+                category: device.category || 'Sensor',
+                deviceId: device.deviceId,
+                comm_type: device.comm_type || 'usb-serial',
+                port: device.port
+              });
+            });
+            console.log(` Found ${serialData.devices.length} USB/Serial devices`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('USB/Serial discovery failed:', e.message);
     }
     
     console.log(` Universal scan complete: ${allDevices.length} devices found`);

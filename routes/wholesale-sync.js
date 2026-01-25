@@ -219,6 +219,13 @@ router.get('/inventory', async (req, res) => {
 
     groups.forEach((group) => {
       const cropName = group.crop || group.recipe;
+      
+      // Skip groups without a crop/recipe assigned
+      if (!cropName) {
+        console.log(`[Wholesale Sync] Skipping group ${group.id || 'unknown'} - no crop/recipe assigned`);
+        return;
+      }
+      
       const recipe = recipes[cropName];
       
       // Get grow days from recipe or use default

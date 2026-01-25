@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schedule a Call | GreenReach</title>
+  <meta name="description" content="Book a consultation with the GreenReach team to discuss growing solutions, wholesale opportunities, or Light Engine technology.">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 22px;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-logo img {
+      height: 32px;
+      width: auto;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+    }
+
+    /* Main Content */
+    .main-content {
+      padding-top: 88px;
+      padding-bottom: 60px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-left: 22px;
+      padding-right: 22px;
+    }
+
+    .schedule-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .schedule-header h1 {
+      font-size: 48px;
+      font-weight: 600;
+      line-height: 1.08;
+      letter-spacing: -0.003em;
+      margin-bottom: 16px;
+      color: var(--primary);
+    }
+
+    .schedule-header p {
+      font-size: 21px;
+      line-height: 1.38;
+      font-weight: 400;
+      color: var(--text-light);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .calendly-container {
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Footer */
+    footer {
+      background: #f5f5f7;
+      padding: 40px 22px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .footer-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .footer-content p {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .footer-links {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      font-size: 12px;
+      color: var(--text-light);
+      text-decoration: none;
+      transition: opacity 0.3s;
+    }
+
+    .footer-links a:hover {
+      opacity: 0.7;
+    }
+
+    @media (max-width: 768px) {
+      .schedule-header h1 {
+        font-size: 32px;
+      }
+
+      .schedule-header p {
+        font-size: 17px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/greenreach-org.html" class="nav-logo">
+        <img src="images/greenreach-clr.png" alt="GreenReach">
+      </a>
+      <ul class="nav-links">
+        <li><a href="/greenreach-org.html">Home</a></li>
+        <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+        <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
+        <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+        <li><a href="mailto:info@greenreachfarms.com">Contact Us</a></li>
+        <li><a href="https://calendly.com/greenreach" style="opacity: 1; font-weight: 500;">Schedule a Call</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="schedule-header">
+      <h1>Schedule a Call</h1>
+      <p>Book a consultation with our team to discuss growing solutions, wholesale opportunities, or Light Engine technology.</p>
+    </div>
+
+    <div class="calendly-container">
+      <!-- Calendly inline widget begin -->
+      <div class="calendly-inline-widget" data-url="https://calendly.com/greenreachfarms" style="min-width:320px;height:700px;"></div>
+      <script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js" async></script>
+      <!-- Calendly inline widget end -->
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <p>&copy; 2026 GreenReach. Building Canadian Food Sovereignty.</p>
+      <div class="footer-links">
+        <a href="/greenreach-org.html">Home</a>
+        <a href="/growing-made-easy.html">Growing Made Easy</a>
+        <a href="/grow-and-sell.html">Wholesale</a>
+        <a href="https://greenreachgreens.com/wholesale-about.html">About</a>
+        <a href="https://greenreachgreens.com/wholesale-about.html#contact">Contact</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1804,6 +1804,12 @@
         
         if (response.ok) {
           alert(`Map saved successfully for room: ${roomName}`);
+          
+          // Refresh Groups v2 zone dropdown if it exists
+          if (typeof window.refreshGroupsV2Zones === 'function') {
+            console.log('[Room Mapper] Refreshing Groups v2 zones...');
+            window.refreshGroupsV2Zones();
+          }
         } else {
           throw new Error('Save failed');
         }
@@ -1822,7 +1828,11 @@
       try {
         const fileName = `room-map-${STATE.currentRoomId}.json`;
         const response = await fetch(`/data/${fileName}`);
-        if (!response.ok) throw new Error('No saved map found for this room');
+        if (response.status === 404) {
+          console.log('[Room Mapper] No saved map for this room, starting fresh');
+          return;
+        }
+        if (!response.ok) throw new Error('Failed to load saved map');
         
         const mapData = await response.json();
         await loadExistingMapData(mapData);
@@ -1832,7 +1842,7 @@
         alert(`Map loaded successfully for room: ${roomName}`);
       } catch (error) {
         console.error('Failed to load map:', error);
-        alert('No saved map found for this room or error loading map.');
+        alert('Failed to load map. See console for details.');
       }
     }
 

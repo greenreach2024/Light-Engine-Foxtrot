@@ -429,6 +429,90 @@ export default class SyncService extends EventEmitter {
       this.emit('sync_error', { type: 'config', error });
     }
   }
+
+  /**
+   * Sync rooms to Central
+   */
+  async syncRooms(rooms) {
+    try {
+      console.log(`[sync-service] Syncing ${rooms.length} rooms...`);
+      
+      const response = await this.apiRequest('POST', '/api/sync/rooms', {
+        farmId: this.config.farmId,
+        rooms
+      });
+      
+      if (response.ok) {
+        console.log('[sync-service] Rooms synced successfully');
+        this.emit('rooms_synced', rooms);
+        return true;
+      } else {
+        throw new Error(`Rooms sync failed: ${response.status}`);
+      }
+      
+    } catch (error) {
+      console.error('[sync-service] Rooms sync error:', error.message);
+      this.emit('sync_error', { type: 'rooms', error });
+      this.queueSync('rooms', rooms);
+      return false;
+    }
+  }
+
+  /**
+   * Sync groups to Central
+   */
+  async syncGroups(groups) {
+    try {
+      console.log(`[sync-service] Syncing ${groups.length} groups...`);
+      
+      const response = await this.apiRequest('POST', '/api/sync/groups', {
+        farmId: this.config.farmId,
+        groups
+      });
+      
+      if (response.ok) {
+        console.log('[sync-service] Groups synced successfully');
+        this.emit('groups_synced', groups);
+        return true;
+      } else {
+        throw new Error(`Groups sync failed: ${response.status}`);
+      }
+      
+    } catch (error) {
+      console.error('[sync-service] Groups sync error:', error.message);
+      this.emit('sync_error', { type: 'groups', error });
+      this.queueSync('groups', groups);
+      return false;
+    }
+  }
+
+  /**
+   * Sync schedules to Central
+   */
+  async syncSchedules(schedules) {
+    try {
+      console.log(`[sync-service] Syncing ${schedules.length} schedules...`);
+      
+      const response = await this.apiRequest('POST', '/api/sync/schedules', {
+        farmId: this.config.farmId,
+        schedules
+      });
+      
+      if (response.ok) {
+        console.log('[sync-service] Schedules synced successfully');
+        this.emit('schedules_synced', schedules);
+        return true;
+      } else {
+        throw new Error(`Schedules sync failed: ${response.status}`);
+      }
+      
+    } catch (error) {
+      console.error('[sync-service] Schedules sync error:', error.message);
+      this.emit('sync_error', { type: 'schedules', error });
+      this.queueSync('schedules', schedules);
+      return false;
+    }
+  }
   
   /**
    * Send alert to Central immediately
@@ -539,6 +623,30 @@ export default class SyncService extends EventEmitter {
               alert: item.data
             });
             success = alertResponse.ok;
+            break;
+            
+          case 'rooms':
+            const roomsResponse = await this.apiRequest('POST', '/api/sync/rooms', {
+              farmId: this.config.farmId,
+              rooms: item.data
+            });
+            success = roomsResponse.ok;
+            break;
+            
+          case 'groups':
+            const groupsResponse = await this.apiRequest('POST', '/api/sync/groups', {
+              farmId: this.config.farmId,
+              groups: item.data
+            });
+            success = groupsResponse.ok;
+            break;
+            
+          case 'schedules':
+            const schedulesResponse = await this.apiRequest('POST', '/api/sync/schedules', {
+              farmId: this.config.farmId,
+              schedules: item.data
+            });
+            success = schedulesResponse.ok;
             break;
         }
         
