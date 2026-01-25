@@ -2499,14 +2499,34 @@ function createDeviceEntryElement(device) {
       const option = document.createElement('option');
       option.value = i;
       option.textContent = `Zone ${i}`;
-      if (device.zone === i || device.zone === String(i)) {
-        option.selected = true;
-      }
       zoneSelect.appendChild(option);
     }
     
-    // Set unassigned as selected if no zone
-    if (!device.zone) {
+    // Check multiple sources for zone data
+    let currentZone = device.zone;
+    if (!currentZone && device.telemetry?.zone_id) {
+      // Extract zone number from zone_id like "zone-main" or "GreenReach:1"
+      const zoneMatch = String(device.telemetry.zone_id).match(/[:\-](\d+)/);
+      if (zoneMatch) currentZone = parseInt(zoneMatch[1]);
+    }
+    if (!currentZone && device.deviceData?.zone_id) {
+      const zoneMatch = String(device.deviceData.zone_id).match(/[:\-](\d+)/);
+      if (zoneMatch) currentZone = parseInt(zoneMatch[1]);
+    }
+    if (!currentZone && device.telemetry?.room_name) {
+      // Try to find zone from room name in groups data
+      const roomName = device.telemetry.room_name;
+      console.log(`[IoT] Looking for zone assignment for device in room: ${roomName}`);
+    }
+    
+    // Set selected zone
+    if (currentZone) {
+      const zoneValue = String(currentZone);
+      const matchingOption = Array.from(zoneSelect.options).find(opt => opt.value === zoneValue);
+      if (matchingOption) {
+        matchingOption.selected = true;
+      }
+    } else {
       unassignedOption.selected = true;
     }
     
@@ -2680,38 +2700,26 @@ function renderIoTDeviceCards(devices) {
   const normalizedDevices = dedupeDevices(Array.isArray(devices) ? devices : []);
   console.log('[renderIoTDeviceCards] Normalized devices:', normalizedDevices.length, normalizedDevices);
 
-  // Filter out devices that are assigned to groups
-  const assignedDeviceIds = new Set();
-  if (window.STATE && Array.isArray(window.STATE.groups)) {
-    window.STATE.groups.forEach(group => {
-      if (!group || !Array.isArray(group.lights)) return;
-      group.lights.forEach(light => {
-        if (!light) return;
-        const lightId = typeof light === 'string' ? light : (light.id || light.deviceId || light.serial);
-        if (lightId) assignedDeviceIds.add(String(lightId));
-      });
-    });
-  }
+  // Show trusted devices (sensors/IoT devices that have been accepted)
+  // Lights/controllers assigned to groups are handled separately and not shown here
+  const trustedDevices = normalizedDevices.filter(device => {
+    const trust = (device.trust || 'unknown').toLowerCase();
+    return trust === 'trusted';
+  });
   
-  const unassignedDevices = normalizedDevices.filter(device => {
-    const deviceId = device.id || device.deviceId || device.serial;
-    return !deviceId || !assignedDeviceIds.has(String(deviceId));
+  const unknownDevices = normalizedDevices.filter(device => {
+    const trust = (device.trust || 'unknown').toLowerCase();
+    return trust === 'unknown';
   });
 
   list.innerHTML = '';
-  if (!unassignedDevices.length) {
-    list.innerHTML = '<div style="padding: 24px; text-align: center; color: #64748b;">No unassigned devices. All discovered devices have been assigned to groups.</div>';
-    return;
-  }
-
-  const unknowns = unassignedDevices.filter(device => (device.trust || 'unknown') === 'unknown');
-  console.log('[renderIoTDeviceCards] Unknown devices (not accepted):', unknowns.length);
-  console.log('[renderIoTDeviceCards] Assigned device IDs:', assignedDeviceIds);
-  if (unknowns.length) {
+  console.log('[renderIoTDeviceCards] Trusted devices:', trustedDevices.length);
+  console.log('[renderIoTDeviceCards] Unknown devices:', unknownDevices.length);
+  if (unknownDevices.length) {
     let html = `<h3 style="margin:0 0 8px 0;">Unknown Devices</h3>`;
     html += `<table class="iot-unknown-table" style="width:100%;border-collapse:collapse;margin-bottom:12px;">
       <thead><tr style="background:#f1f5f9"><th>Identifier</th><th>Type</th><th>Vendor</th><th>Name</th><th>Location</th><th>Trust</th><th>Actions</th></tr></thead><tbody>`;
-    for (const dev of unknowns) {
+    for (const dev of unknownDevices) {
       html += `<tr data-device-id="${escapeHtml(dev.id)}" style="border-bottom:1px solid #e5e7eb;">
         <td>${escapeHtml(dev.address || dev.id || '—')}</td>
         <td><input type="text" class="iot-unknown-type" value="${escapeHtml(dev.type || '')}" style="width:90px"></td>
@@ -2773,12 +2781,19 @@ function renderIoTDeviceCards(devices) {
     });
   }
 
-  const knowns = unassignedDevices.filter(device => (device.trust || 'unknown') !== 'unknown');
-  console.log('[renderIoTDeviceCards] Known/trusted devices:', knowns.length);
-  if (!knowns.length) return;
+  console.log('[renderIoTDeviceCards] Rendering trusted device cards:', trustedDevices.length);
+  if (!trustedDevices.length) {
+    if (!unknownDevices.length) {
+      list.innerHTML = '<div style="padding: 24px; text-align: center; color: #64748b;">No IoT devices found. Use the Universal Scanner to discover devices.</div>';
+    }
+    return;
+  }
 
-  const byVendor = groupBy(knowns, dev => (dev.vendor || dev.brand || 'Unknown').toLowerCase());
+  console.log('[renderIoTDeviceCards] About to group by vendor...');
+  const byVendor = groupBy(trustedDevices, dev => (dev.vendor || dev.brand || 'Unknown').toLowerCase());
+  console.log('[renderIoTDeviceCards] Grouped vendors:', Object.keys(byVendor));
   for (const vendor of Object.keys(byVendor)) {
+    console.log('[renderIoTDeviceCards] Rendering vendor:', vendor, 'with', byVendor[vendor].length, 'devices');
     const card = document.createElement('section');
     card.className = 'iot-vendor-card';
     card.style.cssText = 'background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);';
@@ -2795,12 +2810,15 @@ function renderIoTDeviceCards(devices) {
     const container = document.createElement('div');
     container.style.cssText = 'display:grid;grid-template-columns:repeat(2,1fr);gap:12px;';
     byVendor[vendor].forEach(device => {
+      console.log('[renderIoTDeviceCards] Creating entry for device:', device.id);
       const entry = createDeviceEntryElement(device);
       container.appendChild(entry);
     });
     card.appendChild(container);
     list.appendChild(card);
+    console.log('[renderIoTDeviceCards] Appended vendor card to list');
   }
+  console.log('[renderIoTDeviceCards] === COMPLETED ===');
 }
 
 // View device details
@@ -3255,6 +3273,8 @@ window.runUniversalScan = async function() {
   const resultsContainer = document.getElementById('universalScanResults');
   const resultsTable = document.getElementById('universalScanResultsTable');
   const resultsCount = document.getElementById('universalScanCount');
+  const scanStart = Date.now();
+  const minScanDurationMs = 12000;
   
   // Disable button and show progress
   if (btn) {
@@ -3285,16 +3305,24 @@ window.runUniversalScan = async function() {
     // Update status text
     if (status) status.textContent = 'Scanning WiFi, BLE, MQTT, Kasa, SwitchBot...';
     
-    // Discovery endpoint is on Python backend (port 8000), not Node.js (port 8091)
-    // Corrected endpoint: backend uses /discovery/devices (GET), not /discovery/scan (POST)
-    const discoveryEndpoint = '/discovery/devices';
+    // Use universal scanner on Node.js (port 8091). Fallback to Python discovery if needed.
+    const discoveryEndpoint = '/discovery/scan';
+    const fallbackEndpoint = '/discovery/devices';
     console.log('[UniversalScan] Fetching from:', discoveryEndpoint);
     console.log('[UniversalScan] Full URL:', window.location.origin + discoveryEndpoint);
     
-    const response = await fetch(discoveryEndpoint, {
-      method: 'GET',
+    let response = await fetch(discoveryEndpoint, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
+    
+    if (!response.ok) {
+      console.warn('[UniversalScan] Primary scan failed, trying fallback:', fallbackEndpoint);
+      response = await fetch(fallbackEndpoint, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     
     console.log('[UniversalScan] Response status:', response.status, response.statusText);
     
@@ -3312,6 +3340,12 @@ window.runUniversalScan = async function() {
     console.log('[UniversalScan] Device count:', devices.length);
     console.log('[UniversalScan] Device protocols:', [...new Set(devices.map(d => d.protocol))].join(', '));
     
+    // Ensure scan UI doesn't complete too quickly
+    const elapsedMs = Date.now() - scanStart;
+    if (elapsedMs < minScanDurationMs) {
+      await new Promise(res => setTimeout(res, minScanDurationMs - elapsedMs));
+    }
+
     // Complete progress
     percent = 100;
     if (progressBar) progressBar.style.width = '100%';
@@ -3327,7 +3361,7 @@ window.runUniversalScan = async function() {
     // Render results table with Accept/Ignore buttons
     if (resultsTable) {
       if (devices.length === 0) {
-        resultsTable.innerHTML = '<div style="padding: 24px; text-align: center; color: #64748b;">No devices found. Check network connection.</div>';
+        resultsTable.innerHTML = '<div style="padding: 24px; text-align: center; color: #64748b;">No devices found after scan completed.</div>';
       } else {
         resultsTable.innerHTML = `
           <table style="width: 100%; border-collapse: collapse;">
@@ -3667,11 +3701,17 @@ async function addDeviceToIoT(device, deviceIndex, credentials = null) {
     // Note: Auto-navigation removed to prevent panel switching
     // User can manually navigate to IoT Devices panel to view accepted devices
     
+    const deviceTypeName = sanitizedDevice.category === 'environmental_sensor' ? 'sensor' : 'device';
+    const successMsg = sanitizedDevice.protocol === 'usb-serial' 
+      ? `${sanitizedDevice.name || 'Device'} added successfully. ${deviceTypeName.charAt(0).toUpperCase() + deviceTypeName.slice(1)} will report data once connected and transmitting. View in IoT Devices panel.`
+      : `${sanitizedDevice.name || 'Device'} added to IoT devices. Navigate to IoT Devices panel to view and configure.`;
+    
     showToast({ 
-      title: 'Device added', 
-      msg: `${sanitizedDevice.name || 'Device'} added to IoT devices. Navigate to IoT Devices panel to view.`, 
+      title: 'Device Added Successfully', 
+      msg: successMsg, 
       kind: 'success', 
-      icon: '' 
+      icon: '✓',
+      duration: 5000
     });
     
   } catch (error) {
@@ -6217,11 +6257,47 @@ function getSwitchBotStatusColor(status) {
 // Ensure STATE is globally defined
 var STATE = window.STATE = window.STATE || {};
 STATE.rooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
+STATE.iotDevices = Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [];
 STATE.driverMaxByte = DRIVER_MAX_BYTE;
 
 const $ = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>r.querySelectorAll(s);
 const setStatus = m => { const el=$("#status"); if(el) el.textContent = m; };
+
+// Load saved IoT devices from persistent storage
+async function loadSavedIoTDevices() {
+  console.log('[IoT] ===== loadSavedIoTDevices CALLED =====');
+  try {
+    console.log('[IoT] Fetching /data/iot-devices.json...');
+    const resp = await fetch('/data/iot-devices.json');
+    if (!resp.ok) {
+      console.log('[IoT] No saved devices found (404), starting fresh');
+      STATE.iotDevices = [];
+      window.LAST_IOT_SCAN = [];
+      return;
+    }
+    const devices = await resp.json();
+    console.log('[IoT] Received response:', devices);
+    const deviceArray = Array.isArray(devices) ? devices : (devices.devices || []);
+    console.log('[IoT] Device array length:', deviceArray.length);
+    STATE.iotDevices = deviceArray.map(d => sanitizeDevicePayload(d));
+    window.LAST_IOT_SCAN = STATE.iotDevices.slice();
+    console.log('[IoT] Loaded', STATE.iotDevices.length, 'saved devices');
+    console.log('[IoT] Devices:', STATE.iotDevices);
+    
+    // Render devices if the panel exists
+    if (typeof window.renderIoTDeviceCards === 'function') {
+      console.log('[IoT] Calling renderIoTDeviceCards...');
+      window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
+    } else {
+      console.warn('[IoT] renderIoTDeviceCards function NOT FOUND');
+    }
+  } catch (e) {
+    console.error('[IoT] Failed to load saved devices:', e);
+    STATE.iotDevices = [];
+    window.LAST_IOT_SCAN = [];
+  }
+}
 
 // Load farm data to check demo mode status
 async function loadFarmData() {
@@ -6319,14 +6395,22 @@ function removeDemoRooms() {
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
+  console.log('[INIT] ===== DOMContentLoaded FIRED =====');
   // Load farm data first to check if we're in demo mode
+  console.log('[INIT] Loading farm data...');
   await loadFarmData();
   // Load rooms data
+  console.log('[INIT] Loading rooms...');
   await loadRoomsFromBackend();
+  // Load saved IoT devices
+  console.log('[INIT] Loading saved IoT devices...');
+  await loadSavedIoTDevices();
+  console.log('[INIT] IoT devices loaded, STATE.iotDevices:', STATE.iotDevices?.length);
   // Remove demo rooms (will skip if in demo mode)
   removeDemoRooms();
   // Render rooms if function exists
   if (typeof renderRooms === 'function') renderRooms();
+  console.log('[INIT] ===== Initialization complete =====');
 });
 
 STATE.smartPlugs = Array.isArray(STATE.smartPlugs) ? STATE.smartPlugs : [];
@@ -12192,7 +12276,7 @@ async function loadAllData() {
     
     // Load static data files
     const [groups, schedules, plans, environment, calibrations, spdLibrary, deviceMeta, deviceKB, equipmentKB, deviceManufacturers, farm, rooms, switchbotDevices, storedIotDevices, equipmentMetadata] = await Promise.all([
-      loadJSON('./data/groups.json', { groups: [] }),
+      loadJSON('/data/groups.json', { groups: [] }),
       fetchSchedulesDocument(),
       fetchPlansDocument(),
       safeApi('/env', { zones: [] }),
@@ -12203,10 +12287,10 @@ async function loadAllData() {
       loadJSON('./data/equipment-kb.json', { equipment: [] }),
       loadJSON('./data/device-manufacturers.json', { manufacturers: [] }),
       loadJSON('./data/farm.json', {}),
-      loadJSON('./data/rooms.json', { rooms: [] }),
+      loadJSON('/data/rooms.json', { rooms: [] }),
       loadJSON('./data/switchbot-devices.json', { devices: [], summary: null }),
-      loadJSON('./data/iot-devices.json', []),
-      loadJSON('./data/equipment-metadata.json', {})
+      loadJSON('/data/iot-devices.json', []),
+      loadJSON('/data/equipment-metadata.json', {})
     ]);
 
     STATE.groups = groups?.groups || [];
@@ -12330,6 +12414,9 @@ async function loadAllData() {
     if (STATE.rooms.length > 0) {
       console.log('   Room details:', STATE.rooms.map(r => `${r.name} (id: ${r.id})`).join(', '));
     }
+    
+    // Dispatch rooms-updated event for Groups V2 to populate room dropdown
+    document.dispatchEvent(new Event('rooms-updated'));
   if (deviceKB && Array.isArray(deviceKB.fixtures)) {
     // Assign a unique id to each fixture if missing
     deviceKB.fixtures.forEach(fixture => {
@@ -12577,10 +12664,10 @@ function renderGroups() {
       const idx = STATE.groups.findIndex(g => g.id === group.id);
       if (idx >= 0) {
         STATE.groups[idx] = { ...group };
-        Promise.resolve(saveJSON('./data/groups.json', { groups: STATE.groups }))
+        Promise.resolve(saveJSON('/data/groups.json', { groups: STATE.groups }))
           .then(async () => {
             // Reload groups from disk to ensure persistence
-            const groupsReloaded = await loadJSON('./data/groups.json');
+            const groupsReloaded = await loadJSON('/data/groups.json');
             if (groupsReloaded && Array.isArray(groupsReloaded.groups)) {
               STATE.groups = groupsReloaded.groups;
               normalizeGroupsInState();
@@ -14131,21 +14218,32 @@ function getAllEquipment() {
     }
   });
   
+  // Normalize equipment list to avoid null/invalid entries
+  const cleanedEquipment = equipment.filter(eq => eq && typeof eq === 'object');
+
   // Merge in metadata (name, control overrides, etc.)
   const metadata = STATE.equipmentMetadata || {};
-  equipment.forEach(eq => {
+  cleanedEquipment.forEach(eq => {
     if (metadata[eq.id]) {
       Object.assign(eq, metadata[eq.id]);
     }
   });
   
   // Add standalone equipment that only exists in metadata (manually added)
-  const equipmentIds = new Set(equipment.map(eq => eq.id));
+  const equipmentIds = new Set(cleanedEquipment.map(eq => eq.id));
   Object.keys(metadata).forEach(metadataId => {
+    // Skip metadata keys that are not equipment IDs or have null/invalid values
+    if (metadataId === 'metadata' || metadataId === 'lastUpdated' || metadataId === 'version') {
+      return;
+    }
+    const metaItem = metadata[metadataId];
+    if (!metaItem || typeof metaItem !== 'object') {
+      return;
+    }
+    
     // If this ID doesn't exist in the room-based equipment, it's a standalone item
     if (!equipmentIds.has(metadataId)) {
-      const metaItem = metadata[metadataId];
-      equipment.push({
+      cleanedEquipment.push({
         id: metadataId,
         name: metaItem.name || 'Equipment',
         category: metaItem.category || 'Other',
@@ -14160,7 +14258,7 @@ function getAllEquipment() {
     }
   });
   
-  equipment.forEach(eq => {
+  cleanedEquipment.forEach(eq => {
     if (!eq || typeof eq !== 'object') return;
     const currentName = typeof eq.name === 'string' ? eq.name.trim() : '';
     if (!currentName) {
@@ -14168,7 +14266,7 @@ function getAllEquipment() {
     }
   });
 
-  return equipment;
+  return cleanedEquipment;
 }
 
 function openGrowRoomWizardForEquipment() {
@@ -16828,7 +16926,7 @@ function wireGlobalEvents() {
       }
       console.log('[btnGroupSave] About to save groups...');
       console.log('[btnGroupSave] Groups data:', JSON.stringify({ groups: STATE.groups }, null, 2));
-      const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
+      const ok = await saveJSON('/data/groups.json', { groups: STATE.groups });
       console.log('[btnGroupSave] Save result:', ok);
       if (ok) {
         setStatus('Groups saved');
@@ -17956,7 +18054,7 @@ function wireGlobalEvents() {
       STATE.schedules = schedulesToSave;
       const [schedResult] = await Promise.all([
         publishSchedulesDocument(schedulesToSave),
-        saveJSON('./data/groups.json', { groups: STATE.groups })
+        saveJSON('/data/groups.json', { groups: STATE.groups })
       ]);
       if (schedResult && Array.isArray(schedResult?.schedules)) {
         STATE.schedules = schedResult.schedules
@@ -18001,7 +18099,7 @@ function wireGlobalEvents() {
     // Debounced auto-save after 1 second of no typing
     clearTimeout(nameAutoSaveTimeout);
     nameAutoSaveTimeout = setTimeout(async () => {
-      const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
+      const ok = await saveJSON('/data/groups.json', { groups: STATE.groups });
       if (ok) {
         showToast({ title: 'Auto-saved', msg: `Group name updated to "${STATE.currentGroup.name}"`, kind: 'success', icon: '' });
         setStatus('Group name saved');
@@ -18038,7 +18136,7 @@ function wireGlobalEvents() {
     if (groupsStatus) groupsStatus.textContent = 'Group saved';
   });
   btnReloadGroups?.addEventListener('click', async () => {
-    const data = await loadJSON('./data/groups.json');
+    const data = await loadJSON('/data/groups.json');
     STATE.groups = data?.groups || [];
     normalizeGroupsInState();
     renderGroups();
@@ -18069,7 +18167,7 @@ function wireGlobalEvents() {
     if (!STATE.currentGroup) return;
     const planName = groupPlan.selectedOptions?.[0]?.textContent || groupPlan.value;
     STATE.currentGroup.plan = groupPlan.value || '';
-    const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
+    const ok = await saveJSON('/data/groups.json', { groups: STATE.groups });
     if (ok) {
       showToast({ title: 'Auto-saved', msg: `Plan changed to "${planName}"`, kind: 'success', icon: '' });
       setStatus('Plan saved');
@@ -18080,7 +18178,7 @@ function wireGlobalEvents() {
     if (!STATE.currentGroup) return;
     const schedName = groupSchedule.selectedOptions?.[0]?.textContent || groupSchedule.value;
     STATE.currentGroup.schedule = groupSchedule.value || '';
-    const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
+    const ok = await saveJSON('/data/groups.json', { groups: STATE.groups });
     if (ok) {
       showToast({ title: 'Auto-saved', msg: `Schedule changed to "${schedName}"`, kind: 'success', icon: '' });
       setStatus('Schedule saved');
@@ -18100,7 +18198,7 @@ function wireGlobalEvents() {
   async function saveGroups() {
     console.log('[saveGroups] Saving groups:', STATE.groups.length, 'groups');
     console.log('[saveGroups] Groups data:', JSON.stringify({ groups: STATE.groups }, null, 2));
-    const ok = await saveJSON('./data/groups.json', { groups: STATE.groups });
+    const ok = await saveJSON('/data/groups.json', { groups: STATE.groups });
     console.log('[saveGroups] Save result:', ok);
     if (ok) {
       setStatus('Groups saved');
@@ -18538,7 +18636,7 @@ function wireGlobalEvents() {
     STATE.schedules = STATE.schedules.filter(s => s.id !== id);
     // Unlink from any groups referencing it
     STATE.groups.forEach(g => { if (g.schedule === id) g.schedule = ''; });
-    await Promise.all([saveSchedules(), saveJSON('./data/groups.json', { groups: STATE.groups })]);
+    await Promise.all([saveSchedules(), saveJSON('/data/groups.json', { groups: STATE.groups })]);
     renderSchedules();
     setStatus(`Deleted schedule ${id}`);
   });
@@ -18626,7 +18724,7 @@ function wireGlobalEvents() {
       // File-only: persist to groups.json as a pending mix so a Room Wizard or future apply can use it
       try {
         STATE.currentGroup.pendingSpectrum = { ...mix, updatedAt: new Date().toISOString() };
-        await saveJSON('./data/groups.json', { groups: STATE.groups });
+        await saveJSON('/data/groups.json', { groups: STATE.groups });
         setStatus('Saved spectrum to file only (pending)');
         showToast({ title: 'Saved to file only', msg: 'Pending spectrum saved to groups.json', kind: 'info', icon: '' });
       } catch (e) {
@@ -19378,11 +19476,20 @@ class DevicePairWizard {
     try {
       if (this.scanBtn) { this.scanBtn.disabled = true; this.scanBtn.textContent = 'Scanning...'; }
       if (this.scanStatus) this.scanStatus.textContent = 'Scanning Wi‑Fi, BLE, MQTT, Kasa, SwitchBot...';
-      const resp = await fetch('/discovery/devices', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+      const scanStart = Date.now();
+      const minScanDurationMs = 12000;
+      let resp = await fetch('/discovery/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      if (!resp.ok) {
+        resp = await fetch('/discovery/devices', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+      }
       if (!resp.ok) throw new Error('Scan failed');
       const data = await resp.json().catch(() => ({ devices: [] }));
       const devices = Array.isArray(data.devices) ? data.devices : [];
       window.LAST_UNIVERSAL_SCAN = devices;
+      const elapsedMs = Date.now() - scanStart;
+      if (elapsedMs < minScanDurationMs) {
+        await new Promise(res => setTimeout(res, minScanDurationMs - elapsedMs));
+      }
       if (this.scanStatus) this.scanStatus.textContent = `Found ${devices.length} device${devices.length === 1 ? '' : 's'}`;
       if (this.scanResults) {
         this.scanResults.style.display = 'block';
@@ -19391,7 +19498,7 @@ class DevicePairWizard {
         if (!devices.length) {
           const empty = document.createElement('div');
           empty.style.cssText = 'padding:16px;text-align:center;color:#64748b;';
-          empty.textContent = 'No devices found. Check network connection.';
+          empty.textContent = 'No devices found after scan completed.';
           this.scanResults.appendChild(empty);
         } else {
           const table = document.createElement('table');
