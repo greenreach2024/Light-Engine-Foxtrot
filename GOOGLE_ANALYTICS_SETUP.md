@@ -2,6 +2,13 @@
 
 Google Analytics 4 tracking has been added to all GreenReach marketing pages.
 
+## Production Configuration:
+- **Property:** GreenReach Website
+- **Stream URL:** https://www.greenreachgreens.com
+- **Stream ID:** 13362368703
+- **Measurement ID:** G-GBPD0VBEF2
+- **Status:** ✅ Active and tracking
+
 ## Pages with Analytics Tracking:
 - ✅ greenreach-org.html (Home)
 - ✅ greenreach-grow.html (GROW product page)
@@ -35,16 +42,24 @@ Google Analytics 4 tracking has been added to all GreenReach marketing pages.
    - Stream name: GreenReach Website
 5. Copy your **Measurement ID** (format: `G-XXXXXXXXXX`)
 
+**✅ COMPLETED - Production Details:**
+- **Measurement ID:** G-GBPD0VBEF2
+- **Stream ID:** 13362368703
+- **Stream URL:** https://www.greenreachgreens.com
+
 ### Step 3: Update Tracking Code
-Replace `G-XXXXXXXXXX` with your actual Measurement ID in these files:
+~~Replace `G-XXXXXXXXXX` with your actual Measurement ID in these files:~~
+
+**✅ COMPLETED** - All pages updated with G-GBPD0VBEF2 on January 25, 2026
 
 **In greenreach-central/public/ folder:**
 ```bash
-# Find and replace in all files
-grep -r "G-XXXXXXXXXX" greenreach-central/public/*.html
+# All files already updated with G-GBPD0VBEF2
+# To verify:
+grep -r "G-GBPD0VBEF2" greenreach-central/public/*.html
 ```
 
-**Files to update:**
+**Updated files (✅ Complete):**
 - greenreach-central/public/greenreach-org.html
 - greenreach-central/public/greenreach-grow.html
 - greenreach-central/public/growing-made-easy.html
@@ -55,21 +70,25 @@ grep -r "G-XXXXXXXXXX" greenreach-central/public/*.html
 - greenreach-central/public/schedule.html
 - greenreach-central/public/purchase.html
 
-**Quick command to replace all instances:**
-```bash
+~~**Quick command to replace all instances:**~~
+~~```bash
 cd greenreach-central/public
 # Replace G-XXXXXXXXXX with your actual ID (e.g., G-ABC123DEF456)
 find . -name "*.html" -exec sed -i '' 's/G-XXXXXXXXXX/G-YOUR-ACTUAL-ID/g' {} +
-```
+```~~
+
+**✅ Already deployed with G-GBPD0VBEF2**
 
 ### Step 4: Deploy to AWS
-```bash
+~~```bash
 cd greenreach-central
 git add -A
 git commit -m "Update Google Analytics Measurement ID"
 git push origin main
 eb deploy
-```
+```~~
+
+**✅ DEPLOYED** - Live at https://greenreachgreens.com (January 25, 2026)
 
 ### Step 5: Verify Tracking
 1. Go to https://analytics.google.com
