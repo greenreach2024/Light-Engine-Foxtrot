@@ -974,8 +974,9 @@
         <div id="videoModal" class="video-modal" onclick="closeVideoModal(event)">
             <div class="video-modal-content">
                 <button class="video-modal-close" onclick="closeVideoModal(event)">×</button>
-                <video id="modalVideo" controls>
-                    <source src="videos/crop-pricing.mov" type="video/mp4">
+                <video id="modalVideo" controls playsinline webkit-playsinline>
+                    <source src="videos/crop-pricing.mov" type="video/quicktime">
+                    <source src="videos/crop-pricing.mp4" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
             </div>
@@ -985,8 +986,9 @@
         <div id="videoModal2" class="video-modal" onclick="closeVideoModal2(event)">
             <div class="video-modal-content">
                 <button class="video-modal-close" onclick="closeVideoModal2(event)">×</button>
-                <video id="modalVideo2" controls>
-                    <source src="videos/screen-recording-2.mov" type="video/mp4">
+                <video id="modalVideo2" controls playsinline webkit-playsinline>
+                    <source src="videos/screen-recording-2.mov" type="video/quicktime">
+                    <source src="videos/screen-recording-2.mp4" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
             </div>
@@ -997,7 +999,14 @@
                 const modal = document.getElementById('videoModal');
                 const video = document.getElementById('modalVideo');
                 modal.classList.add('active');
-                video.play();
+                // Attempt to play video, handle promise rejection
+                const playPromise = video.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log('Video autoplay prevented:', error);
+                        // Video will be ready to play with user interaction
+                    });
+                }
             }
 
             function closeVideoModal(event) {
@@ -1014,7 +1023,14 @@
                 const modal = document.getElementById('videoModal2');
                 const video = document.getElementById('modalVideo2');
                 modal.classList.add('active');
-                video.play();
+                // Attempt to play video, handle promise rejection
+                const playPromise = video.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log('Video autoplay prevented:', error);
+                        // Video will be ready to play with user interaction
+                    });
+                }
             }
 
             function closeVideoModal2(event) {
