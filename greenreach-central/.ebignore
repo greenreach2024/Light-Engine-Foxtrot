@@ -13,3 +13,4 @@ test-api.sh
 execute
 login
 preview
+public/videos/
