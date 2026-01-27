@@ -773,4 +773,154 @@ router.get('/farms/:farmId/logs', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/admin/farms/:farmId/devices
+ * Get devices registered to a specific farm
+ */
+router.get('/farms/:farmId/devices', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        console.log(`[Admin API] Fetching devices for farm: ${farmId}`);
+        
+        // Try to get devices from farm_data sync table
+        let devices = [];
+        try {
+            const result = await query(
+                `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+                [farmId, 'devices']
+            );
+            
+            if (result.rows.length > 0) {
+                devices = result.rows[0].data || [];
+            }
+        } catch (e) {
+            console.warn('[Admin API] farm_data table not available:', e.message);
+        }
+        
+        // If no synced devices, return empty array
+        res.json({
+            success: true,
+            devices: devices,
+            count: devices.length,
+            farmId: farmId
+        });
+        
+    } catch (error) {
+        console.error(`[Admin API] Error fetching devices:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch farm devices',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/admin/farms/:farmId/inventory
+ * Get inventory for a specific farm
+ */
+router.get('/farms/:farmId/inventory', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        console.log(`[Admin API] Fetching inventory for farm: ${farmId}`);
+        
+        // Try to get inventory from farm_inventory table
+        let inventory = [];
+        try {
+            const result = await query(
+                `SELECT * FROM farm_inventory WHERE farm_id = $1 ORDER BY last_updated DESC`,
+                [farmId]
+            );
+            
+            inventory = result.rows.map(row => ({
+                productId: row.product_id,
+                productName: row.product_name,
+                sku: row.sku,
+                quantity: row.quantity,
+                unit: row.unit,
+                price: row.price,
+                availableForWholesale: row.available_for_wholesale,
+                lastUpdated: row.last_updated
+            }));
+        } catch (e) {
+            console.warn('[Admin API] farm_inventory table not available:', e.message);
+        }
+        
+        res.json({
+            success: true,
+            inventory: inventory,
+            count: inventory.length,
+            farmId: farmId
+        });
+        
+    } catch (error) {
+        console.error(`[Admin API] Error fetching inventory:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch farm inventory',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/admin/energy/dashboard
+ * Get energy usage dashboard data
+ */
+router.get('/energy/dashboard', async (req, res) => {
+    try {
+        console.log('[Admin API] Fetching energy dashboard data');
+        
+        // Return mock data structure for now
+        // TODO: Implement real energy monitoring when available
+        const now = new Date();
+        const mockData = {
+            summary: {
+                totalConsumption: 1250.5, // kWh
+                cost: 187.58, // USD
+                peakDemand: 45.2, // kW
+                avgDemand: 28.3, // kW
+                period: '30 days'
+            },
+            byFarm: [
+                {
+                    farmId: 'GR-00001',
+                    farmName: 'Farm Alpha',
+                    consumption: 850.3,
+                    cost: 127.54,
+                    percentOfTotal: 68
+                },
+                {
+                    farmId: 'GR-00002',
+                    farmName: 'Farm Beta',
+                    consumption: 400.2,
+                    cost: 60.04,
+                    percentOfTotal: 32
+                }
+            ],
+            hourly: Array.from({ length: 24 }, (_, i) => ({
+                hour: i,
+                consumption: 25 + Math.random() * 20,
+                timestamp: new Date(now.getTime() - (24 - i) * 3600000).toISOString()
+            })),
+            alerts: []
+        };
+        
+        res.json({
+            success: true,
+            data: mockData,
+            timestamp: now.toISOString(),
+            demo: true
+        });
+        
+    } catch (error) {
+        console.error('[Admin API] Error fetching energy dashboard:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch energy dashboard',
+            message: error.message
+        });
+    }
+});
+
 export default router;
