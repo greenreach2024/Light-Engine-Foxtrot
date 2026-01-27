@@ -2308,7 +2308,24 @@ async function loadFarmRooms(farmId, count) {
  * Render rooms table
  */
 function renderRoomsTable() {
-    const tbody = document.getElementById('rooms-tbody');
+    // Target the tbody inside farm-detail-view specifically
+    const detailView = document.getElementById('farm-detail-view');
+    if (!detailView) {
+        console.error('[renderRoomsTable] farm-detail-view not found');
+        return;
+    }
+    const tbody = detailView.querySelector('#rooms-tbody');
+    if (!tbody) {
+        console.error('[renderRoomsTable] rooms-tbody not found in farm-detail-view');
+        return;
+    }
+    
+    console.log('[renderRoomsTable] Rendering', roomsData.length, 'rooms');
+    
+    if (roomsData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">No rooms found for this farm</td></tr>';
+        return;
+    }
     
     tbody.innerHTML = roomsData.map(room => `
         <tr>
@@ -2324,6 +2341,7 @@ function renderRoomsTable() {
             </td>
         </tr>
     `).join('');
+    console.log('[renderRoomsTable] Table updated successfully');
 }
 
 /**
@@ -2359,14 +2377,28 @@ async function loadFarmDevices(farmId, count) {
  * Render devices table
  */
 function renderDevicesTable(devices) {
-    const tbody = document.getElementById('devices-tbody');
+    // Target the tbody inside farm-detail-view specifically
+    const detailView = document.getElementById('farm-detail-view');
+    if (!detailView) {
+        console.error('[renderDevicesTable] farm-detail-view not found');
+        return;
+    }
+    const tbody = detailView.querySelector('#devices-tbody');
+    if (!tbody) {
+        console.error('[renderDevicesTable] devices-tbody not found in farm-detail-view');
+        return;
+    }
     
-    if (devices.length === 0) {
+    // Use passed devices or fall back to global devicesData
+    const deviceList = devices || devicesData;
+    console.log('[renderDevicesTable] Rendering', deviceList.length, 'devices');
+    
+    if (deviceList.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #a0aec0;">No devices found for this farm. Add devices to monitor equipment.</td></tr>';
         return;
     }
     
-    tbody.innerHTML = devices.map(device => `
+    tbody.innerHTML = deviceList.map(device => `
         <tr>
             <td><code>${device.deviceId}</code></td>
             <td>${device.name}</td>
@@ -2380,6 +2412,7 @@ function renderDevicesTable(devices) {
             </td>
         </tr>
     `).join('');
+    console.log('[renderDevicesTable] Table updated successfully');
 }
 
 /**
@@ -2427,7 +2460,19 @@ async function loadFarmInventory(farmId, trayCount) {
  * Render inventory table
  */
 function renderInventoryTable() {
-    const tbody = document.getElementById('inventory-tbody');
+    // Target the tbody inside farm-detail-view specifically
+    const detailView = document.getElementById('farm-detail-view');
+    if (!detailView) {
+        console.error('[renderInventoryTable] farm-detail-view not found');
+        return;
+    }
+    const tbody = detailView.querySelector('#inventory-tbody');
+    if (!tbody) {
+        console.error('[renderInventoryTable] inventory-tbody not found in farm-detail-view');
+        return;
+    }
+    
+    console.log('[renderInventoryTable] Rendering', inventoryData.length, 'inventory items');
     
     if (inventoryData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #a0aec0;">No trays found for this farm. Add trays to see inventory.</td></tr>';
