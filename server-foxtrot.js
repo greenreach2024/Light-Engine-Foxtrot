@@ -18039,9 +18039,10 @@ app.get('/data/groups.json', (req, res, next) => {
   const farm = loadDemoFarmSnapshot();
   if (!farm) {
     try {
-      const groupsPath = path.join(__dirname, 'data', 'groups.json');
-      if (fs.existsSync(groupsPath)) {
-        const raw = fs.readFileSync(groupsPath, 'utf8');
+      // FIX: Use GROUPS_PATH which points to public/data/groups.json (correct location)
+      // Previously was reading from data/groups.json (wrong directory, stale data)
+      if (fs.existsSync(GROUPS_PATH)) {
+        const raw = fs.readFileSync(GROUPS_PATH, 'utf8');
         const payload = raw ? JSON.parse(raw) : { groups: [] };
         const groups = Array.isArray(payload.groups) ? payload.groups : (Array.isArray(payload) ? payload : []);
         res.setHeader('Access-Control-Allow-Origin', '*');
