@@ -1212,7 +1212,7 @@ router.get('/check-overselling', async (req, res) => {
         f.status,
         COUNT(DISTINCT i.id) as product_count
       FROM farms f
-      LEFT JOIN farm_inventory i ON f.farm_id = i.farm_id AND i.quantity_available > 0
+      LEFT JOIN farm_inventory i ON f.farm_id = i.farm_id AND i.quantity > 0
       WHERE f.status = 'active'
       GROUP BY f.farm_id, f.name, f.status
     `);
@@ -1246,4 +1246,41 @@ router.get('/check-overselling', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/wholesale/farm-performance/dashboard
+ * Lightweight dashboard metrics for wholesale insights
+ */
+router.get('/farm-performance/dashboard', async (req, res) => {
+  try {
+    if (req.app?.locals?.databaseReady === false) {
+      return res.json({
+        status: 'ok',
+        data: {
+          farms: 0,
+          orders: 0,
+          revenue: 0,
+          timeframe: req.query?.timeframe || '30d',
+          mode: 'limited'
+        }
+      });
+    }
+
+    const farmsResult = await query(`SELECT COUNT(*)::int AS total FROM farms`);
+    const ordersResult = await query(`SELECT COUNT(*)::int AS total FROM orders`);
+    const revenueResult = await query(`SELECT COALESCE(SUM((order_data->>'total')::numeric), 0) AS revenue FROM orders`);
+
+    res.json({
+      status: 'ok',
+      data: {
+        farms: farmsResult.rows[0]?.total || 0,
+        orders: ordersResult.rows[0]?.total || 0,
+        revenue: Number(revenueResult.rows[0]?.revenue || 0),
+        timeframe: req.query?.timeframe || '30d'
+      }
+    });
+  } catch (error) {
+    console.error('[Farm Performance Dashboard] Error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to load farm performance dashboard' });
+  }
+});
 export default router;
