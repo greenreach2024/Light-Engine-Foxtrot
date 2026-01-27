@@ -17583,7 +17583,7 @@ if (!isControllerDisabled) {
   logLevel: 'debug',
   timeout: 5000,
   proxyTimeout: 5000,
-  agent: (url) => (String(url).startsWith('https:') ? keepAliveHttpsAgent : keepAliveHttpAgent),
+  // Note: agent removed - incompatible with http-proxy-middleware v3+
   // Filter: only proxy paths that should go to the Grow3 controller
   // Exclude paths handled by Node.js server (env, automation, switchbot, kasa, etc.)
   filter: (pathname, req) => {
@@ -17711,7 +17711,7 @@ if (!isControllerDisabled) {
   logLevel: 'debug',
   timeout: 5000,
   proxyTimeout: 5000,
-  agent: (url) => (String(url).startsWith('https:') ? keepAliveHttpsAgent : keepAliveHttpAgent),
+  // Note: agent removed - incompatible with http-proxy-middleware v3+
   pathRewrite: (path) => path.replace(/^\/controller/, ''),
   onProxyReq(proxyReq, req) {
     console.log(`[→] ${req.method} ${req.originalUrl} -> ${getController()}${req.url}`);
