@@ -1488,9 +1488,10 @@ async function viewFarmDetail(farmId) {
             return;
         }
         
-        const farm = await response.json();
-        if (!farm || farm.error) {
-            console.error('Farm not found:', farmId, farm);
+        const payload = await response.json();
+        const farm = payload?.farm || payload;
+        if (!farm || payload?.error || payload?.success === false) {
+            console.error('Farm not found:', farmId, payload);
             alert('Farm not found or unavailable.');
             return;
         }
@@ -1527,7 +1528,7 @@ async function loadFarmDetails(farmId, farmData) {
         
         // Update metrics (handle both API response structure and local data)
         document.getElementById('detail-uptime').textContent = '99.8%';
-        document.getElementById('detail-last-seen').textContent = farm.lastUpdate || 'Unknown';
+        document.getElementById('detail-last-seen').textContent = farm.lastHeartbeat || farm.lastUpdate || 'Unknown';
         document.getElementById('detail-api-calls').textContent = `${Math.floor(Math.random() * 10000)}`;
         document.getElementById('detail-storage').textContent = `${Math.floor(Math.random() * 50)} GB`;
         
@@ -1568,26 +1569,26 @@ async function viewRoomDetail(farmId, roomId) {
     
     showView('room-detail-view');
     
-    // Fetch farm data to get detailed room information
+    // Fetch farm room data to get detailed room information
     let roomData = null;
     
     try {
-        const response = await fetch(`/api/admin/farms/${farmId}`);
+        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/rooms`);
         if (response.ok) {
-            const farmData = await response.json();
-            // Find the specific room in the farm data
-            const room = farmData.rooms?.find(r => r.roomId === roomId);
+            const data = await response.json();
+            const rooms = Array.isArray(data.rooms) ? data.rooms : [];
+            const room = rooms.find(r => r.roomId === roomId || r.id === roomId || r.room_id === roomId || r.name === roomId);
             
             if (room) {
                 roomData = {
-                    roomId: room.roomId,
-                    name: room.name,
-                    temperature: room.temperature,
-                    humidity: room.humidity,
+                    roomId: room.roomId || room.id || room.room_id,
+                    name: room.name || 'Room',
+                    temperature: room.temperature ?? room.temp ?? room.tempC,
+                    humidity: room.humidity ?? room.rh,
                     co2: room.co2,
                     vpd: room.vpd,
-                    zones: room.zones,
-                    devices: room.devices,
+                    zones: room.zones || room.zone_count,
+                    devices: room.devices || room.device_count,
                     trays: room.trays,
                     totalPlants: room.totalPlants,
                     energyToday: room.energyToday,
@@ -1595,7 +1596,7 @@ async function viewRoomDetail(farmId, roomId) {
                     energyTrend: room.energyTrend,
                     energyTrendPercent: room.energyTrendPercent
                 };
-                console.log(`[room-detail] Loaded detailed data for ${room.name}`);
+                console.log(`[room-detail] Loaded detailed data for ${roomData.name}`);
             }
         }
     } catch (error) {
@@ -2213,6 +2214,7 @@ async function loadFarmRooms(farmId, count) {
 
         roomsData = rooms.map(room => {
             const name = room.name || room.room_name || room.roomId || room.id || 'Room';
+            const roomId = room.roomId || room.room_id || room.id || name;
             const zones = room.zones?.length || room.zone_count || room.zoneCount || 0;
             const devices = room.devices?.length || room.device_count || room.deviceCount || 0;
             const temp = room.temperature ?? room.temp ?? room.tempC ?? '-';
@@ -2220,6 +2222,7 @@ async function loadFarmRooms(farmId, count) {
             const co2 = room.co2 ?? '-';
 
             return {
+                roomId,
                 name,
                 status: room.status || 'online',
                 zones,
@@ -2253,7 +2256,7 @@ function renderRoomsTable() {
             <td>${room.humidity}</td>
             <td>${room.co2}</td>
             <td>
-                <button class="btn" onclick="viewRoomDetail('${room.name}')">View</button>
+                <button class="btn" onclick="viewRoomDetail('${currentFarmId}', '${room.roomId || room.name}')">View</button>
             </td>
         </tr>
     `).join('');
@@ -2388,7 +2391,7 @@ function renderInventoryTable() {
  */
 async function loadFarmRecipes(farmId) {
     try {
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/recipes`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/recipes?limit=200`);
         
         if (!response.ok) {
             console.error('Failed to load recipes:', response.status);
@@ -2399,17 +2402,15 @@ async function loadFarmRecipes(farmId) {
         
         const data = await response.json();
         recipesData = (data.recipes || []).map(recipe => ({
-            recipe_id: recipe.recipe_id,
+            recipe_id: recipe.id || recipe.recipe_id || recipe.name,
             name: recipe.name,
-            cropType: recipe.crop_type,
+            cropType: recipe.category || recipe.cropType || recipe.crop_type || 'Unknown',
             activeTrays: recipe.active_trays || 0,
-            cycleDuration: `${recipe.cycle_duration_days} days`,
-            avgHarvestTime: `${recipe.cycle_duration_days} days`,
+            cycleDuration: recipe.duration_days ? `${recipe.duration_days} days` : '—',
+            avgHarvestTime: recipe.duration_days ? `${recipe.duration_days} days` : '—',
             variance: '0d',
             successRate: '100%',
-            description: recipe.description,
-            lightSchedule: recipe.light_schedule,
-            harvestCriteria: recipe.harvest_criteria
+            description: recipe.description
         }));
         
         renderRecipesTable();
@@ -3467,28 +3468,23 @@ async function loadRoomsView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading room data...</td></tr>';
     
     try {
-        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
-        const farmsData = await farmsRes.json();
+        const roomsRes = await authenticatedFetch(`${API_BASE}/api/admin/rooms`);
+        if (!roomsRes || !roomsRes.ok) throw new Error('Failed to load rooms');
+        const roomsData = await roomsRes.json();
         
-        let rooms = [];
-        for (const farm of farmsData.farms || []) {
-            // Mock room data - in production, fetch from farm details
-            const roomCount = farm.rooms || Math.floor(Math.random() * 5) + 1;
-            for (let i = 1; i <= roomCount; i++) {
-                rooms.push({
-                    name: `Room ${String.fromCharCode(64 + i)}`,
-                    farmName: farm.name,
-                    temperature: (70 + Math.random() * 10).toFixed(1),
-                    humidity: (55 + Math.random() * 15).toFixed(0),
-                    co2: (800 + Math.random() * 400).toFixed(0),
-                    vpd: (0.7 + Math.random() * 0.4).toFixed(2),
-                    zones: Math.floor(Math.random() * 4) + 2,
-                    devices: Math.floor(Math.random() * 20) + 10,
-                    status: Math.random() > 0.8 ? 'warning' : 'optimal'
-                });
-            }
-        }
+        const rooms = (roomsData.rooms || []).map(room => ({
+            roomId: room.roomId || room.room_id || room.id || room.name,
+            name: room.name || room.room_name || room.roomId || room.id || 'Room',
+            farmId: room.farmId || room.farm_id || 'Unknown Farm',
+            farmName: room.farmName || room.farm_id || room.farmId || 'Unknown Farm',
+            temperature: room.temperature ?? room.temp ?? room.tempC ?? '-',
+            humidity: room.humidity ?? room.rh ?? '-',
+            co2: room.co2 ?? '-',
+            vpd: room.vpd ?? '-',
+            zones: room.zones?.length || room.zone_count || room.zoneCount || 0,
+            devices: room.devices?.length || room.device_count || room.deviceCount || 0,
+            status: room.status || 'online'
+        }));
         
         if (rooms.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="empty">No rooms found</td></tr>';
@@ -3506,7 +3502,7 @@ async function loadRoomsView() {
                 <td>${room.zones}</td>
                 <td>${room.devices}</td>
                 <td><span class="status-badge status-${room.status}">${room.status}</span></td>
-                <td><button class="btn-small" onclick="viewRoomDetail('${room.name}')">View</button></td>
+                <td><button class="btn-small" onclick="viewRoomDetail('${room.farmId}', '${room.roomId || room.name}')">View</button></td>
             </tr>
         `).join('');
         
