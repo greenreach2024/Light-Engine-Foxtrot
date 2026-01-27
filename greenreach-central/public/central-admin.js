@@ -2912,42 +2912,50 @@ async function navigate(view, element) {
             
         // Farm-specific views - switch tabs within farm-detail-view
         case 'farm-overview':
-            // Switch to overview tab in farm-detail-view
+            // Ensure farm-detail-view is visible, then switch to overview tab
+            document.getElementById('farm-detail-view').style.display = 'block';
             switchDetailTab('overview');
             break;
             
         case 'farm-rooms':
-            // Switch to rooms tab in farm-detail-view
+            // Ensure farm-detail-view is visible, then switch to rooms tab
+            document.getElementById('farm-detail-view').style.display = 'block';
             switchDetailTab('rooms');
             break;
             
         case 'farm-devices':
-            // Switch to devices tab in farm-detail-view
+            // Ensure farm-detail-view is visible, then switch to devices tab
+            document.getElementById('farm-detail-view').style.display = 'block';
             switchDetailTab('devices');
             break;
             
         case 'farm-inventory':
-            // Switch to inventory tab in farm-detail-view
+            // Ensure farm-detail-view is visible, then switch to inventory tab
+            document.getElementById('farm-detail-view').style.display = 'block';
             switchDetailTab('inventory');
             break;
             
         case 'farm-recipes':
-            // Switch to recipes tab in farm-detail-view
+            // Ensure farm-detail-view is visible, then switch to recipes tab
+            document.getElementById('farm-detail-view').style.display = 'block';
             switchDetailTab('recipes');
             break;
             
         case 'farm-environmental':
-            // Switch to environmental tab in farm-detail-view
+            // Ensure farm-detail-view is visible, then switch to environmental tab
+            document.getElementById('farm-detail-view').style.display = 'block';
             switchDetailTab('environmental');
             break;
             
         case 'farm-energy':
-            // Switch to energy tab in farm-detail-view
+            // Ensure farm-detail-view is visible, then switch to energy tab
+            document.getElementById('farm-detail-view').style.display = 'block';
             switchDetailTab('energy');
             break;
             
         case 'farm-alerts':
-            // Switch to alerts tab in farm-detail-view
+            // Ensure farm-detail-view is visible, then switch to alerts tab
+            document.getElementById('farm-detail-view').style.display = 'block';
             switchDetailTab('alerts');
             break;
             
