@@ -7018,6 +7018,72 @@ app.post('/api/room-mapper/save', asyncHandler(async (req, res) => {
   }
 }));
 
+// POST /data/rooms.json - Save rooms and sync to cloud
+app.post('/data/rooms.json', asyncHandler(async (req, res) => {
+  try {
+    const { rooms } = req.body;
+    
+    if (!Array.isArray(rooms)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Rooms must be an array' 
+      });
+    }
+    
+    console.log(`[rooms] Saving ${rooms.length} rooms to disk`);
+    
+    // Save to rooms.json file
+    const roomsFilePath = path.join(__dirname, 'public', 'data', 'rooms.json');
+    const roomsData = {
+      rooms,
+      metadata: {
+        lastUpdated: new Date().toISOString(),
+        version: '1.0'
+      }
+    };
+    
+    await fs.promises.writeFile(
+      roomsFilePath, 
+      JSON.stringify(roomsData, null, 2),
+      'utf8'
+    );
+    
+    console.log(`[rooms] Successfully saved to ${roomsFilePath}`);
+    
+    // Dispatch event to notify other systems
+    if (typeof io !== 'undefined') {
+      io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
+    }
+    
+    // Sync to cloud if configured
+    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY && process.env.FARM_ID) {
+      try {
+        const syncService = getSyncService();
+        await syncService.syncRooms(rooms);
+        console.log('[rooms] Synced rooms to GreenReach Central');
+      } catch (syncError) {
+        console.error('[rooms] Failed to sync rooms to cloud:', syncError.message);
+        // Don't fail the save if sync fails
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Saved ${rooms.length} rooms`,
+      count: rooms.length,
+      synced: !!(process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY)
+    });
+    
+  } catch (error) {
+    console.error('[rooms] Error saving rooms:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to save rooms',
+      message: error.message 
+    });
+  }
+}));
+
 // Groups V2 save groups endpoint
 app.post('/data/groups.json', asyncHandler(async (req, res) => {
   try {
@@ -7271,6 +7337,27 @@ app.post('/api/sync/trigger', asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('[sync] Trigger error:', error);
     res.status(500).json({ error: 'Failed to trigger sync' });
+  }
+}));
+
+// Restore data from cloud (disaster recovery)
+app.post('/api/sync/restore', asyncHandler(async (req, res) => {
+  try {
+    const syncService = getSyncService();
+    const result = await syncService.restoreFromCloud();
+    
+    res.json({ 
+      success: true, 
+      message: 'Data restored from cloud',
+      ...result
+    });
+  } catch (error) {
+    console.error('[sync] Restore error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to restore from cloud',
+      message: error.message 
+    });
   }
 }));
 

@@ -396,4 +396,163 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/sync/:farmId/rooms
+ * Restore rooms from cloud to edge device
+ */
+router.get('/:farmId/rooms', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    logger.info(`[Sync] Restoring rooms for farm ${farmId}`);
+    
+    let rooms = [];
+    
+    if (await isDatabaseAvailable()) {
+      // Retrieve from database
+      const result = await query(
+        `SELECT data FROM farm_data 
+         WHERE farm_id = $1 AND data_type = $2`,
+        [farmId, 'rooms']
+      );
+      
+      if (result.rows.length > 0) {
+        rooms = result.rows[0].data;
+      }
+      
+      logger.info(`[Sync] Retrieved ${rooms.length} rooms from database for farm ${farmId}`);
+    } else {
+      // Retrieve from memory
+      rooms = inMemoryStore.rooms.get(farmId) || [];
+      logger.info(`[Sync] Retrieved ${rooms.length} rooms from memory for farm ${farmId}`);
+    }
+    
+    res.json({ 
+      success: true,
+      rooms,
+      count: rooms.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error restoring rooms:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to restore rooms',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/sync/:farmId/groups
+ * Restore groups from cloud to edge device
+ */
+router.get('/:farmId/groups', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    logger.info(`[Sync] Restoring groups for farm ${farmId}`);
+    
+    let groups = [];
+    
+    if (await isDatabaseAvailable()) {
+      // Retrieve from database
+      const result = await query(
+        `SELECT data FROM farm_data 
+         WHERE farm_id = $1 AND data_type = $2`,
+        [farmId, 'groups']
+      );
+      
+      if (result.rows.length > 0) {
+        groups = result.rows[0].data;
+      }
+      
+      logger.info(`[Sync] Retrieved ${groups.length} groups from database for farm ${farmId}`);
+    } else {
+      // Retrieve from memory
+      groups = inMemoryStore.groups.get(farmId) || [];
+      logger.info(`[Sync] Retrieved ${groups.length} groups from memory for farm ${farmId}`);
+    }
+    
+    res.json({ 
+      success: true,
+      groups,
+      count: groups.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error restoring groups:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to restore groups',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/sync/restore
+ * Trigger full data restore from cloud (called by edge device)
+ * Uses authenticated farm ID from middleware
+ */
+router.post('/restore', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req;
+    
+    logger.info(`[Sync] Full restore requested for farm ${farmId}`);
+    
+    let rooms = [];
+    let groups = [];
+    
+    if (await isDatabaseAvailable()) {
+      // Retrieve rooms
+      const roomsResult = await query(
+        `SELECT data FROM farm_data 
+         WHERE farm_id = $1 AND data_type = $2`,
+        [farmId, 'rooms']
+      );
+      if (roomsResult.rows.length > 0) {
+        rooms = roomsResult.rows[0].data;
+      }
+      
+      // Retrieve groups
+      const groupsResult = await query(
+        `SELECT data FROM farm_data 
+         WHERE farm_id = $1 AND data_type = $2`,
+        [farmId, 'groups']
+      );
+      if (groupsResult.rows.length > 0) {
+        groups = groupsResult.rows[0].data;
+      }
+      
+      logger.info(`[Sync] Retrieved ${rooms.length} rooms, ${groups.length} groups from database for farm ${farmId}`);
+    } else {
+      // Retrieve from memory
+      rooms = inMemoryStore.rooms.get(farmId) || [];
+      groups = inMemoryStore.groups.get(farmId) || [];
+      logger.info(`[Sync] Retrieved ${rooms.length} rooms, ${groups.length} groups from memory for farm ${farmId}`);
+    }
+    
+    res.json({ 
+      success: true,
+      message: `Restored ${rooms.length} rooms, ${groups.length} groups`,
+      data: {
+        rooms,
+        groups
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error during full restore:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to restore data',
+      message: error.message 
+    });
+  }
+});
+
 export default router;
