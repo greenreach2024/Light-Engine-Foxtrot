@@ -25,38 +25,20 @@ import {
 } from './server/middleware/audit-logger.js';
 import { getJwtSecret } from './server/utils/secrets-manager.js';
 
-// Setup console wrapper for demo mode BEFORE any other logs
+// Setup console wrapper
 import { setupConsoleWrapper } from './server/utils/console-wrapper.js';
 setupConsoleWrapper();
 
-// LOG ENVIRONMENT ON STARTUP (will be suppressed in demo mode)
-console.log(' [STARTUP] Environment variables:');
-console.log('  DEMO_MODE:', process.env.DEMO_MODE);
-console.log('  DEMO_FARM_ID:', process.env.DEMO_FARM_ID);
-console.log('  DEMO_REALTIME:', process.env.DEMO_REALTIME);
+// LOG ENVIRONMENT ON STARTUP
+console.log('========== Light Engine Foxtrot Server ==========');
 console.log('  NODE_ENV:', process.env.NODE_ENV);
 console.log('  PORT:', process.env.PORT);
+console.log('  EDGE_MODE:', process.env.EDGE_MODE);
 
 // --- Feature flag: ALLOW_MOCKS (default OFF) ---
 const ALLOW_MOCKS = String(process.env.ALLOW_MOCKS || 'false').toLowerCase() === 'true';
 
-// --- Demo Mode imports ---
-import { 
-  initializeDemoMode, 
-  createDemoModeHandler, 
-  isDemoMode, 
-  getDemoData,
-  getDemoBannerHTML 
-} from './server/middleware/demo-mode-handler.js';
-
-// Initialize demo mode immediately at module load
-console.log('[charlie] 🎬 Module loading - initializing demo mode...');
-try {
-  initializeDemoMode();
-  console.log('[charlie]  Demo mode initialized at module scope');
-} catch (error) {
-  console.error('[charlie]  Demo mode initialization failed:', error?.message || error);
-}
+// DEMO MODE REMOVED - Production only uses real farm data and sensors
 
 import { createProxyMiddleware } from "http-proxy-middleware";
 import fs from "fs";
@@ -5011,88 +4993,7 @@ app.get('/env', async (req, res) => {
   try {
     setPreAutomationCors(req, res);
     
-    // Demo mode: Return demo environmental data
-    if (isDemoMode()) {
-      const demoData = getDemoData();
-      const envData = demoData.getEnvironmentalData();
-      
-      // Generate 24 hours of historical data (288 points at 5-minute intervals)
-      const now = Date.now();
-      const generateHistory = (baseValue, variance, count = 288) => {
-        const history = [];
-        for (let i = count - 1; i >= 0; i--) {
-          const timeOffset = i * 5 * 60 * 1000; // 5 minutes per point
-          const hourOfDay = new Date(now - timeOffset).getHours();
-          
-          // Add daily cycle (warmer during "day" hours 6-18, cooler at "night")
-          const dailyCycle = Math.sin(((hourOfDay - 6) / 12) * Math.PI) * variance * 0.5;
-          
-          // Add random variation
-          const randomVar = (Math.random() - 0.5) * variance;
-          
-          history.push(parseFloat((baseValue + dailyCycle + randomVar).toFixed(2)));
-        }
-        console.log('[ENV] Generated history:', history.length, 'points, first 3:', history.slice(0, 3));
-        return history;
-      };
-      
-      // Transform demo data to match expected frontend structure
-      const zones = envData.zones.map(zone => ({
-        id: zone.id || zone.zoneId,
-        name: zone.name,
-        sensors: {
-          tempC: {
-            current: zone.temperature,
-            unit: '°C',
-            history: generateHistory(zone.temperature, 2),
-            setpoint: { min: 18, max: 24 }
-          },
-          rh: {
-            current: zone.humidity,
-            unit: '%',
-            history: generateHistory(zone.humidity, 5),
-            setpoint: { min: 55, max: 75 }
-          },
-          co2: {
-            current: zone.co2,
-            unit: 'ppm',
-            history: generateHistory(zone.co2, 100),
-            setpoint: { min: 800, max: 1200 }
-          },
-          ppfd: {
-            current: zone.ppfd,
-            unit: 'μmol/m²/s',
-            history: generateHistory(zone.ppfd, 50),
-            setpoint: { min: 200, max: 600 }
-          },
-          vpd: {
-            current: zone.vpd,
-            unit: 'kPa',
-            history: generateHistory(zone.vpd, 0.2),
-            setpoint: { min: 0.8, max: 1.2 }
-          }
-        },
-        updatedAt: zone.timestamp,
-        meta: {
-          status: zone.status,
-          alerts: zone.alerts || [],
-          lastSync: new Date(now).toISOString()
-        }
-      }));
-      
-      return res.json({
-        ok: true,
-        zones,
-        rooms: [],
-        meta: {
-          envSource: 'demo',
-          provider: 'demo-mode',
-          cache: false,
-          updatedAt: new Date().toISOString()
-        }
-      });
-    }
-    
+    // DEMO MODE REMOVED - Always serve real sensor data from preEnvStore
     const zoneBindingSummary = __zoneBindingsSnapshot || { bindings: [], meta: { source: 'cache', bindings: 0 } };
     const snapshot = preEnvStore.getSnapshot();
     const zonesFromScopes = Object.entries(snapshot.scopes || {}).map(([scopeId, scopeData]) => {
