@@ -1478,40 +1478,73 @@ async function checkAlerts() {
  */
 async function viewFarmDetail(farmId) {
     currentFarmId = farmId;
-    console.log('[FarmDetail] Viewing farm:', farmId);
+    console.log('[FarmDetail] ===== VIEWING FARM =====');
+    console.log('[FarmDetail] Farm ID:', farmId);
     
     try {
         // Fetch detailed farm data from API
         const url = `${API_BASE}/api/admin/farms/${farmId}`;
         console.log('[FarmDetail] Fetching:', url);
         const response = await authenticatedFetch(url);
+        console.log('[FarmDetail] Response status:', response.status, response.ok);
         if (!response.ok) {
-            console.error('Failed to load farm details:', response.status);
+            console.error('[FarmDetail] ERROR: Failed to load farm details:', response.status);
+            const errorText = await response.text();
+            console.error('[FarmDetail] ERROR Response:', errorText);
             alert('Unable to load farm details. Please try again.');
             return;
         }
         
         const payload = await response.json();
-        console.log('[FarmDetail] Raw payload:', payload);
+        console.log('[FarmDetail] Raw payload received:', JSON.stringify(payload, null, 2));
         const farm = payload?.farm || payload;
         if (!farm || payload?.error || payload?.success === false) {
-            console.error('Farm not found:', farmId, payload);
+            console.error('[FarmDetail] ERROR: Farm not found or invalid payload:', farmId, payload);
             alert('Farm not found or unavailable.');
             return;
         }
         console.log('[FarmDetail] Parsed farm object:', farm);
+        console.log('[FarmDetail] Farm properties:', {
+            name: farm.name,
+            farmId: farm.farmId,
+            status: farm.status,
+            rooms: farm.rooms,
+            zones: farm.zones,
+            environmental: farm.environmental
+        });
     
         // Update breadcrumb and header
-        document.getElementById('farm-detail-name').textContent = farm.name || farmId;
-        document.getElementById('farm-detail-title').textContent = farm.name || farmId;
-        document.getElementById('farm-detail-id').textContent = farmId;
+        console.log('[FarmDetail] Updating header elements...');
+        const nameEl = document.getElementById('farm-detail-name');
+        const titleEl = document.getElementById('farm-detail-title');
+        const idEl = document.getElementById('farm-detail-id');
+        
+        if (nameEl) nameEl.textContent = farm.name || farmId;
+        if (titleEl) titleEl.textContent = farm.name || farmId;
+        if (idEl) idEl.textContent = farmId;
+        
+        console.log('[FarmDetail] Header updated:', {
+            name: farm.name || farmId,
+            id: farmId
+        });
         
         // Hide overview, show detail
-        document.getElementById('overview-view').style.display = 'none';
-        document.getElementById('farm-detail-view').style.display = 'block';
+        console.log('[FarmDetail] Switching views...');
+        const overviewView = document.getElementById('overview-view');
+        const detailView = document.getElementById('farm-detail-view');
+        
+        if (overviewView) overviewView.style.display = 'none';
+        if (detailView) {
+            detailView.style.display = 'block';
+            console.log('[FarmDetail] Detail view is now visible');
+        } else {
+            console.error('[FarmDetail] ERROR: farm-detail-view element not found!');
+        }
         
         // Load farm details with the fetched farm data
+        console.log('[FarmDetail] Starting loadFarmDetails...');
         await loadFarmDetails(farmId, farm);
+        console.log('[FarmDetail] loadFarmDetails complete');
     } catch (error) {
         console.error('Error loading farm detail:', error);
         alert('Error loading farm details. Please check the console.');
@@ -1523,26 +1556,37 @@ async function viewFarmDetail(farmId) {
  */
 async function loadFarmDetails(farmId, farmData) {
     try {
+        console.log('[loadFarmDetails] ===== LOADING FARM DETAILS =====');
+        console.log('[loadFarmDetails] Farm ID:', farmId);
+        console.log('[loadFarmDetails] Farm Data:', farmData);
+        
         // Use provided farmData or fallback to farmsData array
         const farm = farmData || farmsData.find(f => f.farmId === farmId);
         
         if (!farm) {
-            console.error('Farm data not available for:', farmId);
+            console.error('[loadFarmDetails] ERROR: Farm data not available for:', farmId);
+            alert(`No data available for farm ${farmId}`);
             return;
         }
-        console.log('[FarmDetail] Rendering farm details for:', farmId, farm);
+        console.log('[loadFarmDetails] Using farm object:', farm);
         
         // Update metrics (handle both API response structure and local data)
-        document.getElementById('detail-uptime').textContent = '99.8%';
-        document.getElementById('detail-last-seen').textContent = farm.lastHeartbeat || farm.lastUpdate || 'Unknown';
-        document.getElementById('detail-api-calls').textContent = `${Math.floor(Math.random() * 10000)}`;
-        document.getElementById('detail-storage').textContent = `${Math.floor(Math.random() * 50)} GB`;
+        console.log('[loadFarmDetails] Updating metric elements...');
+        const uptimeEl = document.getElementById('detail-uptime');
+        const lastSeenEl = document.getElementById('detail-last-seen');
+        const apiCallsEl = document.getElementById('detail-api-calls');
+        const storageEl = document.getElementById('detail-storage');
+        
+        if (uptimeEl) uptimeEl.textContent = '99.8%';
+        if (lastSeenEl) lastSeenEl.textContent = farm.lastHeartbeat || farm.lastUpdate || 'Unknown';
+        if (apiCallsEl) apiCallsEl.textContent = `${Math.floor(Math.random() * 10000)}`;
+        if (storageEl) storageEl.textContent = `${Math.floor(Math.random() * 50)} GB`;
         
         // Get counts from farm data
         const rooms = farm.rooms || farm.environmental?.zones?.length || 0;
         const devices = farm.devices || (Array.isArray(farm.devices) ? farm.devices.length : 0);
         const zones = farm.zones || farm.environmental?.zones?.length || 0;
-        console.log('[FarmDetail] Counts:', { rooms, zones, devices });
+        console.log('[loadFarmDetails] Extracted counts:', { rooms, zones, devices });
         
         // Update equipment status
         document.getElementById('detail-lights').textContent = `${Math.floor(devices * 0.6)}/${Math.floor(devices * 0.6)}`;
@@ -1551,16 +1595,26 @@ async function loadFarmDetails(farmId, farmData) {
         document.getElementById('detail-irrigation').textContent = `${Math.floor(zones * 0.3)}/${Math.floor(zones * 0.5)}`;
         
         // Load rooms for this farm
+        console.log('[loadFarmDetails] Calling loadFarmRooms...');
         await loadFarmRooms(farmId, rooms);
+        console.log('[loadFarmDetails] loadFarmRooms complete');
         
         // Load devices for this farm
+        console.log('[loadFarmDetails] Calling loadFarmDevices...');
         await loadFarmDevices(farmId, devices);
+        console.log('[loadFarmDetails] loadFarmDevices complete');
         
         // Load inventory for this farm
+        console.log('[loadFarmDetails] Calling loadFarmInventory...');
         await loadFarmInventory(farmId, farm.trays || 0);
+        console.log('[loadFarmDetails] loadFarmInventory complete');
         
         // Load recipes for this farm
+        console.log('[loadFarmDetails] Calling loadFarmRecipes...');
         await loadFarmRecipes(farmId);
+        console.log('[loadFarmDetails] loadFarmRecipes complete');
+        
+        console.log('[loadFarmDetails] ===== ALL FARM DETAILS LOADED =====');
         
     } catch (error) {
         console.error('Error loading farm details:', error);
