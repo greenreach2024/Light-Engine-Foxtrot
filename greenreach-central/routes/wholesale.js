@@ -99,8 +99,10 @@ function requireBuyerAuth(req, res, next) {
  */
 router.get('/catalog', async (req, res, next) => {
   try {
-    // Limited mode: serve a live in-memory network catalog (pulled from farms)
-    if (req.app?.locals?.databaseReady === false) {
+    // HOTFIX: Always use in-memory catalog until farm_inventory schema is properly deployed
+    // farm_inventory table exists but with wrong schema - missing columns like product_name, category, etc.
+    // Use in-memory network catalog (pulled from farms) which is the proven working approach
+    if (true || req.app?.locals?.databaseReady === false) {
       const nearLat = req.query.nearLat ?? req.query.lat;
       const nearLng = req.query.nearLng ?? req.query.lng;
       const buyerLocation = (nearLat && nearLng)
