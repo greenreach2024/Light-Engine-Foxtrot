@@ -152,11 +152,20 @@ router.get('/farms/:farmId', async (req, res) => {
                 [farmId, 'telemetry']
             );
             telemetryData = telemetryResult.rows[0]?.data || null;
+        } else {
+            console.warn('[Admin API] Database unavailable for farm detail:', farmId);
         }
 
         const roomsCount = Array.isArray(roomsData) ? roomsData.length : 0;
         const zonesFromTelemetry = Array.isArray(telemetryData?.zones) ? telemetryData.zones : [];
         const zonesCount = zonesFromTelemetry.length || (Array.isArray(groupsData) ? groupsData.length : 0);
+        console.log('[Admin API] Farm data counts:', {
+            farmId,
+            roomsCount,
+            zonesCount,
+            telemetryZones: zonesFromTelemetry.length,
+            groupsCount: Array.isArray(groupsData) ? groupsData.length : 0
+        });
 
         const envSummary = zonesFromTelemetry.length ? {
             avgTemp: averageNumber(zonesFromTelemetry.map(z => z.sensors?.tempC?.current ?? z.temperature ?? z.tempC ?? null)),

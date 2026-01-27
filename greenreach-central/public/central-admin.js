@@ -1478,10 +1478,13 @@ async function checkAlerts() {
  */
 async function viewFarmDetail(farmId) {
     currentFarmId = farmId;
+    console.log('[FarmDetail] Viewing farm:', farmId);
     
     try {
         // Fetch detailed farm data from API
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        const url = `${API_BASE}/api/admin/farms/${farmId}`;
+        console.log('[FarmDetail] Fetching:', url);
+        const response = await authenticatedFetch(url);
         if (!response.ok) {
             console.error('Failed to load farm details:', response.status);
             alert('Unable to load farm details. Please try again.');
@@ -1489,12 +1492,14 @@ async function viewFarmDetail(farmId) {
         }
         
         const payload = await response.json();
+        console.log('[FarmDetail] Raw payload:', payload);
         const farm = payload?.farm || payload;
         if (!farm || payload?.error || payload?.success === false) {
             console.error('Farm not found:', farmId, payload);
             alert('Farm not found or unavailable.');
             return;
         }
+        console.log('[FarmDetail] Parsed farm object:', farm);
     
         // Update breadcrumb and header
         document.getElementById('farm-detail-name').textContent = farm.name || farmId;
@@ -1525,6 +1530,7 @@ async function loadFarmDetails(farmId, farmData) {
             console.error('Farm data not available for:', farmId);
             return;
         }
+        console.log('[FarmDetail] Rendering farm details for:', farmId, farm);
         
         // Update metrics (handle both API response structure and local data)
         document.getElementById('detail-uptime').textContent = '99.8%';
@@ -1536,6 +1542,7 @@ async function loadFarmDetails(farmId, farmData) {
         const rooms = farm.rooms || farm.environmental?.zones?.length || 0;
         const devices = farm.devices || (Array.isArray(farm.devices) ? farm.devices.length : 0);
         const zones = farm.zones || farm.environmental?.zones?.length || 0;
+        console.log('[FarmDetail] Counts:', { rooms, zones, devices });
         
         // Update equipment status
         document.getElementById('detail-lights').textContent = `${Math.floor(devices * 0.6)}/${Math.floor(devices * 0.6)}`;
@@ -2204,12 +2211,15 @@ async function loadFarmRooms(farmId, count) {
     roomsData = [];
 
     try {
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/rooms`);
+        const url = `${API_BASE}/api/admin/farms/${farmId}/rooms`;
+        console.log('[FarmRooms] Fetching:', url);
+        const response = await authenticatedFetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('[FarmRooms] Response:', data);
         const rooms = Array.isArray(data.rooms) ? data.rooms : [];
 
         roomsData = rooms.map(room => {
@@ -2391,7 +2401,9 @@ function renderInventoryTable() {
  */
 async function loadFarmRecipes(farmId) {
     try {
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/recipes?limit=200`);
+        const url = `${API_BASE}/api/admin/recipes?limit=200`;
+        console.log('[FarmRecipes] Fetching:', url, 'for farm:', farmId);
+        const response = await authenticatedFetch(url);
         
         if (!response.ok) {
             console.error('Failed to load recipes:', response.status);
@@ -2401,6 +2413,7 @@ async function loadFarmRecipes(farmId) {
         }
         
         const data = await response.json();
+        console.log('[FarmRecipes] Response:', data);
         recipesData = (data.recipes || []).map(recipe => ({
             recipe_id: recipe.id || recipe.recipe_id || recipe.name,
             name: recipe.name,
