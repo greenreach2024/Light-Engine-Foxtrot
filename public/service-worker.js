@@ -3,7 +3,7 @@
  * Provides offline support and caching
  */
 
-const CACHE_VERSION = 'v1.0.3';
+const CACHE_VERSION = 'v1.0.4';
 const CACHE_NAME = `light-engine-${CACHE_VERSION}`;
 
 // Files to cache immediately on install - only actual files that exist
@@ -15,9 +15,11 @@ const STATIC_CACHE = [
 ];
 
 // API routes that should be network-first
+// NOTE: /data/ added to ensure fresh groups, rooms, etc. after changes
 const API_ROUTES = [
   '/api/',
-  '/auth/'
+  '/auth/',
+  '/data/'
 ];
 
 // Install event - cache static assets
