@@ -129,7 +129,41 @@ router.get('/farms/:farmId', async (req, res) => {
         }
         
         const farmRow = result.rows[0];
-        
+
+        let roomsData = null;
+        let groupsData = null;
+        let telemetryData = null;
+
+        if (await isDatabaseAvailable()) {
+            const roomsResult = await query(
+                `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+                [farmId, 'rooms']
+            );
+            roomsData = roomsResult.rows[0]?.data || null;
+
+            const groupsResult = await query(
+                `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+                [farmId, 'groups']
+            );
+            groupsData = groupsResult.rows[0]?.data || null;
+
+            const telemetryResult = await query(
+                `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+                [farmId, 'telemetry']
+            );
+            telemetryData = telemetryResult.rows[0]?.data || null;
+        }
+
+        const roomsCount = Array.isArray(roomsData) ? roomsData.length : 0;
+        const zonesFromTelemetry = Array.isArray(telemetryData?.zones) ? telemetryData.zones : [];
+        const zonesCount = zonesFromTelemetry.length || (Array.isArray(groupsData) ? groupsData.length : 0);
+
+        const envSummary = zonesFromTelemetry.length ? {
+            avgTemp: averageNumber(zonesFromTelemetry.map(z => z.sensors?.tempC?.current ?? z.temperature ?? z.tempC ?? null)),
+            avgHumidity: averageNumber(zonesFromTelemetry.map(z => z.sensors?.rh?.current ?? z.humidity ?? z.rh ?? null)),
+            avgVpd: averageNumber(zonesFromTelemetry.map(z => z.sensors?.vpd?.current ?? z.vpd ?? null))
+        } : null;
+
         // Format farm data - only include fields that exist in DB
         const farm = {
             farmId: farmRow.farm_id,
@@ -138,10 +172,16 @@ router.get('/farms/:farmId', async (req, res) => {
             lastHeartbeat: farmRow.last_heartbeat || null,
             createdAt: farmRow.created_at || null,
             updatedAt: farmRow.updated_at || null,
+            rooms: roomsCount,
+            zones: zonesCount,
+            environmental: {
+                zones: zonesFromTelemetry,
+                summary: envSummary
+            },
             // Include all raw data
             ...farmRow
         };
-        
+
         res.json({
             success: true,
             farm: farm
@@ -153,6 +193,130 @@ router.get('/farms/:farmId', async (req, res) => {
             error: 'Failed to fetch farm details',
             message: error.message
         });
+    }
+});
+
+function averageNumber(values) {
+    const filtered = values.filter(v => typeof v === 'number' && Number.isFinite(v));
+    if (!filtered.length) return null;
+    return filtered.reduce((sum, v) => sum + v, 0) / filtered.length;
+}
+
+/**
+ * GET /api/admin/farms/:farmId/rooms
+ * Return rooms for a farm from synced data
+ */
+router.get('/farms/:farmId/rooms', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, rooms: [], count: 0, farmId, source: 'memory' });
+        }
+
+        const result = await query(
+            `SELECT data, updated_at FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+            [farmId, 'rooms']
+        );
+        const rooms = result.rows[0]?.data || [];
+        const updatedAt = result.rows[0]?.updated_at || null;
+
+        res.json({
+            success: true,
+            rooms,
+            count: Array.isArray(rooms) ? rooms.length : 0,
+            farmId,
+            updatedAt
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching farm rooms:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch farm rooms', message: error.message });
+    }
+});
+
+/**
+ * GET /api/admin/farms/:farmId/zones
+ * Return environmental zones for a farm from telemetry data
+ */
+router.get('/farms/:farmId/zones', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, zones: [], count: 0, farmId, source: 'memory' });
+        }
+
+        const telemetryResult = await query(
+            `SELECT data, updated_at FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+            [farmId, 'telemetry']
+        );
+        const telemetry = telemetryResult.rows[0]?.data || {};
+        const zones = Array.isArray(telemetry.zones) ? telemetry.zones : [];
+        const updatedAt = telemetryResult.rows[0]?.updated_at || null;
+
+        res.json({
+            success: true,
+            zones,
+            count: zones.length,
+            farmId,
+            updatedAt
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching farm zones:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch farm zones', message: error.message });
+    }
+});
+
+/**
+ * GET /api/admin/rooms
+ * Aggregate rooms across all farms
+ */
+router.get('/rooms', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, rooms: [], count: 0, source: 'memory' });
+        }
+
+        const result = await query(
+            `SELECT farm_id, data, updated_at FROM farm_data WHERE data_type = $1`,
+            ['rooms']
+        );
+
+        const rooms = result.rows.flatMap(row => {
+            const list = Array.isArray(row.data) ? row.data : [];
+            return list.map(room => ({ ...room, farmId: row.farm_id, updatedAt: row.updated_at }));
+        });
+
+        res.json({ success: true, rooms, count: rooms.length });
+    } catch (error) {
+        console.error('[Admin API] Error fetching rooms:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch rooms', message: error.message });
+    }
+});
+
+/**
+ * GET /api/admin/zones
+ * Aggregate environmental zones across all farms from telemetry
+ */
+router.get('/zones', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, zones: [], count: 0, source: 'memory' });
+        }
+
+        const result = await query(
+            `SELECT farm_id, data, updated_at FROM farm_data WHERE data_type = $1`,
+            ['telemetry']
+        );
+
+        const zones = result.rows.flatMap(row => {
+            const telemetry = row.data || {};
+            const list = Array.isArray(telemetry.zones) ? telemetry.zones : [];
+            return list.map(zone => ({ ...zone, farmId: row.farm_id, updatedAt: row.updated_at }));
+        });
+
+        res.json({ success: true, zones, count: zones.length });
+    } catch (error) {
+        console.error('[Admin API] Error fetching zones:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch zones', message: error.message });
     }
 });
 

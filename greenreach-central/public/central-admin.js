@@ -41,28 +41,21 @@ async function verifySession() {
     
     console.log('========================================');
     console.log('[verifySession] STARTING TOKEN VERIFICATION');
-    console.log('[verifySession] API_BASE:', API_BASE);
-    console.log('[verifySession] Token preview:', token.substring(0, 30) + '...');
-    console.log('[verifySession] Token length:', token.length);
-    
-    const verifyUrl = `${API_BASE}/api/admin/auth/verify`;
-    console.log('[verifySession] Calling URL:', verifyUrl);
-    console.log('========================================');
-    
-    try {
-        const response = await fetch(verifyUrl, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            credentials: 'same-origin'
-        });
-        
-        console.log('[verifySession] Response status:', response.status);
-        console.log('[verifySession] Response ok:', response.ok);
-        
-        const responseData = await response.json().catch(() => ({}));
+        const roomsRes = await authenticatedFetch(`${API_BASE}/api/admin/rooms`);
+        if (!roomsRes || !roomsRes.ok) throw new Error('Failed to load rooms');
+        const roomsData = await roomsRes.json();
+
+        const rooms = (roomsData.rooms || []).map(room => ({
+            name: room.name || room.room_name || room.roomId || room.id || 'Room',
+            farmName: room.farmName || room.farm_id || room.farmId || 'Unknown Farm',
+            temperature: room.temperature ?? room.temp ?? room.tempC ?? '- ',
+            humidity: room.humidity ?? room.rh ?? '- ',
+            co2: room.co2 ?? '- ',
+            vpd: room.vpd ?? '- ',
+            zones: room.zones?.length || room.zone_count || room.zoneCount || 0,
+            devices: room.devices?.length || room.device_count || room.deviceCount || 0,
+            status: room.status || 'online'
+        }));
         console.log('[verifySession] Response data:', responseData);
         
         if (!response.ok) {
@@ -2201,25 +2194,39 @@ async function loadGroupTrays(farmId, roomId, zoneId, groupId, count) {
  */
 async function loadFarmRooms(farmId, count) {
     roomsData = [];
-    
-    for (let i = 1; i <= count; i++) {
-        const temp = (Math.random() * 4 + 22).toFixed(1);
-        const humidity = (Math.random() * 20 + 60).toFixed(0);
-        const co2 = Math.floor(Math.random() * 400 + 800);
-        const zones = Math.floor(Math.random() * 4) + 2;
-        const devices = zones * (Math.floor(Math.random() * 4) + 3);
-        
-        roomsData.push({
-            name: `Room ${String.fromCharCode(64 + i)}`,
-            status: Math.random() > 0.9 ? 'warning' : 'online',
-            zones,
-            devices,
-            temp,
-            humidity,
-            co2
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/rooms`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const rooms = Array.isArray(data.rooms) ? data.rooms : [];
+
+        roomsData = rooms.map(room => {
+            const name = room.name || room.room_name || room.roomId || room.id || 'Room';
+            const zones = room.zones?.length || room.zone_count || room.zoneCount || 0;
+            const devices = room.devices?.length || room.device_count || room.deviceCount || 0;
+            const temp = room.temperature ?? room.temp ?? room.tempC ?? '-';
+            const humidity = room.humidity ?? room.rh ?? '-';
+            const co2 = room.co2 ?? '-';
+
+            return {
+                name,
+                status: room.status || 'online',
+                zones,
+                devices,
+                temp,
+                humidity,
+                co2
+            };
         });
+    } catch (error) {
+        console.error('[Rooms] Failed to load farm rooms:', error);
+        roomsData = [];
     }
-    
+
     renderRoomsTable();
 }
 
@@ -3485,10 +3492,10 @@ async function loadRoomsView() {
             <tr>
                 <td>${room.name}</td>
                 <td>${room.farmName}</td>
-                <td>${room.temperature}°F</td>
-                <td>${room.humidity}%</td>
-                <td>${room.co2} ppm</td>
-                <td>${room.vpd} kPa</td>
+                <td>${room.temperature}${room.temperature === '-' ? '' : '°F'}</td>
+                <td>${room.humidity}${room.humidity === '-' ? '' : '%'}</td>
+                <td>${room.co2}${room.co2 === '-' ? '' : ' ppm'}</td>
+                <td>${room.vpd}${room.vpd === '-' ? '' : ' kPa'}</td>
                 <td>${room.zones}</td>
                 <td>${room.devices}</td>
                 <td><span class="status-badge status-${room.status}">${room.status}</span></td>
@@ -3512,30 +3519,21 @@ async function loadZonesView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading zone data...</td></tr>';
     
     try {
-        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
-        const farmsData = await farmsRes.json();
+        const zonesRes = await authenticatedFetch(`${API_BASE}/api/admin/zones`);
+        if (!zonesRes || !zonesRes.ok) throw new Error('Failed to load zones');
+        const zonesData = await zonesRes.json();
         
-        let zones = [];
-        for (const farm of farmsData.farms || []) {
-            const roomCount = farm.rooms || 2;
-            for (let r = 1; r <= roomCount; r++) {
-                const zoneCount = Math.floor(Math.random() * 3) + 2;
-                for (let z = 1; z <= zoneCount; z++) {
-                    zones.push({
-                        name: `Zone ${z}`,
-                        farmName: farm.name,
-                        roomName: `Room ${String.fromCharCode(64 + r)}`,
-                        temperature: (70 + Math.random() * 10).toFixed(1),
-                        humidity: (55 + Math.random() * 15).toFixed(0),
-                        co2: (800 + Math.random() * 400).toFixed(0),
-                        ppfd: (400 + Math.random() * 200).toFixed(0),
-                        vpd: (0.7 + Math.random() * 0.4).toFixed(2),
-                        groups: Math.floor(Math.random() * 3) + 1
-                    });
-                }
-            }
-        }
+        const zones = (zonesData.zones || []).map(zone => ({
+            name: zone.name || zone.id || 'Zone',
+            farmName: zone.farmName || zone.farm_id || zone.farmId || 'Unknown Farm',
+            roomName: zone.roomName || zone.room || zone.roomId || 'Unknown Room',
+            temperature: zone.sensors?.tempC?.current ?? zone.temperature ?? zone.tempC ?? '-',
+            humidity: zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh ?? '-',
+            co2: zone.sensors?.co2?.current ?? zone.co2 ?? '-',
+            ppfd: zone.sensors?.ppfd?.current ?? zone.ppfd ?? '-',
+            vpd: zone.sensors?.vpd?.current ?? zone.vpd ?? '-',
+            groups: zone.groups ?? zone.group_count ?? 0
+        }));
         
         if (zones.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="empty">No zones found</td></tr>';
@@ -3547,11 +3545,11 @@ async function loadZonesView() {
                 <td>${zone.name}</td>
                 <td>${zone.farmName}</td>
                 <td>${zone.roomName}</td>
-                <td>${zone.temperature}°F</td>
-                <td>${zone.humidity}%</td>
-                <td>${zone.co2} ppm</td>
-                <td>${zone.ppfd} μmol/m²/s</td>
-                <td>${zone.vpd} kPa</td>
+                <td>${zone.temperature}${zone.temperature === '-' ? '' : '°F'}</td>
+                <td>${zone.humidity}${zone.humidity === '-' ? '' : '%'}</td>
+                <td>${zone.co2}${zone.co2 === '-' ? '' : ' ppm'}</td>
+                <td>${zone.ppfd}${zone.ppfd === '-' ? '' : ' μmol/m²/s'}</td>
+                <td>${zone.vpd}${zone.vpd === '-' ? '' : ' kPa'}</td>
                 <td>${zone.groups}</td>
                 <td><button class="btn-small">Configure</button></td>
             </tr>
