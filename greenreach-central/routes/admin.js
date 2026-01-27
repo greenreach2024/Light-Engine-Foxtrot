@@ -914,6 +914,49 @@ router.get('/farms/:farmId/inventory', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/farms/:farmId/recipes
+ * Get recipes for a specific farm
+ */
+router.get('/farms/:farmId/recipes', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        
+        // For now, return all public recipes
+        // In the future, this could return farm-specific recipes
+        const db = req.app.locals.db;
+        
+        if (!db) {
+            // Fallback: return empty array if no database
+            return res.json({
+                success: true,
+                recipes: [],
+                count: 0,
+                farmId: farmId,
+                message: 'Database not available - use public recipes endpoint'
+            });
+        }
+        
+        // Query could be added here to get farm-specific recipes
+        // For now, suggest using /api/recipes public endpoint
+        res.json({
+            success: true,
+            recipes: [],
+            count: 0,
+            farmId: farmId,
+            redirectTo: '/api/recipes'
+        });
+        
+    } catch (error) {
+        console.error(`[Admin API] Error fetching farm recipes:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch farm recipes',
+            message: error.message
+        });
+    }
+});
+
+/**
  * GET /api/admin/energy/dashboard
  * Get energy usage dashboard data
  */

@@ -18,6 +18,7 @@ import syncRoutes from './routes/sync.js';
 import wholesaleRoutes from './routes/wholesale.js';
 import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 import adminRoutes from './routes/admin.js';
+import adminRecipesRoutes from './routes/admin-recipes.js';
 import reportsRoutes from './routes/reports.js';
 import farmSettingsRoutes from './routes/farm-settings.js';
 import recipesRoutes from './routes/recipes.js';
@@ -140,6 +141,7 @@ app.use('/api/recipes', recipesRoutes); // Public recipes API
 app.use('/api/wholesale', wholesaleRoutes); // Re-enabled with stubbed Square service
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
 app.use('/api/admin', adminRoutes); // Admin dashboard API
+app.use('/api/admin/recipes', adminRecipesRoutes); // Admin recipes management
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
 
 // Root route - redirect to main landing page
