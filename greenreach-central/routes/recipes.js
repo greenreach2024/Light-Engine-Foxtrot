@@ -7,8 +7,8 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Path to recipes directory
-const RECIPES_DIR = path.join(__dirname, '../../data/recipes-v2');
+// Path to recipes directory (relative to routes/ folder)
+const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
 
 /**
  * Parse a recipe CSV file and return structured data
