@@ -12,6 +12,7 @@ const DEBUG_TRACKING = {
     enabled: true,
     sessionId: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
     events: [],
+    sendToServerInterval: null,
     
     log(event) {
         if (!this.enabled) return;
@@ -34,6 +35,54 @@ const DEBUG_TRACKING = {
         // Keep only last 100 events in memory
         if (this.events.length > 100) {
             this.events = this.events.slice(-100);
+        }
+        
+        // Start server sync if not already running
+        if (!this.sendToServerInterval) {
+            this.startServerSync();
+        }
+    },
+    
+    // Send events to server for terminal monitoring
+    async sendToServer(events) {
+        if (!events || events.length === 0) return;
+        
+        try {
+            await fetch(`${API_BASE}/api/debug/track`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: this.sessionId,
+                    events
+                })
+            });
+        } catch (error) {
+            // Silent fail - don't break the app if server logging fails
+            console.debug('Failed to send debug events to server:', error.message);
+        }
+    },
+    
+    // Start periodic sync to server (every 5 seconds)
+    startServerSync() {
+        if (this.sendToServerInterval) return;
+        
+        let lastSentIndex = 0;
+        
+        this.sendToServerInterval = setInterval(() => {
+            if (this.events.length > lastSentIndex) {
+                const newEvents = this.events.slice(lastSentIndex);
+                this.sendToServer(newEvents);
+                lastSentIndex = this.events.length;
+            }
+        }, 5000); // Send every 5 seconds
+    },
+    
+    stopServerSync() {
+        if (this.sendToServerInterval) {
+            clearInterval(this.sendToServerInterval);
+            this.sendToServerInterval = null;
         }
     },
     

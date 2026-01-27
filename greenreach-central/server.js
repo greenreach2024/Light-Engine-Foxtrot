@@ -129,6 +129,35 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Debug tracking endpoint - receives client-side debug events for server logging
+app.post('/api/debug/track', express.json(), (req, res) => {
+  const { events, sessionId } = req.body;
+  
+  if (!events || !Array.isArray(events)) {
+    return res.status(400).json({ error: 'Invalid events data' });
+  }
+  
+  // Log each event to console with prominent styling
+  events.forEach(event => {
+    const timestamp = event.timestamp || new Date().toISOString();
+    const eventType = event.type || 'UNKNOWN';
+    const eventData = { ...event };
+    delete eventData.timestamp;
+    delete eventData.type;
+    
+    // Color-coded log prefix based on event type
+    let prefix = '🔵 [DEBUG]';
+    if (eventType === 'ERROR') prefix = '🔴 [ERROR]';
+    else if (eventType === 'API_CALL') prefix = '🌐 [API]';
+    else if (eventType === 'PAGE_VIEW') prefix = '📄 [PAGE]';
+    else if (eventType === 'CLICK') prefix = '🖱️  [CLICK]';
+    
+    console.log(`${prefix} ${eventType}`, JSON.stringify(eventData, null, 2));
+  });
+  
+  res.json({ success: true, logged: events.length });
+});
+
 // API routes
 app.use('/api/farms', farmRoutes);
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
