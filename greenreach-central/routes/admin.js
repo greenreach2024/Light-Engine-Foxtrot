@@ -20,6 +20,58 @@ router.use('/wholesale', adminWholesaleRoutes);
 router.use('/recipes', adminRecipesRoutes);
 
 /**
+ * GET /api/admin/users
+ * List admin users (employees)
+ */
+router.get('/users', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({
+                success: true,
+                users: [],
+                message: 'Database not available'
+            });
+        }
+
+        const result = await query(
+            `SELECT id, email, name, role, active, last_login, created_at
+             FROM admin_users
+             ORDER BY created_at DESC`
+        );
+
+        const users = result.rows.map(row => {
+            const fullName = row.name || '';
+            const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
+            const firstName = nameParts[0] || '';
+            const lastName = nameParts.slice(1).join(' ');
+
+            return {
+                user_id: row.id,
+                first_name: firstName,
+                last_name: lastName,
+                email: row.email,
+                role: row.role || 'admin',
+                status: row.active ? 'active' : 'inactive',
+                last_login: row.last_login,
+                created_at: row.created_at
+            };
+        });
+
+        res.json({
+            success: true,
+            users
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching users:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to load users',
+            message: error.message
+        });
+    }
+});
+
+/**
  * GET /api/admin/farms
  * Get list of all farms in the network
  */
