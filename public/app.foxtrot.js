@@ -12293,10 +12293,14 @@ async function loadAllData() {
       loadJSON('/data/equipment-metadata.json', {})
     ]);
 
+    console.log('[loadAllData] Raw groups response:', groups);
     STATE.groups = groups?.groups || [];
     console.log(`[loadAllData] Loaded STATE.groups: ${STATE.groups.length} groups`);
     if (STATE.groups.length > 0) {
       console.log('[loadAllData] First group:', STATE.groups[0]);
+      console.log('[loadAllData] All group IDs:', STATE.groups.map(g => g.id));
+    } else {
+      console.error('[loadAllData] ⚠️ NO GROUPS LOADED! Raw response:', groups);
     }
     const iotDevicesData = Array.isArray(storedIotDevices) ? storedIotDevices : [];
     
@@ -12484,10 +12488,11 @@ async function loadAllData() {
 
     // Notify UI components that groups have been loaded
     try {
+      console.log(`[loadAllData] About to dispatch groups-updated event with ${STATE.groups.length} groups`);
       document.dispatchEvent(new Event('groups-updated'));
-      console.log('[loadAllData] Dispatched groups-updated event');
+      console.log('[loadAllData] ✓ Dispatched groups-updated event');
     } catch (err) {
-      console.warn('[loadAllData] Failed to dispatch groups-updated:', err);
+      console.error('[loadAllData] ❌ Failed to dispatch groups-updated:', err);
     }
 
     try {

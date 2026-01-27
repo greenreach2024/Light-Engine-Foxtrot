@@ -1,3 +1,6 @@
+// Groups V2 Script Loading
+console.log('[Groups V2] 📄 Script loading...');
+
 // Helper: safely escape HTML to prevent XSS
 function escapeHtml(text) {
   if (typeof text !== 'string') return '';
@@ -5754,15 +5757,20 @@ function populateGroupsV2LoadGroupDropdown() {
   const selectedZone = zoneSelect ? zoneSelect.value : '';
   
   // Get groups from window.STATE.groups
+  console.log('[Groups V2] Load dropdown - Checking window.STATE:', window.STATE ? 'exists' : 'undefined');
   const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
   console.log('[Groups V2] Load dropdown - STATE.groups:', groups.length, 'total groups');
   if (groups.length > 0) {
     console.log('[Groups V2] Load dropdown - First group:', groups[0]);
+    console.log('[Groups V2] Load dropdown - All groups:', groups.map(g => `${g.name} (${g.id})`));
   } else {
-    console.warn('[Groups V2] Load dropdown - No groups in STATE! Check if groups.json loaded.');
+    console.error('[Groups V2] Load dropdown - ⚠️ NO GROUPS IN STATE!');
+    console.error('[Groups V2] window.STATE:', window.STATE);
+    console.error('[Groups V2] window.STATE.groups:', window.STATE?.groups);
   }
   
   // Filter groups by selected room and zone
+  console.log(`[Groups V2] Load dropdown - Filtering by room="${selectedRoom}", zone="${selectedZone}"`);
   const filteredGroups = groups.filter(group => {
     const groupRoom = group.roomId || group.room || group.roomName || '';
     const groupZone = group.zone || '';
@@ -5772,8 +5780,14 @@ function populateGroupsV2LoadGroupDropdown() {
     // Match zone (case-insensitive)
     const zoneMatches = !selectedZone || groupZone.toLowerCase() === selectedZone.toLowerCase();
     
-    return roomMatches && zoneMatches;
+    const matches = roomMatches && zoneMatches;
+    if (!matches) {
+      console.log(`[Groups V2] Filtered out: ${group.name} (room: ${groupRoom}, zone: ${groupZone})`);
+    }
+    
+    return matches;
   });
+  console.log(`[Groups V2] Load dropdown - After filtering: ${filteredGroups.length} groups remain`);
   
   // Sort: deployed first, then drafts; within each category, alphabetically
   const sortedGroups = [...filteredGroups].sort((a, b) => {
@@ -5824,20 +5838,28 @@ function populateGroupsV2LoadGroupDropdown() {
 }
 
 function requestGroupsV2LoadGroupRefresh() {
+  console.log('[Groups V2] requestGroupsV2LoadGroupRefresh called, domReady:', groupsV2DomReady);
   if (!groupsV2DomReady) {
+    console.log('[Groups V2] DOM not ready, setting pending flag');
     groupsV2PendingRefresh.loadGroup = true;
     return;
   }
+  console.log('[Groups V2] Calling populateGroupsV2LoadGroupDropdown...');
   populateGroupsV2LoadGroupDropdown();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('[Groups V2] ✅ DOMContentLoaded event fired');
   requestGroupsV2LoadGroupRefresh();
 });
 
-document.addEventListener('groups-updated', requestGroupsV2LoadGroupRefresh);
+document.addEventListener('groups-updated', () => {
+  console.log('[Groups V2] 🔄 groups-updated event received, refreshing load dropdown...');
+  requestGroupsV2LoadGroupRefresh();
+});
 
 document.addEventListener('groups-updated', () => {
+  console.log('[Groups V2] 🔄 groups-updated event received, rendering light card...');
   renderGroupsV2LightCard(getGroupsV2SelectedPlan());
 });
 
