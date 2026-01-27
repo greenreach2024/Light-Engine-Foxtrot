@@ -3950,10 +3950,6 @@ async function loadAlertsView() {
         
         tbody.innerHTML = html;
         
-        if (data.demo) {
-            showToast('Demo mode: Displaying sample alerts', 'info');
-        }
-        
     } catch (error) {
         console.error('[Alerts] Error loading data:', error);
         tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--accent-red);">Error loading alerts: ' + error.message + '</td></tr>';
@@ -4467,6 +4463,63 @@ function renderAnalyticsMetricsTable(metrics) {
 let currentRecipeId = null;
 let recipeSpectrumChart = null;
 
+const recipeFieldMap = new Map([
+    ['day', 'day'],
+    ['stage', 'stage'],
+    ['dli target mol m2 d', 'dli_target'],
+    ['dli target', 'dli_target'],
+    ['temp target c', 'temperature'],
+    ['temperature', 'temperature'],
+    ['blue', 'blue'],
+    ['green', 'green'],
+    ['red', 'red'],
+    ['far red', 'far_red'],
+    ['farred', 'far_red'],
+    ['ppfd target umol m2 s', 'ppfd'],
+    ['ppfd target', 'ppfd'],
+    ['vpd target kpa', 'vpd_target'],
+    ['vpd target', 'vpd_target'],
+    ['max humidity', 'max_humidity'],
+    ['ec target ds m', 'ec'],
+    ['ec target', 'ec'],
+    ['ph target', 'ph'],
+    ['ph', 'ph']
+]);
+
+function isRecipeResponseOk(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (typeof data.ok === 'boolean') return data.ok;
+    if (typeof data.success === 'boolean') return data.success;
+    return false;
+}
+
+function normalizeHeaderKey(key) {
+    return String(key)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function normalizeRecipeSchedule(recipe) {
+    if (Array.isArray(recipe?.data?.schedule)) {
+        return recipe.data.schedule;
+    }
+    if (Array.isArray(recipe?.phases)) {
+        return recipe.phases.map(phase => {
+            const normalized = {};
+            Object.entries(phase).forEach(([key, value]) => {
+                const normalizedKey = normalizeHeaderKey(key);
+                const mappedKey = recipeFieldMap.get(normalizedKey);
+                if (mappedKey) {
+                    normalized[mappedKey] = value;
+                }
+            });
+            return normalized;
+        });
+    }
+    return [];
+}
+
 /**
  * Load and display recipes
  */
@@ -4494,7 +4547,7 @@ async function loadRecipes() {
         const data = await response.json();
         console.log('[Recipes] Data received:', data);
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to load recipes');
         }
         
@@ -4705,20 +4758,20 @@ async function viewRecipe(recipeId) {
         const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`);
         const data = await response.json();
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to load recipe');
         }
         
-        const recipe = data.recipe;
-        const schedule = recipe.data?.schedule || [];
+        const recipe = data.recipe || {};
+        const schedule = normalizeRecipeSchedule(recipe);
         
         // Store recipe data for export
         currentRecipeData = recipe;
         
         // Update modal header
-        document.getElementById('recipe-view-title').textContent = recipe.name;
-        document.getElementById('recipe-view-category').textContent = recipe.category;
-        document.getElementById('recipe-view-days').textContent = recipe.total_days || schedule.length;
+        document.getElementById('recipe-view-title').textContent = recipe.name || 'Recipe';
+        document.getElementById('recipe-view-category').textContent = recipe.category || 'Vegetables';
+        document.getElementById('recipe-view-days').textContent = recipe.total_days || recipe.totalDays || schedule.length;
         
         // Render schedule table
         const tbody = document.getElementById('recipe-view-schedule');
@@ -4856,23 +4909,23 @@ async function editRecipe(recipeId) {
         const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`);
         const data = await response.json();
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to load recipe');
         }
         
-        const recipe = data.recipe;
+        const recipe = data.recipe || {};
         currentRecipeId = recipeId;
         
         // Store recipe data for export
         currentRecipeData = recipe;
         
         document.getElementById('recipe-modal-title').textContent = 'Edit Recipe';
-        document.getElementById('recipe-name').value = recipe.name;
-        document.getElementById('recipe-category').value = recipe.category;
+        document.getElementById('recipe-name').value = recipe.name || '';
+        document.getElementById('recipe-category').value = recipe.category || 'Vegetables';
         document.getElementById('recipe-description').value = recipe.description || '';
         
         // Render schedule
-        const schedule = recipe.data?.schedule || [];
+        const schedule = normalizeRecipeSchedule(recipe);
         scheduleData = JSON.parse(JSON.stringify(schedule)); // Deep copy
         renderScheduleEditor(scheduleData);
         
@@ -5051,7 +5104,7 @@ async function saveRecipe(event) {
         
         const data = await response.json();
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to save recipe');
         }
         
@@ -5080,7 +5133,7 @@ async function deleteRecipe(recipeId, recipeName) {
         
         const data = await response.json();
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to delete recipe');
         }
         

@@ -550,130 +550,137 @@ router.post('/farms/sync-all-stats', async (req, res) => {
 router.get('/alerts', async (req, res) => {
     try {
         const { severity, status, farm_id, limit = 50 } = req.query;
-        
-        // Collect alerts from multiple sources
-        const alerts = [];
         const now = new Date();
-        
-        // 1. Farm environmental alerts (temperature, humidity, CO2)
-        // TODO: Query actual farm telemetry for threshold violations
-        
-        // 2. Device health alerts (offline devices, sensor failures)
-        // TODO: Query device registry for offline/unhealthy devices
-        
-        // 3. Business logic alerts (missed deadlines, inventory issues)
-        // TODO: Query order fulfillment and harvest schedules
-        
-        // 4. System alerts (network connectivity, API errors)
-        // TODO: Query system health monitoring
-        
-        // For now, return structure ready for live data
-        const mockAlerts = [
-            {
-                id: 'alert-001',
-                timestamp: now.toISOString(),
-                farm_id: 'GR-00001',
-                farm_name: 'Farm Alpha',
-                severity: 'critical',
-                type: 'environmental',
-                category: 'temperature',
-                message: 'Temperature exceeds threshold in Zone 2',
-                value: '32.5°C',
-                threshold: '30°C',
-                status: 'active',
-                acknowledged: false,
-                acknowledged_by: null,
-                acknowledged_at: null,
-                resolved: false,
-                resolved_at: null,
-                source: 'zone-2-temp-sensor',
-                context: {
-                    room_id: 'room-a',
-                    zone_id: 'zone-2',
-                    device_id: 'temp-sensor-zone-2'
-                }
-            },
-            {
-                id: 'alert-002',
-                timestamp: new Date(now.getTime() - 3600000).toISOString(),
-                farm_id: 'GR-00001',
-                farm_name: 'Farm Alpha',
-                severity: 'warning',
-                type: 'device',
-                category: 'offline',
-                message: 'Humidity sensor not responding',
-                value: 'offline',
-                threshold: 'online',
-                status: 'acknowledged',
-                acknowledged: true,
-                acknowledged_by: 'admin',
-                acknowledged_at: new Date(now.getTime() - 1800000).toISOString(),
-                resolved: false,
-                resolved_at: null,
-                source: 'zone-1-humidity-sensor',
-                context: {
-                    room_id: 'room-a',
-                    zone_id: 'zone-1',
-                    device_id: 'humidity-sensor-zone-1'
-                }
-            },
-            {
-                id: 'alert-003',
-                timestamp: new Date(now.getTime() - 7200000).toISOString(),
-                farm_id: 'GR-00002',
-                farm_name: 'Farm Beta',
-                severity: 'warning',
-                type: 'business',
-                category: 'harvest_deadline',
-                message: 'Harvest verification deadline approaching',
-                value: '2 hours remaining',
-                threshold: '24 hours notice',
-                status: 'resolved',
-                acknowledged: true,
-                acknowledged_by: 'operator',
-                acknowledged_at: new Date(now.getTime() - 5400000).toISOString(),
-                resolved: true,
-                resolved_at: new Date(now.getTime() - 3600000).toISOString(),
-                source: 'harvest-scheduler',
-                context: {
-                    order_id: 'ORD-12345',
-                    harvest_date: new Date(now.getTime() + 7200000).toISOString()
-                }
-            }
-        ];
-        
-        // Filter alerts based on query parameters
-        let filteredAlerts = mockAlerts;
-        
+
+        if (!(await isDatabaseAvailable())) {
+            return res.json({
+                success: true,
+                alerts: [],
+                summary: {
+                    total: 0,
+                    active: 0,
+                    acknowledged: 0,
+                    resolved: 0,
+                    critical: 0,
+                    warning: 0,
+                    info: 0
+                },
+                timestamp: now.toISOString()
+            });
+        }
+
+        const conditions = [];
+        const params = [];
+        let paramIndex = 1;
+
         if (severity) {
-            filteredAlerts = filteredAlerts.filter(a => a.severity === severity);
+            conditions.push(`fa.severity = $${paramIndex}`);
+            params.push(severity);
+            paramIndex++;
         }
-        
-        if (status) {
-            filteredAlerts = filteredAlerts.filter(a => a.status === status);
-        }
-        
+
         if (farm_id) {
-            filteredAlerts = filteredAlerts.filter(a => a.farm_id === farm_id);
+            conditions.push(`f.farm_id = $${paramIndex}`);
+            params.push(farm_id);
+            paramIndex++;
         }
-        
-        // Calculate summary stats
+
+        if (status) {
+            if (status === 'active') {
+                conditions.push('fa.resolved = false AND fa.acknowledged = false');
+            } else if (status === 'acknowledged') {
+                conditions.push('fa.acknowledged = true AND fa.resolved = false');
+            } else if (status === 'resolved') {
+                conditions.push('fa.resolved = true');
+            }
+        }
+
+        const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const summaryResult = await query(
+            `SELECT
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE fa.resolved = false AND fa.acknowledged = false) as active,
+                COUNT(*) FILTER (WHERE fa.acknowledged = true AND fa.resolved = false) as acknowledged,
+                COUNT(*) FILTER (WHERE fa.resolved = true) as resolved,
+                COUNT(*) FILTER (WHERE fa.severity = 'critical') as critical,
+                COUNT(*) FILTER (WHERE fa.severity = 'warning') as warning,
+                COUNT(*) FILTER (WHERE fa.severity = 'info') as info
+             FROM farm_alerts fa
+             JOIN farms f ON f.id = fa.farm_id
+             ${whereClause}`,
+            params
+        );
+
+        const summaryRow = summaryResult.rows[0] || {};
         const summary = {
-            total: filteredAlerts.length,
-            active: filteredAlerts.filter(a => a.status === 'active').length,
-            acknowledged: filteredAlerts.filter(a => a.acknowledged && !a.resolved).length,
-            resolved: filteredAlerts.filter(a => a.resolved).length,
-            critical: filteredAlerts.filter(a => a.severity === 'critical').length,
-            warning: filteredAlerts.filter(a => a.severity === 'warning').length,
-            info: filteredAlerts.filter(a => a.severity === 'info').length
+            total: parseInt(summaryRow.total || 0),
+            active: parseInt(summaryRow.active || 0),
+            acknowledged: parseInt(summaryRow.acknowledged || 0),
+            resolved: parseInt(summaryRow.resolved || 0),
+            critical: parseInt(summaryRow.critical || 0),
+            warning: parseInt(summaryRow.warning || 0),
+            info: parseInt(summaryRow.info || 0)
         };
-        
+
+        const alertsResult = await query(
+            `SELECT
+                fa.id,
+                fa.alert_type,
+                fa.severity,
+                fa.message,
+                fa.zone_id,
+                fa.device_id,
+                fa.acknowledged,
+                fa.acknowledged_by,
+                fa.acknowledged_at,
+                fa.resolved,
+                fa.resolved_at,
+                fa.created_at,
+                f.farm_id,
+                f.name as farm_name
+             FROM farm_alerts fa
+             JOIN farms f ON f.id = fa.farm_id
+             ${whereClause}
+             ORDER BY fa.created_at DESC
+             LIMIT $${params.length + 1}`,
+            [...params, parseInt(limit)]
+        );
+
+        const alerts = alertsResult.rows.map(row => {
+            const statusValue = row.resolved
+                ? 'resolved'
+                : row.acknowledged
+                ? 'acknowledged'
+                : 'active';
+
+            return {
+                id: row.id,
+                timestamp: row.created_at,
+                farm_id: row.farm_id,
+                farm_name: row.farm_name,
+                severity: row.severity,
+                type: row.alert_type,
+                category: row.alert_type,
+                message: row.message,
+                status: statusValue,
+                acknowledged: row.acknowledged,
+                acknowledged_by: row.acknowledged_by,
+                acknowledged_at: row.acknowledged_at,
+                resolved: row.resolved,
+                resolved_at: row.resolved_at,
+                context: row.zone_id || row.device_id ? {
+                    zone_id: row.zone_id,
+                    device_id: row.device_id
+                } : null
+            };
+        });
+
         res.json({
             success: true,
-            alerts: filteredAlerts.slice(0, limit),
+            alerts,
             summary,
-            timestamp: now.toISOString(),
-            demo: true
+            timestamp: now.toISOString()
         });
     } catch (error) {
         console.error('[Admin API] Error fetching alerts:', error);
