@@ -208,39 +208,89 @@ router.get('/kpis', async (req, res) => {
 router.get('/analytics/aggregate', async (req, res) => {
     try {
         // Query real data from database - handle missing tables gracefully
-        let totalFarms = 0, activeFarms = 0, totalOrders = 0, revenue = 0;
+        let totalFarms = 0, totalRooms = 0, totalZones = 0, totalDevices = 0, totalTrays = 0, totalPlants = 0;
         
         try {
-            const farmsResult = await query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = $1) as active FROM farms', ['online']);
+            const farmsResult = await query('SELECT COUNT(*) as total FROM farms');
             totalFarms = parseInt(farmsResult.rows[0].total);
-            activeFarms = parseInt(farmsResult.rows[0].active);
         } catch (e) {
             console.warn('[Admin API] Farms table query failed:', e.message);
         }
         
+        // Aggregate from farm_data table
         try {
-            const ordersResult = await query('SELECT COUNT(*) as total, COALESCE(SUM((order_data->>\'total\')::numeric), 0) as revenue FROM orders WHERE status != $1', ['cancelled']);
-            totalOrders = parseInt(ordersResult.rows[0].total);
-            revenue = parseFloat(ordersResult.rows[0].revenue);
+            const roomsResult = await query("SELECT data FROM farm_data WHERE data_type = 'rooms'");
+            roomsResult.rows.forEach(row => {
+                if (Array.isArray(row.data)) totalRooms += row.data.length;
+            });
         } catch (e) {
-            console.warn('[Admin API] Orders table query failed:', e.message);
+            console.warn('[Admin API] Rooms data query failed:', e.message);
         }
         
+        try {
+            const groupsResult = await query("SELECT data FROM farm_data WHERE data_type = 'groups'");
+            groupsResult.rows.forEach(row => {
+                if (Array.isArray(row.data)) {
+                    totalZones += row.data.length;
+                    row.data.forEach(group => {
+                        totalTrays += group.trays || 0;
+                        totalPlants += group.plants || 0;
+                    });
+                }
+            });
+        } catch (e) {
+            console.warn('[Admin API] Groups data query failed:', e.message);
+        }
+        
+        // Return top-level fields (UI expects this structure)
         res.json({
             success: true,
-            data: {
-                totalFarms,
-                activeFarms,
-                totalOrders,
-                revenue,
-                alerts: 0
-            }
+            totalFarms,
+            totalRooms,
+            totalZones,
+            totalDevices,
+            totalTrays,
+            totalPlants,
+            mode: 'live'
         });
     } catch (error) {
         console.error('[Admin API] Error fetching analytics:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch analytics',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/admin/farms/sync-all-stats
+ * Trigger sync for all farm statistics
+ */
+router.post('/farms/sync-all-stats', async (req, res) => {
+    try {
+        console.log('[Admin API] Sync all farm stats requested');
+        
+        // Get all active farms
+        const farmsResult = await query('SELECT farm_id, name FROM farms WHERE status = $1', ['online']);
+        const farms = farmsResult.rows;
+        
+        console.log(`[Admin API] Found ${farms.length} active farms to sync`);
+        
+        res.json({
+            success: true,
+            sync: {
+                total: farms.length,
+                farms: farms.map(f => ({ farm_id: f.farm_id, name: f.name })),
+                message: 'Farms are automatically syncing via edge sync service',
+                note: 'Edge devices sync rooms, groups, inventory, and telemetry every 30-300 seconds'
+            }
+        });
+    } catch (error) {
+        console.error('[Admin API] Error syncing farm stats:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to sync farm stats',
             message: error.message
         });
     }

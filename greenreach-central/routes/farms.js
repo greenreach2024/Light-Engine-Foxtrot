@@ -70,44 +70,40 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
     const { farmId } = req.params;
     const { cpu_usage, memory_usage, disk_usage, metadata } = req.body;
     
-    // Use in-memory storage only
-    const existingFarm = inMemoryFarms.get(farmId);
     const now = new Date().toISOString();
     
-    if (!existingFarm) {
-      // Auto-register farm
-      inMemoryFarms.set(farmId, {
-        farm_id: farmId,
-        name: metadata?.name || farmId,
-        status: 'online',
-        last_heartbeat: now,
-        metadata: metadata || {},
-        created_at: now,
-        updated_at: now
-      });
-      logger.info(`Auto-registered farm (in-memory): ${farmId}`);
-    } else {
-      // Update existing
-      existingFarm.last_heartbeat = now;
-      existingFarm.status = 'online';
-      existingFarm.metadata = { ...existingFarm.metadata, ...(metadata || {}) };
-      existingFarm.updated_at = now;
-    }
+    // Persist to database (required for farm_data FK)
+    const { query } = await import('../config/database.js');
+    
+    // Upsert farm
+    await query(
+      `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (farm_id) 
+       DO UPDATE SET 
+         status = $3,
+         last_heartbeat = $4,
+         metadata = EXCLUDED.metadata,
+         updated_at = NOW()`,
+      [farmId, metadata?.name || farmId, 'online', now, JSON.stringify(metadata || {})]
+    );
     
     // Store heartbeat
-    inMemoryHeartbeats.push({
-      farm_id: farmId,
-      cpu_usage,
-      memory_usage,
-      disk_usage,
-      metadata,
-      timestamp: now
-    });
+    await query(
+      `INSERT INTO farm_heartbeats (farm_id, cpu_usage, memory_usage, disk_usage, metadata, timestamp)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [farmId, cpu_usage, memory_usage, disk_usage, JSON.stringify(metadata || {}), now]
+    );
     
-    // Keep only last 1000 heartbeats
-    if (inMemoryHeartbeats.length > 1000) {
-      inMemoryHeartbeats.shift();
-    }
+    // Also keep in-memory for fast access
+    inMemoryFarms.set(farmId, {
+      farm_id: farmId,
+      name: metadata?.name || farmId,
+      status: 'online',
+      last_heartbeat: now,
+      metadata: metadata || {},
+      updated_at: now
+    });
     
     logger.info(`Heartbeat received from ${farmId}: CPU=${cpu_usage}%, MEM=${memory_usage}%, DISK=${disk_usage}%`);
     
@@ -129,8 +125,18 @@ router.post('/register', async (req, res, next) => {
   try {
     const { farmId, name, location, contact } = req.body;
     
-    // Use in-memory storage only
     const now = new Date().toISOString();
+    const { query } = await import('../config/database.js');
+    
+    // Persist to database
+    await query(
+      `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+       ON CONFLICT (farm_id) DO NOTHING`,
+      [farmId, name || farmId, 'online', now, JSON.stringify({ location, contact })]
+    );
+    
+    // Also keep in-memory
     inMemoryFarms.set(farmId, {
       farm_id: farmId,
       name: name || farmId,
@@ -140,7 +146,8 @@ router.post('/register', async (req, res, next) => {
       created_at: now,
       updated_at: now
     });
-    logger.info(`Farm registered (in-memory): ${farmId}`);
+    
+    logger.info(`Farm registered: ${farmId}`);
     
     res.status(201).json({
       success: true,

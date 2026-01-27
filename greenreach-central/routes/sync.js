@@ -81,6 +81,14 @@ router.post('/rooms', authenticateFarm, async (req, res) => {
     logger.info(`[Sync] Syncing ${rooms.length} rooms for farm ${farmId}`);
     
     if (await isDatabaseAvailable()) {
+      // Ensure farm exists (auto-register if needed)
+      await query(
+        `INSERT INTO farms (farm_id, name, status, last_heartbeat, updated_at)
+         VALUES ($1, $2, 'online', NOW(), NOW())
+         ON CONFLICT (farm_id) DO UPDATE SET last_heartbeat = NOW(), updated_at = NOW()`,
+        [farmId, farmId]
+      );
+      
       // Store in database
       await query(
         `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
@@ -134,6 +142,14 @@ router.post('/groups', authenticateFarm, async (req, res) => {
     logger.info(`[Sync] Syncing ${groups.length} groups for farm ${farmId}`);
     
     if (await isDatabaseAvailable()) {
+      // Ensure farm exists (auto-register if needed)
+      await query(
+        `INSERT INTO farms (farm_id, name, status, last_heartbeat, updated_at)
+         VALUES ($1, $2, 'online', NOW(), NOW())
+         ON CONFLICT (farm_id) DO UPDATE SET last_heartbeat = NOW(), updated_at = NOW()`,
+        [farmId, farmId]
+      );
+      
       // Store in database
       await query(
         `INSERT INTO farm_data (farm_id, data_type, data, updated_at)

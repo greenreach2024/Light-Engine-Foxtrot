@@ -25,25 +25,29 @@ router.post('/:farmId/sync', async (req, res) => {
     // Clear existing inventory for this farm
     await query('DELETE FROM farm_inventory WHERE farm_id = $1', [farmId]);
 
-    // Insert new inventory
+    // Insert new inventory (match migration schema)
     for (const product of products) {
       await query(
         `INSERT INTO farm_inventory (
           farm_id, 
-          sku_id, 
-          sku_name, 
-          quantity_available, 
+          product_id,
+          product_name,
+          sku, 
+          quantity, 
           unit, 
-          price_per_unit,
-          updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+          price,
+          available_for_wholesale,
+          last_updated
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
         [
           farmId,
-          product.sku || product.product_id,
+          product.product_id || product.sku,
           product.product_name,
+          product.sku || product.product_id,
           product.quantity || 0,
           product.unit || 'unit',
-          product.price || 0
+          product.price || 0,
+          (product.available_for_wholesale !== undefined ? product.available_for_wholesale : 1)
         ]
       );
     }
