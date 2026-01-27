@@ -3130,9 +3130,267 @@ async function saveFarmConfig() {
 /**
  * Show farm logs
  */
-function showFarmLogs() {
-    console.log('Show farm logs');
-    alert('Farm System Logs\n\nWould display:\n- API calls\n- Device connections\n- Errors and warnings\n- User activity\n- System events');
+async function showFarmLogs() {
+    if (!currentFarmId) {
+        alert('No farm selected');
+        return;
+    }
+    
+    console.log('[Farm Logs] Loading logs for:', currentFarmId);
+    
+    try {
+        // Fetch farm logs
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${currentFarmId}/logs?limit=200`);
+        if (!response || !response.ok) {
+            throw new Error('Failed to load farm logs');
+        }
+        
+        const data = await response.json();
+        const logs = data.logs || [];
+        
+        // Create modal
+        const modalHTML = `
+            <div id="farm-logs-modal" class="modal-overlay" onclick="if(event.target === this) closeFarmLogsModal()">
+                <div class="modal-container" style="max-width: 1200px; max-height: 90vh;" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2>Farm System Logs</h2>
+                        <button class="modal-close" onclick="closeFarmLogsModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Filter Tabs -->
+                        <div class="logs-filters" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="log-filter-btn active" onclick="filterLogs('all')" data-filter="all">
+                                All Logs (${logs.length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('api_call')" data-filter="api_call">
+                                📡 API Calls (${logs.filter(l => l.type === 'api_call').length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('device_connection')" data-filter="device_connection">
+                                🔌 Device Connections (${logs.filter(l => l.type === 'device_connection').length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('warning')" data-filter="warning">
+                                ⚠️ Errors & Warnings (${logs.filter(l => l.level === 'warning' || l.level === 'error').length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('user_activity')" data-filter="user_activity">
+                                👤 User Activity (${logs.filter(l => l.type === 'user_activity').length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('system_event')" data-filter="system_event">
+                                ⚙️ System Events (${logs.filter(l => l.type === 'system_event').length})
+                            </button>
+                        </div>
+                        
+                        <!-- Logs Table -->
+                        <div style="overflow-x: auto;">
+                            <table class="logs-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"></th>
+                                        <th style="width: 160px;">Timestamp</th>
+                                        <th style="width: 120px;">Type</th>
+                                        <th>Message</th>
+                                        <th style="width: 100px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logs-tbody">
+                                    ${generateLogsRows(logs)}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        ${logs.length === 0 ? '<p style="text-align: center; color: var(--text-muted); padding: 40px;">No logs available</p>' : ''}
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="exportLogs()">Export Logs</button>
+                        <button class="btn btn-primary" onclick="closeFarmLogsModal()">Close</button>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                .log-filter-btn {
+                    padding: 8px 16px;
+                    border: 1px solid var(--border-color);
+                    background: white;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    transition: all 0.2s;
+                }
+                .log-filter-btn:hover {
+                    background: var(--bg-secondary);
+                }
+                .log-filter-btn.active {
+                    background: var(--primary);
+                    color: white;
+                    border-color: var(--primary);
+                }
+                .logs-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                }
+                .logs-table thead {
+                    background: var(--bg-secondary);
+                    position: sticky;
+                    top: 0;
+                }
+                .logs-table th {
+                    padding: 12px;
+                    text-align: left;
+                    font-weight: 600;
+                    border-bottom: 2px solid var(--border-color);
+                }
+                .logs-table td {
+                    padding: 10px 12px;
+                    border-bottom: 1px solid var(--border-color);
+                    vertical-align: top;
+                }
+                .logs-table tr:hover {
+                    background: var(--bg-hover);
+                }
+                .log-level-icon {
+                    font-size: 16px;
+                }
+                .log-type-badge {
+                    display: inline-block;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    background: var(--bg-secondary);
+                }
+                .log-metadata {
+                    font-size: 11px;
+                    color: var(--text-muted);
+                    margin-top: 4px;
+                }
+            </style>
+        `;
+        
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Store logs data for filtering
+        window.farmLogsData = logs;
+        
+    } catch (error) {
+        console.error('[Farm Logs] Error loading logs:', error);
+        alert('Failed to load farm logs. Please try again.');
+    }
+}
+
+function generateLogsRows(logs) {
+    if (!logs || logs.length === 0) return '';
+    
+    return logs.map(log => {
+        const icon = getLevelIcon(log.level);
+        const typeColor = getTypeColor(log.type);
+        const timestamp = new Date(log.timestamp).toLocaleString();
+        const metadata = log.metadata ? `<div class="log-metadata">${JSON.stringify(log.metadata).substring(0, 100)}${JSON.stringify(log.metadata).length > 100 ? '...' : ''}</div>` : '';
+        
+        return `
+            <tr data-type="${log.type}" data-level="${log.level}">
+                <td class="log-level-icon">${icon}</td>
+                <td>${timestamp}</td>
+                <td><span class="log-type-badge" style="background: ${typeColor};">${log.type.replace('_', ' ')}</span></td>
+                <td>
+                    <strong>${log.message}</strong>
+                    ${metadata}
+                    ${log.ipAddress ? `<div class="log-metadata">IP: ${log.ipAddress}</div>` : ''}
+                    ${log.userId ? `<div class="log-metadata">User: ${log.userId}</div>` : ''}
+                </td>
+                <td><code style="font-size: 11px;">${log.action}</code></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function getLevelIcon(level) {
+    switch (level) {
+        case 'error': return '🔴';
+        case 'warning': return '⚠️';
+        case 'info': return '✅';
+        default: return '📝';
+    }
+}
+
+function getTypeColor(type) {
+    const colors = {
+        'api_call': '#e0f2fe',
+        'device_connection': '#dbeafe',
+        'user_activity': '#fef3c7',
+        'system_event': '#f3e8ff',
+        'warning': '#fee2e2',
+        'error': '#fecaca'
+    };
+    return colors[type] || '#f3f4f6';
+}
+
+function filterLogs(filterType) {
+    // Update active button
+    document.querySelectorAll('.log-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Filter logs
+    const tbody = document.getElementById('logs-tbody');
+    const logs = window.farmLogsData || [];
+    
+    let filteredLogs = logs;
+    if (filterType !== 'all') {
+        if (filterType === 'warning') {
+            filteredLogs = logs.filter(log => log.level === 'warning' || log.level === 'error');
+        } else {
+            filteredLogs = logs.filter(log => log.type === filterType);
+        }
+    }
+    
+    tbody.innerHTML = generateLogsRows(filteredLogs);
+}
+
+function closeFarmLogsModal() {
+    const modal = document.getElementById('farm-logs-modal');
+    if (modal) {
+        modal.remove();
+    }
+    delete window.farmLogsData;
+}
+
+function exportLogs() {
+    const logs = window.farmLogsData || [];
+    if (logs.length === 0) {
+        alert('No logs to export');
+        return;
+    }
+    
+    // Convert to CSV
+    const headers = ['Timestamp', 'Type', 'Level', 'Action', 'Message', 'IP Address', 'User ID'];
+    const rows = logs.map(log => [
+        new Date(log.timestamp).toISOString(),
+        log.type,
+        log.level,
+        log.action,
+        log.message.replace(/"/g, '""'),
+        log.ipAddress || '',
+        log.userId || ''
+    ]);
+    
+    const csv = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `farm-${currentFarmId}-logs-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('Logs exported successfully', 'success');
 }
 
 /**
