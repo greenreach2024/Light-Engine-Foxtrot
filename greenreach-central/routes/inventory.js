@@ -3,7 +3,7 @@
  * Receive and store inventory data from edge devices
  */
 import express from 'express';
-import { query } from '../server/database.js';
+import { query } from '../database.js';
 
 const router = express.Router();
 
