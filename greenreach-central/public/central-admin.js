@@ -2495,14 +2495,59 @@ async function loadFarmRooms(farmId, count) {
         console.log('[FarmRooms] Response:', data);
         const rooms = Array.isArray(data.rooms) ? data.rooms : [];
 
+        // Fetch telemetry data to get environmental readings
+        let telemetryData = null;
+        try {
+            const telemetryRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+            if (telemetryRes.ok) {
+                const farmData = await telemetryRes.json();
+                telemetryData = farmData.farm?.environmental || farmData.environmental;
+                console.log('[FarmRooms] Telemetry data:', telemetryData);
+            }
+        } catch (err) {
+            console.warn('[FarmRooms] Failed to fetch telemetry:', err);
+        }
+
         roomsData = rooms.map(room => {
             const name = room.name || room.room_name || room.roomId || room.id || 'Room';
             const roomId = room.roomId || room.room_id || room.id || name;
             const zones = room.zones?.length || room.zone_count || room.zoneCount || 0;
             const devices = room.devices?.length || room.device_count || room.deviceCount || 0;
-            const temp = room.temperature ?? room.temp ?? room.tempC ?? '-';
-            const humidity = room.humidity ?? room.rh ?? '-';
-            const co2 = room.co2 ?? '-';
+            
+            // Try to get environmental data from room, or use telemetry average
+            let temp = room.temperature ?? room.temp ?? room.tempC;
+            let humidity = room.humidity ?? room.rh;
+            let co2 = room.co2;
+            
+            // If room doesn't have data, use telemetry summary or first zone
+            if ((temp === undefined || temp === null) && telemetryData) {
+                if (telemetryData.summary?.avgTemp != null) {
+                    temp = telemetryData.summary.avgTemp.toFixed(1);
+                } else if (telemetryData.zones?.length > 0) {
+                    const zone = telemetryData.zones[0];
+                    temp = zone.temperature_c ?? zone.temp ?? zone.tempC;
+                    if (temp != null) temp = temp.toFixed(1);
+                }
+            }
+            
+            if ((humidity === undefined || humidity === null) && telemetryData) {
+                if (telemetryData.summary?.avgHumidity != null) {
+                    humidity = telemetryData.summary.avgHumidity.toFixed(0);
+                } else if (telemetryData.zones?.length > 0) {
+                    const zone = telemetryData.zones[0];
+                    humidity = zone.humidity ?? zone.rh;
+                    if (humidity != null) humidity = humidity.toFixed(0);
+                }
+            }
+            
+            if ((co2 === undefined || co2 === null) && telemetryData?.zones?.length > 0) {
+                co2 = telemetryData.zones[0].co2;
+            }
+            
+            // Format display values
+            temp = temp != null ? temp : '-';
+            humidity = humidity != null ? humidity : '-';
+            co2 = co2 != null ? co2 : '-';
 
             return {
                 roomId,
