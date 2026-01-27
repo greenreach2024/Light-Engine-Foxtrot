@@ -30,24 +30,20 @@ router.post('/:farmId/sync', async (req, res) => {
       await query(
         `INSERT INTO farm_inventory (
           farm_id, 
-          product_id, 
-          product_name, 
-          sku, 
-          quantity, 
+          sku_id, 
+          sku_name, 
+          quantity_available, 
           unit, 
-          price, 
-          available_for_wholesale,
-          last_updated
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+          price_per_unit,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
         [
           farmId,
-          product.product_id,
+          product.sku || product.product_id,
           product.product_name,
-          product.sku,
           product.quantity || 0,
           product.unit || 'unit',
-          product.price || 0,
-          product.available_for_wholesale || 0
+          product.price || 0
         ]
       );
     }
