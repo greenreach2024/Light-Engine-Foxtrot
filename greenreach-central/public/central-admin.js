@@ -3,6 +3,128 @@
  * Enterprise-grade farm management and monitoring system
  */
 
+// =============================================================================
+// DEBUG TRACKING SYSTEM
+// Tracks all user navigation, clicks, API calls, and errors
+// =============================================================================
+
+const DEBUG_TRACKING = {
+    enabled: true,
+    sessionId: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+    events: [],
+    
+    log(event) {
+        if (!this.enabled) return;
+        
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+            timestamp,
+            sessionId: this.sessionId,
+            ...event
+        };
+        
+        this.events.push(logEntry);
+        
+        // Console log with prominent styling
+        console.log('%c[DEBUG TRACK] ' + event.type, 
+            'background: #FF4500; color: white; font-weight: bold; padding: 2px 5px; border-radius: 3px',
+            logEntry
+        );
+        
+        // Keep only last 100 events in memory
+        if (this.events.length > 100) {
+            this.events = this.events.slice(-100);
+        }
+    },
+    
+    trackPageView(viewName, context = {}) {
+        this.log({
+            type: 'PAGE_VIEW',
+            view: viewName,
+            url: window.location.href,
+            context
+        });
+    },
+    
+    trackClick(elementId, elementType, context = {}) {
+        this.log({
+            type: 'CLICK',
+            elementId,
+            elementType,
+            context
+        });
+    },
+    
+    trackAPICall(method, url, status, responseTime, error = null) {
+        this.log({
+            type: 'API_CALL',
+            method,
+            url,
+            status,
+            responseTime: responseTime + 'ms',
+            error
+        });
+    },
+    
+    trackError(errorType, message, context = {}) {
+        this.log({
+            type: 'ERROR',
+            errorType,
+            message,
+            context,
+            stack: new Error().stack
+        });
+    },
+    
+    trackNavigation(from, to) {
+        this.log({
+            type: 'NAVIGATION',
+            from,
+            to
+        });
+    },
+    
+    getRecentEvents(count = 20) {
+        return this.events.slice(-count);
+    },
+    
+    exportSession() {
+        return {
+            sessionId: this.sessionId,
+            eventCount: this.events.length,
+            events: this.events
+        };
+    }
+};
+
+// Global error handler
+window.addEventListener('error', (event) => {
+    DEBUG_TRACKING.trackError('GLOBAL_ERROR', event.message, {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno
+    });
+});
+
+// Unhandled promise rejection handler
+window.addEventListener('unhandledrejection', (event) => {
+    DEBUG_TRACKING.trackError('UNHANDLED_REJECTION', event.reason?.message || event.reason, {
+        promise: event.promise
+    });
+});
+
+// Track initial page load
+DEBUG_TRACKING.log({
+    type: 'SESSION_START',
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+    viewport: `${window.innerWidth}x${window.innerHeight}`
+});
+
+// =============================================================================
+// END DEBUG TRACKING SYSTEM
+// =============================================================================
+
 // API_BASE is declared globally in GR-central-admin.html
 // No need to redeclare it here to avoid duplicate variable error
 
@@ -198,8 +320,18 @@ window.handleChangePassword = handleChangePassword;
 
 // Make authenticated API request
 async function authenticatedFetch(url, options = {}) {
+    const startTime = Date.now();
     const token = checkAuth();
-    if (!token) return null;
+    if (!token) {
+        DEBUG_TRACKING.trackError('AUTH_ERROR', 'No token found for authenticated request', { url });
+        return null;
+    }
+    
+    DEBUG_TRACKING.log({
+        type: 'API_REQUEST_START',
+        method: options.method || 'GET',
+        url
+    });
     
     const headers = {
         ...options.headers,
@@ -208,9 +340,22 @@ async function authenticatedFetch(url, options = {}) {
     
     try {
         const response = await fetch(url, { ...options, headers });
+        const responseTime = Date.now() - startTime;
+        
+        DEBUG_TRACKING.trackAPICall(
+            options.method || 'GET',
+            url,
+            response.status,
+            responseTime,
+            response.ok ? null : `HTTP ${response.status}`
+        );
         
         // Handle 401 Unauthorized - session expired
         if (response.status === 401) {
+            DEBUG_TRACKING.trackError('AUTH_ERROR', 'Token expired or invalid (401)', { 
+                url, 
+                status: response.status 
+            });
             console.warn('Authentication failed, redirecting to login');
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_email');
@@ -222,6 +367,14 @@ async function authenticatedFetch(url, options = {}) {
         
         return response;
     } catch (error) {
+        const responseTime = Date.now() - startTime;
+        DEBUG_TRACKING.trackAPICall(
+            options.method || 'GET',
+            url,
+            'ERROR',
+            responseTime,
+            error.message
+        );
         console.error('Authenticated fetch error:', error);
         throw error;
     }
@@ -1478,6 +1631,7 @@ async function checkAlerts() {
  */
 async function viewFarmDetail(farmId) {
     currentFarmId = farmId;
+    DEBUG_TRACKING.trackClick('viewFarmDetail', 'function', { farmId });
     console.log('[FarmDetail] ===== VIEWING FARM =====');
     console.log('[FarmDetail] Farm ID:', farmId);
     
@@ -1491,6 +1645,10 @@ async function viewFarmDetail(farmId) {
             console.error('[FarmDetail] ERROR: Failed to load farm details:', response.status);
             const errorText = await response.text();
             console.error('[FarmDetail] ERROR Response:', errorText);
+            DEBUG_TRACKING.trackError('FARM_DETAIL_LOAD_FAILED', `Failed to load farm ${farmId}`, {
+                status: response.status,
+                errorText
+            });
             alert('Unable to load farm details. Please try again.');
             return;
         }
@@ -2601,6 +2759,13 @@ Harvest Criteria: ${recipe.harvestCriteria || 'Not specified'}
  * Helper function to show a specific view and hide all others
  */
 function showView(viewId) {
+    const previousView = document.querySelector('.view[style*="display: block"]')?.id || 'unknown';
+    
+    DEBUG_TRACKING.trackPageView(viewId, {
+        previousView,
+        timestamp: new Date().toISOString()
+    });
+    
     // Hide all views
     document.querySelectorAll('.view').forEach(v => {
         v.style.display = 'none';
@@ -2610,13 +2775,24 @@ function showView(viewId) {
     const targetView = document.getElementById(viewId);
     if (targetView) {
         targetView.style.display = 'block';
-        
-        // Load data for specific views
-        if (viewId === 'recipes-view' && typeof loadRecipes === 'function') {
-            loadRecipes();
-        }
+        DEBUG_TRACKING.log({
+            type: 'VIEW_SHOWN',
+            viewId,
+            success: true
+        });
     } else {
-        console.error(`View not found: ${viewId}`);
+        DEBUG_TRACKING.trackError('VIEW_NOT_FOUND', `View element not found: ${viewId}`, {
+            requestedView: viewId,
+            availableViews: Array.from(document.querySelectorAll('.view')).map(v => v.id)
+        });
+    }
+    
+    // Load data for specific views
+    if (viewId === 'recipes-view' && typeof loadRecipes === 'function') {
+        DEBUG_TRACKING.log({ type: 'LOADING_VIEW_DATA', view: 'recipes' });
+        loadRecipes();
+    }
+}
     }
 }
 
@@ -5859,3 +6035,67 @@ console.log('✅ [Global Functions] User management functions exposed to window:
     console.log('🔐 [initAuth] Email:', localStorage.getItem('admin_email'));
 })();
 
+// ============================================================================
+// GLOBAL CLICK TRACKING - Track all user interactions
+// ============================================================================
+document.addEventListener('click', (event) => {
+    const target = event.target;
+    const tagName = target.tagName;
+    const id = target.id;
+    const className = target.className;
+    const text = target.textContent?.substring(0, 50);
+    
+    // Track clicks on buttons, links, and interactive elements
+    if (tagName === 'BUTTON' || tagName === 'A' || target.onclick) {
+        DEBUG_TRACKING.trackClick(id || 'unnamed', tagName, {
+            className,
+            text,
+            href: target.href,
+            onclick: target.onclick ? 'has-handler' : null
+        });
+    }
+    
+    // Track navigation menu clicks
+    if (target.closest('.nav-item') || target.closest('.nav-link')) {
+        const navItem = target.closest('.nav-item') || target.closest('.nav-link');
+        DEBUG_TRACKING.trackClick('nav-item', 'navigation', {
+            text: navItem.textContent?.trim(),
+            id: navItem.id
+        });
+    }
+    
+    // Track farm card clicks
+    if (target.closest('.farm-card')) {
+        const farmCard = target.closest('.farm-card');
+        DEBUG_TRACKING.trackClick('farm-card', 'card', {
+            farmId: farmCard.dataset?.farmId || farmCard.getAttribute('onclick')
+        });
+    }
+}, true); // Use capture phase to catch all clicks
+
+// Add helper to console for viewing debug events
+window.DEBUG = {
+    getEvents: (count = 20) => DEBUG_TRACKING.getRecentEvents(count),
+    exportSession: () => DEBUG_TRACKING.exportSession(),
+    clearEvents: () => DEBUG_TRACKING.events = [],
+    showLastError: () => {
+        const errors = DEBUG_TRACKING.events.filter(e => e.type === 'ERROR');
+        return errors[errors.length - 1];
+    },
+    showLastAPICall: () => {
+        const apiCalls = DEBUG_TRACKING.events.filter(e => e.type === 'API_CALL');
+        return apiCalls[apiCalls.length - 1];
+    },
+    showPageViews: () => {
+        return DEBUG_TRACKING.events.filter(e => e.type === 'PAGE_VIEW');
+    }
+};
+
+console.log('%c📊 DEBUG TRACKING ENABLED', 
+    'background: #4CAF50; color: white; font-weight: bold; padding: 5px 10px; font-size: 14px;');
+console.log('%cUse window.DEBUG to access tracking data:', 'color: #4CAF50; font-weight: bold;');
+console.log('  window.DEBUG.getEvents(20) - Get last 20 events');
+console.log('  window.DEBUG.showPageViews() - Show all page views');
+console.log('  window.DEBUG.showLastError() - Show last error');
+console.log('  window.DEBUG.showLastAPICall() - Show last API call');
+console.log('  window.DEBUG.exportSession() - Export full session');
