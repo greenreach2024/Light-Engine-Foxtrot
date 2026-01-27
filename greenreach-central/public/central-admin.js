@@ -2077,7 +2077,6 @@ async function loadRoomTrays(farmId, roomId, totalTrays) {
     countEl.textContent = `${trays.length} ${trays.length === 1 ? 'tray' : 'trays'}`;
     tbody.innerHTML = '<tr><td colspan="7" class="empty">No tray data available. Trays are managed locally on the edge device.</td></tr>';
 }
-}
 
 /**
  * Load energy consumption data for a room
