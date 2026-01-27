@@ -1813,6 +1813,134 @@
       draw();
     }
 
+    /**
+     * Update rooms.json with sensor-to-zone assignments
+     * This ensures ML, AI, and Farm Summary can access sensor data
+     */
+    async function updateRoomsSensorAssignments(roomId, placedDevices, zones) {
+      try {
+        console.log('[Room Mapper] Updating rooms.json with sensor assignments...');
+        
+        // Build zone-to-sensor mapping from placed devices
+        const zoneSensorMap = {};
+        for (const device of placedDevices) {
+          const category = device.device?.category || device.snapshot?.category;
+          const deviceZone = device.device?.zone || device.snapshot?.zone;
+          
+          if (category === 'sensor' && deviceZone) {
+            const zoneNum = parseInt(deviceZone);
+            if (!zoneSensorMap[zoneNum]) {
+              zoneSensorMap[zoneNum] = [];
+            }
+            zoneSensorMap[zoneNum].push({
+              deviceId: device.deviceId,
+              name: device.device?.name || device.snapshot?.name || 'Unknown Sensor',
+              type: device.device?.type || device.snapshot?.type || 'sensor'
+            });
+          }
+        }
+        
+        console.log('[Room Mapper] Zone sensor map:', zoneSensorMap);
+        
+        // Load current rooms.json
+        const roomsResponse = await fetch('/data/rooms.json');
+        if (!roomsResponse.ok) {
+          throw new Error('Failed to load rooms.json');
+        }
+        const roomsData = await roomsResponse.json();
+        
+        // Find current room
+        const room = roomsData.rooms.find(r => (r.id || r.name) === roomId);
+        if (!room) {
+          console.error('[Room Mapper] Room not found in rooms.json:', roomId);
+          return;
+        }
+        
+        // Update each zone with sensor assignments
+        if (room.zones && Array.isArray(room.zones)) {
+          for (const zone of room.zones) {
+            const zoneNum = parseInt(zone.id || zone.zone || '1');
+            const sensors = zoneSensorMap[zoneNum] || [];
+            
+            // Assign primary environmental sensor (first one found)
+            zone.envSensor = sensors[0]?.deviceId || null;
+            
+            // Create detailed sensor mapping by type
+            if (!zone.sensors) zone.sensors = {};
+            
+            for (const sensor of sensors) {
+              const sensorType = sensor.type?.toLowerCase() || '';
+              
+              // Map sensor types to categories
+              if (sensorType.includes('temperature') || sensorType === 'woiosensor' || sensorType.includes('temp')) {
+                zone.sensors.temperature = sensor.deviceId;
+                zone.sensors.humidity = sensor.deviceId; // Typically combined sensor
+              }
+              if (sensorType.includes('co2') || sensorType.includes('carbon')) {
+                zone.sensors.co2 = sensor.deviceId;
+              }
+              if (sensorType.includes('light') || sensorType.includes('lux') || sensorType.includes('ppfd')) {
+                zone.sensors.light = sensor.deviceId;
+              }
+              if (sensorType.includes('ph')) {
+                zone.sensors.ph = sensor.deviceId;
+              }
+              if (sensorType.includes('ec') || sensorType.includes('conductivity')) {
+                zone.sensors.ec = sensor.deviceId;
+              }
+            }
+            
+            // Update target conditions from map zones
+            const mapZone = zones.find(z => z.zone === zoneNum);
+            if (mapZone) {
+              zone.targetConditions = {
+                temperature: {
+                  min: mapZone.tempSetpoint?.min || 20,
+                  max: mapZone.tempSetpoint?.max || 24,
+                  unit: 'C'
+                },
+                humidity: {
+                  min: mapZone.rhSetpoint?.min || 58,
+                  max: mapZone.rhSetpoint?.max || 65,
+                  unit: '%'
+                }
+              };
+              
+              if (mapZone.rhDelta) {
+                zone.targetConditions.rhDelta = mapZone.rhDelta;
+              }
+            }
+            
+            console.log(`[Room Mapper] Updated zone ${zoneNum}:`, {
+              envSensor: zone.envSensor,
+              sensors: zone.sensors,
+              targetConditions: zone.targetConditions
+            });
+          }
+          
+          // Save updated rooms.json
+          const saveResponse = await fetch('/data/rooms.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rooms: roomsData.rooms })
+          });
+          
+          if (saveResponse.ok) {
+            console.log('[Room Mapper] ✅ Successfully updated rooms.json with sensor assignments');
+            const result = await saveResponse.json();
+            if (result.synced) {
+              console.log('[Room Mapper] ✅ Sensor assignments synced to GreenReach Central');
+            }
+          } else {
+            throw new Error('Failed to save rooms.json');
+          }
+        }
+      } catch (error) {
+        console.error('[Room Mapper] ❌ Failed to update rooms.json with sensor assignments:', error);
+        // Don't fail the save - map is still saved, just sensor assignments missing
+      }
+    }
+
     window.saveMap = async function() {
       if (!STATE.currentRoomId) {
         alert('No room selected. Please select a room first.');
@@ -1857,6 +1985,9 @@
         });
         
         if (response.ok) {
+          // NEW: Update rooms.json with sensor assignments
+          await updateRoomsSensorAssignments(STATE.currentRoomId, STATE.placedDevices, STATE.zones);
+          
           alert(`Map saved successfully for room: ${roomName}`);
           
           // Refresh Groups v2 zone dropdown if it exists
