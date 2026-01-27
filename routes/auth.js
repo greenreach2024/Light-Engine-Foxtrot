@@ -123,12 +123,11 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'email and password are required' });
     }
 
-    // Edge device / Demo mode: Accept any login if farm_id not provided
+    // Edge device mode: Accept any login if farm_id not provided
     const isEdgeDevice = process.env.EDGE_MODE === 'true';
-    const isDemoMode = process.env.DEMO_MODE === 'true';
     
-    if ((isEdgeDevice || isDemoMode) && !farm_id) {
-      console.log(`[Auth] Edge/Demo login for ${email}`);
+    if (isEdgeDevice && !farm_id) {
+      console.log(`[Auth] Edge login for ${email}`);
       // Generate JWT token for edge device login
       const token = generateFarmToken({
         farm_id: process.env.FARM_ID || 'edge-device',

@@ -239,7 +239,6 @@ router.get('/diagnostics', requireSystemToken, (req, res) => {
     environment: {
       node_version: process.version,
       db_enabled: process.env.DB_ENABLED === 'true',
-      demo_mode: process.env.DEMO_MODE === 'true',
       log_level: process.env.LOG_LEVEL || 'INFO'
     }
   };

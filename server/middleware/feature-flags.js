@@ -107,7 +107,7 @@ async function getDeploymentMode() {
  */
 export async function isFeatureEnabled(feature) {
   // Development mode - all features enabled
-  if (process.env.NODE_ENV === 'development' || process.env.DEMO_MODE === 'true') {
+  if (process.env.NODE_ENV === 'development') {
     return true;
   }
   
@@ -128,8 +128,8 @@ export async function isFeatureEnabled(feature) {
  */
 export function requireFeature(feature) {
   return async (req, res, next) => {
-    // Development/demo mode - bypass
-    if (process.env.NODE_ENV === 'development' || process.env.DEMO_MODE === 'true') {
+    // Development mode - bypass
+    if (process.env.NODE_ENV === 'development') {
       return next();
     }
     
@@ -178,8 +178,8 @@ export function requireFeature(feature) {
  */
 export function autoEnforceFeatures() {
   return async (req, res, next) => {
-    // Development/demo mode - bypass
-    if (process.env.NODE_ENV === 'development' || process.env.DEMO_MODE === 'true') {
+    // Development mode - bypass
+    if (process.env.NODE_ENV === 'development') {
       return next();
     }
     
@@ -309,8 +309,8 @@ export async function auditFeatureAccess(feature, req, granted) {
  */
 export function requireFeatureForPage(feature) {
   return async (req, res, next) => {
-    // Development/demo mode - bypass
-    if (process.env.NODE_ENV === 'development' || process.env.DEMO_MODE === 'true') {
+    // Development mode - bypass
+    if (process.env.NODE_ENV === 'development') {
       return next();
     }
     

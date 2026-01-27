@@ -29,7 +29,7 @@ import {
 } from '../services/wholesaleNetworkAggregator.js';
 import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
-import { processSquarePayments, createDemoPaymentRecord } from '../services/squarePaymentService.js';
+import { processSquarePayments } from '../services/squarePaymentService.js';
 
 const router = express.Router();
 
@@ -737,18 +737,6 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
             payment.notes = `Square payment failed: ${paymentResult.paymentResults.filter(r => !r.success).map(r => `Farm ${r.farmId}: ${r.error}`).join('; ')}`;
             console.error('[Checkout] Square payments failed:', paymentResult);
           }
-        } else if (allFarmsConnected) {
-          // Demo mode - create demo payment record
-          console.log('[Checkout] Demo mode - creating demo payment record');
-          const demoResult = createDemoPaymentRecord({
-            masterOrderId: order.master_order_id,
-            farmSubOrders: result.allocation.farm_sub_orders,
-            commissionRate
-          });
-          payment.status = 'completed';
-          payment.provider = 'demo';
-          payment.square_details = demoResult;
-          paymentSuccess = true;
         } else {
           console.log('[Checkout] Not all farms have Square connected - using manual payment');
           payment.status = 'pending';
