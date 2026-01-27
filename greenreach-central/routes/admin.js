@@ -1,6 +1,7 @@
 import express from 'express';
 import { adminAuthMiddleware } from '../middleware/adminAuth.js';
 import adminAuthRoutes from './admin-auth.js';
+import adminWholesaleRoutes from './admin-wholesale.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
@@ -10,6 +11,9 @@ router.use('/auth', adminAuthRoutes);
 
 // All routes below require admin authentication
 router.use(adminAuthMiddleware);
+
+// Mount wholesale admin routes
+router.use('/wholesale', adminWholesaleRoutes);
 
 /**
  * GET /api/admin/farms

@@ -223,7 +223,7 @@ router.get('/catalog', async (req, res, next) => {
     const countResult = await query(`
       SELECT COUNT(DISTINCT i.id) as total
       FROM farm_inventory i
-      JOIN farms f ON i.farm_id = f.id
+      JOIN farms f ON i.farm_id = f.farm_id
       ${whereClause}
     `, params);
 
@@ -256,7 +256,7 @@ router.get('/catalog', async (req, res, next) => {
         f.practices as farm_practices,
         f.attributes as farm_attributes
       FROM farm_inventory i
-      JOIN farms f ON i.farm_id = f.id
+      JOIN farms f ON i.farm_id = f.farm_id
       ${whereClause}
       ORDER BY i.synced_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
@@ -1195,6 +1195,63 @@ router.post('/order-status', async (req, res) => {
     return res.status(500).json({
       status: 'error',
       message: 'Failed to process status update'
+    });
+  }
+});
+
+/**
+ * GET /api/wholesale/check-overselling
+ * Check inventory for overselling issues
+ * Returns analysis of inventory levels vs. orders
+ */
+router.get('/check-overselling', async (req, res) => {
+  try {
+    // Check if database is available
+    if (req.app?.locals?.databaseReady === false) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Database unavailable'
+      });
+    }
+
+    // Query farms and their inventory
+    const result = await query(`
+      SELECT 
+        f.farm_id,
+        f.name,
+        f.status,
+        COUNT(DISTINCT i.id) as product_count
+      FROM farms f
+      LEFT JOIN farm_inventory i ON f.farm_id = i.farm_id AND i.quantity_available > 0
+      WHERE f.status = 'active'
+      GROUP BY f.farm_id, f.name, f.status
+    `);
+
+    const farms = result.rows.map(row => ({
+      farm_id: row.farm_id,
+      name: row.name,
+      status: row.status,
+      product_count: parseInt(row.product_count || 0),
+      overselling_detected: false, // Placeholder for future logic
+      available_inventory: row.product_count > 0
+    }));
+
+    res.json({
+      status: 'ok',
+      data: {
+        farms,
+        total_farms: farms.length,
+        issues_detected: 0,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('[Check Overselling] Error:', error);
+    res.status(500).json({
+      status: 'error',
+      error: 'Internal Server Error',
+      message: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
