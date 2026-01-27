@@ -410,4 +410,181 @@ router.get('/alerts', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/admin/farms/:farmId/config
+ * Get farm configuration settings
+ */
+router.get('/farms/:farmId/config', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        console.log(`[Admin API] Fetching config for farm: ${farmId}`);
+        
+        // Query farm configuration
+        const farmResult = await query(
+            'SELECT farm_id, name, email, api_url, metadata, settings, created_at, updated_at FROM farms WHERE farm_id = $1',
+            [farmId]
+        );
+        
+        if (farmResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Farm not found'
+            });
+        }
+        
+        const farm = farmResult.rows[0];
+        
+        // Get API keys count (don't expose actual keys)
+        let apiKeyCount = 0;
+        try {
+            const keysResult = await query(
+                'SELECT COUNT(*) as count FROM farm_api_keys WHERE farm_id = $1 AND active = true',
+                [farmId]
+            );
+            apiKeyCount = parseInt(keysResult.rows[0]?.count || 0);
+        } catch (e) {
+            console.warn('[Admin API] farm_api_keys table not available');
+        }
+        
+        // Get device registration count
+        let deviceCount = 0;
+        try {
+            const devicesResult = await query(
+                'SELECT COUNT(*) as count FROM devices WHERE farm_id = $1',
+                [farmId]
+            );
+            deviceCount = parseInt(devicesResult.rows[0]?.count || 0);
+        } catch (e) {
+            console.warn('[Admin API] devices table not available');
+        }
+        
+        const config = {
+            farmId: farm.farm_id,
+            farmName: farm.name,
+            contactEmail: farm.email,
+            apiUrl: farm.api_url || null,
+            network: {
+                localIP: farm.metadata?.network?.local_ip || null,
+                publicIP: farm.metadata?.network?.public_ip || null,
+                hostname: farm.metadata?.network?.hostname || null
+            },
+            apiKeys: {
+                count: apiKeyCount,
+                hasActive: apiKeyCount > 0
+            },
+            devices: {
+                count: deviceCount,
+                types: farm.metadata?.devices?.types || []
+            },
+            integrations: {
+                square: farm.settings?.square?.connected || false,
+                wholesale: farm.settings?.wholesale?.enabled || false,
+                notifications: farm.settings?.notifications || {}
+            },
+            notifications: {
+                email: farm.settings?.notifications?.email || true,
+                sms: farm.settings?.notifications?.sms || false,
+                slack: farm.settings?.notifications?.slack || false,
+                alerts: {
+                    system: farm.settings?.notifications?.alerts?.system || true,
+                    environmental: farm.settings?.notifications?.alerts?.environmental || true,
+                    inventory: farm.settings?.notifications?.alerts?.inventory || false
+                }
+            },
+            settings: farm.settings || {},
+            metadata: farm.metadata || {},
+            createdAt: farm.created_at,
+            updatedAt: farm.updated_at
+        };
+        
+        res.json({
+            success: true,
+            config
+        });
+        
+    } catch (error) {
+        console.error(`[Admin API] Error fetching farm config:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch farm configuration',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * PATCH /api/admin/farms/:farmId/config
+ * Update farm configuration settings
+ */
+router.patch('/farms/:farmId/config', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        const { apiUrl, notifications, settings } = req.body;
+        
+        console.log(`[Admin API] Updating config for farm: ${farmId}`);
+        
+        // Build update query dynamically
+        const updates = [];
+        const params = [farmId];
+        let paramCount = 1;
+        
+        if (apiUrl !== undefined) {
+            paramCount++;
+            updates.push(`api_url = $${paramCount}`);
+            params.push(apiUrl);
+        }
+        
+        if (notifications) {
+            // Merge with existing settings
+            const farmResult = await query('SELECT settings FROM farms WHERE farm_id = $1', [farmId]);
+            const currentSettings = farmResult.rows[0]?.settings || {};
+            currentSettings.notifications = { ...currentSettings.notifications, ...notifications };
+            
+            paramCount++;
+            updates.push(`settings = $${paramCount}`);
+            params.push(JSON.stringify(currentSettings));
+        } else if (settings) {
+            paramCount++;
+            updates.push(`settings = $${paramCount}`);
+            params.push(JSON.stringify(settings));
+        }
+        
+        if (updates.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No valid updates provided'
+            });
+        }
+        
+        // Add updated_at
+        paramCount++;
+        updates.push(`updated_at = $${paramCount}`);
+        params.push(new Date().toISOString());
+        
+        const updateQuery = `UPDATE farms SET ${updates.join(', ')} WHERE farm_id = $1 RETURNING *`;
+        const result = await query(updateQuery, params);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Farm not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Farm configuration updated successfully',
+            farm: result.rows[0]
+        });
+        
+    } catch (error) {
+        console.error(`[Admin API] Error updating farm config:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update farm configuration',
+            message: error.message
+        });
+    }
+});
+
 export default router;

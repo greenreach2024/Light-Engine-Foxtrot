@@ -2877,9 +2877,254 @@ function analyzeRecipe(recipeName) {
 /**
  * Show farm configuration
  */
-function showFarmConfig() {
-    console.log('Show farm configuration');
-    alert('Farm Configuration\n\nWould display:\n- Network settings\n- API keys\n- Device registration\n- Integration settings\n- Notification preferences');
+async function showFarmConfig() {
+    if (!currentFarmId) {
+        alert('No farm selected');
+        return;
+    }
+    
+    console.log('[Farm Config] Loading configuration for:', currentFarmId);
+    
+    try {
+        // Fetch farm configuration
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${currentFarmId}/config`);
+        if (!response || !response.ok) {
+            throw new Error('Failed to load farm configuration');
+        }
+        
+        const data = await response.json();
+        const config = data.config;
+        
+        // Create modal
+        const modalHTML = `
+            <div id="farm-config-modal" class="modal-overlay" onclick="if(event.target === this) closeFarmConfigModal()">
+                <div class="modal-container" style="max-width: 900px; max-height: 90vh; overflow-y: auto;" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2>Farm Configuration</h2>
+                        <button class="modal-close" onclick="closeFarmConfigModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="config-section">
+                            <h3>📡 Network Settings</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Local IP:</label>
+                                    <span>${config.network.localIP || 'Not configured'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Public IP:</label>
+                                    <span>${config.network.publicIP || 'Not configured'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Hostname:</label>
+                                    <span>${config.network.hostname || 'Not configured'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>API URL:</label>
+                                    <input type="text" id="config-api-url" value="${config.apiUrl || ''}" 
+                                           placeholder="https://farm.example.com" style="width: 100%; padding: 6px;">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <h3>🔑 API Keys</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Active Keys:</label>
+                                    <span>${config.apiKeys.count} ${config.apiKeys.hasActive ? '✓ Active' : '⚠ No active keys'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Actions:</label>
+                                    <button class="btn-small" onclick="alert('API key management coming soon')">Manage Keys</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <h3>📱 Device Registration</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Registered Devices:</label>
+                                    <span>${config.devices.count} devices</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Device Types:</label>
+                                    <span>${config.devices.types.length > 0 ? config.devices.types.join(', ') : 'None registered'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <h3>🔌 Integration Settings</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Square Payments:</label>
+                                    <span>${config.integrations.square ? '✓ Connected' : '✗ Not connected'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Wholesale API:</label>
+                                    <span>${config.integrations.wholesale ? '✓ Enabled' : '✗ Disabled'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <h3>🔔 Notification Preferences</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Email Notifications:</label>
+                                    <input type="checkbox" id="config-notify-email" 
+                                           ${config.notifications.email ? 'checked' : ''}>
+                                </div>
+                                <div class="config-item">
+                                    <label>SMS Notifications:</label>
+                                    <input type="checkbox" id="config-notify-sms" 
+                                           ${config.notifications.sms ? 'checked' : ''}>
+                                </div>
+                                <div class="config-item">
+                                    <label>Slack Notifications:</label>
+                                    <input type="checkbox" id="config-notify-slack" 
+                                           ${config.notifications.slack ? 'checked' : ''}>
+                                </div>
+                            </div>
+                            
+                            <h4 style="margin-top: 15px; font-size: 14px;">Alert Types:</h4>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>System Alerts:</label>
+                                    <input type="checkbox" id="config-alert-system" 
+                                           ${config.notifications.alerts.system ? 'checked' : ''}>
+                                </div>
+                                <div class="config-item">
+                                    <label>Environmental Alerts:</label>
+                                    <input type="checkbox" id="config-alert-environmental" 
+                                           ${config.notifications.alerts.environmental ? 'checked' : ''}>
+                                </div>
+                                <div class="config-item">
+                                    <label>Inventory Alerts:</label>
+                                    <input type="checkbox" id="config-alert-inventory" 
+                                           ${config.notifications.alerts.inventory ? 'checked' : ''}>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section" style="background: #f8f9fa; padding: 12px; border-radius: 6px; font-size: 13px;">
+                            <strong>Farm ID:</strong> ${config.farmId}<br>
+                            <strong>Contact Email:</strong> ${config.contactEmail || 'Not set'}<br>
+                            <strong>Created:</strong> ${new Date(config.createdAt).toLocaleDateString()}<br>
+                            <strong>Last Updated:</strong> ${new Date(config.updatedAt).toLocaleString()}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="closeFarmConfigModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveFarmConfig()">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                .config-section {
+                    margin-bottom: 25px;
+                    padding-bottom: 20px;
+                    border-bottom: 1px solid var(--border-color);
+                }
+                .config-section:last-child {
+                    border-bottom: none;
+                }
+                .config-section h3 {
+                    font-size: 16px;
+                    margin-bottom: 15px;
+                    color: var(--text-primary);
+                }
+                .config-section h4 {
+                    font-size: 14px;
+                    margin-bottom: 10px;
+                    color: var(--text-secondary);
+                }
+                .config-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 15px;
+                }
+                .config-item {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+                .config-item label {
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: var(--text-secondary);
+                }
+                .config-item span {
+                    font-size: 14px;
+                    color: var(--text-primary);
+                }
+                .config-item input[type="checkbox"] {
+                    width: 18px;
+                    height: 18px;
+                    cursor: pointer;
+                }
+            </style>
+        `;
+        
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+    } catch (error) {
+        console.error('[Farm Config] Error loading configuration:', error);
+        alert('Failed to load farm configuration. Please try again.');
+    }
+}
+
+function closeFarmConfigModal() {
+    const modal = document.getElementById('farm-config-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function saveFarmConfig() {
+    if (!currentFarmId) return;
+    
+    try {
+        // Gather form data
+        const apiUrl = document.getElementById('config-api-url').value.trim();
+        const notifications = {
+            email: document.getElementById('config-notify-email').checked,
+            sms: document.getElementById('config-notify-sms').checked,
+            slack: document.getElementById('config-notify-slack').checked,
+            alerts: {
+                system: document.getElementById('config-alert-system').checked,
+                environmental: document.getElementById('config-alert-environmental').checked,
+                inventory: document.getElementById('config-alert-inventory').checked
+            }
+        };
+        
+        // Send update request
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${currentFarmId}/config`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ apiUrl, notifications })
+        });
+        
+        if (!response || !response.ok) {
+            throw new Error('Failed to save configuration');
+        }
+        
+        showToast('Configuration saved successfully', 'success');
+        closeFarmConfigModal();
+        
+        // Reload farm details to reflect changes
+        await loadFarmDetail(currentFarmId);
+        
+    } catch (error) {
+        console.error('[Farm Config] Error saving configuration:', error);
+        showToast('Failed to save configuration', 'error');
+    }
 }
 
 /**
