@@ -1883,118 +1883,146 @@ async function viewRoomDetail(farmId, roomId) {
         console.error('[room-detail] Failed to load room data:', error);
     }
     
-    // Fallback to mock data if API call failed
+    // If no detailed room data, fetch farm-level telemetry
+    if (!roomData) {
+        try {
+            const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+            if (farmRes.ok) {
+                const farmData = await farmRes.json();
+                const environmental = farmData.farm?.environmental || farmData.environmental;
+                const zones = environmental?.zones || [];
+                
+                // Use telemetry data for environmental readings
+                if (zones.length > 0) {
+                    const zone = zones[0];
+                    roomData = {
+                        roomId,
+                        name: roomId,
+                        temperature: zone.temperature_c ?? zone.temp ?? zone.tempC,
+                        humidity: zone.humidity ?? zone.rh,
+                        co2: zone.co2,
+                        vpd: zone.vpd,
+                        zones: zones,
+                        devices: [],
+                        trays: 0,
+                        energyToday: null,
+                        energyWeek: null,
+                        energyTrend: null,
+                        energyTrendPercent: null
+                    };
+                }
+            }
+        } catch (err) {
+            console.error('[room-detail] Failed to fetch farm telemetry:', err);
+        }
+    }
+    
+    // If still no data, use empty defaults
     if (!roomData) {
         roomData = {
             roomId,
-            name: `Room ${roomId}`,
-            temperature: (Math.random() * 4 + 22).toFixed(1),
-            humidity: (Math.random() * 20 + 60).toFixed(0),
-            co2: Math.floor(Math.random() * 400 + 800),
-            vpd: (Math.random() * 0.5 + 0.8).toFixed(2),
-            zones: [{ zoneId: 'zone-1' }, { zoneId: 'zone-2' }],
+            name: roomId,
+            temperature: null,
+            humidity: null,
+            co2: null,
+            vpd: null,
+            zones: [],
             devices: [],
-            trays: Math.floor(Math.random() * 30) + 15,
-            energyToday: Math.floor(Math.random() * 50) + 40,
-            energyWeek: Math.floor(Math.random() * 300) + 250,
-            energyTrend: 'down',
-            energyTrendPercent: 4.2
+            trays: 0,
+            energyToday: null,
+            energyWeek: null
         };
     }
     
-    const zoneCount = Array.isArray(roomData.zones) ? roomData.zones.length : 2;
-    const deviceCount = Array.isArray(roomData.devices) ? roomData.devices.length : 20;
-    const trayCount = roomData.trays || 140;
+    const zoneCount = Array.isArray(roomData.zones) ? roomData.zones.length : 0;
+    const deviceCount = Array.isArray(roomData.devices) ? roomData.devices.length : 0;
+    const trayCount = roomData.trays || 0;
     
     // Update title and subtitle
     document.getElementById('room-detail-title').textContent = roomData.name;
-    const subtitle = `${zoneCount} zones • ${trayCount} active trays • ${deviceCount} devices`;
+    const subtitle = `${zoneCount} ${zoneCount === 1 ? 'zone' : 'zones'} • ${trayCount} ${trayCount === 1 ? 'tray' : 'trays'} • ${deviceCount} ${deviceCount === 1 ? 'device' : 'devices'}`;
     document.getElementById('room-detail-subtitle').textContent = subtitle;
     
-    // Update KPIs
-    document.getElementById('room-temp').textContent = `${roomData.temperature}°F`;
-    document.getElementById('room-temp-change').textContent = 'Optimal range';
-    document.getElementById('room-humidity').textContent = `${roomData.humidity}%`;
-    document.getElementById('room-humidity-change').textContent = 'Stable';
-    document.getElementById('room-co2').textContent = `${roomData.co2} ppm`;
-    document.getElementById('room-co2-change').textContent = 'Within limits';
-    document.getElementById('room-vpd').textContent = `${roomData.vpd} kPa`;
-    document.getElementById('room-vpd-change').textContent = 'Optimal';
+    // Update KPIs with real or null values
+    const temp = roomData.temperature != null ? `${roomData.temperature.toFixed(1)}°C` : 'No data';
+    const humidity = roomData.humidity != null ? `${roomData.humidity.toFixed(0)}%` : 'No data';
+    const co2 = roomData.co2 != null ? `${Math.round(roomData.co2)} ppm` : 'No data';
+    const vpd = roomData.vpd != null ? `${roomData.vpd.toFixed(2)} kPa` : 'No data';
+    
+    document.getElementById('room-temp').textContent = temp;
+    document.getElementById('room-temp-change').textContent = roomData.temperature != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-humidity').textContent = humidity;
+    document.getElementById('room-humidity-change').textContent = roomData.humidity != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-co2').textContent = co2;
+    document.getElementById('room-co2-change').textContent = roomData.co2 != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-vpd').textContent = vpd;
+    document.getElementById('room-vpd-change').textContent = roomData.vpd != null ? 'Calculated' : 'No data';
     document.getElementById('room-trays').textContent = trayCount;
-    document.getElementById('room-trays-change').textContent = `${Math.floor(trayCount * 0.85)} healthy`;
-    document.getElementById('room-energy').textContent = `${roomData.energyToday} kWh`;
+    document.getElementById('room-trays-change').textContent = trayCount > 0 ? `${trayCount} active` : 'No trays configured';
+    document.getElementById('room-energy').textContent = roomData.energyToday != null ? `${roomData.energyToday} kWh` : 'No data';
     
-    const arrow = roomData.energyTrend === 'down' ? '↓' : '↑';
-    document.getElementById('room-energy-change').textContent = `${arrow} ${roomData.energyTrendPercent}% vs last week`;
+    const energyChange = roomData.energyTrend && roomData.energyTrendPercent != null 
+        ? `${roomData.energyTrend === 'down' ? '↓' : '↑'} ${roomData.energyTrendPercent}% vs last week`
+        : 'No historical data';
+    document.getElementById('room-energy-change').textContent = energyChange;
     
-    // Load all sections with actual data
+    // Load all sections with actual data (no fake data generation)
     await Promise.all([
-        loadRoomZones(farmId, roomId, roomData.zones, trayCount),
+        loadRoomZones(farmId, roomId, roomData.zones),
         loadRoomDevices(farmId, roomId, roomData.devices),
-        loadRoomTrays(farmId, roomId, roomData.zones, trayCount),
+        loadRoomTrays(farmId, roomId, trayCount),
         loadRoomEnergy(farmId, roomId, roomData.energyToday, roomData.energyWeek),
-        loadRoomTrends(farmId, roomId)
+        loadRoomTrends(farmId, roomId, roomData.zones)
     ]);
 }
 
 /**
  * Load zones for a specific room
  */
-async function loadRoomZones(farmId, roomId, zonesData, totalTrays) {
+async function loadRoomZones(farmId, roomId, zonesData) {
     const tbody = document.getElementById('room-zones-tbody');
     const countEl = document.getElementById('room-zones-count');
     
-    // Check if zonesData is actual zone objects or just a count
     let zones = [];
     
-    if (Array.isArray(zonesData) && zonesData.length > 0 && zonesData[0].zoneId) {
-        // We have actual zone data from API
-        zones = zonesData.map(zone => ({
-            zoneId: zone.zoneId,
-            name: zone.name,
-            crop: zone.crop,
-            groups: Array.isArray(zone.groups) ? zone.groups.length : 5,
-            trays: zone.groups?.reduce((sum, g) => sum + (g.trays || 0), 0) || 0,
-            temperature: `${zone.temperature}°F`,
-            humidity: `${zone.humidity}%`,
-            status: zone.status || 'online'
-        }));
-    } else {
-        // Generate mock data
-        const count = Array.isArray(zonesData) ? zonesData.length : 2;
-        for (let i = 1; i <= count; i++) {
-            const zoneId = `zone-${i}`;
-            const temp = (Math.random() * 4 + 22).toFixed(1);
-            const humidity = (Math.random() * 20 + 60).toFixed(0);
-            const status = Math.random() > 0.9 ? 'warning' : 'online';
-            const groups = Math.floor(Math.random() * 3) + 2;
-            const trays = Math.floor(totalTrays / count) + Math.floor(Math.random() * 3);
+    // Use real zone data from telemetry if available
+    if (Array.isArray(zonesData) && zonesData.length > 0) {
+        zones = zonesData.map((zone, idx) => {
+            const zoneId = zone.zone_id || zone.zoneId || `zone-${idx + 1}`;
+            const name = zone.name || zone.zone_name || `Zone ${idx + 1}`;
+            const temp = zone.temperature_c ?? zone.temp ?? zone.tempC;
+            const humidity = zone.humidity ?? zone.rh;
             
-            zones.push({
+            return {
                 zoneId,
-                name: `Zone ${i}`,
-                groups,
-                trays,
-                temperature: `${temp}°F`,
-                humidity: `${humidity}%`,
-                status
-            });
-        }
+                name,
+                groups: 0, // No group data yet
+                trays: 0, // No tray data yet
+                temperature: temp != null ? `${temp.toFixed(1)}°C` : 'No data',
+                humidity: humidity != null ? `${humidity.toFixed(0)}%` : 'No data',
+                status: 'online'
+            };
+        });
     }
     
-    countEl.textContent = `${zones.length} zones`;
-    tbody.innerHTML = zones.map(zone => `
-        <tr>
-            <td><code>${zone.zoneId}</code></td>
-            <td><strong>${zone.name}</strong></td>
-            <td>${zone.groups}</td>
-            <td>${zone.trays}</td>
-            <td>${zone.temperature}</td>
-            <td>${zone.humidity}</td>
-            <td><span class="status-badge status-${zone.status}">${zone.status}</span></td>
-            <td><button class="btn-sm" onclick="drillToZone('${farmId}', '${roomId}', '${zone.zoneId}')">View</button></td>
-        </tr>
-    `).join('');
+    countEl.textContent = `${zones.length} ${zones.length === 1 ? 'zone' : 'zones'}`;
+    
+    if (zones.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">No zones configured for this room</td></tr>';
+    } else {
+        tbody.innerHTML = zones.map(zone => `
+            <tr>
+                <td><code>${zone.zoneId}</code></td>
+                <td><strong>${zone.name}</strong></td>
+                <td>${zone.groups}</td>
+                <td>${zone.trays}</td>
+                <td>${zone.temperature}</td>
+                <td>${zone.humidity}</td>
+                <td><span class="status-badge status-online">${zone.status}</span></td>
+                <td><button class="btn-sm" onclick="drillToZone('${farmId}', '${roomId}', '${zone.zoneId}')">View</button></td>
+            </tr>
+        `).join('');
+    }
 }
 
 /**
@@ -2003,118 +2031,52 @@ async function loadRoomZones(farmId, roomId, zonesData, totalTrays) {
 async function loadRoomDevices(farmId, roomId, devicesData) {
     const tbody = document.getElementById('room-devices-tbody');
     const countEl = document.getElementById('room-devices-count');
-    const deviceTypes = ['light', 'sensor', 'HVAC', 'irrigation'];
     let devices = [];
     
-    // Check if we have actual device data from API
+    // Only show devices if we have actual data
     if (Array.isArray(devicesData) && devicesData.length > 0 && devicesData[0].deviceId) {
         devices = devicesData.map(device => ({
             deviceId: device.deviceId,
             type: device.type,
             zone: device.zone,
             status: device.status || 'online',
-            lastSeen: device.lastSeen ? new Date(device.lastSeen).toLocaleString() : generateRandomTime()
+            lastSeen: device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Never'
         }));
-    } else {
-        // Generate mock data
-        const count = Array.isArray(devicesData) ? devicesData.length : 20;
-        for (let i = 1; i <= count; i++) {
-            const type = deviceTypes[Math.floor(Math.random() * deviceTypes.length)];
-            const status = Math.random() > 0.9 ? 'offline' : 'online';
-            const zoneNum = Math.floor(Math.random() * 4) + 1;
-            
-            devices.push({
-                deviceId: `DEV-${String(i).padStart(4, '0')}`,
-                type,
-                zone: `Zone ${zoneNum}`,
-                status,
-                lastSeen: generateRandomTime()
-            });
-        }
     }
     
-    tbody.innerHTML = devices.map(device => `
-        <tr>
-            <td><code>${device.deviceId}</code></td>
-            <td>${device.type}</td>
-            <td>${device.zone}</td>
-            <td><span class="badge badge-${device.status === 'online' ? 'success' : 'danger'}">${device.status}</span></td>
-            <td>${device.lastSeen}</td>
-        </tr>
-    `).join('');
+    countEl.textContent = `${devices.length} ${devices.length === 1 ? 'device' : 'devices'}`;
     
-    countEl.textContent = `${devices.length} devices`;
+    if (devices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">No devices configured for this room</td></tr>';
+    } else {
+        tbody.innerHTML = devices.map(device => `
+            <tr>
+                <td><code>${device.deviceId}</code></td>
+                <td>${device.type}</td>
+                <td>${device.zone}</td>
+                <td><span class="badge badge-${device.status === 'online' ? 'success' : 'danger'}">${device.status}</span></td>
+                <td>${device.lastSeen}</td>
+            </tr>
+        `).join('');
+    }
 }
 
 /**
  * Load trays for a specific room
  */
-async function loadRoomTrays(farmId, roomId, zonesData, totalTrays) {
+async function loadRoomTrays(farmId, roomId, totalTrays) {
     const tbody = document.getElementById('room-trays-tbody');
     const countEl = document.getElementById('room-trays-count');
-    const crops = ['Lettuce', 'Basil', 'Kale', 'Spinach', 'Arugula', 'Chard', 'Microgreens', 'Strawberries'];
+    
+    // Trays are not synced yet, show empty state
     let trays = [];
     
-    // Check if we have actual zone data with groups
-    if (Array.isArray(zonesData) && zonesData.length > 0 && zonesData[0].groups) {
-        // Extract tray data from groups
-        zonesData.forEach(zone => {
-            zone.groups.forEach((group, idx) => {
-                const trayCount = group.trays || 8;
-                for (let i = 1; i <= trayCount; i++) {
-                    trays.push({
-                        trayId: `${group.groupId}-T${String(i).padStart(2, '0')}`,
-                        crop: group.crop,
-                        zone: zone.name,
-                        plants: Math.floor((group.plants || 192) / trayCount),
-                        daysOld: group.daysOld,
-                        harvestIn: group.harvestIn,
-                        health: group.health
-                    });
-                }
-            });
-        });
-    } else {
-        // Generate mock data
-        const count = totalTrays || 140;
-        const zoneCount = Array.isArray(zonesData) ? zonesData.length : 2;
-        
-        for (let i = 1; i <= count; i++) {
-            const crop = crops[Math.floor(Math.random() * crops.length)];
-            const zoneNum = Math.floor(Math.random() * zoneCount) + 1;
-            const daysOld = Math.floor(Math.random() * 20) + 5;
-            const harvestIn = Math.floor(Math.random() * 15) + 3;
-            const health = Math.random() > 0.15 ? 'healthy' : (Math.random() > 0.5 ? 'warning' : 'attention');
-            const plants = Math.floor(Math.random() * 50) + 150;
-            
-            trays.push({
-                trayId: `T-${String(i).padStart(3, '0')}`,
-                crop,
-                zone: `Zone ${zoneNum}`,
-                plants,
-                daysOld,
-                harvestIn,
-                health
-            });
-        }
-    }
+    // TODO: Fetch tray data from API when available
+    // For now, trays are managed locally on edge device only
     
-    countEl.textContent = `${trays.length} trays`;
-    tbody.innerHTML = trays.slice(0, 50).map(tray => `
-        <tr>
-            <td><code>${tray.trayId}</code></td>
-            <td><strong>${tray.crop}</strong></td>
-            <td>${tray.zone}</td>
-            <td>${tray.plants}</td>
-            <td>${tray.daysOld}d</td>
-            <td>${tray.harvestIn}d</td>
-            <td><span class="status-badge status-${tray.health === 'healthy' ? 'online' : (tray.health === 'warning' ? 'warning' : 'offline')}">${tray.health}</span></td>
-        </tr>
-    `).join('');
-    
-    if (trays.length > 50) {
-        tbody.innerHTML += `<tr><td colspan="7" style="text-align: center; padding: 12px; color: #a0aec0;">Showing first 50 of ${trays.length} trays</td></tr>`;
-    }
+    countEl.textContent = `${trays.length} ${trays.length === 1 ? 'tray' : 'trays'}`;
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">No tray data available. Trays are managed locally on the edge device.</td></tr>';
+}
 }
 
 /**
@@ -2142,12 +2104,26 @@ async function loadRoomEnergy(farmId, roomId, today, week) {
 /**
  * Load environmental trends for a room
  */
-async function loadRoomTrends(farmId, roomId) {
-    // Generate 24-hour data (every 2 hours = 12 points)
-    const tempData = generateTrendData(24, 72, 78);
-    const humidityData = generateTrendData(55, 65, 75);
-    const co2Data = generateTrendData(800, 1000, 1200);
-    const vpdData = generateTrendData(0.8, 1.0, 1.2);
+async function loadRoomTrends(farmId, roomId, zonesData) {
+    // If we have real zone data, use it for current values, otherwise show no data message
+    if (!zonesData || zonesData.length === 0) {
+        // No trend data available
+        console.log('[room-trends] No historical data available');
+        return;
+    }
+    
+    // TODO: Fetch actual historical telemetry data
+    // For now, just show flat lines at current values if available
+    const zone = zonesData[0];
+    const temp = zone.temperature_c ?? zone.temp ?? zone.tempC ?? 20;
+    const humidity = zone.humidity ?? zone.rh ?? 50;
+    const co2 = zone.co2 ?? 400;
+    
+    // Create flat trend data from current readings
+    const tempData = Array(12).fill(temp);
+    const humidityData = Array(12).fill(humidity);
+    const co2Data = Array(12).fill(co2);
+    const vpdData = Array(12).fill(0); // VPD calculation not available
     
     drawSimpleChart('room-temp-chart', tempData, '#3b82f6');
     drawSimpleChart('room-humidity-chart', humidityData, '#10b981');
