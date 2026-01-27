@@ -8,7 +8,8 @@ logs/
 *.md
 !README.md
 .env
-data/
+data/*
+!data/recipes-v2/
 test-api.sh
 execute
 login
