@@ -18,6 +18,7 @@ const inMemoryStore = {
   groups: new Map(),     // farmId -> groups array
   schedules: new Map(),  // farmId -> schedules array
   inventory: new Map(),  // farmId -> inventory array
+  telemetry: new Map(),  // farmId -> telemetry data
 };
 
 /**
@@ -487,6 +488,119 @@ router.get('/:farmId/groups', authenticateFarm, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'Failed to restore groups',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/sync/telemetry
+ * Sync environmental sensor data from edge to cloud
+ * Real-time sensor readings (temperature, humidity, CO2, etc.)
+ */
+router.post('/telemetry', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req;
+    const { zones, sensors, timestamp } = req.body;
+    
+    if (!zones && !sensors) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Telemetry data required (zones or sensors)' 
+      });
+    }
+    
+    const telemetryData = {
+      zones: zones || [],
+      sensors: sensors || {},
+      timestamp: timestamp || new Date().toISOString()
+    };
+    
+    logger.info(`[Sync] Syncing telemetry for farm ${farmId}: ${zones?.length || 0} zones`);
+    
+    if (await isDatabaseAvailable()) {
+      // Store in database with upsert
+      await query(
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (farm_id, data_type) 
+         DO UPDATE SET data = $3, updated_at = NOW()`,
+        [farmId, 'telemetry', JSON.stringify(telemetryData)]
+      );
+      logger.info(`[Sync] Stored telemetry in database for farm ${farmId}`);
+    } else {
+      // Store in memory
+      if (!inMemoryStore.telemetry) {
+        inMemoryStore.telemetry = new Map();
+      }
+      inMemoryStore.telemetry.set(farmId, telemetryData);
+      logger.info(`[Sync] Stored telemetry in memory for farm ${farmId}`);
+    }
+    
+    res.json({ 
+      success: true,
+      message: `Synced telemetry data for ${zones?.length || 0} zones`,
+      farmId,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error syncing telemetry:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to sync telemetry',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/sync/:farmId/telemetry
+ * Retrieve latest telemetry data for a farm
+ */
+router.get('/:farmId/telemetry', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    let telemetryData = null;
+    
+    if (await isDatabaseAvailable()) {
+      const result = await query(
+        `SELECT data, updated_at FROM farm_data 
+         WHERE farm_id = $1 AND data_type = $2`,
+        [farmId, 'telemetry']
+      );
+      
+      if (result.rows.length > 0) {
+        telemetryData = result.rows[0].data;
+        telemetryData.lastUpdated = result.rows[0].updated_at;
+      }
+    } else {
+      // Retrieve from memory
+      if (inMemoryStore.telemetry) {
+        telemetryData = inMemoryStore.telemetry.get(farmId);
+      }
+    }
+    
+    if (!telemetryData) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'No telemetry data found for this farm' 
+      });
+    }
+    
+    res.json({ 
+      success: true,
+      farmId,
+      telemetry: telemetryData,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error retrieving telemetry:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to retrieve telemetry',
       message: error.message 
     });
   }
