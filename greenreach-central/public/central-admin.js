@@ -1853,7 +1853,7 @@ async function viewRoomDetail(farmId, roomId) {
     let roomData = null;
     
     try {
-        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/rooms`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/rooms`);
         if (response.ok) {
             const data = await response.json();
             const rooms = Array.isArray(data.rooms) ? data.rooms : [];
@@ -1889,12 +1889,15 @@ async function viewRoomDetail(farmId, roomId) {
             const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
             if (farmRes.ok) {
                 const farmData = await farmRes.json();
+                console.log('[room-detail] Farm data:', farmData);
                 const environmental = farmData.farm?.environmental || farmData.environmental;
                 const zones = environmental?.zones || [];
+                console.log('[room-detail] Environmental zones:', zones);
                 
                 // Use telemetry data for environmental readings
                 if (zones.length > 0) {
                     const zone = zones[0];
+                    console.log('[room-detail] Using first zone for room metrics:', zone);
                     roomData = {
                         roomId,
                         name: roomId,
@@ -1910,6 +1913,7 @@ async function viewRoomDetail(farmId, roomId) {
                         energyTrend: null,
                         energyTrendPercent: null
                     };
+                    console.log('[room-detail] Created roomData from telemetry:', roomData);
                 }
             }
         } catch (err) {
@@ -1983,6 +1987,8 @@ async function loadRoomZones(farmId, roomId, zonesData) {
     const tbody = document.getElementById('room-zones-tbody');
     const countEl = document.getElementById('room-zones-count');
     
+    console.log('[loadRoomZones] Received zonesData:', zonesData);
+    
     let zones = [];
     
     // Use real zone data from telemetry if available
@@ -1992,6 +1998,8 @@ async function loadRoomZones(farmId, roomId, zonesData) {
             const name = zone.name || zone.zone_name || `Zone ${idx + 1}`;
             const temp = zone.temperature_c ?? zone.temp ?? zone.tempC;
             const humidity = zone.humidity ?? zone.rh;
+            
+            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, temp, humidity, rawZone: zone });
             
             return {
                 zoneId,
