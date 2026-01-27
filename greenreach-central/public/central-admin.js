@@ -3254,7 +3254,7 @@ function analyzeRecipe(recipeName) {
  */
 async function showFarmConfig() {
     if (!currentFarmId) {
-        alert('No farm selected');
+        alert('No farm selected. Please select a farm from the overview first.');
         return;
     }
     
@@ -3262,12 +3262,25 @@ async function showFarmConfig() {
     
     try {
         // Fetch farm configuration
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${currentFarmId}/config`);
+        const url = `${API_BASE}/api/admin/farms/${currentFarmId}/config`;
+        console.log('[Farm Config] Fetching from:', url);
+        
+        const response = await authenticatedFetch(url);
+        console.log('[Farm Config] Response status:', response?.status);
+        
         if (!response || !response.ok) {
-            throw new Error('Failed to load farm configuration');
+            const errorText = await response?.text();
+            console.error('[Farm Config] API error:', errorText);
+            throw new Error(`Failed to load farm configuration (${response?.status}): ${errorText}`);
         }
         
         const data = await response.json();
+        console.log('[Farm Config] Received data:', data);
+        
+        if (!data.config) {
+            throw new Error('No configuration data in response');
+        }
+        
         const config = data.config;
         
         // Create modal
