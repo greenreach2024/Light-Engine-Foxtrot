@@ -8,8 +8,7 @@ logs/
 *.md
 !README.md
 .env
-data/*
-!data/recipes-v2/
+# data/  # Allow data/recipes-v2 to be deployed (recipes CSV files)
 test-api.sh
 execute
 login
