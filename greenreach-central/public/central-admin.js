@@ -3809,42 +3809,135 @@ async function loadHarvestView() {
 async function loadEnvironmentalView() {
     console.log('[Environmental] Loading environmental data...');
     
-    document.getElementById('env-avg-temp').textContent = '72.4';
-    document.getElementById('env-avg-humidity').textContent = '62';
-    document.getElementById('env-avg-co2').textContent = '875';
-    document.getElementById('env-avg-vpd').textContent = '0.85';
-    
-    const conditionsHtml = `
-        <div class="metric-row">
-            <div class="metric-label">Optimal Zones</div>
-            <div class="metric-value">18 / 24 zones</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Warning Zones</div>
-            <div class="metric-value" style="color: var(--accent-yellow);">4 zones</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Critical Zones</div>
-            <div class="metric-value" style="color: var(--accent-red);">2 zones</div>
-        </div>
-    `;
-    document.getElementById('env-current-all').innerHTML = conditionsHtml;
-    
-    const vpdHtml = `
-        <div class="metric-row">
-            <div class="metric-label">Zones in Target Range</div>
-            <div class="metric-value">21 / 24 zones</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Avg VPD Deviation</div>
-            <div class="metric-value">±0.12 kPa</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Optimization Opportunity</div>
-            <div class="metric-value">3 zones need adjustment</div>
-        </div>
-    `;
-    document.getElementById('env-vpd-insights').innerHTML = vpdHtml;
+    try {
+        // Fetch environmental data from all farms or specific farm if context exists
+        const farmId = currentFarmId || navigationContext?.farmId;
+        const url = farmId 
+            ? `${API_BASE}/api/admin/farms/${farmId}/zones`
+            : `${API_BASE}/api/admin/zones`;
+        
+        console.log('[Environmental] Fetching from:', url);
+        const response = await authenticatedFetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('[Environmental] Response:', data);
+        
+        const zones = data.zones || [];
+        
+        // Calculate averages from real data
+        let totalTemp = 0, totalHumidity = 0, totalCO2 = 0, totalVPD = 0;
+        let tempCount = 0, humidityCount = 0, co2Count = 0, vpdCount = 0;
+        let optimalZones = 0, warningZones = 0, criticalZones = 0;
+        let zonesInVPDTarget = 0;
+        
+        zones.forEach(zone => {
+            // Temperature (convert C to F if needed)
+            const temp = zone.temperature_c || zone.temperature || zone.tempC || zone.sensors?.tempC?.current;
+            if (temp != null) {
+                totalTemp += (temp * 9/5) + 32; // Convert C to F
+                tempCount++;
+            }
+            
+            // Humidity
+            const humidity = zone.humidity || zone.rh || zone.sensors?.rh?.current;
+            if (humidity != null) {
+                totalHumidity += humidity;
+                humidityCount++;
+            }
+            
+            // CO2
+            const co2 = zone.co2 || zone.sensors?.co2?.current;
+            if (co2 != null) {
+                totalCO2 += co2;
+                co2Count++;
+            }
+            
+            // VPD
+            const vpd = zone.vpd || zone.sensors?.vpd?.current;
+            if (vpd != null) {
+                totalVPD += vpd;
+                vpdCount++;
+                // VPD target range: 0.8-1.2 kPa
+                if (vpd >= 0.8 && vpd <= 1.2) zonesInVPDTarget++;
+            }
+            
+            // Status classification
+            const status = zone.status || 'unknown';
+            if (status === 'optimal' || status === 'online') optimalZones++;
+            else if (status === 'warning') warningZones++;
+            else if (status === 'critical') criticalZones++;
+        });
+        
+        // Display averages
+        document.getElementById('env-avg-temp').textContent = tempCount > 0 
+            ? (totalTemp / tempCount).toFixed(1) + ' °F'
+            : '-- °F';
+        document.getElementById('env-avg-humidity').textContent = humidityCount > 0
+            ? (totalHumidity / humidityCount).toFixed(1) + ' %'
+            : '-- %';
+        document.getElementById('env-avg-co2').textContent = co2Count > 0
+            ? Math.round(totalCO2 / co2Count) + ' ppm'
+            : '-- ppm';
+        document.getElementById('env-avg-vpd').textContent = vpdCount > 0
+            ? (totalVPD / vpdCount).toFixed(2) + ' kPa'
+            : '-- kPa';
+        
+        // Current conditions
+        const totalZones = zones.length;
+        const conditionsHtml = `
+            <div class="metric-row">
+                <div class="metric-label">Total Zones</div>
+                <div class="metric-value">${totalZones} zones</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Optimal Zones</div>
+                <div class="metric-value" style="color: var(--accent-green);">${optimalZones} zones</div>
+            </div>
+            ${warningZones > 0 ? `
+            <div class="metric-row">
+                <div class="metric-label">Warning Zones</div>
+                <div class="metric-value" style="color: var(--accent-yellow);">${warningZones} zones</div>
+            </div>` : ''}
+            ${criticalZones > 0 ? `
+            <div class="metric-row">
+                <div class="metric-label">Critical Zones</div>
+                <div class="metric-value" style="color: var(--accent-red);">${criticalZones} zones</div>
+            </div>` : ''}
+        `;
+        document.getElementById('env-current-all').innerHTML = conditionsHtml || '<div class="metric-row"><div class="metric-label">No zone data available</div></div>';
+        
+        // VPD insights
+        const avgVPDDeviation = vpdCount > 0 ? Math.abs((totalVPD / vpdCount) - 1.0).toFixed(2) : 0;
+        const vpdHtml = `
+            <div class="metric-row">
+                <div class="metric-label">Zones in Target Range</div>
+                <div class="metric-value">${zonesInVPDTarget} / ${totalZones} zones</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Avg VPD Deviation from 1.0</div>
+                <div class="metric-value">±${avgVPDDeviation} kPa</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Optimization Opportunity</div>
+                <div class="metric-value">${totalZones - zonesInVPDTarget} zones need adjustment</div>
+            </div>
+        `;
+        document.getElementById('env-vpd-insights').innerHTML = vpdHtml;
+        
+        console.log('[Environmental] Data loaded successfully');
+    } catch (error) {
+        console.error('[Environmental] Error loading data:', error);
+        document.getElementById('env-avg-temp').textContent = 'Error';
+        document.getElementById('env-avg-humidity').textContent = 'Error';
+        document.getElementById('env-avg-co2').textContent = 'Error';
+        document.getElementById('env-avg-vpd').textContent = 'Error';
+        document.getElementById('env-current-all').innerHTML = '<div class="metric-row"><div class="metric-label" style="color: var(--accent-red);">Failed to load environmental data</div></div>';
+        document.getElementById('env-vpd-insights').innerHTML = '<div class="metric-row"><div class="metric-label" style="color: var(--accent-red);">Failed to load VPD data</div></div>';
+    }
 }
 
 /**
