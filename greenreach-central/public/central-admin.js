@@ -4658,9 +4658,9 @@ async function loadFarmRoomsView(farmId) {
         }
         
         // Render rooms table
-        const tableBody = document.querySelector('#rooms-table');
+        const tableBody = document.querySelector('#rooms-tbody');
         if (!tableBody) {
-            console.error('Rooms table not found');
+            console.error('Rooms table body not found (#rooms-tbody)');
             return;
         }
         
@@ -4711,9 +4711,9 @@ async function loadFarmDevicesView(farmId) {
         }
         
         // Render devices table
-        const tableBody = document.querySelector('#devices-table');
+        const tableBody = document.querySelector('#devices-tbody');
         if (!tableBody) {
-            console.error('Devices table not found');
+            console.error('Devices table body not found (#devices-tbody)');
             return;
         }
         
