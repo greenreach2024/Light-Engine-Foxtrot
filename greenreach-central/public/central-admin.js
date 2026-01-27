@@ -2842,8 +2842,6 @@ function showView(viewId) {
         loadRecipes();
     }
 }
-    }
-}
 
 /**
  * Navigate between views
@@ -3195,9 +3193,9 @@ async function refreshData() {
 }
 
 /**
- * View room detail
+ * View room detail (stub - legacy)
  */
-function viewRoomDetail(roomName) {
+function viewRoomDetailStub(roomName) {
     console.log(`View room: ${roomName}`);
     alert(`Room Detail: ${roomName}\n\nIn production, this would drill down to:\n- Zone-level environmental data\n- Device status per zone\n- Active trays in this room\n- Energy consumption\n- Historical trends`);
 }
@@ -4442,7 +4440,7 @@ function filterDevicesByType() {
     console.log('[Devices] Filter triggered');
 }
 
-function filterRecipes() {
+function filterRecipesStub() {
     console.log('[Recipes] Filter triggered');
 }
 
@@ -4989,7 +4987,7 @@ async function loadRecipes() {
 /**
  * Render recipes table
  */
-function renderRecipesTable(recipes) {
+function renderRecipesTableDetailed(recipes) {
     const tbody = document.getElementById('recipes-tbody');
     
     if (recipes.length === 0) {
