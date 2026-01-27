@@ -41,21 +41,28 @@ async function verifySession() {
     
     console.log('========================================');
     console.log('[verifySession] STARTING TOKEN VERIFICATION');
-        const roomsRes = await authenticatedFetch(`${API_BASE}/api/admin/rooms`);
-        if (!roomsRes || !roomsRes.ok) throw new Error('Failed to load rooms');
-        const roomsData = await roomsRes.json();
-
-        const rooms = (roomsData.rooms || []).map(room => ({
-            name: room.name || room.room_name || room.roomId || room.id || 'Room',
-            farmName: room.farmName || room.farm_id || room.farmId || 'Unknown Farm',
-            temperature: room.temperature ?? room.temp ?? room.tempC ?? '- ',
-            humidity: room.humidity ?? room.rh ?? '- ',
-            co2: room.co2 ?? '- ',
-            vpd: room.vpd ?? '- ',
-            zones: room.zones?.length || room.zone_count || room.zoneCount || 0,
-            devices: room.devices?.length || room.device_count || room.deviceCount || 0,
-            status: room.status || 'online'
-        }));
+    console.log('[verifySession] API_BASE:', API_BASE);
+    console.log('[verifySession] Token preview:', token.substring(0, 30) + '...');
+    console.log('[verifySession] Token length:', token.length);
+    
+    const verifyUrl = `${API_BASE}/api/admin/auth/verify`;
+    console.log('[verifySession] Calling URL:', verifyUrl);
+    console.log('========================================');
+    
+    try {
+        const response = await fetch(verifyUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin'
+        });
+        
+        console.log('[verifySession] Response status:', response.status);
+        console.log('[verifySession] Response ok:', response.ok);
+        
+        const responseData = await response.json().catch(() => ({}));
         console.log('[verifySession] Response data:', responseData);
         
         if (!response.ok) {
