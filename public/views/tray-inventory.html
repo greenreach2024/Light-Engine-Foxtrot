@@ -18,7 +18,7 @@
   <meta name="theme-color" content="#60a5fa">
   
   <!-- Content Security Policy -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://chart.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://chart.googleapis.com https://code.responsivevoice.org https://web.squarecdn.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' blob:;">
   
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
   <style>
@@ -3009,7 +3009,7 @@
           const isUrgent = hoursRemaining < 6;
           
           return `
-            <div class="order-card ${isUrgent ? 'urgent' : ''}" style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; border: 2px solid ${isUrgent ? '#ef4444' : 'rgba(59, 130, 246, 0.3)');">
+            <div class="order-card ${isUrgent ? 'urgent' : ''}" style="background: rgba(30, 41, 59, 0.8); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; border: 2px solid ${isUrgent ? '#ef4444' : 'rgba(59, 130, 246, 0.3)';">
               <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
                 <div>
                   <div style="color: #60a5fa; font-weight: 700; font-size: 1.2rem; margin-bottom: 0.25rem;">Order #${order.id.slice(-8)}</div>
