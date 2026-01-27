@@ -1684,6 +1684,18 @@ async function viewFarmDetail(farmId) {
     console.log('[FarmDetail] ===== VIEWING FARM =====');
     console.log('[FarmDetail] Farm ID:', farmId);
     
+    // Set navigation context to farm level and update sidebar
+    navigationContext = { 
+        level: 'farm', 
+        farmId, 
+        roomId: null, 
+        zoneId: null, 
+        groupId: null, 
+        deviceId: null 
+    };
+    renderContextualSidebar();
+    updateBreadcrumb();
+    
     try {
         // Fetch detailed farm data from API
         const url = `${API_BASE}/api/admin/farms/${farmId}`;
@@ -2898,61 +2910,45 @@ async function navigate(view, element) {
             }
             break;
             
-        // Farm-specific views
+        // Farm-specific views - switch tabs within farm-detail-view
         case 'farm-overview':
-            document.getElementById('overview-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmSpecificDashboard(navigationContext.farmId);
-            }
+            // Switch to overview tab in farm-detail-view
+            switchDetailTab('overview');
             break;
             
         case 'farm-rooms':
-            document.getElementById('rooms-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmRoomsView(navigationContext.farmId);
-            }
+            // Switch to rooms tab in farm-detail-view
+            switchDetailTab('rooms');
             break;
             
         case 'farm-devices':
-            document.getElementById('devices-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmDevicesView(navigationContext.farmId);
-            }
+            // Switch to devices tab in farm-detail-view
+            switchDetailTab('devices');
             break;
             
         case 'farm-inventory':
-            document.getElementById('inventory-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmInventoryView(navigationContext.farmId);
-            }
+            // Switch to inventory tab in farm-detail-view
+            switchDetailTab('inventory');
             break;
             
         case 'farm-recipes':
-            document.getElementById('recipes-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmRecipesView(navigationContext.farmId);
-            }
+            // Switch to recipes tab in farm-detail-view
+            switchDetailTab('recipes');
             break;
             
         case 'farm-environmental':
-            document.getElementById('environmental-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmEnvironmentalView(navigationContext.farmId);
-            }
+            // Switch to environmental tab in farm-detail-view
+            switchDetailTab('environmental');
             break;
             
         case 'farm-energy':
-            document.getElementById('energy-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmEnergyDashboard(navigationContext.farmId);
-            }
+            // Switch to energy tab in farm-detail-view
+            switchDetailTab('energy');
             break;
             
         case 'farm-alerts':
-            document.getElementById('alerts-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmAlertsView(navigationContext.farmId);
-            }
+            // Switch to alerts tab in farm-detail-view
+            switchDetailTab('alerts');
             break;
             
         case 'farms':
@@ -3799,7 +3795,12 @@ async function loadAnalytics() {
  */
 async function loadRoomsView() {
     console.log('[Rooms] Loading rooms data...');
-    const tbody = document.getElementById('rooms-tbody');
+    const roomsView = document.getElementById('rooms-view');
+    const tbody = roomsView ? roomsView.querySelector('#rooms-tbody') : document.getElementById('rooms-tbody');
+    if (!tbody) {
+        console.error('[Rooms] rooms-tbody not found in rooms-view');
+        return;
+    }
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading room data...</td></tr>';
     
     try {
@@ -4657,10 +4658,11 @@ async function loadFarmRoomsView(farmId) {
             header.textContent = 'Farm Rooms';
         }
         
-        // Render rooms table
-        const tableBody = document.querySelector('#rooms-tbody');
+        // Render rooms table - scope to rooms-view to avoid duplicate IDs
+        const roomsView = document.getElementById('rooms-view');
+        const tableBody = roomsView ? roomsView.querySelector('#rooms-tbody') : document.querySelector('#rooms-tbody');
         if (!tableBody) {
-            console.error('Rooms table body not found (#rooms-tbody)');
+            console.error('Rooms table body not found (#rooms-tbody in #rooms-view)');
             return;
         }
         
