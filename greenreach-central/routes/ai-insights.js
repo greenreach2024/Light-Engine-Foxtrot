@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import OpenAI from 'openai';
-import db from '../db.js';
+import { query } from '../config/database.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -39,7 +39,7 @@ router.get('/:farmId', async (req, res) => {
     }
 
     // 1. Fetch farm metadata (type, name, configuration)
-    const farmResult = await db.query(
+    const farmResult = await query(
       'SELECT * FROM farms WHERE farm_id = $1',
       [farmId]
     );
@@ -51,7 +51,7 @@ router.get('/:farmId', async (req, res) => {
     const farm = farmResult.rows[0];
 
     // 2. Fetch current environmental data (telemetry)
-    const telemetryResult = await db.query(
+    const telemetryResult = await query(
       `SELECT data FROM farm_data 
        WHERE farm_id = $1 AND data_type = 'telemetry' 
        ORDER BY timestamp DESC LIMIT 1`,
@@ -94,7 +94,7 @@ router.get('/:farmId', async (req, res) => {
     }
 
     // 3. Fetch active recipes and their targets
-    const groupsResult = await db.query(
+    const groupsResult = await query(
       `SELECT data FROM farm_data 
        WHERE farm_id = $1 AND data_type = 'groups' 
        ORDER BY timestamp DESC LIMIT 1`,
@@ -169,7 +169,7 @@ router.get('/:farmId', async (req, res) => {
     }
 
     // 4. Fetch farm devices/equipment
-    const devicesResult = await db.query(
+    const devicesResult = await query(
       'SELECT * FROM devices WHERE farm_id = $1',
       [farmId]
     );
@@ -182,7 +182,7 @@ router.get('/:farmId', async (req, res) => {
     }));
 
     // 5. Fetch historical data (last 24 hours)
-    const historyResult = await db.query(
+    const historyResult = await query(
       `SELECT data, timestamp FROM farm_data 
        WHERE farm_id = $1 AND data_type = 'telemetry' 
        AND timestamp > NOW() - INTERVAL '24 hours'
