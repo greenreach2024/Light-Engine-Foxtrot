@@ -1833,6 +1833,11 @@ async function loadFarmDetails(farmId, farmData) {
         await loadFarmRecipes(farmId);
         console.log('[loadFarmDetails] loadFarmRecipes complete');
         
+        // Load environmental data for the farm detail environmental tab
+        console.log('[loadFarmDetails] Calling loadFarmEnvironmentalData...');
+        await loadFarmEnvironmentalData(farmId, farm);
+        console.log('[loadFarmDetails] loadFarmEnvironmentalData complete');
+        
         console.log('[loadFarmDetails] ===== ALL FARM DETAILS LOADED =====');
         
     } catch (error) {
@@ -4784,6 +4789,163 @@ async function loadFarmRecipesView(farmId) {
         });
     } catch (error) {
         console.error('Error loading farm recipes:', error);
+    }
+}
+
+/**
+ * Load environmental data for farm detail tab
+ * Populates env-current and env-insights elements
+ */
+async function loadFarmEnvironmentalData(farmId, farmData) {
+    console.log('[loadFarmEnvironmentalData] Loading for farm:', farmId);
+    
+    try {
+        // Get environmental data from farm
+        const environmental = farmData?.environmental || {};
+        const zones = environmental.zones || [];
+        
+        console.log('[loadFarmEnvironmentalData] Found zones:', zones.length);
+        
+        if (zones.length === 0) {
+            // No environmental data
+            document.getElementById('env-current').innerHTML = `
+                <div class="metric-row">
+                    <div class="metric-label">No Environmental Data</div>
+                    <div class="metric-value" style="color: var(--text-secondary);">No zones reporting</div>
+                </div>
+            `;
+            document.getElementById('env-insights').innerHTML = `
+                <div class="metric-row">
+                    <div class="metric-label">No AI Insights Available</div>
+                    <div class="metric-value" style="color: var(--text-secondary);">Insufficient data</div>
+                </div>
+            `;
+            return;
+        }
+        
+        // Calculate averages from real zone data
+        let totalTemp = 0, totalHumidity = 0, totalPressure = 0;
+        let tempCount = 0, humidityCount = 0, pressureCount = 0;
+        
+        zones.forEach(zone => {
+            if (zone.temperature_c != null) {
+                totalTemp += zone.temperature_c;
+                tempCount++;
+            }
+            if (zone.humidity != null) {
+                totalHumidity += zone.humidity;
+                humidityCount++;
+            }
+            if (zone.pressure_hpa != null) {
+                totalPressure += zone.pressure_hpa;
+                pressureCount++;
+            }
+        });
+        
+        const avgTemp = tempCount > 0 ? (totalTemp / tempCount).toFixed(1) : null;
+        const avgHumidity = humidityCount > 0 ? (totalHumidity / humidityCount).toFixed(1) : null;
+        const avgPressure = pressureCount > 0 ? (totalPressure / pressureCount).toFixed(1) : null;
+        
+        // Calculate VPD from temp and humidity (simplified)
+        let avgVPD = null;
+        if (avgTemp != null && avgHumidity != null) {
+            // VPD = SVP * (1 - RH/100), where SVP = 0.6108 * exp(17.27*T/(T+237.3))
+            const svp = 0.6108 * Math.exp((17.27 * avgTemp) / (avgTemp + 237.3));
+            avgVPD = (svp * (1 - avgHumidity / 100)).toFixed(2);
+        }
+        
+        // Populate Current Conditions
+        const conditionsHtml = `
+            <div class="metric-row">
+                <div class="metric-label">Temperature</div>
+                <div class="metric-value">${avgTemp != null ? avgTemp + '°C' : 'No data'}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Humidity</div>
+                <div class="metric-value">${avgHumidity != null ? avgHumidity + '%' : 'No data'}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Pressure</div>
+                <div class="metric-value">${avgPressure != null ? avgPressure + ' hPa' : 'No data'}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">VPD (calculated)</div>
+                <div class="metric-value">${avgVPD != null ? avgVPD + ' kPa' : 'No data'}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Active Zones</div>
+                <div class="metric-value">${zones.length} ${zones.length === 1 ? 'zone' : 'zones'}</div>
+            </div>
+        `;
+        document.getElementById('env-current').innerHTML = conditionsHtml;
+        
+        // Generate AI Insights based on real data
+        const insights = [];
+        
+        // Temperature insight
+        if (avgTemp != null) {
+            if (avgTemp < 18) {
+                insights.push({ icon: '❄️', text: 'Temperature below optimal range (18-25°C)', severity: 'warning' });
+            } else if (avgTemp > 25) {
+                insights.push({ icon: '🔥', text: 'Temperature above optimal range (18-25°C)', severity: 'warning' });
+            } else {
+                insights.push({ icon: '✅', text: 'Temperature within optimal range', severity: 'good' });
+            }
+        }
+        
+        // Humidity insight
+        if (avgHumidity != null) {
+            if (avgHumidity < 40) {
+                insights.push({ icon: '💧', text: 'Humidity below optimal range (40-70%)', severity: 'warning' });
+            } else if (avgHumidity > 70) {
+                insights.push({ icon: '🌫️', text: 'Humidity above optimal range (40-70%)', severity: 'warning' });
+            } else {
+                insights.push({ icon: '✅', text: 'Humidity within optimal range', severity: 'good' });
+            }
+        }
+        
+        // VPD insight
+        if (avgVPD != null) {
+            const vpdNum = parseFloat(avgVPD);
+            if (vpdNum < 0.8) {
+                insights.push({ icon: '📊', text: 'VPD below target range (0.8-1.2 kPa)', severity: 'info' });
+            } else if (vpdNum > 1.2) {
+                insights.push({ icon: '📊', text: 'VPD above target range (0.8-1.2 kPa)', severity: 'info' });
+            } else {
+                insights.push({ icon: '✅', text: 'VPD within target range', severity: 'good' });
+            }
+        }
+        
+        // If no issues, add positive insight
+        if (insights.filter(i => i.severity === 'warning').length === 0) {
+            insights.push({ icon: '🌱', text: 'All environmental parameters optimal for growth', severity: 'good' });
+        }
+        
+        const insightsHtml = insights.map(insight => `
+            <div class="metric-row">
+                <div class="metric-label">${insight.icon} ${insight.text}</div>
+            </div>
+        `).join('');
+        document.getElementById('env-insights').innerHTML = insightsHtml || `
+            <div class="metric-row">
+                <div class="metric-label">No insights available</div>
+            </div>
+        `;
+        
+        console.log('[loadFarmEnvironmentalData] Data loaded successfully');
+        
+    } catch (error) {
+        console.error('[loadFarmEnvironmentalData] Error:', error);
+        document.getElementById('env-current').innerHTML = `
+            <div class="metric-row">
+                <div class="metric-label" style="color: var(--accent-red);">Error loading environmental data</div>
+            </div>
+        `;
+        document.getElementById('env-insights').innerHTML = `
+            <div class="metric-row">
+                <div class="metric-label" style="color: var(--accent-red);">Error loading insights</div>
+            </div>
+        `;
     }
 }
 
