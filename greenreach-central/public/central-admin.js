@@ -1907,11 +1907,24 @@ async function viewRoomDetail(farmId, roomId) {
                 roomData.temperature = zone.temperature_c ?? zone.temp ?? zone.tempC;
                 roomData.humidity = zone.humidity ?? zone.rh;
                 roomData.co2 = zone.co2;
-                roomData.vpd = zone.vpd;
+                
+                // Calculate VPD if we have both temp and humidity
+                if (roomData.temperature != null && roomData.humidity != null) {
+                    const T = roomData.temperature;
+                    const RH = roomData.humidity;
+                    // Saturation vapor pressure (kPa)
+                    const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
+                    // Vapor pressure deficit
+                    roomData.vpd = SVP * (1 - RH / 100);
+                } else {
+                    roomData.vpd = zone.vpd;
+                }
+                
                 roomData.zones = zones;
                 console.log('[room-detail] Updated roomData with telemetry:', {
                     temperature: roomData.temperature,
                     humidity: roomData.humidity,
+                    vpd: roomData.vpd,
                     zonesCount: zones.length
                 });
             } else {
