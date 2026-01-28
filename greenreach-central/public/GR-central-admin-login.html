@@ -194,7 +194,7 @@
                     type="email" 
                     id="email" 
                     name="email" 
-                    placeholder="info@greenreachfarms.com" 
+                    placeholder="Enter your email address" 
                     required 
                     autocomplete="email"
                 >
@@ -324,7 +324,7 @@
                     }, 500);
                     return;
                 } else {
-                    showAlert('Invalid credentials. Use: info@greenreachfarms.com / Admin2025!', 'error');
+                    showAlert('Invalid email or password. Please try again.', 'error');
                     loginButton.disabled = false;
                     loginButton.innerHTML = 'Login to Admin Portal';
                     return;
