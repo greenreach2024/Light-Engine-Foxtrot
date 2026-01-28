@@ -1890,34 +1890,40 @@ async function viewRoomDetail(farmId, roomId) {
         console.error('[room-detail] Failed to load room metadata:', error);
     }
     
-    // Step 2: ALWAYS fetch farm telemetry for environmental data
+    // Step 2: ALWAYS fetch zone telemetry for environmental data
     try {
-        const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
-        if (farmRes.ok) {
-            const farmData = await farmRes.json();
-            console.log('[room-detail] Farm data:', farmData);
-            const environmental = farmData.farm?.environmental || farmData.environmental;
-            const zones = environmental?.zones || [];
+        const zonesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+        if (zonesRes.ok) {
+            const zonesData = await zonesRes.json();
+            console.log('[room-detail] Zones telemetry data:', zonesData);
+            const zones = zonesData.zones || [];
             console.log('[room-detail] Environmental zones:', zones);
             
             // Use telemetry data for environmental readings
             if (zones.length > 0) {
                 const zone = zones[0];
                 console.log('[room-detail] Using first zone for room metrics:', zone);
-                roomData.temperature = zone.temperature_c ?? zone.temp ?? zone.tempC;
-                roomData.humidity = zone.humidity ?? zone.rh;
-                roomData.co2 = zone.co2;
                 
-                // Calculate VPD if we have both temp and humidity
-                if (roomData.temperature != null && roomData.humidity != null) {
-                    const T = roomData.temperature;
-                    const RH = roomData.humidity;
+                // Extract sensor data - support both direct properties and sensors object
+                const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
+                const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
+                const co2 = zone.co2 ?? zone.sensors?.co2?.current;
+                const vpd = zone.vpd ?? zone.sensors?.vpd?.current;
+                
+                roomData.temperature = tempC;
+                roomData.humidity = rh;
+                roomData.co2 = co2;
+                
+                // Calculate VPD if we have both temp and humidity and don't already have it
+                if (vpd != null) {
+                    roomData.vpd = vpd;
+                } else if (tempC != null && rh != null) {
+                    const T = tempC;
+                    const RH = rh;
                     // Saturation vapor pressure (kPa)
                     const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
                     // Vapor pressure deficit
                     roomData.vpd = SVP * (1 - RH / 100);
-                } else {
-                    roomData.vpd = zone.vpd;
                 }
                 
                 roomData.zones = zones;
@@ -1992,20 +1998,22 @@ async function loadRoomZones(farmId, roomId, zonesData) {
     if (Array.isArray(zonesData) && zonesData.length > 0) {
         zones = zonesData.map((zone, idx) => {
             // Use real zone identifiers from telemetry
-            const zoneId = zone.zone_id || zone.zoneId || zone.name || `zone-${idx + 1}`;
+            const zoneId = zone.zone_id || zone.zoneId || zone.id || zone.name || `zone-${idx + 1}`;
             const name = zone.zone_name || zone.name || `Zone ${idx + 1}`;
-            const temp = zone.temperature_c ?? zone.temp ?? zone.tempC;
-            const humidity = zone.humidity ?? zone.rh;
             
-            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, temp, humidity, rawZone: zone });
+            // Extract sensor data - support both direct properties and sensors object
+            const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
+            const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
+            
+            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, rawZone: zone });
             
             return {
                 zoneId,
                 name,
-                groups: 0, // Groups managed locally on edge device
-                trays: 0, // Trays managed at room level
-                temperature: temp != null ? `${temp.toFixed(1)}°C` : 'No data',
-                humidity: humidity != null ? `${humidity.toFixed(0)}%` : 'No data'
+                groups: zone.groups?.length || 0, // Groups count if available
+                trays: zone.trays?.length || 0, // Trays count if available
+                temperature: tempC != null ? `${tempC.toFixed(1)}°C` : 'No data',
+                humidity: rh != null ? `${rh.toFixed(0)}%` : 'No data'
             };
         });
     }
@@ -2409,13 +2417,13 @@ async function loadFarmRooms(farmId, count) {
         const rooms = Array.isArray(data.rooms) ? data.rooms : [];
 
         // Fetch telemetry data to get environmental readings
-        let telemetryData = null;
+        let telemetryZones = [];
         try {
-            const telemetryRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+            const telemetryRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
             if (telemetryRes.ok) {
-                const farmData = await telemetryRes.json();
-                telemetryData = farmData.farm?.environmental || farmData.environmental;
-                console.log('[FarmRooms] Telemetry data:', telemetryData);
+                const zonesData = await telemetryRes.json();
+                telemetryZones = zonesData.zones || [];
+                console.log('[FarmRooms] Telemetry zones:', telemetryZones.length);
             }
         } catch (err) {
             console.warn('[FarmRooms] Failed to fetch telemetry:', err);
@@ -2432,29 +2440,22 @@ async function loadFarmRooms(farmId, count) {
             let humidity = room.humidity ?? room.rh;
             let co2 = room.co2;
             
-            // If room doesn't have data, use telemetry summary or first zone
-            if ((temp === undefined || temp === null) && telemetryData) {
-                if (telemetryData.summary?.avgTemp != null) {
-                    temp = telemetryData.summary.avgTemp.toFixed(1);
-                } else if (telemetryData.zones?.length > 0) {
-                    const zone = telemetryData.zones[0];
-                    temp = zone.temperature_c ?? zone.temp ?? zone.tempC;
-                    if (temp != null) temp = temp.toFixed(1);
-                }
+            // If room doesn't have data, use first zone from telemetry
+            if ((temp === undefined || temp === null) && telemetryZones.length > 0) {
+                const zone = telemetryZones[0];
+                temp = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
+                if (temp != null) temp = temp.toFixed(1);
             }
             
-            if ((humidity === undefined || humidity === null) && telemetryData) {
-                if (telemetryData.summary?.avgHumidity != null) {
-                    humidity = telemetryData.summary.avgHumidity.toFixed(0);
-                } else if (telemetryData.zones?.length > 0) {
-                    const zone = telemetryData.zones[0];
-                    humidity = zone.humidity ?? zone.rh;
-                    if (humidity != null) humidity = humidity.toFixed(0);
-                }
+            if ((humidity === undefined || humidity === null) && telemetryZones.length > 0) {
+                const zone = telemetryZones[0];
+                humidity = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
+                if (humidity != null) humidity = humidity.toFixed(0);
             }
             
-            if ((co2 === undefined || co2 === null) && telemetryData?.zones?.length > 0) {
-                co2 = telemetryData.zones[0].co2;
+            if ((co2 === undefined || co2 === null) && telemetryZones.length > 0) {
+                const zone = telemetryZones[0];
+                co2 = zone.co2 ?? zone.sensors?.co2?.current;
             }
             
             // Format display values
