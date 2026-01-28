@@ -77,7 +77,25 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_farms_farm_id ON farms(farm_id);
     CREATE INDEX IF NOT EXISTS idx_farms_status ON farms(status);
   `);
-
+  
+  // Add missing columns to existing farms table (migration for old schemas)
+  try {
+    await client.query(`
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMP;
+    `);
+    logger.info('Added last_heartbeat column to farms table');
+  } catch (err) {
+    logger.warn('Could not add last_heartbeat column (may already exist):', err.message);
+  }
+  
+  try {
+    await client.query(`
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+    `);
+    logger.info('Added metadata column to farms table');
+  } catch (err) {
+    logger.warn('Could not add metadata column (may already exist):', err.message);
+  }
   // Create farm_heartbeats table
   await client.query(`
     CREATE TABLE IF NOT EXISTS farm_heartbeats (
