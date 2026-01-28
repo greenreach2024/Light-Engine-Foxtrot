@@ -2405,9 +2405,9 @@ async function loadFarmRooms(farmId, count) {
     roomsData = [];
 
     try {
-        const url = `${API_BASE}/api/admin/farms/${farmId}/rooms`;
+        const url = `${API_BASE}/api/sync/${farmId}/rooms`;
         console.log('[FarmRooms] Fetching:', url);
-        const response = await authenticatedFetch(url);
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
@@ -2527,7 +2527,16 @@ function renderRoomsTable() {
  */
 async function loadFarmDevices(farmId, count) {
     try {
-        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
+        // Try public endpoint first, fall back to authenticated if needed
+        let response;
+        try {
+            response = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            if (!response.ok) throw new Error('No public devices endpoint');
+        } catch (e) {
+            // Fall back to authenticated endpoint
+            response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         
         if (data.success && data.devices) {
@@ -2608,11 +2617,12 @@ function filterDevices() {
  */
 async function loadFarmInventory(farmId, trayCount) {
     try {
-        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/inventory`);
+        const response = await fetch(`${API_BASE}/api/sync/${farmId}/inventory`);
         const data = await response.json();
         
-        if (data.success && data.trays) {
-            inventoryData = data.trays.map(tray => ({
+        if (data.success && (data.inventory || data.trays)) {
+            const trays = data.inventory || data.trays;
+            inventoryData = trays.map(tray => ({
                 trayId: tray.tray_code,
                 recipe: tray.recipe_name || 'Unknown',
                 location: tray.location || 'Unassigned',
@@ -2678,10 +2688,10 @@ function renderInventoryTable() {
  */
 async function loadFarmRecipes(farmId) {
     try {
-        // Fetch farm-specific active recipes (not all recipes from library)
-        const url = `${API_BASE}/api/admin/farms/${farmId}/recipes`;
+        // Fetch farm-specific active recipes from sync endpoint
+        const url = `${API_BASE}/api/sync/${farmId}/groups`;
         console.log('[FarmRecipes] Fetching active recipes for farm:', farmId);
-        const response = await authenticatedFetch(url);
+        const response = await fetch(url);
         
         if (!response.ok) {
             console.error('Failed to load farm recipes:', response.status);
@@ -2694,7 +2704,7 @@ async function loadFarmRecipes(farmId) {
         console.log('[FarmRecipes] Farm recipes response:', data);
         
         // Map recipes from synced group data
-        recipesData = (data.recipes || []).map(recipe => ({
+        recipesData = (data.groups || data.recipes || []).map(recipe => ({
             recipe_id: recipe.id || recipe.recipe_id || recipe.name,
             name: recipe.name,
             cropType: recipe.category || recipe.cropType || recipe.crop_type || 'Unknown',

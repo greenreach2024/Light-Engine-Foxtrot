@@ -415,9 +415,9 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
 
 /**
  * GET /api/sync/:farmId/rooms
- * Restore rooms from cloud to edge device
+ * Retrieve rooms data for a farm (public read access)
  */
-router.get('/:farmId/rooms', authenticateFarm, async (req, res) => {
+router.get('/:farmId/rooms', async (req, res) => {
   try {
     const { farmId } = req.params;
     
@@ -463,9 +463,9 @@ router.get('/:farmId/rooms', authenticateFarm, async (req, res) => {
 
 /**
  * GET /api/sync/:farmId/groups
- * Restore groups from cloud to edge device
+ * Retrieve groups (recipes) data for a farm (public read access)
  */
-router.get('/:farmId/groups', authenticateFarm, async (req, res) => {
+router.get('/:farmId/groups', async (req, res) => {
   try {
     const { farmId } = req.params;
     
@@ -504,6 +504,54 @@ router.get('/:farmId/groups', authenticateFarm, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'Failed to restore groups',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/sync/:farmId/inventory
+ * Retrieve inventory (trays) data for a farm (public read access)
+ */
+router.get('/:farmId/inventory', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    logger.info(`[Sync] Retrieving inventory for farm ${farmId}`);
+    
+    let inventory = [];
+    
+    if (await isDatabaseAvailable()) {
+      // Retrieve from database
+      const result = await query(
+        `SELECT data FROM farm_data 
+         WHERE farm_id = $1 AND data_type = $2`,
+        [farmId, 'inventory']
+      );
+      
+      if (result.rows.length > 0) {
+        inventory = result.rows[0].data;
+      }
+      
+      logger.info(`[Sync] Retrieved ${inventory.length} inventory items from database for farm ${farmId}`);
+    } else {
+      // Retrieve from memory
+      inventory = inMemoryStore.inventory?.get(farmId) || [];
+      logger.info(`[Sync] Retrieved ${inventory.length} inventory items from memory for farm ${farmId}`);
+    }
+    
+    res.json({ 
+      success: true,
+      inventory,
+      count: inventory.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error retrieving inventory:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to retrieve inventory',
       message: error.message 
     });
   }
