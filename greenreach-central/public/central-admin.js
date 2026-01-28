@@ -2372,22 +2372,25 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
     };
     
     try {
-        // Fetch telemetry data (public endpoint)
-        const telemetryRes = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
-        if (telemetryRes.ok) {
-            const telemetryData = await telemetryRes.json();
-            console.log('[zone-detail] Telemetry data:', telemetryData);
-            const zones = telemetryData.telemetry?.zones || [];
-            console.log('[zone-detail] Zones:', zones);
+        // Fetch farm data with environmental data from authenticated admin API
+        const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        if (farmRes && farmRes.ok) {
+            const farmData = await farmRes.json();
+            console.log('[zone-detail] Farm data:', farmData);
+            const environmental = farmData.farm?.environmental || farmData.environmental;
+            const zones = environmental?.zones || [];
+            console.log('[zone-detail] Environmental zones:', zones);
             
-            // Find the specific zone
-            const zone = zones.find(z => 
-                z.id === zoneId || 
-                z.zone_id === zoneId || 
-                z.zoneId === zoneId || 
-                z.name === zoneId ||
-                z.zone_name === zoneId
-            );
+            // Find the specific zone - match by zone number
+            const zoneNumber = zoneId.match(/\d+$/)?.[0];
+            const zone = zones.find(z => {
+                const zId = z.id || z.zone_id || z.zoneId || '';
+                const zName = z.name || z.zone_name || '';
+                // Match: "zone-1", "room-knukf2:1", or name containing zone number
+                return zId === zoneId || 
+                       zName === zoneId ||
+                       (zoneNumber && (zId.endsWith(`:${zoneNumber}`) || zId.endsWith(`-${zoneNumber}`) || zName.includes(`Zone ${zoneNumber}`)));
+            });
             
             if (zone) {
                 console.log('[zone-detail] Found zone:', zone);
@@ -2400,33 +2403,50 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
                     vpd: zone.sensors?.vpd?.current ?? zone.vpd,
                     ppfd: (zone.sensors?.ppfd?.current ?? zone.ppfd) || zone.light,
                     pressure: (zone.sensors?.pressure?.current ?? zone.pressure_hpa) || zone.pressure,
-                    groups: 0, // Will be updated from groups API
-                    devices: 0, // Zone-level devices not tracked
-                    trays: 0 // Trays at room level
+                    groups: 0, // Will be updated from groups data below
+                    devices: zone.devices?.length || 0,
+                    trays: zone.trays || 0,
+                    sensorCount: 0 // Will be calculated from sensors
                 };
+                
+                // Count sensors that have current readings
+                if (zone.sensors) {
+                    const sensorKeys = Object.keys(zone.sensors);
+                    zoneData.sensorCount = sensorKeys.filter(key => {
+                        const sensor = zone.sensors[key];
+                        return sensor && sensor.current != null;
+                    }).length;
+                }
             } else {
-                console.warn('[zone-detail] Zone not found in telemetry:', zoneId);
+                console.warn('[zone-detail] Zone not found in environmental data:', zoneId, 'Available zones:', zones.map(z => z.id || z.name));
             }
         }
         
-        // Fetch groups data to count groups in this zone
-        const groupsRes = await fetch(`${API_BASE}/api/sync/${farmId}/groups`);
-        if (groupsRes.ok) {
+        // Fetch groups data from farm_data table via admin API
+        const groupsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (groupsRes && groupsRes.ok) {
             const groupsData = await groupsRes.json();
             const groups = groupsData.groups || [];
+            console.log('[zone-detail] Groups data:', groups.length, 'groups');
             
             // Count groups assigned to this zone
             // Zone format in groups: "room-knukf2:1", zoneId: "zone-1"
-            // Match by checking if group.zone ends with the zone number
             const zoneNumber = zoneId.match(/\d+$/)?.[0];
             const zoneGroups = groups.filter(g => {
-                const groupZone = g.zone || g.zone_id;
+                const groupZone = g.zone || g.zone_id || g.location;
+                if (!groupZone) return false;
+                
+                // Match exact zone ID or by zone number
                 return groupZone === zoneId || 
-                       (zoneNumber && groupZone && groupZone.endsWith(`:${zoneNumber}`));
+                       (zoneNumber && (
+                           groupZone.endsWith(`:${zoneNumber}`) || 
+                           groupZone.endsWith(`-${zoneNumber}`) ||
+                           groupZone === `zone-${zoneNumber}`
+                       ));
             });
             
             zoneData.groups = zoneGroups.length;
-            console.log('[zone-detail] Found groups for zone:', zoneData.groups);
+            console.log('[zone-detail] Found groups for zone:', zoneData.groups, 'matching zoneId:', zoneId);
         }
     } catch (error) {
         console.error('[zone-detail] Failed to fetch zone data:', error);
@@ -2480,21 +2500,30 @@ async function loadZoneGroups(farmId, roomId, zoneId, count) {
     tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading groups...</td></tr>';
     
     try {
-        // Fetch groups from sync API
-        const res = await fetch(`${API_BASE}/api/sync/${farmId}/groups`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // Fetch groups from admin API
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (!res || !res.ok) throw new Error(`HTTP ${res?.status || 'error'}`);
         
         const data = await res.json();
         const allGroups = data.groups || [];
+        console.log('[loadZoneGroups] All groups:', allGroups.length);
         
         // Filter groups for this zone
         // Zone format in groups: "room-knukf2:1", zoneId: "zone-1"
         const zoneNumber = zoneId.match(/\d+$/)?.[0];
         const zoneGroups = allGroups.filter(g => {
-            const groupZone = g.zone || g.zone_id;
+            const groupZone = g.zone || g.zone_id || g.location;
+            if (!groupZone) return false;
+            
             return groupZone === zoneId || 
-                   (zoneNumber && groupZone && groupZone.endsWith(`:${zoneNumber}`));
+                   (zoneNumber && (
+                       groupZone.endsWith(`:${zoneNumber}`) || 
+                       groupZone.endsWith(`-${zoneNumber}`) ||
+                       groupZone === `zone-${zoneNumber}`
+                   ));
         });
+        
+        console.log('[loadZoneGroups] Filtered to zone:', zoneGroups.length, 'groups for', zoneId);
         
         if (zoneGroups.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="empty">No groups assigned to this zone</td></tr>';
@@ -2503,20 +2532,20 @@ async function loadZoneGroups(farmId, roomId, zoneId, count) {
         
         // Render groups table
         tbody.innerHTML = zoneGroups.map(group => `
-            <tr onclick="viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${group.id}')">
-                <td>${escapeHtml(group.id || 'N/A')}</td>
+            <tr onclick="viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${escapeHtml(group.id || group.group_id || '')}')">
+                <td>${escapeHtml(group.id || group.group_id || 'N/A')}</td>
                 <td>${escapeHtml(group.name || 'Unnamed')}</td>
-                <td>${group.lights?.length || 0}</td>
-                <td>${group.trays || 0}</td>
-                <td>${escapeHtml(group.plan || 'No recipe')}</td>
-                <td><span class="status-badge status-${group.status || 'unknown'}">${group.status || 'unknown'}</span></td>
-                <td><button class="btn-secondary btn-sm" onclick="event.stopPropagation(); viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${group.id}')">View</button></td>
+                <td>${group.lights?.length || group.light_count || 0}</td>
+                <td>${group.trays || group.tray_count || 0}</td>
+                <td>${escapeHtml(group.plan || group.recipe || 'No recipe')}</td>
+                <td><span class="status-badge status-${group.status || 'active'}">${group.status || 'active'}</span></td>
+                <td><button class="btn-secondary btn-sm" onclick="event.stopPropagation(); viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${escapeHtml(group.id || group.group_id || '')}')">View</button></td>
             </tr>
         `).join('');
         
     } catch (error) {
         console.error('[loadZoneGroups] Failed to load groups:', error);
-        tbody.innerHTML = '<tr><td colspan="7" class="empty error">Failed to load groups</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty error">Failed to load groups - ' + escapeHtml(error.message) + '</td></tr>';
     }
 }
 
@@ -2525,9 +2554,123 @@ async function loadZoneGroups(farmId, roomId, zoneId, count) {
  */
 async function loadZoneSensors(farmId, roomId, zoneId) {
     const tbody = document.getElementById('zone-sensors-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading sensors...</td></tr>';
     
-    // Sensor readings are aggregated at zone level and shown in KPIs above
-    tbody.innerHTML = '<tr><td colspan="6" class="empty" style="padding: 40px; text-align: center; color: var(--text-secondary);"><div style="margin-bottom: 8px;"><strong>Sensor Data Displayed Above</strong></div><div>Individual sensor breakdowns are not available. Environmental readings (temperature, humidity) are aggregated at the zone level and displayed in the KPI cards above.</div></td></tr>';
+    try {
+        // Fetch farm environmental data to get zone sensors
+        const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        if (!farmRes || !farmRes.ok) throw new Error(`HTTP ${farmRes?.status || 'error'}`);
+        
+        const farmData = await farmRes.json();
+        const environmental = farmData.farm?.environmental || farmData.environmental;
+        const zones = environmental?.zones || [];
+        
+        // Find the specific zone
+        const zoneNumber = zoneId.match(/\d+$/)?.[0];
+        const zone = zones.find(z => {
+            const zId = z.id || z.zone_id || z.zoneId || '';
+            const zName = z.name || z.zone_name || '';
+            return zId === zoneId || 
+                   zName === zoneId ||
+                   (zoneNumber && (zId.endsWith(`:${zoneNumber}`) || zId.endsWith(`-${zoneNumber}`) || zName.includes(`Zone ${zoneNumber}`)));
+        });
+        
+        if (!zone || !zone.sensors) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty">No sensors configured for this zone</td></tr>';
+            return;
+        }
+        
+        // Build sensor rows from the sensors object
+        const sensors = [];
+        const sensorMap = zone.sensors;
+        
+        // Temperature sensor
+        if (sensorMap.tempC && sensorMap.tempC.current != null) {
+            sensors.push({
+                type: 'Temperature',
+                device: zone.meta?.deviceId || 'ESP32',
+                value: `${sensorMap.tempC.current.toFixed(1)}°C`,
+                status: 'active',
+                lastSeen: zone.meta?.lastSeen || 'Active'
+            });
+        }
+        
+        // Humidity sensor
+        if (sensorMap.rh && sensorMap.rh.current != null) {
+            sensors.push({
+                type: 'Humidity',
+                device: zone.meta?.deviceId || 'ESP32',
+                value: `${sensorMap.rh.current.toFixed(0)}%`,
+                status: 'active',
+                lastSeen: zone.meta?.lastSeen || 'Active'
+            });
+        }
+        
+        // VPD
+        if (sensorMap.vpd && sensorMap.vpd.current != null) {
+            sensors.push({
+                type: 'VPD',
+                device: 'Calculated',
+                value: `${sensorMap.vpd.current.toFixed(2)} kPa`,
+                status: 'active',
+                lastSeen: 'Real-time'
+            });
+        }
+        
+        // CO2
+        if (sensorMap.co2 && sensorMap.co2.current != null) {
+            sensors.push({
+                type: 'CO2',
+                device: zone.meta?.deviceId || 'ESP32',
+                value: `${sensorMap.co2.current.toFixed(0)} ppm`,
+                status: 'active',
+                lastSeen: zone.meta?.lastSeen || 'Active'
+            });
+        }
+        
+        // PPFD / Light
+        if (sensorMap.ppfd && sensorMap.ppfd.current != null) {
+            sensors.push({
+                type: 'PPFD',
+                device: zone.meta?.deviceId || 'Light Sensor',
+                value: `${sensorMap.ppfd.current.toFixed(0)} μmol/m²/s`,
+                status: 'active',
+                lastSeen: zone.meta?.lastSeen || 'Active'
+            });
+        }
+        
+        // Pressure
+        if (sensorMap.pressure && sensorMap.pressure.current != null) {
+            sensors.push({
+                type: 'Pressure',
+                device: zone.meta?.deviceId || 'ESP32',
+                value: `${sensorMap.pressure.current.toFixed(1)} hPa`,
+                status: 'active',
+                lastSeen: zone.meta?.lastSeen || 'Active'
+            });
+        }
+        
+        if (sensors.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty">No active sensor readings</td></tr>';
+            return;
+        }
+        
+        // Render sensors table
+        tbody.innerHTML = sensors.map(sensor => `
+            <tr>
+                <td>${escapeHtml(sensor.type)}</td>
+                <td>${escapeHtml(sensor.device)}</td>
+                <td><strong>${escapeHtml(sensor.value)}</strong></td>
+                <td><span class="status-badge status-${sensor.status}">${sensor.status}</span></td>
+                <td>${escapeHtml(sensor.lastSeen)}</td>
+                <td>—</td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('[loadZoneSensors] Failed to load sensors:', error);
+        tbody.innerHTML = '<tr><td colspan="6" class="empty error">Failed to load sensors - ' + escapeHtml(error.message) + '</td></tr>';
+    }
 }
 
 /**
