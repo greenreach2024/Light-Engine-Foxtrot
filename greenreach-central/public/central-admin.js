@@ -1991,8 +1991,9 @@ async function loadRoomZones(farmId, roomId, zonesData) {
     // Use real zone data from telemetry if available
     if (Array.isArray(zonesData) && zonesData.length > 0) {
         zones = zonesData.map((zone, idx) => {
-            const zoneId = zone.zone_id || zone.zoneId || `zone-${idx + 1}`;
-            const name = zone.name || zone.zone_name || `Zone ${idx + 1}`;
+            // Use real zone identifiers from telemetry
+            const zoneId = zone.zone_id || zone.zoneId || zone.name || `zone-${idx + 1}`;
+            const name = zone.zone_name || zone.name || `Zone ${idx + 1}`;
             const temp = zone.temperature_c ?? zone.temp ?? zone.tempC;
             const humidity = zone.humidity ?? zone.rh;
             
@@ -2001,11 +2002,10 @@ async function loadRoomZones(farmId, roomId, zonesData) {
             return {
                 zoneId,
                 name,
-                groups: 0, // No group data yet
-                trays: 0, // No tray data yet
+                groups: 0, // Groups managed locally on edge device
+                trays: 0, // Trays managed at room level
                 temperature: temp != null ? `${temp.toFixed(1)}°C` : 'No data',
-                humidity: humidity != null ? `${humidity.toFixed(0)}%` : 'No data',
-                status: 'online'
+                humidity: humidity != null ? `${humidity.toFixed(0)}%` : 'No data'
             };
         });
     }
@@ -2013,7 +2013,7 @@ async function loadRoomZones(farmId, roomId, zonesData) {
     countEl.textContent = `${zones.length} ${zones.length === 1 ? 'zone' : 'zones'}`;
     
     if (zones.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty">No zones configured for this room</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No zones configured for this room</td></tr>';
     } else {
         tbody.innerHTML = zones.map(zone => `
             <tr>
@@ -2023,7 +2023,6 @@ async function loadRoomZones(farmId, roomId, zonesData) {
                 <td>${zone.trays}</td>
                 <td>${zone.temperature}</td>
                 <td>${zone.humidity}</td>
-                <td><span class="status-badge status-online">${zone.status}</span></td>
                 <td><button class="btn-sm" onclick="drillToZone('${farmId}', '${roomId}', '${zone.zoneId}')">View</button></td>
             </tr>
         `).join('');
