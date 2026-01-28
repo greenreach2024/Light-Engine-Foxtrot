@@ -4879,46 +4879,152 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
         `;
         document.getElementById('env-current').innerHTML = conditionsHtml;
         
-        // Generate AI Insights based on real data
+        // Try to get recipe targets for more accurate insights
+        let recipeTargets = null;
+        try {
+            // Check if farm has an active recipe, otherwise use defaults
+            const activeRecipe = farmData?.activeRecipe || farmData?.recipe;
+            if (activeRecipe && activeRecipe.data && activeRecipe.data.schedule) {
+                // Get average targets from recipe schedule
+                const schedule = activeRecipe.data.schedule;
+                let tempSum = 0, humiditySum = 0, tempCount = 0, humidityCount = 0;
+                
+                schedule.forEach(phase => {
+                    const temp = phase.temperature || phase.tempC || phase['Afternoon Temp (C)'];
+                    const humidity = phase.humidity || phase.rh || phase['RH (%)'];
+                    if (temp != null) {
+                        tempSum += parseFloat(temp);
+                        tempCount++;
+                    }
+                    if (humidity != null) {
+                        humiditySum += parseFloat(humidity);
+                        humidityCount++;
+                    }
+                });
+                
+                if (tempCount > 0 || humidityCount > 0) {
+                    recipeTargets = {
+                        temperature: tempCount > 0 ? tempSum / tempCount : null,
+                        humidity: humidityCount > 0 ? humiditySum / humidityCount : null
+                    };
+                    console.log('[loadFarmEnvironmentalData] Using recipe targets:', recipeTargets);
+                }
+            }
+        } catch (err) {
+            console.log('[loadFarmEnvironmentalData] No recipe targets available:', err.message);
+        }
+        
+        // If no recipe targets, use general hydroponic ranges
+        if (!recipeTargets) {
+            recipeTargets = {
+                temperature: 20, // 20°C as default for leafy greens
+                humidity: 60     // 60% as default for leafy greens
+            };
+            console.log('[loadFarmEnvironmentalData] Using default targets for leafy greens');
+        }
+        
+        // Calculate acceptable ranges (±10% from target)
+        const tempTarget = recipeTargets.temperature;
+        const tempMin = tempTarget * 0.9;  // -10%
+        const tempMax = tempTarget * 1.1;  // +10%
+        
+        const humidityTarget = recipeTargets.humidity;
+        const humidityMin = humidityTarget * 0.9;  // -10%
+        const humidityMax = humidityTarget * 1.1;  // +10%
+        
+        // VPD targets (0.8-1.2 kPa is optimal for most crops)
+        const vpdTarget = 1.0;
+        const vpdMin = 0.8;
+        const vpdMax = 1.2;
+        
+        // Generate AI Insights based on recipe targets
         const insights = [];
         
         // Temperature insight
         if (avgTemp != null) {
-            if (avgTemp < 18) {
-                insights.push({ icon: '❄️', text: 'Temperature below optimal range (18-25°C)', severity: 'warning' });
-            } else if (avgTemp > 25) {
-                insights.push({ icon: '🔥', text: 'Temperature above optimal range (18-25°C)', severity: 'warning' });
+            const temp = parseFloat(avgTemp);
+            if (temp < tempMin) {
+                const diff = ((tempMin - temp) / tempTarget * 100).toFixed(1);
+                insights.push({ 
+                    icon: '❄️', 
+                    text: `Temperature ${diff}% below target (${tempTarget.toFixed(1)}°C ±10%)`, 
+                    severity: 'warning' 
+                });
+            } else if (temp > tempMax) {
+                const diff = ((temp - tempMax) / tempTarget * 100).toFixed(1);
+                insights.push({ 
+                    icon: '🔥', 
+                    text: `Temperature ${diff}% above target (${tempTarget.toFixed(1)}°C ±10%)`, 
+                    severity: 'warning' 
+                });
             } else {
-                insights.push({ icon: '✅', text: 'Temperature within optimal range', severity: 'good' });
+                insights.push({ 
+                    icon: '✅', 
+                    text: `Temperature optimal (${temp}°C in ${tempMin.toFixed(1)}-${tempMax.toFixed(1)}°C range)`, 
+                    severity: 'good' 
+                });
             }
         }
         
         // Humidity insight
         if (avgHumidity != null) {
-            if (avgHumidity < 40) {
-                insights.push({ icon: '💧', text: 'Humidity below optimal range (40-70%)', severity: 'warning' });
-            } else if (avgHumidity > 70) {
-                insights.push({ icon: '🌫️', text: 'Humidity above optimal range (40-70%)', severity: 'warning' });
+            const humidity = parseFloat(avgHumidity);
+            if (humidity < humidityMin) {
+                const diff = ((humidityMin - humidity) / humidityTarget * 100).toFixed(1);
+                insights.push({ 
+                    icon: '💧', 
+                    text: `Humidity ${diff}% below target (${humidityTarget.toFixed(0)}% ±10%)`, 
+                    severity: 'warning' 
+                });
+            } else if (humidity > humidityMax) {
+                const diff = ((humidity - humidityMax) / humidityTarget * 100).toFixed(1);
+                insights.push({ 
+                    icon: '🌫️', 
+                    text: `Humidity ${diff}% above target (${humidityTarget.toFixed(0)}% ±10%)`, 
+                    severity: 'warning' 
+                });
             } else {
-                insights.push({ icon: '✅', text: 'Humidity within optimal range', severity: 'good' });
+                insights.push({ 
+                    icon: '✅', 
+                    text: `Humidity optimal (${humidity}% in ${humidityMin.toFixed(0)}-${humidityMax.toFixed(0)}% range)`, 
+                    severity: 'good' 
+                });
             }
         }
         
         // VPD insight
         if (avgVPD != null) {
             const vpdNum = parseFloat(avgVPD);
-            if (vpdNum < 0.8) {
-                insights.push({ icon: '📊', text: 'VPD below target range (0.8-1.2 kPa)', severity: 'info' });
-            } else if (vpdNum > 1.2) {
-                insights.push({ icon: '📊', text: 'VPD above target range (0.8-1.2 kPa)', severity: 'info' });
+            if (vpdNum < vpdMin) {
+                const diff = ((vpdMin - vpdNum) / vpdTarget * 100).toFixed(1);
+                insights.push({ 
+                    icon: '📊', 
+                    text: `VPD ${diff}% below target (${vpdTarget} kPa ±20%)`, 
+                    severity: 'info' 
+                });
+            } else if (vpdNum > vpdMax) {
+                const diff = ((vpdNum - vpdMax) / vpdTarget * 100).toFixed(1);
+                insights.push({ 
+                    icon: '📊', 
+                    text: `VPD ${diff}% above target (${vpdTarget} kPa ±20%)`, 
+                    severity: 'info' 
+                });
             } else {
-                insights.push({ icon: '✅', text: 'VPD within target range', severity: 'good' });
+                insights.push({ 
+                    icon: '✅', 
+                    text: `VPD optimal (${vpdNum} kPa in ${vpdMin}-${vpdMax} kPa range)`, 
+                    severity: 'good' 
+                });
             }
         }
         
         // If no issues, add positive insight
         if (insights.filter(i => i.severity === 'warning').length === 0) {
-            insights.push({ icon: '🌱', text: 'All environmental parameters optimal for growth', severity: 'good' });
+            insights.push({ 
+                icon: '🌱', 
+                text: 'All environmental parameters within target ranges', 
+                severity: 'good' 
+            });
         }
         
         const insightsHtml = insights.map(insight => `
