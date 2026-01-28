@@ -2107,19 +2107,19 @@ async function loadRoomZones(farmId, roomId, zonesData) {
     // Use real zone data from telemetry if available
     if (Array.isArray(zonesData) && zonesData.length > 0) {
         zones = zonesData.map((zone, idx) => {
-            // Use real zone identifiers from telemetry
-            const zoneId = zone.zone_id || zone.zoneId || zone.id || zone.name || `zone-${idx + 1}`;
-            const name = zone.zone_name || zone.name || `Zone ${idx + 1}`;
+            // Construct compound zone ID to match groups format: "room-xxx:1"
+            const rawZoneId = zone.zone_id || zone.zoneId || zone.id || zone.name || `${idx + 1}`;
+            const zoneId = `${roomId}:${rawZoneId}`;
+            const name = zone.zone_name || zone.name || `Zone ${rawZoneId}`;
             
             // Extract sensor data - support both direct properties and sensors object
             const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
             const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
             
-            // Count groups assigned to this zone - try multiple zone ID formats
-            const zoneKey = `${roomId}:${idx + 1}`;
-            const groupsCount = groupsByZone[zoneId] || groupsByZone[zoneKey] || 0;
+            // Count groups assigned to this zone - use compound zone ID
+            const groupsCount = groupsByZone[zoneId] || 0;
             
-            console.log(`[loadRoomZones] Zone ${zoneId} (key: ${zoneKey}):`, { name, tempC, rh, groupsCount, rawZone: zone });
+            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, groupsCount, rawZone: zone });
             
             return {
                 zoneId,
@@ -2632,13 +2632,16 @@ async function loadZoneGroupsAndPPFD(farmId, roomId, zoneId, count) {
         console.log('[loadZoneGroupsAndPPFD] All groups:', allGroups.length);
         
         // Filter groups for this zone
+        // Zone ID formats: "room-knukf2:1" (compound), "zone-1" (legacy), or just "1" (number)
         const zoneNumber = zoneId.match(/\d+$/)?.[0];
         const zoneGroups = allGroups.filter(g => {
             const groupZone = g.zone || g.zone_id || g.location;
             if (!groupZone) return false;
             
+            // Match exact zone ID or by compound format or zone number
             return groupZone === zoneId || 
                    (zoneNumber && (
+                       groupZone === `${roomId}:${zoneNumber}` ||
                        groupZone.endsWith(`:${zoneNumber}`) || 
                        groupZone.endsWith(`-${zoneNumber}`) ||
                        groupZone === `zone-${zoneNumber}`
@@ -2721,13 +2724,14 @@ async function loadZoneGroupsAndPPFD(farmId, roomId, zoneId, count) {
         // Render groups table with calculated PPFD
         tbody.innerHTML = zoneGroups.map(group => {
             const ppfdDisplay = group._calculatedPPFD ? `${group._calculatedPPFD} μmol/m²/s` : (group.ppfd || 'N/A');
+            const recipeName = group.recipe || group.plan || 'No recipe';
             return `
             <tr onclick="viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${escapeHtml(group.id || group.group_id || '')}')">
                 <td>${escapeHtml(group.id || group.group_id || 'N/A')}</td>
                 <td>${escapeHtml(group.name || 'Unnamed')}</td>
                 <td>${group.lights?.length || group.light_count || 0}</td>
                 <td>${group.trays || group.tray_count || 0}</td>
-                <td title="Current PPFD: ${ppfdDisplay}">${escapeHtml(group.plan || group.recipe || 'No recipe')}</td>
+                <td title="Current PPFD: ${ppfdDisplay}">${escapeHtml(recipeName)}</td>
                 <td><span class="status-badge status-${group.status || 'active'}">${group.status || 'active'}</span></td>
                 <td><button class="btn-secondary btn-sm" onclick="event.stopPropagation(); viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${escapeHtml(group.id || group.group_id || '')}')">View</button></td>
             </tr>
