@@ -2278,33 +2278,6 @@ async function loadZoneSensors(farmId, roomId, zoneId) {
     // Individual sensor data not available at zone level
     // Sensor readings are aggregated in telemetry at zone level
     tbody.innerHTML = '<tr><td colspan="6" class="empty">Individual sensor data not available. Environmental readings are shown in zone telemetry.</td></tr>';
-                break;
-            case 'Light':
-                reading = `${Math.floor(Math.random() * 200) + 400} PPFD`;
-                break;
-            case 'Soil Moisture':
-                reading = `${(Math.random() * 20 + 40).toFixed(0)}%`;
-                break;
-        }
-        
-        sensors.push({
-            sensorId,
-            type,
-            reading,
-            status: Math.random() > 0.95 ? 'offline' : 'online',
-            lastUpdate: generateRandomTime()
-        });
-    }
-    
-    tbody.innerHTML = sensors.map(sensor => `
-        <tr>
-            <td><code>${sensor.sensorId}</code></td>
-            <td>${sensor.type}</td>
-            <td>${sensor.reading}</td>
-            <td><span class="badge badge-${sensor.status === 'online' ? 'success' : 'danger'}">${sensor.status}</span></td>
-            <td>${sensor.lastUpdate}</td>
-        </tr>
-    `).join('');
 }
 
 /**
