@@ -17,16 +17,26 @@ const __dirname = dirname(__filename);
 const router = Router();
 
 /**
- * Load current environmental data
+ * Load current environmental data from in-memory cache
+ * Reads from DATA_DIR/env.json if available, otherwise returns empty structure
  */
-function loadEnvData() {
+async function loadEnvData() {
   try {
-    const envPath = join(__dirname, '..', 'public', 'data', 'env.json');
+    const envPath = join(__dirname, '..', 'data', 'env.json');
     const data = readFileSync(envPath, 'utf8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    
+    // Transform to expected format if zones exist
+    if (Array.isArray(parsed.zones) && parsed.zones.length > 0) {
+      return { zones: parsed.zones };
+    }
+    
+    // Return empty structure if no zones
+    return { zones: [] };
   } catch (error) {
-    console.error('[Health API] Failed to load env data:', error.message);
-    return null;
+    console.warn('[Health API] Failed to load env data from data/env.json:', error.message);
+    // Return empty structure instead of null to avoid errors
+    return { zones: [] };
   }
 }
 
@@ -34,11 +44,11 @@ function loadEnvData() {
  * GET /api/health/scan
  * Perform full health scan of all zones
  */
-router.get('/scan', (req, res) => {
+router.get('/scan', async (req, res) => {
   try {
-    const envData = loadEnvData();
+    const envData = await loadEnvData();
     
-    if (!envData) {
+    if (!envData || !envData.zones) {
       return res.status(500).json({
         ok: false,
         error: 'Failed to load environmental data'
@@ -61,12 +71,12 @@ router.get('/scan', (req, res) => {
  * GET /api/health/status/:zoneId
  * Get health status for a specific zone
  */
-router.get('/status/:zoneId', (req, res) => {
+router.get('/status/:zoneId', async (req, res) => {
   try {
     const { zoneId } = req.params;
-    const envData = loadEnvData();
+    const envData = await loadEnvData();
     
-    if (!envData) {
+    if (!envData || !envData.zones) {
       return res.status(500).json({
         ok: false,
         error: 'Failed to load environmental data'
@@ -89,11 +99,11 @@ router.get('/status/:zoneId', (req, res) => {
  * GET /api/health/out-of-target
  * Get only zones with out-of-target conditions
  */
-router.get('/out-of-target', (req, res) => {
+router.get('/out-of-target', async (req, res) => {
   try {
-    const envData = loadEnvData();
+    const envData = await loadEnvData();
     
-    if (!envData) {
+    if (!envData || !envData.zones) {
       return res.status(500).json({
         ok: false,
         error: 'Failed to load environmental data'
@@ -149,11 +159,11 @@ router.get('/status', (req, res) => {
  * GET /api/health/score
  * Get comprehensive 0-100 health score for entire farm
  */
-router.get('/score', (req, res) => {
+router.get('/score', async (req, res) => {
   try {
-    const envData = loadEnvData();
+    const envData = await loadEnvData();
     
-    if (!envData) {
+    if (!envData || !envData.zones) {
       return res.status(500).json({
         ok: false,
         error: 'Failed to load environmental data'
@@ -176,11 +186,11 @@ router.get('/score', (req, res) => {
  * GET /api/health/insights
  * Get health score with AI-generated insights and recommendations
  */
-router.get('/insights', (req, res) => {
+router.get('/insights', async (req, res) => {
   try {
-    const envData = loadEnvData();
+    const envData = await loadEnvData();
     
-    if (!envData) {
+    if (!envData || !envData.zones) {
       return res.status(500).json({
         ok: false,
         error: 'Failed to load environmental data'

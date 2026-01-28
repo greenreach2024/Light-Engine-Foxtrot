@@ -3007,8 +3007,7 @@
                 console.log(`[Farm Summary] ${zone.name} using envData from ${envZone.id}: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
               }
             } else {
-              console.log(`[Farm Summary] ${zone.name} - no matching envData zone found`);
-            }
+              }
           }
 
           // Find groups in this zone, excluding cannabis
@@ -3586,29 +3585,39 @@
               </h3>
               
               <!-- Zone Environmental Metrics (shown first) -->
-              <div class="env-grid" style="margin-bottom: 20px;">
-                <div class="env-metric ${tempInvalid ? 'invalid-reading' : ''}">
-                  <div class="label">Temperature</div>
-                  <div class="value">${Number.isFinite(temp) ? formatNumber(temp, 1) : '--'}</div>
-                  <div class="unit">°C</div>
-                  ${zone.tempSetpoint ? `<div class="target">Target: ${zone.tempSetpoint.min}–${zone.tempSetpoint.max}°C</div>` : ''}
-                  <div class="status ${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'warning' : 'critical') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'optimal' : temp >= 15 && temp <= 28 ? 'warning' : 'critical') : '')}">${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'Optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'Acceptable' : 'Alert') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'Optimal' : temp >= 15 && temp <= 28 ? 'Acceptable' : 'Alert') : '--')}</div>
+              ${!Number.isFinite(temp) && !Number.isFinite(humidity) ? `
+                <div style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 12px; text-align: center;">
+                  <div style="color: #1e40af; font-weight: 600; margin-bottom: 8px;">Environmental Monitoring</div>
+                  <div style="color: #475569; font-size: 0.9rem; margin-bottom: 12px;">View detailed sensor readings and spatial heatmap</div>
+                  <a href="/views/room-heatmap.html" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 0.9rem; transition: background 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                    Open Room Heatmap →
+                  </a>
                 </div>
-                <div class="env-metric ${humidityInvalid ? 'invalid-reading' : ''}">
-                  <div class="label">Humidity</div>
-                  <div class="value">${Number.isFinite(humidity) ? formatNumber(humidity, 0) : '--'}</div>
-                  <div class="unit">%</div>
-                  ${zone.rhSetpoint ? `<div class="target">Target: ${zone.rhSetpoint.min}–${zone.rhSetpoint.max}%</div>` : ''}
-                  <div class="status ${Number.isFinite(humidity) && zone.rhSetpoint ? (humidity >= zone.rhSetpoint.min && humidity <= zone.rhSetpoint.max ? 'optimal' : humidity >= (zone.rhSetpoint.min - 10) && humidity <= (zone.rhSetpoint.max + 10) ? 'warning' : 'critical') : (Number.isFinite(humidity) ? (humidity >= 50 && humidity <= 70 ? 'optimal' : humidity >= 40 && humidity <= 80 ? 'warning' : 'critical') : '')}">${Number.isFinite(humidity) && zone.rhSetpoint ? (humidity >= zone.rhSetpoint.min && humidity <= zone.rhSetpoint.max ? 'Optimal' : humidity >= (zone.rhSetpoint.min - 10) && humidity <= (zone.rhSetpoint.max + 10) ? 'Acceptable' : 'Alert') : (Number.isFinite(humidity) ? (humidity >= 50 && humidity <= 70 ? 'Optimal' : humidity >= 40 && humidity <= 80 ? 'Acceptable' : 'Alert') : '--')}</div>
+              ` : `
+                <div class="env-grid" style="margin-bottom: 20px;">
+                  <div class="env-metric ${tempInvalid ? 'invalid-reading' : ''}">
+                    <div class="label">Temperature</div>
+                    <div class="value">${Number.isFinite(temp) ? formatNumber(temp, 1) : '--'}</div>
+                    <div class="unit">°C</div>
+                    ${zone.tempSetpoint ? `<div class="target">Target: ${zone.tempSetpoint.min}–${zone.tempSetpoint.max}°C</div>` : ''}
+                    <div class="status ${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'warning' : 'critical') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'optimal' : temp >= 15 && temp <= 28 ? 'warning' : 'critical') : '')}">${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'Optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'Acceptable' : 'Alert') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'Optimal' : temp >= 15 && temp <= 28 ? 'Acceptable' : 'Alert') : '--')}</div>
+                  </div>
+                  <div class="env-metric ${humidityInvalid ? 'invalid-reading' : ''}">
+                    <div class="label">Humidity</div>
+                    <div class="value">${Number.isFinite(humidity) ? formatNumber(humidity, 0) : '--'}</div>
+                    <div class="unit">%</div>
+                    ${zone.rhSetpoint ? `<div class="target">Target: ${zone.rhSetpoint.min}–${zone.rhSetpoint.max}%</div>` : ''}
+                    <div class="status ${Number.isFinite(humidity) && zone.rhSetpoint ? (humidity >= zone.rhSetpoint.min && humidity <= zone.rhSetpoint.max ? 'optimal' : humidity >= (zone.rhSetpoint.min - 10) && humidity <= (zone.rhSetpoint.max + 10) ? 'warning' : 'critical') : (Number.isFinite(humidity) ? (humidity >= 50 && humidity <= 70 ? 'optimal' : humidity >= 40 && humidity <= 80 ? 'warning' : 'critical') : '')}">${Number.isFinite(humidity) && zone.rhSetpoint ? (humidity >= zone.rhSetpoint.min && humidity <= zone.rhSetpoint.max ? 'Optimal' : humidity >= (zone.rhSetpoint.min - 10) && humidity <= (zone.rhSetpoint.max + 10) ? 'Acceptable' : 'Alert') : (Number.isFinite(humidity) ? (humidity >= 50 && humidity <= 70 ? 'Optimal' : humidity >= 40 && humidity <= 80 ? 'Acceptable' : 'Alert') : '--')}</div>
+                  </div>
+                  <div class="env-metric">
+                    <div class="label">VPD</div>
+                    <div class="value">${Number.isFinite(vpd) ? formatNumber(vpd, 2) : '--'}</div>
+                    <div class="unit">kPa</div>
+                    <div class="target">Target: 0.8–1.2 kPa</div>
+                    <div class="status ${Number.isFinite(vpd) ? (vpd >= 0.8 && vpd <= 1.2 ? 'optimal' : vpd >= 0.6 && vpd <= 1.5 ? 'warning' : 'critical') : ''}">${Number.isFinite(vpd) ? (vpd >= 0.8 && vpd <= 1.2 ? 'Optimal' : vpd >= 0.6 && vpd <= 1.5 ? 'Acceptable' : 'Alert') : '--'}</div>
+                  </div>
                 </div>
-                <div class="env-metric">
-                  <div class="label">VPD</div>
-                  <div class="value">${Number.isFinite(vpd) ? formatNumber(vpd, 2) : '--'}</div>
-                  <div class="unit">kPa</div>
-                  <div class="target">Target: 0.8–1.2 kPa</div>
-                  <div class="status ${Number.isFinite(vpd) ? (vpd >= 0.8 && vpd <= 1.2 ? 'optimal' : vpd >= 0.6 && vpd <= 1.5 ? 'warning' : 'critical') : ''}">${Number.isFinite(vpd) ? (vpd >= 0.8 && vpd <= 1.2 ? 'Optimal' : vpd >= 0.6 && vpd <= 1.5 ? 'Acceptable' : 'Alert') : '--'}</div>
-                </div>
-              </div>
+              `}
               
               <!-- Groups within this zone -->
               ${zoneGroups.length > 0 ? `

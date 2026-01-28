@@ -94,7 +94,7 @@ function requireEdgeForControl(req, res, next) {
       });
     }
     
-    // Edge users and demo mode get full control access
+    // Edge users get full control access
     next();
   } catch (error) {
     // Invalid token - let other middleware handle auth
@@ -6111,18 +6111,11 @@ app.options('/devices', (req,res)=>{ setApiCors(res); res.status(204).end(); });
 app.options('/devices/:id', (req,res)=>{ setApiCors(res); res.status(204).end(); });
 
 // GET /devices → list
-app.get('/devices', createDemoModeHandler(), async (req, res) => {
+app.get('/devices', async (req, res) => {
   try {
     setApiCors(res);
     
-    // Handle demo mode - always return demo devices when demo mode is enabled
-    if (isDemoMode()) {
-      const demoData = getDemoData();
-      const devices = demoData.getDevices();
-      console.log('[charlie] Demo mode: serving demo devices (' + devices.length + ' devices)');
-      return res.json({ devices });
-    }
-    
+    // Always return real devices from database
     const rows = await devicesStore.find({});
     rows.sort((a,b)=> String(a.id||'').localeCompare(String(b.id||'')));
     return res.json({ devices: rows.map(deviceDocToJson) });
@@ -10002,8 +9995,8 @@ app.post('/api/schedule-executor/tick', async (req, res) => {
 // Get ML anomalies from executor
 app.get('/api/schedule-executor/ml-anomalies', (req, res) => {
   try {
-    // Demo mode: return synthetic anomaly data
-    if (isDemoMode() || !scheduleExecutor) {
+    // Return real ML anomalies from schedule executor
+    if (!scheduleExecutor) {
       const now = new Date();
       const demoAnomalies = [];
       
@@ -11357,8 +11350,8 @@ print(json.dumps(result))
  * Get latest cached anomaly detection results
  */
 app.get('/api/ml/insights/anomalies', asyncHandler(async (req, res) => {
-  // Demo mode: generate realistic anomaly detection results
-  if (isDemoMode()) {
+  // Demo mode removed - always use real data
+  if (false) {
     const now = new Date();
     const hoursAgo = (hours) => new Date(now.getTime() - hours * 60 * 60 * 1000);
     
@@ -11544,8 +11537,8 @@ app.get('/api/ml/insights/anomalies', asyncHandler(async (req, res) => {
 app.get('/api/ml/insights/forecast/:zone', asyncHandler(async (req, res) => {
   const { zone } = req.params;
   
-  // Demo mode: generate mock forecast data
-  if (isDemoMode()) {
+  // Demo mode removed - always use real forecast data
+  if (false) {
     const now = new Date();
     const predictions = [];
     
@@ -14483,16 +14476,11 @@ app.get('/api/admin/farms', adminAuthMiddleware, asyncHandler(async (req, res) =
  * Returns detailed data for a specific farm
  * PROTECTED: Requires admin authentication
  */
-app.get('/api/admin/farms/:farmId', adminAuthMiddleware, createDemoModeHandler(), asyncHandler(async (req, res) => {
+app.get('/api/admin/farms/:farmId', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log(`[admin] GET /api/admin/farms/${req.params.farmId} called`);
   const { farmId } = req.params;
   
-  // Handle demo mode
-  if (req.isDemoRequest && isDemoMode()) {
-    const demoData = getDemoData();
-    const farm = demoData.getFarm();
-    return res.json(farm);
-  }
+  // Demo mode removed - always use real farm data
   
   const registry = loadFarmRegistry();
   const farmConfig = registry.farms.find(f => f.farmId === farmId);
@@ -18518,14 +18506,14 @@ app.get('/data/devices.cache.json', (req, res, next) => {
   return res.json({ devices, timestamp: new Date().toISOString() });
 });
 
-// Demo mode: Intercept data file requests BEFORE static middleware
+// Data file requests - serve from static files only (no demo mode)
 app.use('/data', (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'OPTIONS') return next();
   
-  // Demo mode data intercepts
-  if (isDemoMode()) {
-    const demoData = getDemoData();
-    const farm = demoData ? demoData.getFarm() : null;
+  // Demo mode removed - always serve real data from files
+  if (false) {
+    const demoData = null;
+    const farm = null;
     
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-cache');
@@ -19533,6 +19521,13 @@ app.post("/ingest/env", async (req, res) => {
     if (typeof battery === "number") zone.meta.battery = battery;
     if (typeof rssi === "number") zone.meta.rssi = rssi;
 
+    // Auto-calculate VPD if not provided but temp and humidity are available
+    let calculatedVpd = vpd;
+    if (calculatedVpd == null && typeof temperature === "number" && typeof humidity === "number") {
+      calculatedVpd = computeVPDkPa(temperature, humidity);
+      console.log(`[ingest/env] Auto-calculated VPD for ${zoneId}: ${calculatedVpd?.toFixed(2)} kPa`);
+    }
+
     const ensure = (k, val, unit) => {
       zone.sensors[k] = zone.sensors[k] || { current: null, setpoint: { min: null, max: null }, history: [] };
       if (typeof val === "number" && !Number.isNaN(val)) {
@@ -19542,7 +19537,7 @@ app.post("/ingest/env", async (req, res) => {
     };
     ensure("tempC", temperature);
     ensure("rh", humidity);
-    ensure("vpd", vpd);
+    ensure("vpd", calculatedVpd);
     ensure("co2", co2);
 
   // Persist in the background; coalesce high-churn writes

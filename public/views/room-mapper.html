@@ -1970,26 +1970,42 @@
       const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
       const roomName = currentRoom ? (currentRoom.name || currentRoom.location || 'Unknown Room') : 'Unknown Room';
       
+      // Helper to detect zone from device position
+      const findZoneForPosition = (x, y) => {
+        for (const zone of STATE.zones) {
+          if (x >= zone.x1 && x <= zone.x2 && y >= zone.y1 && y <= zone.y2) {
+            return zone.zone;
+          }
+        }
+        return null;
+      };
+      
       const mapData = {
         roomId: STATE.currentRoomId,
         name: roomName,
         gridSize: STATE.gridSize,
         cellSize: STATE.cellSize,
         version: 2,
-        devices: STATE.placedDevices.map(d => ({
-          deviceId: d.deviceId,
-          x: d.x,
-          y: d.y,
-          snapshot: {
-            name: d.device?.name || null,
-            type: d.device?.type || null,
-            protocol: d.device?.protocol || null,
-            category: d.device?.category || null,
-            zone: d.device?.zone ?? null,
-            room: roomName,
-            icon: d.icon || null
-          }
-        })),
+        devices: STATE.placedDevices.map(d => {
+          // Detect zone from position if device is inside a zone boundary
+          const detectedZone = (d.x != null && d.y != null) ? findZoneForPosition(d.x, d.y) : null;
+          const finalZone = detectedZone !== null ? detectedZone : (d.device?.zone ?? null);
+          
+          return {
+            deviceId: d.deviceId,
+            x: d.x,
+            y: d.y,
+            snapshot: {
+              name: d.device?.name || null,
+              type: d.device?.type || null,
+              protocol: d.device?.protocol || null,
+              category: d.device?.category || null,
+              zone: finalZone,
+              room: roomName,
+              icon: d.icon || null
+            }
+          };
+        }),
         zones: STATE.zones,
         lastUpdated: new Date().toISOString()
       };
