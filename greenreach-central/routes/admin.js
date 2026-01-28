@@ -1147,35 +1147,66 @@ router.get('/farms/:farmId/inventory', async (req, res) => {
 
 /**
  * GET /api/admin/farms/:farmId/recipes
- * Get recipes for a specific farm
+ * Get active recipes for a specific farm (from synced group data)
  */
 router.get('/farms/:farmId/recipes', async (req, res) => {
     try {
         const { farmId } = req.params;
-        
-        // For now, return all public recipes
-        // In the future, this could return farm-specific recipes
         const db = req.app.locals.db;
         
         if (!db) {
-            // Fallback: return empty array if no database
             return res.json({
                 success: true,
                 recipes: [],
                 count: 0,
                 farmId: farmId,
-                message: 'Database not available - use public recipes endpoint'
+                message: 'Database not available'
             });
         }
         
-        // Query could be added here to get farm-specific recipes
-        // For now, suggest using /api/recipes public endpoint
+        // Get groups from farm_data (synced from edge device)
+        const result = await db.query(
+            `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups'`,
+            [farmId]
+        );
+        
+        let activeRecipes = [];
+        
+        if (result.rows.length > 0 && Array.isArray(result.rows[0].data)) {
+            const groups = result.rows[0].data;
+            
+            // Extract active recipes from groups
+            // Each group has an active recipe assigned
+            const recipeMap = new Map();
+            
+            groups.forEach(group => {
+                if (group.active_recipe || group.recipe_name || group.recipeName) {
+                    const recipeName = group.active_recipe || group.recipe_name || group.recipeName;
+                    
+                    if (!recipeMap.has(recipeName)) {
+                        recipeMap.set(recipeName, {
+                            name: recipeName,
+                            id: recipeName.toLowerCase().replace(/\s+/g, '-'),
+                            groups: 0,
+                            trays: 0,
+                            category: group.crop_type || 'Unknown'
+                        });
+                    }
+                    
+                    const recipe = recipeMap.get(recipeName);
+                    recipe.groups++;
+                    recipe.trays += group.trays?.length || 0;
+                });
+            });
+            
+            activeRecipes = Array.from(recipeMap.values());
+        }
+        
         res.json({
             success: true,
-            recipes: [],
-            count: 0,
-            farmId: farmId,
-            redirectTo: '/api/recipes'
+            recipes: activeRecipes,
+            count: activeRecipes.length,
+            farmId: farmId
         });
         
     } catch (error) {

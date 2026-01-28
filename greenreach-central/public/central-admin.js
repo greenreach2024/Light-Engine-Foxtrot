@@ -2692,12 +2692,13 @@ async function loadFarmRecipes(farmId) {
         const data = await response.json();
         console.log('[FarmRecipes] Farm recipes response:', data);
         
-        // The endpoint returns empty for now - farms don't have assigned recipes yet
+        // Map recipes from synced group data
         recipesData = (data.recipes || []).map(recipe => ({
             recipe_id: recipe.id || recipe.recipe_id || recipe.name,
             name: recipe.name,
             cropType: recipe.category || recipe.cropType || recipe.crop_type || 'Unknown',
-            activeTrays: recipe.active_trays || 0,
+            activeGroups: recipe.groups || 0,
+            activeTrays: recipe.trays || 0,
             cycleDuration: recipe.duration_days ? `${recipe.duration_days} days` : '—',
             avgHarvestTime: recipe.duration_days ? `${recipe.duration_days} days` : '—',
             variance: '0d',
@@ -2735,12 +2736,10 @@ function renderRecipesTable(recipes) {
                         <strong>No Active Recipes</strong>
                     </div>
                     <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                        No recipes have been assigned to this farm yet.
+                        No groups are currently running recipes on this farm. Recipes are assigned to groups on the edge device.
                     </div>
-                    <div style="margin-top: 16px;">
-                        <button onclick="alert('Recipe assignment feature coming soon!')" class="btn btn-sm" style="padding: 8px 16px;">
-                            Browse Recipe Library
-                        </button>
+                    <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-secondary);">
+                        Note: Recipe assignments are synced from Light Engine Foxtrot when groups are configured with active recipes.
                     </div>
                 </td>
             </tr>
