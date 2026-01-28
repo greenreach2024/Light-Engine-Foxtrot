@@ -2477,9 +2477,47 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
  */
 async function loadZoneGroups(farmId, roomId, zoneId, count) {
     const tbody = document.getElementById('zone-groups-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading groups...</td></tr>';
     
-    // Groups are managed locally on edge devices, not synced to Central
-    tbody.innerHTML = '<tr><td colspan="7" class="empty" style="padding: 40px; text-align: center; color: var(--text-secondary);"><div style="margin-bottom: 8px;"><strong>Groups Managed Locally</strong></div><div>Group assignments and scheduling are managed on the edge device (Light Engine Foxtrot) and not synchronized to Central.</div></td></tr>';
+    try {
+        // Fetch groups from sync API
+        const res = await fetch(`${API_BASE}/api/sync/${farmId}/groups`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        
+        const data = await res.json();
+        const allGroups = data.groups || [];
+        
+        // Filter groups for this zone
+        // Zone format in groups: "room-knukf2:1", zoneId: "zone-1"
+        const zoneNumber = zoneId.match(/\d+$/)?.[0];
+        const zoneGroups = allGroups.filter(g => {
+            const groupZone = g.zone || g.zone_id;
+            return groupZone === zoneId || 
+                   (zoneNumber && groupZone && groupZone.endsWith(`:${zoneNumber}`));
+        });
+        
+        if (zoneGroups.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty">No groups assigned to this zone</td></tr>';
+            return;
+        }
+        
+        // Render groups table
+        tbody.innerHTML = zoneGroups.map(group => `
+            <tr onclick="viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${group.id}')">
+                <td>${escapeHtml(group.id || 'N/A')}</td>
+                <td>${escapeHtml(group.name || 'Unnamed')}</td>
+                <td>${group.lights?.length || 0}</td>
+                <td>${group.trays || 0}</td>
+                <td>${escapeHtml(group.plan || 'No recipe')}</td>
+                <td><span class="status-badge status-${group.status || 'unknown'}">${group.status || 'unknown'}</span></td>
+                <td><button class="btn-secondary btn-sm" onclick="event.stopPropagation(); viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${group.id}')">View</button></td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('[loadZoneGroups] Failed to load groups:', error);
+        tbody.innerHTML = '<tr><td colspan="7" class="empty error">Failed to load groups</td></tr>';
+    }
 }
 
 /**
