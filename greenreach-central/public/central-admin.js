@@ -2480,36 +2480,39 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
         'No groups assigned';
     
     // Devices and trays
-    document.getElementById('zone-devices').textContent = '0';
-    document.getElementById('zone-devices-change').textContent = 'Managed locally on edge device';
-    document.getElementById('zone-trays').textContent = '0';
-    document.getElementById('zone-trays-change').textContent = 'Managed at room level';
+    document.getElementById('zone-devices').textContent = zoneData.devices.toString();
+    document.getElementById('zone-devices-change').textContent = zoneData.devices > 0 ? 
+        `${zoneData.devices} ${zoneData.devices === 1 ? 'device' : 'devices'}` : 
+        'Managed locally on edge device';
+    document.getElementById('zone-trays').textContent = zoneData.trays.toString();
+    document.getElementById('zone-trays-change').textContent = zoneData.trays > 0 ?
+        `${zoneData.trays} ${zoneData.trays === 1 ? 'tray' : 'trays'}` :
+        'Managed at room level';
     
-    // Load groups for this zone
-    await loadZoneGroups(farmId, roomId, zoneId, zoneData.groups);
+    // Load groups and calculate PPFD from recipes
+    await loadZoneGroupsAndPPFD(farmId, roomId, zoneId, zoneData.groups);
     
     // Load sensors for this zone
     await loadZoneSensors(farmId, roomId, zoneId);
 }
 
 /**
- * Load groups for a specific zone
+ * Load groups for a specific zone and calculate PPFD from recipes
  */
-async function loadZoneGroups(farmId, roomId, zoneId, count) {
+async function loadZoneGroupsAndPPFD(farmId, roomId, zoneId, count) {
     const tbody = document.getElementById('zone-groups-tbody');
     tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading groups...</td></tr>';
     
     try {
         // Fetch groups from admin API
-        const res = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
-        if (!res || !res.ok) throw new Error(`HTTP ${res?.status || 'error'}`);
+        const groupsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (!groupsRes || !groupsRes.ok) throw new Error(`HTTP ${groupsRes?.status || 'error'}`);
         
-        const data = await res.json();
-        const allGroups = data.groups || [];
-        console.log('[loadZoneGroups] All groups:', allGroups.length);
+        const groupsData = await groupsRes.json();
+        const allGroups = groupsData.groups || [];
+        console.log('[loadZoneGroupsAndPPFD] All groups:', allGroups.length);
         
         // Filter groups for this zone
-        // Zone format in groups: "room-knukf2:1", zoneId: "zone-1"
         const zoneNumber = zoneId.match(/\d+$/)?.[0];
         const zoneGroups = allGroups.filter(g => {
             const groupZone = g.zone || g.zone_id || g.location;
@@ -2523,28 +2526,97 @@ async function loadZoneGroups(farmId, roomId, zoneId, count) {
                    ));
         });
         
-        console.log('[loadZoneGroups] Filtered to zone:', zoneGroups.length, 'groups for', zoneId);
+        console.log('[loadZoneGroupsAndPPFD] Filtered to zone:', zoneGroups.length, 'groups for', zoneId);
+        
+        // Fetch lighting recipes to calculate PPFD
+        let recipesData = null;
+        try {
+            const recipesRes = await fetch(`${API_BASE}/data/lighting-recipes.json`);
+            if (recipesRes.ok) {
+                recipesData = await recipesRes.json();
+            }
+        } catch (err) {
+            console.warn('[loadZoneGroupsAndPPFD] Failed to load recipes:', err);
+        }
+        
+        // Calculate PPFD for each group based on seed date and recipe
+        let totalPPFD = 0;
+        let ppfdCount = 0;
+        
+        zoneGroups.forEach(group => {
+            if (!recipesData || !group.plan || !group.planConfig?.anchor?.seedDate) return;
+            
+            // Find recipe for this group's plan
+            const planName = group.plan || group.planId || group.recipe;
+            const recipes = recipesData.crops?.[planName];
+            if (!recipes || !Array.isArray(recipes)) return;
+            
+            // Calculate days since seed date
+            try {
+                const seedDate = new Date(group.planConfig.anchor.seedDate);
+                const now = new Date();
+                seedDate.setHours(0, 0, 0, 0);
+                now.setHours(0, 0, 0, 0);
+                const daysSinceSeed = Math.floor((now - seedDate) / (1000 * 60 * 60 * 24)) + 1;
+                
+                // Find the closest day in the recipe
+                let closestDay = recipes[0];
+                recipes.forEach(recipeDay => {
+                    if (Math.abs(recipeDay.day - daysSinceSeed) < Math.abs(closestDay.day - daysSinceSeed)) {
+                        closestDay = recipeDay;
+                    }
+                });
+                
+                if (closestDay && closestDay.ppfd) {
+                    group._calculatedPPFD = Math.round(closestDay.ppfd);
+                    totalPPFD += group._calculatedPPFD;
+                    ppfdCount++;
+                    console.log(`[loadZoneGroupsAndPPFD] Group ${group.id}: Day ${daysSinceSeed}, PPFD = ${group._calculatedPPFD}`);
+                }
+            } catch (err) {
+                console.warn(`[loadZoneGroupsAndPPFD] Failed to calculate PPFD for group ${group.id}:`, err);
+            }
+        });
+        
+        // Update zone PPFD KPI with average from groups
+        if (ppfdCount > 0) {
+            const avgPPFD = Math.round(totalPPFD / ppfdCount);
+            // Update the PPFD display (assuming there's a zone-ppfd element in the HTML)
+            const ppfdEl = document.getElementById('zone-ppfd');
+            if (ppfdEl) {
+                ppfdEl.textContent = `${avgPPFD} μmol/m²/s`;
+            }
+            const ppfdChangeEl = document.getElementById('zone-ppfd-change');
+            if (ppfdChangeEl) {
+                ppfdChangeEl.textContent = `Average from ${ppfdCount} ${ppfdCount === 1 ? 'group' : 'groups'}`;
+            }
+            
+            console.log(`[loadZoneGroupsAndPPFD] Zone ${zoneId} average PPFD: ${avgPPFD} from ${ppfdCount} groups`);
+        }
         
         if (zoneGroups.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="empty">No groups assigned to this zone</td></tr>';
             return;
         }
         
-        // Render groups table
-        tbody.innerHTML = zoneGroups.map(group => `
+        // Render groups table with calculated PPFD
+        tbody.innerHTML = zoneGroups.map(group => {
+            const ppfdDisplay = group._calculatedPPFD ? `${group._calculatedPPFD} μmol/m²/s` : (group.ppfd || 'N/A');
+            return `
             <tr onclick="viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${escapeHtml(group.id || group.group_id || '')}')">
                 <td>${escapeHtml(group.id || group.group_id || 'N/A')}</td>
                 <td>${escapeHtml(group.name || 'Unnamed')}</td>
                 <td>${group.lights?.length || group.light_count || 0}</td>
                 <td>${group.trays || group.tray_count || 0}</td>
-                <td>${escapeHtml(group.plan || group.recipe || 'No recipe')}</td>
+                <td title="Current PPFD: ${ppfdDisplay}">${escapeHtml(group.plan || group.recipe || 'No recipe')}</td>
                 <td><span class="status-badge status-${group.status || 'active'}">${group.status || 'active'}</span></td>
                 <td><button class="btn-secondary btn-sm" onclick="event.stopPropagation(); viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${escapeHtml(group.id || group.group_id || '')}')">View</button></td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
         
     } catch (error) {
-        console.error('[loadZoneGroups] Failed to load groups:', error);
+        console.error('[loadZoneGroupsAndPPFD] Failed to load groups:', error);
         tbody.innerHTML = '<tr><td colspan="7" class="empty error">Failed to load groups - ' + escapeHtml(error.message) + '</td></tr>';
     }
 }
