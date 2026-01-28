@@ -96,6 +96,17 @@ async function runMigrations(client) {
   } catch (err) {
     logger.warn('Could not add metadata column (may already exist):', err.message);
   }
+  
+  // Make existing columns nullable (migration from old schema)
+  try {
+    await client.query(`
+      ALTER TABLE farms ALTER COLUMN email DROP NOT NULL;
+      ALTER TABLE farms ALTER COLUMN name DROP NOT NULL;
+    `);
+    logger.info('Made email and name columns nullable in farms table');
+  } catch (err) {
+    logger.warn('Could not alter column constraints:', err.message);
+  }
   // Create farm_heartbeats table
   await client.query(`
     CREATE TABLE IF NOT EXISTS farm_heartbeats (
