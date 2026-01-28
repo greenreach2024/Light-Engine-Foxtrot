@@ -8,10 +8,19 @@ import { fileURLToPath } from 'url';
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Initialize OpenAI client (if API key is available)
+let openai = null;
+try {
+  if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+  } else {
+    console.warn('[AI Insights] OPENAI_API_KEY not set - AI insights will not be available');
+  }
+} catch (error) {
+  console.error('[AI Insights] Failed to initialize OpenAI client:', error.message);
+}
 
 /**
  * GET /api/ai-insights/:farmId
@@ -20,6 +29,14 @@ const openai = new OpenAI({
 router.get('/:farmId', async (req, res) => {
   try {
     const { farmId } = req.params;
+    
+    // Check if OpenAI is available
+    if (!openai) {
+      return res.status(503).json({ 
+        error: 'AI Insights service not available',
+        message: 'OpenAI API key not configured'
+      });
+    }
 
     // 1. Fetch farm metadata (type, name, configuration)
     const farmResult = await db.query(
