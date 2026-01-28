@@ -1849,9 +1849,24 @@ async function viewRoomDetail(farmId, roomId) {
     
     showView('room-detail-view');
     
-    // Fetch farm room data to get detailed room information
-    let roomData = null;
+    // Initialize room data
+    let roomData = {
+        roomId,
+        name: roomId,
+        temperature: null,
+        humidity: null,
+        co2: null,
+        vpd: null,
+        zones: [],
+        devices: [],
+        trays: 0,
+        energyToday: null,
+        energyWeek: null,
+        energyTrend: null,
+        energyTrendPercent: null
+    };
     
+    // Step 1: Fetch room metadata (name, counts)
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/rooms`);
         if (response.ok) {
@@ -1860,82 +1875,46 @@ async function viewRoomDetail(farmId, roomId) {
             const room = rooms.find(r => r.roomId === roomId || r.id === roomId || r.room_id === roomId || r.name === roomId);
             
             if (room) {
-                roomData = {
-                    roomId: room.roomId || room.id || room.room_id,
-                    name: room.name || 'Room',
-                    temperature: room.temperature ?? room.temp ?? room.tempC,
-                    humidity: room.humidity ?? room.rh,
-                    co2: room.co2,
-                    vpd: room.vpd,
-                    zones: room.zones || room.zone_count,
-                    devices: room.devices || room.device_count,
-                    trays: room.trays,
-                    totalPlants: room.totalPlants,
-                    energyToday: room.energyToday,
-                    energyWeek: room.energyWeek,
-                    energyTrend: room.energyTrend,
-                    energyTrendPercent: room.energyTrendPercent
-                };
-                console.log(`[room-detail] Loaded detailed data for ${roomData.name}`);
+                console.log('[room-detail] Found room metadata:', room);
+                roomData.name = room.name || roomData.name;
+                roomData.roomId = room.roomId || room.id || room.room_id || roomId;
+                // Don't use environmental data from room - it's not there
             }
         }
     } catch (error) {
-        console.error('[room-detail] Failed to load room data:', error);
+        console.error('[room-detail] Failed to load room metadata:', error);
     }
     
-    // If no detailed room data, fetch farm-level telemetry
-    if (!roomData) {
-        try {
-            const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
-            if (farmRes.ok) {
-                const farmData = await farmRes.json();
-                console.log('[room-detail] Farm data:', farmData);
-                const environmental = farmData.farm?.environmental || farmData.environmental;
-                const zones = environmental?.zones || [];
-                console.log('[room-detail] Environmental zones:', zones);
-                
-                // Use telemetry data for environmental readings
-                if (zones.length > 0) {
-                    const zone = zones[0];
-                    console.log('[room-detail] Using first zone for room metrics:', zone);
-                    roomData = {
-                        roomId,
-                        name: roomId,
-                        temperature: zone.temperature_c ?? zone.temp ?? zone.tempC,
-                        humidity: zone.humidity ?? zone.rh,
-                        co2: zone.co2,
-                        vpd: zone.vpd,
-                        zones: zones,
-                        devices: [],
-                        trays: 0,
-                        energyToday: null,
-                        energyWeek: null,
-                        energyTrend: null,
-                        energyTrendPercent: null
-                    };
-                    console.log('[room-detail] Created roomData from telemetry:', roomData);
-                }
+    // Step 2: ALWAYS fetch farm telemetry for environmental data
+    try {
+        const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        if (farmRes.ok) {
+            const farmData = await farmRes.json();
+            console.log('[room-detail] Farm data:', farmData);
+            const environmental = farmData.farm?.environmental || farmData.environmental;
+            const zones = environmental?.zones || [];
+            console.log('[room-detail] Environmental zones:', zones);
+            
+            // Use telemetry data for environmental readings
+            if (zones.length > 0) {
+                const zone = zones[0];
+                console.log('[room-detail] Using first zone for room metrics:', zone);
+                roomData.temperature = zone.temperature_c ?? zone.temp ?? zone.tempC;
+                roomData.humidity = zone.humidity ?? zone.rh;
+                roomData.co2 = zone.co2;
+                roomData.vpd = zone.vpd;
+                roomData.zones = zones;
+                console.log('[room-detail] Updated roomData with telemetry:', {
+                    temperature: roomData.temperature,
+                    humidity: roomData.humidity,
+                    zonesCount: zones.length
+                });
+            } else {
+                console.warn('[room-detail] No zones in telemetry data');
             }
-        } catch (err) {
-            console.error('[room-detail] Failed to fetch farm telemetry:', err);
         }
-    }
-    
-    // If still no data, use empty defaults
-    if (!roomData) {
-        roomData = {
-            roomId,
-            name: roomId,
-            temperature: null,
-            humidity: null,
-            co2: null,
-            vpd: null,
-            zones: [],
-            devices: [],
-            trays: 0,
-            energyToday: null,
-            energyWeek: null
-        };
+    } catch (err) {
+        console.error('[room-detail] Failed to fetch farm telemetry:', err);
     }
     
     const zoneCount = Array.isArray(roomData.zones) ? roomData.zones.length : 0;
