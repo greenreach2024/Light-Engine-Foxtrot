@@ -22,6 +22,7 @@ import adminRecipesRoutes from './routes/admin-recipes.js';
 import reportsRoutes from './routes/reports.js';
 import farmSettingsRoutes from './routes/farm-settings.js';
 import recipesRoutes from './routes/recipes.js';
+import aiInsightsRoutes from './routes/ai-insights.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -172,6 +173,7 @@ app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to f
 app.use('/api/admin', adminRoutes); // Admin dashboard API
 app.use('/api/admin/recipes', adminRecipesRoutes); // Admin recipes management
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
+app.use('/api/ai-insights', aiInsightsRoutes); // GPT-4 powered AI insights
 
 // Root route - redirect to main landing page
 app.get('/', (req, res) => {

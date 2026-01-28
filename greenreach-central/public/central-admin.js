@@ -4818,7 +4818,7 @@ async function loadFarmRecipesView(farmId) {
 
 /**
  * Load environmental data for farm detail tab
- * Populates env-current and env-insights elements
+ * Populates env-current and env-insights elements using GPT-4 AI
  */
 async function loadFarmEnvironmentalData(farmId, farmData) {
     console.log('[loadFarmEnvironmentalData] Loading for farm:', farmId);
@@ -4908,181 +4908,139 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
         `;
         document.getElementById('env-current').innerHTML = conditionsHtml;
         
-        // Try to get recipe targets for more accurate insights
-        let recipeTargets = null;
-        try {
-            // Check if farm has an active recipe, otherwise use defaults
-            const activeRecipe = farmData?.activeRecipe || farmData?.recipe;
-            if (activeRecipe && activeRecipe.data && activeRecipe.data.schedule) {
-                // Get average targets from recipe schedule
-                const schedule = activeRecipe.data.schedule;
-                let tempSum = 0, humiditySum = 0, tempCount = 0, humidityCount = 0;
-                
-                schedule.forEach(phase => {
-                    const temp = phase.temperature || phase.tempC || phase['Afternoon Temp (C)'];
-                    const humidity = phase.humidity || phase.rh || phase['RH (%)'];
-                    if (temp != null) {
-                        tempSum += parseFloat(temp);
-                        tempCount++;
-                    }
-                    if (humidity != null) {
-                        humiditySum += parseFloat(humidity);
-                        humidityCount++;
-                    }
-                });
-                
-                if (tempCount > 0 || humidityCount > 0) {
-                    recipeTargets = {
-                        temperature: tempCount > 0 ? tempSum / tempCount : null,
-                        humidity: humidityCount > 0 ? humiditySum / humidityCount : null
-                    };
-                    console.log('[loadFarmEnvironmentalData] Using recipe targets:', recipeTargets);
-                }
-            }
-        } catch (err) {
-            console.log('[loadFarmEnvironmentalData] No recipe targets available:', err.message);
-        }
-        
-        // If no recipe targets, use general hydroponic ranges
-        if (!recipeTargets) {
-            recipeTargets = {
-                temperature: 20, // 20°C as default for leafy greens
-                humidity: 60     // 60% as default for leafy greens
-            };
-            console.log('[loadFarmEnvironmentalData] Using default targets for leafy greens');
-        }
-        
-        // Calculate acceptable ranges (±10% from target)
-        const tempTarget = recipeTargets.temperature;
-        const tempMin = tempTarget * 0.9;  // -10%
-        const tempMax = tempTarget * 1.1;  // +10%
-        
-        const humidityTarget = recipeTargets.humidity;
-        const humidityMin = humidityTarget * 0.9;  // -10%
-        const humidityMax = humidityTarget * 1.1;  // +10%
-        
-        // VPD targets (0.8-1.2 kPa is optimal for most crops)
-        const vpdTarget = 1.0;
-        const vpdMin = 0.8;
-        const vpdMax = 1.2;
-        
-        // Generate AI Insights based on recipe targets
-        const insights = [];
-        
-        // Temperature insight
-        if (avgTemp != null) {
-            const temp = parseFloat(avgTemp);
-            if (temp < tempMin) {
-                const diff = ((tempMin - temp) / tempTarget * 100).toFixed(1);
-                insights.push({ 
-                    icon: '❄️', 
-                    text: `Temperature ${diff}% below target (${tempTarget.toFixed(1)}°C ±10%)`, 
-                    severity: 'warning' 
-                });
-            } else if (temp > tempMax) {
-                const diff = ((temp - tempMax) / tempTarget * 100).toFixed(1);
-                insights.push({ 
-                    icon: '🔥', 
-                    text: `Temperature ${diff}% above target (${tempTarget.toFixed(1)}°C ±10%)`, 
-                    severity: 'warning' 
-                });
-            } else {
-                insights.push({ 
-                    icon: '✅', 
-                    text: `Temperature optimal (${temp}°C in ${tempMin.toFixed(1)}-${tempMax.toFixed(1)}°C range)`, 
-                    severity: 'good' 
-                });
-            }
-        }
-        
-        // Humidity insight
-        if (avgHumidity != null) {
-            const humidity = parseFloat(avgHumidity);
-            if (humidity < humidityMin) {
-                const diff = ((humidityMin - humidity) / humidityTarget * 100).toFixed(1);
-                insights.push({ 
-                    icon: '💧', 
-                    text: `Humidity ${diff}% below target (${humidityTarget.toFixed(0)}% ±10%)`, 
-                    severity: 'warning' 
-                });
-            } else if (humidity > humidityMax) {
-                const diff = ((humidity - humidityMax) / humidityTarget * 100).toFixed(1);
-                insights.push({ 
-                    icon: '🌫️', 
-                    text: `Humidity ${diff}% above target (${humidityTarget.toFixed(0)}% ±10%)`, 
-                    severity: 'warning' 
-                });
-            } else {
-                insights.push({ 
-                    icon: '✅', 
-                    text: `Humidity optimal (${humidity}% in ${humidityMin.toFixed(0)}-${humidityMax.toFixed(0)}% range)`, 
-                    severity: 'good' 
-                });
-            }
-        }
-        
-        // VPD insight
-        if (avgVPD != null) {
-            const vpdNum = parseFloat(avgVPD);
-            if (vpdNum < vpdMin) {
-                const diff = ((vpdMin - vpdNum) / vpdTarget * 100).toFixed(1);
-                insights.push({ 
-                    icon: '📊', 
-                    text: `VPD ${diff}% below target (${vpdTarget} kPa ±20%)`, 
-                    severity: 'info' 
-                });
-            } else if (vpdNum > vpdMax) {
-                const diff = ((vpdNum - vpdMax) / vpdTarget * 100).toFixed(1);
-                insights.push({ 
-                    icon: '📊', 
-                    text: `VPD ${diff}% above target (${vpdTarget} kPa ±20%)`, 
-                    severity: 'info' 
-                });
-            } else {
-                insights.push({ 
-                    icon: '✅', 
-                    text: `VPD optimal (${vpdNum} kPa in ${vpdMin}-${vpdMax} kPa range)`, 
-                    severity: 'good' 
-                });
-            }
-        }
-        
-        // If no issues, add positive insight
-        if (insights.filter(i => i.severity === 'warning').length === 0) {
-            insights.push({ 
-                icon: '🌱', 
-                text: 'All environmental parameters within target ranges', 
-                severity: 'good' 
-            });
-        }
-        
-        const insightsHtml = insights.map(insight => `
+        // Show loading state for AI insights
+        document.getElementById('env-insights').innerHTML = `
             <div class="metric-row">
-                <div class="metric-label">${insight.icon} ${insight.text}</div>
-            </div>
-        `).join('');
-        document.getElementById('env-insights').innerHTML = insightsHtml || `
-            <div class="metric-row">
-                <div class="metric-label">No insights available</div>
+                <div class="metric-label">🤖 Analyzing with GPT-4...</div>
+                <div class="metric-value" style="color: var(--text-secondary);">Generating insights</div>
             </div>
         `;
         
-        console.log('[loadFarmEnvironmentalData] Data loaded successfully');
+        // Call GPT-4 AI Insights API
+        try {
+            console.log('[loadFarmEnvironmentalData] Calling GPT-4 AI Insights API for farm:', farmId);
+            const response = await authenticatedFetch(`${API_BASE}/api/ai-insights/${farmId}`);
+            
+            if (!response.ok) {
+                throw new Error(`AI Insights API returned ${response.status}`);
+            }
+            
+            const aiData = await response.json();
+            console.log('[loadFarmEnvironmentalData] GPT-4 response:', aiData);
+            
+            // Display AI-generated insights
+            let insightsHtml = '';
+            
+            // Overall status
+            if (aiData.insights.overall_status) {
+                insightsHtml += `
+                    <div class="metric-row" style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;">
+                        <div class="metric-label">Status</div>
+                        <div class="metric-value">${escapeHtml(aiData.insights.overall_status)}</div>
+                    </div>
+                `;
+            }
+            
+            // Temperature assessment
+            if (aiData.insights.parameters.temperature.assessment) {
+                const tempIcon = Math.abs(aiData.insights.parameters.temperature.deviation_percent) < 10 ? '✅' : '🌡️';
+                insightsHtml += `
+                    <div class="metric-row">
+                        <div class="metric-label">${tempIcon} Temperature</div>
+                        <div class="metric-value" style="font-size: 0.9em;">${escapeHtml(aiData.insights.parameters.temperature.assessment)}</div>
+                    </div>
+                `;
+            }
+            
+            // Humidity assessment
+            if (aiData.insights.parameters.humidity.assessment) {
+                const humidityIcon = Math.abs(aiData.insights.parameters.humidity.deviation_percent) < 10 ? '✅' : '💧';
+                insightsHtml += `
+                    <div class="metric-row">
+                        <div class="metric-label">${humidityIcon} Humidity</div>
+                        <div class="metric-value" style="font-size: 0.9em;">${escapeHtml(aiData.insights.parameters.humidity.assessment)}</div>
+                    </div>
+                `;
+            }
+            
+            // VPD assessment
+            if (aiData.insights.parameters.vpd.assessment) {
+                insightsHtml += `
+                    <div class="metric-row">
+                        <div class="metric-label">📊 VPD</div>
+                        <div class="metric-value" style="font-size: 0.9em;">${escapeHtml(aiData.insights.parameters.vpd.assessment)}</div>
+                    </div>
+                `;
+            }
+            
+            // Priority actions
+            if (aiData.insights.priority_actions && aiData.insights.priority_actions.length > 0) {
+                insightsHtml += `
+                    <div class="metric-row" style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px;">
+                        <div class="metric-label" style="font-weight: bold;">🎯 Priority Actions</div>
+                    </div>
+                `;
+                aiData.insights.priority_actions.forEach((action, index) => {
+                    insightsHtml += `
+                        <div class="metric-row" style="padding-left: 20px;">
+                            <div class="metric-value" style="font-size: 0.9em;">
+                                ${index + 1}. ${escapeHtml(action)}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Add timestamp and GPT-4 badge
+            insightsHtml += `
+                <div class="metric-row" style="border-top: 1px solid var(--border); padding-top: 8px; margin-top: 12px;">
+                    <div class="metric-value" style="font-size: 0.8em; color: var(--text-secondary);">
+                        🤖 Powered by GPT-4 | ${new Date(aiData.timestamp).toLocaleTimeString()}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('env-insights').innerHTML = insightsHtml;
+            
+        } catch (aiError) {
+            console.error('[loadFarmEnvironmentalData] GPT-4 API error:', aiError);
+            
+            // Fallback to basic insights if AI fails
+            document.getElementById('env-insights').innerHTML = `
+                <div class="metric-row">
+                    <div class="metric-label">⚠️ AI Insights Unavailable</div>
+                    <div class="metric-value" style="color: var(--text-secondary);">${escapeHtml(aiError.message)}</div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-value" style="font-size: 0.9em;">
+                        Environmental data is being monitored. AI analysis will be available when the service is configured.
+                    </div>
+                </div>
+            `;
+        }
         
     } catch (error) {
         console.error('[loadFarmEnvironmentalData] Error:', error);
         document.getElementById('env-current').innerHTML = `
             <div class="metric-row">
-                <div class="metric-label" style="color: var(--accent-red);">Error loading environmental data</div>
-            </div>
-        `;
-        document.getElementById('env-insights').innerHTML = `
-            <div class="metric-row">
-                <div class="metric-label" style="color: var(--accent-red);">Error loading insights</div>
+                <div class="metric-label">Error</div>
+                <div class="metric-value" style="color: var(--danger);">${escapeHtml(error.message)}</div>
             </div>
         `;
     }
 }
+
+// Helper function to escape HTML
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 
 /**
  * Load environmental view filtered for a specific farm
