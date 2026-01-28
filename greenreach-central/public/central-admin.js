@@ -2356,7 +2356,7 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
     
     showView('zone-detail-view');
     
-    // Fetch farm telemetry to get real zone environmental data
+    // Fetch zone telemetry and groups data
     let zoneData = {
         zoneId,
         name: zoneId,
@@ -2364,22 +2364,25 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
         humidity: null,
         ppfd: null,
         pressure: null,
+        co2: null,
+        vpd: null,
         groups: 0,
         devices: 0,
         trays: 0
     };
     
     try {
-        const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
-        if (farmRes && farmRes.ok) {
-            const farmData = await farmRes.json();
-            console.log('[zone-detail] Farm data:', farmData);
-            const environmental = farmData.farm?.environmental || farmData.environmental;
-            const zones = environmental?.zones || [];
+        // Fetch telemetry data (public endpoint)
+        const telemetryRes = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        if (telemetryRes.ok) {
+            const telemetryData = await telemetryRes.json();
+            console.log('[zone-detail] Telemetry data:', telemetryData);
+            const zones = telemetryData.telemetry?.zones || [];
             console.log('[zone-detail] Zones:', zones);
             
             // Find the specific zone
             const zone = zones.find(z => 
+                z.id === zoneId || 
                 z.zone_id === zoneId || 
                 z.zoneId === zoneId || 
                 z.name === zoneId ||
@@ -2389,20 +2392,41 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
             if (zone) {
                 console.log('[zone-detail] Found zone:', zone);
                 zoneData = {
-                    zoneId: zone.zone_id || zone.zoneId || zoneId,
+                    zoneId: zone.id || zone.zone_id || zone.zoneId || zoneId,
                     name: zone.name || zone.zone_name || zoneId,
-                    temperature: zone.temperature_c ?? zone.temp ?? zone.tempC,
-                    humidity: zone.humidity ?? zone.rh,
-                    ppfd: zone.ppfd || zone.light,
-                    pressure: zone.pressure_hpa || zone.pressure,
-                    co2: zone.co2,
-                    groups: 0, // Groups not synced
+                    temperature: zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? zone.tempC,
+                    humidity: zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh,
+                    co2: zone.sensors?.co2?.current ?? zone.co2,
+                    vpd: zone.sensors?.vpd?.current ?? zone.vpd,
+                    ppfd: zone.sensors?.ppfd?.current ?? zone.ppfd || zone.light,
+                    pressure: zone.sensors?.pressure?.current ?? zone.pressure_hpa || zone.pressure,
+                    groups: 0, // Will be updated from groups API
                     devices: 0, // Zone-level devices not tracked
                     trays: 0 // Trays at room level
                 };
             } else {
                 console.warn('[zone-detail] Zone not found in telemetry:', zoneId);
             }
+        }
+        
+        // Fetch groups data to count groups in this zone
+        const groupsRes = await fetch(`${API_BASE}/api/sync/${farmId}/groups`);
+        if (groupsRes.ok) {
+            const groupsData = await groupsRes.json();
+            const groups = groupsData.groups || [];
+            
+            // Count groups assigned to this zone
+            // Zone format in groups: "room-knukf2:1", zoneId: "zone-1"
+            // Match by checking if group.zone ends with the zone number
+            const zoneNumber = zoneId.match(/\d+$/)?.[0];
+            const zoneGroups = groups.filter(g => {
+                const groupZone = g.zone || g.zone_id;
+                return groupZone === zoneId || 
+                       (zoneNumber && groupZone && groupZone.endsWith(`:${zoneNumber}`));
+            });
+            
+            zoneData.groups = zoneGroups.length;
+            console.log('[zone-detail] Found groups for zone:', zoneData.groups);
         }
     } catch (error) {
         console.error('[zone-detail] Failed to fetch zone data:', error);
@@ -2429,18 +2453,22 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
         document.getElementById('zone-humidity-change').textContent = 'Sensor not configured';
     }
     
-    // Groups, devices, trays - these are managed locally on edge devices
-    document.getElementById('zone-groups').textContent = '0';
-    document.getElementById('zone-groups-change').textContent = 'Managed locally on edge device';
+    // Groups count
+    document.getElementById('zone-groups').textContent = zoneData.groups.toString();
+    document.getElementById('zone-groups-change').textContent = zoneData.groups > 0 ? 
+        `${zoneData.groups} ${zoneData.groups === 1 ? 'group' : 'groups'} assigned` : 
+        'No groups assigned';
+    
+    // Devices and trays
     document.getElementById('zone-devices').textContent = '0';
     document.getElementById('zone-devices-change').textContent = 'Managed locally on edge device';
     document.getElementById('zone-trays').textContent = '0';
     document.getElementById('zone-trays-change').textContent = 'Managed at room level';
     
-    // Load groups for this zone (will show empty state)
+    // Load groups for this zone
     await loadZoneGroups(farmId, roomId, zoneId, zoneData.groups);
     
-    // Load sensors for this zone (will show aggregated telemetry message)
+    // Load sensors for this zone
     await loadZoneSensors(farmId, roomId, zoneId);
 }
 
