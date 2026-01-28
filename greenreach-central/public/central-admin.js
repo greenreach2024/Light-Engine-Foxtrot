@@ -2689,19 +2689,22 @@ function renderInventoryTable() {
  */
 async function loadFarmRecipes(farmId) {
     try {
-        const url = `${API_BASE}/api/admin/recipes?limit=200`;
-        console.log('[FarmRecipes] Fetching:', url, 'for farm:', farmId);
+        // Fetch farm-specific active recipes (not all recipes from library)
+        const url = `${API_BASE}/api/admin/farms/${farmId}/recipes`;
+        console.log('[FarmRecipes] Fetching active recipes for farm:', farmId);
         const response = await authenticatedFetch(url);
         
         if (!response.ok) {
-            console.error('Failed to load recipes:', response.status);
+            console.error('Failed to load farm recipes:', response.status);
             recipesData = [];
             renderRecipesTable();
             return;
         }
         
         const data = await response.json();
-        console.log('[FarmRecipes] Response:', data);
+        console.log('[FarmRecipes] Farm recipes response:', data);
+        
+        // The endpoint returns empty for now - farms don't have assigned recipes yet
         recipesData = (data.recipes || []).map(recipe => ({
             recipe_id: recipe.id || recipe.recipe_id || recipe.name,
             name: recipe.name,
@@ -2716,7 +2719,7 @@ async function loadFarmRecipes(farmId) {
         
         renderRecipesTable();
     } catch (error) {
-        console.error('Error loading recipes:', error);
+        console.error('Error loading farm recipes:', error);
         recipesData = [];
         renderRecipesTable();
     }
@@ -2737,7 +2740,23 @@ function renderRecipesTable(recipes) {
     const recipesList = recipes || recipesData;
     
     if (recipesList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">No recipes found.</td></tr>';
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 40px;">
+                    <div style="color: var(--text-secondary); margin-bottom: 8px;">
+                        <strong>No Active Recipes</strong>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        No recipes have been assigned to this farm yet.
+                    </div>
+                    <div style="margin-top: 16px;">
+                        <button onclick="alert('Recipe assignment feature coming soon!')" class="btn btn-sm" style="padding: 8px 16px;">
+                            Browse Recipe Library
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
         return;
     }
     
