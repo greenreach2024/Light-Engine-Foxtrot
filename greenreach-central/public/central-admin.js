@@ -2264,11 +2264,15 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
         vpd: last24Vpd.length
     });
     
-    // Draw charts with historical data
-    drawSimpleChart('room-temp-chart', last24Temp, '#3b82f6');
-    drawSimpleChart('room-humidity-chart', last24Humidity, '#10b981');
-    drawSimpleChart('room-co2-chart', last24Co2, '#f59e0b');
-    drawSimpleChart('room-vpd-chart', last24Vpd, '#8b5cf6');
+    // Draw combined chart with all metrics
+    drawCombinedTrendsChart('room-combined-trends-chart', {
+        datasets: [
+            { label: 'Temperature (°C)', data: last24Temp, color: '#3b82f6', yAxisId: 'temp' },
+            { label: 'Humidity (%)', data: last24Humidity, color: '#10b981', yAxisId: 'humidity' },
+            { label: 'CO₂ (ppm)', data: last24Co2, color: '#f59e0b', yAxisId: 'co2' },
+            { label: 'VPD (kPa)', data: last24Vpd, color: '#8b5cf6', yAxisId: 'vpd' }
+        ]
+    });
 }
 
 /**
@@ -2303,7 +2307,122 @@ function generateEnergyData(days) {
 }
 
 /**
- * Draw simple sparkline chart on canvas
+ * Draw combined environmental trends chart with multiple metrics
+ */
+function drawCombinedTrendsChart(canvasId, config) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.warn(`[drawCombinedTrendsChart] Canvas not found: ${canvasId}`);
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const padding = { top: 40, right: 100, bottom: 50, left: 60 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Draw background
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Draw chart area background
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(padding.left, padding.top, chartWidth, chartHeight);
+    
+    // Draw grid lines (horizontal)
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = padding.top + (chartHeight * i / 4);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+    }
+    
+    // Draw each dataset
+    config.datasets.forEach((dataset, datasetIndex) => {
+        if (!dataset.data || dataset.data.length === 0) return;
+        
+        const min = Math.min(...dataset.data);
+        const max = Math.max(...dataset.data);
+        const range = max - min || 1;
+        
+        // Offset each line vertically for better separation
+        const verticalOffset = (chartHeight / config.datasets.length) * datasetIndex;
+        const lineHeight = chartHeight / config.datasets.length * 0.8; // 80% of allocated space
+        
+        // Draw line
+        ctx.strokeStyle = dataset.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        
+        dataset.data.forEach((value, index) => {
+            const x = padding.left + (index / (dataset.data.length - 1)) * chartWidth;
+            const normalizedValue = (value - min) / range;
+            const y = padding.top + verticalOffset + lineHeight - (normalizedValue * lineHeight);
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+        
+        // Draw current value and label on the right
+        const lastValue = dataset.data[dataset.data.length - 1];
+        const lastY = padding.top + verticalOffset + lineHeight - ((lastValue - min) / range * lineHeight);
+        
+        // Draw value dot
+        ctx.fillStyle = dataset.color;
+        ctx.beginPath();
+        ctx.arc(padding.left + chartWidth, lastY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw label and value
+        ctx.fillStyle = dataset.color;
+        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(dataset.label, padding.left + chartWidth + 10, lastY - 8);
+        
+        ctx.font = '14px system-ui, -apple-system, sans-serif';
+        ctx.fillText(lastValue.toFixed(1), padding.left + chartWidth + 10, lastY + 8);
+        
+        // Draw min/max range on left
+        ctx.fillStyle = '#888';
+        ctx.font = '10px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        const rangeY = padding.top + verticalOffset + lineHeight / 2;
+        ctx.fillText(`${min.toFixed(0)}-${max.toFixed(0)}`, padding.left - 5, rangeY);
+    });
+    
+    // Draw time axis labels
+    ctx.fillStyle = '#888';
+    ctx.font = '11px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    
+    const timeLabels = ['24h ago', '18h', '12h', '6h', 'Now'];
+    timeLabels.forEach((label, index) => {
+        const x = padding.left + (chartWidth * index / (timeLabels.length - 1));
+        ctx.fillText(label, x, height - 20);
+    });
+    
+    // Draw title
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Environmental Trends (24h)', padding.left, 25);
+}
+
+/**
+ * Draw simple sparkline chart on canvas (kept for backward compatibility)
  */
 function drawSimpleChart(canvasId, data, color) {
     const canvas = document.getElementById(canvasId);
