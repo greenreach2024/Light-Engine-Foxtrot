@@ -2223,32 +2223,33 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
     
     showView('zone-detail-view');
     
-    // Mock zone data - TODO: Replace with actual API call
+    // Zone-level detail views are not yet implemented
+    // Zones are managed as part of rooms, not standalone entities
     const zoneData = {
         zoneId,
-        name: `Zone ${zoneId.split('-').pop()}`,
-        temperature: (Math.random() * 4 + 22).toFixed(1),
-        humidity: (Math.random() * 20 + 60).toFixed(0),
-        ppfd: Math.floor(Math.random() * 200) + 400,
-        groups: Math.floor(Math.random() * 3) + 2,
-        devices: Math.floor(Math.random() * 8) + 5,
-        trays: Math.floor(Math.random() * 15) + 10
+        name: zoneId,
+        temperature: null,
+        humidity: null,
+        ppfd: null,
+        groups: 0,
+        devices: 0,
+        trays: 0
     };
     
-    // Update title and KPIs
+    // Update title and KPIs with empty states
     document.getElementById('zone-detail-title').textContent = zoneData.name;
-    document.getElementById('zone-temp').textContent = `${zoneData.temperature}°F`;
-    document.getElementById('zone-temp-change').textContent = 'Optimal';
-    document.getElementById('zone-humidity').textContent = `${zoneData.humidity}%`;
-    document.getElementById('zone-humidity-change').textContent = 'Stable';
-    document.getElementById('zone-ppfd').textContent = `${zoneData.ppfd} μmol/m²/s`;
-    document.getElementById('zone-ppfd-change').textContent = 'Target: 600';
-    document.getElementById('zone-groups').textContent = zoneData.groups;
-    document.getElementById('zone-groups-change').textContent = 'All active';
-    document.getElementById('zone-devices').textContent = zoneData.devices;
-    document.getElementById('zone-devices-change').textContent = 'All online';
-    document.getElementById('zone-trays').textContent = zoneData.trays;
-    document.getElementById('zone-trays-change').textContent = 'At capacity';
+    document.getElementById('zone-temp').textContent = 'No data';
+    document.getElementById('zone-temp-change').textContent = 'Zone sensors not configured';
+    document.getElementById('zone-humidity').textContent = 'No data';
+    document.getElementById('zone-humidity-change').textContent = 'Zone sensors not configured';
+    document.getElementById('zone-ppfd').textContent = 'No data';
+    document.getElementById('zone-ppfd-change').textContent = 'Light sensors not configured';
+    document.getElementById('zone-groups').textContent = '0';
+    document.getElementById('zone-groups-change').textContent = 'Groups not configured';
+    document.getElementById('zone-devices').textContent = '0';
+    document.getElementById('zone-devices-change').textContent = 'No zone devices';
+    document.getElementById('zone-trays').textContent = '0';
+    document.getElementById('zone-trays-change').textContent = 'Trays managed at room level';
     
     // Load groups for this zone
     await loadZoneGroups(farmId, roomId, zoneId, zoneData.groups);
@@ -2262,39 +2263,10 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
  */
 async function loadZoneGroups(farmId, roomId, zoneId, count) {
     const tbody = document.getElementById('zone-groups-tbody');
-    const cropTypes = ['Lettuce', 'Basil', 'Arugula', 'Kale', 'Spinach'];
-    const groups = [];
     
-    for (let i = 1; i <= count; i++) {
-        const groupId = `group-${i}`;
-        const cropType = cropTypes[Math.floor(Math.random() * cropTypes.length)];
-        const devices = Math.floor(Math.random() * 4) + 2;
-        const trays = Math.floor(Math.random() * 8) + 4;
-        const status = Math.random() > 0.95 ? 'warning' : 'active';
-        
-        groups.push({
-            groupId,
-            name: `${cropType} Batch ${i}`,
-            devices,
-            trays,
-            recipe: `${cropType} Standard`,
-            status
-        });
-    }
-    
-    tbody.innerHTML = groups.map(group => `
-        <tr>
-            <td><code>${group.groupId}</code></td>
-            <td><strong>${group.name}</strong></td>
-            <td>${group.devices}</td>
-            <td>${group.trays}</td>
-            <td>${group.recipe}</td>
-            <td><span class="badge badge-${getStatusBadgeClass(group.status)}">${group.status}</span></td>
-            <td>
-                <button class="btn" onclick="drillToGroup('${farmId}', '${roomId}', '${zoneId}', '${group.groupId}')">View</button>
-            </td>
-        </tr>
-    `).join('');
+    // Groups are not synced from edge devices yet
+    // They are managed locally on the Light Engine only
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">No group data available. Groups are managed locally on the edge device and not synced to Central.</td></tr>';
 }
 
 /**
@@ -2302,22 +2274,10 @@ async function loadZoneGroups(farmId, roomId, zoneId, count) {
  */
 async function loadZoneSensors(farmId, roomId, zoneId) {
     const tbody = document.getElementById('zone-sensors-tbody');
-    const sensorTypes = ['Temperature', 'Humidity', 'CO2', 'Light', 'Soil Moisture'];
-    const sensors = [];
     
-    for (const type of sensorTypes) {
-        const sensorId = `${type.toLowerCase().replace(' ', '-')}-sensor-${zoneId}`;
-        let reading = '';
-        
-        switch(type) {
-            case 'Temperature':
-                reading = `${(Math.random() * 4 + 22).toFixed(1)}°F`;
-                break;
-            case 'Humidity':
-                reading = `${(Math.random() * 20 + 60).toFixed(0)}%`;
-                break;
-            case 'CO2':
-                reading = `${Math.floor(Math.random() * 400 + 800)} ppm`;
+    // Individual sensor data not available at zone level
+    // Sensor readings are aggregated in telemetry at zone level
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Individual sensor data not available. Environmental readings are shown in zone telemetry.</td></tr>';
                 break;
             case 'Light':
                 reading = `${Math.floor(Math.random() * 200) + 400} PPFD`;
@@ -2356,32 +2316,32 @@ async function viewGroupDetail(farmId, roomId, zoneId, groupId) {
     
     showView('group-detail-view');
     
-    // Mock group data - TODO: Replace with actual API call
+    // Group-level data not synced from edge devices
     const groupData = {
         groupId,
-        name: groupId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        devices: Math.floor(Math.random() * 4) + 2,
-        trays: Math.floor(Math.random() * 8) + 4,
-        intensity: Math.floor(Math.random() * 30) + 70,
-        ppfd: Math.floor(Math.random() * 200) + 400,
-        recipe: 'Lettuce Standard',
-        schedule: 'Day 12 / Photoperiod 18:6'
+        name: groupId,
+        devices: 0,
+        trays: 0,
+        intensity: null,
+        ppfd: null,
+        recipe: 'Not configured',
+        schedule: 'Not configured'
     };
     
-    // Update title and KPIs
+    // Update title and KPIs with empty states
     document.getElementById('group-detail-title').textContent = groupData.name;
-    document.getElementById('group-devices').textContent = groupData.devices;
-    document.getElementById('group-devices-change').textContent = 'All online';
-    document.getElementById('group-trays').textContent = groupData.trays;
-    document.getElementById('group-trays-change').textContent = 'At capacity';
-    document.getElementById('group-intensity').textContent = `${groupData.intensity}%`;
-    document.getElementById('group-intensity-change').textContent = 'Scheduled';
-    document.getElementById('group-ppfd').textContent = `${groupData.ppfd} μmol/m²/s`;
-    document.getElementById('group-ppfd-change').textContent = 'Target: 600';
-    document.getElementById('group-recipe').textContent = groupData.recipe;
-    document.getElementById('group-recipe-change').textContent = 'On schedule';
-    document.getElementById('group-schedule').textContent = groupData.schedule;
-    document.getElementById('group-schedule-change').textContent = 'Active';
+    document.getElementById('group-devices').textContent = '0';
+    document.getElementById('group-devices-change').textContent = 'Groups not synced';
+    document.getElementById('group-trays').textContent = '0';
+    document.getElementById('group-trays-change').textContent = 'Groups not synced';
+    document.getElementById('group-intensity').textContent = 'No data';
+    document.getElementById('group-intensity-change').textContent = 'Not configured';
+    document.getElementById('group-ppfd').textContent = 'No data';
+    document.getElementById('group-ppfd-change').textContent = 'Not configured';
+    document.getElementById('group-recipe').textContent = 'Not configured';
+    document.getElementById('group-recipe-change').textContent = 'Recipes managed on edge';
+    document.getElementById('group-schedule').textContent = 'Not configured';
+    document.getElementById('group-schedule-change').textContent = 'Schedules managed on edge';
     
     // Load devices for this group
     await loadGroupDevices(farmId, roomId, zoneId, groupId, groupData.devices);
@@ -2395,34 +2355,9 @@ async function viewGroupDetail(farmId, roomId, zoneId, groupId) {
  */
 async function loadGroupDevices(farmId, roomId, zoneId, groupId, count) {
     const tbody = document.getElementById('group-devices-tbody');
-    const devices = [];
     
-    for (let i = 1; i <= count; i++) {
-        const deviceId = `light-${groupId}-${i}`;
-        const status = Math.random() > 0.95 ? 'offline' : 'online';
-        const state = status === 'online' ? `${Math.floor(Math.random() * 30) + 70}%` : 'Off';
-        
-        devices.push({
-            deviceId,
-            type: 'LED Grow Light',
-            status,
-            state,
-            lastSeen: generateRandomTime()
-        });
-    }
-    
-    tbody.innerHTML = devices.map(device => `
-        <tr>
-            <td><code>${device.deviceId}</code></td>
-            <td>${device.type}</td>
-            <td><span class="badge badge-${device.status === 'online' ? 'success' : 'danger'}">${device.status}</span></td>
-            <td>${device.state}</td>
-            <td>${device.lastSeen}</td>
-            <td>
-                <button class="btn" style="font-size: 0.85rem; padding: 4px 12px;">Control</button>
-            </td>
-        </tr>
-    `).join('');
+    // Group-level device assignments not synced
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No device data for this group. Group-level device assignments are managed on the edge device.</td></tr>';
 }
 
 /**
@@ -2430,34 +2365,9 @@ async function loadGroupDevices(farmId, roomId, zoneId, groupId, count) {
  */
 async function loadGroupTrays(farmId, roomId, zoneId, groupId, count) {
     const tbody = document.getElementById('group-trays-tbody');
-    const cropTypes = ['Lettuce', 'Basil', 'Arugula', 'Kale'];
-    const trays = [];
     
-    for (let i = 1; i <= count; i++) {
-        const trayId = `tray-${groupId}-${String(i).padStart(3, '0')}`;
-        const cropType = cropTypes[Math.floor(Math.random() * cropTypes.length)];
-        const plantCount = Math.floor(Math.random() * 20) + 40;
-        const daysToHarvest = Math.floor(Math.random() * 15) + 5;
-        const health = Math.random() > 0.9 ? 'Fair' : 'Good';
-        
-        trays.push({
-            trayId,
-            cropType,
-            plantCount,
-            daysToHarvest,
-            health
-        });
-    }
-    
-    tbody.innerHTML = trays.map(tray => `
-        <tr>
-            <td><code>${tray.trayId}</code></td>
-            <td>${tray.cropType}</td>
-            <td>${tray.plantCount}</td>
-            <td>${tray.daysToHarvest} days</td>
-            <td><span class="badge badge-${tray.health === 'Good' ? 'success' : 'warning'}">${tray.health}</span></td>
-        </tr>
-    `).join('');
+    // Group-level tray assignments not synced
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No tray data for this group. Trays are managed locally on the edge device.</td></tr>';
 }
 
 /**
