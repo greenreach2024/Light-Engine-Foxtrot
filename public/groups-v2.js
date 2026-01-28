@@ -2249,15 +2249,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Persist to server
+        console.log('[Groups V2] 🔄 About to POST delete to server, groups count:', window.STATE.groups.length);
+        console.log('[Groups V2] Groups being sent:', window.STATE.groups.map(g => ({ id: g.id, name: g.name, lights: g.lights?.length || 0 })));
         try {
           const response = await fetch('/data/groups.json', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ groups: window.STATE.groups })
           });
-          if (!response.ok) throw new Error('Failed to save groups to server');
+          console.log('[Groups V2] POST response status:', response.status, response.statusText);
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[Groups V2] Server returned error:', errorText);
+            throw new Error(`Failed to save groups: ${response.status} ${errorText}`);
+          }
+          const result = await response.json();
+          console.log('[Groups V2] ✅ Successfully saved groups, server response:', result);
         } catch (error) {
-          console.error('[groups-v2] Failed to persist groups after deletion:', error);
+          console.error('[Groups V2] ❌ Failed to persist groups after deletion:', error);
+          console.error('[Groups V2] Error details:', error.message, error.stack);
+          // Show error to user
+          alert(`Failed to save group deletion: ${error.message}\n\nPlease check console for details.`);
         }
 
         // Also persist lights state

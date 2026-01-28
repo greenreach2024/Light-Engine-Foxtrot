@@ -1821,13 +1821,32 @@
       try {
         console.log('[Room Mapper] Updating rooms.json with sensor assignments...');
         
+        // Helper function to find zone for device position
+        function findZoneForPosition(x, y, zones) {
+          for (const zone of zones) {
+            if (x >= zone.x1 && x <= zone.x2 && y >= zone.y1 && y <= zone.y2) {
+              return zone.zone;
+            }
+          }
+          return null;
+        }
+        
         // Build zone-to-sensor mapping from placed devices
         const zoneSensorMap = {};
         for (const device of placedDevices) {
           const category = device.device?.category || device.snapshot?.category;
-          const deviceZone = device.device?.zone || device.snapshot?.zone;
+          let deviceZone = device.device?.zone || device.snapshot?.zone;
           
-          if (category === 'sensor' && deviceZone) {
+          // If no zone assigned, detect it from position
+          if (!deviceZone && device.x !== undefined && device.y !== undefined) {
+            deviceZone = findZoneForPosition(device.x, device.y, zones);
+            console.log(`[Room Mapper] Device ${device.deviceId} at (${device.x},${device.y}) detected in zone ${deviceZone}`);
+          }
+          
+          // Match sensor, environmental_sensor, or any category containing 'sensor'
+          const isSensor = category && (category === 'sensor' || category === 'environmental_sensor' || category.includes('sensor'));
+          
+          if (isSensor && deviceZone) {
             const zoneNum = parseInt(deviceZone);
             if (!zoneSensorMap[zoneNum]) {
               zoneSensorMap[zoneNum] = [];

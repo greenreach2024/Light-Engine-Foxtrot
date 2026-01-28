@@ -2223,38 +2223,100 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
     
     showView('zone-detail-view');
     
-    // Zone-level detail views are not yet implemented
-    // Zones are managed as part of rooms, not standalone entities
-    const zoneData = {
+    // Fetch farm telemetry to get real zone environmental data
+    let zoneData = {
         zoneId,
         name: zoneId,
         temperature: null,
         humidity: null,
         ppfd: null,
+        pressure: null,
         groups: 0,
         devices: 0,
         trays: 0
     };
     
-    // Update title and KPIs with empty states
+    try {
+        const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        if (farmRes && farmRes.ok) {
+            const farmData = await farmRes.json();
+            console.log('[zone-detail] Farm data:', farmData);
+            const environmental = farmData.farm?.environmental || farmData.environmental;
+            const zones = environmental?.zones || [];
+            console.log('[zone-detail] Zones:', zones);
+            
+            // Find the specific zone
+            const zone = zones.find(z => 
+                z.zone_id === zoneId || 
+                z.zoneId === zoneId || 
+                z.name === zoneId ||
+                z.zone_name === zoneId
+            );
+            
+            if (zone) {
+                console.log('[zone-detail] Found zone:', zone);
+                zoneData = {
+                    zoneId: zone.zone_id || zone.zoneId || zoneId,
+                    name: zone.name || zone.zone_name || zoneId,
+                    temperature: zone.temperature_c ?? zone.temp ?? zone.tempC,
+                    humidity: zone.humidity ?? zone.rh,
+                    ppfd: zone.ppfd || zone.light,
+                    pressure: zone.pressure_hpa || zone.pressure,
+                    co2: zone.co2,
+                    groups: 0, // Groups not synced
+                    devices: 0, // Zone-level devices not tracked
+                    trays: 0 // Trays at room level
+                };
+            } else {
+                console.warn('[zone-detail] Zone not found in telemetry:', zoneId);
+            }
+        }
+    } catch (error) {
+        console.error('[zone-detail] Failed to fetch zone data:', error);
+    }
+    
+    // Update title and KPIs with real data or empty states
     document.getElementById('zone-detail-title').textContent = zoneData.name;
-    document.getElementById('zone-temp').textContent = 'No data';
-    document.getElementById('zone-temp-change').textContent = 'Zone sensors not configured';
-    document.getElementById('zone-humidity').textContent = 'No data';
-    document.getElementById('zone-humidity-change').textContent = 'Zone sensors not configured';
-    document.getElementById('zone-ppfd').textContent = 'No data';
-    document.getElementById('zone-ppfd-change').textContent = 'Light sensors not configured';
+    
+    // Temperature
+    if (zoneData.temperature != null) {
+        document.getElementById('zone-temp').textContent = `${zoneData.temperature.toFixed(1)}°C`;
+        document.getElementById('zone-temp-change').textContent = 'Live sensor reading';
+    } else {
+        document.getElementById('zone-temp').textContent = 'No data';
+        document.getElementById('zone-temp-change').textContent = 'Sensor not configured';
+    }
+    
+    // Humidity
+    if (zoneData.humidity != null) {
+        document.getElementById('zone-humidity').textContent = `${zoneData.humidity.toFixed(0)}%`;
+        document.getElementById('zone-humidity-change').textContent = 'Live sensor reading';
+    } else {
+        document.getElementById('zone-humidity').textContent = 'No data';
+        document.getElementById('zone-humidity-change').textContent = 'Sensor not configured';
+    }
+    
+    // PPFD (light)
+    if (zoneData.ppfd != null) {
+        document.getElementById('zone-ppfd').textContent = `${Math.round(zoneData.ppfd)} μmol/m²/s`;
+        document.getElementById('zone-ppfd-change').textContent = 'Live sensor reading';
+    } else {
+        document.getElementById('zone-ppfd').textContent = 'No data';
+        document.getElementById('zone-ppfd-change').textContent = 'Light sensor not configured';
+    }
+    
+    // Groups, devices, trays - these are not tracked at zone level
     document.getElementById('zone-groups').textContent = '0';
-    document.getElementById('zone-groups-change').textContent = 'Groups not configured';
+    document.getElementById('zone-groups-change').textContent = 'Groups not synced to Central';
     document.getElementById('zone-devices').textContent = '0';
-    document.getElementById('zone-devices-change').textContent = 'No zone devices';
+    document.getElementById('zone-devices-change').textContent = 'Zone devices not tracked';
     document.getElementById('zone-trays').textContent = '0';
     document.getElementById('zone-trays-change').textContent = 'Trays managed at room level';
     
-    // Load groups for this zone
+    // Load groups for this zone (will show empty state)
     await loadZoneGroups(farmId, roomId, zoneId, zoneData.groups);
     
-    // Load sensors for this zone
+    // Load sensors for this zone (will show aggregated telemetry message)
     await loadZoneSensors(farmId, roomId, zoneId);
 }
 
