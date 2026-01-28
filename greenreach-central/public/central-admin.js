@@ -2726,7 +2726,12 @@ async function loadFarmRecipes(farmId) {
  * Render recipes table
  */
 function renderRecipesTable(recipes) {
-    const tbody = document.getElementById('recipes-tbody');
+    const tbody = document.getElementById('overview-recipes-tbody');
+    
+    if (!tbody) {
+        console.error('[renderRecipesTable] Table body element not found');
+        return;
+    }
     
     // Use passed recipes or fall back to global recipesData
     const recipesList = recipes || recipesData;
