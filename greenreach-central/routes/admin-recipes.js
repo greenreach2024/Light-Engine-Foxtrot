@@ -52,7 +52,7 @@ async function parseRecipeCSV(filePath) {
 
 /**
  * GET /api/admin/recipes
- * List all available recipes
+ * List all available recipes with full details
  */
 router.get('/', async (req, res) => {
     try {
@@ -62,12 +62,12 @@ router.get('/', async (req, res) => {
         const files = await fs.readdir(RECIPES_DIR);
         const recipeFiles = files.filter(f => f.endsWith('.csv'));
         
-        // Extract recipe names
-        let recipes = recipeFiles.map(file => {
+        // Load recipe details from CSV files
+        const recipesPromises = recipeFiles.map(async file => {
             // Remove "-Table 1.csv" suffix
             const name = file.replace(/-Table 1\.csv$/, '');
             
-            // Determine category based on name (simple categorization)
+            // Determine category based on name
             let category = 'Vegetables';
             const lowerName = name.toLowerCase();
             
@@ -100,16 +100,40 @@ router.get('/', async (req, res) => {
                 category = 'Berries';
             }
             
-            return {
-                id: file.replace('.csv', ''),
-                name: name,
-                category: category,
-                file: file,
-                description: `Growing recipe for ${name}`,
-                duration_days: null, // Will be populated when file is loaded
-                stages: []
-            };
+            // Parse CSV to get schedule data
+            try {
+                const filePath = path.join(RECIPES_DIR, file);
+                const recipeData = await parseRecipeCSV(filePath);
+                
+                return {
+                    id: file.replace('.csv', ''),
+                    name: name,
+                    category: category,
+                    file: file,
+                    description: `Growing recipe for ${name}`,
+                    total_days: recipeData.totalDays,
+                    schedule_length: recipeData.phases.length,
+                    data: {
+                        schedule: recipeData.phases,
+                        headers: recipeData.headers
+                    }
+                };
+            } catch (error) {
+                console.error(`[Recipes] Error parsing ${file}:`, error);
+                return {
+                    id: file.replace('.csv', ''),
+                    name: name,
+                    category: category,
+                    file: file,
+                    description: `Growing recipe for ${name}`,
+                    total_days: 0,
+                    schedule_length: 0,
+                    data: null
+                };
+            }
         });
+        
+        let recipes = await Promise.all(recipesPromises);
         
         // Filter by search if provided
         if (search) {
