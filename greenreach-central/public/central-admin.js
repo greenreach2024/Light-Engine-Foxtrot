@@ -1890,7 +1890,7 @@ async function loadFarmEnvironmentalTrends(farmId) {
         if (chartEl && last24Temp.length > 0) {
             chartEl.innerHTML = `
                 <div style="padding: 16px;">
-                    <canvas id="farm-combined-trends-chart" width="800" height="400"></canvas>
+                    <canvas id="farm-combined-trends-chart" width="1200" height="500"></canvas>
                 </div>
             `;
             
@@ -2296,7 +2296,7 @@ function drawCombinedTrendsChart(canvasId, config) {
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const height = canvas.height;
-    const padding = { top: 50, right: 120, bottom: 50, left: 80 };
+    const padding = { top: 50, right: 150, bottom: 50, left: 100 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
@@ -3236,19 +3236,32 @@ async function loadFarmRecipes(farmId) {
         const data = await response.json();
         console.log('[FarmRecipes] Farm recipes response:', data);
         
-        // Map recipes from synced group data
-        recipesData = (data.groups || data.recipes || []).map(recipe => ({
-            recipe_id: recipe.id || recipe.recipe_id || recipe.name,
-            name: recipe.name,
-            cropType: recipe.category || recipe.cropType || recipe.crop_type || 'Unknown',
-            activeGroups: recipe.groups || 0,
-            activeTrays: recipe.trays || 0,
-            cycleDuration: recipe.duration_days ? `${recipe.duration_days} days` : '—',
-            avgHarvestTime: recipe.duration_days ? `${recipe.duration_days} days` : '—',
-            variance: '0d',
-            successRate: '100%',
-            description: recipe.description
-        }));
+        // Map recipes from groups - each group represents a recipe in use
+        // Group by recipe/plan to avoid duplicates
+        const recipeMap = new Map();
+        (data.groups || []).forEach(group => {
+            const recipeName = group.recipe || group.plan || 'Unknown Recipe';
+            const planId = group.plan || group.recipe || 'unknown';
+            
+            if (recipeMap.has(planId)) {
+                const existing = recipeMap.get(planId);
+                existing.activeGroups++;
+                existing.activeTrays += (group.trays || 0);
+            } else {
+                recipeMap.set(planId, {
+                    name: recipeName,
+                    category: group.category || 'Leafy Greens',
+                    total_days: group.planConfig?.duration || 28,
+                    schedule_length: group.planConfig?.duration || 28,
+                    activeGroups: 1,
+                    activeTrays: group.trays || 0,
+                    plan: planId
+                });
+            }
+        });
+        
+        recipesData = Array.from(recipeMap.values());
+        console.log('[FarmRecipes] Mapped recipes:', recipesData);
         
         renderRecipesTable();
     } catch (error) {
