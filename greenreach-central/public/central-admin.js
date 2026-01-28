@@ -4824,9 +4824,20 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
     console.log('[loadFarmEnvironmentalData] Loading for farm:', farmId);
     
     try {
-        // Get environmental data from farm
-        const environmental = farmData?.environmental || {};
-        const zones = environmental.zones || [];
+        // Fetch zone telemetry data from API
+        let zones = [];
+        try {
+            const zonesResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+            if (zonesResponse.ok) {
+                const zonesData = await zonesResponse.json();
+                zones = zonesData.zones || [];
+                console.log('[loadFarmEnvironmentalData] Fetched zones from API:', zones.length);
+            } else {
+                console.warn('[loadFarmEnvironmentalData] Zones API returned:', zonesResponse.status);
+            }
+        } catch (apiError) {
+            console.error('[loadFarmEnvironmentalData] Failed to fetch zones:', apiError);
+        }
         
         console.log('[loadFarmEnvironmentalData] Found zones:', zones.length);
         
@@ -4852,16 +4863,21 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
         let tempCount = 0, humidityCount = 0, pressureCount = 0;
         
         zones.forEach(zone => {
-            if (zone.temperature_c != null) {
-                totalTemp += zone.temperature_c;
+            // Support multiple data formats: direct properties, or sensors object
+            const temp = zone.temperature_c || zone.sensors?.tempC?.current;
+            const humidity = zone.humidity || zone.rh || zone.sensors?.rh?.current;
+            const pressure = zone.pressure_hpa || zone.sensors?.pressure?.current;
+            
+            if (temp != null) {
+                totalTemp += temp;
                 tempCount++;
             }
-            if (zone.humidity != null) {
-                totalHumidity += zone.humidity;
+            if (humidity != null) {
+                totalHumidity += humidity;
                 humidityCount++;
             }
-            if (zone.pressure_hpa != null) {
-                totalPressure += zone.pressure_hpa;
+            if (pressure != null) {
+                totalPressure += pressure;
                 pressureCount++;
             }
         });
