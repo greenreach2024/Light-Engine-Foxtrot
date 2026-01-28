@@ -2293,22 +2293,13 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
         document.getElementById('zone-humidity-change').textContent = 'Sensor not configured';
     }
     
-    // PPFD (light)
-    if (zoneData.ppfd != null) {
-        document.getElementById('zone-ppfd').textContent = `${Math.round(zoneData.ppfd)} μmol/m²/s`;
-        document.getElementById('zone-ppfd-change').textContent = 'Live sensor reading';
-    } else {
-        document.getElementById('zone-ppfd').textContent = 'No data';
-        document.getElementById('zone-ppfd-change').textContent = 'Light sensor not configured';
-    }
-    
-    // Groups, devices, trays - these are not tracked at zone level
+    // Groups, devices, trays - these are managed locally on edge devices
     document.getElementById('zone-groups').textContent = '0';
-    document.getElementById('zone-groups-change').textContent = 'Groups not synced to Central';
+    document.getElementById('zone-groups-change').textContent = 'Managed locally on edge device';
     document.getElementById('zone-devices').textContent = '0';
-    document.getElementById('zone-devices-change').textContent = 'Zone devices not tracked';
+    document.getElementById('zone-devices-change').textContent = 'Managed locally on edge device';
     document.getElementById('zone-trays').textContent = '0';
-    document.getElementById('zone-trays-change').textContent = 'Trays managed at room level';
+    document.getElementById('zone-trays-change').textContent = 'Managed at room level';
     
     // Load groups for this zone (will show empty state)
     await loadZoneGroups(farmId, roomId, zoneId, zoneData.groups);
@@ -2323,9 +2314,8 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
 async function loadZoneGroups(farmId, roomId, zoneId, count) {
     const tbody = document.getElementById('zone-groups-tbody');
     
-    // Groups are not synced from edge devices yet
-    // They are managed locally on the Light Engine only
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">No group data available. Groups are managed locally on the edge device and not synced to Central.</td></tr>';
+    // Groups are managed locally on edge devices, not synced to Central
+    tbody.innerHTML = '<tr><td colspan="7" class="empty" style="padding: 40px; text-align: center; color: var(--text-secondary);"><div style="margin-bottom: 8px;"><strong>Groups Managed Locally</strong></div><div>Group assignments and scheduling are managed on the edge device (Light Engine Foxtrot) and not synchronized to Central.</div></td></tr>';
 }
 
 /**
@@ -2334,9 +2324,8 @@ async function loadZoneGroups(farmId, roomId, zoneId, count) {
 async function loadZoneSensors(farmId, roomId, zoneId) {
     const tbody = document.getElementById('zone-sensors-tbody');
     
-    // Individual sensor data not available at zone level
-    // Sensor readings are aggregated in telemetry at zone level
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">Individual sensor data not available. Environmental readings are shown in zone telemetry.</td></tr>';
+    // Sensor readings are aggregated at zone level and shown in KPIs above
+    tbody.innerHTML = '<tr><td colspan="6" class="empty" style="padding: 40px; text-align: center; color: var(--text-secondary);"><div style="margin-bottom: 8px;"><strong>Sensor Data Displayed Above</strong></div><div>Individual sensor breakdowns are not available. Environmental readings (temperature, humidity) are aggregated at the zone level and displayed in the KPI cards above.</div></td></tr>';
 }
 
 /**
