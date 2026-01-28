@@ -1838,10 +1838,97 @@ async function loadFarmDetails(farmId, farmData) {
         await loadFarmEnvironmentalData(farmId, farm);
         console.log('[loadFarmDetails] loadFarmEnvironmentalData complete');
         
+        // Load environmental trends chart for Summary tab
+        console.log('[loadFarmDetails] Calling loadFarmEnvironmentalTrends...');
+        await loadFarmEnvironmentalTrends(farmId);
+        console.log('[loadFarmDetails] loadFarmEnvironmentalTrends complete');
+        
         console.log('[loadFarmDetails] ===== ALL FARM DETAILS LOADED =====');
         
     } catch (error) {
         console.error('Error loading farm details:', error);
+    }
+}
+
+/**
+ * Load environmental trends chart for farm Summary tab
+ */
+async function loadFarmEnvironmentalTrends(farmId) {
+    try {
+        // Fetch telemetry data with history
+        const response = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        if (!response.ok) {
+            console.warn('[Farm Trends] No telemetry data available');
+            return;
+        }
+        
+        const data = await response.json();
+        const zones = data.telemetry?.zones || [];
+        
+        if (zones.length === 0) {
+            console.warn('[Farm Trends] No zones in telemetry');
+            return;
+        }
+        
+        const zone = zones[0];
+        console.log('[Farm Trends] Using zone data:', zone);
+        
+        // Extract sensor history
+        const tempHistory = zone.sensors?.tempC?.history || [];
+        const humidityHistory = zone.sensors?.rh?.history || [];
+        const co2History = zone.sensors?.co2?.history || [];
+        const vpdHistory = zone.sensors?.vpd?.history || [];
+        
+        // Use last 24 data points
+        const last24Temp = tempHistory.slice(-24);
+        const last24Humidity = humidityHistory.slice(-24);
+        const last24Co2 = co2History.slice(-24);
+        const last24Vpd = vpdHistory.slice(-24);
+        
+        // Create simple chart in env-chart placeholder
+        const chartEl = document.getElementById('env-chart');
+        if (chartEl && last24Temp.length > 0) {
+            chartEl.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px;">
+                    <div>
+                        <div style="font-weight: 600; margin-bottom: 8px; color: #3b82f6;">Temperature (°C)</div>
+                        <canvas id="farm-trend-temp" width="300" height="100"></canvas>
+                        <div style="text-align: center; margin-top: 4px; color: var(--text-secondary); font-size: 12px;">
+                            Current: ${zone.sensors.tempC.current.toFixed(1)}°C
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; margin-bottom: 8px; color: #10b981;">Humidity (%)</div>
+                        <canvas id="farm-trend-rh" width="300" height="100"></canvas>
+                        <div style="text-align: center; margin-top: 4px; color: var(--text-secondary); font-size: 12px;">
+                            Current: ${zone.sensors.rh.current.toFixed(0)}%
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; margin-bottom: 8px; color: #f59e0b;">CO₂ (ppm)</div>
+                        <canvas id="farm-trend-co2" width="300" height="100"></canvas>
+                        <div style="text-align: center; margin-top: 4px; color: var(--text-secondary); font-size: 12px;">
+                            Current: ${zone.sensors.co2?.current?.toFixed(0) || 'N/A'}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; margin-bottom: 8px; color: #8b5cf6;">VPD (kPa)</div>
+                        <canvas id="farm-trend-vpd" width="300" height="100"></canvas>
+                        <div style="text-align: center; margin-top: 4px; color: var(--text-secondary); font-size: 12px;">
+                            Current: ${zone.sensors.vpd?.current?.toFixed(2) || 'N/A'}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Draw mini charts
+            drawSimpleChart('farm-trend-temp', last24Temp, '#3b82f6');
+            drawSimpleChart('farm-trend-rh', last24Humidity, '#10b981');
+            if (last24Co2.length > 0) drawSimpleChart('farm-trend-co2', last24Co2, '#f59e0b');
+            if (last24Vpd.length > 0) drawSimpleChart('farm-trend-vpd', last24Vpd, '#8b5cf6');
+        }
+    } catch (error) {
+        console.error('[Farm Trends] Error loading trends:', error);
     }
 }
 
@@ -1994,6 +2081,28 @@ async function loadRoomZones(farmId, roomId, zonesData) {
     
     let zones = [];
     
+    // Fetch groups data to get group counts per zone
+    let groupsByZone = {};
+    try {
+        const groupsRes = await fetch(`${API_BASE}/api/sync/${farmId}/groups`);
+        if (groupsRes.ok) {
+            const groupsData = await groupsRes.json();
+            const groups = groupsData.groups || [];
+            console.log('[loadRoomZones] Groups data:', groups);
+            
+            // Count groups per zone
+            groups.forEach(group => {
+                const zoneId = group.zone || group.zone_id;
+                if (zoneId) {
+                    groupsByZone[zoneId] = (groupsByZone[zoneId] || 0) + 1;
+                }
+            });
+            console.log('[loadRoomZones] Groups by zone:', groupsByZone);
+        }
+    } catch (err) {
+        console.warn('[loadRoomZones] Failed to fetch groups:', err);
+    }
+    
     // Use real zone data from telemetry if available
     if (Array.isArray(zonesData) && zonesData.length > 0) {
         zones = zonesData.map((zone, idx) => {
@@ -2005,13 +2114,16 @@ async function loadRoomZones(farmId, roomId, zonesData) {
             const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
             const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
             
-            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, rawZone: zone });
+            // Count groups assigned to this zone - try multiple zone ID formats
+            const groupsCount = groupsByZone[zoneId] || groupsByZone[`${roomId}:${idx + 1}`] || 0;
+            
+            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, groupsCount, rawZone: zone });
             
             return {
                 zoneId,
                 name,
-                groups: zone.groups?.length || 0, // Groups count if available
-                trays: zone.trays?.length || 0, // Trays count if available
+                groups: groupsCount,
+                trays: zone.trays?.length || 0, // Trays count if available in zone data
                 temperature: tempC != null ? `${tempC.toFixed(1)}°C` : 'No data',
                 humidity: rh != null ? `${rh.toFixed(0)}%` : 'No data'
             };
@@ -2116,30 +2228,45 @@ async function loadRoomEnergy(farmId, roomId, today, week) {
  * Load environmental trends for a room
  */
 async function loadRoomTrends(farmId, roomId, zonesData) {
-    // If we have real zone data, use it for current values, otherwise show no data message
+    // If we have real zone data, use it for current values and history
     if (!zonesData || zonesData.length === 0) {
-        // No trend data available
         console.log('[room-trends] No historical data available');
         return;
     }
     
-    // TODO: Fetch actual historical telemetry data
-    // For now, just show flat lines at current values if available
     const zone = zonesData[0];
-    const temp = zone.temperature_c ?? zone.temp ?? zone.tempC ?? 20;
-    const humidity = zone.humidity ?? zone.rh ?? 50;
-    const co2 = zone.co2 ?? 400;
+    console.log('[room-trends] Zone data:', zone);
     
-    // Create flat trend data from current readings
-    const tempData = Array(12).fill(temp);
-    const humidityData = Array(12).fill(humidity);
-    const co2Data = Array(12).fill(co2);
-    const vpdData = Array(12).fill(0); // VPD calculation not available
+    // Extract sensor history data if available
+    const tempHistory = zone.sensors?.tempC?.history || [];
+    const humidityHistory = zone.sensors?.rh?.history || [];
+    const co2History = zone.sensors?.co2?.history || [];
+    const vpdHistory = zone.sensors?.vpd?.history || [];
     
-    drawSimpleChart('room-temp-chart', tempData, '#3b82f6');
-    drawSimpleChart('room-humidity-chart', humidityData, '#10b981');
-    drawSimpleChart('room-co2-chart', co2Data, '#f59e0b');
-    drawSimpleChart('room-vpd-chart', vpdData, '#8b5cf6');
+    // Get current values as fallback
+    const tempCurrent = zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? 20;
+    const rhCurrent = zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh ?? 50;
+    const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? 400;
+    const vpdCurrent = zone.sensors?.vpd?.current ?? zone.vpd ?? 1.0;
+    
+    // Use last 24 data points from history, or create flat line from current value
+    const last24Temp = tempHistory.length > 0 ? tempHistory.slice(-24) : Array(24).fill(tempCurrent);
+    const last24Humidity = humidityHistory.length > 0 ? humidityHistory.slice(-24) : Array(24).fill(rhCurrent);
+    const last24Co2 = co2History.length > 0 ? co2History.slice(-24) : Array(24).fill(co2Current);
+    const last24Vpd = vpdHistory.length > 0 ? vpdHistory.slice(-24) : Array(24).fill(vpdCurrent);
+    
+    console.log('[room-trends] Drawing charts with data:', {
+        temp: last24Temp.length,
+        humidity: last24Humidity.length,
+        co2: last24Co2.length,
+        vpd: last24Vpd.length
+    });
+    
+    // Draw charts with historical data
+    drawSimpleChart('room-temp-chart', last24Temp, '#3b82f6');
+    drawSimpleChart('room-humidity-chart', last24Humidity, '#10b981');
+    drawSimpleChart('room-co2-chart', last24Co2, '#f59e0b');
+    drawSimpleChart('room-vpd-chart', last24Vpd, '#8b5cf6');
 }
 
 /**
