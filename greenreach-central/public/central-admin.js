@@ -2062,8 +2062,8 @@ async function loadRoomZones(farmId, roomId, zonesData) {
     // Fetch groups data to get group counts per zone
     let groupsByZone = {};
     try {
-        const groupsRes = await fetch(`${API_BASE}/api/sync/${farmId}/groups`);
-        if (groupsRes.ok) {
+        const groupsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (groupsRes && groupsRes.ok) {
             const groupsData = await groupsRes.json();
             const groups = groupsData.groups || [];
             console.log('[loadRoomZones] Groups data:', groups);
@@ -3221,13 +3221,13 @@ function renderInventoryTable() {
  */
 async function loadFarmRecipes(farmId) {
     try {
-        // Fetch farm-specific active recipes from sync endpoint
-        const url = `${API_BASE}/api/sync/${farmId}/groups`;
+        // Fetch farm-specific active recipes from admin API
+        const url = `${API_BASE}/api/admin/farms/${farmId}/groups`;
         console.log('[FarmRecipes] Fetching active recipes for farm:', farmId);
-        const response = await fetch(url);
+        const response = await authenticatedFetch(url);
         
-        if (!response.ok) {
-            console.error('Failed to load farm recipes:', response.status);
+        if (!response || !response.ok) {
+            console.error('Failed to load farm recipes:', response?.status || 'error');
             recipesData = [];
             renderRecipesTable();
             return;
