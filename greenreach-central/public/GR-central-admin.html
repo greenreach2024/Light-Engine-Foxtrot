@@ -647,8 +647,20 @@
 
         .grid-2col {
             display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .grid-2col-responsive {
+            display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2col-responsive {
+                grid-template-columns: 1fr;
+            }
         }
 
         .loading {
