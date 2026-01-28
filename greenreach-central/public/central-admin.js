@@ -4860,16 +4860,21 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
             }
         });
         
-        const avgTemp = tempCount > 0 ? (totalTemp / tempCount).toFixed(1) : null;
-        const avgHumidity = humidityCount > 0 ? (totalHumidity / humidityCount).toFixed(1) : null;
-        const avgPressure = pressureCount > 0 ? (totalPressure / pressureCount).toFixed(1) : null;
+        const avgTempNum = tempCount > 0 ? (totalTemp / tempCount) : null;
+        const avgHumidityNum = humidityCount > 0 ? (totalHumidity / humidityCount) : null;
+        const avgPressureNum = pressureCount > 0 ? (totalPressure / pressureCount) : null;
         
-        // Calculate VPD from temp and humidity (simplified)
+        // Format for display
+        const avgTemp = avgTempNum != null ? avgTempNum.toFixed(1) : null;
+        const avgHumidity = avgHumidityNum != null ? avgHumidityNum.toFixed(1) : null;
+        const avgPressure = avgPressureNum != null ? avgPressureNum.toFixed(1) : null;
+        
+        // Calculate VPD from temp and humidity using numeric values
         let avgVPD = null;
-        if (avgTemp != null && avgHumidity != null) {
+        if (avgTempNum != null && avgHumidityNum != null) {
             // VPD = SVP * (1 - RH/100), where SVP = 0.6108 * exp(17.27*T/(T+237.3))
-            const svp = 0.6108 * Math.exp((17.27 * avgTemp) / (avgTemp + 237.3));
-            avgVPD = (svp * (1 - avgHumidity / 100)).toFixed(2);
+            const svp = 0.6108 * Math.exp((17.27 * avgTempNum) / (avgTempNum + 237.3));
+            avgVPD = (svp * (1 - avgHumidityNum / 100)).toFixed(2);
         }
         
         // Populate Current Conditions
