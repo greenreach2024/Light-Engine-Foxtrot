@@ -327,6 +327,38 @@ router.get('/farms/:farmId/zones', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/farms/:farmId/groups
+ * Get groups data for a specific farm
+ */
+router.get('/farms/:farmId/groups', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, groups: [], count: 0, farmId, source: 'memory' });
+        }
+
+        const groupsResult = await query(
+            `SELECT data, updated_at FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+            [farmId, 'groups']
+        );
+        const groupsData = groupsResult.rows[0]?.data || [];
+        const groups = Array.isArray(groupsData) ? groupsData : [];
+        const updatedAt = groupsResult.rows[0]?.updated_at || null;
+
+        res.json({
+            success: true,
+            groups,
+            count: groups.length,
+            farmId,
+            updatedAt
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching farm groups:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch farm groups', message: error.message });
+    }
+});
+
+/**
  * GET /api/admin/rooms
  * Aggregate rooms across all farms
  */
