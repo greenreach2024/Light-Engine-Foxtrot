@@ -3842,45 +3842,50 @@ async function loadAllDevicesView() {
     tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading device inventory...</td></tr>';
     
     try {
-        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
-        const farmsData = await farmsRes.json();
+        // Fetch devices from all farms
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        if (!response || !response.ok) throw new Error('Failed to load farms');
+        
+        const farmsData = await response.json();
+        const farms = farmsData.farms || [];
         
         let allDevices = [];
-        for (const farm of farmsData.farms || []) {
-            const deviceCount = farm.devices || Math.floor(Math.random() * 30) + 20;
-            const types = ['light', 'sensor', 'hvac', 'irrigation'];
-            for (let i = 1; i <= deviceCount; i++) {
-                const type = types[Math.floor(Math.random() * types.length)];
-                allDevices.push({
-                    deviceId: `${type.toUpperCase()}-${String(i).padStart(4, '0')}`,
-                    name: `${type.charAt(0).toUpperCase() + type.slice(1)} Device ${i}`,
-                    type,
-                    farmName: farm.name,
-                    location: `Room ${String.fromCharCode(65 + Math.floor(i / 10))} / Zone ${(i % 5) + 1}`,
-                    status: Math.random() > 0.9 ? 'offline' : 'online',
-                    firmware: `v${Math.floor(Math.random() * 3) + 1}.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 20)}`,
-                    lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString()
-                });
+        
+        // Fetch devices for each farm
+        for (const farm of farms) {
+            try {
+                const devicesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farm.farm_id || farm.farmId}/devices`);
+                if (devicesRes && devicesRes.ok) {
+                    const deviceData = await devicesRes.json();
+                    const devices = deviceData.devices || [];
+                    
+                    // Add farm name to each device
+                    devices.forEach(device => {
+                        device.farmName = farm.name;
+                        allDevices.push(device);
+                    });
+                }
+            } catch (err) {
+                console.warn(`Failed to fetch devices for farm ${farm.farm_id}:`, err);
             }
         }
         
         if (allDevices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="empty">No devices found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="empty">No devices configured. Devices must be registered in the database.</td></tr>';
             return;
         }
         
         const html = allDevices.slice(0, 100).map(device => `
             <tr>
-                <td>${device.deviceId}</td>
-                <td>${device.name}</td>
-                <td>${device.type}</td>
-                <td>${device.farmName}</td>
-                <td>${device.location}</td>
-                <td><span class="status-badge status-${device.status}">${device.status}</span></td>
-                <td>${device.firmware}</td>
-                <td>${new Date(device.lastSeen).toLocaleString()}</td>
-                <td><button class="btn-small" onclick="viewDeviceDetail('${device.deviceId}')">Details</button></td>
+                <td><code>${device.device_code || device.device_id}</code></td>
+                <td>${device.device_name || 'Unnamed Device'}</td>
+                <td>${device.device_type || 'Unknown'}</td>
+                <td>${device.farmName || 'Unknown Farm'}</td>
+                <td>${device.location || 'Not assigned'}</td>
+                <td><span class="status-badge status-${device.status}">${device.status || 'unknown'}</span></td>
+                <td>${device.firmware_version || 'N/A'}</td>
+                <td>${device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never'}</td>
+                <td><button class="btn-small" onclick="viewDeviceDetail('${device.device_code || device.device_id}')">Details</button></td>
             </tr>
         `).join('');
         
