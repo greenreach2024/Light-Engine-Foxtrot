@@ -2398,8 +2398,8 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
                     humidity: zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh,
                     co2: zone.sensors?.co2?.current ?? zone.co2,
                     vpd: zone.sensors?.vpd?.current ?? zone.vpd,
-                    ppfd: zone.sensors?.ppfd?.current ?? zone.ppfd || zone.light,
-                    pressure: zone.sensors?.pressure?.current ?? zone.pressure_hpa || zone.pressure,
+                    ppfd: (zone.sensors?.ppfd?.current ?? zone.ppfd) || zone.light,
+                    pressure: (zone.sensors?.pressure?.current ?? zone.pressure_hpa) || zone.pressure,
                     groups: 0, // Will be updated from groups API
                     devices: 0, // Zone-level devices not tracked
                     trays: 0 // Trays at room level
