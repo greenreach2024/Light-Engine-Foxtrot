@@ -2077,6 +2077,7 @@ async function loadRoomZones(farmId, roomId, zonesData) {
     const tbody = document.getElementById('room-zones-tbody');
     const countEl = document.getElementById('room-zones-count');
     
+    console.log('[loadRoomZones] roomId:', roomId);
     console.log('[loadRoomZones] Received zonesData:', zonesData);
     
     let zones = [];
@@ -2115,9 +2116,10 @@ async function loadRoomZones(farmId, roomId, zonesData) {
             const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
             
             // Count groups assigned to this zone - try multiple zone ID formats
-            const groupsCount = groupsByZone[zoneId] || groupsByZone[`${roomId}:${idx + 1}`] || 0;
+            const zoneKey = `${roomId}:${idx + 1}`;
+            const groupsCount = groupsByZone[zoneId] || groupsByZone[zoneKey] || 0;
             
-            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, groupsCount, rawZone: zone });
+            console.log(`[loadRoomZones] Zone ${zoneId} (key: ${zoneKey}):`, { name, tempC, rh, groupsCount, rawZone: zone });
             
             return {
                 zoneId,
