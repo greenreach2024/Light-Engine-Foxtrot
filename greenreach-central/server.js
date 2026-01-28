@@ -23,6 +23,7 @@ import reportsRoutes from './routes/reports.js';
 import farmSettingsRoutes from './routes/farm-settings.js';
 import recipesRoutes from './routes/recipes.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
+import envProxyRoutes from './routes/env-proxy.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';

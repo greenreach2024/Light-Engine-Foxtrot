@@ -463,45 +463,28 @@ async function loadRecentActivity() {
                 </tr>
             `).join('');
         } else {
-            // Mock data
+            // No activity yet - show empty state
             tbody.innerHTML = `
                 <tr>
-                    <td>2 min ago</td>
-                    <td>Irrigation cycle completed in ROOM-A-Z1</td>
-                    <td>System</td>
-                    <td><span class="status-badge active">ACTIVE</span></td>
-                </tr>
-                <tr>
-                    <td>15 min ago</td>
-                    <td>New growth group planted: ROOM-A-Z1-G03</td>
-                    <td>admin@demo-farm.com</td>
-                    <td><span class="status-badge active">ACTIVE</span></td>
-                </tr>
-                <tr>
-                    <td>1 hour ago</td>
-                    <td>Environmental data synced to GreenReach</td>
-                    <td>System</td>
-                    <td><span class="status-badge active">ACTIVE</span></td>
-                </tr>
-                <tr>
-                    <td>2 hours ago</td>
-                    <td>Device SENSOR-012 came online</td>
-                    <td>System</td>
-                    <td><span class="status-badge active">ACTIVE</span></td>
-                </tr>
-                <tr>
-                    <td>3 hours ago</td>
-                    <td>Subscription payment processed</td>
-                    <td>Billing</td>
-                    <td><span class="status-badge active">ACTIVE</span></td>
+                    <td colspan="4" style="text-align: center; padding: 2rem; color: #64748b;">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
+                        <div>No recent activity</div>
+                        <div style="font-size: 0.875rem; margin-top: 0.5rem;">Activity will appear as events occur on your farm</div>
+                    </td>
                 </tr>
             `;
         }
         
     } catch (error) {
-        console.warn(' Could not load activity (using mock data):', error.message);
-        
-        // Keep mock data from above
+        console.error('Failed to load activity:', error.message);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align: center; padding: 2rem; color: #ef4444;">
+                    <div>⚠️ Failed to load activity</div>
+                    <div style="font-size: 0.875rem; margin-top: 0.5rem;">${error.message}</div>
+                </td>
+            </tr>
+        `;
     }
 }
 

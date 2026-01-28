@@ -40,7 +40,74 @@ const log = {
 };
 
 /**
+ * Get farm location coordinates from farm.json
+ */
+async function getFarmCoordinates() {
+  try {
+    const farmPath = path.join(PROJECT_ROOT, 'public', 'data', 'farm.json');
+    const content = await fs.readFile(farmPath, 'utf-8');
+    const farmData = JSON.parse(content);
+    
+    // Check coordinates object first (preferred structure)
+    if (farmData.coordinates && farmData.coordinates.lat && farmData.coordinates.lng) {
+      return {
+        lat: farmData.coordinates.lat,
+        lng: farmData.coordinates.lng
+      };
+    }
+    
+    // Fallback to direct lat/lng properties
+    if (farmData.lat && farmData.lng) {
+      return {
+        lat: farmData.lat,
+        lng: farmData.lng
+      };
+    }
+    
+    return null;
+  } catch (err) {
+    log.warn(`Failed to read farm coordinates: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Fetch outdoor data from weather API as fallback
+ */
+async function fetchWeatherAPIData() {
+  try {
+    // Get farm location from configuration
+    const coords = await getFarmCoordinates();
+    if (!coords) {
+      throw new Error('Farm location not configured - set coordinates in setup wizard');
+    }
+    
+    const response = await fetch(`http://localhost:8091/api/weather?lat=${coords.lat}&lng=${coords.lng}`);
+    if (!response.ok) {
+      throw new Error(`Weather API returned ${response.status}`);
+    }
+    const data = await response.json();
+    
+    if (!data.ok || !data.current) {
+      throw new Error('Invalid weather API response');
+    }
+    
+    return {
+      temp: data.current.temperature_c,
+      rh: data.current.humidity,
+      timestamp: data.current.last_updated || new Date().toISOString(),
+      zone: 'weather-api',
+      location: coords
+    };
+  } catch (err) {
+    log.warn(`Failed to fetch weather API data: ${err.message}`);
+    return null;
+  }
+}
+
+/**
  * Check outdoor sensor validity before running ML job
+ * Falls back to weather API if no outdoor sensor found
  */
 async function checkOutdoorSensorValidity() {
   try {
@@ -50,9 +117,29 @@ async function checkOutdoorSensorValidity() {
     try {
       await fs.access(envPath);
     } catch (err) {
+      // Try weather API as fallback
+      const weatherData = await fetchWeatherAPIData();
+      if (weatherData) {
+        const validation = outdoorSensorValidator.validateOutdoorSensor(weatherData);
+        const gate = outdoorSensorValidator.gateMLOperation(validation);
+        
+        return {
+          valid: validation.isValid,
+          validation,
+          gate,
+          outdoor_sensor: {
+            zone: weatherData.zone,
+            temp: weatherData.temp,
+            rh: weatherData.rh,
+            age_minutes: validation.age_minutes,
+            source: 'weather-api'
+          }
+        };
+      }
+      
       return {
         valid: false,
-        reason: 'No environmental data file found',
+        reason: 'No environmental data file found and weather API unavailable',
         gate: { allowed: false, reason: 'no_env_data' }
       };
     }
@@ -65,9 +152,30 @@ async function checkOutdoorSensorValidity() {
     const outdoorSensor = outdoorSensorValidator.findOutdoorSensor(envData);
     
     if (!outdoorSensor) {
+      // Try weather API as fallback
+      const weatherData = await fetchWeatherAPIData();
+      if (weatherData) {
+        log.info('Using weather API as outdoor data source');
+        const validation = outdoorSensorValidator.validateOutdoorSensor(weatherData);
+        const gate = outdoorSensorValidator.gateMLOperation(validation);
+        
+        return {
+          valid: validation.isValid,
+          validation,
+          gate,
+          outdoor_sensor: {
+            zone: weatherData.zone,
+            temp: weatherData.temp,
+            rh: weatherData.rh,
+            age_minutes: validation.age_minutes,
+            source: 'weather-api'
+          }
+        };
+      }
+      
       return {
         valid: false,
-        reason: 'No outdoor sensor found in environmental data',
+        reason: 'No outdoor sensor found in environmental data and weather API unavailable',
         gate: { allowed: false, reason: 'no_outdoor_sensor' }
       };
     }
@@ -84,7 +192,8 @@ async function checkOutdoorSensorValidity() {
         zone: outdoorSensor.zone,
         temp: outdoorSensor.temp,
         rh: outdoorSensor.rh,
-        age_minutes: validation.age_minutes
+        age_minutes: validation.age_minutes,
+        source: 'sensor'
       }
     };
   } catch (err) {

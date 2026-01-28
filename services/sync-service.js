@@ -513,6 +513,38 @@ export default class SyncService extends EventEmitter {
       return false;
     }
   }
+
+  /**
+   * Sync telemetry (environmental/zone data) to Central
+   * Sends zone sensor readings so Central can display room environmental data
+   */
+  async syncTelemetry(telemetryData) {
+    try {
+      const { zones, sensors, timestamp } = telemetryData;
+      console.log(`[sync-service] Syncing telemetry: ${zones?.length || 0} zones...`);
+      
+      const response = await this.apiRequest('POST', '/api/sync/telemetry', {
+        farmId: this.config.farmId,
+        zones: zones || [],
+        sensors: sensors || {},
+        timestamp: timestamp || new Date().toISOString()
+      });
+      
+      if (response.ok) {
+        console.log('[sync-service] Telemetry synced successfully');
+        this.emit('telemetry_synced', telemetryData);
+        return true;
+      } else {
+        throw new Error(`Telemetry sync failed: ${response.status}`);
+      }
+      
+    } catch (error) {
+      console.error('[sync-service] Telemetry sync error:', error.message);
+      this.emit('sync_error', { type: 'telemetry', error });
+      // Don't queue telemetry - it's time-sensitive, next sync will send fresh data
+      return false;
+    }
+  }
   
   /**
    * Send alert to Central immediately

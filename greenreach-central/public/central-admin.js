@@ -1892,11 +1892,11 @@ async function viewRoomDetail(farmId, roomId) {
     
     // Step 2: ALWAYS fetch zone telemetry for environmental data
     try {
-        const zonesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+        const zonesRes = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
         if (zonesRes.ok) {
             const zonesData = await zonesRes.json();
             console.log('[room-detail] Zones telemetry data:', zonesData);
-            const zones = zonesData.zones || [];
+            const zones = zonesData.telemetry?.zones || zonesData.zones || [];
             console.log('[room-detail] Environmental zones:', zones);
             
             // Use telemetry data for environmental readings
@@ -2419,10 +2419,10 @@ async function loadFarmRooms(farmId, count) {
         // Fetch telemetry data to get environmental readings
         let telemetryZones = [];
         try {
-            const telemetryRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+            const telemetryRes = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
             if (telemetryRes.ok) {
                 const zonesData = await telemetryRes.json();
-                telemetryZones = zonesData.zones || [];
+                telemetryZones = zonesData.telemetry?.zones || zonesData.zones || [];
                 console.log('[FarmRooms] Telemetry zones:', telemetryZones.length);
             }
         } catch (err) {
@@ -4068,11 +4068,11 @@ async function loadEnvironmentalView() {
         // Fetch environmental data from all farms or specific farm if context exists
         const farmId = currentFarmId || navigationContext?.farmId;
         const url = farmId 
-            ? `${API_BASE}/api/admin/farms/${farmId}/zones`
+            ? `${API_BASE}/api/sync/${farmId}/telemetry`
             : `${API_BASE}/api/admin/zones`;
         
         console.log('[Environmental] Fetching from:', url);
-        const response = await authenticatedFetch(url);
+        const response = farmId ? await fetch(url) : await authenticatedFetch(url);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -4081,7 +4081,7 @@ async function loadEnvironmentalView() {
         const data = await response.json();
         console.log('[Environmental] Response:', data);
         
-        const zones = data.zones || [];
+        const zones = data.telemetry?.zones || data.zones || [];
         
         // Calculate averages from real data
         let totalTemp = 0, totalHumidity = 0, totalCO2 = 0, totalVPD = 0;
@@ -4828,10 +4828,10 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
         // Fetch zone telemetry data from API
         let zones = [];
         try {
-            const zonesResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+            const zonesResponse = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
             if (zonesResponse.ok) {
                 const zonesData = await zonesResponse.json();
-                zones = zonesData.zones || [];
+                zones = zonesData.telemetry?.zones || zonesData.zones || [];
                 console.log('[loadFarmEnvironmentalData] Fetched zones from API:', zones.length);
             } else {
                 console.warn('[loadFarmEnvironmentalData] Zones API returned:', zonesResponse.status);

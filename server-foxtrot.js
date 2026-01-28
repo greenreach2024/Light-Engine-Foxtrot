@@ -238,7 +238,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://code.responsivevoice.org", "https://web.squarecdn.com", "https://cdn.jsdelivr.net"], // Note: unsafe-inline/eval needed for dynamic UI
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com", "https://code.responsivevoice.org", "https://web.squarecdn.com", "https://cdn.jsdelivr.net"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
@@ -11739,7 +11739,8 @@ app.get('/api/ml/anomalies/statistics', asyncHandler(async (req, res) => {
   
   try {
     // In demo mode, return synthetic anomaly data
-    if (isDemoMode()) {
+    // Demo mode removed
+    if (false) {
       const now = new Date();
       const since = new Date(now.getTime() - (hours * 60 * 60 * 1000));
       
@@ -11990,8 +11991,8 @@ app.get('/api/ml/automation/actions', asyncHandler(async (req, res) => {
  */
 app.get('/api/ml/energy-forecast', asyncHandler(async (req, res) => {
   try {
-    // Demo mode: generate synthetic energy forecast
-    if (isDemoMode()) {
+    // Demo mode removed - always use real energy forecast
+    if (false) {
       const now = new Date();
       const predictions = [];
       
@@ -15157,8 +15158,9 @@ app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res)
     }
   }
   
-  // DEMO MODE BYPASS: Grant full access without credentials
-  if (isDemoMode()) {
+  // DEMO MODE REMOVED: No bypass - always require real authentication
+  if (false) {
+    // Demo mode removed
     const demoToken = crypto.randomBytes(32).toString('hex');
     const demoExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     
@@ -16248,44 +16250,71 @@ app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
     }
   }
   
-  // Mock activity data (in production, fetch from database)
-  const userEmail = session?.email || 'demo@farm.com';
-  const activity = [
-    {
-      timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-      description: 'Irrigation cycle completed in ROOM-A-Z1',
-      user: 'System',
-      status: 'active'
-    },
-    {
-      timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      description: 'New growth group planted: ROOM-A-Z1-G03',
-      user: userEmail,
-      status: 'active'
-    },
-    {
-      timestamp: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-      description: 'Environmental data synced to GreenReach',
-      user: 'System',
-      status: 'active'
-    },
-    {
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      description: 'Device SENSOR-012 came online',
-      user: 'System',
-      status: 'active'
-    },
-    {
-      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-      description: 'Subscription payment processed',
-      user: 'Billing',
-      status: 'active'
+  // Read actual activity from audit logs
+  const activity = [];
+  
+  try {
+    const auditLogPath = join(publicDataDir, '..', 'logs', 'audit.log');
+    
+    // Check if audit log exists
+    if (await fsPromises.access(auditLogPath).then(() => true).catch(() => false)) {
+      const logContent = await fsPromises.readFile(auditLogPath, 'utf-8');
+      const logLines = logContent.split('\n').filter(line => line.trim()).slice(-50); // Last 50 events
+      
+      for (const line of logLines) {
+        try {
+          const entry = JSON.parse(line);
+          
+          // Format audit log entry as activity
+          let description = '';
+          let user = entry.userId || 'System';
+          
+          if (entry.eventType === 'LOGIN_SUCCESS') {
+            description = `User logged in: ${entry.email || user}`;
+          } else if (entry.eventType === 'LOGIN_FAILURE') {
+            description = `Failed login attempt: ${entry.email || 'unknown'}`;
+            user = 'Security';
+          } else if (entry.eventType === 'AUTOMATION_TRIGGERED') {
+            description = entry.message || 'Automation action triggered';
+          } else if (entry.eventType === 'SENSOR_UPDATE') {
+            description = `Environmental data updated`;
+          } else if (entry.action) {
+            description = `${entry.action}: ${entry.resource_type || 'resource'}`;
+          } else {
+            description = entry.message || JSON.stringify(entry).substring(0, 100);
+          }
+          
+          activity.push({
+            timestamp: entry.timestamp,
+            description,
+            user,
+            status: entry.success === false ? 'error' : 'active'
+          });
+        } catch (parseError) {
+          // Skip malformed log lines
+          continue;
+        }
+      }
     }
-  ];
+  } catch (error) {
+    console.warn('[Activity] Failed to read audit log:', error.message);
+  }
+  
+  // If no real activity found, return empty array (NOT mock data)
+  if (activity.length === 0) {
+    return res.json({
+      status: 'success',
+      activity: [],
+      message: 'No recent activity recorded'
+    });
+  }
+  
+  // Sort by timestamp descending and limit to 20
+  activity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   
   res.json({
     status: 'success',
-    activity
+    activity: activity.slice(0, 20)
   });
 }));
 
@@ -16654,14 +16683,14 @@ app.get('/api/demo/intro-cards', (req, res) => {
     return res.json({
       ok: true,
       card: introCards[page],
-      demo: isDemoMode()
+      demo: false
     });
   }
   
   return res.json({
     ok: true,
     cards: introCards,
-    demo: isDemoMode()
+    demo: false
   });
 });
 
@@ -17123,7 +17152,7 @@ app.post('/api/trays/register', (req, res) => {
   }
   
   // In demo mode, just acknowledge registration
-  if (isDemoMode()) {
+  if (false) { // Demo mode removed
     console.log('[inventory] Demo mode: Tray registered:', trayId);
     return res.json({ success: true, trayId, message: 'Tray registered (demo mode)' });
   }
@@ -17140,7 +17169,8 @@ app.post('/api/trays/:trayId/seed', (req, res) => {
   const { trayId } = req.params;
   const { recipe, seedDate, plantCount } = req.body;
   
-  if (isDemoMode()) {
+  // Demo mode removed - always use real seeding logic
+  if (false) {
     console.log('[inventory] Demo mode: Tray seeded:', { trayId, recipe, seedDate, plantCount });
     return res.json({ success: true, message: 'Seeding recorded (demo mode)' });
   }
@@ -17211,8 +17241,8 @@ app.post('/api/tray-runs/:id/loss', async (req, res) => {
   }
   
   try {
-    // In demo mode, just mock the operation
-    if (isDemoMode()) {
+    // Demo mode removed - always use real loss recording
+    if (false) {
       console.log('[inventory] Demo mode: Tray loss recorded:', { 
         trayRunId, 
         crop_name, 
@@ -17293,7 +17323,8 @@ app.get('/api/tray-runs/:id/loss-events', async (req, res) => {
   const { id: trayRunId } = req.params;
   
   try {
-    if (isDemoMode()) {
+    // Demo mode removed
+    if (false) {
       return res.json({ 
         trayRunId,
         lossEvents: [],
@@ -17322,7 +17353,7 @@ app.get('/api/losses/current', async (req, res) => {
   const { farmId, tenant_id } = req.query;
   
   try {
-    if (isDemoMode()) {
+    if (false) { // Demo mode removed
       return res.json({
         totalLosses: 0,
         lossesByReason: {},
@@ -18314,7 +18345,7 @@ app.get('/data/room-map.json', (req, res, next) => {
   }
   
   // Demo mode: Return comprehensive room map with positioned sensors
-  if (isDemoMode()) {
+  if (false) { // Demo mode removed
     const demoData = getDemoData();
     const envData = demoData.getEnvironmentalData();
     
@@ -19852,7 +19883,7 @@ app.get('/plans', async (req, res) => {
     setCors(req, res);
     
     // Demo mode: Return sample lighting recipes with environmental targets
-    if (isDemoMode()) {
+    if (false) { // Demo mode removed
       const demoPlans = [
         {
           id: 'crop-lettuce',
@@ -20508,7 +20539,7 @@ app.get('/sched', (req, res) => {
     setCors(req, res);
     
     // Demo mode: Return sample schedules
-    if (isDemoMode()) {
+    if (false) { // Demo mode removed
       const demoData = getDemoData();
       const farm = demoData.getFarm();
       const schedules = [];
@@ -24689,10 +24720,7 @@ async function startServer() {
     const address = SERVER.address();
     console.log(`[charlie]  Server successfully started on ${address.address}:${address.port}`);
     console.log(`[charlie] running http://127.0.0.1:${PORT} → ${getController()}`);
-    console.log(`[charlie] Demo mode check: isDemoMode() = ${isDemoMode()}`);
-    if (isDemoMode()) {
-      console.log(`[charlie] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
-    }
+    console.log(`[charlie] Demo mode: DISABLED (production mode)`);
     
     // Validate license (Task #2 - License Validation)
     try {
@@ -24838,6 +24866,34 @@ async function startServer() {
             // Start data sync service
             syncService = new SyncService(db);
             syncService.start();
+            
+            // Start periodic telemetry (environmental/zone data) sync
+            const TELEMETRY_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+            const syncTelemetry = async () => {
+              try {
+                // Fetch current environmental data from /env endpoint
+                const envData = await ensureEnvCacheLoaded();
+                if (envData && envData.zones && envData.zones.length > 0) {
+                  const telemetryData = {
+                    zones: envData.zones,
+                    timestamp: new Date().toISOString()
+                  };
+                  await syncService.syncTelemetry(telemetryData);
+                  console.log(`[telemetry-sync] Synced ${envData.zones.length} zones to Central`);
+                } else {
+                  console.log('[telemetry-sync] No zone data available to sync');
+                }
+              } catch (error) {
+                console.warn('[telemetry-sync] Sync failed:', error?.message || error);
+              }
+            };
+            
+            // Initial sync
+            syncTelemetry().catch(e => console.warn('[telemetry-sync] Initial sync failed:', e?.message));
+            
+            // Periodic sync every 5 minutes
+            setInterval(syncTelemetry, TELEMETRY_SYNC_INTERVAL);
+            console.log(`[EdgeMode] ✓ Telemetry sync enabled (interval: ${TELEMETRY_SYNC_INTERVAL / 60000} minutes)`);
             
             // Start wholesale inventory sync service
             wholesaleService = new EdgeWholesaleService(db);
