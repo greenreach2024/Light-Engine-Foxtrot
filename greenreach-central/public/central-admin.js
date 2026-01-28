@@ -1885,47 +1885,24 @@ async function loadFarmEnvironmentalTrends(farmId) {
         const last24Co2 = co2History.slice(-24);
         const last24Vpd = vpdHistory.slice(-24);
         
-        // Create simple chart in env-chart placeholder
+        // Create combined trends chart
         const chartEl = document.getElementById('env-chart');
         if (chartEl && last24Temp.length > 0) {
             chartEl.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px;">
-                    <div>
-                        <div style="font-weight: 600; margin-bottom: 8px; color: #3b82f6;">Temperature (°C)</div>
-                        <canvas id="farm-trend-temp" width="300" height="100"></canvas>
-                        <div style="text-align: center; margin-top: 4px; color: var(--text-secondary); font-size: 12px;">
-                            Current: ${zone.sensors.tempC.current.toFixed(1)}°C
-                        </div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; margin-bottom: 8px; color: #10b981;">Humidity (%)</div>
-                        <canvas id="farm-trend-rh" width="300" height="100"></canvas>
-                        <div style="text-align: center; margin-top: 4px; color: var(--text-secondary); font-size: 12px;">
-                            Current: ${zone.sensors.rh.current.toFixed(0)}%
-                        </div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; margin-bottom: 8px; color: #f59e0b;">CO₂ (ppm)</div>
-                        <canvas id="farm-trend-co2" width="300" height="100"></canvas>
-                        <div style="text-align: center; margin-top: 4px; color: var(--text-secondary); font-size: 12px;">
-                            Current: ${zone.sensors.co2?.current?.toFixed(0) || 'N/A'}
-                        </div>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; margin-bottom: 8px; color: #8b5cf6;">VPD (kPa)</div>
-                        <canvas id="farm-trend-vpd" width="300" height="100"></canvas>
-                        <div style="text-align: center; margin-top: 4px; color: var(--text-secondary); font-size: 12px;">
-                            Current: ${zone.sensors.vpd?.current?.toFixed(2) || 'N/A'}
-                        </div>
-                    </div>
+                <div style="padding: 16px;">
+                    <canvas id="farm-combined-trends-chart" width="800" height="400"></canvas>
                 </div>
             `;
             
-            // Draw mini charts
-            drawSimpleChart('farm-trend-temp', last24Temp, '#3b82f6');
-            drawSimpleChart('farm-trend-rh', last24Humidity, '#10b981');
-            if (last24Co2.length > 0) drawSimpleChart('farm-trend-co2', last24Co2, '#f59e0b');
-            if (last24Vpd.length > 0) drawSimpleChart('farm-trend-vpd', last24Vpd, '#8b5cf6');
+            // Draw combined horizontal trend lines
+            drawCombinedTrendsChart('farm-combined-trends-chart', {
+                datasets: [
+                    { label: 'Temperature °C', data: last24Temp, color: '#3b82f6' },
+                    { label: 'Humidity %', data: last24Humidity, color: '#10b981' },
+                    { label: 'CO₂ ppm', data: last24Co2.length > 0 ? last24Co2 : [], color: '#f59e0b' },
+                    { label: 'VPD kPa', data: last24Vpd.length > 0 ? last24Vpd : [], color: '#8b5cf6' }
+                ].filter(dataset => dataset.data.length > 0)
+            });
         }
     } catch (error) {
         console.error('[Farm Trends] Error loading trends:', error);
@@ -2307,7 +2284,7 @@ function generateEnergyData(days) {
 }
 
 /**
- * Draw combined environmental trends chart with multiple metrics
+ * Draw combined environmental trends chart with horizontal trend lines
  */
 function drawCombinedTrendsChart(canvasId, config) {
     const canvas = document.getElementById(canvasId);
@@ -2319,7 +2296,7 @@ function drawCombinedTrendsChart(canvasId, config) {
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const height = canvas.height;
-    const padding = { top: 40, right: 100, bottom: 50, left: 60 };
+    const padding = { top: 50, right: 120, bottom: 50, left: 80 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
@@ -2337,15 +2314,26 @@ function drawCombinedTrendsChart(canvasId, config) {
     // Draw grid lines (horizontal)
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-        const y = padding.top + (chartHeight * i / 4);
+    const numDatasets = config.datasets.length;
+    for (let i = 0; i <= numDatasets; i++) {
+        const y = padding.top + (chartHeight * i / numDatasets);
         ctx.beginPath();
         ctx.moveTo(padding.left, y);
         ctx.lineTo(padding.left + chartWidth, y);
         ctx.stroke();
     }
     
-    // Draw each dataset
+    // Draw vertical grid lines (time markers)
+    ctx.strokeStyle = '#222';
+    for (let i = 0; i <= 4; i++) {
+        const x = padding.left + (chartWidth * i / 4);
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, padding.top + chartHeight);
+        ctx.stroke();
+    }
+    
+    // Draw each dataset as horizontal trend line
     config.datasets.forEach((dataset, datasetIndex) => {
         if (!dataset.data || dataset.data.length === 0) return;
         
@@ -2353,19 +2341,31 @@ function drawCombinedTrendsChart(canvasId, config) {
         const max = Math.max(...dataset.data);
         const range = max - min || 1;
         
-        // Offset each line vertically for better separation
-        const verticalOffset = (chartHeight / config.datasets.length) * datasetIndex;
-        const lineHeight = chartHeight / config.datasets.length * 0.8; // 80% of allocated space
+        // Each metric gets its own horizontal band
+        const bandTop = padding.top + (chartHeight / numDatasets) * datasetIndex;
+        const bandHeight = chartHeight / numDatasets * 0.7; // Use 70% of band for the line
+        const bandCenter = bandTop + (chartHeight / numDatasets) * 0.5;
         
-        // Draw line
+        // Draw horizontal center line for reference
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, bandCenter);
+        ctx.lineTo(padding.left + chartWidth, bandCenter);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw trend line
         ctx.strokeStyle = dataset.color;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         
         dataset.data.forEach((value, index) => {
             const x = padding.left + (index / (dataset.data.length - 1)) * chartWidth;
+            // Map value to position within the band (inverted so high values are at top)
             const normalizedValue = (value - min) / range;
-            const y = padding.top + verticalOffset + lineHeight - (normalizedValue * lineHeight);
+            const y = bandCenter - (normalizedValue - 0.5) * bandHeight;
             
             if (index === 0) {
                 ctx.moveTo(x, y);
@@ -2376,34 +2376,34 @@ function drawCombinedTrendsChart(canvasId, config) {
         
         ctx.stroke();
         
-        // Draw current value and label on the right
+        // Draw current value point at end
         const lastValue = dataset.data[dataset.data.length - 1];
-        const lastY = padding.top + verticalOffset + lineHeight - ((lastValue - min) / range * lineHeight);
+        const lastX = padding.left + chartWidth;
+        const lastY = bandCenter - ((lastValue - min) / range - 0.5) * bandHeight;
         
-        // Draw value dot
         ctx.fillStyle = dataset.color;
         ctx.beginPath();
-        ctx.arc(padding.left + chartWidth, lastY, 4, 0, Math.PI * 2);
+        ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw label and value
+        // Draw label on the left
         ctx.fillStyle = dataset.color;
-        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(dataset.label, padding.left - 10, bandCenter + 4);
+        
+        // Draw current value on the right
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(dataset.label, padding.left + chartWidth + 10, lastY - 8);
+        ctx.fillText(lastValue.toFixed(1), padding.left + chartWidth + 10, bandCenter + 5);
         
-        ctx.font = '14px system-ui, -apple-system, sans-serif';
-        ctx.fillText(lastValue.toFixed(1), padding.left + chartWidth + 10, lastY + 8);
-        
-        // Draw min/max range on left
+        // Draw min/max range next to current value
         ctx.fillStyle = '#888';
         ctx.font = '10px system-ui, -apple-system, sans-serif';
-        ctx.textAlign = 'right';
-        const rangeY = padding.top + verticalOffset + lineHeight / 2;
-        ctx.fillText(`${min.toFixed(0)}-${max.toFixed(0)}`, padding.left - 5, rangeY);
+        ctx.fillText(`(${min.toFixed(0)}-${max.toFixed(0)})`, padding.left + chartWidth + 10, bandCenter + 18);
     });
     
-    // Draw time axis labels
+    // Draw time axis labels at bottom
     ctx.fillStyle = '#888';
     ctx.font = '11px system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
@@ -2411,14 +2411,14 @@ function drawCombinedTrendsChart(canvasId, config) {
     const timeLabels = ['24h ago', '18h', '12h', '6h', 'Now'];
     timeLabels.forEach((label, index) => {
         const x = padding.left + (chartWidth * index / (timeLabels.length - 1));
-        ctx.fillText(label, x, height - 20);
+        ctx.fillText(label, x, height - 25);
     });
     
-    // Draw title
+    // Draw title at top
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+    ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('Environmental Trends (24h)', padding.left, 25);
+    ctx.fillText('Environmental Trends (24h)', padding.left, 30);
 }
 
 /**
