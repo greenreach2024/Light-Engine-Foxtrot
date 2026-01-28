@@ -1196,7 +1196,7 @@ router.get('/farms/:farmId/recipes', async (req, res) => {
                     const recipe = recipeMap.get(recipeName);
                     recipe.groups++;
                     recipe.trays += group.trays?.length || 0;
-                });
+                }
             });
             
             activeRecipes = Array.from(recipeMap.values());
