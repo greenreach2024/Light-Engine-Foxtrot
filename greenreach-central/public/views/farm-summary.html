@@ -3814,13 +3814,12 @@
         const sensor = zone.sensors?.[metric.sensorKey] || {};
         const currentValue = Number.isFinite(sensor.current) ? Number(sensor.current) : null;
         const status = getStatus(metric.key, currentValue, sensor.setpoint);
-        const targetSummary = buildTargetSummary(sensor.setpoint, metric);
+        // Note: No target display for Indoor Conditions as this shows averaged data across all zones
         return `
           <div class="env-metric">
             <div class="label">${metric.label}</div>
             <div class="value">${metric.valueFormatter(currentValue)}</div>
             <div class="unit">${metric.unit}</div>
-            ${targetSummary ? `<div class="target">${targetSummary}</div>` : ''}
             <div class="status ${status.class}">${status.text}</div>
           </div>
         `;
