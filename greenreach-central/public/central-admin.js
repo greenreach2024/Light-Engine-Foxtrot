@@ -1876,8 +1876,8 @@ async function loadFarmEnvironmentalTrends(farmId) {
         // Extract sensor history
         const tempHistory = zone.sensors?.tempC?.history || [];
         const humidityHistory = zone.sensors?.rh?.history || [];
-        const pressureHistory = zone.sensors?.pressure_hpa?.history || [];
-        const gasHistory = zone.sensors?.gas_kohm?.history || [];
+        const pressureHistory = zone.sensors?.pressureHpa?.history || zone.sensors?.pressure_hpa?.history || [];
+        const gasHistory = zone.sensors?.gasKohm?.history || zone.sensors?.gas_kohm?.history || [];
         const co2History = zone.sensors?.co2?.history || [];
         const vpdHistory = zone.sensors?.vpd?.history || [];
         
@@ -1913,10 +1913,10 @@ async function loadFarmEnvironmentalTrends(farmId) {
                 datasets.push({ label: 'Gas kΩ', data: last24Gas, color: '#ec4899' });
             }
             
-            // Only add CO2 if we have actual data
-            if (last24Co2.length > 0 && last24Co2.some(v => v > 0)) {
-                datasets.splice(2, 0, { label: 'CO₂ ppm', data: last24Co2, color: '#f59e0b' });
-            }
+            // CO2 disabled - no sensor available
+            // if (last24Co2.length > 0 && last24Co2.some(v => v > 0)) {
+            //     datasets.splice(2, 0, { label: 'CO₂ ppm', data: last24Co2, color: '#f59e0b' });
+            // }
             
             // Draw combined horizontal trend lines
             drawCombinedTrendsChart('farm-combined-trends-chart', { datasets });
@@ -1990,8 +1990,8 @@ async function viewRoomDetail(farmId, roomId) {
                 // Extract sensor data - support both direct properties and sensors object
                 const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
                 const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
-                const pressure = zone.pressure_hpa ?? zone.pressure ?? zone.sensors?.pressure_hpa?.current;
-                const gas = zone.gas_kohm ?? zone.gas ?? zone.sensors?.gas_kohm?.current;
+                const pressure = zone.pressure_hpa ?? zone.pressure ?? zone.sensors?.pressureHpa?.current ?? zone.sensors?.pressure_hpa?.current;
+                const gas = zone.gas_kohm ?? zone.gas ?? zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current;
                 const co2 = zone.co2 ?? zone.sensors?.co2?.current;
                 const vpd = zone.vpd ?? zone.sensors?.vpd?.current;
                 
@@ -2248,16 +2248,16 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     // Extract sensor history data if available
     const tempHistory = zone.sensors?.tempC?.history || [];
     const humidityHistory = zone.sensors?.rh?.history || [];
-    const pressureHistory = zone.sensors?.pressure_hpa?.history || [];
-    const gasHistory = zone.sensors?.gas_kohm?.history || [];
+    const pressureHistory = zone.sensors?.pressureHpa?.history || zone.sensors?.pressure_hpa?.history || [];
+    const gasHistory = zone.sensors?.gasKohm?.history || zone.sensors?.gas_kohm?.history || [];
     const co2History = zone.sensors?.co2?.history || [];
     const vpdHistory = zone.sensors?.vpd?.history || [];
     
     // Get current values as fallback
     const tempCurrent = zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? 20;
     const rhCurrent = zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh ?? 50;
-    const pressureCurrent = zone.sensors?.pressure_hpa?.current ?? zone.pressure_hpa ?? zone.pressure ?? null;
-    const gasCurrent = zone.sensors?.gas_kohm?.current ?? zone.gas_kohm ?? zone.gas ?? null;
+    const pressureCurrent = zone.sensors?.pressureHpa?.current ?? zone.sensors?.pressure_hpa?.current ?? zone.pressure_hpa ?? zone.pressure ?? null;
+    const gasCurrent = zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current ?? zone.gas_kohm ?? zone.gas ?? null;
     const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? 400;
     const vpdCurrent = zone.sensors?.vpd?.current ?? zone.vpd ?? 1.0;
     
@@ -2579,7 +2579,8 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
                     co2: zone.sensors?.co2?.current ?? zone.co2,
                     vpd: zone.sensors?.vpd?.current ?? zone.vpd,
                     ppfd: (zone.sensors?.ppfd?.current ?? zone.ppfd) || zone.light,
-                    pressure: (zone.sensors?.pressure?.current ?? zone.pressure_hpa) || zone.pressure,
+                    pressure: (zone.sensors?.pressureHpa?.current ?? zone.sensors?.pressure_hpa?.current ?? zone.pressure_hpa) || zone.pressure,
+                    gas: (zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current ?? zone.gas_kohm) || zone.gas,
                     groups: 0, // Will be updated from groups data below
                     devices: zone.devices?.length || 0,
                     trays: zone.trays || 0,
