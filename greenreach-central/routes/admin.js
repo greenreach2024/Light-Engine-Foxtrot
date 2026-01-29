@@ -486,15 +486,18 @@ router.get('/analytics/aggregate', async (req, res) => {
         
         try {
             const groupsResult = await query("SELECT data FROM farm_data WHERE data_type = 'groups'");
+            const uniqueZones = new Set();
             groupsResult.rows.forEach(row => {
                 if (Array.isArray(row.data)) {
-                    totalZones += row.data.length;
                     row.data.forEach(group => {
+                        // Count unique zones, not groups
+                        if (group.zone) uniqueZones.add(group.zone);
                         totalTrays += group.trays || 0;
                         totalPlants += group.plants || 0;
                     });
                 }
             });
+            totalZones = uniqueZones.size;
         } catch (e) {
             console.warn('[Admin API] Groups data query failed:', e.message);
         }
