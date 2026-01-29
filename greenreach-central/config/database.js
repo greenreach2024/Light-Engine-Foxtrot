@@ -67,9 +67,12 @@ async function runMigrations(client) {
       id SERIAL PRIMARY KEY,
       farm_id VARCHAR(255) UNIQUE NOT NULL,
       name VARCHAR(255) NOT NULL,
+      email VARCHAR(255),
+      api_url VARCHAR(500),
       status VARCHAR(50) DEFAULT 'offline',
       last_heartbeat TIMESTAMP,
       metadata JSONB DEFAULT '{}',
+      settings JSONB DEFAULT '{}',
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
@@ -95,6 +98,33 @@ async function runMigrations(client) {
     logger.info('Added metadata column to farms table');
   } catch (err) {
     logger.warn('Could not add metadata column (may already exist):', err.message);
+  }
+
+  try {
+    await client.query(`
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+    `);
+    logger.info('Added email column to farms table');
+  } catch (err) {
+    logger.warn('Could not add email column (may already exist):', err.message);
+  }
+
+  try {
+    await client.query(`
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS api_url VARCHAR(500);
+    `);
+    logger.info('Added api_url column to farms table');
+  } catch (err) {
+    logger.warn('Could not add api_url column (may already exist):', err.message);
+  }
+
+  try {
+    await client.query(`
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}';
+    `);
+    logger.info('Added settings column to farms table');
+  } catch (err) {
+    logger.warn('Could not add settings column (may already exist):', err.message);
   }
   
   // Make existing columns nullable (migration from old schema)
