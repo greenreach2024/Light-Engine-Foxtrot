@@ -1682,13 +1682,8 @@
      * @returns {object|null} Live data {tempC, rh, vpd} or null if not found
      */
     function getLiveSensorData(sensor) {
-      if (!STATE.envData?.zones || !sensor?.zone) {
-        console.log('[getLiveSensorData] Missing data:', {
-          hasEnvZones: !!STATE.envData?.zones,
-          envZonesCount: STATE.envData?.zones?.length,
-          sensorZone: sensor?.zone,
-          sensorId: sensor?.deviceId || sensor?.id
-        });
+      if (!STATE.envData?.zones) {
+        console.log('[getLiveSensorData] No env zones available');
         return null;
       }
       
@@ -1696,11 +1691,26 @@
       // 1. A full zone ID like "room-knukf2:1" (matches ENV directly)
       // 2. A numeric value like 1 or "1" (needs to be formatted as "zone-1")
       // 3. A compound ID like "zone-1" (matches ENV directly)
-      let zoneId = sensor.zone;
+      // 4. null/undefined - if only one zone, use it automatically
+      let zoneId = sensor?.zone;
+      
+      // Smart fallback: If sensor has no zone but there's only ONE zone, use it
+      if (!zoneId && STATE.envData.zones.length === 1) {
+        zoneId = STATE.envData.zones[0].id;
+        console.log('[getLiveSensorData] Sensor has no zone, using single available zone:', zoneId);
+      }
+      
+      if (!zoneId) {
+        console.log('[getLiveSensorData] No zone for sensor:', {
+          sensorId: sensor?.deviceId || sensor?.id,
+          availableZones: STATE.envData.zones.map(z => z.id)
+        });
+        return null;
+      }
       
       // If it's a simple number, format it as "zone-N"
-      if (typeof sensor.zone === 'number' || /^\d+$/.test(sensor.zone)) {
-        zoneId = `zone-${sensor.zone}`;
+      if (typeof zoneId === 'number' || /^\d+$/.test(zoneId)) {
+        zoneId = `zone-${zoneId}`;
       }
       
       const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
@@ -1745,7 +1755,16 @@
      * @returns {object|null} Targets {tempC: {min, max}, rh: {min, max}, vpd: {min, max}} or null
      */
     function getSensorTargets(sensor) {
-      if (!STATE.envData?.zones || !sensor?.zone) return null;
+      if (!STATE.envData?.zones) return null;
+      
+      let zoneId = sensor?.zone;
+      
+      // Smart fallback: If sensor has no zone but there's only ONE zone, use it
+      if (!zoneId && STATE.envData.zones.length === 1) {
+        zoneId = STATE.envData.zones[0].id;
+      }
+      
+      if (!zoneId) return null;
       
       // Handle different zone ID formats (see getLiveSensorData)
       let zoneId = sensor.zone;
@@ -1771,12 +1790,20 @@
      * @returns {Array<number>} Historical values (last 48 points = 4 hours at 5-min intervals)
      */
     function getSensorHistory(sensor, metric) {
-      if (!STATE.envData?.zones || !sensor?.zone) return [];
+      if (!STATE.envData?.zones) return [];
+      
+      let zoneId = sensor?.zone;
+      
+      // Smart fallback: If sensor has no zone but there's only ONE zone, use it
+      if (!zoneId && STATE.envData.zones.length === 1) {
+        zoneId = STATE.envData.zones[0].id;
+      }
+      
+      if (!zoneId) return [];
       
       // Handle different zone ID formats (see getLiveSensorData)
-      let zoneId = sensor.zone;
-      if (typeof sensor.zone === 'number' || /^\d+$/.test(sensor.zone)) {
-        zoneId = `zone-${sensor.zone}`;
+      if (typeof zoneId === 'number' || /^\d+$/.test(zoneId)) {
+        zoneId = `zone-${zoneId}`;
       }
       
       const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
