@@ -10,6 +10,13 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { scanAllZones, getZoneStatus, getOutOfTargetConditions } from '../lib/broad-health-monitor.js';
 import { calculateFarmHealthScore, getHealthScoreWithInsights } from '../lib/health-scorer.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const AI_RECOMMENDATIONS_PATH = path.join(__dirname, '../data/ai-recommendations.json');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -185,6 +192,7 @@ router.get('/score', async (req, res) => {
 /**
  * GET /api/health/insights
  * Get health score with AI-generated insights and recommendations
+ * Merges rule-based insights with GPT-4 recommendations from Central
  */
 router.get('/insights', async (req, res) => {
   try {
@@ -199,9 +207,95 @@ router.get('/insights', async (req, res) => {
 
     const insights = getHealthScoreWithInsights(envData);
     
+    // Load AI recommendations from Central (if available)
+    try {
+      const aiRecsData = await fs.readFile(AI_RECOMMENDATIONS_PATH, 'utf-8');
+      const aiRecs = JSON.parse(aiRecsData);
+      
+      // Only include recommendations that are recent (within last 24 hours)
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      const recentRecs = aiRecs.recommendations?.filter(rec => 
+        new Date(rec.timestamp).getTime() > oneDayAgo
+      ) || [];
+      
+      if (recentRecs.length > 0) {
+        // Prepend AI recommendations to insights
+        insights.insights = [
+          ...recentRecs.map(rec => ({
+            type: 'ai',
+            message: rec.message,
+            recommendation: rec.recommendation,
+            zones: rec.zones || [],
+            priority: rec.priority || 'medium',
+            source: 'GPT-4 Analysis'
+          })),
+          ...insights.insights
+        ];
+      }
+    } catch (err) {
+      // AI recommendations not available yet - continue with rule-based only
+      console.log('[Health API] No AI recommendations available:', err.message);
+    }
+    
     res.json(insights);
   } catch (error) {
     console.error('[Health API] Insights error:', error);
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/health/ai-recommendations
+ * Receive AI-generated recommendations from GreenReach Central
+ * Protected endpoint - requires API key authentication
+ */
+router.post('/ai-recommendations', async (req, res) => {
+  try {
+    // Verify API key (Central should send X-API-Key header)
+    const apiKey = req.headers['x-api-key'];
+    const validKey = process.env.CENTRAL_API_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    
+    if (apiKey !== validKey) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Unauthorized'
+      });
+    }
+    
+    const { recommendations, farm_id, generated_at } = req.body;
+    
+    if (!recommendations || !Array.isArray(recommendations)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Invalid recommendations format'
+      });
+    }
+    
+    // Store recommendations
+    const data = {
+      farm_id,
+      generated_at: generated_at || new Date().toISOString(),
+      received_at: new Date().toISOString(),
+      recommendations: recommendations.map(rec => ({
+        ...rec,
+        timestamp: rec.timestamp || new Date().toISOString()
+      }))
+    };
+    
+    await fs.writeFile(AI_RECOMMENDATIONS_PATH, JSON.stringify(data, null, 2));
+    
+    console.log('[Health API] ✓ Received', recommendations.length, 'AI recommendations from Central');
+    
+    res.json({
+      ok: true,
+      message: 'AI recommendations stored successfully',
+      count: recommendations.length
+    });
+  } catch (error) {
+    console.error('[Health API] Error storing AI recommendations:', error);
     res.status(500).json({
       ok: false,
       error: error.message

@@ -4249,9 +4249,9 @@
             
             zonesHTML += `
               <div class="health-zone-item">
-                <div class="health-zone-name">${zone.zone_id}</div>
-                <div class="health-zone-score" style="color: ${zoneScoreColor};">${zone.score}<span style="font-size: 1rem; color: #64748b;">/100</span></div>
-                <span class="health-zone-status status ${statusClass}">${zone.grade || 'N/A'}</span>
+                <div class="health-zone-name">${zone.zone_name || zone.zone_id || zone.id || 'Unknown Zone'}</div>
+                <div class="health-zone-score" style="color: ${zoneScoreColor};">${zone.score || zone.overall || 0}<span style="font-size: 1rem; color: #64748b;">/100</span></div>
+                <span class="health-zone-status status ${statusClass}">${zone.grade || zone.status || 'N/A'}</span>
               </div>
             `;
           });
@@ -4264,7 +4264,16 @@
           insightsHTML = `
             <div class="health-insights">
               <h3>💡 Insights & Recommendations</h3>
-              ${data.insights.map(insight => `<div class="health-insight-item">${insight}</div>`).join('')}
+              ${data.insights.map(insight => {
+                const message = typeof insight === 'string' ? insight : insight.message || '';
+                const recommendation = (typeof insight === 'object' && insight.recommendation) ? 
+                  `<div style="margin-top: 0.25rem; font-size: 0.875rem; color: #3b82f6;">→ ${insight.recommendation}</div>` : '';
+                const source = (typeof insight === 'object' && insight.source) ?
+                  `<div style="margin-top: 0.25rem; font-size: 0.75rem; color: #10b981; font-weight: 600;">🤖 ${insight.source}</div>` : '';
+                const priority = (typeof insight === 'object' && insight.priority === 'high') ?
+                  `<span style="color: #ef4444; font-weight: 700; margin-left: 0.5rem;">⚠️ HIGH PRIORITY</span>` : '';
+                return `<div class="health-insight-item">${message}${priority}${recommendation}${source}</div>`;
+              }).join('')}
             </div>
           `;
         }
