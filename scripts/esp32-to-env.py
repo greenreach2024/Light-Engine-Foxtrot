@@ -14,11 +14,11 @@ from datetime import datetime, timezone
 
 # Configuration
 SERIAL_PORT = None  # Auto-detect
-BAUD_RATE = 115200
-ENV_JSON_PATH = '/home/admin/light-engine/public/data/env.json'
-IOT_DEVICES_PATH = '/home/admin/light-engine/public/data/iot-devices.json'
-ZONE_ID = 'zone-main'
-ZONE_NAME = 'GreenReach Room'
+BAUD_RATE = 74880
+ENV_JSON_PATH = '/home/greenreach/Light-Engine-Foxtrot/public/data/env.json'
+IOT_DEVICES_PATH = '/home/greenreach/Light-Engine-Foxtrot/public/data/iot-devices.json'
+ZONE_ID = 'zone-1'
+ZONE_NAME = 'Zone 1'
 DEVICE_ID = 'esp32-bme680-sensor-01'
 DEVICE_NAME = 'ESP32 Environmental Sensor'
 UPDATE_INTERVAL = 10  # Write to env.json every 10 seconds
@@ -108,7 +108,7 @@ def register_iot_device():
     return device_exists
 
 def update_env_json(data):
-    """Update env.json with sensor data"""
+    """Update env.json with sensor data in proper server format"""
     env_path = Path(ENV_JSON_PATH)
     
     # Load existing env.json or create new
@@ -123,44 +123,91 @@ def update_env_json(data):
         return
     
     avg = data['averaged']
+    now = datetime.now(timezone.utc).isoformat()
     
-    # Create or update zone entry
-    zone = {
-        'id': ZONE_ID,
-        'name': ZONE_NAME,
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-        'source': 'esp32-bme680',
-        'uptime_s': data.get('uptime_s', 0)
-    }
+    # Find or create zone
+    zones = env_data.get('zones', [])
+    zone = None
+    for i, z in enumerate(zones):
+        if z.get('id') == ZONE_ID:
+            zone = z
+            break
     
+    if not zone:
+        zone = {
+            'id': ZONE_ID,
+            'name': ZONE_NAME,
+            'location': ZONE_NAME,
+            'sensors': {},
+            'meta': {}
+        }
+        zones.append(zone)
+    
+    # Ensure sensors object exists
+    if 'sensors' not in zone:
+        zone['sensors'] = {}
+    
+    # Update sensor data in correct format (matching server expectations)
+    def update_sensor(key, value, unit='', setpoint_min=None, setpoint_max=None):
+        if value is None:
+            return
+        
+        if key not in zone['sensors']:
+            zone['sensors'][key] = {
+                'current': None,
+                'unit': unit,
+                'history': [],
+                'setpoint': {'min': setpoint_min, 'max': setpoint_max},
+                'updatedAt': now
+            }
+        
+        sensor = zone['sensors'][key]
+        sensor['current'] = value
+        sensor['updatedAt'] = now
+        
+        # Keep last 100 history points
+        if 'history' not in sensor:
+            sensor['history'] = []
+        sensor['history'].insert(0, value)
+        sensor['history'] = sensor['history'][:100]
+    
+    # Update temperature (°C)
     if 'temperature_c' in avg:
-        zone['temperature_c'] = avg['temperature_c']
+        update_sensor('tempC', avg['temperature_c'], '°C', 20, 24)
+    
+    # Update humidity (%)
     if 'humidity' in avg:
-        zone['humidity'] = avg['humidity']
+        update_sensor('rh', avg['humidity'], '%', 58, 65)
+    
+    # Update pressure (hPa) - NEW
     if 'pressure_hpa' in avg:
-        zone['pressure_hpa'] = avg['pressure_hpa']
+        update_sensor('pressureHpa', avg['pressure_hpa'], 'hPa', None, None)
+    
+    # Update gas resistance (kΩ) - NEW  
+    if 'gas_kohms' in avg:
+        update_sensor('gasKohm', avg['gas_kohms'], 'kΩ', None, None)
+    
+    # Calculate and update VPD
+    if 'temperature_c' in avg and 'humidity' in avg:
+        temp_c = avg['temperature_c']
+        rh = avg['humidity']
+        # VPD calculation: SVP * (1 - RH/100)
+        svp = 0.6108 * (2.71828 ** ((17.27 * temp_c) / (temp_c + 237.3)))
+        vpd = svp * (1 - rh / 100)
+        update_sensor('vpd', round(vpd, 2), 'kPa', 0.9, 1.05)
+    
+    # Update metadata
+    zone['meta']['source'] = 'esp32-bme680'
+    zone['meta']['lastUpdated'] = now
+    zone['meta']['uptime_s'] = data.get('uptime_s', 0)
+    
+    env_data['zones'] = zones
+    env_data['updatedAt'] = now
+    
     # Register as IoT device
     was_registered = register_iot_device()
     if was_registered:
         print(f"✓ IoT device already registered: {DEVICE_ID}")
-    print()
-    
-    if 'gas_kohms' in avg:
-        zone['gas_kohms'] = avg['gas_kohms']
-    
-    # Update or append zone
-    zones = env_data.get('zones', [])
-    zone_exists = False
-    for i, z in enumerate(zones):
-        if z.get('id') == ZONE_ID:
-            zones[i] = zone
-            zone_exists = True
-            break
-    
-    if not zone_exists:
-        zones.append(zone)
-    
-    env_data['zones'] = zones
     
     # Write atomically
     temp_path = env_path.with_suffix('.tmp')
@@ -168,7 +215,11 @@ def update_env_json(data):
         json.dump(env_data, f, indent=2)
     temp_path.replace(env_path)
     
-    print(f"[{zone['timestamp']}] Updated: {zone['temperature_c']}°C, {zone['humidity']}%")
+    temp = avg.get('temperature_c', '?')
+    humidity = avg.get('humidity', '?')
+    pressure = avg.get('pressure_hpa', '?')
+    gas = avg.get('gas_kohms', '?')
+    print(f"[{now}] {temp}°C, {humidity}%, {pressure}hPa, {gas}kΩ")
 
 def main():
     print("=" * 60)
