@@ -2217,20 +2217,26 @@
       }
 
       const gridSize = STATE.roomMap.gridSize || 20;
-      const cellSize = 45; // Larger cell size for better visibility
+      const cellSize = STATE.roomMap.cellSize || 40; // Use cellSize from room map or default to 40
       const width = gridSize * cellSize;
       const height = Math.floor(gridSize * 0.75) * cellSize;
 
-      console.log('[Heat Map] Canvas dimensions:', width, 'x', height);
+      console.log('[Heat Map] Canvas dimensions:', width, 'x', height, '(gridSize:', gridSize, 'cellSize:', cellSize, ')');
 
       STATE.canvas.width = width;
       STATE.canvas.height = height;
+      
+      // Set explicit display style for visibility
+      STATE.canvas.style.display = 'block';
+      STATE.canvas.style.border = '2px solid #3b82f6';
 
       const ctx = STATE.ctx;
       ctx.clearRect(0, 0, width, height);
 
       // Get sensor readings based on current metric
       const sensorReadings = getSensorReadingsForMetric(STATE.currentMetric);
+      
+      console.log('[Heat Map] Sensor readings for', STATE.currentMetric, ':', sensorReadings.length, 'readings');
       
       if (sensorReadings.length === 0) {
         ctx.fillStyle = 'rgba(100, 116, 139, 0.3)';
