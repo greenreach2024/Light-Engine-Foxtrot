@@ -2893,10 +2893,10 @@ async function viewGroupDetail(farmId, roomId, zoneId, groupId) {
     document.getElementById('group-devices-change').textContent = 'Groups not synced';
     document.getElementById('group-trays').textContent = '0';
     document.getElementById('group-trays-change').textContent = 'Groups not synced';
-    document.getElementById('group-intensity').textContent = 'No data';
-    document.getElementById('group-intensity-change').textContent = 'Not configured';
-    document.getElementById('group-ppfd').textContent = 'No data';
-    document.getElementById('group-ppfd-change').textContent = 'Not configured';
+    document.getElementById('group-days-since-seed').textContent = 'No data';
+    document.getElementById('group-days-since-seed-change').textContent = 'Seed date not configured';
+    document.getElementById('group-target-ppfd').textContent = 'No data';
+    document.getElementById('group-target-ppfd-change').textContent = 'From recipe schedule';
     document.getElementById('group-recipe').textContent = 'Not configured';
     document.getElementById('group-recipe-change').textContent = 'Recipes managed on edge';
     document.getElementById('group-schedule').textContent = 'Not configured';
