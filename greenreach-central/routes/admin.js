@@ -1,4 +1,7 @@
 import express from 'express';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { adminAuthMiddleware } from '../middleware/adminAuth.js';
 import adminAuthRoutes from './admin-auth.js';
 import adminWholesaleRoutes from './admin-wholesale.js';
@@ -6,6 +9,100 @@ import adminRecipesRoutes from './admin-recipes.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
+
+function normalizeRecipeName(name) {
+    return String(name || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function getRecipeCategory(name) {
+    const lowerName = String(name || '').toLowerCase();
+    if (lowerName.includes('basil') || lowerName.includes('cilantro') ||
+        lowerName.includes('parsley') || lowerName.includes('thyme') ||
+        lowerName.includes('oregano') || lowerName.includes('rosemary') ||
+        lowerName.includes('sage') || lowerName.includes('dill') ||
+        lowerName.includes('tarragon') || lowerName.includes('marjoram') ||
+        lowerName.includes('mint') || lowerName.includes('chervil') ||
+        lowerName.includes('lovage') || lowerName.includes('lemon balm')) {
+        return 'Herbs';
+    }
+    if (lowerName.includes('lettuce') || lowerName.includes('arugula') ||
+        lowerName.includes('spinach') || lowerName.includes('kale') ||
+        lowerName.includes('chard') || lowerName.includes('endive') ||
+        lowerName.includes('escarole') || lowerName.includes('frisée') ||
+        lowerName.includes('romaine') || lowerName.includes('oakleaf') ||
+        lowerName.includes('butterhead') || lowerName.includes('pak choi') ||
+        lowerName.includes('mizuna') || lowerName.includes('tatsoi') ||
+        lowerName.includes('komatsuna') || lowerName.includes('mustard') ||
+        lowerName.includes('watercress') || lowerName.includes('sorrel')) {
+        return 'Leafy Greens';
+    }
+    if (lowerName.includes('tomato') || lowerName.includes('boy') ||
+        lowerName.includes('brandywine') || lowerName.includes('celebrity') ||
+        lowerName.includes('heatmaster') || lowerName.includes('marzano') ||
+        lowerName.includes('gold')) {
+        return 'Tomatoes';
+    }
+    if (lowerName.includes('strawberry') || lowerName.includes('albion') ||
+        lowerName.includes('chandler') || lowerName.includes('eversweet') ||
+        lowerName.includes('mara') || lowerName.includes('monterey') ||
+        lowerName.includes('ozark') || lowerName.includes('seascape') ||
+        lowerName.includes('sequoia') || lowerName.includes('tribute') ||
+        lowerName.includes('tristar') || lowerName.includes('fort laramie') ||
+        lowerName.includes('jewel')) {
+        return 'Berries';
+    }
+    return 'Vegetables';
+}
+
+async function parseRecipeCSV(filePath) {
+    const content = await fs.readFile(filePath, 'utf-8');
+    const lines = content.trim().split('\n');
+    if (lines.length < 3) {
+        throw new Error('Invalid recipe file format');
+    }
+
+    const tableName = lines[0].trim();
+    const headers = lines[1].split(',').map(h => h.trim());
+    const dataLines = lines.slice(2);
+
+    const phases = dataLines.map(line => {
+        const values = line.split(',').map(v => v.trim());
+        const phase = {};
+        headers.forEach((header, index) => {
+            const value = values[index];
+            if (value && !isNaN(value) && value !== '') {
+                phase[header] = parseFloat(value);
+            } else {
+                phase[header] = value || '';
+            }
+        });
+        return phase;
+    });
+
+    return {
+        tableName,
+        headers,
+        phases,
+        totalDays: dataLines.length
+    };
+}
+
+function getAverageTemperature(schedule) {
+    if (!Array.isArray(schedule) || schedule.length === 0) return null;
+    const temps = schedule
+        .map(day => day.temperature || day.tempC || day.afternoon_temp || day['Afternoon Temp (C)'])
+        .map(temp => (typeof temp === 'string' ? parseFloat(temp) : temp))
+        .filter(t => !Number.isNaN(t) && t > 0);
+    if (temps.length === 0) return null;
+    const sum = temps.reduce((a, b) => a + b, 0);
+    return Math.round((sum / temps.length) * 10) / 10;
+}
 
 // Mount authentication routes (no auth required for login)
 router.use('/auth', adminAuthRoutes);
@@ -1223,28 +1320,106 @@ router.get('/farms/:farmId/recipes', async (req, res) => {
             // Extract active recipes from groups
             // Each group has an active recipe assigned
             const recipeMap = new Map();
-            
+            const recipeNameToGroups = new Map();
+
             groups.forEach(group => {
-                if (group.active_recipe || group.recipe_name || group.recipeName) {
-                    const recipeName = group.active_recipe || group.recipe_name || group.recipeName;
-                    
-                    if (!recipeMap.has(recipeName)) {
-                        recipeMap.set(recipeName, {
-                            name: recipeName,
-                            id: recipeName.toLowerCase().replace(/\s+/g, '-'),
-                            groups: 0,
-                            trays: 0,
-                            category: group.crop_type || 'Unknown'
-                        });
-                    }
-                    
-                    const recipe = recipeMap.get(recipeName);
-                    recipe.groups++;
-                    recipe.trays += group.trays?.length || 0;
+                const recipeName = group.active_recipe || group.recipe_name || group.recipeName || group.recipe || group.crop;
+                if (!recipeName) return;
+
+                const key = recipeName.trim();
+                if (!recipeMap.has(key)) {
+                    recipeMap.set(key, {
+                        name: recipeName,
+                        id: recipeName.toLowerCase().replace(/\s+/g, '-'),
+                        groups: 0,
+                        trays: 0,
+                        category: group.crop_type || getRecipeCategory(recipeName)
+                    });
+                    recipeNameToGroups.set(key, []);
                 }
+
+                const recipe = recipeMap.get(key);
+                recipe.groups++;
+                recipe.trays += Array.isArray(group.trays) ? group.trays.length : (group.trays || 0);
+                recipeNameToGroups.get(key).push(group);
             });
-            
-            activeRecipes = Array.from(recipeMap.values());
+
+            const recipeFiles = await fs.readdir(RECIPES_DIR).catch(() => []);
+            const recipeFileMap = new Map();
+            recipeFiles.filter(f => f.endsWith('.csv')).forEach(file => {
+                const name = file.replace(/-Table 1\.csv$/, '').replace(/\.csv$/, '');
+                recipeFileMap.set(normalizeRecipeName(name), file);
+            });
+
+            const today = new Date();
+            activeRecipes = await Promise.all(Array.from(recipeMap.values()).map(async recipe => {
+                const normalized = normalizeRecipeName(recipe.name);
+                const file = recipeFileMap.get(normalized);
+                let schedule = [];
+                let totalDays = null;
+                let avgTemp = null;
+
+                if (file) {
+                    try {
+                        const parsed = await parseRecipeCSV(path.join(RECIPES_DIR, file));
+                        schedule = parsed.phases || [];
+                        totalDays = parsed.totalDays || schedule.length || null;
+                        avgTemp = getAverageTemperature(schedule);
+                    } catch (err) {
+                        console.warn(`[Admin API] Failed to parse recipe file ${file}:`, err.message);
+                    }
+                }
+
+                const groupsForRecipe = recipeNameToGroups.get(recipe.name) || [];
+                const seedDates = groupsForRecipe
+                    .map(group => group.planConfig?.anchor?.seedDate || group.planSeedDate || group.seedDate)
+                    .filter(Boolean)
+                    .map(dateStr => new Date(dateStr))
+                    .filter(dateObj => !Number.isNaN(dateObj.getTime()));
+
+                let seedDateMin = null;
+                let seedDateMax = null;
+                let currentDayMin = null;
+                let currentDayMax = null;
+                let daysRemainingMin = null;
+                let daysRemainingMax = null;
+
+                if (seedDates.length > 0) {
+                    seedDates.sort((a, b) => a - b);
+                    seedDateMin = seedDates[0];
+                    seedDateMax = seedDates[seedDates.length - 1];
+
+                    const daysSinceSeed = seedDates.map(d => Math.max(0, Math.floor((today - d) / (1000 * 60 * 60 * 24))));
+                    currentDayMin = Math.min(...daysSinceSeed) + 1;
+                    currentDayMax = Math.max(...daysSinceSeed) + 1;
+
+                    if (totalDays != null) {
+                        const daysRemaining = daysSinceSeed.map(days => Math.max(0, totalDays - (days + 1)));
+                        daysRemainingMin = Math.min(...daysRemaining);
+                        daysRemainingMax = Math.max(...daysRemaining);
+                    }
+                }
+
+                return {
+                    recipe_id: recipe.id,
+                    id: recipe.id,
+                    name: recipe.name,
+                    category: recipe.category,
+                    total_days: totalDays,
+                    schedule_length: schedule.length,
+                    avg_temp_c: avgTemp,
+                    groups_running: recipe.groups,
+                    trays_running: recipe.trays,
+                    seed_date_min: seedDateMin ? seedDateMin.toISOString().split('T')[0] : null,
+                    seed_date_max: seedDateMax ? seedDateMax.toISOString().split('T')[0] : null,
+                    current_day_min: currentDayMin,
+                    current_day_max: currentDayMax,
+                    days_remaining_min: daysRemainingMin,
+                    days_remaining_max: daysRemainingMax,
+                    description: `Growing recipe for ${recipe.name}`,
+                    data: { schedule }
+                };
+            }));
         }
         
         res.json({

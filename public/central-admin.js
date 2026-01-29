@@ -2004,7 +2004,7 @@ async function loadRoomTrends(farmId, roomId) {
     // Generate 24-hour data (every 2 hours = 12 points)
     const tempData = generateTrendData(24, 72, 78);
     const humidityData = generateTrendData(55, 65, 75);
-    const co2Data = generateTrendData(800, 1000, 1200);
+    const co2Data = [];
     const vpdData = generateTrendData(0.8, 1.0, 1.2);
     
     drawSimpleChart('room-temp-chart', tempData, '#3b82f6');
@@ -2058,6 +2058,14 @@ function drawSimpleChart(canvasId, data, color) {
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
+    if (!Array.isArray(data) || data.length === 0) {
+        ctx.fillStyle = '#a0aec0';
+        ctx.font = '12px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No data', width / 2, height / 2 + 4);
+        return;
+    }
+
     // Find min/max for scaling
     const min = Math.min(...data);
     const max = Math.max(...data);

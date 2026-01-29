@@ -2053,13 +2053,17 @@ async function loadFarmEnvironmentalTrends(farmId) {
                 datasets.push({ label: 'Gas kΩ', data: last24Gas, color: '#ec4899' });
             }
             
+            const co2HasData = last24Co2.length > 0 && last24Co2.some(v => v > 0);
             // CO2 disabled - no sensor available
-            // if (last24Co2.length > 0 && last24Co2.some(v => v > 0)) {
+            // if (co2HasData) {
             //     datasets.splice(2, 0, { label: 'CO₂ ppm', data: last24Co2, color: '#f59e0b' });
             // }
             
             // Draw combined horizontal trend lines
-            drawCombinedTrendsChart('farm-combined-trends-chart', { datasets });
+            drawCombinedTrendsChart('farm-combined-trends-chart', {
+                datasets,
+                noDataLabels: co2HasData ? [] : ['CO₂']
+            });
         }
     } catch (error) {
         console.error('[Farm Trends] Error loading trends:', error);
@@ -2398,7 +2402,7 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     const rhCurrent = zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh ?? 50;
     const pressureCurrent = zone.sensors?.pressureHpa?.current ?? zone.sensors?.pressure_hpa?.current ?? zone.pressure_hpa ?? zone.pressure ?? null;
     const gasCurrent = zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current ?? zone.gas_kohm ?? zone.gas ?? null;
-    const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? 400;
+    const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? null;
     const vpdCurrent = zone.sensors?.vpd?.current ?? zone.vpd ?? 1.0;
     
     // Use last 24 data points from history, or create flat line from current value
@@ -2406,7 +2410,9 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     const last24Humidity = humidityHistory.length > 0 ? humidityHistory.slice(-24) : Array(24).fill(rhCurrent);
     const last24Pressure = pressureHistory.length > 0 ? pressureHistory.slice(-24) : (pressureCurrent != null ? Array(24).fill(pressureCurrent) : []);
     const last24Gas = gasHistory.length > 0 ? gasHistory.slice(-24) : (gasCurrent != null ? Array(24).fill(gasCurrent) : []);
-    const last24Co2 = co2History.length > 0 ? co2History.slice(-24) : Array(24).fill(co2Current);
+    const last24Co2 = co2History.length > 0
+        ? co2History.slice(-24)
+        : (co2Current != null ? Array(24).fill(co2Current) : []);
     const last24Vpd = vpdHistory.length > 0 ? vpdHistory.slice(-24) : Array(24).fill(vpdCurrent);
     
     console.log('[room-trends] Drawing charts with data:', {
@@ -2436,12 +2442,16 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     }
     
     // Only add CO2 if we have actual data
-    if (last24Co2.length > 0 && last24Co2.some(v => v > 0)) {
+    const co2HasData = last24Co2.length > 0 && last24Co2.some(v => v > 0);
+    if (co2HasData) {
         datasets.splice(2, 0, { label: 'CO₂ ppm', data: last24Co2, color: '#f59e0b' });
     }
     
     // Draw combined chart with all available metrics
-    drawCombinedTrendsChart('room-combined-trends-chart', { datasets });
+    drawCombinedTrendsChart('room-combined-trends-chart', {
+        datasets,
+        noDataLabels: co2HasData ? [] : ['CO₂']
+    });
 }
 
 /**
@@ -2617,6 +2627,13 @@ function drawCombinedTrendsChart(canvasId, config) {
         const x = padding.left + (chartWidth * index / (timeLabels.length - 1));
         ctx.fillText(label, x, height - 20);
     });
+
+    if (config.noDataLabels && config.noDataLabels.length > 0) {
+        ctx.fillStyle = '#a0aec0';
+        ctx.font = '12px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${config.noDataLabels.join(', ')}: No data`, padding.left, height - 5);
+    }
 }
 
 /**
@@ -3431,17 +3448,24 @@ async function loadFarmRecipes(farmId) {
         
         const data = await response.json();
         recipesData = (data.recipes || []).map(recipe => ({
-            recipe_id: recipe.recipe_id,
+            recipe_id: recipe.recipe_id || recipe.id,
+            id: recipe.id || recipe.recipe_id,
             name: recipe.name,
-            cropType: recipe.crop_type,
-            activeTrays: recipe.active_trays || 0,
-            cycleDuration: `${recipe.cycle_duration_days} days`,
-            avgHarvestTime: `${recipe.cycle_duration_days} days`,
-            variance: '0d',
-            successRate: '100%',
+            cropType: recipe.crop_type || recipe.category,
+            category: recipe.category || recipe.crop_type || 'Uncategorized',
+            activeTrays: recipe.active_trays || recipe.trays_running || 0,
+            activeGroups: recipe.groups_running || 0,
+            totalDays: recipe.total_days,
+            scheduleLength: recipe.schedule_length,
+            avgTempC: recipe.avg_temp_c,
+            currentDayMin: recipe.current_day_min,
+            currentDayMax: recipe.current_day_max,
+            daysRemainingMin: recipe.days_remaining_min,
+            daysRemainingMax: recipe.days_remaining_max,
+            seedDateMin: recipe.seed_date_min,
+            seedDateMax: recipe.seed_date_max,
             description: recipe.description,
-            lightSchedule: recipe.light_schedule,
-            harvestCriteria: recipe.harvest_criteria
+            data: recipe.data
         }));
         
         renderRecipesTable();
@@ -3486,36 +3510,47 @@ function renderRecipesTable(recipes) {
     }
     
     tbody.innerHTML = recipesList.map(recipe => {
-        // Calculate average temperature from schedule
-        let avgTemp = 'N/A';
-        if (recipe.data && recipe.data.schedule && recipe.data.schedule.length > 0) {
-            const temps = recipe.data.schedule
+        const schedule = recipe.data?.schedule || [];
+        let avgTemp = recipe.avgTempC != null ? `${recipe.avgTempC.toFixed(1)}°C` : 'N/A';
+        if (avgTemp === 'N/A' && schedule.length > 0) {
+            const temps = schedule
                 .map(day => {
                     const temp = day.temperature || day.tempC || day.afternoon_temp || day['Afternoon Temp (C)'];
                     return typeof temp === 'string' ? parseFloat(temp) : temp;
                 })
                 .filter(t => !isNaN(t) && t > 0);
-            
             if (temps.length > 0) {
                 const sum = temps.reduce((a, b) => a + b, 0);
                 avgTemp = `${(sum / temps.length).toFixed(1)}°C`;
             }
         }
-        
+
+        const totalDays = recipe.totalDays ?? recipe.total_days ?? 0;
+        const stages = recipe.scheduleLength ?? recipe.schedule_length ?? schedule.length ?? 0;
+        const dayRange = recipe.currentDayMin != null
+            ? `Day ${recipe.currentDayMin}${recipe.currentDayMax && recipe.currentDayMax !== recipe.currentDayMin ? `-${recipe.currentDayMax}` : ''}`
+            : 'Day —';
+        const remainingRange = recipe.daysRemainingMin != null
+            ? `Harvest ${recipe.daysRemainingMin}${recipe.daysRemainingMax && recipe.daysRemainingMax !== recipe.daysRemainingMin ? `-${recipe.daysRemainingMax}` : ''}d`
+            : 'Harvest —';
+        const groupsTrays = `Groups: ${recipe.activeGroups || 0} · Trays: ${recipe.activeTrays || 0}`;
+
         return `
             <tr>
-                <td><strong>${recipe.name || 'Unknown'}</strong></td>
+                <td>
+                    <strong>${recipe.name || 'Unknown'}</strong>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">${groupsTrays} · ${dayRange} · ${remainingRange}</div>
+                </td>
                 <td>
                     <span class="badge" style="background: ${getCategoryColor(recipe.category)}; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">
                         ${recipe.category || 'Uncategorized'}
                     </span>
                 </td>
-                <td>${recipe.total_days || 0} days</td>
-                <td>${recipe.schedule_length || 0} entries</td>
+                <td>${totalDays} days</td>
+                <td>${stages} entries</td>
                 <td style="font-size: 0.85rem;">${avgTemp}</td>
                 <td>
-                    <button onclick="viewRecipe('${recipe.id}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">Edit</button>
-                    <button onclick="viewRecipe('${recipe.id}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
+                    <button onclick="viewRecipeDetails('${recipe.recipe_id || recipe.id}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
                 </td>
             </tr>
         `;
@@ -3526,20 +3561,33 @@ function renderRecipesTable(recipes) {
  * View recipe details
  */
 function viewRecipeDetails(recipeId) {
-    const recipe = recipesData.find(r => r.recipe_id === recipeId);
+    const recipe = recipesData.find(r => r.recipe_id === recipeId || r.id === recipeId);
     if (!recipe) {
         alert('Recipe not found');
         return;
     }
-    
+
+    const dayRange = recipe.currentDayMin != null
+        ? `${recipe.currentDayMin}${recipe.currentDayMax && recipe.currentDayMax !== recipe.currentDayMin ? `-${recipe.currentDayMax}` : ''}`
+        : '—';
+    const remainingRange = recipe.daysRemainingMin != null
+        ? `${recipe.daysRemainingMin}${recipe.daysRemainingMax && recipe.daysRemainingMax !== recipe.daysRemainingMin ? `-${recipe.daysRemainingMax}` : ''}`
+        : '—';
+    const seedRange = recipe.seedDateMin
+        ? `${recipe.seedDateMin}${recipe.seedDateMax && recipe.seedDateMax !== recipe.seedDateMin ? ` → ${recipe.seedDateMax}` : ''}`
+        : '—';
+
     const details = `
 Recipe: ${recipe.name}
-Crop Type: ${recipe.cropType}
-Cycle Duration: ${recipe.cycleDuration}
-Active Trays: ${recipe.activeTrays}
+Category: ${recipe.category || recipe.cropType || 'Unknown'}
+Cycle Duration: ${recipe.totalDays ?? recipe.total_days ?? '—'} days
+Stages: ${recipe.scheduleLength ?? recipe.schedule_length ?? '—'}
+Active Groups: ${recipe.activeGroups || 0}
+Active Trays: ${recipe.activeTrays || 0}
+Seed Date Range: ${seedRange}
+Current Day: ${dayRange}
+Days to Harvest: ${remainingRange}
 Description: ${recipe.description || 'No description'}
-Light Schedule: ${recipe.lightSchedule ? JSON.stringify(recipe.lightSchedule) : 'Not configured'}
-Harvest Criteria: ${recipe.harvestCriteria || 'Not specified'}
     `.trim();
     
     alert(details);

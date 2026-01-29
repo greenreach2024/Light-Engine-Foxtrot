@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 # Configuration
 SERIAL_PORT = None  # Auto-detect
-BAUD_RATE = 74880
+BAUD_RATE = 115200
 ENV_JSON_PATH = '/home/greenreach/Light-Engine-Foxtrot/public/data/env.json'
 IOT_DEVICES_PATH = '/home/greenreach/Light-Engine-Foxtrot/public/data/iot-devices.json'
 ZONE_ID = 'zone-1'
@@ -59,6 +59,22 @@ def read_sensor_data(port):
     except (json.JSONDecodeError, UnicodeDecodeError):
         pass
     return None
+
+def connect_esp32(serial_port):
+    """Connect to ESP32, retrying until available."""
+    while True:
+        port_name = serial_port or find_esp32_port()
+        if not port_name:
+            print("✗ No ESP32 detected, retrying in 2s")
+            time.sleep(2)
+            continue
+        try:
+            port = serial.Serial(port_name, BAUD_RATE, timeout=1)
+            print(f"✓ Connected to ESP32 ({port_name})")
+            return port
+        except serial.SerialException as e:
+            print(f"✗ Failed to connect: {e}")
+            time.sleep(2)
 
 def register_iot_device():
     """Register ESP32 as an IoT device"""
@@ -204,6 +220,8 @@ def update_env_json(data):
     # Update metadata
     zone['meta']['source'] = 'esp32-bme680'
     zone['meta']['lastUpdated'] = now
+    zone['meta']['lastSync'] = now
+    zone['meta']['lastSampleAt'] = now
     zone['meta']['uptime_s'] = data.get('uptime_s', 0)
     
     env_data['zones'] = zones
@@ -286,13 +304,8 @@ def main():
     print(f"Update Interval: {UPDATE_INTERVAL}s")
     print()
     
-    # Connect to ESP32
-    try:
-        port = serial.Serial(serial_port, BAUD_RATE, timeout=1)
-        print(f"✓ Connected to ESP32")
-    except serial.SerialException as e:
-        print(f"✗ Failed to connect: {e}")
-        sys.exit(1)
+    # Connect to ESP32 (retry on failure)
+    port = connect_esp32(serial_port)
     
     print("✓ Waiting for sensor data...")
     print()
@@ -301,16 +314,26 @@ def main():
     
     try:
         while True:
-            data = read_sensor_data(port)
-            
+            try:
+                data = read_sensor_data(port)
+            except serial.SerialException as e:
+                print(f"✗ Serial error: {e}")
+                try:
+                    port.close()
+                except Exception:
+                    pass
+                print("↻ Reconnecting to ESP32...")
+                port = connect_esp32(None)
+                continue
+
             if data and 'averaged' in data:
                 now = time.time()
-                
+
                 # Update env.json at interval
                 if now - last_update >= UPDATE_INTERVAL:
                     update_env_json(data)
                     last_update = now
-            
+
             time.sleep(0.1)
     
     except KeyboardInterrupt:

@@ -19698,6 +19698,12 @@ app.post("/ingest/env", async (req, res) => {
     ensure("pressureHpa", resolvedPressure);
     ensure("gasKohm", resolvedGas);
 
+    const nowIso = new Date().toISOString();
+    zone.meta.lastSampleAt = nowIso;
+    zone.meta.lastSync = nowIso;
+    zone.meta.lastUpdated = nowIso;
+    data.updatedAt = nowIso;
+
   // Persist in the background; coalesce high-churn writes
   persistEnvCache().catch((e)=>console.warn('[env] async persist failed:', e?.message || e));
 
