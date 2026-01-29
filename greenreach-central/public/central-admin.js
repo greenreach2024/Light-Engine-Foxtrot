@@ -2423,14 +2423,14 @@ function drawCombinedTrendsChart(canvasId, config) {
     
     // Draw time axis labels at bottom
     ctx.fillStyle = '#888';
-    ctx.font = '11px system-ui, -apple-sy0);
-    });
+    ctx.font = '11px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
     
-    // Draw title at top
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Environmental Trends (24h)', padding.left, 28
+    const timeLabels = ['24h ago', '18h', '12h', '6h', 'Now'];
+    timeLabels.forEach((label, index) => {
+        const x = padding.left + (chartWidth * index / (timeLabels.length - 1));
+        ctx.fillText(label, x, height - 25);
+    });
     
     // Draw title at top
     ctx.fillStyle = '#fff';
