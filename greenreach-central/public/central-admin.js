@@ -5852,9 +5852,9 @@ function renderRecipesTableDetailed(recipes) {
                 <td style="font-size: 0.85rem;">${avgTemp}</td>
                 <td>
                     <div style="display: flex; gap: 8px;">
-                        <button onclick="viewRecipe(${recipe.id})" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
-                        <button onclick="editRecipe(${recipe.id})" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">Edit</button>
-                        <button onclick="deleteRecipe(${recipe.id}, '${recipe.name}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem; background: var(--accent-red);">Delete</button>
+                        <button onclick="viewRecipe('${recipe.id}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
+                        <button onclick="editRecipe('${recipe.id}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">Edit</button>
+                        <button onclick="deleteRecipe('${recipe.id}', '${recipe.name}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem; background: var(--accent-red);">Delete</button>
                     </div>
                 </td>
             </tr>
