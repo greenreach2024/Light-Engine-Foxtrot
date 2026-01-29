@@ -2301,13 +2301,25 @@ function drawCombinedTrendsChart(canvasId, config) {
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Draw background
+    // Draw background with rounded corners
     ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(0, 0, width, height);
+    if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(0, 0, width, height, 12);
+        ctx.fill();
+    } else {
+        ctx.fillRect(0, 0, width, height);
+    }
     
-    // Draw chart area background
+    // Draw chart area background with rounded corners
     ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(padding.left, padding.top, chartWidth, chartHeight);
+    if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(padding.left, padding.top, chartWidth, chartHeight, 8);
+        ctx.fill();
+    } else {
+        ctx.fillRect(padding.left, padding.top, chartWidth, chartHeight);
+    }
     
     // Draw grid lines (horizontal)
     ctx.strokeStyle = '#333';
@@ -2360,9 +2372,11 @@ function drawCombinedTrendsChart(canvasId, config) {
         ctx.beginPath();
         
         dataset.data.forEach((value, index) => {
-            const x = padding.left + (index / (dataset.data.length - 1)) * chartWidth;
+            // Prevent division by zero for single-point data
+            const xProgress = dataset.data.length > 1 ? (index / (dataset.data.length - 1)) : 0.5;
+            const x = padding.left + xProgress * chartWidth;
             // Map value to position within the band (inverted so high values are at top)
-            const normalizedValue = (value - min) / range;
+            const normalizedValue = range > 0 ? (value - min) / range : 0.5;
             const y = bandCenter - (normalizedValue - 0.5) * bandHeight;
             
             if (index === 0) {
