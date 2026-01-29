@@ -1515,23 +1515,8 @@
                         <div class="card-title">Environmental Trends (24 Hours)</div>
                     </div>
                     <div class="card-body">
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                            <div>
-                                <div style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 8px;">Temperature</div>
-                                <canvas id="room-temp-chart" width="200" height="80"></canvas>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 8px;">Humidity</div>
-                                <canvas id="room-humidity-chart" width="200" height="80"></canvas>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 8px;">CO₂</div>
-                                <canvas id="room-co2-chart" width="200" height="80"></canvas>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 8px;">VPD</div>
-                                <canvas id="room-vpd-chart" width="200" height="80"></canvas>
-                            </div>
+                        <div id="room-trends-chart" style="padding: 16px;">
+                            <canvas id="room-combined-trends-chart" width="1200" height="500"></canvas>
                         </div>
                     </div>
                 </div>
