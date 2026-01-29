@@ -3250,12 +3250,6 @@ async function loadFarmRecipes(farmId) {
         renderRecipesTable();
     }
 }
-    } catch (error) {
-        console.error('Error loading farm recipes:', error);
-        recipesData = [];
-        renderRecipesTable();
-    }
-}
 
 /**
  * Render recipes table
