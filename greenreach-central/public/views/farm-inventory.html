@@ -1333,6 +1333,14 @@
       arrowElement.textContent = isHidden ? '▲ Click to hide' : '▼ Click for trays';
     }
 
+    // Expose toggle functions to global scope for onclick handlers
+    window.toggleLocation = toggleLocation;
+    window.toggleZone = toggleZone;
+    window.toggleGroupTrays = toggleGroupTrays;
+    window.toggleCrop = toggleCrop;
+    window.toggleHarvest = toggleHarvest;
+    window.toggleNode = toggleNode;
+
     // Load inventory on page load
     loadInventory();
 
