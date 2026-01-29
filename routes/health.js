@@ -6,20 +6,15 @@
 
 import { Router } from 'express';
 import { readFileSync } from 'fs';
+import fs from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { scanAllZones, getZoneStatus, getOutOfTargetConditions } from '../lib/broad-health-monitor.js';
 import { calculateFarmHealthScore, getHealthScoreWithInsights } from '../lib/health-scorer.js';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const AI_RECOMMENDATIONS_PATH = path.join(__dirname, '../data/ai-recommendations.json');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const AI_RECOMMENDATIONS_PATH = join(__dirname, '../data/ai-recommendations.json');
 
 const router = Router();
 
