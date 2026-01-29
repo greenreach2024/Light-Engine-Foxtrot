@@ -19628,6 +19628,7 @@ app.post("/ingest/env", async (req, res) => {
       zone.sensors[k] = zone.sensors[k] || { current: null, setpoint: { min: null, max: null }, history: [] };
       if (typeof val === "number" && !Number.isNaN(val)) {
         zone.sensors[k].current = val;
+        zone.sensors[k].updatedAt = new Date().toISOString();
         zone.sensors[k].history = [val, ...(zone.sensors[k].history || [])].slice(0, 100);
       }
     };
