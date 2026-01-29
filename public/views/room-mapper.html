@@ -1991,6 +1991,13 @@
           const detectedZone = (d.x != null && d.y != null) ? findZoneForPosition(d.x, d.y) : null;
           const finalZone = detectedZone !== null ? detectedZone : (d.device?.zone ?? null);
           
+          console.log(`[Room Mapper Save] Device ${d.deviceId} at (${d.x}, ${d.y}):`, {
+            detectedZone,
+            deviceZone: d.device?.zone,
+            finalZone,
+            availableZones: STATE.zones.map(z => `zone ${z.zone}: (${z.x1},${z.y1})-(${z.x2},${z.y2})`)
+          });
+          
           return {
             deviceId: d.deviceId,
             x: d.x,
