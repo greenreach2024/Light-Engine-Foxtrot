@@ -3003,6 +3003,10 @@
               humidity = zoneSensors.rh?.current;
               vpd = zoneSensors.vpd?.current;
               
+              // Copy setpoints to zone level for rendering
+              zone.tempSetpoint = zoneSensors.tempC?.setpoint;
+              zone.rhSetpoint = zoneSensors.rh?.setpoint;
+              
               if (temp != null || humidity != null || vpd != null) {
                 console.log(`[Farm Summary] ${zone.name} using envData from ${envZone.id}: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
               }
@@ -3603,7 +3607,7 @@
                     <div class="status ${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'warning' : 'critical') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'optimal' : temp >= 15 && temp <= 28 ? 'warning' : 'critical') : '')}">${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'Optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'Acceptable' : 'Alert') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'Optimal' : temp >= 15 && temp <= 28 ? 'Acceptable' : 'Alert') : '--')}</div>
                   </div>
                   <div class="env-metric ${humidityInvalid ? 'invalid-reading' : ''}">
-                    <div class="label">Humidity</div>
+                    <div class="label">Humidity <span style="color: green; font-weight: bold;">✓</span></div>
                     <div class="value">${Number.isFinite(humidity) ? formatNumber(humidity, 0) : '--'}</div>
                     <div class="unit">%</div>
                     ${zone.rhSetpoint ? `<div class="target">Target: ${zone.rhSetpoint.min}–${zone.rhSetpoint.max}%</div>` : ''}
@@ -3823,9 +3827,10 @@
         const sensor = zone.sensors?.[metric.sensorKey] || {};
         const currentValue = Number.isFinite(sensor.current) ? Number(sensor.current) : null;
         // Note: No target display or status alerts for Indoor Conditions as this shows averaged data across all zones
+        const marker = metric.key === 'temperature' ? ' <span style="color: blue; font-weight: bold;">✓</span>' : '';
         return `
           <div class="env-metric">
-            <div class="label">${metric.label}</div>
+            <div class="label">${metric.label}${marker}</div>
             <div class="value">${metric.valueFormatter(currentValue)}</div>
             <div class="unit">${metric.unit}</div>
           </div>

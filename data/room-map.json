@@ -1,0 +1,39 @@
+{
+  "name": "Big Green Farm - Room 1",
+  "width": 800,
+  "height": 600,
+  "zones": [
+    {
+      "zone": "room-knukf2:1",
+      "name": "Zone 1",
+      "room": "room-knukf2",
+      "roomName": "Big Green Farm - Room 1",
+      "crop": null
+    }
+  ],
+  "devices": [
+    {
+      "deviceId": "serial-0001",
+      "x": 400,
+      "y": 300,
+      "snapshot": {
+        "id": "serial-0001",
+        "deviceId": "serial-0001",
+        "name": "ESP32 Sensor (ttyUSB1)",
+        "brand": "Silicon Labs",
+        "vendor": "Silicon Labs",
+        "protocol": "usb-serial",
+        "type": "environmental_sensor",
+        "category": "sensor",
+        "zone": 1,
+        "room": "room-knukf2",
+        "telemetry": {
+          "temperature": 18.67,
+          "humidity": 65,
+          "vpd": 0.65,
+          "online": true
+        }
+      }
+    }
+  ]
+}

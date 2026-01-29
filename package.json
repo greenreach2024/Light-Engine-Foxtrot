@@ -57,6 +57,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "sqlite3": "^5.1.7",
     "square": "^37.1.1",
     "tplink-smarthome-api": "^5.0.0",
     "twilio": "^5.11.1",

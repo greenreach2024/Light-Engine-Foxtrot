@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "serial-0001",
+    "deviceId": "serial-0001",
+    "name": "ESP32 Sensor (ttyUSB1)",
+    "type": "environmental_sensor",
+    "protocol": "usb-serial",
+    "category": "sensor",
+    "zone": 1,
+    "room": "Big Green Farm - Room 1",
+    "telemetry": {
+      "temperature": 18.7,
+      "humidity": 33.8,
+      "vpd": 1.43,
+      "online": true,
+      "lastSeen": "2026-01-29T15:00:00Z"
+    },
+    "location": "room-knukf2 - Zone 1"
+  }
+]
