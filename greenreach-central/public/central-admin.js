@@ -1876,12 +1876,16 @@ async function loadFarmEnvironmentalTrends(farmId) {
         // Extract sensor history
         const tempHistory = zone.sensors?.tempC?.history || [];
         const humidityHistory = zone.sensors?.rh?.history || [];
+        const pressureHistory = zone.sensors?.pressure_hpa?.history || [];
+        const gasHistory = zone.sensors?.gas_kohm?.history || [];
         const co2History = zone.sensors?.co2?.history || [];
         const vpdHistory = zone.sensors?.vpd?.history || [];
         
         // Use last 24 data points
         const last24Temp = tempHistory.slice(-24);
         const last24Humidity = humidityHistory.slice(-24);
+        const last24Pressure = pressureHistory.slice(-24);
+        const last24Gas = gasHistory.slice(-24);
         const last24Co2 = co2History.slice(-24);
         const last24Vpd = vpdHistory.slice(-24);
         
@@ -1892,12 +1896,22 @@ async function loadFarmEnvironmentalTrends(farmId) {
                 <canvas id="farm-combined-trends-chart"></canvas>
             `;
             
-            // Build datasets, filtering out CO2 if no data
+            // Build datasets, filtering out those with no data
             const datasets = [
                 { label: 'Temperature °C', data: last24Temp, color: '#3b82f6' },
                 { label: 'Humidity %', data: last24Humidity, color: '#10b981' },
                 { label: 'VPD kPa', data: last24Vpd.length > 0 ? last24Vpd : [], color: '#8b5cf6' }
             ].filter(dataset => dataset.data.length > 0);
+            
+            // Add pressure if data available
+            if (last24Pressure.length > 0 && last24Pressure.some(v => v > 0)) {
+                datasets.push({ label: 'Pressure hPa', data: last24Pressure, color: '#f97316' });
+            }
+            
+            // Add gas if data available
+            if (last24Gas.length > 0 && last24Gas.some(v => v > 0)) {
+                datasets.push({ label: 'Gas kΩ', data: last24Gas, color: '#ec4899' });
+            }
             
             // Only add CO2 if we have actual data
             if (last24Co2.length > 0 && last24Co2.some(v => v > 0)) {
@@ -1927,6 +1941,8 @@ async function viewRoomDetail(farmId, roomId) {
         name: roomId,
         temperature: null,
         humidity: null,
+        pressure: null,
+        gas: null,
         co2: null,
         vpd: null,
         zones: [],
@@ -1974,11 +1990,15 @@ async function viewRoomDetail(farmId, roomId) {
                 // Extract sensor data - support both direct properties and sensors object
                 const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
                 const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
+                const pressure = zone.pressure_hpa ?? zone.pressure ?? zone.sensors?.pressure_hpa?.current;
+                const gas = zone.gas_kohm ?? zone.gas ?? zone.sensors?.gas_kohm?.current;
                 const co2 = zone.co2 ?? zone.sensors?.co2?.current;
                 const vpd = zone.vpd ?? zone.sensors?.vpd?.current;
                 
                 roomData.temperature = tempC;
                 roomData.humidity = rh;
+                roomData.pressure = pressure;
+                roomData.gas = gas;
                 roomData.co2 = co2;
                 
                 // Calculate VPD if we have both temp and humidity and don't already have it
@@ -2020,6 +2040,8 @@ async function viewRoomDetail(farmId, roomId) {
     // Update KPIs with real or null values
     const temp = roomData.temperature != null ? `${roomData.temperature.toFixed(1)}°C` : 'No data';
     const humidity = roomData.humidity != null ? `${roomData.humidity.toFixed(0)}%` : 'No data';
+    const pressure = roomData.pressure != null ? `${roomData.pressure.toFixed(1)} hPa` : 'N/A';
+    const gas = roomData.gas != null ? `${roomData.gas.toFixed(1)} kΩ` : 'N/A';
     const co2 = roomData.co2 != null ? `${Math.round(roomData.co2)} ppm` : 'No data';
     const vpd = roomData.vpd != null ? `${roomData.vpd.toFixed(2)} kPa` : 'No data';
     
@@ -2027,6 +2049,10 @@ async function viewRoomDetail(farmId, roomId) {
     document.getElementById('room-temp-change').textContent = roomData.temperature != null ? 'Live reading' : 'No sensor';
     document.getElementById('room-humidity').textContent = humidity;
     document.getElementById('room-humidity-change').textContent = roomData.humidity != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-pressure').textContent = pressure;
+    document.getElementById('room-pressure-change').textContent = roomData.pressure != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-gas').textContent = gas;
+    document.getElementById('room-gas-change').textContent = roomData.gas != null ? 'Live reading' : 'No sensor';
     document.getElementById('room-co2').textContent = co2;
     document.getElementById('room-co2-change').textContent = roomData.co2 != null ? 'Live reading' : 'No sensor';
     document.getElementById('room-vpd').textContent = vpd;
@@ -2222,34 +2248,52 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     // Extract sensor history data if available
     const tempHistory = zone.sensors?.tempC?.history || [];
     const humidityHistory = zone.sensors?.rh?.history || [];
+    const pressureHistory = zone.sensors?.pressure_hpa?.history || [];
+    const gasHistory = zone.sensors?.gas_kohm?.history || [];
     const co2History = zone.sensors?.co2?.history || [];
     const vpdHistory = zone.sensors?.vpd?.history || [];
     
     // Get current values as fallback
     const tempCurrent = zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? 20;
     const rhCurrent = zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh ?? 50;
+    const pressureCurrent = zone.sensors?.pressure_hpa?.current ?? zone.pressure_hpa ?? zone.pressure ?? null;
+    const gasCurrent = zone.sensors?.gas_kohm?.current ?? zone.gas_kohm ?? zone.gas ?? null;
     const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? 400;
     const vpdCurrent = zone.sensors?.vpd?.current ?? zone.vpd ?? 1.0;
     
     // Use last 24 data points from history, or create flat line from current value
     const last24Temp = tempHistory.length > 0 ? tempHistory.slice(-24) : Array(24).fill(tempCurrent);
     const last24Humidity = humidityHistory.length > 0 ? humidityHistory.slice(-24) : Array(24).fill(rhCurrent);
+    const last24Pressure = pressureHistory.length > 0 ? pressureHistory.slice(-24) : (pressureCurrent != null ? Array(24).fill(pressureCurrent) : []);
+    const last24Gas = gasHistory.length > 0 ? gasHistory.slice(-24) : (gasCurrent != null ? Array(24).fill(gasCurrent) : []);
     const last24Co2 = co2History.length > 0 ? co2History.slice(-24) : Array(24).fill(co2Current);
     const last24Vpd = vpdHistory.length > 0 ? vpdHistory.slice(-24) : Array(24).fill(vpdCurrent);
     
     console.log('[room-trends] Drawing charts with data:', {
         temp: last24Temp.length,
         humidity: last24Humidity.length,
+        pressure: last24Pressure.length,
+        gas: last24Gas.length,
         co2: last24Co2.length,
         vpd: last24Vpd.length
     });
     
-    // Build datasets, filtering out CO2 if no data
+    // Build datasets, filtering out those with no data
     const datasets = [
         { label: 'Temp °C', data: last24Temp, color: '#3b82f6' },
         { label: 'Humidity %', data: last24Humidity, color: '#10b981' },
         { label: 'VPD kPa', data: last24Vpd, color: '#8b5cf6' }
     ];
+    
+    // Add pressure if data available
+    if (last24Pressure.length > 0 && last24Pressure.some(v => v > 0)) {
+        datasets.push({ label: 'Pressure hPa', data: last24Pressure, color: '#f97316' });
+    }
+    
+    // Add gas if data available
+    if (last24Gas.length > 0 && last24Gas.some(v => v > 0)) {
+        datasets.push({ label: 'Gas kΩ', data: last24Gas, color: '#ec4899' });
+    }
     
     // Only add CO2 if we have actual data
     if (last24Co2.length > 0 && last24Co2.some(v => v > 0)) {
@@ -4673,6 +4717,12 @@ async function loadEnvironmentalView() {
         document.getElementById('env-avg-humidity').textContent = humidityCount > 0
             ? (totalHumidity / humidityCount).toFixed(1) + ' %'
             : '-- %';
+        document.getElementById('env-avg-pressure').textContent = pressureCount > 0
+            ? (totalPressure / pressureCount).toFixed(1) + ' hPa'
+            : 'N/A';
+        document.getElementById('env-avg-gas').textContent = gasCount > 0
+            ? (totalGas / gasCount).toFixed(1) + ' kΩ'
+            : 'N/A';
         document.getElementById('env-avg-co2').textContent = co2Count > 0
             ? Math.round(totalCO2 / co2Count) + ' ppm'
             : '-- ppm';
@@ -4727,6 +4777,8 @@ async function loadEnvironmentalView() {
         console.error('[Environmental] Error loading data:', error);
         document.getElementById('env-avg-temp').textContent = 'Error';
         document.getElementById('env-avg-humidity').textContent = 'Error';
+        document.getElementById('env-avg-pressure').textContent = 'N/A';
+        document.getElementById('env-avg-gas').textContent = 'N/A';
         document.getElementById('env-avg-co2').textContent = 'Error';
         document.getElementById('env-avg-vpd').textContent = 'Error';
         document.getElementById('env-current-all').innerHTML = '<div class="metric-row"><div class="metric-label" style="color: var(--accent-red);">Failed to load environmental data</div></div>';
