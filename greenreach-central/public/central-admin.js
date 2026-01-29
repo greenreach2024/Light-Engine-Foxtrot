@@ -1889,9 +1889,7 @@ async function loadFarmEnvironmentalTrends(farmId) {
         const chartEl = document.getElementById('env-chart');
         if (chartEl && last24Temp.length > 0) {
             chartEl.innerHTML = `
-                <div style="padding: 16px;">
-                    <canvas id="farm-combined-trends-chart" width="1200" height="500"></canvas>
-                </div>
+                <canvas id="farm-combined-trends-chart" width="900" height="350"></canvas>
             `;
             
             // Draw combined horizontal trend lines
