@@ -1682,17 +1682,44 @@
      * @returns {object|null} Live data {tempC, rh, vpd} or null if not found
      */
     function getLiveSensorData(sensor) {
-      if (!STATE.envData?.zones || !sensor?.zone) return null;
+      if (!STATE.envData?.zones || !sensor?.zone) {
+        console.log('[getLiveSensorData] Missing data:', {
+          hasEnvZones: !!STATE.envData?.zones,
+          envZonesCount: STATE.envData?.zones?.length,
+          sensorZone: sensor?.zone,
+          sensorId: sensor?.deviceId || sensor?.id
+        });
+        return null;
+      }
       
       // Match sensor.zone (numeric like 1, 3) to zone ID (string like "zone-1", "zone-3")
       const zoneId = `zone-${sensor.zone}`;
       const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
       
-      if (!zoneData?.sensors) return null;
+      console.log('[getLiveSensorData] Looking for zone:', {
+        sensorZone: sensor.zone,
+        zoneId: zoneId,
+        foundZone: !!zoneData,
+        availableZones: STATE.envData.zones.map(z => z.id)
+      });
+      
+      if (!zoneData?.sensors) {
+        console.log('[getLiveSensorData] Zone found but no sensors:', { zoneId, hasZoneData: !!zoneData });
+        return null;
+      }
       
       const tempC = zoneData.sensors.tempC?.current;
       const rh = zoneData.sensors.rh?.current;
       const vpd = zoneData.sensors.vpd?.current;
+      
+      console.log('[getLiveSensorData] Sensor data:', {
+        zoneId,
+        tempC,
+        rh,
+        vpd,
+        hasTempC: !!zoneData.sensors.tempC,
+        hasRh: !!zoneData.sensors.rh
+      });
       
       return { tempC, rh, vpd };
     }
@@ -2006,12 +2033,20 @@
       const humidities = [];
       const vpds = [];
 
+      console.log('[updateStatusBar] Processing sensors:', STATE.sensors.length, STATE.sensors.map(s => ({
+        id: s.deviceId || s.id,
+        name: s.name,
+        zone: s.zone,
+        hasTelemetry: !!s.telemetry
+      })));
+
       for (const sensor of STATE.sensors) {
         // Try live data first
         let liveData = getLiveSensorData(sensor);
         
         // Fallback to sensor telemetry if live data not available
         if (!liveData && sensor.telemetry) {
+          console.log('[updateStatusBar] Using telemetry fallback for sensor:', sensor.deviceId || sensor.id);
           liveData = {
             tempC: sensor.telemetry.temperature,
             rh: sensor.telemetry.humidity,
@@ -2025,6 +2060,8 @@
           if (liveData.vpd != null) vpds.push(liveData.vpd);
         }
       }
+
+      console.log('[updateStatusBar] Aggregated data:', { temps, humidities, vpds });
 
       // Temperature (display in Celsius)
       if (temps.length > 0) {
