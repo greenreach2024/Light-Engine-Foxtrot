@@ -254,17 +254,21 @@ async function loadFarmData() {
             
             if (currentSession.subscription) {
                 const badge = document.getElementById('subscriptionBadge');
-                badge.textContent = currentSession.subscription.plan.toUpperCase() + ' PLAN';
+                if (badge) {
+                    badge.textContent = currentSession.subscription.plan.toUpperCase() + ' PLAN';
+                }
             }
             
             // Update GreenReach connection status
             const statusEl = document.getElementById('greenreach-status');
-            if (farmData.status === 'active' || farmData.summary) {
-                statusEl.textContent = 'CONNECTED';
-                statusEl.classList.remove('disconnected');
-            } else {
-                statusEl.textContent = 'DISCONNECTED';
-                statusEl.classList.add('disconnected');
+            if (statusEl) {
+                if (farmData.status === 'active' || farmData.summary) {
+                    statusEl.textContent = 'CONNECTED';
+                    statusEl.classList.remove('disconnected');
+                } else {
+                    statusEl.textContent = 'DISCONNECTED';
+                    statusEl.classList.add('disconnected');
+                }
             }
         }
         
