@@ -5779,7 +5779,7 @@ async function loadRecipes() {
         
         recipesData = data.recipes || [];
         console.log('[Recipes] Loaded', recipesData.length, 'recipes');
-        renderRecipesTable(recipesData);
+        renderRecipesTableDetailed(recipesData);
         updateRecipeStats(recipesData);
         
     } catch (error) {
