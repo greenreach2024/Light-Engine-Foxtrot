@@ -1,0 +1,233 @@
+/**
+ * AI Recommendations Pusher Service
+ * 
+ * Periodically analyzes all farms using GPT-4 and pushes recommendations to edge devices
+ */
+
+import OpenAI from 'openai';
+import { query } from '../config/database.js';
+import fetch from 'node-fetch';
+
+let openai = null;
+try {
+  if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    console.log('[AI Pusher] OpenAI initialized');
+  } else {
+    console.warn('[AI Pusher] OPENAI_API_KEY not set - service disabled');
+  }
+} catch (error) {
+  console.error('[AI Pusher] Failed to initialize OpenAI:', error.message);
+}
+
+// API key for authenticating with edge devices
+const EDGE_API_KEY = process.env.GREENREACH_API_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+/**
+ * Analyze a single farm and generate recommendations
+ */
+async function analyzeFarm(farm) {
+  try {
+    // 1. Fetch environmental telemetry
+    const telemetryResult = await query(
+      `SELECT data FROM farm_data 
+       WHERE farm_id = $1 AND data_type = 'telemetry' 
+       ORDER BY timestamp DESC LIMIT 1`,
+      [farm.farm_id]
+    );
+    
+    if (telemetryResult.rows.length === 0) {
+      console.log(`[AI Pusher] No telemetry for ${farm.farm_id}`);
+      return null;
+    }
+
+    const telemetry = telemetryResult.rows[0].data;
+    const zones = telemetry.environmental?.zones || [];
+    
+    if (zones.length === 0) {
+      console.log(`[AI Pusher] No zones for ${farm.farm_id}`);
+      return null;
+    }
+
+    // 2. Build analysis prompt
+    let prompt = `Analyze this farm's environmental conditions and provide actionable recommendations:\n\n`;
+    prompt += `FARM: ${farm.name} (${farm.farm_id})\n`;
+    prompt += `Type: ${farm.farm_type || 'Controlled Environment Agriculture'}\n\n`;
+    
+    prompt += `CURRENT CONDITIONS:\n`;
+    zones.forEach(zone => {
+      const sensor = zone.sensors?.[0];
+      if (sensor && sensor.readings) {
+        prompt += `Zone "${zone.zone_name || zone.zone_id}":\n`;
+        prompt += `  - Temperature: ${sensor.readings.temperature_c}°C\n`;
+        prompt += `  - Humidity: ${sensor.readings.humidity}%\n`;
+        if (sensor.readings.pressure_hpa) {
+          prompt += `  - Pressure: ${sensor.readings.pressure_hpa} hPa\n`;
+        }
+      }
+    });
+    
+    prompt += `\n`;
+    prompt += `Provide 1-3 HIGH PRIORITY actionable recommendations. Format as:\n`;
+    prompt += `1. [RECOMMENDATION TEXT]\n`;
+    prompt += `2. [RECOMMENDATION TEXT]\n`;
+    prompt += `Focus on: Temperature/humidity optimization, equipment adjustments, crop health.\n`;
+
+    // 3. Call GPT-4
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert agricultural AI monitoring multiple farms. Provide brief, actionable recommendations (1-2 sentences each) for farm operators."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 300
+    });
+
+    const aiResponse = completion.choices[0].message.content;
+    
+    // 4. Parse recommendations
+    const recommendations = [];
+    const lines = aiResponse.split('\n').filter(line => line.trim());
+    
+    for (const line of lines) {
+      // Match numbered recommendations: "1. Text" or "1) Text" or "• Text"
+      const match = line.match(/^(?:\d+[\.\)]\s*|[•\-]\s*)(.+)$/);
+      if (match) {
+        const text = match[1].trim();
+        recommendations.push({
+          message: text,
+          recommendation: text,
+          zones: zones.map(z => z.zone_name || z.zone_id),
+          priority: 'high',
+          source: 'GPT-4 Analysis',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    if (recommendations.length === 0) {
+      console.log(`[AI Pusher] No structured recommendations from GPT-4 for ${farm.farm_id}`);
+      return null;
+    }
+
+    return recommendations;
+
+  } catch (error) {
+    console.error(`[AI Pusher] Error analyzing ${farm.farm_id}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Push recommendations to farm's edge device
+ */
+async function pushToFarm(farm, recommendations) {
+  if (!farm.url) {
+    console.log(`[AI Pusher] No URL for farm ${farm.farm_id}`);
+    return false;
+  }
+
+  const payload = {
+    farm_id: farm.farm_id,
+    generated_at: new Date().toISOString(),
+    recommendations: recommendations
+  };
+
+  try {
+    const response = await fetch(`${farm.url}/api/health/ai-recommendations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': EDGE_API_KEY
+      },
+      body: JSON.stringify(payload),
+      timeout: 10000
+    });
+
+    if (response.ok) {
+      console.log(`[AI Pusher] ✅ Pushed ${recommendations.length} recommendations to ${farm.farm_id}`);
+      return true;
+    } else {
+      console.error(`[AI Pusher] ❌ Farm ${farm.farm_id} returned ${response.status}`);
+      return false;
+    }
+
+  } catch (error) {
+    console.error(`[AI Pusher] ❌ Failed to push to ${farm.farm_id}:`, error.message);
+    return false;
+  }
+}
+
+/**
+ * Analyze all farms and push recommendations
+ */
+export async function analyzeAndPushToAllFarms() {
+  if (!openai) {
+    console.log('[AI Pusher] Service disabled (no OpenAI API key)');
+    return { analyzed: 0, pushed: 0 };
+  }
+
+  console.log('[AI Pusher] Starting farm analysis cycle...');
+  
+  try {
+    // Get all active farms
+    const farmsResult = await query(
+      `SELECT farm_id, name, url, farm_type FROM farms WHERE url IS NOT NULL`
+    );
+    
+    const farms = farmsResult.rows;
+    console.log(`[AI Pusher] Found ${farms.length} farms with URLs`);
+
+    let analyzed = 0;
+    let pushed = 0;
+
+    for (const farm of farms) {
+      console.log(`[AI Pusher] Analyzing ${farm.name} (${farm.farm_id})...`);
+      
+      const recommendations = await analyzeFarm(farm);
+      
+      if (recommendations && recommendations.length > 0) {
+        analyzed++;
+        const success = await pushToFarm(farm, recommendations);
+        if (success) pushed++;
+        
+        // Small delay between farms
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    console.log(`[AI Pusher] Cycle complete: ${analyzed} analyzed, ${pushed} pushed`);
+    return { analyzed, pushed, total: farms.length };
+
+  } catch (error) {
+    console.error('[AI Pusher] Error in cycle:', error);
+    return { error: error.message };
+  }
+}
+
+/**
+ * Start periodic analysis (every 30 minutes)
+ */
+export function startAIPusher() {
+  if (!openai) {
+    console.log('[AI Pusher] Service disabled');
+    return null;
+  }
+
+  console.log('[AI Pusher] Starting periodic service (30 min intervals)');
+  
+  // Run immediately on start
+  analyzeAndPushToAllFarms();
+  
+  // Then run every 30 minutes
+  const interval = setInterval(analyzeAndPushToAllFarms, 30 * 60 * 1000);
+  
+  return interval;
+}

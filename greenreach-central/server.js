@@ -36,6 +36,7 @@ import { startHealthCheckService } from './services/healthCheck.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
+import { startAIPusher } from './services/ai-recommendations-pusher.js';
 // import deadlineMonitor from '../services/deadline-monitor.js'; // Not available in standalone deployment
 import logger from './utils/logger.js';
 
@@ -275,6 +276,7 @@ async function startServer() {
       logger.info('Starting background services...');
       startHealthCheckService(app);
       startSyncMonitor(app);
+      startAIPusher(); // AI recommendations pusher (GPT-4)
       
       // Start deadline monitor for wholesale orders (disabled in standalone deployment)
       // logger.info('Starting deadline monitor service...');
