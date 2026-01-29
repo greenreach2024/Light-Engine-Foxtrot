@@ -3342,19 +3342,6 @@ function renderRecipesTable(recipes) {
 }
 
 /**
- * Edit recipe
- */
-function editRecipe(recipeId) {
-    const recipe = recipesData.find(r => r.recipe_id === recipeId);
-    if (!recipe) {
-        alert('Recipe not found');
-        return;
-    }
-    
-    alert(`Edit Recipe: ${recipe.name}\n\nRecipe editing UI will be implemented in the next phase.`);
-}
-
-/**
  * View recipe details
  */
 function viewRecipeDetails(recipeId) {
