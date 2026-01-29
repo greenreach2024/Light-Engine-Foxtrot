@@ -4999,15 +4999,18 @@ app.get('/env', async (req, res) => {
     const snapshot = preEnvStore.getSnapshot();
     const zonesFromScopes = Object.entries(snapshot.scopes || {}).map(([scopeId, scopeData]) => {
       const sensors = Object.entries(scopeData.sensors || {}).reduce((acc, [sensorKey, sensorData]) => {
-        // Limit history to last 12 points (1 hour at 5min intervals) for performance
+        // Limit history to last 100 points for trending charts
         const fullHistory = Array.isArray(sensorData.history) ? sensorData.history : [];
-        const limitedHistory = fullHistory.slice(-12);
+        const fullTimestamps = Array.isArray(sensorData.timestamps) ? sensorData.timestamps : [];
+        const limitedHistory = fullHistory.slice(-100);
+        const limitedTimestamps = fullTimestamps.slice(-100);
         
         acc[sensorKey] = {
           current: sensorData.value,
           unit: sensorData.unit || null,
           observedAt: sensorData.observedAt || null,
           history: limitedHistory,
+          timestamps: limitedTimestamps,
           setpoint: snapshot.targets?.[scopeId]?.[sensorKey] || null
         };
         return acc;

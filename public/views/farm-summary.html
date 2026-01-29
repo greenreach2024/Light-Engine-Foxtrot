@@ -5834,6 +5834,54 @@
 
     function buildHistoryFromZone(zone) {
       const sensors = zone?.sensors || {};
+      
+      // Check if timestamps are available in the sensor data
+      const hasTimestamps = sensors.tempC?.timestamps && Array.isArray(sensors.tempC.timestamps) && sensors.tempC.timestamps.length > 0;
+      
+      if (hasTimestamps) {
+        // Use actual timestamps from sensor data
+        const tempTimestamps = sensors.tempC?.timestamps || [];
+        const rhTimestamps = sensors.rh?.timestamps || [];
+        const co2Timestamps = sensors.co2?.timestamps || [];
+        const vpdTimestamps = sensors.vpd?.timestamps || [];
+        
+        // Find the longest timestamp array to use as the base
+        const allTimestamps = [tempTimestamps, rhTimestamps, co2Timestamps, vpdTimestamps];
+        const primaryTimestamps = allTimestamps.reduce((longest, current) => 
+          current.length > longest.length ? current : longest, []);
+        
+        if (primaryTimestamps.length === 0) {
+          // Fall back to current value only
+          const now = new Date().toISOString();
+          return [{
+            timestamp: now,
+            temperature: Number.isFinite(sensors.tempC?.current) ? Number(sensors.tempC.current) : null,
+            humidity: Number.isFinite(sensors.rh?.current) ? Number(sensors.rh.current) : null,
+            co2: Number.isFinite(sensors.co2?.current) ? Number(sensors.co2.current) : null,
+            vpd: Number.isFinite(sensors.vpd?.current) ? Number(sensors.vpd.current) : null
+          }];
+        }
+        
+        // Build series using actual timestamps
+        const series = primaryTimestamps.map((timestamp, index) => ({
+          timestamp,
+          temperature: getHistoryValue(sensors.tempC, index),
+          humidity: getHistoryValue(sensors.rh, index),
+          co2: getHistoryValue(sensors.co2, index),
+          vpd: getHistoryValue(sensors.vpd, index)
+        }));
+        
+        console.log('[Chart] Using real timestamps from sensor data:', {
+          points: series.length,
+          firstTimestamp: series[0]?.timestamp,
+          lastTimestamp: series[series.length - 1]?.timestamp
+        });
+        
+        return series;
+      }
+      
+      // FALLBACK: Old behavior for sensors without timestamps
+      console.warn('[Chart] No timestamps in sensor data, using estimated intervals');
       const histories = [
         sensors.tempC?.history,
         sensors.rh?.history,
