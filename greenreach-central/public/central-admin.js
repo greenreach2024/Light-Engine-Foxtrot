@@ -1889,18 +1889,23 @@ async function loadFarmEnvironmentalTrends(farmId) {
         const chartEl = document.getElementById('env-chart');
         if (chartEl && last24Temp.length > 0) {
             chartEl.innerHTML = `
-                <canvas id="farm-combined-trends-chart" width="900" height="350"></canvas>
+                <canvas id="farm-combined-trends-chart"></canvas>
             `;
             
+            // Build datasets, filtering out CO2 if no data
+            const datasets = [
+                { label: 'Temperature °C', data: last24Temp, color: '#3b82f6' },
+                { label: 'Humidity %', data: last24Humidity, color: '#10b981' },
+                { label: 'VPD kPa', data: last24Vpd.length > 0 ? last24Vpd : [], color: '#8b5cf6' }
+            ].filter(dataset => dataset.data.length > 0);
+            
+            // Only add CO2 if we have actual data
+            if (last24Co2.length > 0 && last24Co2.some(v => v > 0)) {
+                datasets.splice(2, 0, { label: 'CO₂ ppm', data: last24Co2, color: '#f59e0b' });
+            }
+            
             // Draw combined horizontal trend lines
-            drawCombinedTrendsChart('farm-combined-trends-chart', {
-                datasets: [
-                    { label: 'Temperature °C', data: last24Temp, color: '#3b82f6' },
-                    { label: 'Humidity %', data: last24Humidity, color: '#10b981' },
-                    { label: 'CO₂ ppm', data: last24Co2.length > 0 ? last24Co2 : [], color: '#f59e0b' },
-                    { label: 'VPD kPa', data: last24Vpd.length > 0 ? last24Vpd : [], color: '#8b5cf6' }
-                ].filter(dataset => dataset.data.length > 0)
-            });
+            drawCombinedTrendsChart('farm-combined-trends-chart', { datasets });
         }
     } catch (error) {
         console.error('[Farm Trends] Error loading trends:', error);
@@ -2239,15 +2244,20 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
         vpd: last24Vpd.length
     });
     
-    // Draw combined chart with all metrics
-    drawCombinedTrendsChart('room-combined-trends-chart', {
-        datasets: [
-            { label: 'Temperature (°C)', data: last24Temp, color: '#3b82f6', yAxisId: 'temp' },
-            { label: 'Humidity (%)', data: last24Humidity, color: '#10b981', yAxisId: 'humidity' },
-            { label: 'CO₂ (ppm)', data: last24Co2, color: '#f59e0b', yAxisId: 'co2' },
-            { label: 'VPD (kPa)', data: last24Vpd, color: '#8b5cf6', yAxisId: 'vpd' }
-        ]
-    });
+    // Build datasets, filtering out CO2 if no data
+    const datasets = [
+        { label: 'Temp °C', data: last24Temp, color: '#3b82f6' },
+        { label: 'Humidity %', data: last24Humidity, color: '#10b981' },
+        { label: 'VPD kPa', data: last24Vpd, color: '#8b5cf6' }
+    ];
+    
+    // Only add CO2 if we have actual data
+    if (last24Co2.length > 0 && last24Co2.some(v => v > 0)) {
+        datasets.splice(2, 0, { label: 'CO₂ ppm', data: last24Co2, color: '#f59e0b' });
+    }
+    
+    // Draw combined chart with all available metrics
+    drawCombinedTrendsChart('room-combined-trends-chart', { datasets });
 }
 
 /**
@@ -2291,35 +2301,33 @@ function drawCombinedTrendsChart(canvasId, config) {
         return;
     }
     
+    // Make canvas responsive to container
+    const container = canvas.parentElement;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight || 380;
+    
+    // Set canvas size to match container (accounting for device pixel ratio)
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = containerWidth * dpr;
+    canvas.height = containerHeight * dpr;
+    canvas.style.width = containerWidth + 'px';
+    canvas.style.height = containerHeight + 'px';
+    
     const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-    const padding = { top: 45, right: 120, bottom: 45, left: 120 };
+    ctx.scale(dpr, dpr);
+    
+    const width = containerWidth;
+    const height = containerHeight;
+    const padding = { top: 50, right: 110, bottom: 50, left: 110 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Draw background with rounded corners
-    ctx.fillStyle = '#1a1a1a';
-    if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(0, 0, width, height, 12);
-        ctx.fill();
-    } else {
-        ctx.fillRect(0, 0, width, height);
-    }
-    
-    // Draw chart area background with rounded corners
-    ctx.fillStyle = '#0a0a0a';
-    if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(padding.left, padding.top, chartWidth, chartHeight, 8);
-        ctx.fill();
-    } else {
-        ctx.fillRect(padding.left, padding.top, chartWidth, chartHeight);
-    }
+    // Draw chart area background (match card background)
+    ctx.fillStyle = '#1a202c';
+    ctx.fillRect(padding.left, padding.top, chartWidth, chartHeight);
     
     // Draw grid lines (horizontal)
     ctx.strokeStyle = '#333';
@@ -2398,17 +2406,11 @@ function drawCombinedTrendsChart(canvasId, config) {
         ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw label on the left (shorten long labels to fit)
+        // Draw label on the left
         ctx.fillStyle = dataset.color;
-        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
         ctx.textAlign = 'right';
-        // Shorten labels to prevent cutoff
-        let displayLabel = dataset.label;
-        if (displayLabel.includes('Temperature')) displayLabel = 'Temp °C';
-        if (displayLabel.includes('Humidity')) displayLabel = 'Humidity %';
-        if (displayLabel.includes('CO₂')) displayLabel = 'CO₂ ppm';
-        if (displayLabel.includes('VPD')) displayLabel = 'VPD kPa';
-        ctx.fillText(displayLabel, padding.left - 10, bandCenter + 4);
+        ctx.fillText(dataset.label, padding.left - 12, bandCenter + 5);
         
         // Draw current value on the right
         ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
@@ -2422,21 +2424,15 @@ function drawCombinedTrendsChart(canvasId, config) {
     });
     
     // Draw time axis labels at bottom
-    ctx.fillStyle = '#888';
-    ctx.font = '11px system-ui, -apple-system, sans-serif';
+    ctx.fillStyle = '#718096';
+    ctx.font = '12px system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
     
     const timeLabels = ['24h ago', '18h', '12h', '6h', 'Now'];
     timeLabels.forEach((label, index) => {
         const x = padding.left + (chartWidth * index / (timeLabels.length - 1));
-        ctx.fillText(label, x, height - 25);
+        ctx.fillText(label, x, height - 20);
     });
-    
-    // Draw title at top
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Environmental Trends (24h)', padding.left, 30);
 }
 
 /**

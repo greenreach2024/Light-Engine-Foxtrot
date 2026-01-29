@@ -645,6 +645,22 @@
             font-size: 13px;
         }
 
+        .chart-container {
+            width: 100%;
+            height: 100%;
+            min-height: 350px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-container canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
         .grid-2col {
             display: grid;
             grid-template-columns: 1fr;
@@ -1098,9 +1114,9 @@
                         <div class="card-header">
                             <div class="card-title">Environmental Trends (24h)</div>
                         </div>
-                        <div class="card-body">
-                            <div class="chart-placeholder" id="env-chart">
-                                Chart: Temperature, Humidity, CO2, VPD
+                        <div class="card-body" style="padding: 0;">
+                            <div class="chart-container" id="env-chart">
+                                <div style="color: var(--text-muted); font-size: 13px;">Loading trends...</div>
                             </div>
                         </div>
                     </div>
@@ -1514,9 +1530,9 @@
                     <div class="card-header">
                         <div class="card-title">Environmental Trends (24 Hours)</div>
                     </div>
-                    <div class="card-body">
-                        <div id="room-trends-chart">
-                            <canvas id="room-combined-trends-chart" width="900" height="350"></canvas>
+                    <div class="card-body" style="padding: 0;">
+                        <div class="chart-container" id="room-trends-chart">
+                            <canvas id="room-combined-trends-chart"></canvas>
                         </div>
                     </div>
                 </div>
