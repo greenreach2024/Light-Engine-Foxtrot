@@ -1692,8 +1692,17 @@
         return null;
       }
       
-      // Match sensor.zone (numeric like 1, 3) to zone ID (string like "zone-1", "zone-3")
-      const zoneId = `zone-${sensor.zone}`;
+      // Match sensor.zone - it could be:
+      // 1. A full zone ID like "room-knukf2:1" (matches ENV directly)
+      // 2. A numeric value like 1 or "1" (needs to be formatted as "zone-1")
+      // 3. A compound ID like "zone-1" (matches ENV directly)
+      let zoneId = sensor.zone;
+      
+      // If it's a simple number, format it as "zone-N"
+      if (typeof sensor.zone === 'number' || /^\d+$/.test(sensor.zone)) {
+        zoneId = `zone-${sensor.zone}`;
+      }
+      
       const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
       
       console.log('[getLiveSensorData] Looking for zone:', {
@@ -1738,7 +1747,12 @@
     function getSensorTargets(sensor) {
       if (!STATE.envData?.zones || !sensor?.zone) return null;
       
-      const zoneId = `zone-${sensor.zone}`;
+      // Handle different zone ID formats (see getLiveSensorData)
+      let zoneId = sensor.zone;
+      if (typeof sensor.zone === 'number' || /^\d+$/.test(sensor.zone)) {
+        zoneId = `zone-${sensor.zone}`;
+      }
+      
       const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
       
       if (!zoneData?.sensors) return null;
@@ -1759,7 +1773,12 @@
     function getSensorHistory(sensor, metric) {
       if (!STATE.envData?.zones || !sensor?.zone) return [];
       
-      const zoneId = `zone-${sensor.zone}`;
+      // Handle different zone ID formats (see getLiveSensorData)
+      let zoneId = sensor.zone;
+      if (typeof sensor.zone === 'number' || /^\d+$/.test(sensor.zone)) {
+        zoneId = `zone-${sensor.zone}`;
+      }
+      
       const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
       
       if (!zoneData?.sensors) return [];
