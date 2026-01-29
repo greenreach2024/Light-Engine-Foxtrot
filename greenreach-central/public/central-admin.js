@@ -3221,49 +3221,37 @@ function renderInventoryTable() {
  */
 async function loadFarmRecipes(farmId) {
     try {
-        // Fetch farm-specific active recipes from admin API
-        const url = `${API_BASE}/api/admin/farms/${farmId}/groups`;
-        console.log('[FarmRecipes] Fetching active recipes for farm:', farmId);
-        const response = await authenticatedFetch(url);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/recipes`);
         
         if (!response || !response.ok) {
-            console.error('Failed to load farm recipes:', response?.status || 'error');
+            console.error('Failed to load recipes:', response?.status || 'error');
             recipesData = [];
             renderRecipesTable();
             return;
         }
         
         const data = await response.json();
-        console.log('[FarmRecipes] Farm recipes response:', data);
-        
-        // Map recipes from groups - each group represents a recipe in use
-        // Group by recipe/plan to avoid duplicates
-        const recipeMap = new Map();
-        (data.groups || []).forEach(group => {
-            const recipeName = group.recipe || group.plan || 'Unknown Recipe';
-            const planId = group.plan || group.recipe || 'unknown';
-            
-            if (recipeMap.has(planId)) {
-                const existing = recipeMap.get(planId);
-                existing.activeGroups++;
-                existing.activeTrays += (group.trays || 0);
-            } else {
-                recipeMap.set(planId, {
-                    name: recipeName,
-                    category: group.category || 'Leafy Greens',
-                    total_days: group.planConfig?.duration || 28,
-                    schedule_length: group.planConfig?.duration || 28,
-                    activeGroups: 1,
-                    activeTrays: group.trays || 0,
-                    plan: planId
-                });
-            }
-        });
-        
-        recipesData = Array.from(recipeMap.values());
-        console.log('[FarmRecipes] Mapped recipes:', recipesData);
+        recipesData = (data.recipes || []).map(recipe => ({
+            recipe_id: recipe.recipe_id,
+            name: recipe.name,
+            cropType: recipe.crop_type,
+            activeTrays: recipe.active_trays || 0,
+            cycleDuration: `${recipe.cycle_duration_days} days`,
+            avgHarvestTime: `${recipe.cycle_duration_days} days`,
+            variance: '0d',
+            successRate: '100%',
+            description: recipe.description,
+            lightSchedule: recipe.light_schedule,
+            harvestCriteria: recipe.harvest_criteria
+        }));
         
         renderRecipesTable();
+    } catch (error) {
+        console.error('Error loading recipes:', error);
+        recipesData = [];
+        renderRecipesTable();
+    }
+}
     } catch (error) {
         console.error('Error loading farm recipes:', error);
         recipesData = [];
