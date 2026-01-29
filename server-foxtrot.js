@@ -600,6 +600,7 @@ async function writeJsonQueued(fullPath, jsonString) {
 
 // In-memory caches for hot data paths
 let __envCache = null; // { zones: [...], updatedAt?: ISO }
+let __envCacheMtimeMs = null;
 let __envWriteInFlight = false;
 let __envDirty = false;
 
@@ -2564,11 +2565,27 @@ function readJsonSafe(filePath, fallback = null) {
 
 // --- ENV hot path helpers: in-memory cache + async write queue ---
 async function ensureEnvCacheLoaded() {
-  if (__envCache) return __envCache;
+  if (__envCache) {
+    try {
+      if (fs.existsSync(ENV_PATH)) {
+        const stat = await fs.promises.stat(ENV_PATH);
+        if (__envCacheMtimeMs && stat.mtimeMs <= __envCacheMtimeMs) {
+          return __envCache;
+        }
+      } else {
+        return __envCache;
+      }
+    } catch (error) {
+      console.warn('[env] Failed to stat env.json, using cache:', error?.message || error);
+      return __envCache;
+    }
+  }
   try {
     if (fs.existsSync(ENV_PATH)) {
+      const stat = await fs.promises.stat(ENV_PATH);
       const raw = await fs.promises.readFile(ENV_PATH, 'utf8');
       __envCache = JSON.parse(raw || '{"zones":[]}');
+      __envCacheMtimeMs = stat.mtimeMs;
       if (!__envCache || typeof __envCache !== 'object') __envCache = { zones: [] };
       if (!Array.isArray(__envCache.zones)) __envCache.zones = [];
 
@@ -2633,10 +2650,12 @@ async function ensureEnvCacheLoaded() {
       }
     } else {
       __envCache = { zones: [] };
+      __envCacheMtimeMs = null;
     }
   } catch (error) {
     console.warn('[env] Failed to load env.json, starting empty:', error?.message || error);
     __envCache = { zones: [] };
+    __envCacheMtimeMs = null;
   }
   return __envCache;
 }
@@ -5080,6 +5099,29 @@ app.get('/env', async (req, res) => {
     // allZones is already filtered to only real zones (zone-1, zone-2, zone-3)
     // showAllZones query param can bypass for debugging, but still filter mocks/sensors
     const zones = req.query.showAllZones === 'true' ? allZones : allZones;
+    const zonesUpdatedAt = zones.reduce((latest, zone) => {
+      const candidateValues = [
+        zone?.updatedAt,
+        zone?.meta?.lastUpdated,
+        ...Object.values(zone?.sensors || {}).flatMap((sensor) => [
+          sensor?.updatedAt,
+          sensor?.observedAt
+        ])
+      ].filter(Boolean);
+      for (const value of candidateValues) {
+        const ts = Date.parse(value);
+        if (Number.isFinite(ts) && (!latest || ts > latest)) {
+          latest = ts;
+        }
+      }
+      return latest;
+    }, null);
+    const payloadUpdatedAt = zonesPayload.meta?.updatedAt || null;
+    const resolvedUpdatedAt = [payloadUpdatedAt, zonesUpdatedAt]
+      .map((value) => Date.parse(value))
+      .filter((ts) => Number.isFinite(ts))
+      .reduce((max, ts) => (max == null || ts > max ? ts : max), null);
+    const resolvedUpdatedAtIso = resolvedUpdatedAt ? new Date(resolvedUpdatedAt).toISOString() : payloadUpdatedAt || null;
     const legacyEnvState = readEnv();
     const automationState = evaluateRoomAutomationState(snapshot, zones, legacyEnvState, zoneBindingSummary);
     const aiBundle = buildAiAdvisory(automationState.rooms, legacyEnvState);
@@ -5124,7 +5166,7 @@ app.get('/env', async (req, res) => {
         totalSuggestions: automationState.totalSuggestions,
         provider: zonesPayload.meta?.provider || null,
         cache: Boolean(zonesPayload.meta?.cached),
-        updatedAt: zonesPayload.meta?.updatedAt || null,
+        updatedAt: resolvedUpdatedAtIso,
         error: zonesPayload.meta?.error || null,
         zoneBindingsUpdatedAt: zoneBindingSummary.meta?.updatedAt || null,
         zoneBindingsSource: zoneBindingSummary.meta?.source || null,
@@ -19599,7 +19641,21 @@ async function loadEnvZonesPayload(query = {}) {
 // Expected body: { zoneId, name, temperature, humidity, vpd, co2, battery, rssi, source }
 app.post("/ingest/env", async (req, res) => {
   try {
-    const { zoneId, name, temperature, humidity, vpd, co2, battery, rssi, source } = req.body || {};
+    const {
+      zoneId,
+      name,
+      temperature,
+      humidity,
+      vpd,
+      co2,
+      pressureHpa,
+      gasKohm,
+      pressure,
+      gas,
+      battery,
+      rssi,
+      source
+    } = req.body || {};
     if (!zoneId) return res.status(400).json({ ok: false, error: "zoneId required" });
     
     // Load/ensure in-memory state
@@ -19632,10 +19688,15 @@ app.post("/ingest/env", async (req, res) => {
         zone.sensors[k].history = [val, ...(zone.sensors[k].history || [])].slice(0, 100);
       }
     };
+    const resolvedPressure = pressureHpa ?? pressure;
+    const resolvedGas = gasKohm ?? gas;
+
     ensure("tempC", temperature);
     ensure("rh", humidity);
     ensure("vpd", calculatedVpd);
     ensure("co2", co2);
+    ensure("pressureHpa", resolvedPressure);
+    ensure("gasKohm", resolvedGas);
 
   // Persist in the background; coalesce high-churn writes
   persistEnvCache().catch((e)=>console.warn('[env] async persist failed:', e?.message || e));

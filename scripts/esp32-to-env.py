@@ -7,6 +7,8 @@ Reads BME680 sensor data via USB serial and updates env.json
 import serial
 import serial.tools.list_ports
 import json
+import urllib.request
+import urllib.error
 import time
 import sys
 from pathlib import Path
@@ -124,6 +126,11 @@ def update_env_json(data):
     
     avg = data['averaged']
     now = datetime.now(timezone.utc).isoformat()
+    temp_c = avg.get('temperature_c')
+    humidity = avg.get('humidity')
+    pressure_hpa = avg.get('pressure_hpa') or data.get('bme680', {}).get('pressure_hpa')
+    gas_kohms = avg.get('gas_kohms') or data.get('bme680', {}).get('gas_kohms')
+    vpd_value = None
     
     # Find or create zone
     zones = env_data.get('zones', [])
@@ -172,29 +179,27 @@ def update_env_json(data):
         sensor['history'] = sensor['history'][:100]
     
     # Update temperature (°C)
-    if 'temperature_c' in avg:
-        update_sensor('tempC', avg['temperature_c'], '°C', 20, 24)
+    if temp_c is not None:
+        update_sensor('tempC', temp_c, '°C', 20, 24)
     
     # Update humidity (%)
-    if 'humidity' in avg:
-        update_sensor('rh', avg['humidity'], '%', 58, 65)
+    if humidity is not None:
+        update_sensor('rh', humidity, '%', 58, 65)
     
     # Update pressure (hPa) - NEW
-    if 'pressure_hpa' in avg:
-        update_sensor('pressureHpa', avg['pressure_hpa'], 'hPa', None, None)
+    if pressure_hpa is not None:
+        update_sensor('pressureHpa', pressure_hpa, 'hPa', None, None)
     
     # Update gas resistance (kΩ) - NEW  
-    if 'gas_kohms' in avg:
-        update_sensor('gasKohm', avg['gas_kohms'], 'kΩ', None, None)
+    if gas_kohms is not None:
+        update_sensor('gasKohm', gas_kohms, 'kΩ', None, None)
     
     # Calculate and update VPD
-    if 'temperature_c' in avg and 'humidity' in avg:
-        temp_c = avg['temperature_c']
-        rh = avg['humidity']
+    if temp_c is not None and humidity is not None:
         # VPD calculation: SVP * (1 - RH/100)
         svp = 0.6108 * (2.71828 ** ((17.27 * temp_c) / (temp_c + 237.3)))
-        vpd = svp * (1 - rh / 100)
-        update_sensor('vpd', round(vpd, 2), 'kPa', 0.9, 1.05)
+        vpd_value = svp * (1 - humidity / 100)
+        update_sensor('vpd', round(vpd_value, 2), 'kPa', 0.9, 1.05)
     
     # Update metadata
     zone['meta']['source'] = 'esp32-bme680'
@@ -215,11 +220,40 @@ def update_env_json(data):
         json.dump(env_data, f, indent=2)
     temp_path.replace(env_path)
     
-    temp = avg.get('temperature_c', '?')
-    humidity = avg.get('humidity', '?')
-    pressure = avg.get('pressure_hpa', '?')
-    gas = avg.get('gas_kohms', '?')
-    print(f"[{now}] {temp}°C, {humidity}%, {pressure}hPa, {gas}kΩ")
+    post_ingest_env(temp_c, humidity, vpd_value, pressure_hpa, gas_kohms)
+
+    temp = temp_c if temp_c is not None else '?'
+    rh = humidity if humidity is not None else '?'
+    pressure = pressure_hpa if pressure_hpa is not None else '?'
+    gas = gas_kohms if gas_kohms is not None else '?'
+    print(f"[{now}] {temp}°C, {rh}%, {pressure}hPa, {gas}kΩ")
+
+def post_ingest_env(temp_c, humidity, vpd_value, pressure_hpa, gas_kohms):
+    """Send latest readings to Light Engine ingest endpoint to refresh cache."""
+    payload = {
+        'zoneId': ZONE_ID,
+        'name': ZONE_NAME,
+        'temperature': temp_c,
+        'humidity': humidity,
+        'vpd': round(vpd_value, 2) if isinstance(vpd_value, float) else vpd_value,
+        'pressureHpa': pressure_hpa,
+        'gasKohm': gas_kohms,
+        'source': 'esp32-bme680'
+    }
+
+    try:
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            'http://127.0.0.1:8091/ingest/env',
+            data=data,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            if resp.status >= 400:
+                print(f"[ingest] Failed: HTTP {resp.status}")
+    except urllib.error.URLError as err:
+        print(f"[ingest] Error posting to Light Engine: {err}")
 
 def main():
     print("=" * 60)

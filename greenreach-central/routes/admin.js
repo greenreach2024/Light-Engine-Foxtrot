@@ -492,8 +492,16 @@ router.get('/analytics/aggregate', async (req, res) => {
                     row.data.forEach(group => {
                         // Count unique zones, not groups
                         if (group.zone) uniqueZones.add(group.zone);
-                        totalTrays += group.trays || 0;
-                        totalPlants += group.plants || 0;
+
+                        const trayCount = Array.isArray(group.trays)
+                            ? group.trays.length
+                            : (Number.isFinite(group.trays) ? group.trays : 0);
+                        totalTrays += trayCount;
+
+                        const plants = Number.isFinite(group.plants)
+                            ? group.plants
+                            : (trayCount > 0 ? trayCount * 48 : 0);
+                        totalPlants += plants;
                     });
                 }
             });
@@ -542,8 +550,10 @@ router.post('/farms/sync-all-stats', async (req, res) => {
             sync: {
                 total: farms.length,
                 farms: farms.map(f => ({ farm_id: f.farm_id, name: f.name })),
-                message: 'Farms are automatically syncing via edge sync service',
-                note: 'Edge devices sync rooms, groups, inventory, and telemetry every 30-300 seconds'
+                message: 'Farms are automatically syncing via edge sync service.',
+                note: farms.length === 1
+                    ? '1 farm was online at the time of query. Edge devices sync rooms, groups, inventory, and telemetry every 30-300 seconds.'
+                    : `${farms.length} farms were online at the time of query. Edge devices sync rooms, groups, inventory, and telemetry every 30-300 seconds.`
             }
         });
     } catch (error) {

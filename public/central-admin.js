@@ -1515,6 +1515,131 @@ async function viewFarmDetail(farmId) {
 /**
  * Load farm details
  */
+async function buildFarmEquipmentSummary(farmId, farm) {
+    const roomsList = Array.isArray(farm.rooms) ? farm.rooms : [];
+    const zonesList = Array.isArray(farm.zones) ? farm.zones : (Array.isArray(farm.environmental?.zones) ? farm.environmental.zones : []);
+    const roomsCount = Number.isFinite(farm.rooms) ? farm.rooms : roomsList.length;
+    const zonesCount = Number.isFinite(farm.zones) ? farm.zones : zonesList.length;
+
+    const devices = await resolveFarmDevices(farmId, farm);
+    const groups = await resolveFarmGroups(farmId, farm);
+
+    const deviceSummary = summarizeDevices(devices);
+    const lightSummary = summarizeLights(groups, devices);
+
+    return {
+        rooms: roomsCount,
+        zones: zonesCount,
+        devicesTotal: devices.length,
+        lightsAssigned: lightSummary.assigned,
+        lightsTotal: lightSummary.total,
+        sensorsAssigned: deviceSummary.sensors.assigned,
+        sensorsTotal: deviceSummary.sensors.total,
+        hvacAssigned: deviceSummary.hvac.assigned,
+        hvacTotal: deviceSummary.hvac.total,
+        irrigationAssigned: deviceSummary.irrigation.assigned,
+        irrigationTotal: deviceSummary.irrigation.total
+    };
+}
+
+async function resolveFarmDevices(farmId, farm) {
+    if (Array.isArray(farm.devices)) return farm.devices;
+    if (Array.isArray(farm.devices?.devices)) return farm.devices.devices;
+    try {
+        let response;
+        try {
+            response = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            if (!response.ok) throw new Error('No public devices endpoint');
+        } catch (err) {
+            response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
+        }
+        if (!response || !response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data.devices) ? data.devices : [];
+    } catch (error) {
+        console.warn('[equipment-summary] Failed to load devices:', error);
+        return [];
+    }
+}
+
+async function resolveFarmGroups(farmId, farm) {
+    if (Array.isArray(farm.groups)) return farm.groups;
+    try {
+        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/groups`);
+        if (!response || !response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data.groups) ? data.groups : [];
+    } catch (error) {
+        console.warn('[equipment-summary] Failed to load groups:', error);
+        return [];
+    }
+}
+
+function summarizeLights(groups, devices) {
+    const assignedLightIds = new Set();
+    let assignedCount = 0;
+
+    (groups || []).forEach((group) => {
+        if (Array.isArray(group.lights)) {
+            group.lights.forEach((lightId) => {
+                if (lightId) assignedLightIds.add(lightId);
+            });
+        } else if (Number.isFinite(group.light_count)) {
+            assignedCount += group.light_count;
+        }
+    });
+
+    const assigned = assignedLightIds.size > 0 ? assignedLightIds.size : assignedCount;
+    const total = devices.filter((device) => isLightDevice(device)).length || assigned;
+
+    return { assigned, total };
+}
+
+function summarizeDevices(devices) {
+    const sensors = summarizeDevicesByType(devices, isSensorDevice);
+    const hvac = summarizeDevicesByType(devices, isHvacDevice);
+    const irrigation = summarizeDevicesByType(devices, isIrrigationDevice);
+
+    return { sensors, hvac, irrigation };
+}
+
+function summarizeDevicesByType(devices, predicate) {
+    const matches = devices.filter((device) => predicate(device));
+    const assigned = matches.filter((device) => hasAssignment(device)).length;
+    return { total: matches.length, assigned };
+}
+
+function hasAssignment(device) {
+    const candidate = device?.location || device?.room || device?.room_id || device?.roomId || device?.zone || device?.zone_id || device?.zoneId;
+    if (!candidate) return false;
+    const normalized = String(candidate).trim().toLowerCase();
+    return normalized !== '' && normalized !== 'unknown' && normalized !== 'unassigned';
+}
+
+function normalizeDeviceType(device) {
+    return String(device?.device_type || device?.type || device?.category || '').toLowerCase();
+}
+
+function isSensorDevice(device) {
+    const type = normalizeDeviceType(device);
+    return /(sensor|probe|monitor|env|environment|bme|co2|temp|humidity|pressure)/.test(type);
+}
+
+function isLightDevice(device) {
+    const type = normalizeDeviceType(device);
+    return /(light|led|fixture|lamp|grow)/.test(type);
+}
+
+function isHvacDevice(device) {
+    const type = normalizeDeviceType(device);
+    return /(hvac|fan|vent|ac|air|heater|cooler|mini\s*-?split|dehumidifier|humidifier)/.test(type);
+}
+
+function isIrrigationDevice(device) {
+    const type = normalizeDeviceType(device);
+    return /(irrigation|pump|valve|water|fertigation|mist|sprinkler)/.test(type);
+}
+
 async function loadFarmDetails(farmId, farmData) {
     try {
         // Use provided farmData or fallback to farmsData array
@@ -1531,16 +1656,30 @@ async function loadFarmDetails(farmId, farmData) {
         document.getElementById('detail-api-calls').textContent = `${Math.floor(Math.random() * 10000)}`;
         document.getElementById('detail-storage').textContent = `${Math.floor(Math.random() * 50)} GB`;
         
-        // Get counts from farm data
-        const rooms = farm.rooms || farm.environmental?.zones?.length || 0;
-        const devices = farm.devices || (Array.isArray(farm.devices) ? farm.devices.length : 0);
-        const zones = farm.zones || farm.environmental?.zones?.length || 0;
-        
-        // Update equipment status
-        document.getElementById('detail-lights').textContent = `${Math.floor(devices * 0.6)}/${Math.floor(devices * 0.6)}`;
-        document.getElementById('detail-sensors').textContent = `${Math.floor(devices * 0.25)}/${Math.floor(devices * 0.25)}`;
-        document.getElementById('detail-hvac').textContent = `${Math.floor(rooms * 0.8)}/${rooms}`;
-        document.getElementById('detail-irrigation').textContent = `${Math.floor(zones * 0.3)}/${Math.floor(zones * 0.5)}`;
+        // Resolve live equipment counts from group assignments + room mapping + equipment overview
+        const equipmentSummary = await buildFarmEquipmentSummary(farmId, farm);
+
+        const rooms = equipmentSummary.rooms;
+        const devices = equipmentSummary.devicesTotal;
+        const zones = equipmentSummary.zones;
+
+        const setCount = (elementId, assigned, total, fallbackLabel) => {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const display = `${assigned}/${total}`;
+            el.textContent = display;
+            if (total === 0) {
+                el.title = fallbackLabel || 'Not configured';
+            } else {
+                el.title = `${assigned} assigned of ${total} total`;
+            }
+        };
+
+        // Update equipment status with live counts
+        setCount('detail-lights', equipmentSummary.lightsAssigned, equipmentSummary.lightsTotal, 'Lights not configured');
+        setCount('detail-sensors', equipmentSummary.sensorsAssigned, equipmentSummary.sensorsTotal, 'Sensors not configured');
+        setCount('detail-hvac', equipmentSummary.hvacAssigned, equipmentSummary.hvacTotal, 'HVAC not configured');
+        setCount('detail-irrigation', equipmentSummary.irrigationAssigned, equipmentSummary.irrigationTotal, 'Irrigation not configured');
         
         // Load rooms for this farm
         await loadFarmRooms(farmId, rooms);
