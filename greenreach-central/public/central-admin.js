@@ -2294,7 +2294,7 @@ function drawCombinedTrendsChart(canvasId, config) {
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const height = canvas.height;
-    const padding = { top: 50, right: 150, bottom: 50, left: 100 };
+    const padding = { top: 45, right: 120, bottom: 45, left: 120 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
@@ -2384,11 +2384,17 @@ function drawCombinedTrendsChart(canvasId, config) {
         ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw label on the left
+        // Draw label on the left (shorten long labels to fit)
         ctx.fillStyle = dataset.color;
-        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
         ctx.textAlign = 'right';
-        ctx.fillText(dataset.label, padding.left - 10, bandCenter + 4);
+        // Shorten labels to prevent cutoff
+        let displayLabel = dataset.label;
+        if (displayLabel.includes('Temperature')) displayLabel = 'Temp °C';
+        if (displayLabel.includes('Humidity')) displayLabel = 'Humidity %';
+        if (displayLabel.includes('CO₂')) displayLabel = 'CO₂ ppm';
+        if (displayLabel.includes('VPD')) displayLabel = 'VPD kPa';
+        ctx.fillText(displayLabel, padding.left - 10, bandCenter + 4);
         
         // Draw current value on the right
         ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
@@ -2403,14 +2409,14 @@ function drawCombinedTrendsChart(canvasId, config) {
     
     // Draw time axis labels at bottom
     ctx.fillStyle = '#888';
-    ctx.font = '11px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    
-    const timeLabels = ['24h ago', '18h', '12h', '6h', 'Now'];
-    timeLabels.forEach((label, index) => {
-        const x = padding.left + (chartWidth * index / (timeLabels.length - 1));
-        ctx.fillText(label, x, height - 25);
+    ctx.font = '11px system-ui, -apple-sy0);
     });
+    
+    // Draw title at top
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Environmental Trends (24h)', padding.left, 28
     
     // Draw title at top
     ctx.fillStyle = '#fff';
