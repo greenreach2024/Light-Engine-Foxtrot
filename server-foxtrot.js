@@ -145,6 +145,7 @@ function authenticateToken(req, res, next) {
 
 import AutomationRulesEngine from './lib/automation-engine.js';
 import { createPreAutomationLayer } from './automation/index.js';
+import { sendEmail } from './lib/email-service.js';
 import {
   buildSetupWizards,
   mergeDiscoveryPayload,
@@ -15927,9 +15928,70 @@ app.post('/api/users/create', asyncHandler(async (req, res) => {
       [farmId, email, name, role, passwordHash]
     );
     
+    // Send confirmation email to new user
+    try {
+      const farmResult = await req.app.locals.db.query(
+        'SELECT name FROM farms WHERE farm_id = $1',
+        [farmId]
+      );
+      const farmName = farmResult.rows[0]?.name || 'Your Farm';
+      
+      await sendEmail({
+        to: email,
+        subject: `Welcome to ${farmName} - Light Engine Access Granted`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #10b981;">Welcome to Light Engine</h2>
+            <p>Hi ${name},</p>
+            <p>Your account has been created for <strong>${farmName}</strong>.</p>
+            
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #1f2937;">Login Credentials</h3>
+              <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
+              <p style="margin: 10px 0;"><strong>Role:</strong> ${role.charAt(0).toUpperCase() + role.slice(1)}</p>
+              <p style="margin: 10px 0;"><strong>Temporary Password:</strong> ${password}</p>
+            </div>
+            
+            <p><strong>⚠️ Important:</strong> Please change your password after your first login for security.</p>
+            
+            <p>You can access the system at:</p>
+            <p><a href="${req.protocol}://${req.get('host')}/login.html" style="color: #10b981; text-decoration: none; font-weight: bold;">${req.protocol}://${req.get('host')}/login.html</a></p>
+            
+            <p>If you have any questions, please contact your farm administrator.</p>
+            
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 12px;">This is an automated message from Light Engine Foxtrot. Please do not reply to this email.</p>
+          </div>
+        `,
+        text: `
+Welcome to Light Engine
+
+Hi ${name},
+
+Your account has been created for ${farmName}.
+
+Login Credentials:
+- Email: ${email}
+- Role: ${role.charAt(0).toUpperCase() + role.slice(1)}
+- Temporary Password: ${password}
+
+⚠️ Important: Please change your password after your first login for security.
+
+Access the system at: ${req.protocol}://${req.get('host')}/login.html
+
+If you have any questions, please contact your farm administrator.
+        `
+      });
+      
+      console.log(`[/api/users/create] Confirmation email sent to ${email}`);
+    } catch (emailError) {
+      console.error('[/api/users/create] Failed to send confirmation email:', emailError);
+      // Don't fail the user creation if email fails
+    }
+    
     res.json({
       status: 'success',
-      message: 'User created successfully',
+      message: 'User created successfully. Confirmation email sent.',
       user: { email, name, role }
     });
     
