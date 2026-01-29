@@ -98,27 +98,51 @@ class IoTDevicesManager {
   }
 
   async setupAssignmentData() {
-    // Load room/zone data from farm registration
+    // Load room/zone data from static files
     try {
-      const [roomsResponse, zonesResponse] = await Promise.all([
-        fetch('/farm/rooms'),
-        fetch('/farm/zones')
-      ]);
+      const roomsResponse = await fetch('/data/rooms.json');
+      if (!roomsResponse.ok) throw new Error('Failed to load rooms.json');
       
-      const rooms = await roomsResponse.json();
-      const zones = await zonesResponse.json();
+      const roomsData = await roomsResponse.json();
+      const rooms = roomsData.rooms || [];
+      
+      console.log('[IoT Manager] Loaded rooms:', rooms.length);
       
       this.roomOptions = rooms.map(room => ({
-        value: room.id,
-        label: room.name
+        value: room.id || room.name,
+        label: room.name || room.location || room.id
       }));
       
-      this.zoneOptions = zones.map(zone => ({
-        value: zone.id,
-        label: zone.name
-      }));
+      // Load zones from room-map.json files
+      // For now, create zones from room data
+      this.zoneOptions = [];
+      for (const room of rooms) {
+        try {
+          const mapResponse = await fetch(`/data/room-map-${room.id}.json`);
+          if (mapResponse.ok) {
+            const mapData = await mapResponse.json();
+            if (mapData.zones && Array.isArray(mapData.zones)) {
+              mapData.zones.forEach(zone => {
+                this.zoneOptions.push({
+                  value: zone.zone,
+                  label: `${room.name} - ${zone.name || 'Zone ' + zone.zone}`
+                });
+              });
+            }
+          }
+        } catch (e) {
+          console.warn(`[IoT Manager] Could not load map for room ${room.id}:`, e.message);
+        }
+      }
+      
+      console.log('[IoT Manager] Setup complete:', {
+        rooms: this.roomOptions.length,
+        zones: this.zoneOptions.length
+      });
     } catch (error) {
-      console.error('Failed to load assignment data:', error);
+      console.error('[IoT Manager] Failed to load assignment data:', error);
+      this.roomOptions = [];
+      this.zoneOptions = [];
     }
   }
 
