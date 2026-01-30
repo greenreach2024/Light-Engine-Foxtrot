@@ -25,18 +25,7 @@
             line-height: 1.5;
         }
         .main-layout {
-            display: grid;
-            grid-template-columns: 260px 1fr;
             min-height: 100vh;
-        }
-        .sidebar {
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border);
-            padding: 20px;
-            position: sticky;
-            top: 0;
-            height: 100vh;
-            overflow-y: auto;
         }
         .logo {
             font-size: 18px;
@@ -213,49 +202,6 @@
 </head>
 <body>
     <div class="main-layout">
-        <aside class="sidebar">
-            <div class="logo">GreenReach Admin</div>
-            
-            <nav>
-                <div class="nav-section">
-                    <div class="nav-section-title">Dashboard</div>
-                    <a href="/GR-central-admin.html" class="nav-item">
-                        <span>Operations Overview</span>
-                    </a>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-section-title">Wholesale</div>
-                    <a href="/GR-wholesale-admin.html" class="nav-item active">
-                        <span>Buyers Management</span>
-                    </a>
-                    <a href="/GR-wholesale.html" class="nav-item">
-                        <span>Buyer Portal</span>
-                    </a>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-section-title">Management</div>
-                    <a href="/GR-central-admin.html?view=farms" class="nav-item">
-                        <span>All Farms</span>
-                    </a>
-                    <a href="/GR-central-admin.html?view=users" class="nav-item">
-                        <span>Users</span>
-                    </a>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-section-title">Analytics</div>
-                    <a href="/GR-central-admin.html?view=analytics" class="nav-item">
-                        <span>AI Insights</span>
-                    </a>
-                    <a href="/GR-central-admin.html?view=energy" class="nav-item">
-                        <span>Energy</span>
-                    </a>
-                </div>
-            </nav>
-        </aside>
-        
         <main class="main-content">
             <div class="container">
                 <div class="header">
@@ -300,6 +246,8 @@
                 </table>
             </div>
         </div>
+    </div>
+        </main>
     </div>
 
     <!-- Password Reset Modal -->
