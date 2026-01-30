@@ -52,40 +52,54 @@ router.get('/:farmId', async (req, res) => {
 
     // 2. Fetch current environmental data (telemetry)
     const telemetryResult = await query(
-      `SELECT data FROM farm_data 
+      `SELECT data, updated_at FROM farm_data 
        WHERE farm_id = $1 AND data_type = 'telemetry' 
-       ORDER BY timestamp DESC LIMIT 1`,
+       ORDER BY updated_at DESC LIMIT 1`,
       [farmId]
     );
     
     let currentConditions = null;
     if (telemetryResult.rows.length > 0) {
-      const telemetry = telemetryResult.rows[0].data;
-      if (telemetry.environmental && telemetry.environmental.zones && telemetry.environmental.zones.length > 0) {
-        const zone = telemetry.environmental.zones[0];
-        const sensor = zone.sensors && zone.sensors.length > 0 ? zone.sensors[0] : null;
-        
-        if (sensor && sensor.readings) {
-          const temp = sensor.readings.temperature_c;
-          const humidity = sensor.readings.humidity;
-          const pressure = sensor.readings.pressure_hpa;
-          
-          // Calculate VPD
-          let vpd = null;
-          if (temp !== undefined && humidity !== undefined) {
-            const SVP = 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
-            vpd = SVP * (1 - humidity / 100);
-          }
-          
-          currentConditions = {
-            temperature_c: temp,
-            humidity: humidity,
-            pressure_hpa: pressure,
-            vpd_kpa: vpd,
-            zone_id: zone.zone_id,
-            zone_name: zone.zone_name
-          };
+      const telemetry = telemetryResult.rows[0].data || {};
+      const zones = telemetry.environmental?.zones || telemetry.zones || [];
+      const zone = Array.isArray(zones) && zones.length > 0 ? zones[0] : null;
+
+      if (zone) {
+        const sensors = zone.sensors && typeof zone.sensors === 'object' ? zone.sensors : {};
+        const temp = Number(
+          sensors.tempC?.current ??
+          sensors.temperature?.current ??
+          zone.temperature_c ??
+          zone.temperature ??
+          zone.tempC ??
+          zone.temp
+        );
+        const humidity = Number(
+          sensors.rh?.current ??
+          sensors.humidity?.current ??
+          zone.humidity ??
+          zone.rh
+        );
+        const pressure = Number(
+          sensors.pressure?.current ??
+          zone.pressure_hpa ??
+          zone.pressure
+        );
+
+        let vpd = null;
+        if (!Number.isNaN(temp) && !Number.isNaN(humidity)) {
+          const SVP = 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
+          vpd = SVP * (1 - humidity / 100);
         }
+
+        currentConditions = {
+          temperature_c: Number.isNaN(temp) ? null : temp,
+          humidity: Number.isNaN(humidity) ? null : humidity,
+          pressure_hpa: Number.isNaN(pressure) ? null : pressure,
+          vpd_kpa: vpd,
+          zone_id: zone.id || zone.zone_id || zone.zoneId || null,
+          zone_name: zone.name || zone.zone_name || zone.location || zone.id || null
+        };
       }
     }
     
@@ -97,7 +111,7 @@ router.get('/:farmId', async (req, res) => {
     const groupsResult = await query(
       `SELECT data FROM farm_data 
        WHERE farm_id = $1 AND data_type = 'groups' 
-       ORDER BY timestamp DESC LIMIT 1`,
+       ORDER BY updated_at DESC LIMIT 1`,
       [farmId]
     );
     
