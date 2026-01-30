@@ -2022,13 +2022,13 @@ async function loadFarmEnvironmentalTrends(farmId) {
         const co2History = zone.sensors?.co2?.history || [];
         const vpdHistory = zone.sensors?.vpd?.history || [];
         
-        // Use last 24 data points
-        const last24Temp = tempHistory.slice(-24);
-        const last24Humidity = humidityHistory.slice(-24);
-        const last24Pressure = pressureHistory.slice(-24);
-        const last24Gas = gasHistory.slice(-24);
-        const last24Co2 = co2History.slice(-24);
-        const last24Vpd = vpdHistory.slice(-24);
+        // Use most recent 24 data points (history is newest-first)
+        const last24Temp = getLatestHistory(tempHistory, 24);
+        const last24Humidity = getLatestHistory(humidityHistory, 24);
+        const last24Pressure = getLatestHistory(pressureHistory, 24);
+        const last24Gas = getLatestHistory(gasHistory, 24);
+        const last24Co2 = getLatestHistory(co2History, 24);
+        const last24Vpd = getLatestHistory(vpdHistory, 24);
         
         // Create combined trends chart
         const chartEl = document.getElementById('env-chart');
@@ -2406,15 +2406,15 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? null;
     const vpdCurrent = zone.sensors?.vpd?.current ?? zone.vpd ?? 1.0;
     
-    // Use last 24 data points from history, or create flat line from current value
-    const last24Temp = tempHistory.length > 0 ? tempHistory.slice(-24) : Array(24).fill(tempCurrent);
-    const last24Humidity = humidityHistory.length > 0 ? humidityHistory.slice(-24) : Array(24).fill(rhCurrent);
-    const last24Pressure = pressureHistory.length > 0 ? pressureHistory.slice(-24) : (pressureCurrent != null ? Array(24).fill(pressureCurrent) : []);
-    const last24Gas = gasHistory.length > 0 ? gasHistory.slice(-24) : (gasCurrent != null ? Array(24).fill(gasCurrent) : []);
+    // Use most recent 24 data points from history, or create flat line from current value
+    const last24Temp = tempHistory.length > 0 ? getLatestHistory(tempHistory, 24) : Array(24).fill(tempCurrent);
+    const last24Humidity = humidityHistory.length > 0 ? getLatestHistory(humidityHistory, 24) : Array(24).fill(rhCurrent);
+    const last24Pressure = pressureHistory.length > 0 ? getLatestHistory(pressureHistory, 24) : (pressureCurrent != null ? Array(24).fill(pressureCurrent) : []);
+    const last24Gas = gasHistory.length > 0 ? getLatestHistory(gasHistory, 24) : (gasCurrent != null ? Array(24).fill(gasCurrent) : []);
     const last24Co2 = co2History.length > 0
-        ? co2History.slice(-24)
+        ? getLatestHistory(co2History, 24)
         : (co2Current != null ? Array(24).fill(co2Current) : []);
-    const last24Vpd = vpdHistory.length > 0 ? vpdHistory.slice(-24) : Array(24).fill(vpdCurrent);
+    const last24Vpd = vpdHistory.length > 0 ? getLatestHistory(vpdHistory, 24) : Array(24).fill(vpdCurrent);
     
     console.log('[room-trends] Drawing charts with data:', {
         temp: last24Temp.length,
@@ -2635,6 +2635,12 @@ function drawCombinedTrendsChart(canvasId, config) {
         ctx.textAlign = 'left';
         ctx.fillText(`${config.noDataLabels.join(', ')}: No data`, padding.left, height - 5);
     }
+}
+
+function getLatestHistory(history, count) {
+    if (!Array.isArray(history) || history.length === 0) return [];
+    const slice = history.slice(0, count);
+    return slice.slice().reverse();
 }
 
 /**
