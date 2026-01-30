@@ -270,8 +270,10 @@ def post_ingest_env(temp_c, humidity, vpd_value, pressure_hpa, gas_kohms):
         with urllib.request.urlopen(req, timeout=3) as resp:
             if resp.status >= 400:
                 print(f"[ingest] Failed: HTTP {resp.status}")
-    except urllib.error.URLError as err:
+    except (urllib.error.URLError, TimeoutError) as err:
         print(f"[ingest] Error posting to Light Engine: {err}")
+    except Exception as err:
+        print(f"[ingest] Unexpected error posting to Light Engine: {err}")
 
 def main():
     print("=" * 60)
