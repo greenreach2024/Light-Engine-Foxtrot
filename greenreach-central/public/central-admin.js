@@ -9,7 +9,7 @@
 // =============================================================================
 
 const DEBUG_TRACKING = {
-    enabled: true,
+    enabled: false, // Disabled to reduce API load
     sessionId: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
     events: [],
     sendToServerInterval: null,
