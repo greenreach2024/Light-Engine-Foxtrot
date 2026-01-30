@@ -5965,6 +5965,7 @@ function renderAnalyticsMetricsTable(metrics) {
 // recipesData already declared as global variable at top of file
 let currentRecipeId = null;
 let recipeSpectrumChart = null;
+let recipeSortState = { key: 'name', direction: 'asc' };
 
 const recipeFieldMap = new Map([
     ['day', 'day'],
@@ -6056,7 +6057,9 @@ async function loadRecipes() {
         
         recipesData = data.recipes || [];
         console.log('[Recipes] Loaded', recipesData.length, 'recipes');
-        renderRecipesTableDetailed(recipesData);
+        const sorted = getSortedRecipes(recipesData);
+        renderRecipesTableDetailed(sorted);
+        updateRecipeSortIndicators();
         updateRecipeStats(recipesData);
         
     } catch (error) {
@@ -6132,6 +6135,46 @@ function renderRecipesTableDetailed(recipes) {
     }).join('');
     
     document.getElementById('recipes-count').textContent = `${recipes.length} recipe${recipes.length !== 1 ? 's' : ''}`;
+}
+
+function setRecipeSort(key) {
+    if (recipeSortState.key === key) {
+        recipeSortState.direction = recipeSortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        recipeSortState.key = key;
+        recipeSortState.direction = 'asc';
+    }
+    const sorted = getSortedRecipes(recipesData || []);
+    renderRecipesTableDetailed(sorted);
+    updateRecipeSortIndicators();
+}
+
+function getSortedRecipes(recipes) {
+    if (!Array.isArray(recipes)) return [];
+    const sorted = [...recipes];
+    const dir = recipeSortState.direction === 'desc' ? -1 : 1;
+
+    sorted.sort((a, b) => {
+        const nameA = String(a?.name || '').toLowerCase();
+        const nameB = String(b?.name || '').toLowerCase();
+        const catA = String(a?.category || '').toLowerCase();
+        const catB = String(b?.category || '').toLowerCase();
+
+        if (recipeSortState.key === 'category') {
+            if (catA !== catB) return catA.localeCompare(catB) * dir;
+            return nameA.localeCompare(nameB) * dir;
+        }
+        return nameA.localeCompare(nameB) * dir;
+    });
+
+    return sorted;
+}
+
+function updateRecipeSortIndicators() {
+    const nameIndicator = document.getElementById('recipe-sort-name');
+    const categoryIndicator = document.getElementById('recipe-sort-category');
+    if (nameIndicator) nameIndicator.textContent = recipeSortState.key === 'name' ? (recipeSortState.direction === 'asc' ? '▲' : '▼') : '';
+    if (categoryIndicator) categoryIndicator.textContent = recipeSortState.key === 'category' ? (recipeSortState.direction === 'asc' ? '▲' : '▼') : '';
 }
 
 /**
