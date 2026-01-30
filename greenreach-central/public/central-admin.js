@@ -1556,11 +1556,6 @@ function renderFarmsTable(farms) {
     }
     
     tbody.innerHTML = farms.map(farm => {
-        // Format last login/update from database
-        const lastUpdate = farm.last_login || farm.updated_at
-            ? new Date(farm.last_login || farm.updated_at).toLocaleString()
-            : 'Never';
-        
         // Use database fields: farm_id, name, email, status, tier, user_count
         const email = farm.email || '';
         const farmId = farm.farm_id || farm.farmId || 'unknown';
@@ -1577,10 +1572,11 @@ function renderFarmsTable(farms) {
             <td><span class="badge badge-${getStatusBadgeClass(status)}">${status}</span></td>
             <td><span class="badge badge-${tier === 'enterprise' ? 'success' : 'info'}">${tier}</span></td>
             <td>${farm.user_count || 0}</td>
-            <td>${lastUpdate}</td>
             <td>
                 <button class="btn" onclick="drillToFarm('${farmId}')">View</button>
-                ${email ? `<button class="btn" style="background: var(--accent-red); margin-left: 5px;" onclick="deleteFarm('${email}', '${farm.name}')">Delete</button>` : ''}
+            </td>
+            <td>
+                <button class="btn" style="background: var(--accent-red);" onclick="deleteFarm('${farmId}', '${farm.name}')">Delete</button>
             </td>
         </tr>
         `;
@@ -1588,26 +1584,31 @@ function renderFarmsTable(farms) {
 }
 
 /**
- * Delete all farms and users for an email address
+ * Delete a farm by farm ID (requires admin password)
  */
-async function deleteFarm(email, farmName) {
-    if (!confirm(`⚠️ Delete ALL farms and users for ${email}?\n\nFarm: ${farmName}\n\nThis action cannot be undone!`)) {
+async function deleteFarm(farmId, farmName) {
+    if (!confirm(`⚠️ Delete farm ${farmId}?\n\nFarm: ${farmName}\n\nThis action cannot be undone!`)) {
         return;
     }
-    
-    if (!confirm(`Are you absolutely sure? Type the email to confirm deletion:\n\n${email}`)) {
+
+    const password = prompt('Enter your GreenReach admin password to confirm deletion:');
+    if (!password) {
         return;
     }
     
     try {
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${encodeURIComponent(email)}`, {
-            method: 'DELETE'
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${encodeURIComponent(farmId)}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ password })
         });
         
         const data = await response.json();
         
         if (response.ok && data.status === 'success') {
-            alert(`✅ Successfully deleted:\n\n${data.deleted.farms} farm(s)\n${data.deleted.users} user(s)\n\nFarm IDs: ${data.farmIds.join(', ')}`);
+            alert(`✅ Successfully deleted:\n\n${data.deleted.farms} farm(s)\n\nFarm IDs: ${data.farmIds.join(', ')}`);
             // Reload farms list
             await loadFarms();
         } else {
@@ -2243,7 +2244,7 @@ async function loadRoomZones(farmId, roomId, zonesData) {
             
             // Count groups per zone
             groups.forEach(group => {
-                const zoneId = group.zone || group.zone_id;
+                const zoneId = group.zone || group.zone_id || group.zoneId;
                 if (zoneId) {
                     groupsByZone[zoneId] = (groupsByZone[zoneId] || 0) + 1;
                 }
@@ -2259,7 +2260,7 @@ async function loadRoomZones(farmId, roomId, zonesData) {
         zones = zonesData.map((zone, idx) => {
             // Construct compound zone ID to match groups format: "room-xxx:1"
             const rawZoneId = zone.zone_id || zone.zoneId || zone.id || zone.name || `${idx + 1}`;
-            const zoneId = `${roomId}:${rawZoneId}`;
+            const zoneId = String(rawZoneId).includes(':') ? String(rawZoneId) : `${roomId}:${rawZoneId}`;
             const name = zone.zone_name || zone.name || `Zone ${rawZoneId}`;
             
             // Extract sensor data - support both direct properties and sensors object
@@ -2267,7 +2268,7 @@ async function loadRoomZones(farmId, roomId, zonesData) {
             const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
             
             // Count groups assigned to this zone - use compound zone ID
-            const groupsCount = groupsByZone[zoneId] || 0;
+            const groupsCount = groupsByZone[zoneId] || groupsByZone[String(rawZoneId)] || 0;
             
             console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, groupsCount, rawZone: zone });
             
