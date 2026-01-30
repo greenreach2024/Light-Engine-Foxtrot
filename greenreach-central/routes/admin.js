@@ -736,6 +736,114 @@ router.post('/farms/sync-all-stats', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/analytics/farms/:farmId/metrics
+ * Returns farm-specific analytics metrics
+ */
+router.get('/analytics/farms/:farmId/metrics', async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        const days = parseInt(req.query.days) || 7;
+        const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+        if (!(await isDatabaseAvailable())) {
+            return res.json({
+                farmId,
+                days,
+                summary: {
+                    totalProduction: 0,
+                    totalRevenue: 0,
+                    daysReported: 0,
+                    avgYield: 0,
+                    topCrop: null
+                },
+                metrics: [],
+                modelPerformance: {
+                    temperatureForecast: null,
+                    harvestTiming: null,
+                    energyPrediction: null
+                }
+            });
+        }
+
+        const farmResult = await query(
+            'SELECT id FROM farms WHERE farm_id = $1',
+            [farmId]
+        );
+
+        if (farmResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Farm not found' });
+        }
+
+        const farmPk = farmResult.rows[0].id;
+
+        let metricsRows = [];
+        try {
+            const metricsResult = await query(`
+                SELECT 
+                    recorded_at,
+                    room_count,
+                    zone_count,
+                    device_count,
+                    tray_count,
+                    plant_count,
+                    energy_24h,
+                    alert_count
+                FROM farm_metrics
+                WHERE farm_id = $1 AND recorded_at >= $2
+                ORDER BY recorded_at ASC
+            `, [farmPk, cutoffDate]);
+            metricsRows = metricsResult.rows || [];
+        } catch (e) {
+            console.warn('[Admin API] farm_metrics query failed:', e.message);
+        }
+
+        let topCrop = null;
+        try {
+            const inventoryResult = await query(`
+                SELECT 
+                    COUNT(*) as total_trays,
+                    SUM(plant_count) as total_plants,
+                    recipe_name
+                FROM farm_inventory
+                WHERE farm_id = $1 AND status IN ('growing', 'ready', 'harvested')
+                GROUP BY recipe_name
+                ORDER BY COUNT(*) DESC
+                LIMIT 1
+            `, [farmPk]);
+            if (inventoryResult.rows.length > 0) {
+                topCrop = inventoryResult.rows[0].recipe_name;
+            }
+        } catch (e) {
+            console.warn('[Admin API] farm_inventory query failed:', e.message);
+        }
+
+        res.json({
+            farmId,
+            days,
+            summary: {
+                totalProduction: 0,
+                totalRevenue: 0,
+                daysReported: metricsRows.length,
+                avgYield: 0,
+                topCrop
+            },
+            metrics: metricsRows,
+            modelPerformance: {
+                temperatureForecast: null,
+                harvestTiming: null,
+                energyPrediction: null
+            }
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching farm analytics:', error);
+        res.status(500).json({
+            error: 'Failed to fetch analytics data',
+            message: error.message
+        });
+    }
+});
+
+/**
  * GET /api/admin/anomalies
  * Aggregate ML anomaly detections across farms
  */
