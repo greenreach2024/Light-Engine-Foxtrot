@@ -981,20 +981,67 @@ router.get('/alerts', async (req, res) => {
 
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        const summaryResult = await query(
-            `SELECT
-                COUNT(*) as total,
-                COUNT(*) FILTER (WHERE fa.resolved = false AND fa.acknowledged = false) as active,
-                COUNT(*) FILTER (WHERE fa.acknowledged = true AND fa.resolved = false) as acknowledged,
-                COUNT(*) FILTER (WHERE fa.resolved = true) as resolved,
-                COUNT(*) FILTER (WHERE fa.severity = 'critical') as critical,
-                COUNT(*) FILTER (WHERE fa.severity = 'warning') as warning,
-                COUNT(*) FILTER (WHERE fa.severity = 'info') as info
-             FROM farm_alerts fa
-             JOIN farms f ON f.id = fa.farm_id
-             ${whereClause}`,
-            params
-        );
+        let summaryResult;
+        let alertsResult;
+        try {
+            summaryResult = await query(
+                `SELECT
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE fa.resolved = false AND fa.acknowledged = false) as active,
+                    COUNT(*) FILTER (WHERE fa.acknowledged = true AND fa.resolved = false) as acknowledged,
+                    COUNT(*) FILTER (WHERE fa.resolved = true) as resolved,
+                    COUNT(*) FILTER (WHERE fa.severity = 'critical') as critical,
+                    COUNT(*) FILTER (WHERE fa.severity = 'warning') as warning,
+                    COUNT(*) FILTER (WHERE fa.severity = 'info') as info
+                 FROM farm_alerts fa
+                 JOIN farms f ON f.id = fa.farm_id
+                 ${whereClause}`,
+                params
+            );
+
+            alertsResult = await query(
+                `SELECT
+                    fa.id,
+                    fa.alert_type,
+                    fa.severity,
+                    fa.message,
+                    fa.zone_id,
+                    fa.device_id,
+                    fa.acknowledged,
+                    fa.acknowledged_by,
+                    fa.acknowledged_at,
+                    fa.resolved,
+                    fa.resolved_at,
+                    fa.created_at,
+                    f.farm_id,
+                    f.name as farm_name
+                 FROM farm_alerts fa
+                 JOIN farms f ON f.id = fa.farm_id
+                 ${whereClause}
+                 ORDER BY fa.created_at DESC
+                 LIMIT $${params.length + 1}`,
+                [...params, parseInt(limit)]
+            );
+        } catch (dbError) {
+            const message = dbError?.message || '';
+            if (message.includes('relation') && message.includes('farm_alerts')) {
+                return res.json({
+                    success: true,
+                    alerts: [],
+                    summary: {
+                        total: 0,
+                        active: 0,
+                        acknowledged: 0,
+                        resolved: 0,
+                        critical: 0,
+                        warning: 0,
+                        info: 0
+                    },
+                    timestamp: now.toISOString()
+                });
+            }
+            throw dbError;
+        }
 
         const summaryRow = summaryResult.rows[0] || {};
         const summary = {
@@ -1006,30 +1053,6 @@ router.get('/alerts', async (req, res) => {
             warning: parseInt(summaryRow.warning || 0),
             info: parseInt(summaryRow.info || 0)
         };
-
-        const alertsResult = await query(
-            `SELECT
-                fa.id,
-                fa.alert_type,
-                fa.severity,
-                fa.message,
-                fa.zone_id,
-                fa.device_id,
-                fa.acknowledged,
-                fa.acknowledged_by,
-                fa.acknowledged_at,
-                fa.resolved,
-                fa.resolved_at,
-                fa.created_at,
-                f.farm_id,
-                f.name as farm_name
-             FROM farm_alerts fa
-             JOIN farms f ON f.id = fa.farm_id
-             ${whereClause}
-             ORDER BY fa.created_at DESC
-             LIMIT $${params.length + 1}`,
-            [...params, parseInt(limit)]
-        );
 
         const alerts = alertsResult.rows.map(row => {
             const statusValue = row.resolved
