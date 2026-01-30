@@ -60,6 +60,21 @@ router.get('/buyers', async (req, res) => {
             }
         });
     } catch (error) {
+        const message = error?.message || '';
+        if (message.includes('relation') && message.includes('wholesale_buyers')) {
+            return res.json({
+                status: 'ok',
+                data: {
+                    buyers: [],
+                    pagination: {
+                        page: parseInt(page),
+                        limit: parseInt(limit),
+                        total: 0,
+                        pages: 0
+                    }
+                }
+            });
+        }
         console.error('[Admin Wholesale] Error fetching buyers:', error);
         res.status(500).json({
             status: 'error',
@@ -113,6 +128,14 @@ router.post('/buyers/reset-password', async (req, res) => {
             message: 'Password reset successfully'
         });
     } catch (error) {
+        const message = error?.message || '';
+        if (message.includes('relation') && message.includes('wholesale_buyers')) {
+            return res.status(503).json({
+                status: 'error',
+                error: 'Wholesale buyers not initialized',
+                message: 'Wholesale buyers table is missing'
+            });
+        }
         console.error('[Admin Wholesale] Error resetting password:', error);
         res.status(500).json({
             status: 'error',
