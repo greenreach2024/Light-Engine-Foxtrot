@@ -410,9 +410,20 @@
                     },
                     body: JSON.stringify({ email, newPassword })
                 });
-                
-                if (!response.ok) throw new Error('Failed to reset password');
-                
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    data = null;
+                }
+
+                if (!response.ok || data?.status === 'error') {
+                    const message = data?.message || data?.error || `Failed to reset password (HTTP ${response.status})`;
+                    alert(message);
+                    return;
+                }
+
                 alert('Password reset successfully!');
                 closeResetModal();
             } catch (error) {
