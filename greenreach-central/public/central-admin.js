@@ -670,6 +670,24 @@ const INFO_CARDS = {
             }
         ]
     },
+    'ai-rules': {
+        title: 'AI Rules & Safety Policy',
+        subtitle: 'Guardrails that keep recommendations safe, practical, and adaptive',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Authoritative policy rules for AI recommendations</li><li>Priority, status, and review requirements for each rule</li><li>Operational guardrails for high-humidity and limited-control rooms</li><li>Recommendation format requirements for consistent outputs</li></ul>'
+            },
+            {
+                title: 'Why This Matters',
+                content: 'This rulebook ensures AI recommendations remain safe and useful in non-ideal rooms. It prevents unsafe automation, enforces sensor sanity checks, and documents tradeoffs so staff can trust and audit AI guidance.'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Review rules after incidents, add new guardrails when edge cases are discovered, and flag high-risk actions for human approval. Keep the rulebook current as equipment capabilities change.'
+            }
+        ]
+    },
     'alerts': {
         title: 'Real-Time Alerts & Notifications',
         subtitle: 'Immediate notifications for critical farm events requiring attention',
@@ -1090,6 +1108,7 @@ function renderContextualSidebar() {
                     title: 'Analytics',
                     items: [
                         { label: 'AI Insights', view: 'analytics' },
+                        { label: 'AI Rules', view: 'ai-rules' },
                         { label: 'Energy', view: 'energy' },
                         { label: 'Harvest Forecast', view: 'harvest' }
                     ]
@@ -3802,6 +3821,14 @@ async function navigate(view, element) {
             await loadAnalytics();
             if (INFO_CARDS['analytics']) {
                 showInfoCard(createInfoCard(INFO_CARDS['analytics'].title, INFO_CARDS['analytics'].subtitle, INFO_CARDS['analytics'].sections));
+            }
+            break;
+
+        case 'ai-rules':
+            document.getElementById('ai-rules-view').style.display = 'block';
+            await loadAiRules();
+            if (INFO_CARDS['ai-rules']) {
+                showInfoCard(createInfoCard(INFO_CARDS['ai-rules'].title, INFO_CARDS['ai-rules'].subtitle, INFO_CARDS['ai-rules'].sections));
             }
             break;
             
@@ -7163,6 +7190,261 @@ async function confirmDeleteUser() {
     }
 }
 
+// ============================================================================
+// AI RULES MANAGEMENT
+// ============================================================================
+let aiRules = [];
+let activeAiRuleId = null;
+
+function setAiRulesStatus(message, isError = false) {
+    const statusEl = document.getElementById('ai-rules-status');
+    if (!statusEl) return;
+    statusEl.textContent = message || '';
+    statusEl.style.color = isError ? 'var(--accent-red)' : 'var(--text-muted)';
+}
+
+function getAiRulesSearchTerm() {
+    const input = document.getElementById('ai-rules-search');
+    return input ? input.value.trim().toLowerCase() : '';
+}
+
+function filterAiRules() {
+    renderAiRulesList();
+}
+
+function renderAiRulesList() {
+    const tbody = document.getElementById('ai-rules-tbody');
+    const count = document.getElementById('ai-rules-count');
+    if (!tbody) return;
+
+    const filter = getAiRulesSearchTerm();
+    const filtered = aiRules.filter(rule => {
+        const haystack = `${rule.title} ${rule.category} ${rule.content}`.toLowerCase();
+        return !filter || haystack.includes(filter);
+    });
+
+    if (count) {
+        count.textContent = `${aiRules.length}`;
+    }
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-secondary);">No rules found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(rule => {
+        const status = `${rule.enabled ? 'Enabled' : 'Disabled'}${rule.requiresReview ? ' • Review' : ''}`;
+        const activeClass = rule.id === activeAiRuleId ? 'active' : '';
+        
+        // Priority colors
+        const priorityColors = {
+            'critical': '#ef4444',
+            'high': '#f59e0b',
+            'medium': '#3b82f6',
+            'low': '#6b7280'
+        };
+        const priorityColor = priorityColors[rule.priority] || '#6b7280';
+        const priorityBadge = `<span style="display: inline-block; padding: 3px 10px; border-radius: 12px; background: ${priorityColor}20; color: ${priorityColor}; font-weight: 600; font-size: 12px; text-transform: uppercase;">${escapeHtml(rule.priority)}</span>`;
+        
+        // Status colors
+        const statusColor = rule.enabled ? '#10b981' : '#6b7280';
+        const reviewBadge = rule.requiresReview ? `<span style="display: inline-block; margin-left: 8px; padding: 3px 10px; border-radius: 12px; background: #f59e0b20; color: #f59e0b; font-weight: 600; font-size: 11px;">REVIEW</span>` : '';
+        const statusBadge = `<span style="color: ${statusColor}; font-weight: 500;">${rule.enabled ? '✓ Enabled' : 'Disabled'}</span>${reviewBadge}`;
+        
+        return `
+            <tr class="ai-rules-row ${activeClass}" onclick="selectAiRule('${escapeHtml(rule.id)}')">
+                <td><strong>${escapeHtml(rule.title)}</strong></td>
+                <td>${escapeHtml(rule.category)}</td>
+                <td>${priorityBadge}</td>
+                <td>${statusBadge}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function setAiRuleForm(rule) {
+    document.getElementById('ai-rule-title').value = rule?.title || '';
+    document.getElementById('ai-rule-category').value = rule?.category || '';
+    document.getElementById('ai-rule-priority').value = rule?.priority || 'medium';
+    document.getElementById('ai-rule-content').value = rule?.content || '';
+    document.getElementById('ai-rule-enabled').checked = rule?.enabled !== false;
+    document.getElementById('ai-rule-review').checked = Boolean(rule?.requiresReview);
+
+    const meta = document.getElementById('ai-rule-meta');
+    if (meta) {
+        if (rule?.updatedAt) {
+            meta.textContent = `Last updated ${new Date(rule.updatedAt).toLocaleString()}`;
+        } else {
+            meta.textContent = activeAiRuleId ? 'Editing rule' : 'New rule';
+        }
+    }
+}
+
+function selectAiRule(ruleId) {
+    const rule = aiRules.find(r => r.id === ruleId);
+    if (!rule) return;
+    activeAiRuleId = ruleId;
+    setAiRuleForm(rule);
+    renderAiRulesList();
+    setAiRulesStatus('');
+}
+
+function openNewAiRule() {
+    activeAiRuleId = null;
+    setAiRuleForm({ priority: 'medium', enabled: true, requiresReview: false });
+    renderAiRulesList();
+    setAiRulesStatus('Creating a new rule. Fill in details and save.');
+}
+
+function generateAiRuleId(title) {
+    const slug = String(title || 'rule')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-');
+    return `ai-rule-${slug}-${Date.now().toString(36)}`;
+}
+
+function getAiRuleFormValues() {
+    return {
+        id: activeAiRuleId,
+        title: document.getElementById('ai-rule-title').value.trim(),
+        category: document.getElementById('ai-rule-category').value.trim() || 'General',
+        priority: document.getElementById('ai-rule-priority').value,
+        content: document.getElementById('ai-rule-content').value.trim(),
+        enabled: document.getElementById('ai-rule-enabled').checked,
+        requiresReview: document.getElementById('ai-rule-review').checked
+    };
+}
+
+async function saveAiRule() {
+    const formValues = getAiRuleFormValues();
+    if (!formValues.title || !formValues.content) {
+        setAiRulesStatus('Title and rule details are required.', true);
+        return;
+    }
+
+    const now = new Date().toISOString();
+    let updatedRules = [...aiRules];
+    const existingIndex = updatedRules.findIndex(rule => rule.id === formValues.id);
+
+    if (existingIndex >= 0) {
+        const existing = updatedRules[existingIndex];
+        updatedRules[existingIndex] = {
+            ...existing,
+            ...formValues,
+            createdAt: existing.createdAt || now,
+            updatedAt: now
+        };
+    } else {
+        const newRule = {
+            ...formValues,
+            id: formValues.id || generateAiRuleId(formValues.title),
+            createdAt: now,
+            updatedAt: now
+        };
+        updatedRules = [newRule, ...updatedRules];
+        activeAiRuleId = newRule.id;
+    }
+
+    setAiRulesStatus('Saving...');
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rules: updatedRules })
+        });
+
+        if (!response) return;
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to save rules');
+        }
+
+        aiRules = Array.isArray(data.rules) ? data.rules : updatedRules;
+        renderAiRulesList();
+        if (activeAiRuleId) {
+            selectAiRule(activeAiRuleId);
+        }
+        setAiRulesStatus('Rule saved successfully.');
+    } catch (error) {
+        console.error('Error saving AI rules:', error);
+        setAiRulesStatus(`Failed to save rules: ${error.message}`, true);
+    }
+}
+
+async function deleteAiRule() {
+    if (!activeAiRuleId) {
+        setAiRulesStatus('Select a rule to delete.', true);
+        return;
+    }
+
+    const targetRule = aiRules.find(rule => rule.id === activeAiRuleId);
+    if (!targetRule) return;
+
+    if (!confirm(`Delete rule "${targetRule.title}"? This cannot be undone.`)) {
+        return;
+    }
+
+    const updatedRules = aiRules.filter(rule => rule.id !== activeAiRuleId);
+    setAiRulesStatus('Deleting...');
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rules: updatedRules })
+        });
+
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to delete rule');
+        }
+
+        aiRules = Array.isArray(data.rules) ? data.rules : updatedRules;
+        activeAiRuleId = aiRules[0]?.id || null;
+        if (activeAiRuleId) {
+            selectAiRule(activeAiRuleId);
+        } else {
+            openNewAiRule();
+        }
+        renderAiRulesList();
+        setAiRulesStatus('Rule deleted.');
+    } catch (error) {
+        console.error('Error deleting AI rule:', error);
+        setAiRulesStatus(`Failed to delete rule: ${error.message}`, true);
+    }
+}
+
+async function loadAiRules() {
+    setAiRulesStatus('Loading...');
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-rules`);
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load AI rules');
+        }
+
+        aiRules = Array.isArray(data.rules) ? data.rules : [];
+        renderAiRulesList();
+
+        if (aiRules.length && !activeAiRuleId) {
+            selectAiRule(aiRules[0].id);
+        } else if (!aiRules.length) {
+            openNewAiRule();
+        }
+
+        setAiRulesStatus('');
+    } catch (error) {
+        console.error('Error loading AI rules:', error);
+        setAiRulesStatus(`Failed to load AI rules: ${error.message}`, true);
+    }
+}
+
+function refreshAiRules() {
+    loadAiRules();
+}
+
 
 // Initialize on load
 console.log('Central Admin loaded');
@@ -7229,6 +7511,13 @@ window.deleteUser = deleteUser;
 window.closeDeleteUserModal = closeDeleteUserModal;
 window.confirmDeleteUser = confirmDeleteUser;
 window.filterUsers = filterUsers;
+window.loadAiRules = loadAiRules;
+window.refreshAiRules = refreshAiRules;
+window.filterAiRules = filterAiRules;
+window.selectAiRule = selectAiRule;
+window.openNewAiRule = openNewAiRule;
+window.saveAiRule = saveAiRule;
+window.deleteAiRule = deleteAiRule;
 
 console.log('✅ [Global Functions] User management functions exposed to window:', {
     openAddUserModal: typeof window.openAddUserModal,
