@@ -1,5 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
+import fs from 'fs/promises';
+import path from 'path';
+import { isDatabaseAvailable, query } from '../config/database.js';
 
 const buyersByEmail = new Map();
 const buyersById = new Map();
@@ -8,6 +11,13 @@ const ordersById = new Map();
 const ordersByBuyerId = new Map();
 
 const paymentsById = new Map();
+
+const ARCHIVE_PATH = process.env.WHOLESALE_ORDER_ARCHIVE_PATH
+  ? path.resolve(process.env.WHOLESALE_ORDER_ARCHIVE_PATH)
+  : path.resolve(process.cwd(), 'data', 'wholesale-orders-archive.csv');
+const ARCHIVE_DAYS = Math.max(1, parseInt(process.env.WHOLESALE_ORDER_ARCHIVE_DAYS || '90', 10));
+const ARCHIVE_INTERVAL_MS = Math.max(60_000, parseInt(process.env.WHOLESALE_ORDER_ARCHIVE_INTERVAL_MS || '600000', 10));
+let lastArchiveRun = 0;
 
 export async function createBuyer({ businessName, contactName, email, password, buyerType, location }) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -93,18 +103,56 @@ export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, del
   if (!ordersByBuyerId.has(buyerId)) ordersByBuyerId.set(buyerId, []);
   ordersByBuyerId.get(buyerId).unshift(order);
 
+  persistOrder(order).catch(() => {});
+  runArchiveIfNeeded().catch(() => {});
+
   return order;
 }
 
-export function listOrdersForBuyer(buyerId) {
-  return ordersByBuyerId.get(buyerId) || [];
+export async function listOrdersForBuyer(buyerId, options = {}) {
+  await runArchiveIfNeeded().catch(() => {});
+  if (isDatabaseAvailable()) {
+    const result = await query(
+      'SELECT order_data FROM wholesale_orders WHERE buyer_id = $1 ORDER BY created_at DESC',
+      [buyerId]
+    );
+    const dbOrders = result.rows.map((row) => row.order_data);
+    if (options.includeArchived) {
+      const archived = await loadArchivedOrders({ buyerId });
+      return mergeOrders(dbOrders, archived);
+    }
+    return dbOrders;
+  }
+  const memOrders = ordersByBuyerId.get(buyerId) || [];
+  if (options.includeArchived) {
+    const archived = await loadArchivedOrders({ buyerId });
+    return mergeOrders(memOrders, archived);
+  }
+  return memOrders;
 }
 
-export function listAllOrders() {
-  return Array.from(ordersById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+export async function listAllOrders(options = {}) {
+  await runArchiveIfNeeded().catch(() => {});
+  if (isDatabaseAvailable()) {
+    const result = await query(
+      'SELECT order_data FROM wholesale_orders ORDER BY created_at DESC'
+    );
+    const dbOrders = result.rows.map((row) => row.order_data);
+    if (options.includeArchived) {
+      const archived = await loadArchivedOrders();
+      return mergeOrders(dbOrders, archived);
+    }
+    return dbOrders;
+  }
+  const memOrders = Array.from(ordersById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (options.includeArchived) {
+    const archived = await loadArchivedOrders();
+    return mergeOrders(memOrders, archived);
+  }
+  return memOrders;
 }
 
-export function updateFarmSubOrder({ orderId, farmId, updates }) {
+export async function updateFarmSubOrder({ orderId, farmId, updates }) {
   const order = ordersById.get(orderId);
   if (!order) return null;
 
@@ -119,6 +167,8 @@ export function updateFarmSubOrder({ orderId, farmId, updates }) {
     const idx = buyerOrders.findIndex((o) => o.master_order_id === orderId);
     if (idx >= 0) buyerOrders[idx] = order;
   }
+
+  await persistOrder(order).catch(() => {});
 
   return subOrder;
 }
@@ -147,4 +197,182 @@ export function listPayments() {
 
 export function listRefunds() {
   return [];
+}
+
+export async function getOrderById(orderId, options = {}) {
+  if (isDatabaseAvailable()) {
+    const result = await query('SELECT order_data FROM wholesale_orders WHERE master_order_id = $1', [orderId]);
+    const row = result.rows[0];
+    if (!row) {
+      if (options.includeArchived) {
+        const archived = await loadArchivedOrders({ orderId });
+        return archived[0] || null;
+      }
+      return null;
+    }
+    return row.order_data;
+  }
+  const order = ordersById.get(orderId) || null;
+  if (order) return order;
+  if (options.includeArchived) {
+    const archived = await loadArchivedOrders({ orderId });
+    return archived[0] || null;
+  }
+  return null;
+}
+
+export async function saveOrder(order) {
+  await persistOrder(order);
+  return order;
+}
+
+async function persistOrder(order) {
+  if (!isDatabaseAvailable()) return;
+  const now = new Date().toISOString();
+  const createdAt = order.created_at || now;
+  const buyerEmail = order.buyer_account?.email || null;
+  await query(
+    `INSERT INTO wholesale_orders
+      (master_order_id, buyer_id, buyer_email, status, order_data, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+     ON CONFLICT (master_order_id) DO UPDATE
+     SET buyer_id = EXCLUDED.buyer_id,
+         buyer_email = EXCLUDED.buyer_email,
+         status = EXCLUDED.status,
+         order_data = EXCLUDED.order_data,
+         updated_at = EXCLUDED.updated_at`,
+    [order.master_order_id, order.buyer_id, buyerEmail, order.status, JSON.stringify(order), createdAt, now]
+  );
+}
+
+async function runArchiveIfNeeded() {
+  if (!isDatabaseAvailable()) return;
+  const now = Date.now();
+  if (now - lastArchiveRun < ARCHIVE_INTERVAL_MS) return;
+  lastArchiveRun = now;
+  await archiveOldOrders();
+}
+
+async function archiveOldOrders() {
+  const cutoff = new Date(Date.now() - ARCHIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const result = await query(
+    'SELECT master_order_id, buyer_id, buyer_email, status, created_at, updated_at, order_data FROM wholesale_orders WHERE created_at < $1 ORDER BY created_at ASC',
+    [cutoff]
+  );
+  if (!result.rows.length) return;
+  await appendArchiveRows(result.rows);
+  const ids = result.rows.map((row) => row.master_order_id);
+  await query('DELETE FROM wholesale_orders WHERE master_order_id = ANY($1)', [ids]);
+}
+
+function mergeOrders(primary, secondary) {
+  const seen = new Set(primary.map((o) => o.master_order_id));
+  const merged = [...primary];
+  for (const order of secondary) {
+    if (!seen.has(order.master_order_id)) merged.push(order);
+  }
+  return merged.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+async function appendArchiveRows(rows) {
+  await fs.mkdir(path.dirname(ARCHIVE_PATH), { recursive: true });
+  let hasFile = true;
+  try {
+    await fs.access(ARCHIVE_PATH);
+  } catch {
+    hasFile = false;
+  }
+
+  const header = 'master_order_id,buyer_id,buyer_email,status,created_at,updated_at,order_json\n';
+  const lines = rows.map((row) => {
+    const orderJson = JSON.stringify(row.order_data || {});
+    return [
+      row.master_order_id,
+      row.buyer_id,
+      row.buyer_email || '',
+      row.status || '',
+      new Date(row.created_at).toISOString(),
+      new Date(row.updated_at).toISOString(),
+      orderJson
+    ].map(csvEscape).join(',');
+  }).join('\n') + '\n';
+
+  if (!hasFile) {
+    await fs.writeFile(ARCHIVE_PATH, header + lines, 'utf8');
+    return;
+  }
+  await fs.appendFile(ARCHIVE_PATH, lines, 'utf8');
+}
+
+function csvEscape(value) {
+  const str = String(value ?? '');
+  if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+async function loadArchivedOrders(filters = {}) {
+  let content = '';
+  try {
+    content = await fs.readFile(ARCHIVE_PATH, 'utf8');
+  } catch {
+    return [];
+  }
+
+  const lines = content.split(/\r?\n/).filter(Boolean);
+  if (lines.length <= 1) return [];
+  const rows = lines.slice(1).map(parseCsvLine).filter(Boolean);
+
+  let orders = rows.map((row) => {
+    const orderJson = row[6] ? safeJsonParse(row[6]) : null;
+    return orderJson || null;
+  }).filter(Boolean);
+
+  if (filters.orderId) {
+    orders = orders.filter((o) => o.master_order_id === filters.orderId);
+  }
+  if (filters.buyerId) {
+    orders = orders.filter((o) => o.buyer_id === filters.buyerId);
+  }
+  return orders;
+}
+
+function parseCsvLine(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (inQuotes) {
+      if (char === '"' && next === '"') {
+        current += '"';
+        i++;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        current += char;
+      }
+    } else if (char === ',') {
+      values.push(current);
+      current = '';
+    } else if (char === '"') {
+      inQuotes = true;
+    } else {
+      current += char;
+    }
+  }
+  values.push(current);
+  return values.length >= 7 ? values : null;
+}
+
+function safeJsonParse(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }

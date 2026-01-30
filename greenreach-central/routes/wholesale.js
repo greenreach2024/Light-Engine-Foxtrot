@@ -9,10 +9,12 @@ import {
   createOrder,
   createPayment,
   getBuyerById,
+  getOrderById,
   listAllOrders,
   listOrdersForBuyer,
   listPayments,
   listRefunds,
+  saveOrder,
   updateFarmSubOrder
 } from '../services/wholesaleMemoryStore.js';
 
@@ -533,10 +535,11 @@ router.post('/buyers/login', async (req, res, next) => {
 });
 
 router.get('/orders', requireBuyerAuth, async (req, res) => {
+  const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
   return res.json({
     status: 'ok',
     data: {
-      orders: listOrdersForBuyer(req.wholesaleBuyer.id)
+      orders: await listOrdersForBuyer(req.wholesaleBuyer.id, { includeArchived })
     }
   });
 });
@@ -544,8 +547,11 @@ router.get('/orders', requireBuyerAuth, async (req, res) => {
 // Get invoice for a specific order
 router.get('/orders/:orderId/invoice', requireBuyerAuth, async (req, res) => {
   const orderId = req.params.orderId;
-  const orders = listOrdersForBuyer(req.wholesaleBuyer.id);
-  const order = orders.find((o) => o.master_order_id === orderId);
+  const order = await getOrderById(orderId, { includeArchived: true });
+
+  if (order && order.buyer_id !== req.wholesaleBuyer.id) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
 
   if (!order) {
     return res.status(404).json({ status: 'error', message: 'Order not found' });
@@ -761,6 +767,9 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
 
       // Best-effort: notify each farm (Light Engine) about its sub-order.
       // Additive only; failure does not block checkout.
+      order.payment = payment;
+      await saveOrder(order).catch(() => {});
+
       (async () => {
         try {
           const farms = await listNetworkFarms();
@@ -895,6 +904,8 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
       totals: result.allocation
     });
     payment.status = 'completed';
+    order.payment = payment;
+    await saveOrder(order).catch(() => {});
 
     // Notify farms (dev stub): broadcast over WS if available.
     const wss = req.app?.locals?.wss;
@@ -946,11 +957,13 @@ router.delete('/oauth/square/disconnect/:farmId', (req, res) => {
   return res.json({ status: 'ok', data: { disconnected: true, farm_id: req.params.farmId } });
 });
 
-router.get('/admin/orders', (req, res) => {
+router.get('/admin/orders', async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(404).json({ status: 'error', message: 'Not Found' });
   }
-  return res.json({ status: 'ok', data: { orders: listAllOrders() } });
+  const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
+  const orders = await listAllOrders({ includeArchived });
+  return res.json({ status: 'ok', data: { orders } });
 });
 
 // --- Network admin (DB optional) ---
@@ -1008,8 +1021,8 @@ router.post('/network/market-events', (req, res) => {
   return res.json({ status: 'ok', data: { event: evt } });
 });
 
-router.get('/network/recommendations', (req, res) => {
-  const recentOrders = listAllOrders().slice(0, 200);
+router.get('/network/recommendations', async (req, res) => {
+  const recentOrders = (await listAllOrders()).slice(0, 200);
   return res.json({ status: 'ok', data: generateNetworkRecommendations({ recentOrders }) });
 });
 
@@ -1017,9 +1030,10 @@ router.get('/network/recommendations', (req, res) => {
 // ADMIN ENDPOINTS - Payment Management
 // ============================================================================
 
-router.get('/admin/orders', (req, res) => {
+router.get('/admin/orders', async (req, res) => {
   try {
-    const orders = listAllOrders();
+    const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
+    const orders = await listAllOrders({ includeArchived });
     return res.json({ status: 'ok', orders });
   } catch (error) {
     console.error('Admin list orders error:', error);
@@ -1027,7 +1041,7 @@ router.get('/admin/orders', (req, res) => {
   }
 });
 
-router.post('/admin/orders/:orderId/payment', express.json(), (req, res) => {
+router.post('/admin/orders/:orderId/payment', express.json(), async (req, res) => {
   try {
     const { orderId } = req.params;
     const { status, payment_reference, payment_method, marked_at } = req.body;
@@ -1037,8 +1051,7 @@ router.post('/admin/orders/:orderId/payment', express.json(), (req, res) => {
     }
 
     // In limited mode, orders are in memory - update the order directly
-    const orders = listAllOrders();
-    const order = orders.find(o => o.master_order_id === orderId);
+    const order = await getOrderById(orderId, { includeArchived: true });
 
     if (!order) {
       return res.status(404).json({ status: 'error', message: 'Order not found' });
@@ -1051,6 +1064,8 @@ router.post('/admin/orders/:orderId/payment', express.json(), (req, res) => {
     order.payment.method = payment_method || 'manual';
     order.payment.marked_at = marked_at || new Date().toISOString();
 
+    await saveOrder(order).catch(() => {});
+
     return res.json({ status: 'ok', data: { order } });
   } catch (error) {
     console.error('Admin update payment error:', error);
@@ -1059,7 +1074,7 @@ router.post('/admin/orders/:orderId/payment', express.json(), (req, res) => {
 });
 
 // Update farm sub-order tracking (for farm fulfillment UI)
-router.patch('/admin/orders/:orderId/farms/:farmId/tracking', express.json(), (req, res) => {
+router.patch('/admin/orders/:orderId/farms/:farmId/tracking', express.json(), async (req, res) => {
   try {
     const { orderId, farmId } = req.params;
     const { tracking_number, tracking_carrier, status } = req.body;
@@ -1076,7 +1091,7 @@ router.patch('/admin/orders/:orderId/farms/:farmId/tracking', express.json(), (r
 
     if (status) updates.status = status;
 
-    const subOrder = updateFarmSubOrder({ orderId, farmId, updates });
+    const subOrder = await updateFarmSubOrder({ orderId, farmId, updates });
 
     if (!subOrder) {
       return res.status(404).json({ status: 'error', message: 'Order or farm sub-order not found' });
@@ -1153,12 +1168,13 @@ router.post('/order-status', async (req, res) => {
     console.log(`📞 [Status Callback] Received from farm ${farm_id}: Order ${order_id} → ${status}`);
     
     // Update order status in memory store
-    const orders = listAllOrders();
-    const order = orders.find(o => o.master_order_id === order_id);
+    const order = await getOrderById(order_id, { includeArchived: true });
     
     if (order) {
       order.fulfillment_status = status;
       order.status_updated_at = timestamp || new Date().toISOString();
+
+      await saveOrder(order).catch(() => {});
       
       console.log(`✅ Updated order ${order_id} status to ${status}`);
       

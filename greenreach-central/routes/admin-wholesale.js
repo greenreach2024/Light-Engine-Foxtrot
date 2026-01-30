@@ -1,5 +1,6 @@
 import express from 'express';
-import { query } from '../config/database.js';
+import { query, isDatabaseAvailable } from '../config/database.js';
+import { listAllOrders } from '../services/wholesaleMemoryStore.js';
 
 const router = express.Router();
 
@@ -8,8 +9,22 @@ const router = express.Router();
  * Get list of all wholesale buyers
  */
 router.get('/buyers', async (req, res) => {
+    const { page = 1, limit = 50, buyerType, search } = req.query;
     try {
-        const { page = 1, limit = 50, buyerType, search } = req.query;
+        if (!isDatabaseAvailable()) {
+            return res.json({
+                status: 'ok',
+                data: {
+                    buyers: [],
+                    pagination: {
+                        page: parseInt(page),
+                        limit: parseInt(limit),
+                        total: 0,
+                        pages: 0
+                    }
+                }
+            });
+        }
         
         // Build query
         let sqlQuery = `
@@ -90,6 +105,13 @@ router.get('/buyers', async (req, res) => {
  */
 router.post('/buyers/reset-password', async (req, res) => {
     try {
+        if (!isDatabaseAvailable()) {
+            return res.status(503).json({
+                status: 'error',
+                error: 'Wholesale buyers not initialized',
+                message: 'Database not available'
+            });
+        }
         const { email, newPassword } = req.body;
         
         if (!email || !newPassword) {
@@ -151,16 +173,20 @@ router.post('/buyers/reset-password', async (req, res) => {
  */
 router.get('/orders', async (req, res) => {
     try {
-        // Return empty array for now - orders functionality to be implemented
+        const { page = 1, limit = 50, includeArchived } = req.query;
+        const orders = await listAllOrders({ includeArchived: String(includeArchived || '').toLowerCase() === 'true' });
+        const total = orders.length;
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        const paged = orders.slice(offset, offset + parseInt(limit));
         res.json({
             status: 'ok',
             data: {
-                orders: [],
+                orders: paged,
                 pagination: {
-                    page: 1,
-                    limit: 50,
-                    total: 0,
-                    pages: 0
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / parseInt(limit))
                 }
             }
         });
@@ -180,17 +206,26 @@ router.get('/orders', async (req, res) => {
  */
 router.get('/dashboard', async (req, res) => {
     try {
-        // Return basic stats for now
-        const buyersResult = await query('SELECT COUNT(*) as count FROM wholesale_buyers');
-        const buyersCount = parseInt(buyersResult.rows[0]?.count || 0);
+        let buyersCount = 0;
+        if (isDatabaseAvailable()) {
+            const buyersResult = await query('SELECT COUNT(*) as count FROM wholesale_buyers');
+            buyersCount = parseInt(buyersResult.rows[0]?.count || 0);
+        }
+
+        const orders = await listAllOrders();
+        const totalOrders = orders.length;
+        const totalRevenue = orders.reduce((sum, order) => sum + Number(order.grand_total || 0), 0);
+        const activeFarms = new Set(
+            orders.flatMap((order) => (order.farm_sub_orders || []).map((sub) => sub.farm_id))
+        ).size;
         
         res.json({
             status: 'ok',
             data: {
                 totalBuyers: buyersCount,
-                totalOrders: 0,
-                totalRevenue: 0,
-                activeFarms: 0
+                totalOrders,
+                totalRevenue,
+                activeFarms
             }
         });
     } catch (error) {

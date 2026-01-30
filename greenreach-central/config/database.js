@@ -196,6 +196,42 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_products_updated ON products(updated_at);
   `);
 
+  // Create wholesale_buyers table for wholesale admin + buyer auth
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS wholesale_buyers (
+      id SERIAL PRIMARY KEY,
+      business_name VARCHAR(255) NOT NULL,
+      contact_name VARCHAR(255),
+      email VARCHAR(255) UNIQUE NOT NULL,
+      buyer_type VARCHAR(50),
+      location JSONB DEFAULT '{}',
+      password_hash VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wholesale_buyers_email ON wholesale_buyers(email);
+    CREATE INDEX IF NOT EXISTS idx_wholesale_buyers_created ON wholesale_buyers(created_at);
+  `);
+
+  // Create wholesale_orders table for persisted wholesale orders
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS wholesale_orders (
+      id SERIAL PRIMARY KEY,
+      master_order_id VARCHAR(64) UNIQUE NOT NULL,
+      buyer_id VARCHAR(128) NOT NULL,
+      buyer_email VARCHAR(255),
+      status VARCHAR(50) DEFAULT 'confirmed',
+      order_data JSONB NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wholesale_orders_master ON wholesale_orders(master_order_id);
+    CREATE INDEX IF NOT EXISTS idx_wholesale_orders_buyer ON wholesale_orders(buyer_id);
+    CREATE INDEX IF NOT EXISTS idx_wholesale_orders_created ON wholesale_orders(created_at);
+  `);
+
   logger.info('Database migrations completed');
 }
 
