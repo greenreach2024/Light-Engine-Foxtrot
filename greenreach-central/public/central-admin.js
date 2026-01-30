@@ -1814,11 +1814,45 @@ async function resolveFarmDevices(farmId, farm) {
         }
         if (!response || !response.ok) return [];
         const data = await response.json();
-        return Array.isArray(data.devices) ? data.devices : [];
+        const normalized = normalizeDeviceList(data);
+        if (normalized.length > 0) return normalized;
+
+        // Fallback: derive sensor devices from telemetry when devices are not synced
+        try {
+            const telemetryRes = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            if (telemetryRes.ok) {
+                const telemetry = await telemetryRes.json();
+                const zones = telemetry?.telemetry?.zones || [];
+                const derived = zones.map((zone, index) => ({
+                    id: zone.id || `zone-${index + 1}`,
+                    device_id: zone.id || `zone-${index + 1}`,
+                    name: zone.name || zone.id || `Zone ${index + 1}`,
+                    device_type: 'sensor',
+                    type: 'sensor',
+                    category: 'sensor',
+                    room: zone.room || zone.roomName || null,
+                    zone: zone.id || null
+                }));
+                return derived;
+            }
+        } catch (fallbackError) {
+            console.warn('[equipment-summary] Telemetry fallback failed:', fallbackError);
+        }
+
+        return [];
     } catch (error) {
         console.warn('[equipment-summary] Failed to load devices:', error);
         return [];
     }
+}
+
+function normalizeDeviceList(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload.devices)) return payload.devices;
+    if (Array.isArray(payload.data)) return payload.data;
+    if (Array.isArray(payload.items)) return payload.items;
+    if (Array.isArray(payload.devices?.devices)) return payload.devices.devices;
+    return [];
 }
 
 async function resolveFarmGroups(farmId, farm) {
