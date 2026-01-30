@@ -2831,9 +2831,10 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
                 const groupZone = g.zone || g.zone_id || g.location;
                 if (!groupZone) return false;
                 
-                // Match exact zone ID or by zone number
+                // Match exact zone ID or by compound format or zone number
                 return groupZone === zoneId || 
                        (zoneNumber && (
+                           groupZone === `${roomId}:${zoneNumber}` ||
                            groupZone.endsWith(`:${zoneNumber}`) || 
                            groupZone.endsWith(`-${zoneNumber}`) ||
                            groupZone === `zone-${zoneNumber}`
@@ -2841,7 +2842,7 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
             });
             
             zoneData.groups = zoneGroups.length;
-            console.log('[zone-detail] Found groups for zone:', zoneData.groups, 'matching zoneId:', zoneId);
+            console.log('[zone-detail] Found groups for zone:', zoneData.groups, 'matching zoneId:', zoneId, 'roomId:', roomId);
         }
     } catch (error) {
         console.error('[zone-detail] Failed to fetch zone data:', error);
