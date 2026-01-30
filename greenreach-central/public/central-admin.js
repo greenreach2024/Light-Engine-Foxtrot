@@ -3731,11 +3731,18 @@ async function navigate(view, element) {
             switchDetailTab('energy');
             break;
             
-        case 'farm-alerts':
-            // Ensure farm-detail-view is visible, then switch to alerts tab
+        case 'farm-alerts': {
+            // Ensure farm-detail-view is visible, then switch to alerts tab if available
             document.getElementById('farm-detail-view').style.display = 'block';
-            switchDetailTab('alerts');
+            const detailAlerts = document.getElementById('detail-alerts');
+            if (detailAlerts) {
+                switchDetailTab('alerts');
+            } else {
+                document.getElementById('alerts-view').style.display = 'block';
+                await loadAlertsView({ farmId: currentFarmId });
+            }
             break;
+        }
             
         case 'farms':
             document.getElementById('overview-view').style.display = 'block';
@@ -3889,7 +3896,12 @@ function switchDetailTab(tab, element) {
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
     });
-    document.getElementById(`detail-${tab}`).classList.add('active');
+    const target = document.getElementById(`detail-${tab}`);
+    if (!target) {
+        console.warn(`[switchDetailTab] Tab not found: detail-${tab}`);
+        return;
+    }
+    target.classList.add('active');
 }
 
 /**
@@ -5020,7 +5032,7 @@ async function loadAnomaliesView() {
     
     try {
         // Fetch live anomaly data from API
-        const response = await authenticatedFetch(`${API_BASE}/api/schedule-executor/ml-anomalies`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/anomalies`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -5053,31 +5065,34 @@ async function loadAnomaliesView() {
         
         // Transform data to match dashboard format
         const html = anomalies.map((anomaly, idx) => {
-            const timestamp = anomaly.timestamp ? new Date(anomaly.timestamp).toLocaleString() : new Date().toLocaleString();
-            const farm = 'Farm Alpha'; // TODO: Get actual farm name from context
-            const type = 'environmental'; // Most ML anomalies are environmental
-            const severity = anomaly.severity || 'warning';
-            const description = anomaly.reason || 'Anomaly detected';
-            const confidence = 85; // Default confidence if not provided
+            const timestamp = anomaly.timestamp || anomaly.created_at || anomaly.lastUpdated;
+            const timestampLabel = timestamp ? new Date(timestamp).toLocaleString() : '—';
+            const farm = anomaly.farmName || anomaly.farmId || 'Unknown Farm';
+            const type = (anomaly.type || anomaly.category || 'environmental').toString().toLowerCase();
+            const severity = (anomaly.severity || 'warning').toString().toLowerCase();
+            const description = anomaly.reason || anomaly.description || 'Anomaly detected';
+            const confidence = Number.isFinite(anomaly.confidence)
+                ? Math.round(anomaly.confidence * (anomaly.confidence <= 1 ? 100 : 1))
+                : '—';
             const status = anomaly.status || 'new';
             
             // Build context for tracing
             const context = {
-                farmId: 'GR-00001', // TODO: Get from actual farm data
-                roomId: 'room-a',
-                zoneId: anomaly.zone || null,
-                groupId: null,
-                deviceId: null
+                farmId: anomaly.farmId || null,
+                roomId: anomaly.roomId || anomaly.room || null,
+                zoneId: anomaly.zone || anomaly.zoneId || null,
+                groupId: anomaly.groupId || null,
+                deviceId: anomaly.deviceId || null
             };
             
             return `
                 <tr>
-                    <td>${timestamp}</td>
+                    <td>${timestampLabel}</td>
                     <td>${farm}</td>
                     <td>${type}</td>
                     <td><span class="status-badge status-${severity}">${severity}</span></td>
                     <td>${description}</td>
-                    <td>${confidence}%</td>
+                    <td>${confidence === '—' ? '—' : `${confidence}%`}</td>
                     <td>${status}</td>
                     <td>
                         <button class="btn-small" onclick="traceAnomaly('anom-${idx}', ${JSON.stringify(context).replace(/"/g, '&quot;')})">Trace</button>
@@ -5115,13 +5130,23 @@ async function loadAnomaliesView() {
  * - Anomalies: ML pattern detection, investigative (unusual behavior patterns)
  * - Alerts are reactive (known problems), Anomalies are proactive (emerging issues)
  */
-async function loadAlertsView() {
-    console.log('[Alerts] Loading alerts...');
+async function loadAlertsView(options = {}) {
+    const { farmId = null, severity = null, status = null } = options;
+    console.log('[Alerts] Loading alerts...', { farmId, severity, status });
     const tbody = document.getElementById('alerts-tbody');
+    if (!tbody) {
+        console.warn('[Alerts] Table body not found');
+        return;
+    }
     
     try {
         // Fetch live alert data from API
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts`);
+        const params = new URLSearchParams();
+        if (farmId) params.append('farm_id', farmId);
+        if (severity) params.append('severity', severity);
+        if (status) params.append('status', status);
+        const query = params.toString();
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts${query ? `?${query}` : ''}`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -5190,6 +5215,13 @@ async function loadAlertsView() {
         
         showToast('Failed to load alert data', 'error');
     }
+}
+
+function filterAlerts() {
+    const severity = document.getElementById('filter-alert-severity')?.value || null;
+    const status = document.getElementById('filter-alert-status')?.value || null;
+    const farmId = currentFarmId || null;
+    loadAlertsView({ farmId, severity, status });
 }
 
 /**
