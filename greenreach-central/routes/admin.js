@@ -1,9 +1,10 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { adminAuthMiddleware } from '../middleware/adminAuth.js';
+import { adminAuthMiddleware, requireAdminRole } from '../middleware/adminAuth.js';
 import adminAuthRoutes from './admin-auth.js';
 import adminWholesaleRoutes from './admin-wholesale.js';
 import adminRecipesRoutes from './admin-recipes.js';
@@ -13,6 +14,280 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
+const AI_RULES_PATH = path.join(__dirname, '../data/ai-rules.json');
+const ADMIN_SALT_ROUNDS = 12;
+
+function generateTempPassword() {
+    return crypto.randomBytes(8).toString('base64url');
+}
+
+function normalizeAdminRole(role) {
+    const normalized = String(role || '').trim().toLowerCase();
+    if (['admin', 'operations', 'support', 'viewer'].includes(normalized)) return normalized;
+    return 'viewer';
+}
+
+const DEFAULT_AI_RULES = [
+    {
+        id: 'decision-support-first',
+        title: 'Decision support first',
+        category: 'Operating role & guardrails',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Default to recommendations + predicted outcomes, not guaranteed fixes. If the system can auto-actuate (smart plugs, dimmable lights, irrigation, nutrients), recommend an action plan but require the control layer to enforce safety limits + rate limits.'
+    },
+    {
+        id: 'never-assume-missing-equipment',
+        title: 'Never assume missing equipment',
+        category: 'Operating role & guardrails',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Only recommend actions that match the available actuators (fans, dehumidifier, humidifier, dimmable lights, irrigation timing, nutrient dosing). If the obvious tool is not available, offer alternatives instead of repeating the same suggestion.'
+    },
+    {
+        id: 'explain-constraints',
+        title: 'Explain constraints explicitly',
+        category: 'Operating role & guardrails',
+        priority: 'medium',
+        requiresReview: false,
+        enabled: true,
+        content: 'Always state why a perfect solution may be unavailable (no exhaust, ambient air likely humid, no heater) and then propose the best achievable improvements.'
+    },
+    {
+        id: 'human-oversight-high-risk',
+        title: 'Human oversight for high-risk actions',
+        category: 'Operating role & guardrails',
+        priority: 'high',
+        requiresReview: true,
+        enabled: true,
+        content: 'Any recommendation that could affect worker safety, electrical loading, or crop loss must be flagged as needs review.'
+    },
+    {
+        id: 'validate-sensor-plausibility',
+        title: 'Validate ranges and plausibility before acting',
+        category: 'Sensor sanity',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Check for impossible or suspicious readings (RH > 100%, sudden CO₂ jumps, temperature step changes). If data looks wrong, recommend holding actions, verifying sensors, cross-checking with another sensor, and inspecting placement.'
+    },
+    {
+        id: 'trend-over-snapshot',
+        title: 'Use trend over snapshot',
+        category: 'Sensor sanity',
+        priority: 'medium',
+        requiresReview: false,
+        enabled: true,
+        content: 'Require a short rolling window (10–20 minutes) before big changes. If readings are drifting, propose small, reversible steps first.'
+    },
+    {
+        id: 'gas-relative-indicator',
+        title: 'GAS is a relative indicator',
+        category: 'Sensor sanity',
+        priority: 'medium',
+        requiresReview: false,
+        enabled: true,
+        content: 'Treat gas resistance (kΩ) as a broad proxy for indoor air quality/VOCs. Use it to detect change and suggest inspection (standing water, cleaning chemicals, biofilm, off-gassing plastics), not precise diagnoses.'
+    },
+    {
+        id: 'pressure-contextual',
+        title: 'Pressure is contextual',
+        category: 'Sensor sanity',
+        priority: 'low',
+        requiresReview: false,
+        enabled: true,
+        content: 'Pressure helps interpret weather/infiltration context but rarely justifies direct control changes by itself unless consistent correlations are observed.'
+    },
+    {
+        id: 'prioritize-outcomes',
+        title: 'Prioritize outcomes',
+        category: 'Decision framework',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Order of priorities: prevent plant damage and disease risk → restore stable transpiration (VPD/condensation control) → improve quality/yield → minimize energy and equipment wear.'
+    },
+    {
+        id: 'vpd-over-rh',
+        title: 'Use VPD + condensation risk, not RH alone',
+        category: 'Decision framework',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'RH is useful, but condensation risk depends on leaf/surface temperature vs dew point. At very high RH, tiny temperature drops can cause condensation. VPD is the plant-facing metric.'
+    },
+    {
+        id: 'ranked-options',
+        title: 'Always propose 2–5 ranked options',
+        category: 'Decision framework',
+        priority: 'medium',
+        requiresReview: false,
+        enabled: true,
+        content: 'Provide a ranked list (Best, Second-best, If you can’t do X). Include at least one no-new-hardware option and one operational schedule option.'
+    },
+    {
+        id: 'predict-side-effects',
+        title: 'Predict side-effects',
+        category: 'Decision framework',
+        priority: 'medium',
+        requiresReview: false,
+        enabled: true,
+        content: 'Every action must include likely tradeoffs (raising temp reduces RH but increases water use; more airflow may cool canopy).' 
+    },
+    {
+        id: 'hysteresis-min-run-time',
+        title: 'Hysteresis + minimum run times',
+        category: 'Actuation rules',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Fans/dehumidifiers/humidifiers must not toggle rapidly. Enforce minimum ON/OFF times (10–20 min) and deadbands around targets.'
+    },
+    {
+        id: 'rate-limit-lights-nutrients',
+        title: 'Rate-limit light and nutrient changes',
+        category: 'Actuation rules',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Lights: limit dimming steps and frequency (max ±10% per 10 minutes unless emergency). Nutrients: never chase EC/pH rapidly; recommend incremental changes with verification.'
+    },
+    {
+        id: 'avoid-conflicting-actions',
+        title: 'Avoid conflicting actions',
+        category: 'Actuation rules',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Do not run humidifier and dehumidifier together. Do not increase irrigation to cool when humidity is already the main problem. Do not dim lights for cooling if it drives VPD toward condensation risk unless heat stress is worse.'
+    },
+    {
+        id: 'co2-safety-separation',
+        title: 'CO₂: plant benefit vs people safety',
+        category: 'CO₂ safety',
+        priority: 'critical',
+        requiresReview: true,
+        enabled: true,
+        content: 'If CO₂ is elevated unexpectedly, prioritize human safety and ventilation/alerts. Occupational exposure limits commonly cite 5,000 ppm TWA and 30,000 ppm short-term.'
+    },
+    {
+        id: 'co2-enrichment-guidance',
+        title: 'CO₂ enrichment guidance',
+        category: 'CO₂ safety',
+        priority: 'medium',
+        requiresReview: false,
+        enabled: true,
+        content: 'Only enrich during lights-on / active photosynthesis. Many greenhouse references recommend staying around ~1,000–1,200 ppm when not ventilating (crop dependent).' 
+    },
+    {
+        id: 'high-humidity-playbook',
+        title: 'High-humidity playbook',
+        category: 'High humidity',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Checklist: (1) confirm VPD + condensation risk; flag nighttime VPD below ~0.2–0.3 kPa. (2) Choose best moisture removal: dehumidify; or vent + heat; or limited exchange when outside is drier; or slight temp increase with warnings. (3) Reduce moisture sources: adjust irrigation timing, remove standing water, cover reservoirs. (4) Improve circulation to remove microclimates and canopy stagnation. Provide ranked action bundles.'
+    },
+    {
+        id: 'recommendation-format',
+        title: 'Recommendation format rules',
+        category: 'Recommendation format',
+        priority: 'medium',
+        requiresReview: false,
+        enabled: true,
+        content: 'Always output: current conditions (Temp, RH, VPD, CO₂, Pressure, GAS kΩ + trend), primary diagnosis + confidence, 2–5 ranked actions, expected impact + side-effects, stop conditions and recheck time.'
+    },
+    {
+        id: 'logging-requirement',
+        title: 'Log everything',
+        category: 'Recommendation format',
+        priority: 'high',
+        requiresReview: false,
+        enabled: true,
+        content: 'Each recommendation should be stored with inputs used, chosen actions, expected outcome, and follow-up result. This enables continuous improvement and governance.'
+    },
+    {
+        id: 'dont-be-dumb-limits',
+        title: 'Practical “don’t be dumb” limits',
+        category: 'Safety limits',
+        priority: 'critical',
+        requiresReview: true,
+        enabled: true,
+        content: 'Never recommend overheating plants to lower RH, drastic nutrient EC/pH jumps, disabling airflow when humidity is high, or actions exceeding electrical circuit or smart plug limits.'
+    },
+    {
+        id: 'escalation-conditions',
+        title: 'Escalation conditions',
+        category: 'Safety limits',
+        priority: 'high',
+        requiresReview: true,
+        enabled: true,
+        content: 'Escalate to manual intervention when RH stays high for hours despite actions, condensation/mold risk persists, CO₂ enters unsafe ranges, or sensors disagree/appear miscalibrated.'
+    },
+    {
+        id: 'targets-note',
+        title: 'Targets note',
+        category: 'Targets & context',
+        priority: 'low',
+        requiresReview: false,
+        enabled: true,
+        content: 'Do not hardcode a universal RH/VPD target. Use broad guidance and note crop/stage specificity (e.g., leafy greens respond to VPD bands).'
+    }
+];
+
+function normalizeAiRule(rule) {
+    const now = new Date().toISOString();
+    const baseId = String(rule?.id || '').trim();
+    return {
+        id: baseId || `ai-rule-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        title: String(rule?.title || '').trim() || 'Untitled Rule',
+        category: String(rule?.category || '').trim() || 'General',
+        priority: ['low', 'medium', 'high', 'critical'].includes(String(rule?.priority || '').toLowerCase())
+            ? String(rule.priority).toLowerCase()
+            : 'medium',
+        requiresReview: Boolean(rule?.requiresReview),
+        enabled: rule?.enabled !== false,
+        content: String(rule?.content || '').trim(),
+        createdAt: rule?.createdAt || now,
+        updatedAt: now
+    };
+}
+
+async function loadAiRules() {
+    try {
+        const raw = await fs.readFile(AI_RULES_PATH, 'utf-8');
+        const parsed = JSON.parse(raw);
+        const rules = Array.isArray(parsed?.rules) ? parsed.rules.map(normalizeAiRule) : [];
+        return {
+            rules,
+            updatedAt: parsed?.updatedAt || null,
+            updatedBy: parsed?.updatedBy || null
+        };
+    } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        const payload = {
+            rules: DEFAULT_AI_RULES.map(normalizeAiRule),
+            updatedAt: new Date().toISOString(),
+            updatedBy: 'system'
+        };
+        await fs.mkdir(path.dirname(AI_RULES_PATH), { recursive: true });
+        await fs.writeFile(AI_RULES_PATH, JSON.stringify(payload, null, 2));
+        return payload;
+    }
+}
+
+async function saveAiRules(rules, updatedBy) {
+    const payload = {
+        rules: rules.map(normalizeAiRule),
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy || 'unknown'
+    };
+    await fs.mkdir(path.dirname(AI_RULES_PATH), { recursive: true });
+    await fs.writeFile(AI_RULES_PATH, JSON.stringify(payload, null, 2));
+    return payload;
+}
 
 function normalizeRecipeName(name) {
     return String(name || '')
@@ -118,10 +393,66 @@ router.use('/wholesale', adminWholesaleRoutes);
 router.use('/recipes', adminRecipesRoutes);
 
 /**
+ * GET /api/admin/ai-rules
+ * Retrieve AI policy rules
+ */
+router.get('/ai-rules', async (req, res) => {
+    try {
+        const payload = await loadAiRules();
+        return res.json({
+            success: true,
+            rules: payload.rules,
+            updatedAt: payload.updatedAt,
+            updatedBy: payload.updatedBy
+        });
+    } catch (error) {
+        console.error('[Admin API] Error loading AI rules:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to load AI rules',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/admin/ai-rules
+ * Replace AI policy rules
+ */
+router.post('/ai-rules', async (req, res) => {
+    try {
+        const rules = Array.isArray(req.body?.rules) ? req.body.rules : null;
+        if (!rules) {
+            return res.status(400).json({
+                success: false,
+                error: 'Rules array is required'
+            });
+        }
+
+        const updatedBy = req.admin?.email || 'admin';
+        const payload = await saveAiRules(rules, updatedBy);
+        return res.json({
+            success: true,
+            rules: payload.rules,
+            updatedAt: payload.updatedAt,
+            updatedBy: payload.updatedBy
+        });
+    } catch (error) {
+        console.error('[Admin API] Error saving AI rules:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to save AI rules',
+            message: error.message
+        });
+    }
+});
+
+/**
  * DELETE /api/admin/farms/:farmId
  * Delete a farm (requires admin password confirmation)
+ * Restricted to: admin role only
  */
-router.delete('/farms/:farmId', async (req, res) => {
+router.delete('/farms/:farmId', requireAdminRole('admin'), async (req, res) => {
     try {
         const farmId = req.params.farmId;
         const { password } = req.body || {};
@@ -235,6 +566,256 @@ router.get('/users', async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to load users',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/admin/users
+ * Create admin user (employee)
+ * Restricted to: admin role only
+ */
+router.post('/users', requireAdminRole('admin'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({
+                success: false,
+                error: 'Database not available'
+            });
+        }
+
+        const { first_name, last_name, email, role, password } = req.body || {};
+        if (!first_name || !last_name || !email) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields'
+            });
+        }
+
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const normalizedRole = normalizeAdminRole(role);
+        const fullName = `${String(first_name).trim()} ${String(last_name).trim()}`.trim();
+
+        const existing = await query('SELECT id FROM admin_users WHERE email = $1', [normalizedEmail]);
+        if (existing.rows.length) {
+            return res.status(409).json({
+                success: false,
+                error: 'User already exists'
+            });
+        }
+
+        const tempPassword = password && String(password).trim()
+            ? String(password).trim()
+            : generateTempPassword();
+        const passwordHash = await bcrypt.hash(tempPassword, ADMIN_SALT_ROUNDS);
+
+        const result = await query(
+            `INSERT INTO admin_users (email, password_hash, name, role, active, mfa_enabled)
+             VALUES ($1, $2, $3, $4, true, false)
+             RETURNING id, email, name, role, active, created_at`,
+            [normalizedEmail, passwordHash, fullName, normalizedRole]
+        );
+
+        return res.json({
+            success: true,
+            user: {
+                user_id: result.rows[0].id,
+                email: result.rows[0].email,
+                name: result.rows[0].name,
+                role: result.rows[0].role,
+                status: result.rows[0].active ? 'active' : 'inactive',
+                created_at: result.rows[0].created_at,
+                temporary_password: password ? undefined : tempPassword
+            },
+            temp_password: password ? undefined : tempPassword
+        });
+    } catch (error) {
+        console.error('[Admin API] Error creating admin user:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to create user',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * PUT /api/admin/users/:userId
+ * Update admin user
+ * Restricted to: admin role only
+ */
+router.put('/users/:userId', requireAdminRole('admin'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({
+                success: false,
+                error: 'Database not available'
+            });
+        }
+
+        const userId = Number(req.params.userId);
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid user id'
+            });
+        }
+
+        const { first_name, last_name, email, role, active } = req.body || {};
+        if (!first_name || !last_name || !email) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields'
+            });
+        }
+
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const normalizedRole = normalizeAdminRole(role);
+        const fullName = `${String(first_name).trim()} ${String(last_name).trim()}`.trim();
+
+        const duplicate = await query('SELECT id FROM admin_users WHERE email = $1 AND id <> $2', [normalizedEmail, userId]);
+        if (duplicate.rows.length) {
+            return res.status(409).json({
+                success: false,
+                error: 'Email already in use'
+            });
+        }
+
+        const result = await query(
+            `UPDATE admin_users
+             SET email = $1, name = $2, role = $3, active = $4
+             WHERE id = $5
+             RETURNING id, email, name, role, active, updated_at`,
+            [normalizedEmail, fullName, normalizedRole, active !== false, userId]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        return res.json({
+            success: true,
+            user: {
+                user_id: result.rows[0].id,
+                email: result.rows[0].email,
+                name: result.rows[0].name,
+                role: result.rows[0].role,
+                status: result.rows[0].active ? 'active' : 'inactive',
+                updated_at: result.rows[0].updated_at
+            }
+        });
+    } catch (error) {
+        console.error('[Admin API] Error updating admin user:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to update user',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * DELETE /api/admin/users/:userId
+ * Delete admin user
+ * Restricted to: admin role only
+ */
+router.delete('/users/:userId', requireAdminRole('admin'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({
+                success: false,
+                error: 'Database not available'
+            });
+        }
+
+        const userId = Number(req.params.userId);
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid user id'
+            });
+        }
+
+        const result = await query('DELETE FROM admin_users WHERE id = $1 RETURNING id', [userId]);
+        if (!result.rows.length) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        return res.json({
+            success: true,
+            user_id: result.rows[0].id
+        });
+    } catch (error) {
+        console.error('[Admin API] Error deleting admin user:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to delete user',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/admin/users/:userId/reset-password
+ * Reset admin user password
+ * Restricted to: admin, operations roles
+ */
+router.post('/users/:userId/reset-password', requireAdminRole('admin', 'operations'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({
+                success: false,
+                error: 'Database not available'
+            });
+        }
+
+        const userId = Number(req.params.userId);
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid user id'
+            });
+        }
+
+        const tempPassword = generateTempPassword();
+        const passwordHash = await bcrypt.hash(tempPassword, ADMIN_SALT_ROUNDS);
+
+        const result = await query(
+            `UPDATE admin_users
+             SET password_hash = $1
+             WHERE id = $2
+             RETURNING id, email, name`,
+            [passwordHash, userId]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        return res.json({
+            success: true,
+            temp_password: tempPassword,
+            user: {
+                user_id: result.rows[0].id,
+                email: result.rows[0].email,
+                name: result.rows[0].name
+            }
+        });
+    } catch (error) {
+        console.error('[Admin API] Error resetting admin password:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to reset password',
             message: error.message
         });
     }
@@ -1312,8 +1893,9 @@ router.get('/farms/:farmId/config', async (req, res) => {
 /**
  * PATCH /api/admin/farms/:farmId/config
  * Update farm configuration settings
+ * Restricted to: admin, operations roles
  */
-router.patch('/farms/:farmId/config', async (req, res) => {
+router.patch('/farms/:farmId/config', requireAdminRole('admin', 'operations'), async (req, res) => {
     try {
         const { farmId } = req.params;
         const { apiUrl, notifications, settings } = req.body;
@@ -1991,6 +2573,222 @@ router.get('/energy/dashboard', async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch energy dashboard',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/admin/harvest/forecast
+ * Get harvest forecast data across all farms
+ * Calculates expected harvest dates based on seed dates and recipe cycle times
+ */
+router.get('/harvest/forecast', async (req, res) => {
+    try {
+        console.log('[Admin API] Fetching harvest forecast data');
+        
+        const dbAvailable = await isDatabaseAvailable();
+        if (!dbAvailable) {
+            // Return mock data if database not available
+            return res.json({
+                thisWeek: "0",
+                thisCycle: "0",
+                successRate: "0",
+                upcomingTrays: "0",
+                forecast: {
+                    sevenDay: { trays: 0, plants: 0 },
+                    fourteenDay: { trays: 0, plants: 0 },
+                    thirtyDay: { trays: 0, plants: 0 },
+                    thirtyPlus: { trays: 0, plants: 0 }
+                },
+                recipePerformance: {
+                    bestPerformer: "N/A",
+                    mostPopular: "N/A",
+                    fastestCycle: "N/A"
+                },
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Load lighting recipes to get cycle times
+        const recipesPath = path.join(__dirname, '../public/data/lighting-recipes.json');
+        let recipesData = {};
+        try {
+            const recipesContent = await fs.readFile(recipesPath, 'utf8');
+            recipesData = JSON.parse(recipesContent);
+        } catch (error) {
+            console.warn('[Harvest Forecast] Could not load lighting recipes:', error.message);
+        }
+
+        // Get cycle time for a recipe (max day in recipe)
+        function getRecipeCycleTime(recipeName) {
+            const crops = recipesData.crops || {};
+            const recipeData = crops[recipeName];
+            if (!recipeData || !Array.isArray(recipeData) || recipeData.length === 0) {
+                return 30; // Default 30 days if recipe not found
+            }
+            const maxDay = Math.max(...recipeData.map(stage => stage.day || 0));
+            return Math.ceil(maxDay);
+        }
+
+        // Get all groups from farm_data
+        const groupsResult = await query(
+            `SELECT farm_id, data FROM farm_data WHERE data_type = 'groups'`
+        );
+
+        const now = new Date();
+        const forecasts = {
+            sevenDay: [],
+            fourteenDay: [],
+            thirtyDay: [],
+            thirtyPlus: []
+        };
+
+        let totalTraysThisWeek = 0;
+        let totalTraysThisCycle = 0;
+        let recipeStats = {};
+
+        // Process each farm's groups
+        for (const row of groupsResult.rows) {
+            let groups = row.data;
+            if (typeof groups === 'string') {
+                try {
+                    groups = JSON.parse(groups);
+                } catch (e) {
+                    continue;
+                }
+            }
+            if (!Array.isArray(groups)) continue;
+
+            // Process each group
+            for (const group of groups) {
+                const recipeName = group.active_recipe || group.recipe_name || group.recipeName || group.recipe;
+                const seedDateStr = group.seed_date || group.seedDate || group.planted_date;
+                
+                if (!recipeName || !seedDateStr) continue;
+
+                // Parse seed date
+                let seedDate;
+                try {
+                    seedDate = new Date(seedDateStr);
+                    if (isNaN(seedDate.getTime())) continue;
+                } catch (e) {
+                    continue;
+                }
+
+                // Get cycle time and calculate harvest date
+                const cycleTime = getRecipeCycleTime(recipeName);
+                const harvestDate = new Date(seedDate.getTime() + cycleTime * 24 * 60 * 60 * 1000);
+                const daysUntilHarvest = Math.ceil((harvestDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+
+                // Skip if already harvested (negative days)
+                if (daysUntilHarvest < 0) continue;
+
+                // Count trays
+                const trayCount = Array.isArray(group.trays) ? group.trays.length : (group.trays || 1);
+                const plantCount = trayCount * 128; // Assuming 128 plants per tray
+
+                // Bucket into time ranges
+                if (daysUntilHarvest <= 7) {
+                    forecasts.sevenDay.push({ trayCount, plantCount, recipeName, harvestDate });
+                    totalTraysThisWeek += trayCount;
+                } else if (daysUntilHarvest <= 14) {
+                    forecasts.fourteenDay.push({ trayCount, plantCount, recipeName, harvestDate });
+                } else if (daysUntilHarvest <= 30) {
+                    forecasts.thirtyDay.push({ trayCount, plantCount, recipeName, harvestDate });
+                } else {
+                    forecasts.thirtyPlus.push({ trayCount, plantCount, recipeName, harvestDate });
+                }
+
+                // Count for current cycle (30 days)
+                if (daysUntilHarvest <= 30) {
+                    totalTraysThisCycle += trayCount;
+                }
+
+                // Track recipe statistics
+                if (!recipeStats[recipeName]) {
+                    recipeStats[recipeName] = {
+                        count: 0,
+                        trays: 0,
+                        totalCycleTime: 0
+                    };
+                }
+                recipeStats[recipeName].count++;
+                recipeStats[recipeName].trays += trayCount;
+                recipeStats[recipeName].totalCycleTime += cycleTime;
+            }
+        }
+
+        // Calculate aggregated forecast
+        const forecastSummary = {
+            sevenDay: {
+                trays: forecasts.sevenDay.reduce((sum, f) => sum + f.trayCount, 0),
+                plants: forecasts.sevenDay.reduce((sum, f) => sum + f.plantCount, 0)
+            },
+            fourteenDay: {
+                trays: forecasts.fourteenDay.reduce((sum, f) => sum + f.trayCount, 0),
+                plants: forecasts.fourteenDay.reduce((sum, f) => sum + f.plantCount, 0)
+            },
+            thirtyDay: {
+                trays: forecasts.thirtyDay.reduce((sum, f) => sum + f.trayCount, 0),
+                plants: forecasts.thirtyDay.reduce((sum, f) => sum + f.plantCount, 0)
+            },
+            thirtyPlus: {
+                trays: forecasts.thirtyPlus.reduce((sum, f) => sum + f.trayCount, 0),
+                plants: forecasts.thirtyPlus.reduce((sum, f) => sum + f.plantCount, 0)
+            }
+        };
+
+        // Calculate recipe performance metrics
+        let bestPerformer = "N/A";
+        let mostPopular = "N/A";
+        let fastestCycle = "N/A";
+        
+        if (Object.keys(recipeStats).length > 0) {
+            // Most popular by tray count
+            const sortedByTrays = Object.entries(recipeStats).sort((a, b) => b[1].trays - a[1].trays);
+            if (sortedByTrays.length > 0) {
+                mostPopular = `${sortedByTrays[0][0]} (${sortedByTrays[0][1].trays} trays)`;
+            }
+
+            // Fastest cycle (lowest average cycle time)
+            const sortedByCycle = Object.entries(recipeStats)
+                .map(([name, stats]) => [name, stats.totalCycleTime / stats.count])
+                .sort((a, b) => a[1] - b[1]);
+            if (sortedByCycle.length > 0) {
+                fastestCycle = `${sortedByCycle[0][0]} (${Math.round(sortedByCycle[0][1])} days avg)`;
+            }
+
+            // Best performer - for now, same as most popular
+            // TODO: Calculate based on actual harvest success rate when available
+            bestPerformer = mostPopular.split(' (')[0] + " (N/A success)";
+        }
+
+        // Calculate success rate (placeholder - would need harvest history)
+        const successRate = "N/A";
+
+        const response = {
+            thisWeek: String(totalTraysThisWeek),
+            thisCycle: String(totalTraysThisCycle),
+            successRate: successRate,
+            upcomingTrays: String(forecastSummary.sevenDay.trays),
+            forecast: forecastSummary,
+            recipePerformance: {
+                bestPerformer,
+                mostPopular,
+                fastestCycle
+            },
+            timestamp: now.toISOString()
+        };
+
+        console.log('[Harvest Forecast] Generated forecast:', response);
+        res.json(response);
+
+    } catch (error) {
+        console.error('[Admin API] Error fetching harvest forecast:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch harvest forecast',
             message: error.message
         });
     }
