@@ -736,6 +736,51 @@ router.post('/farms/sync-all-stats', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/anomalies
+ * Aggregate ML anomaly detections across farms
+ */
+router.get('/anomalies', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, anomalies: [], mlEnabled: false });
+        }
+
+        const farmsResult = await query('SELECT farm_id, name FROM farms');
+        const farmNameById = new Map(farmsResult.rows.map(row => [row.farm_id, row.name || row.farm_id]));
+
+        const dataTypes = ['anomalies', 'ml-anomalies', 'ml_anomalies', 'ml_anomaly', 'anomaly'];
+        const anomaliesResult = await query(
+            `SELECT farm_id, data, updated_at FROM farm_data WHERE data_type = ANY($1)`,
+            [dataTypes]
+        );
+
+        const anomalies = anomaliesResult.rows.flatMap(row => {
+            const payload = row.data || {};
+            const list = Array.isArray(payload) ? payload : (Array.isArray(payload.anomalies) ? payload.anomalies : []);
+            return list.map(item => ({
+                ...item,
+                farmId: row.farm_id,
+                farmName: farmNameById.get(row.farm_id) || row.farm_id,
+                lastUpdated: row.updated_at
+            }));
+        });
+
+        res.json({
+            success: true,
+            anomalies,
+            mlEnabled: anomalies.length > 0
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching anomalies:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch anomalies',
+            message: error.message
+        });
+    }
+});
+
+/**
  * GET /api/admin/fleet/monitoring
  * Fleet monitoring summary + deployments table data
  */
