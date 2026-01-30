@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -115,6 +116,77 @@ router.use('/wholesale', adminWholesaleRoutes);
 
 // Mount recipes admin routes
 router.use('/recipes', adminRecipesRoutes);
+
+/**
+ * DELETE /api/admin/farms/:farmId
+ * Delete a farm (requires admin password confirmation)
+ */
+router.delete('/farms/:farmId', async (req, res) => {
+    try {
+        const farmId = req.params.farmId;
+        const { password } = req.body || {};
+
+        if (!farmId) {
+            return res.status(400).json({ status: 'error', message: 'Farm ID is required' });
+        }
+
+        if (!password) {
+            return res.status(400).json({ status: 'error', message: 'Admin password is required' });
+        }
+
+        const dbAvailable = await isDatabaseAvailable();
+        if (!dbAvailable) {
+            return res.status(503).json({ status: 'error', message: 'Database not available' });
+        }
+
+        const adminEmail = req.admin?.email;
+        if (!adminEmail) {
+            return res.status(401).json({ status: 'error', message: 'Admin session not found' });
+        }
+
+        const dbEnabled = String(process.env.DB_ENABLED || 'false').toLowerCase() === 'true';
+        if (dbEnabled) {
+            const adminResult = await query(
+                'SELECT id, password_hash FROM admin_users WHERE email = $1',
+                [adminEmail.toLowerCase()]
+            );
+
+            if (!adminResult.rows.length) {
+                return res.status(401).json({ status: 'error', message: 'Admin account not found' });
+            }
+
+            const passwordMatch = await bcrypt.compare(password, adminResult.rows[0].password_hash);
+            if (!passwordMatch) {
+                return res.status(401).json({ status: 'error', message: 'Invalid admin password' });
+            }
+        } else {
+            const FALLBACK_ADMIN = {
+                email: 'info@greenreachfarms.com',
+                password: 'Admin2025!'
+            };
+
+            if (adminEmail.toLowerCase() !== FALLBACK_ADMIN.email.toLowerCase() || password !== FALLBACK_ADMIN.password) {
+                return res.status(401).json({ status: 'error', message: 'Invalid admin password' });
+            }
+        }
+
+        const farmResult = await query('SELECT farm_id FROM farms WHERE farm_id = $1', [farmId]);
+        if (!farmResult.rows.length) {
+            return res.status(404).json({ status: 'error', message: 'Farm not found' });
+        }
+
+        const deleted = await query('DELETE FROM farms WHERE farm_id = $1 RETURNING farm_id', [farmId]);
+
+        return res.json({
+            status: 'success',
+            deleted: { farms: deleted.rowCount },
+            farmIds: deleted.rows.map(row => row.farm_id)
+        });
+    } catch (error) {
+        console.error('[Admin API] Error deleting farm:', error);
+        return res.status(500).json({ status: 'error', message: error.message || 'Failed to delete farm' });
+    }
+});
 
 /**
  * GET /api/admin/users
@@ -658,6 +730,131 @@ router.post('/farms/sync-all-stats', async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to sync farm stats',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/admin/fleet/monitoring
+ * Fleet monitoring summary + deployments table data
+ */
+router.get('/fleet/monitoring', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({
+                success: true,
+                summary: {
+                    connectedFarms: 0,
+                    monthlyRecurringRevenue: 0,
+                    totalZones: 0,
+                    connectedSensors: 0,
+                    fleetHealthScore: 0,
+                    activeAlerts: 0
+                },
+                deployments: []
+            });
+        }
+
+        const farmsResult = await query(
+            `SELECT farm_id, name, status, metadata, settings, last_heartbeat, updated_at
+             FROM farms
+             ORDER BY created_at DESC`
+        );
+
+        const telemetryResult = await query(
+            `SELECT farm_id, data, updated_at
+             FROM farm_data
+             WHERE data_type = $1`,
+            ['telemetry']
+        );
+
+        const telemetryByFarm = new Map();
+        telemetryResult.rows.forEach(row => {
+            telemetryByFarm.set(row.farm_id, { data: row.data || {}, updatedAt: row.updated_at });
+        });
+
+        const deployments = farmsResult.rows.map(row => {
+            const farmId = row.farm_id;
+            const telemetry = telemetryByFarm.get(farmId);
+            const telemetryData = telemetry?.data || {};
+            const zones = Array.isArray(telemetryData.zones) ? telemetryData.zones : [];
+
+            const sensorCounts = zones.reduce((acc, zone) => {
+                const sensors = zone?.sensors && typeof zone.sensors === 'object' ? zone.sensors : null;
+                if (!sensors) return acc;
+                Object.values(sensors).forEach(sensor => {
+                    const current = sensor?.current ?? sensor?.value;
+                    if (current !== null && current !== undefined) {
+                        acc.current += 1;
+                    }
+                    acc.total += 1;
+                });
+                return acc;
+            }, { current: 0, total: 0 });
+
+            const status = (row.status || 'unknown').toLowerCase();
+            const baseHealth = status === 'online' ? 95
+                : status === 'warning' ? 80
+                : status === 'critical' ? 50
+                : status === 'offline' ? 40
+                : 60;
+
+            const lastSeen = telemetry?.updatedAt || row.last_heartbeat || row.updated_at || null;
+            const lastSeenAgeMs = lastSeen ? Date.now() - new Date(lastSeen).getTime() : null;
+            const healthScore = Number.isFinite(lastSeenAgeMs) && lastSeenAgeMs > 24 * 60 * 60 * 1000
+                ? Math.max(10, baseHealth - 20)
+                : baseHealth;
+
+            const telemetryBytes = telemetryData ? Buffer.byteLength(JSON.stringify(telemetryData)) : 0;
+            const dataStorageMB = telemetryBytes ? Math.round((telemetryBytes / (1024 * 1024)) * 10) / 10 : 0;
+
+            const plan = row.settings?.plan || row.settings?.tier || row.metadata?.plan || 'Starter';
+
+            return {
+                farmId,
+                farmName: row.name || farmId,
+                plan,
+                status: status.toUpperCase(),
+                sensors: {
+                    current: sensorCounts.current,
+                    total: sensorCounts.total,
+                    limit: Number.isFinite(row.settings?.sensorLimit) ? row.settings.sensorLimit : null
+                },
+                apiCalls30d: null,
+                dataStorageMB,
+                healthScore,
+                lastSeen
+            };
+        });
+
+        const connectedFarms = farmsResult.rows.filter(row => (row.status || '').toLowerCase() === 'online').length;
+        const totalZones = telemetryResult.rows.reduce((acc, row) => {
+            const zones = Array.isArray(row.data?.zones) ? row.data.zones.length : 0;
+            return acc + zones;
+        }, 0);
+        const connectedSensors = deployments.reduce((acc, d) => acc + (d.sensors?.current || 0), 0);
+        const fleetHealthScore = deployments.length
+            ? Math.round(deployments.reduce((acc, d) => acc + (Number.isFinite(d.healthScore) ? d.healthScore : 0), 0) / deployments.length)
+            : 0;
+
+        res.json({
+            success: true,
+            summary: {
+                connectedFarms,
+                monthlyRecurringRevenue: 0,
+                totalZones,
+                connectedSensors,
+                fleetHealthScore,
+                activeAlerts: 0
+            },
+            deployments
+        });
+    } catch (error) {
+        console.error('[Admin API] Error fetching fleet monitoring:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to load fleet monitoring',
             message: error.message
         });
     }
@@ -1314,8 +1511,19 @@ router.get('/farms/:farmId/recipes', async (req, res) => {
         
         let activeRecipes = [];
         
-        if (result.rows.length > 0 && Array.isArray(result.rows[0].data)) {
-            const groups = result.rows[0].data;
+        if (result.rows.length > 0) {
+            let groups = result.rows[0].data;
+            if (typeof groups === 'string') {
+                try {
+                    groups = JSON.parse(groups);
+                } catch (parseError) {
+                    console.warn('[Admin API] Failed to parse groups JSON:', parseError.message);
+                    groups = [];
+                }
+            }
+            if (!Array.isArray(groups)) {
+                groups = [];
+            }
             
             // Extract active recipes from groups
             // Each group has an active recipe assigned
@@ -1420,6 +1628,119 @@ router.get('/farms/:farmId/recipes', async (req, res) => {
                     data: { schedule }
                 };
             }));
+        }
+
+        if (activeRecipes.length === 0) {
+            try {
+                const syncResponse = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/sync/${farmId}/groups`);
+                if (syncResponse.ok) {
+                    const syncData = await syncResponse.json();
+                    const groups = Array.isArray(syncData.groups) ? syncData.groups : [];
+                    if (groups.length > 0) {
+                        const recipeMap = new Map();
+                        const recipeNameToGroups = new Map();
+
+                        groups.forEach(group => {
+                            const recipeName = group.active_recipe || group.recipe_name || group.recipeName || group.recipe || group.crop;
+                            if (!recipeName) return;
+                            const key = recipeName.trim();
+                            if (!recipeMap.has(key)) {
+                                recipeMap.set(key, {
+                                    name: recipeName,
+                                    id: recipeName.toLowerCase().replace(/\s+/g, '-'),
+                                    groups: 0,
+                                    trays: 0,
+                                    category: group.crop_type || getRecipeCategory(recipeName)
+                                });
+                                recipeNameToGroups.set(key, []);
+                            }
+                            const recipe = recipeMap.get(key);
+                            recipe.groups++;
+                            recipe.trays += Array.isArray(group.trays) ? group.trays.length : (group.trays || 0);
+                            recipeNameToGroups.get(key).push(group);
+                        });
+
+                        const recipeFiles = await fs.readdir(RECIPES_DIR).catch(() => []);
+                        const recipeFileMap = new Map();
+                        recipeFiles.filter(f => f.endsWith('.csv')).forEach(file => {
+                            const name = file.replace(/-Table 1\.csv$/, '').replace(/\.csv$/, '');
+                            recipeFileMap.set(normalizeRecipeName(name), file);
+                        });
+
+                        const today = new Date();
+                        activeRecipes = await Promise.all(Array.from(recipeMap.values()).map(async recipe => {
+                            const normalized = normalizeRecipeName(recipe.name);
+                            const file = recipeFileMap.get(normalized);
+                            let schedule = [];
+                            let totalDays = null;
+                            let avgTemp = null;
+
+                            if (file) {
+                                try {
+                                    const parsed = await parseRecipeCSV(path.join(RECIPES_DIR, file));
+                                    schedule = parsed.phases || [];
+                                    totalDays = parsed.totalDays || schedule.length || null;
+                                    avgTemp = getAverageTemperature(schedule);
+                                } catch (err) {
+                                    console.warn(`[Admin API] Failed to parse recipe file ${file}:`, err.message);
+                                }
+                            }
+
+                            const groupsForRecipe = recipeNameToGroups.get(recipe.name) || [];
+                            const seedDates = groupsForRecipe
+                                .map(group => group.planConfig?.anchor?.seedDate || group.planSeedDate || group.seedDate)
+                                .filter(Boolean)
+                                .map(dateStr => new Date(dateStr))
+                                .filter(dateObj => !Number.isNaN(dateObj.getTime()));
+
+                            let seedDateMin = null;
+                            let seedDateMax = null;
+                            let currentDayMin = null;
+                            let currentDayMax = null;
+                            let daysRemainingMin = null;
+                            let daysRemainingMax = null;
+
+                            if (seedDates.length > 0) {
+                                seedDates.sort((a, b) => a - b);
+                                seedDateMin = seedDates[0];
+                                seedDateMax = seedDates[seedDates.length - 1];
+
+                                const daysSinceSeed = seedDates.map(d => Math.max(0, Math.floor((today - d) / (1000 * 60 * 60 * 24))));
+                                currentDayMin = Math.min(...daysSinceSeed) + 1;
+                                currentDayMax = Math.max(...daysSinceSeed) + 1;
+
+                                if (totalDays != null) {
+                                    const daysRemaining = daysSinceSeed.map(days => Math.max(0, totalDays - (days + 1)));
+                                    daysRemainingMin = Math.min(...daysRemaining);
+                                    daysRemainingMax = Math.max(...daysRemaining);
+                                }
+                            }
+
+                            return {
+                                recipe_id: recipe.id,
+                                id: recipe.id,
+                                name: recipe.name,
+                                category: recipe.category,
+                                total_days: totalDays,
+                                schedule_length: schedule.length,
+                                avg_temp_c: avgTemp,
+                                groups_running: recipe.groups,
+                                trays_running: recipe.trays,
+                                seed_date_min: seedDateMin ? seedDateMin.toISOString().split('T')[0] : null,
+                                seed_date_max: seedDateMax ? seedDateMax.toISOString().split('T')[0] : null,
+                                current_day_min: currentDayMin,
+                                current_day_max: currentDayMax,
+                                days_remaining_min: daysRemainingMin,
+                                days_remaining_max: daysRemainingMax,
+                                description: `Growing recipe for ${recipe.name}`,
+                                data: { schedule }
+                            };
+                        }));
+                    }
+                }
+            } catch (error) {
+                console.warn('[Admin API] Fallback sync groups failed:', error.message);
+            }
         }
         
         res.json({
