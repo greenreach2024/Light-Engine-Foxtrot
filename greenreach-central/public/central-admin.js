@@ -4875,8 +4875,8 @@ async function loadEnvironmentalView() {
         const zones = data.telemetry?.zones || data.zones || [];
         
         // Calculate averages from real data
-        let totalTemp = 0, totalHumidity = 0, totalCO2 = 0, totalVPD = 0;
-        let tempCount = 0, humidityCount = 0, co2Count = 0, vpdCount = 0;
+        let totalTemp = 0, totalHumidity = 0, totalCO2 = 0, totalVPD = 0, totalPressure = 0, totalGas = 0;
+        let tempCount = 0, humidityCount = 0, co2Count = 0, vpdCount = 0, pressureCount = 0, gasCount = 0;
         let optimalZones = 0, warningZones = 0, criticalZones = 0;
         let zonesInVPDTarget = 0;
         
@@ -4893,6 +4893,20 @@ async function loadEnvironmentalView() {
             if (humidity != null) {
                 totalHumidity += humidity;
                 humidityCount++;
+            }
+            
+            // Pressure
+            const pressure = zone.pressure_hpa || zone.pressure || zone.pressureHpa || zone.sensors?.pressureHpa?.current || zone.sensors?.pressure_hpa?.current;
+            if (pressure != null) {
+                totalPressure += pressure;
+                pressureCount++;
+            }
+            
+            // Gas
+            const gas = zone.gas_kohm || zone.gas || zone.gasKohm || zone.sensors?.gasKohm?.current || zone.sensors?.gas_kohm?.current;
+            if (gas != null) {
+                totalGas += gas;
+                gasCount++;
             }
             
             // CO2
