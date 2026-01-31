@@ -3285,8 +3285,21 @@ async function loadFarmSummary(farmId, farm) {
                 metadata = {};
             }
         }
-        const contact = metadata.contact || {};
-        const location = metadata.location || {};
+
+        // Merge config metadata as fallback if farm metadata is incomplete
+        let configMetadata = config?.metadata || {};
+        if (typeof configMetadata === 'string') {
+            try {
+                configMetadata = JSON.parse(configMetadata);
+            } catch (parseError) {
+                console.warn('[FarmSummary] Failed to parse config metadata string:', parseError);
+                configMetadata = {};
+            }
+        }
+
+        const mergedMetadata = { ...configMetadata, ...metadata };
+        const contact = { ...(configMetadata.contact || {}), ...(metadata.contact || {}) };
+        const location = { ...(configMetadata.location || {}), ...(metadata.location || {}) };
         
         // Determine deployment type based on API URL pattern
         let deploymentType = 'Unknown';
@@ -3319,14 +3332,14 @@ async function loadFarmSummary(farmId, farm) {
         const notesEl = document.getElementById('detail-notes');
         
         // Pull from metadata.contact first (from edge farm.json), then farm level
-        if (ownerEl) ownerEl.textContent = contact.owner || metadata.owner || farm.owner || '--';
-        if (contactEl) contactEl.textContent = contact.name || contact.contactName || metadata.contactName || farm.contactName || '--';
-        if (phoneEl) phoneEl.textContent = contact.phone || metadata.phone || farm.phone || '--';
-        if (emailEl) emailEl.textContent = contact.email || metadata.email || farm.email || '--';
+        if (ownerEl) ownerEl.textContent = contact.owner || mergedMetadata.owner || farm.owner || configMetadata.owner || '--';
+        if (contactEl) contactEl.textContent = contact.name || contact.contactName || mergedMetadata.contactName || configMetadata.contactName || farm.contactName || '--';
+        if (phoneEl) phoneEl.textContent = contact.phone || mergedMetadata.phone || configMetadata.phone || farm.phone || '--';
+        if (emailEl) emailEl.textContent = contact.email || mergedMetadata.email || farm.email || config.email || '--';
         
         // Website field (from farm.json url or metadata)
         if (websiteEl) {
-            const website = metadata.website || contact.website || metadata.url || farm.url || apiUrl;
+            const website = mergedMetadata.website || contact.website || mergedMetadata.url || farm.url || apiUrl;
             if (website && website !== '--') {
                 websiteEl.innerHTML = `<a href="${website}" target="_blank" style="color: var(--accent-blue); text-decoration: none;">${website}</a>`;
             } else {
@@ -5032,7 +5045,13 @@ async function loadAnalytics() {
     console.log('[Analytics] Loading farm analytics data...');
     
     // Load farm metrics data - this will also populate model performance from API
-    await loadFarmMetrics(currentAnalyticsFarmId, 7);
+    const farmId = resolveAnalyticsFarmId();
+    if (!farmId) {
+        showToast('No farms available for analytics', 'warning');
+        return;
+    }
+    currentAnalyticsFarmId = farmId;
+    await loadFarmMetrics(farmId, 7);
 }
 
 /**
@@ -5751,11 +5770,18 @@ function filterAlerts() {
  * ===================================
  */
 
-let currentAnalyticsFarmId = 'greenreach-greens';
+let currentAnalyticsFarmId = null;
 let analyticsData = {
     metrics: [],
     summary: {}
 };
+
+function resolveAnalyticsFarmId() {
+    if (currentAnalyticsFarmId) return currentAnalyticsFarmId;
+    if (currentFarmId) return currentFarmId;
+    const fallbackFarm = farmsData.find(f => f.farmId) || farmsData[0];
+    return fallbackFarm ? fallbackFarm.farmId : null;
+}
 
 /**
  * Load analytics for a specific farm
@@ -5775,12 +5801,20 @@ async function refreshAnalytics() {
 /**
  * Load farm metrics from API
  */
-async function loadFarmMetrics(farmId, days = 7) {
+async function loadFarmMetrics(farmId, days = 7, isFallback = false) {
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/farms/${farmId}/metrics?days=${days}`);
         
         if (!response.ok) {
             console.error('Failed to load farm metrics:', response.status);
+            if (response.status === 404 && !isFallback) {
+                const fallbackFarm = farmsData.find(f => f.farmId && f.farmId !== farmId);
+                if (fallbackFarm) {
+                    currentAnalyticsFarmId = fallbackFarm.farmId;
+                    await loadFarmMetrics(fallbackFarm.farmId, days, true);
+                    return;
+                }
+            }
             showToast('Failed to load analytics data', 'error');
             return;
         }
