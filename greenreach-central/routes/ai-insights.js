@@ -197,10 +197,10 @@ router.get('/:farmId', async (req, res) => {
 
     // 5. Fetch historical data (last 24 hours)
     const historyResult = await query(
-      `SELECT data, timestamp FROM farm_data 
+      `SELECT data, updated_at FROM farm_data 
        WHERE farm_id = $1 AND data_type = 'telemetry' 
-       AND timestamp > NOW() - INTERVAL '24 hours'
-       ORDER BY timestamp DESC LIMIT 48`,
+       AND updated_at > NOW() - INTERVAL '24 hours'
+       ORDER BY updated_at DESC LIMIT 48`,
       [farmId]
     );
     
