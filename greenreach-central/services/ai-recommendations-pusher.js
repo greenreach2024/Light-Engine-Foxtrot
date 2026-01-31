@@ -179,7 +179,12 @@ export async function analyzeAndPushToAllFarms() {
   try {
     // Get all active farms
     const farmsResult = await query(
-      `SELECT farm_id, name, url, farm_type FROM farms WHERE url IS NOT NULL`
+      `SELECT farm_id,
+              name,
+              COALESCE(api_url, metadata->>'url') AS url,
+              farm_type
+       FROM farms
+       WHERE COALESCE(api_url, metadata->>'url') IS NOT NULL`
     );
     
     const farms = farmsResult.rows;
