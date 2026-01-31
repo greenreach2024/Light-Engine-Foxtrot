@@ -8,6 +8,7 @@
 
 import express from 'express';
 import logger from '../utils/logger.js';
+import { evaluateAndGenerateAlerts, autoResolveAlerts } from '../services/alert-manager.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
@@ -389,19 +390,29 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         dbStatus = 'inactive';
       }
       
+      // Extract contact_name from metadata
+      const contactName = metadata?.contact?.name
+        || metadata?.contactName
+        || metadata?.contact_name
+        || metadata?.farmName
+        || metadata?.name
+        || 'Farm Admin';
+      
       // Upsert farm - create if doesn't exist, update if it does
       await query(
-        `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, NOW(), $4, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), $5, NOW(), NOW())
          ON CONFLICT (farm_id) 
          DO UPDATE SET 
            status = EXCLUDED.status,
+           contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
            last_heartbeat = NOW(),
            metadata = EXCLUDED.metadata,
            updated_at = NOW()`,
         [
           farmId, 
-          metadata?.farmName || metadata?.name || farmId, 
+          metadata?.farmName || metadata?.name || farmId,
+          contactName,
           dbStatus, 
           JSON.stringify(metadata || {})
         ]
@@ -613,6 +624,15 @@ router.post('/telemetry', authenticateFarm, async (req, res) => {
       }
       inMemoryStore.telemetry.set(farmId, telemetryData);
       logger.info(`[Sync] Stored telemetry in memory for farm ${farmId}`);
+    }
+    
+    // ALERT GENERATION: Evaluate telemetry and generate alerts
+    try {
+      await evaluateAndGenerateAlerts(farmId, telemetryData);
+      await autoResolveAlerts(farmId, telemetryData);
+    } catch (alertError) {
+      logger.error(`[Sync] Error generating alerts for farm ${farmId}:`, alertError);
+      // Don't fail the telemetry sync if alert generation fails
     }
     
     res.json({ 
