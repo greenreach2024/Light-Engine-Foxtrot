@@ -962,12 +962,13 @@ router.get('/farms/:farmId', async (req, res) => {
         const roomsCount = Array.isArray(roomsData) ? roomsData.length : 0;
         const zonesFromTelemetry = Array.isArray(telemetryData?.zones) ? telemetryData.zones : [];
         const zonesCount = zonesFromTelemetry.length || (Array.isArray(groupsData) ? groupsData.length : 0);
+        const groupsCount = Array.isArray(groupsData) ? groupsData.length : 0;
         console.log('[Admin API] Farm data counts:', {
             farmId,
             roomsCount,
             zonesCount,
             telemetryZones: zonesFromTelemetry.length,
-            groupsCount: Array.isArray(groupsData) ? groupsData.length : 0
+            groupsCount
         });
 
         const envSummary = zonesFromTelemetry.length ? {
@@ -986,6 +987,7 @@ router.get('/farms/:farmId', async (req, res) => {
             updatedAt: farmRow.updated_at || null,
             rooms: roomsCount,
             zones: zonesCount,
+            groups: groupsCount,
             environmental: {
                 zones: zonesFromTelemetry,
                 summary: envSummary
@@ -1174,7 +1176,16 @@ router.get('/kpis', async (req, res) => {
         let totalFarms = 0, activeFarms = 0, totalOrders = 0, revenue = 0;
         
         try {
-            const farmsResult = await query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = $1) as active FROM farms', ['online']);
+            // Count farms with status 'active' or recently active (heartbeat within 10 minutes)
+            const farmsResult = await query(`
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (
+                        WHERE status = 'active' 
+                        OR (last_heartbeat IS NOT NULL AND last_heartbeat > NOW() - INTERVAL '10 minutes')
+                    ) as active 
+                FROM farms
+            `);
             totalFarms = parseInt(farmsResult.rows[0].total);
             activeFarms = parseInt(farmsResult.rows[0].active);
         } catch (e) {
