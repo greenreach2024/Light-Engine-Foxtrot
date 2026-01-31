@@ -4194,12 +4194,15 @@
 
       const renderFallbackFromEnv = async () => {
         try {
-          const envResponse = await fetch('/api/env');
+          console.log('[Health] Fetching fallback from /api/env...');
+          const envResponse = await fetch('/api/env?t=' + Date.now());
           if (!envResponse.ok) throw new Error(`HTTP ${envResponse.status}`);
           const envData = await envResponse.json();
+          console.log('[Health] Received env data:', { zones_count: envData.zones?.length, has_zones: Array.isArray(envData.zones) });
           const zones = Array.isArray(envData.zones) ? envData.zones : [];
 
           if (zones.length === 0) {
+            console.log('[Health] No zones found in env data');
             container.innerHTML = `
               <div class="health-no-data">
                 <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">No Environmental Data Yet</div>
@@ -4208,6 +4211,8 @@
             `;
             return true;
           }
+          
+          console.log('[Health] Rendering fallback for', zones.length, 'zones');
 
           const computeQuickScore = (zone) => {
             const temp = zone?.sensors?.tempC?.current ?? zone?.temperature ?? zone?.tempC;
@@ -4317,16 +4322,20 @@
         
         container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading health data...</div>';
         
-        const response = await fetch('/api/health/insights');
+        console.log('[Health] Fetching primary insights from /api/health/insights...');
+        const response = await fetch('/api/health/insights?t=' + Date.now());
         if (!response.ok) {
+          console.log('[Health] Primary insights failed, using fallback');
           const usedFallback = await renderFallbackFromEnv();
           if (usedFallback) return;
           throw new Error(`HTTP ${response.status}`);
         }
         
         const data = await response.json();
+        console.log('[Health] Primary insights response:', { ok: data.ok, zones: data.zones?.length });
         
         if (!data.ok) {
+          console.log('[Health] Primary insights not ok, using fallback');
           const usedFallback = await renderFallbackFromEnv();
           if (usedFallback) return;
           throw new Error(data.message || 'Failed to load health data');
@@ -4334,6 +4343,11 @@
         
         // Check if we have data
         if (!data.zones || data.zones.length === 0) {
+          console.log('[Health] Primary insights has no zones, using fallback');
+          const usedFallback = await renderFallbackFromEnv();
+          if (usedFallback) return;
+          
+          // If fallback also failed, show generic message
           container.innerHTML = `
             <div class="health-no-data">
               <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
