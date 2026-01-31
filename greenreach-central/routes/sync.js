@@ -396,16 +396,18 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         || metadata?.contactName 
         || metadata?.contact?.name
         || 'Farm Admin';
+      const planType = metadata?.plan_type || metadata?.planType || 'free';
       
-      // Upsert farm - production schema requires: farm_id, name, contact_name
+      // Upsert farm - production schema requires: farm_id, name, contact_name, plan_type
       await query(
-        `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, NOW(), $5, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, contact_name, plan_type, status, last_heartbeat, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), $6, NOW(), NOW())
          ON CONFLICT (farm_id) 
          DO UPDATE SET 
            status = EXCLUDED.status,
            name = COALESCE(EXCLUDED.name, farms.name),
            contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
+           plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type),
            last_heartbeat = NOW(),
            metadata = EXCLUDED.metadata,
            updated_at = NOW()`,
@@ -413,6 +415,7 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
           farmId, 
           farmName,
           contactName,
+          planType,
           dbStatus, 
           JSON.stringify(metadata || {})
         ]
