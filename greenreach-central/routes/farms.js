@@ -71,21 +71,29 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
     const { cpu_usage, memory_usage, disk_usage, metadata } = req.body;
     
     const now = new Date().toISOString();
+    const contactName = metadata?.contact?.name
+      || metadata?.contactName
+      || metadata?.contact_name
+      || metadata?.name
+      || metadata?.farm_name
+      || farmId;
     
     // Persist to database (required for farm_data FK)
     const { query } = await import('../config/database.js');
     
     // Upsert farm
     await query(
-      `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, metadata, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT (farm_id) 
        DO UPDATE SET 
-         status = $3,
-         last_heartbeat = $4,
+         status = $4,
+         last_heartbeat = $5,
          metadata = EXCLUDED.metadata,
+         name = COALESCE(EXCLUDED.name, farms.name),
+         contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
          updated_at = NOW()`,
-      [farmId, metadata?.name || farmId, 'online', now, JSON.stringify(metadata || {})]
+      [farmId, metadata?.name || farmId, contactName, 'online', now, JSON.stringify(metadata || {})]
     );
     
     // Store heartbeat
