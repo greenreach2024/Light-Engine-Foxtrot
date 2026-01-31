@@ -3232,18 +3232,27 @@ async function loadFarmSummary(farmId, farm) {
             console.log('[FarmSummary] Config loaded:', config);
         }
         
-        // Extract metadata from farm object
+        // Extract metadata from farm object (this comes from edge farm.json or heartbeat)
         const metadata = farm.metadata || {};
         const contact = metadata.contact || {};
         const location = metadata.location || {};
         
-        // Determine deployment type (Edge or Cloud)
+        // Determine deployment type based on API URL pattern
         let deploymentType = 'Unknown';
-        if (farm.apiUrl || config.api_url) {
-            const apiUrl = farm.apiUrl || config.api_url;
-            if (apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1') || apiUrl.includes('192.168') || apiUrl.includes('10.0')) {
+        let apiUrl = farm.apiUrl || config.api_url || metadata.url || farm.url;
+        
+        if (apiUrl) {
+            // Check if it's a local/edge deployment
+            if (apiUrl.includes('localhost') || 
+                apiUrl.includes('127.0.0.1') || 
+                apiUrl.match(/192\.168\.\d+\.\d+/) || 
+                apiUrl.match(/10\.\d+\.\d+\.\d+/) || 
+                apiUrl.match(/172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+/)) {
                 deploymentType = 'Edge (Local Network)';
-            } else {
+            } else if (apiUrl.includes('elasticbeanstalk.com') || 
+                       apiUrl.includes('amazonaws.com') || 
+                       apiUrl.includes('azure') || 
+                       apiUrl.includes('greenreach')) {
                 deploymentType = 'Cloud';
             }
         }
@@ -3253,16 +3262,28 @@ async function loadFarmSummary(farmId, farm) {
         const contactEl = document.getElementById('detail-contact');
         const phoneEl = document.getElementById('detail-phone');
         const emailEl = document.getElementById('detail-email');
+        const websiteEl = document.getElementById('detail-website');
         const addressEl = document.getElementById('detail-address');
         const deploymentTypeEl = document.getElementById('detail-deployment-type');
         const notesEl = document.getElementById('detail-notes');
         
+        // Pull from metadata.contact first (from edge farm.json), then farm level
         if (ownerEl) ownerEl.textContent = contact.owner || metadata.owner || farm.owner || '--';
-        if (contactEl) contactEl.textContent = contact.name || metadata.contactName || farm.contactName || '--';
+        if (contactEl) contactEl.textContent = contact.name || contact.contactName || metadata.contactName || farm.contactName || '--';
         if (phoneEl) phoneEl.textContent = contact.phone || metadata.phone || farm.phone || '--';
         if (emailEl) emailEl.textContent = contact.email || metadata.email || farm.email || '--';
         
-        // Format address
+        // Website field (from farm.json url or metadata)
+        if (websiteEl) {
+            const website = metadata.website || contact.website || metadata.url || farm.url || apiUrl;
+            if (website && website !== '--') {
+                websiteEl.innerHTML = `<a href="${website}" target="_blank" style="color: var(--accent-blue); text-decoration: none;">${website}</a>`;
+            } else {
+                websiteEl.textContent = '--';
+            }
+        }
+        
+        // Format address from location object or contact
         let addressText = '--';
         if (location.street || location.city || location.state || location.zip) {
             const parts = [];
