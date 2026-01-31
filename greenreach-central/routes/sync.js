@@ -21,6 +21,10 @@ const inMemoryStore = {
   telemetry: new Map(),  // farmId -> telemetry data
 };
 
+export function getInMemoryGroups() {
+  return inMemoryStore.groups;
+}
+
 /**
  * Middleware: Authenticate farm device via API key
  */
@@ -377,13 +381,33 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
     logger.info(`[Sync] Heartbeat from farm ${farmId}, status: ${status}`);
     
     if (await isDatabaseAvailable()) {
-      // Update farm status in database
+      // Map edge device status to database valid statuses
+      let dbStatus = 'active';  // Default to active
+      if (status === 'offline' || status === 'suspended') {
+        dbStatus = 'suspended';
+      } else if (status === 'inactive') {
+        dbStatus = 'inactive';
+      }
+      
+      // Upsert farm - create if doesn't exist, update if it does
       await query(
-        `UPDATE farms 
-         SET status = $1, last_heartbeat = NOW(), metadata = $2
-         WHERE farm_id = $3`,
-        [status || 'online', JSON.stringify(metadata || {}), farmId]
+        `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, NOW(), $4, NOW(), NOW())
+         ON CONFLICT (farm_id) 
+         DO UPDATE SET 
+           status = EXCLUDED.status,
+           last_heartbeat = NOW(),
+           metadata = EXCLUDED.metadata,
+           updated_at = NOW()`,
+        [
+          farmId, 
+          metadata?.farmName || metadata?.name || farmId, 
+          dbStatus, 
+          JSON.stringify(metadata || {})
+        ]
       );
+      
+      logger.info(`[Sync] Farm ${farmId} upserted successfully with status ${dbStatus}`);
     }
     
     res.json({ 
