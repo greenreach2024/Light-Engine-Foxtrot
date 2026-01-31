@@ -390,40 +390,24 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         dbStatus = 'inactive';
       }
       
-      // Extract all required fields from metadata with defaults
-      const contactName = metadata?.contact?.name
-        || metadata?.contactName
-        || metadata?.contact_name
-        || metadata?.farmName
-        || metadata?.name
-        || 'Farm Admin';
+      // Extract farm name with fallback
+      const farmName = metadata?.farmName || metadata?.name || farmId;
       
-      const registrationCode = metadata?.registrationCode
-        || metadata?.registration_code
-        || 'auto-' + farmId.substring(0, 8);
-      
-      // Upsert farm - create if doesn't exist, update if it does
-      // Include all possible required fields that might exist in production schema
+      // Upsert farm - use only columns that exist in production schema
+      // Removed contact_name and registration_code - not in production DB
       await query(
-        `INSERT INTO farms (
-           farm_id, name, contact_name, registration_code, 
-           status, last_heartbeat, metadata, 
-           created_at, updated_at
-         )
-         VALUES ($1, $2, $3, $4, $5, NOW(), $6, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, NOW(), $4, NOW(), NOW())
          ON CONFLICT (farm_id) 
          DO UPDATE SET 
            status = EXCLUDED.status,
-           contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
-           registration_code = COALESCE(EXCLUDED.registration_code, farms.registration_code),
+           name = COALESCE(EXCLUDED.name, farms.name),
            last_heartbeat = NOW(),
            metadata = EXCLUDED.metadata,
            updated_at = NOW()`,
         [
           farmId, 
-          metadata?.farmName || metadata?.name || farmId,
-          contactName,
-          registrationCode,
+          farmName,
           dbStatus, 
           JSON.stringify(metadata || {})
         ]

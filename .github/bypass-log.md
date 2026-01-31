@@ -1,0 +1,1 @@
+- Sat Jan 31 17:43:11 EST 2026: Emergency sync.js fix - production schema mismatch (contact_name, registration_code missing)
