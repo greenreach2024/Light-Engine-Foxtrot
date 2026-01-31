@@ -2079,29 +2079,16 @@ async function loadFarmEnvironmentalTrends(farmId) {
         const gasHistory = zone.sensors?.gasKohm?.history || zone.sensors?.gas_kohm?.history || [];
         const co2History = zone.sensors?.co2?.history || [];
         
-        // Use most recent 24 data points (history is newest-first)
-        const last24Temp = getLatestHistory(tempHistory, 24);
-        const last24Humidity = getLatestHistory(humidityHistory, 24);
-        const last24Pressure = getLatestHistory(pressureHistory, 24);
-        const last24Gas = getLatestHistory(gasHistory, 24);
-        const last24Co2 = getLatestHistory(co2History, 24);
+        const trendPoints = 96; // 24h at 15-minute intervals
+        // Use most recent data points (history is newest-first)
+        const last24Temp = getLatestHistory(tempHistory, trendPoints);
+        const last24Humidity = getLatestHistory(humidityHistory, trendPoints);
+        const last24Pressure = getLatestHistory(pressureHistory, trendPoints);
+        const last24Gas = getLatestHistory(gasHistory, trendPoints);
+        const last24Co2 = getLatestHistory(co2History, trendPoints);
         
-        // Calculate VPD from historical temp and humidity data
-        const last24Vpd = [];
-        const minLength = Math.min(last24Temp.length, last24Humidity.length);
-        for (let i = 0; i < minLength; i++) {
-            const T = last24Temp[i];
-            const RH = last24Humidity[i];
-            if (T != null && RH != null) {
-                // Saturation vapor pressure (kPa)
-                const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
-                // Vapor pressure deficit
-                const vpd = SVP * (1 - RH / 100);
-                last24Vpd.push(Math.round(vpd * 100) / 100);
-            } else {
-                last24Vpd.push(null);
-            }
-        }
+        // Calculate VPD at ~15-minute intervals from temp/humidity history
+        const last24Vpd = buildVpdSeries(tempHistory, humidityHistory, trendPoints);
         
         // Create combined trends chart
         const chartEl = document.getElementById('env-chart');
@@ -2477,31 +2464,18 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     const gasCurrent = zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current ?? zone.gas_kohm ?? zone.gas ?? null;
     const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? null;
     
-    // Use most recent 24 data points from history, or create flat line from current value
-    const last24Temp = tempHistory.length > 0 ? getLatestHistory(tempHistory, 24) : Array(24).fill(tempCurrent);
-    const last24Humidity = humidityHistory.length > 0 ? getLatestHistory(humidityHistory, 24) : Array(24).fill(rhCurrent);
-    const last24Pressure = pressureHistory.length > 0 ? getLatestHistory(pressureHistory, 24) : (pressureCurrent != null ? Array(24).fill(pressureCurrent) : []);
-    const last24Gas = gasHistory.length > 0 ? getLatestHistory(gasHistory, 24) : (gasCurrent != null ? Array(24).fill(gasCurrent) : []);
+    const trendPoints = 96; // 24h at 15-minute intervals
+    // Use most recent data points from history, or create flat line from current value
+    const last24Temp = tempHistory.length > 0 ? getLatestHistory(tempHistory, trendPoints) : Array(trendPoints).fill(tempCurrent);
+    const last24Humidity = humidityHistory.length > 0 ? getLatestHistory(humidityHistory, trendPoints) : Array(trendPoints).fill(rhCurrent);
+    const last24Pressure = pressureHistory.length > 0 ? getLatestHistory(pressureHistory, trendPoints) : (pressureCurrent != null ? Array(trendPoints).fill(pressureCurrent) : []);
+    const last24Gas = gasHistory.length > 0 ? getLatestHistory(gasHistory, trendPoints) : (gasCurrent != null ? Array(trendPoints).fill(gasCurrent) : []);
     const last24Co2 = co2History.length > 0
-        ? getLatestHistory(co2History, 24)
-        : (co2Current != null ? Array(24).fill(co2Current) : []);
+        ? getLatestHistory(co2History, trendPoints)
+        : (co2Current != null ? Array(trendPoints).fill(co2Current) : []);
     
-    // Calculate VPD from historical temp and humidity data
-    const last24Vpd = [];
-    const minLength = Math.min(last24Temp.length, last24Humidity.length);
-    for (let i = 0; i < minLength; i++) {
-        const T = last24Temp[i];
-        const RH = last24Humidity[i];
-        if (T != null && RH != null) {
-            // Saturation vapor pressure (kPa)
-            const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
-            // Vapor pressure deficit
-            const vpd = SVP * (1 - RH / 100);
-            last24Vpd.push(Math.round(vpd * 100) / 100);
-        } else {
-            last24Vpd.push(null);
-        }
-    }
+    // Calculate VPD at ~15-minute intervals from temp/humidity history
+    const last24Vpd = buildVpdSeries(tempHistory, humidityHistory, trendPoints);
     
     console.log('[room-trends] Drawing charts with data:', {
         temp: last24Temp.length,
@@ -2728,6 +2702,44 @@ function getLatestHistory(history, count) {
     if (!Array.isArray(history) || history.length === 0) return [];
     const slice = history.slice(0, count);
     return slice.slice().reverse();
+}
+
+function coerceNumber(value) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+}
+
+function downsampleHistory(history, targetPoints) {
+    if (!Array.isArray(history) || history.length === 0) return [];
+    if (!targetPoints || targetPoints <= 0) return history.slice();
+    if (history.length <= targetPoints) return history.slice();
+    const step = Math.max(1, Math.floor(history.length / targetPoints));
+    const sampled = [];
+    for (let i = 0; i < history.length && sampled.length < targetPoints; i += step) {
+        sampled.push(history[i]);
+    }
+    return sampled;
+}
+
+function buildVpdSeries(tempHistory, humidityHistory, targetPoints = 96) {
+    const tempSeries = downsampleHistory(getLatestHistory(tempHistory, targetPoints * 3), targetPoints)
+        .map(coerceNumber);
+    const humiditySeries = downsampleHistory(getLatestHistory(humidityHistory, targetPoints * 3), targetPoints)
+        .map(coerceNumber);
+    const length = Math.min(tempSeries.length, humiditySeries.length);
+    const vpdSeries = [];
+    for (let i = 0; i < length; i++) {
+        const T = tempSeries[i];
+        const RH = humiditySeries[i];
+        if (T == null || RH == null) {
+            vpdSeries.push(null);
+            continue;
+        }
+        const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
+        const vpd = SVP * (1 - RH / 100);
+        vpdSeries.push(Math.round(vpd * 1000) / 1000);
+    }
+    return vpdSeries;
 }
 
 /**
