@@ -390,24 +390,29 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         dbStatus = 'inactive';
       }
       
-      // Extract farm name with fallback
+      // Extract farm data from metadata
       const farmName = metadata?.farmName || metadata?.name || farmId;
+      const contactName = metadata?.contact_name 
+        || metadata?.contactName 
+        || metadata?.contact?.name
+        || 'Farm Admin';
       
-      // Upsert farm - use only columns that exist in production schema
-      // Removed contact_name and registration_code - not in production DB
+      // Upsert farm - production schema requires: farm_id, name, contact_name
       await query(
-        `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, NOW(), $4, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), $5, NOW(), NOW())
          ON CONFLICT (farm_id) 
          DO UPDATE SET 
            status = EXCLUDED.status,
            name = COALESCE(EXCLUDED.name, farms.name),
+           contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
            last_heartbeat = NOW(),
            metadata = EXCLUDED.metadata,
            updated_at = NOW()`,
         [
           farmId, 
           farmName,
+          contactName,
           dbStatus, 
           JSON.stringify(metadata || {})
         ]
