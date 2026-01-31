@@ -123,35 +123,65 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
  */
 router.post('/register', async (req, res, next) => {
   try {
-    const { farmId, name, location, contact } = req.body;
-    
+    const {
+      farmId,
+      name,
+      location,
+      contact,
+      registration_code,
+      farm_name,
+      contact_email
+    } = req.body;
+
     const now = new Date().toISOString();
     const { query } = await import('../config/database.js');
-    
+
+    const resolvedFarmId = farmId || registration_code;
+    if (!resolvedFarmId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing farmId or registration_code'
+      });
+    }
+
+    const resolvedName = name || farm_name || resolvedFarmId;
+
+    const metadata = {
+      location: location || {},
+      contact: {
+        ...(typeof contact === 'object' && contact ? contact : {}),
+        ...(contact_email ? { email: contact_email } : {}),
+        ...(farm_name ? { name: farm_name } : {})
+      }
+    };
+
     // Persist to database
     await query(
       `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-       ON CONFLICT (farm_id) DO NOTHING`,
-      [farmId, name || farmId, 'online', now, JSON.stringify({ location, contact })]
+       ON CONFLICT (farm_id) DO UPDATE SET
+         name = EXCLUDED.name,
+         metadata = EXCLUDED.metadata,
+         updated_at = NOW()`,
+      [resolvedFarmId, resolvedName, 'online', now, JSON.stringify(metadata)]
     );
-    
+
     // Also keep in-memory
-    inMemoryFarms.set(farmId, {
-      farm_id: farmId,
-      name: name || farmId,
+    inMemoryFarms.set(resolvedFarmId, {
+      farm_id: resolvedFarmId,
+      name: resolvedName,
       status: 'online',
       last_heartbeat: now,
-      metadata: { location, contact },
+      metadata,
       created_at: now,
       updated_at: now
     });
-    
-    logger.info(`Farm registered: ${farmId}`);
-    
+
+    logger.info(`Farm registered: ${resolvedFarmId}`);
+
     res.status(201).json({
       success: true,
-      farmId,
+      farmId: resolvedFarmId,
       message: 'Farm registered successfully'
     });
   } catch (error) {
