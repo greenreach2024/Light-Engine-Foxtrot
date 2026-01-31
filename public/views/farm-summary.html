@@ -4191,6 +4191,122 @@
       const refreshBtn = document.getElementById('healthRefreshBtn');
       
       if (!container) return;
+
+      const renderFallbackFromEnv = async () => {
+        try {
+          const envResponse = await fetch('/api/env');
+          if (!envResponse.ok) throw new Error(`HTTP ${envResponse.status}`);
+          const envData = await envResponse.json();
+          const zones = Array.isArray(envData.zones) ? envData.zones : [];
+
+          if (zones.length === 0) {
+            container.innerHTML = `
+              <div class="health-no-data">
+                <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">No Environmental Data Yet</div>
+                <div>Waiting for sensors to report...</div>
+              </div>
+            `;
+            return true;
+          }
+
+          const computeQuickScore = (zone) => {
+            const temp = zone?.sensors?.tempC?.current ?? zone?.temperature ?? zone?.tempC;
+            const rh = zone?.sensors?.rh?.current ?? zone?.humidity ?? zone?.rh;
+            const vpd = zone?.sensors?.vpd?.current ?? zone?.vpd;
+
+            let score = 70;
+            if (Number.isFinite(temp) && temp >= 18 && temp <= 24) score += 10;
+            if (Number.isFinite(rh) && rh >= 40 && rh <= 70) score += 10;
+            if (Number.isFinite(vpd) && vpd >= 0.8 && vpd <= 1.2) score += 10;
+            return Math.max(0, Math.min(100, Math.round(score)));
+          };
+
+          const zoneScores = zones.map(zone => {
+            const score = computeQuickScore(zone);
+            return {
+              zone_id: zone.id,
+              zone_name: zone.name || zone.id,
+              overall: score,
+              grade: score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F'
+            };
+          });
+
+          const avgScore = Math.round(zoneScores.reduce((sum, z) => sum + z.overall, 0) / zoneScores.length);
+          const summary = {
+            total_zones: zoneScores.length,
+            excellent: zoneScores.filter(z => z.overall >= 90).length,
+            good: zoneScores.filter(z => z.overall >= 70 && z.overall < 90).length,
+            fair: zoneScores.filter(z => z.overall >= 50 && z.overall < 70).length,
+            poor: zoneScores.filter(z => z.overall < 50).length
+          };
+
+          let gradeClass = 'poor';
+          if (avgScore >= 90) gradeClass = 'excellent';
+          else if (avgScore >= 80) gradeClass = 'good';
+          else if (avgScore >= 70) gradeClass = 'fair';
+
+          let scoreColor = '#fca5a5';
+          if (avgScore >= 90) scoreColor = '#86efac';
+          else if (avgScore >= 80) scoreColor = '#93c5fd';
+          else if (avgScore >= 70) scoreColor = '#fdba74';
+
+          let zonesHTML = '<div class="health-zones-grid">';
+          zoneScores.forEach(zone => {
+            let zoneScoreColor = '#fca5a5';
+            if (zone.overall >= 90) zoneScoreColor = '#86efac';
+            else if (zone.overall >= 80) zoneScoreColor = '#93c5fd';
+            else if (zone.overall >= 70) zoneScoreColor = '#fdba74';
+
+            const statusClass = zone.overall >= 80 ? 'optimal' : zone.overall >= 60 ? 'warning' : 'critical';
+
+            zonesHTML += `
+              <div class="health-zone-item">
+                <div class="health-zone-name">${zone.zone_name || zone.zone_id || 'Unknown Zone'}</div>
+                <div class="health-zone-score" style="color: ${zoneScoreColor};">${zone.overall}<span style="font-size: 1rem; color: #64748b;">/100</span></div>
+                <span class="health-zone-status status ${statusClass}">${zone.grade || 'N/A'}</span>
+              </div>
+            `;
+          });
+          zonesHTML += '</div>';
+
+          const insightsHTML = `
+            <div class="health-insights">
+              <h3>Insights & Recommendations</h3>
+              <div class="health-insight-item">Using live sensor snapshot. Detailed AI insights are currently unavailable.</div>
+            </div>
+          `;
+
+          container.innerHTML = `
+            <div class="health-score-display">
+              <div class="health-score-main">
+                <div class="health-score-number" style="color: ${scoreColor};">
+                  ${avgScore}<span style="font-size: 2rem; color: #64748b;">/100</span>
+                </div>
+                <div>
+                  <div class="health-grade-badge ${gradeClass}">${avgScore >= 90 ? 'A' : avgScore >= 80 ? 'B' : avgScore >= 70 ? 'C' : avgScore >= 60 ? 'D' : 'F'}</div>
+                  <div style="margin-top: 0.5rem; font-size: 0.875rem; color: #94a3b8;">Farm Health Score</div>
+                </div>
+              </div>
+              <div style="text-align: right; color: #94a3b8; font-size: 0.875rem;">
+                <div style="margin-bottom: 0.5rem;"><strong>${summary.total_zones}</strong> zones monitored</div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                  <span>Excellent ${summary.excellent}</span>
+                  <span>Good ${summary.good}</span>
+                  <span>Fair ${summary.fair}</span>
+                  <span>Poor ${summary.poor}</span>
+                </div>
+              </div>
+            </div>
+            ${zonesHTML}
+            ${insightsHTML}
+          `;
+
+          return true;
+        } catch (fallbackError) {
+          console.error('Failed to load health status fallback:', fallbackError);
+          return false;
+        }
+      };
       
       try {
         // Disable refresh button
@@ -4202,11 +4318,17 @@
         container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading health data...</div>';
         
         const response = await fetch('/api/health/insights');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          const usedFallback = await renderFallbackFromEnv();
+          if (usedFallback) return;
+          throw new Error(`HTTP ${response.status}`);
+        }
         
         const data = await response.json();
         
         if (!data.ok) {
+          const usedFallback = await renderFallbackFromEnv();
+          if (usedFallback) return;
           throw new Error(data.message || 'Failed to load health data');
         }
         
