@@ -398,12 +398,13 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         || 'Farm Admin';
       const planType = metadata?.plan_type || metadata?.planType || 'free';
       const apiKeyValue = req.apiKey; // From authenticateFarm middleware
+      const apiSecret = metadata?.api_secret || metadata?.apiSecret || 'auto-generated';
       
       // Upsert farm - production schema discovered via error messages
-      // Required fields: farm_id, name, contact_name, plan_type, api_key
+      // Required fields: farm_id, name, contact_name, plan_type, api_key, api_secret
       await query(
-        `INSERT INTO farms (farm_id, name, contact_name, plan_type, api_key, status, last_heartbeat, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, contact_name, plan_type, api_key, api_secret, status, last_heartbeat, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, NOW(), NOW())
          ON CONFLICT (farm_id) 
          DO UPDATE SET 
            status = EXCLUDED.status,
@@ -419,6 +420,7 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
           contactName,
           planType,
           apiKeyValue,
+          apiSecret,
           dbStatus, 
           JSON.stringify(metadata || {})
         ]
