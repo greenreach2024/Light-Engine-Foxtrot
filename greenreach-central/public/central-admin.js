@@ -3254,15 +3254,25 @@ async function loadFarmSummary(farmId, farm) {
         let config = {};
         let settings = {};
         
-        if (configResponse.ok) {
+        if (configResponse && configResponse.ok) {
             const configData = await configResponse.json();
             config = configData.config || {};
             settings = config.settings || {};
             console.log('[FarmSummary] Config loaded:', config);
+        } else {
+            console.warn('[FarmSummary] Config request failed or unavailable');
         }
         
         // Extract metadata from farm object (this comes from edge farm.json or heartbeat)
-        const metadata = farm.metadata || {};
+        let metadata = farm.metadata || {};
+        if (typeof metadata === 'string') {
+            try {
+                metadata = JSON.parse(metadata);
+            } catch (parseError) {
+                console.warn('[FarmSummary] Failed to parse farm metadata string:', parseError);
+                metadata = {};
+            }
+        }
         const contact = metadata.contact || {};
         const location = metadata.location || {};
         
