@@ -2078,7 +2078,6 @@ async function loadFarmEnvironmentalTrends(farmId) {
         const pressureHistory = zone.sensors?.pressureHpa?.history || zone.sensors?.pressure_hpa?.history || [];
         const gasHistory = zone.sensors?.gasKohm?.history || zone.sensors?.gas_kohm?.history || [];
         const co2History = zone.sensors?.co2?.history || [];
-        const vpdHistory = zone.sensors?.vpd?.history || [];
         
         // Use most recent 24 data points (history is newest-first)
         const last24Temp = getLatestHistory(tempHistory, 24);
@@ -2086,7 +2085,23 @@ async function loadFarmEnvironmentalTrends(farmId) {
         const last24Pressure = getLatestHistory(pressureHistory, 24);
         const last24Gas = getLatestHistory(gasHistory, 24);
         const last24Co2 = getLatestHistory(co2History, 24);
-        const last24Vpd = getLatestHistory(vpdHistory, 24);
+        
+        // Calculate VPD from historical temp and humidity data
+        const last24Vpd = [];
+        const minLength = Math.min(last24Temp.length, last24Humidity.length);
+        for (let i = 0; i < minLength; i++) {
+            const T = last24Temp[i];
+            const RH = last24Humidity[i];
+            if (T != null && RH != null) {
+                // Saturation vapor pressure (kPa)
+                const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
+                // Vapor pressure deficit
+                const vpd = SVP * (1 - RH / 100);
+                last24Vpd.push(Math.round(vpd * 100) / 100);
+            } else {
+                last24Vpd.push(null);
+            }
+        }
         
         // Create combined trends chart
         const chartEl = document.getElementById('env-chart');
@@ -2454,7 +2469,6 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     const pressureHistory = zone.sensors?.pressureHpa?.history || zone.sensors?.pressure_hpa?.history || [];
     const gasHistory = zone.sensors?.gasKohm?.history || zone.sensors?.gas_kohm?.history || [];
     const co2History = zone.sensors?.co2?.history || [];
-    const vpdHistory = zone.sensors?.vpd?.history || [];
     
     // Get current values as fallback
     const tempCurrent = zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? 20;
@@ -2462,7 +2476,6 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     const pressureCurrent = zone.sensors?.pressureHpa?.current ?? zone.sensors?.pressure_hpa?.current ?? zone.pressure_hpa ?? zone.pressure ?? null;
     const gasCurrent = zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current ?? zone.gas_kohm ?? zone.gas ?? null;
     const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? null;
-    const vpdCurrent = zone.sensors?.vpd?.current ?? zone.vpd ?? 1.0;
     
     // Use most recent 24 data points from history, or create flat line from current value
     const last24Temp = tempHistory.length > 0 ? getLatestHistory(tempHistory, 24) : Array(24).fill(tempCurrent);
@@ -2472,7 +2485,23 @@ async function loadRoomTrends(farmId, roomId, zonesData) {
     const last24Co2 = co2History.length > 0
         ? getLatestHistory(co2History, 24)
         : (co2Current != null ? Array(24).fill(co2Current) : []);
-    const last24Vpd = vpdHistory.length > 0 ? getLatestHistory(vpdHistory, 24) : Array(24).fill(vpdCurrent);
+    
+    // Calculate VPD from historical temp and humidity data
+    const last24Vpd = [];
+    const minLength = Math.min(last24Temp.length, last24Humidity.length);
+    for (let i = 0; i < minLength; i++) {
+        const T = last24Temp[i];
+        const RH = last24Humidity[i];
+        if (T != null && RH != null) {
+            // Saturation vapor pressure (kPa)
+            const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
+            // Vapor pressure deficit
+            const vpd = SVP * (1 - RH / 100);
+            last24Vpd.push(Math.round(vpd * 100) / 100);
+        } else {
+            last24Vpd.push(null);
+        }
+    }
     
     console.log('[room-trends] Drawing charts with data:', {
         temp: last24Temp.length,
