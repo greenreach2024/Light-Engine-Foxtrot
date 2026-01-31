@@ -699,6 +699,53 @@
             font-size: 13px;
         }
 
+        .farm-summary-card {
+            margin-bottom: 20px;
+        }
+
+        .farm-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .notes-toggle {
+            margin-top: 16px;
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+        }
+
+        .notes-toggle:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-blue);
+        }
+
+        .notes-toggle-icon {
+            transition: transform 0.2s;
+        }
+
+        .notes-toggle.active .notes-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .notes-content {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .notes-content.active {
+            display: block;
+        }
+
         .ai-rules-layout {
             display: grid;
             grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.2fr);
@@ -769,6 +816,10 @@
             }
             
             .grid-3col {
+                grid-template-columns: 1fr;
+            }
+            
+            .farm-summary-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -1154,44 +1205,55 @@
                 </div>
 
                 <div id="detail-overview" class="tab-content active">
-                    <div class="grid-3col">
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Farm Summary</div>
+                    <div class="card farm-summary-card">
+                        <div class="card-header">
+                            <div class="card-title">Farm Summary</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="farm-summary-grid">
+                                <div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Farm Owner</div>
+                                        <div class="metric-value" id="detail-owner">--</div>
+                                    </div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Key Contact</div>
+                                        <div class="metric-value" id="detail-contact">--</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Phone</div>
+                                        <div class="metric-value" id="detail-phone">--</div>
+                                    </div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Email</div>
+                                        <div class="metric-value" id="detail-email">--</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Address</div>
+                                        <div class="metric-value" id="detail-address">--</div>
+                                    </div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Deployment Type</div>
+                                        <div class="metric-value" id="detail-deployment-type">--</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="card-body">
-                                <div class="metric-row">
-                                    <div class="metric-label">Farm Owner</div>
-                                    <div class="metric-value" id="detail-owner">--</div>
-                                </div>
-                                <div class="metric-row">
-                                    <div class="metric-label">Key Contact</div>
-                                    <div class="metric-value" id="detail-contact">--</div>
-                                </div>
-                                <div class="metric-row">
-                                    <div class="metric-label">Phone</div>
-                                    <div class="metric-value" id="detail-phone">--</div>
-                                </div>
-                                <div class="metric-row">
-                                    <div class="metric-label">Email</div>
-                                    <div class="metric-value" id="detail-email">--</div>
-                                </div>
-                                <div class="metric-row">
-                                    <div class="metric-label">Address</div>
-                                    <div class="metric-value" id="detail-address">--</div>
-                                </div>
-                                <div class="metric-row">
-                                    <div class="metric-label">Deployment Type</div>
-                                    <div class="metric-value" id="detail-deployment-type">--</div>
-                                </div>
-                                <div style="margin-top: 16px;">
-                                    <label for="detail-notes" style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Notes</label>
-                                    <textarea id="detail-notes" rows="3" style="width: 100%; padding: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; resize: vertical;" placeholder="Add internal notes about this farm..."></textarea>
-                                    <button class="btn btn-primary" onclick="saveFarmNotes()" style="margin-top: 8px; width: 100%;">Save Notes</button>
-                                </div>
+                            <div class="notes-toggle" onclick="toggleFarmNotes()">
+                                <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">Internal Notes</span>
+                                <span class="notes-toggle-icon">▼</span>
+                            </div>
+                            <div class="notes-content" id="farm-notes-section">
+                                <textarea id="detail-notes" rows="3" style="width: 100%; padding: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; resize: vertical;" placeholder="Add internal notes about this farm..."></textarea>
+                                <button class="btn btn-primary" onclick="saveFarmNotes()" style="margin-top: 8px;">Save Notes</button>
                             </div>
                         </div>
+                    </div>
 
+                    <div class="grid-2col">
                         <div class="card compact-card">
                             <div class="card-header">
                                 <div class="card-title">Farm Metrics</div>

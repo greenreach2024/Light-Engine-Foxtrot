@@ -3293,6 +3293,19 @@ async function loadFarmSummary(farmId, farm) {
 }
 
 /**
+ * Toggle farm notes section visibility
+ */
+function toggleFarmNotes() {
+    const notesSection = document.getElementById('farm-notes-section');
+    const toggle = document.querySelector('.notes-toggle');
+    
+    if (notesSection && toggle) {
+        notesSection.classList.toggle('active');
+        toggle.classList.toggle('active');
+    }
+}
+
+/**
  * Save farm notes
  */
 async function saveFarmNotes() {
