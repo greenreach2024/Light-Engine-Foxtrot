@@ -3016,7 +3016,7 @@
 
           // Find groups in this zone, excluding cannabis
           const zoneGroups = groups.filter(g => {
-            if (String(g.zone) !== String(zone.zone)) return false;
+            if (!matchesGroupZoneToZone(g, zone)) return false;
             
             // Filter out cannabis crops
             const groupName = (g.name || '').toLowerCase();
@@ -3670,6 +3670,36 @@
       return typeof value === 'string' ? value.trim().toLowerCase() : '';
     }
 
+    function parseZoneIdentity(token) {
+      const raw = normalizeToken(token);
+      if (!raw) return { room: null, zoneNumber: null, raw };
+
+      // Format: room-id:zoneNumber (e.g., "room-a:1")
+      if (raw.includes(':')) {
+        const [room, zoneNumber] = raw.split(':');
+        return { room: room || null, zoneNumber: zoneNumber || null, raw };
+      }
+
+      // Format: room-id-zN (e.g., "room-a-z1")
+      const roomZoneMatch = raw.match(/^(.*?)-z(\d+)$/i);
+      if (roomZoneMatch) {
+        return { room: roomZoneMatch[1], zoneNumber: roomZoneMatch[2], raw };
+      }
+
+      // Format: zone-N
+      const zoneMatch = raw.match(/^zone-(\d+)$/i);
+      if (zoneMatch) {
+        return { room: null, zoneNumber: zoneMatch[1], raw };
+      }
+
+      // Format: plain number
+      if (/^\d+$/.test(raw)) {
+        return { room: null, zoneNumber: raw, raw };
+      }
+
+      return { room: null, zoneNumber: null, raw };
+    }
+
     function matchesZoneToken(zone, token) {
       const normalized = normalizeToken(token);
       if (!normalized || !zone) return false;
@@ -3683,6 +3713,49 @@
         zone.meta?.scopeId
       ];
       return candidates.some((candidate) => normalizeToken(candidate) === normalized);
+    }
+
+    function matchesGroupZoneToZone(group, zone) {
+      if (!group || !zone) return false;
+      const groupTokens = [
+        group.zone,
+        group.zoneId,
+        group.location,
+        group.room,
+        group.roomId,
+        group.scope,
+        group.scopeId
+      ].filter(Boolean);
+
+      const zoneTokens = [
+        zone.zone,
+        zone.name,
+        zone.room,
+        zone.roomName,
+        zone.id,
+        zone.location
+      ].filter(Boolean);
+
+      // Direct token match
+      if (groupTokens.some((token) => zoneTokens.some((zoneToken) => normalizeToken(token) === normalizeToken(zoneToken)))) {
+        return true;
+      }
+
+      // Structured match: room + zone number
+      const zoneIdentity = parseZoneIdentity(zone.zone || zone.id || zone.name || '');
+      if (zoneIdentity.zoneNumber) {
+        for (const token of groupTokens) {
+          const groupIdentity = parseZoneIdentity(token);
+          if (!groupIdentity.zoneNumber) continue;
+
+          const roomMatches = !zoneIdentity.room || !groupIdentity.room || zoneIdentity.room === groupIdentity.room;
+          if (roomMatches && zoneIdentity.zoneNumber === groupIdentity.zoneNumber) {
+            return true;
+          }
+        }
+      }
+
+      return false;
     }
 
     function findZoneBySensorToken(zones, token) {
