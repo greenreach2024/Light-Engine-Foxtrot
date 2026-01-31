@@ -2021,6 +2021,122 @@ router.patch('/farms/:farmId/notes', requireAdminRole('admin', 'operations', 'su
 });
 
 /**
+ * PATCH /api/admin/farms/:farmId/metadata
+ * Update farm contact metadata and sync to edge device
+ * Restricted to: admin, operations roles
+ */
+router.patch('/farms/:farmId/metadata', requireAdminRole('admin', 'operations'), async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        const { contact } = req.body;
+        
+        console.log(`[Admin API] Updating metadata for farm: ${farmId}`, contact);
+        
+        if (!contact || typeof contact !== 'object') {
+            return res.status(400).json({
+                success: false,
+                error: 'Contact object is required'
+            });
+        }
+        
+        // Get current farm data
+        const farmResult = await query('SELECT * FROM farms WHERE farm_id = $1', [farmId]);
+        
+        if (farmResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Farm not found'
+            });
+        }
+        
+        const farm = farmResult.rows[0];
+        const currentMetadata = farm.metadata || {};
+        
+        // Update metadata.contact with new information
+        const updatedMetadata = {
+            ...currentMetadata,
+            contact: {
+                ...(currentMetadata.contact || {}),
+                owner: contact.owner || currentMetadata.contact?.owner,
+                name: contact.contactName || contact.name || currentMetadata.contact?.name,
+                contactName: contact.contactName || contact.name || currentMetadata.contact?.contactName,
+                phone: contact.phone || currentMetadata.contact?.phone,
+                email: contact.email || currentMetadata.contact?.email,
+                website: contact.website || currentMetadata.contact?.website,
+                address: contact.address || currentMetadata.contact?.address
+            }
+        };
+        
+        // Update farm metadata in database
+        await query(
+            `UPDATE farms SET metadata = $1, updated_at = $2 WHERE farm_id = $3`,
+            [JSON.stringify(updatedMetadata), new Date().toISOString(), farmId]
+        );
+        
+        // Push update to edge device if farm is online
+        let syncStatus = 'not_attempted';
+        try {
+            const apiUrl = farm.api_url || currentMetadata.url;
+            if (apiUrl) {
+                console.log(`[Admin API] Attempting to sync metadata to edge device at ${apiUrl}`);
+                
+                // Build the update payload for edge device
+                const edgeUpdatePayload = {
+                    contact: {
+                        owner: contact.owner,
+                        name: contact.contactName || contact.name,
+                        phone: contact.phone,
+                        email: contact.email,
+                        website: contact.website,
+                        address: contact.address
+                    }
+                };
+                
+                // Call edge device API to update farm.json
+                const edgeResponse = await fetch(`${apiUrl}/api/config/farm-metadata`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': process.env.SYNC_API_KEY || 'default-sync-key'
+                    },
+                    body: JSON.stringify(edgeUpdatePayload),
+                    timeout: 5000
+                });
+                
+                if (edgeResponse.ok) {
+                    syncStatus = 'synced';
+                    console.log(`[Admin API] Successfully synced metadata to edge device`);
+                } else {
+                    syncStatus = 'sync_failed';
+                    console.warn(`[Admin API] Edge device sync failed: ${edgeResponse.status}`);
+                }
+            } else {
+                syncStatus = 'no_api_url';
+                console.log(`[Admin API] No API URL available for edge sync`);
+            }
+        } catch (syncError) {
+            syncStatus = 'sync_error';
+            console.error(`[Admin API] Error syncing to edge device:`, syncError.message);
+        }
+        
+        res.json({
+            success: true,
+            message: 'Farm metadata updated successfully',
+            syncStatus,
+            metadata: updatedMetadata
+        });
+        
+    } catch (error) {
+        console.error(`[Admin API] Error updating farm metadata:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update farm metadata',
+            message: error.message
+        });
+    }
+});
+
+/**
  * GET /api/admin/farms/:farmId/logs
  * Get system logs for a specific farm
  */

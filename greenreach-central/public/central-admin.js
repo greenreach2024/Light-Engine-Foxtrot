@@ -3343,6 +3343,157 @@ async function loadFarmSummary(farmId, farm) {
 }
 
 /**
+ * Enable edit mode for farm info
+ */
+function enableFarmInfoEdit() {
+    console.log('[FarmInfo] Enabling edit mode');
+    
+    // Hide display values, show input fields
+    const fields = ['owner', 'contact', 'phone', 'email', 'website', 'address'];
+    fields.forEach(field => {
+        const displayEl = document.getElementById(`detail-${field}`);
+        const inputEl = document.getElementById(`detail-${field}-input`);
+        
+        if (displayEl && inputEl) {
+            // Copy current value to input
+            let value = displayEl.textContent.trim();
+            // Handle website links
+            if (field === 'website' && displayEl.querySelector('a')) {
+                value = displayEl.querySelector('a').href;
+            }
+            inputEl.value = value === '--' ? '' : value;
+            
+            // Toggle visibility
+            displayEl.style.display = 'none';
+            inputEl.style.display = 'block';
+        }
+    });
+    
+    // Toggle buttons
+    document.getElementById('edit-farm-info-btn').style.display = 'none';
+    document.getElementById('save-farm-info-btn').style.display = 'inline-block';
+    document.getElementById('cancel-farm-info-btn').style.display = 'inline-block';
+}
+
+/**
+ * Cancel edit mode and revert changes
+ */
+function cancelFarmInfoEdit() {
+    console.log('[FarmInfo] Cancelling edit mode');
+    
+    // Hide input fields, show display values
+    const fields = ['owner', 'contact', 'phone', 'email', 'website', 'address'];
+    fields.forEach(field => {
+        const displayEl = document.getElementById(`detail-${field}`);
+        const inputEl = document.getElementById(`detail-${field}-input`);
+        
+        if (displayEl && inputEl) {
+            displayEl.style.display = 'block';
+            inputEl.style.display = 'none';
+        }
+    });
+    
+    // Toggle buttons
+    document.getElementById('edit-farm-info-btn').style.display = 'inline-block';
+    document.getElementById('save-farm-info-btn').style.display = 'none';
+    document.getElementById('cancel-farm-info-btn').style.display = 'none';
+}
+
+/**
+ * Save farm info and sync to edge device
+ */
+async function saveFarmInfo() {
+    const farmId = currentFarmId;
+    if (!farmId) {
+        alert('No farm selected');
+        return;
+    }
+    
+    console.log('[FarmInfo] Saving farm info for:', farmId);
+    
+    // Collect values from input fields
+    const farmInfo = {
+        owner: document.getElementById('detail-owner-input').value.trim(),
+        contactName: document.getElementById('detail-contact-input').value.trim(),
+        phone: document.getElementById('detail-phone-input').value.trim(),
+        email: document.getElementById('detail-email-input').value.trim(),
+        website: document.getElementById('detail-website-input').value.trim(),
+        address: document.getElementById('detail-address-input').value.trim()
+    };
+    
+    console.log('[FarmInfo] Collected data:', farmInfo);
+    
+    try {
+        // Save to GreenReach Central
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/metadata`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contact: farmInfo })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+            throw new Error(errorData.message || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('[FarmInfo] Save response:', result);
+        
+        // Update display values
+        document.getElementById('detail-owner').textContent = farmInfo.owner || '--';
+        document.getElementById('detail-contact').textContent = farmInfo.contactName || '--';
+        document.getElementById('detail-phone').textContent = farmInfo.phone || '--';
+        document.getElementById('detail-email').textContent = farmInfo.email || '--';
+        
+        // Handle website display
+        const websiteEl = document.getElementById('detail-website');
+        if (farmInfo.website) {
+            websiteEl.innerHTML = `<a href="${farmInfo.website}" target="_blank" style="color: var(--accent-blue); text-decoration: none;">${farmInfo.website}</a>`;
+        } else {
+            websiteEl.textContent = '--';
+        }
+        
+        document.getElementById('detail-address').textContent = farmInfo.address || '--';
+        
+        // Exit edit mode
+        cancelFarmInfoEdit();
+        
+        // Show success message
+        showNotification('Farm info updated successfully and synced to edge device', 'success');
+        
+    } catch (error) {
+        console.error('[FarmInfo] Error saving:', error);
+        alert(`Failed to save farm info: ${error.message}`);
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Simple notification system
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 16px 24px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        max-width: 400px;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transition = 'opacity 0.3s';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+/**
  * Toggle farm notes section visibility
  */
 function toggleFarmNotes() {

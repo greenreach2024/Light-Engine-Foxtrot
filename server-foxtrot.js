@@ -464,6 +464,26 @@ const DEFAULT_AUTODOSE_CONFIG = Object.freeze({
   minDoseIntervalSec: 60
 });
 
+const IRRIGATION_PLUG_ID = process.env.NUTRIENT_IRRIGATION_PLUG_ID || process.env.IRRIGATION_PLUG_ID || null;
+const parsedIrrigationInterval = Number.parseInt(process.env.IRRIGATION_SCHEDULER_INTERVAL_MS || '', 10);
+const IRRIGATION_SCHEDULER_INTERVAL_MS = Number.isFinite(parsedIrrigationInterval) ? parsedIrrigationInterval : 15000;
+const parsedIrrigationMinSwitch = Number.parseInt(process.env.IRRIGATION_MIN_SWITCH_MS || '', 10);
+const IRRIGATION_MIN_SWITCH_MS = Number.isFinite(parsedIrrigationMinSwitch) ? parsedIrrigationMinSwitch : 60000;
+const parsedDayStartHour = Number.parseInt(process.env.IRRIGATION_DAY_START_HOUR || '', 10);
+const IRRIGATION_DAY_START_HOUR = Number.isFinite(parsedDayStartHour) ? parsedDayStartHour : 6;
+const parsedPhotoperiodHours = Number.parseFloat(process.env.IRRIGATION_PHOTOPERIOD_HOURS || '');
+const IRRIGATION_PHOTOPERIOD_HOURS = Number.isFinite(parsedPhotoperiodHours) ? parsedPhotoperiodHours : 16;
+const parsedMaxRh = Number.parseFloat(process.env.IRRIGATION_MAX_RH || '');
+const IRRIGATION_MAX_RH = Number.isFinite(parsedMaxRh) ? parsedMaxRh : 90;
+const DEFAULT_IRRIGATION_CONFIG = Object.freeze({
+  mode: 'always_on',
+  onMinutes: 15,
+  offMinutes: 15,
+  dayNightSync: true,
+  plugId: IRRIGATION_PLUG_ID,
+  enabled: true
+});
+
 const LEGACY_CHANNEL_MAP = Object.freeze({
   phdown: 'phDown',
   ph_up: 'phUp',
@@ -12902,6 +12922,16 @@ const nutrientAutomationState = {
   dashboardWriteTimer: null
 };
 
+const irrigationSchedulerState = {
+  lastDecisionAt: 0,
+  lastSwitchAt: 0,
+  nextToggleAt: 0,
+  cycleState: 'on',
+  appliedState: null,
+  lastReason: null,
+  lastError: null
+};
+
 function clone(value) {
   if (value === null || value === undefined) return null;
   try {
@@ -12909,6 +12939,85 @@ function clone(value) {
   } catch {
     return null;
   }
+}
+
+function normalizeIrrigationConfig(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const mode = typeof source.mode === 'string' && ['always_on', 'cycle'].includes(source.mode)
+    ? source.mode
+    : DEFAULT_IRRIGATION_CONFIG.mode;
+  const onMinutes = toNumberOrNull(source.onMinutes ?? source.on_minutes) ?? DEFAULT_IRRIGATION_CONFIG.onMinutes;
+  const offMinutes = toNumberOrNull(source.offMinutes ?? source.off_minutes) ?? DEFAULT_IRRIGATION_CONFIG.offMinutes;
+  const dayNightSync = typeof source.dayNightSync === 'boolean'
+    ? source.dayNightSync
+    : DEFAULT_IRRIGATION_CONFIG.dayNightSync;
+  const plugId = typeof source.plugId === 'string' && source.plugId.trim()
+    ? source.plugId.trim()
+    : DEFAULT_IRRIGATION_CONFIG.plugId;
+  const enabled = typeof source.enabled === 'boolean' ? source.enabled : DEFAULT_IRRIGATION_CONFIG.enabled;
+  const dayStartHour = toNumberOrNull(source.dayStartHour ?? source.day_start_hour) ?? IRRIGATION_DAY_START_HOUR;
+  const photoperiodHours = toNumberOrNull(source.photoperiodHours ?? source.photoperiod_hours) ?? IRRIGATION_PHOTOPERIOD_HOURS;
+  const maxRh = toNumberOrNull(source.maxRh ?? source.max_rh) ?? IRRIGATION_MAX_RH;
+
+  return {
+    mode,
+    onMinutes: Math.max(1, Math.min(240, onMinutes)),
+    offMinutes: Math.max(1, Math.min(240, offMinutes)),
+    dayNightSync,
+    plugId,
+    enabled: Boolean(enabled),
+    dayStartHour: Math.max(0, Math.min(23, dayStartHour)),
+    photoperiodHours: Math.max(1, Math.min(23, photoperiodHours)),
+    maxRh: Math.max(50, Math.min(100, maxRh))
+  };
+}
+
+function resolveDayNightWindow(now = new Date(), config) {
+  const startHour = Math.max(0, Math.min(23, config.dayStartHour));
+  const hours = Math.max(1, Math.min(23, config.photoperiodHours));
+  const start = new Date(now);
+  start.setHours(startHour, 0, 0, 0);
+  const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
+  const isDay = now >= start && now < end;
+  return { isDay, start, end, hours };
+}
+
+function resolveNutrientEnvSnapshot() {
+  if (!preEnvStore || typeof preEnvStore.getRoom !== 'function') return null;
+  return preEnvStore.getRoom(NUTRIENT_SCOPE_ID) || null;
+}
+
+function readHumidityFromEnv(roomSnapshot) {
+  if (!roomSnapshot || typeof roomSnapshot !== 'object') return null;
+  const sensors = roomSnapshot.sensors || {};
+  const rh = sensors.rh?.current ?? sensors.humidity?.current ?? roomSnapshot?.telemetry?.rh ?? roomSnapshot?.telemetry?.humidity;
+  const num = toNumberOrNull(rh);
+  return Number.isFinite(num) ? num : null;
+}
+
+function computeCycleDurations(config, isDay) {
+  const onMinutes = config.onMinutes;
+  const offMinutes = config.offMinutes;
+  if (!config.dayNightSync || isDay) {
+    return { onMinutes, offMinutes };
+  }
+  const nightOn = Math.max(1, Math.round(onMinutes * 0.5));
+  const nightOff = Math.max(offMinutes, Math.round(offMinutes * 1.5));
+  return { onMinutes: nightOn, offMinutes: nightOff };
+}
+
+function updateIrrigationRuntime(doc, runtime) {
+  if (!doc || typeof doc !== 'object') return;
+  doc.system = doc.system && typeof doc.system === 'object' ? { ...doc.system } : {};
+  doc.system.irrigation = doc.system.irrigation && typeof doc.system.irrigation === 'object'
+    ? { ...doc.system.irrigation }
+    : {};
+  doc.system.irrigation.runtime = {
+    ...(doc.system.irrigation.runtime || {}),
+    ...runtime,
+    updatedAt: new Date().toISOString()
+  };
+  schedulePersistNutrientDashboard(doc);
 }
 
 function loadNutrientDashboardCache() {
@@ -13418,6 +13527,123 @@ async function refreshNutrientAutomation({ force = false, reason = 'interval' } 
   return nutrientAutomationState.pollInFlight;
 }
 
+let irrigationSchedulerTimer = null;
+
+async function refreshIrrigationScheduler({ force = false, reason = 'interval' } = {}) {
+  const now = Date.now();
+  if (!force && irrigationSchedulerState.lastDecisionAt && (now - irrigationSchedulerState.lastDecisionAt) < IRRIGATION_SCHEDULER_INTERVAL_MS / 2) {
+    return;
+  }
+
+  const doc = loadNutrientDashboardCache() || {};
+  const system = doc.system && typeof doc.system === 'object' ? doc.system : {};
+  const irrigationConfig = normalizeIrrigationConfig(system.irrigation || {});
+  const automationEnabled = system.automation ? system.automation.mode !== 'disabled' : true;
+
+  const runtime = {
+    enabled: irrigationConfig.enabled && automationEnabled,
+    mode: irrigationConfig.mode,
+    plugId: irrigationConfig.plugId || null,
+    decisionAt: new Date().toISOString(),
+    reason
+  };
+
+  if (!irrigationConfig.enabled || !automationEnabled) {
+    runtime.status = 'disabled';
+    updateIrrigationRuntime(doc, runtime);
+    return;
+  }
+
+  const roomSnapshot = resolveNutrientEnvSnapshot();
+  const humidity = readHumidityFromEnv(roomSnapshot);
+  const dayWindow = resolveDayNightWindow(new Date(), irrigationConfig);
+  const { onMinutes, offMinutes } = computeCycleDurations(irrigationConfig, dayWindow.isDay);
+
+  runtime.isDay = dayWindow.isDay;
+  runtime.dayWindow = {
+    start: dayWindow.start.toISOString(),
+    end: dayWindow.end.toISOString(),
+    hours: dayWindow.hours
+  };
+  runtime.humidity = humidity;
+
+  const humidityPause = Number.isFinite(humidity) && humidity >= irrigationConfig.maxRh;
+  let desired = false;
+  let decisionReason = 'cycle';
+
+  if (irrigationConfig.mode === 'always_on') {
+    desired = true;
+    decisionReason = 'always_on';
+  } else {
+    if (!irrigationSchedulerState.nextToggleAt || now >= irrigationSchedulerState.nextToggleAt) {
+      irrigationSchedulerState.cycleState = irrigationSchedulerState.cycleState === 'on' ? 'off' : 'on';
+      const durationMinutes = irrigationSchedulerState.cycleState === 'on' ? onMinutes : offMinutes;
+      irrigationSchedulerState.nextToggleAt = now + durationMinutes * 60 * 1000;
+    }
+    desired = irrigationSchedulerState.cycleState === 'on';
+  }
+
+  if (humidityPause) {
+    desired = false;
+    decisionReason = 'humidity_pause';
+  }
+
+  runtime.desiredState = desired ? 'on' : 'off';
+  runtime.decisionReason = decisionReason;
+  runtime.nextToggleAt = irrigationSchedulerState.nextToggleAt
+    ? new Date(irrigationSchedulerState.nextToggleAt).toISOString()
+    : null;
+  runtime.cycleState = irrigationSchedulerState.cycleState;
+  runtime.onMinutes = onMinutes;
+  runtime.offMinutes = offMinutes;
+
+  if (!irrigationConfig.plugId || !preAutomationEngine || typeof preAutomationEngine.setPlugState !== 'function') {
+    runtime.status = irrigationConfig.plugId ? 'engine-unavailable' : 'plug-unconfigured';
+    updateIrrigationRuntime(doc, runtime);
+    return;
+  }
+
+  const shouldSwitch = irrigationSchedulerState.appliedState === null || irrigationSchedulerState.appliedState !== desired;
+  const canSwitch = !irrigationSchedulerState.lastSwitchAt || (now - irrigationSchedulerState.lastSwitchAt) >= IRRIGATION_MIN_SWITCH_MS;
+
+  if (shouldSwitch && canSwitch) {
+    try {
+      await preAutomationEngine.setPlugState(irrigationConfig.plugId, desired);
+      irrigationSchedulerState.appliedState = desired;
+      irrigationSchedulerState.lastSwitchAt = now;
+      irrigationSchedulerState.lastError = null;
+      runtime.status = desired ? 'running' : 'paused';
+      runtime.appliedState = desired ? 'on' : 'off';
+    } catch (error) {
+      irrigationSchedulerState.lastError = error?.message || 'plug-control-failed';
+      runtime.status = 'error';
+      runtime.error = irrigationSchedulerState.lastError;
+    }
+  } else {
+    runtime.status = irrigationSchedulerState.appliedState ? 'running' : 'paused';
+    runtime.appliedState = irrigationSchedulerState.appliedState ? 'on' : 'off';
+    if (!canSwitch) {
+      runtime.guard = `min-switch ${IRRIGATION_MIN_SWITCH_MS}ms`;
+    }
+  }
+
+  irrigationSchedulerState.lastDecisionAt = now;
+  irrigationSchedulerState.lastReason = decisionReason;
+  updateIrrigationRuntime(doc, runtime);
+}
+
+function ensureIrrigationScheduler() {
+  if (irrigationSchedulerTimer) return;
+  irrigationSchedulerTimer = setInterval(() => {
+    refreshIrrigationScheduler({ reason: 'timer' }).catch((error) => {
+      console.warn('[irrigation] Scheduler tick failed:', error?.message || error);
+    });
+  }, IRRIGATION_SCHEDULER_INTERVAL_MS);
+  if (typeof irrigationSchedulerTimer?.unref === 'function') {
+    irrigationSchedulerTimer.unref();
+  }
+}
+
 let nutrientPollTimer = null;
 
 function ensureNutrientAutomationTimer() {
@@ -13455,6 +13681,10 @@ async function getNutrientAutomationState({ forceRefresh = false } = {}) {
 ensureNutrientAutomationTimer();
 refreshNutrientAutomation({ force: true, reason: 'startup' }).catch((error) => {
   console.warn('[nutrients] Initial nutrient poll failed:', error?.message || error);
+});
+ensureIrrigationScheduler();
+refreshIrrigationScheduler({ force: true, reason: 'startup' }).catch((error) => {
+  console.warn('[irrigation] Initial scheduler run failed:', error?.message || error);
 });
 
 app.options('/api/nutrients/targets', (req, res) => {
@@ -17574,6 +17804,75 @@ app.get('/api/config/app', async (req, res) => {
       farmSlug: 'demo',
       region: 'Pacific Northwest',
       status: 'online'
+    });
+  }
+});
+
+/**
+ * PATCH /api/config/farm-metadata
+ * Update farm metadata (contact info) from GreenReach Central
+ * Updates farm.json on the edge device
+ */
+app.patch('/api/config/farm-metadata', async (req, res) => {
+  try {
+    console.log('[API] PATCH /api/config/farm-metadata - Received update from GreenReach Central');
+    const { contact } = req.body;
+    
+    if (!contact || typeof contact !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Contact object is required'
+      });
+    }
+    
+    // Load current farm.json
+    const farmJsonPath = path.join(__dirname, 'farm.json');
+    let farmData = {};
+    
+    try {
+      const farmJsonContent = await fs.readFile(farmJsonPath, 'utf-8');
+      farmData = JSON.parse(farmJsonContent);
+    } catch (readError) {
+      console.warn('[API] farm.json not found or invalid, creating new one');
+      farmData = {
+        farmId: process.env.FARM_ID || 'unknown',
+        farmName: process.env.FARM_NAME || 'Unknown Farm'
+      };
+    }
+    
+    // Update contact metadata
+    farmData.metadata = farmData.metadata || {};
+    farmData.metadata.contact = {
+      ...(farmData.metadata.contact || {}),
+      owner: contact.owner || farmData.metadata.contact?.owner,
+      name: contact.name || farmData.metadata.contact?.name,
+      contactName: contact.name || farmData.metadata.contact?.contactName,
+      phone: contact.phone || farmData.metadata.contact?.phone,
+      email: contact.email || farmData.metadata.contact?.email,
+      website: contact.website || farmData.metadata.contact?.website,
+      address: contact.address || farmData.metadata.contact?.address
+    };
+    
+    farmData.metadata.lastUpdated = new Date().toISOString();
+    farmData.metadata.updatedBy = 'GreenReach Central';
+    
+    // Write updated farm.json
+    await fs.writeFile(farmJsonPath, JSON.stringify(farmData, null, 2), 'utf-8');
+    
+    console.log('[API] farm.json updated successfully with new contact metadata');
+    
+    res.json({
+      success: true,
+      message: 'Farm metadata updated successfully',
+      metadata: farmData.metadata
+    });
+    
+  } catch (error) {
+    console.error('[API] Error updating farm metadata:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update farm metadata',
+      message: error.message
     });
   }
 });

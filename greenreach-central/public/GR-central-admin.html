@@ -1208,6 +1208,11 @@
                     <div class="card farm-summary-card">
                         <div class="card-header">
                             <div class="card-title">Farm Summary</div>
+                            <div style="display: flex; gap: 8px;">
+                                <button id="edit-farm-info-btn" class="btn" onclick="enableFarmInfoEdit()" style="padding: 6px 12px; font-size: 13px;">Edit Info</button>
+                                <button id="save-farm-info-btn" class="btn btn-primary" onclick="saveFarmInfo()" style="padding: 6px 12px; font-size: 13px; display: none;">Save & Sync</button>
+                                <button id="cancel-farm-info-btn" class="btn" onclick="cancelFarmInfoEdit()" style="padding: 6px 12px; font-size: 13px; display: none;">Cancel</button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="farm-summary-grid">
@@ -1215,30 +1220,36 @@
                                     <div class="metric-row">
                                         <div class="metric-label">Farm Owner</div>
                                         <div class="metric-value" id="detail-owner">--</div>
+                                        <input type="text" id="detail-owner-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
                                     </div>
                                     <div class="metric-row">
                                         <div class="metric-label">Key Contact</div>
                                         <div class="metric-value" id="detail-contact">--</div>
+                                        <input type="text" id="detail-contact-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
                                     </div>
                                 </div>
                                 <div>
                                     <div class="metric-row">
                                         <div class="metric-label">Phone</div>
                                         <div class="metric-value" id="detail-phone">--</div>
+                                        <input type="tel" id="detail-phone-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
                                     </div>
                                     <div class="metric-row">
                                         <div class="metric-label">Email</div>
                                         <div class="metric-value" id="detail-email">--</div>
+                                        <input type="email" id="detail-email-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
                                     </div>
                                     <div class="metric-row">
                                         <div class="metric-label">Website</div>
                                         <div class="metric-value" id="detail-website">--</div>
+                                        <input type="url" id="detail-website-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
                                     </div>
                                 </div>
                                 <div>
                                     <div class="metric-row">
                                         <div class="metric-label">Address</div>
                                         <div class="metric-value" id="detail-address">--</div>
+                                        <input type="text" id="detail-address-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
                                     </div>
                                     <div class="metric-row">
                                         <div class="metric-label">Deployment Type</div>
