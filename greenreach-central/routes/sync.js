@@ -390,18 +390,20 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         dbStatus = 'inactive';
       }
       
-      // Extract farm data from metadata
+      // Extract farm data from metadata with safe defaults
       const farmName = metadata?.farmName || metadata?.name || farmId;
       const contactName = metadata?.contact_name 
         || metadata?.contactName 
         || metadata?.contact?.name
         || 'Farm Admin';
       const planType = metadata?.plan_type || metadata?.planType || 'free';
+      const apiKeyValue = req.apiKey; // From authenticateFarm middleware
       
-      // Upsert farm - production schema requires: farm_id, name, contact_name, plan_type
+      // Upsert farm - production schema discovered via error messages
+      // Required fields: farm_id, name, contact_name, plan_type, api_key
       await query(
-        `INSERT INTO farms (farm_id, name, contact_name, plan_type, status, last_heartbeat, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW(), $6, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, contact_name, plan_type, api_key, status, last_heartbeat, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, NOW(), NOW())
          ON CONFLICT (farm_id) 
          DO UPDATE SET 
            status = EXCLUDED.status,
@@ -416,6 +418,7 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
           farmName,
           contactName,
           planType,
+          apiKeyValue,
           dbStatus, 
           JSON.stringify(metadata || {})
         ]
