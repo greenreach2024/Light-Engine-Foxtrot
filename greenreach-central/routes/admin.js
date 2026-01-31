@@ -8,6 +8,7 @@ import { adminAuthMiddleware, requireAdminRole } from '../middleware/adminAuth.j
 import adminAuthRoutes from './admin-auth.js';
 import adminWholesaleRoutes from './admin-wholesale.js';
 import adminRecipesRoutes from './admin-recipes.js';
+import { getInMemoryGroups } from './sync.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
@@ -1967,6 +1968,59 @@ router.patch('/farms/:farmId/config', requireAdminRole('admin', 'operations'), a
 });
 
 /**
+ * PATCH /api/admin/farms/:farmId/notes
+ * Update farm notes (internal GreenReach Central notes)
+ * Restricted to: admin, operations, support roles
+ */
+router.patch('/farms/:farmId/notes', requireAdminRole('admin', 'operations', 'support'), async (req, res) => {
+    try {
+        const { farmId } = req.params;
+        const { notes } = req.body;
+        
+        console.log(`[Admin API] Updating notes for farm: ${farmId}`);
+        
+        if (notes === undefined) {
+            return res.status(400).json({
+                success: false,
+                error: 'Notes field is required'
+            });
+        }
+        
+        // Get current settings to merge notes into
+        const farmResult = await query('SELECT settings FROM farms WHERE farm_id = $1', [farmId]);
+        
+        if (farmResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Farm not found'
+            });
+        }
+        
+        const currentSettings = farmResult.rows[0]?.settings || {};
+        currentSettings.notes = notes;
+        
+        const result = await query(
+            `UPDATE farms SET settings = $1, updated_at = $2 WHERE farm_id = $3 RETURNING *`,
+            [JSON.stringify(currentSettings), new Date().toISOString(), farmId]
+        );
+        
+        res.json({
+            success: true,
+            message: 'Farm notes updated successfully',
+            notes: notes
+        });
+        
+    } catch (error) {
+        console.error(`[Admin API] Error updating farm notes:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update farm notes',
+            message: error.message
+        });
+    }
+});
+
+/**
  * GET /api/admin/farms/:farmId/logs
  * Get system logs for a specific farm
  */
@@ -2586,29 +2640,8 @@ router.get('/energy/dashboard', async (req, res) => {
 router.get('/harvest/forecast', async (req, res) => {
     try {
         console.log('[Admin API] Fetching harvest forecast data');
-        
+
         const dbAvailable = await isDatabaseAvailable();
-        if (!dbAvailable) {
-            // Return mock data if database not available
-            return res.json({
-                thisWeek: "0",
-                thisCycle: "0",
-                successRate: "0",
-                upcomingTrays: "0",
-                forecast: {
-                    sevenDay: { trays: 0, plants: 0 },
-                    fourteenDay: { trays: 0, plants: 0 },
-                    thirtyDay: { trays: 0, plants: 0 },
-                    thirtyPlus: { trays: 0, plants: 0 }
-                },
-                recipePerformance: {
-                    bestPerformer: "N/A",
-                    mostPopular: "N/A",
-                    fastestCycle: "N/A"
-                },
-                timestamp: new Date().toISOString()
-            });
-        }
 
         // Load lighting recipes to get cycle times
         const recipesPath = path.join(__dirname, '../public/data/lighting-recipes.json');
@@ -2631,10 +2664,19 @@ router.get('/harvest/forecast', async (req, res) => {
             return Math.ceil(maxDay);
         }
 
-        // Get all groups from farm_data
-        const groupsResult = await query(
-            `SELECT farm_id, data FROM farm_data WHERE data_type = 'groups'`
-        );
+        let groupsPayloads = [];
+        let dataSource = 'memory';
+
+        if (dbAvailable) {
+            const groupsResult = await query(
+                `SELECT farm_id, data FROM farm_data WHERE data_type = 'groups'`
+            );
+            groupsPayloads = groupsResult.rows.map(row => row.data);
+            dataSource = 'database';
+        } else {
+            const groupsMap = getInMemoryGroups();
+            groupsPayloads = Array.from(groupsMap.values());
+        }
 
         const now = new Date();
         const forecasts = {
@@ -2648,9 +2690,57 @@ router.get('/harvest/forecast', async (req, res) => {
         let totalTraysThisCycle = 0;
         let recipeStats = {};
 
+        function coerceNumber(value) {
+            if (value === null || value === undefined) return null;
+            const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+            return Number.isFinite(num) ? num : null;
+        }
+
+        function computeTrayAndPlantCounts(group) {
+            let trayCount = 0;
+            let plantCount = 0;
+
+            if (Array.isArray(group.trays)) {
+                trayCount = group.trays.length;
+                const trayPlants = group.trays
+                    .map(tray => coerceNumber(tray.plantCount ?? tray.plants ?? tray.plant_count))
+                    .filter(value => value && value > 0);
+                if (trayPlants.length > 0) {
+                    plantCount = trayPlants.reduce((sum, value) => sum + value, 0);
+                }
+            } else {
+                trayCount = coerceNumber(group.trays) || coerceNumber(group.tray_count) || coerceNumber(group.trayCount) || 0;
+            }
+
+            if (trayCount <= 0) {
+                trayCount = 1;
+            }
+
+            if (plantCount <= 0) {
+                const perTray = coerceNumber(group.plants_per_tray)
+                    || coerceNumber(group.plantsPerTray)
+                    || coerceNumber(group.plant_count)
+                    || coerceNumber(group.plantCount)
+                    || coerceNumber(group.plantsPerTrayCount)
+                    || null;
+                if (perTray && perTray > 0) {
+                    plantCount = perTray * trayCount;
+                } else {
+                    const totalPlants = coerceNumber(group.plants) || coerceNumber(group.total_plants) || null;
+                    if (totalPlants && totalPlants > 0) {
+                        plantCount = totalPlants;
+                    } else {
+                        plantCount = trayCount * 128;
+                    }
+                }
+            }
+
+            return { trayCount, plantCount };
+        }
+
         // Process each farm's groups
-        for (const row of groupsResult.rows) {
-            let groups = row.data;
+        for (const payload of groupsPayloads) {
+            let groups = payload;
             if (typeof groups === 'string') {
                 try {
                     groups = JSON.parse(groups);
@@ -2684,9 +2774,7 @@ router.get('/harvest/forecast', async (req, res) => {
                 // Skip if already harvested (negative days)
                 if (daysUntilHarvest < 0) continue;
 
-                // Count trays
-                const trayCount = Array.isArray(group.trays) ? group.trays.length : (group.trays || 1);
-                const plantCount = trayCount * 128; // Assuming 128 plants per tray
+                const { trayCount, plantCount } = computeTrayAndPlantCounts(group);
 
                 // Bucket into time ranges
                 if (daysUntilHarvest <= 7) {
@@ -2778,6 +2866,8 @@ router.get('/harvest/forecast', async (req, res) => {
                 mostPopular,
                 fastestCycle
             },
+            dataSource,
+            groupsCount: groupsPayloads.length,
             timestamp: now.toISOString()
         };
 

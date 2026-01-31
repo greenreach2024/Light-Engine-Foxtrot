@@ -2007,6 +2007,11 @@ async function loadFarmDetails(farmId, farmData) {
         setCount('detail-hvac', equipmentSummary.hvacAssigned, equipmentSummary.hvacTotal, 'HVAC not configured');
         setCount('detail-irrigation', equipmentSummary.irrigationAssigned, equipmentSummary.irrigationTotal, 'Irrigation not configured');
         
+        // Load farm summary information
+        console.log('[loadFarmDetails] Calling loadFarmSummary...');
+        await loadFarmSummary(farmId, farm);
+        console.log('[loadFarmDetails] loadFarmSummary complete');
+        
         // Load rooms for this farm
         console.log('[loadFarmDetails] Calling loadFarmRooms...');
         await loadFarmRooms(farmId, rooms);
@@ -3206,6 +3211,131 @@ async function loadGroupTrays(farmId, roomId, zoneId, groupId, count) {
     
     // Group-level tray assignments not synced
     tbody.innerHTML = '<tr><td colspan="5" class="empty">No tray data for this group. Trays are managed locally on the edge device.</td></tr>';
+}
+
+/**
+ * Load farm summary information
+ */
+async function loadFarmSummary(farmId, farm) {
+    try {
+        console.log('[FarmSummary] Loading summary for farm:', farmId);
+        
+        // Fetch farm config to get contact info and notes
+        const configResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/config`);
+        let config = {};
+        let settings = {};
+        
+        if (configResponse.ok) {
+            const configData = await configResponse.json();
+            config = configData.config || {};
+            settings = config.settings || {};
+            console.log('[FarmSummary] Config loaded:', config);
+        }
+        
+        // Extract metadata from farm object
+        const metadata = farm.metadata || {};
+        const contact = metadata.contact || {};
+        const location = metadata.location || {};
+        
+        // Determine deployment type (Edge or Cloud)
+        let deploymentType = 'Unknown';
+        if (farm.apiUrl || config.api_url) {
+            const apiUrl = farm.apiUrl || config.api_url;
+            if (apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1') || apiUrl.includes('192.168') || apiUrl.includes('10.0')) {
+                deploymentType = 'Edge (Local Network)';
+            } else {
+                deploymentType = 'Cloud';
+            }
+        }
+        
+        // Update Farm Summary card fields
+        const ownerEl = document.getElementById('detail-owner');
+        const contactEl = document.getElementById('detail-contact');
+        const phoneEl = document.getElementById('detail-phone');
+        const emailEl = document.getElementById('detail-email');
+        const addressEl = document.getElementById('detail-address');
+        const deploymentTypeEl = document.getElementById('detail-deployment-type');
+        const notesEl = document.getElementById('detail-notes');
+        
+        if (ownerEl) ownerEl.textContent = contact.owner || metadata.owner || farm.owner || '--';
+        if (contactEl) contactEl.textContent = contact.name || metadata.contactName || farm.contactName || '--';
+        if (phoneEl) phoneEl.textContent = contact.phone || metadata.phone || farm.phone || '--';
+        if (emailEl) emailEl.textContent = contact.email || metadata.email || farm.email || '--';
+        
+        // Format address
+        let addressText = '--';
+        if (location.street || location.city || location.state || location.zip) {
+            const parts = [];
+            if (location.street) parts.push(location.street);
+            if (location.city) parts.push(location.city);
+            if (location.state) parts.push(location.state);
+            if (location.zip) parts.push(location.zip);
+            addressText = parts.join(', ');
+        } else if (contact.address) {
+            addressText = contact.address;
+        }
+        if (addressEl) addressEl.textContent = addressText;
+        
+        if (deploymentTypeEl) deploymentTypeEl.textContent = deploymentType;
+        
+        // Load notes from settings
+        if (notesEl) {
+            notesEl.value = settings.notes || '';
+            // Store farmId in a data attribute for saving
+            notesEl.dataset.farmId = farmId;
+        }
+        
+        console.log('[FarmSummary] Summary loaded successfully');
+        
+    } catch (error) {
+        console.error('[FarmSummary] Error loading farm summary:', error);
+    }
+}
+
+/**
+ * Save farm notes
+ */
+async function saveFarmNotes() {
+    try {
+        const notesEl = document.getElementById('detail-notes');
+        if (!notesEl) {
+            alert('Notes field not found');
+            return;
+        }
+        
+        const farmId = notesEl.dataset.farmId;
+        const notes = notesEl.value;
+        
+        if (!farmId) {
+            alert('Farm ID not found. Please reload the page.');
+            return;
+        }
+        
+        console.log('[SaveNotes] Saving notes for farm:', farmId);
+        
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/notes`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ notes })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save notes');
+        }
+        
+        const result = await response.json();
+        console.log('[SaveNotes] Notes saved successfully:', result);
+        
+        // Show success message
+        alert('Farm notes saved successfully!');
+        
+    } catch (error) {
+        console.error('[SaveNotes] Error saving notes:', error);
+        alert(`Failed to save notes: ${error.message}`);
+    }
 }
 
 /**
@@ -6053,8 +6183,17 @@ const recipeFieldMap = new Map([
     ['day', 'day'],
     ['stage', 'stage'],
     ['dli target mol m2 d', 'dli_target'],
+    ['dli target mol m d', 'dli_target'],
     ['dli target', 'dli_target'],
+    ['dli target mol m2 day', 'dli_target'],
+    ['dli target mol m 2 day', 'dli_target'],
+    ['dli target mol m2 day ', 'dli_target'],
+    ['dli target mol m 2 d', 'dli_target'],
     ['temp target c', 'temperature'],
+    ['temperature c', 'temperature'],
+    ['temperature (c)', 'temperature'],
+    ['temp c', 'temperature'],
+    ['afternoon temp c', 'afternoon_temp'],
     ['temperature', 'temperature'],
     ['blue', 'blue'],
     ['green', 'green'],
@@ -6062,6 +6201,12 @@ const recipeFieldMap = new Map([
     ['far red', 'far_red'],
     ['farred', 'far_red'],
     ['ppfd target umol m2 s', 'ppfd'],
+    ['ppfd target mol m s', 'ppfd'],
+    ['ppfd target umol m 2 s', 'ppfd'],
+    ['ppfd target umol m2 s ', 'ppfd'],
+    ['ppfd target umol m 2 s ', 'ppfd'],
+    ['ppfd target (umol m2 s)', 'ppfd'],
+    ['ppfd target (umol m 2 s)', 'ppfd'],
     ['ppfd target', 'ppfd'],
     ['vpd target kpa', 'vpd_target'],
     ['vpd target', 'vpd_target'],
@@ -6088,7 +6233,16 @@ function normalizeHeaderKey(key) {
 
 function normalizeRecipeSchedule(recipe) {
     if (Array.isArray(recipe?.data?.schedule)) {
-        return recipe.data.schedule;
+        return recipe.data.schedule.map(row => {
+            const normalized = {};
+            Object.entries(row).forEach(([key, value]) => {
+                if (key in normalized) return;
+                const normalizedKey = normalizeHeaderKey(key);
+                const mappedKey = recipeFieldMap.get(normalizedKey) || key;
+                normalized[mappedKey] = value;
+            });
+            return normalized;
+        });
     }
     if (Array.isArray(recipe?.phases)) {
         return recipe.phases.map(phase => {
@@ -6177,8 +6331,9 @@ function renderRecipesTableDetailed(recipes) {
         
         // Get average temperature from schedule
         let avgTemp = 'N/A';
-        if (recipe.data && recipe.data.schedule && recipe.data.schedule.length > 0) {
-            const temps = recipe.data.schedule
+        const normalizedSchedule = normalizeRecipeSchedule(recipe);
+        if (normalizedSchedule.length > 0) {
+            const temps = normalizedSchedule
                 .map(day => {
                     const temp = day.temperature || day.tempC || day.afternoon_temp;
                     return typeof temp === 'string' ? parseFloat(temp) : temp;
@@ -6401,22 +6556,31 @@ async function viewRecipe(recipeId) {
         document.getElementById('recipe-view-category').textContent = recipe.category || 'Vegetables';
         document.getElementById('recipe-view-days').textContent = recipe.total_days || recipe.totalDays || schedule.length;
         
+        const formatNumber = (value, decimals) => {
+            const num = Number(value);
+            return Number.isFinite(num) ? num.toFixed(decimals) : '';
+        };
+        const formatInteger = (value) => {
+            const num = Number(value);
+            return Number.isFinite(num) ? Math.round(num) : '';
+        };
+
         // Render schedule table
         const tbody = document.getElementById('recipe-view-schedule');
         tbody.innerHTML = schedule.map(day => `
             <tr>
                 <td>${day.day.toFixed(1) || ''}</td>
                 <td>${day.stage || ''}</td>
-                <td>${day.dli_target ? day.dli_target.toFixed(2) : ''}</td>
-                <td>${day.temperature || day.tempC || day.afternoon_temp || ''}</td>
-                <td>${day.vpd_target ? day.vpd_target.toFixed(2) : ''}</td>
+                <td>${formatNumber(day.dli_target, 2)}</td>
+                <td>${formatNumber(day.temperature || day.tempC || day.afternoon_temp, 1)}</td>
+                <td>${formatNumber(day.vpd_target, 2)}</td>
                 <td>${day.max_humidity || ''}</td>
                 <td>${day.blue || 0}</td>
                 <td>${day.green || 0}</td>
                 <td>${day.red || 0}</td>
                 <td>${day.far_red || 0}</td>
-                <td>${day.ppfd ? Math.round(day.ppfd) : 0}</td>
-                <td>${day.ec ? day.ec.toFixed(2) : ''}</td>
+                <td>${formatInteger(day.ppfd)}</td>
+                <td>${formatNumber(day.ec, 2)}</td>
                 <td>${day.ph || ''}</td>
             </tr>
         `).join('');

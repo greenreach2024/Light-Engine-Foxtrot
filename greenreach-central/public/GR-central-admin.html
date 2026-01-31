@@ -673,6 +673,32 @@
             gap: 20px;
         }
 
+        .grid-3col {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .compact-card {
+            max-height: 320px;
+        }
+
+        .compact-card .card-body {
+            padding: 14px 16px;
+        }
+
+        .compact-card .metric-row {
+            margin-bottom: 8px;
+        }
+
+        .compact-card .metric-label {
+            font-size: 12px;
+        }
+
+        .compact-card .metric-value {
+            font-size: 13px;
+        }
+
         .ai-rules-layout {
             display: grid;
             grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.2fr);
@@ -739,6 +765,10 @@
 
         @media (max-width: 768px) {
             .grid-2col-responsive {
+                grid-template-columns: 1fr;
+            }
+            
+            .grid-3col {
                 grid-template-columns: 1fr;
             }
         }
@@ -1124,8 +1154,45 @@
                 </div>
 
                 <div id="detail-overview" class="tab-content active">
-                    <div class="grid-2col">
+                    <div class="grid-3col">
                         <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">Farm Summary</div>
+                            </div>
+                            <div class="card-body">
+                                <div class="metric-row">
+                                    <div class="metric-label">Farm Owner</div>
+                                    <div class="metric-value" id="detail-owner">--</div>
+                                </div>
+                                <div class="metric-row">
+                                    <div class="metric-label">Key Contact</div>
+                                    <div class="metric-value" id="detail-contact">--</div>
+                                </div>
+                                <div class="metric-row">
+                                    <div class="metric-label">Phone</div>
+                                    <div class="metric-value" id="detail-phone">--</div>
+                                </div>
+                                <div class="metric-row">
+                                    <div class="metric-label">Email</div>
+                                    <div class="metric-value" id="detail-email">--</div>
+                                </div>
+                                <div class="metric-row">
+                                    <div class="metric-label">Address</div>
+                                    <div class="metric-value" id="detail-address">--</div>
+                                </div>
+                                <div class="metric-row">
+                                    <div class="metric-label">Deployment Type</div>
+                                    <div class="metric-value" id="detail-deployment-type">--</div>
+                                </div>
+                                <div style="margin-top: 16px;">
+                                    <label for="detail-notes" style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Notes</label>
+                                    <textarea id="detail-notes" rows="3" style="width: 100%; padding: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; resize: vertical;" placeholder="Add internal notes about this farm..."></textarea>
+                                    <button class="btn btn-primary" onclick="saveFarmNotes()" style="margin-top: 8px; width: 100%;">Save Notes</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card compact-card">
                             <div class="card-header">
                                 <div class="card-title">Farm Metrics</div>
                             </div>
@@ -1149,7 +1216,7 @@
                             </div>
                         </div>
 
-                        <div class="card">
+                        <div class="card compact-card">
                             <div class="card-header">
                                 <div class="card-title">Equipment Status</div>
                             </div>
