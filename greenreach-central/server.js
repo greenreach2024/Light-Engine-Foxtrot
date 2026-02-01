@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 
 // Import routes
 import farmRoutes from './routes/farms.js';
+import authRoutes from './routes/auth.js';
 import monitoringRoutes from './routes/monitoring.js';
 import inventoryRoutes from './routes/inventory.js';
 import ordersRoutes from './routes/orders.js';
@@ -178,6 +179,7 @@ app.post('/api/debug/track', express.json(), (req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRoutes); // Farm authentication
 app.use('/api/farms', farmRoutes);
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 app.use('/api/inventory', authMiddleware, inventoryRoutes);
