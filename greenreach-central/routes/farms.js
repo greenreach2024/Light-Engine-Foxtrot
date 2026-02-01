@@ -18,8 +18,15 @@ const inMemoryHeartbeats = [];
  */
 router.get('/', async (req, res, next) => {
   try {
-    // Try in-memory first, then database
-    const farms = Array.from(inMemoryFarms.values()).map(farm => ({
+    // Query database for all farms
+    const { query } = await import('../config/database.js');
+    const result = await query(
+      `SELECT farm_id, name, status, last_heartbeat, metadata 
+       FROM farms 
+       ORDER BY created_at DESC`
+    );
+    
+    const farms = result.rows.map(farm => ({
       farmId: farm.farm_id,
       name: farm.name,
       status: farm.status,
@@ -42,12 +49,20 @@ router.get('/:farmId', async (req, res, next) => {
   try {
     const { farmId } = req.params;
     
-    // Use in-memory storage only
-    const farm = inMemoryFarms.get(farmId);
-    if (!farm) {
+    // Query database for farm
+    const { query } = await import('../config/database.js');
+    const result = await query(
+      `SELECT farm_id, name, status, last_heartbeat, metadata 
+       FROM farms 
+       WHERE farm_id = $1`,
+      [farmId]
+    );
+    
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Farm not found' });
     }
     
+    const farm = result.rows[0];
     res.json({
       farmId: farm.farm_id,
       name: farm.name,
