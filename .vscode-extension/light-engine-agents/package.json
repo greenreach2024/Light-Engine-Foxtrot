@@ -1,0 +1,103 @@
+{
+  "name": "light-engine-agents",
+  "displayName": "Light Engine Multi-Agent Review",
+  "description": "Enforced multi-agent workflow for Light Engine Foxtrot development",
+  "version": "1.0.0",
+  "publisher": "greenreach",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/greenreach2024/Light-Engine-Foxtrot.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:json"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "light-engine.implementation",
+        "name": "le-implementation",
+        "description": "Implementation Agent - Proposes solutions with verification",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "propose",
+            "description": "Propose a solution for the given task"
+          }
+        ]
+      },
+      {
+        "id": "light-engine.review",
+        "name": "le-review",
+        "description": "Review Agent - Validates scope and catches hallucinations",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "validate",
+            "description": "Validate a proposal from Implementation Agent"
+          }
+        ]
+      },
+      {
+        "id": "light-engine.architecture",
+        "name": "le-architecture",
+        "description": "Architecture Agent - Strategic assessment and mission alignment",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "assess",
+            "description": "Assess approved proposal for strategic fit"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "lightEngine.startWorkflow",
+        "title": "Light Engine: Start Multi-Agent Workflow"
+      },
+      {
+        "command": "lightEngine.showProgress",
+        "title": "Light Engine: Show Workflow Progress"
+      },
+      {
+        "command": "lightEngine.resetWorkflow",
+        "title": "Light Engine: Reset Workflow"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "lightEngineWorkflow",
+          "name": "Multi-Agent Workflow"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.50.0",
+    "typescript": "^5.3.0"
+  }
+}
