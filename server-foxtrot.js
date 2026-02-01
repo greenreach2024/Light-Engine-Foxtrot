@@ -426,6 +426,17 @@ const INDEX_CHARLIE_PATH = path.join(PUBLIC_DIR, 'index.charlie.html');
 let INDEX_CHARLIE_HTML = null;
 let indexCharlieLoadErrorLogged = false;
 
+// Production mode flag - used for demo farm validation
+const PRODUCTION_MODE = process.env.PRODUCTION_MODE === 'true' || process.env.NODE_ENV === 'production';
+
+// Demo farm validation - prevent demo farm IDs in production
+function validateNoDemoFarm(farmId) {
+  const demoFarmIds = ['GR-00001', 'LOCAL-FARM', 'DEMO-FARM'];
+  if (PRODUCTION_MODE && demoFarmIds.includes(farmId)) {
+    throw new Error(`Demo farm ID ${farmId} not allowed in PRODUCTION_MODE`);
+  }
+}
+
 // Demo data helper so /data/*.json can fall back even if demo middleware is skipped
 function loadDemoFarmSnapshot() {
   try {
@@ -7007,10 +7018,9 @@ app.post('/api/room-mapper/save', asyncHandler(async (req, res) => {
       io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
     }
     
-    // Sync to cloud if configured
-    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY && process.env.FARM_ID) {
+    // Sync to cloud if configured (using singleton syncService from line 293)
+    if (syncService && syncService.isConnected && syncService.isConnected()) {
       try {
-        const syncService = getSyncService();
         await syncService.syncRooms(rooms);
         console.log('[room-mapper] Synced rooms to GreenReach Central');
       } catch (syncError) {
@@ -7073,10 +7083,9 @@ app.post('/data/rooms.json', asyncHandler(async (req, res) => {
       io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
     }
     
-    // Sync to cloud if configured
-    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY && process.env.FARM_ID) {
+    // Sync to cloud if configured (using singleton syncService from line 293)
+    if (syncService && syncService.isConnected && syncService.isConnected()) {
       try {
-        const syncService = getSyncService();
         await syncService.syncRooms(rooms);
         console.log('[rooms] Synced rooms to GreenReach Central');
       } catch (syncError) {
@@ -7139,10 +7148,9 @@ app.post('/data/groups.json', asyncHandler(async (req, res) => {
       io.emit('farmDataChanged', { type: 'groups', count: groups.length });
     }
     
-    // Sync to cloud if configured
-    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY && process.env.FARM_ID) {
+    // Sync to cloud if configured (using singleton syncService from line 293)
+    if (syncService && syncService.isConnected && syncService.isConnected()) {
       try {
-        const syncService = getSyncService();
         await syncService.syncGroups(groups);
         console.log('[groups-v2] Synced groups to GreenReach Central');
       } catch (syncError) {
@@ -7302,23 +7310,8 @@ app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
   }
 }));
 
-// Sync service routes
-let syncServiceInstance = null;
-
-// Get sync service instance
-function getSyncService() {
-  if (!syncServiceInstance) {
-    const SyncServiceClass = require('./services/sync-service.js').default;
-    syncServiceInstance = new SyncServiceClass({
-      centralUrl: process.env.GREENREACH_CENTRAL_URL,
-      wsUrl: process.env.GREENREACH_WS_URL,
-      farmId: process.env.FARM_ID,
-      apiKey: process.env.GREENREACH_API_KEY,
-      apiSecret: process.env.GREENREACH_API_SECRET
-    });
-  }
-  return syncServiceInstance;
-}
+// Sync service instance removed - using singleton syncService from line 293
+// which correctly uses edge-config.json instead of environment variables
 
 // Sync monitor UI
 app.get('/sync-monitor', (req, res) => {
@@ -7328,7 +7321,9 @@ app.get('/sync-monitor', (req, res) => {
 // Get sync status
 app.get('/api/sync/status', asyncHandler(async (req, res) => {
   try {
-    const syncService = getSyncService();
+    if (!syncService) {
+      return res.status(503).json({ error: 'Sync service not initialized' });
+    }
     const status = syncService.getStatus();
     
     res.json({
@@ -7348,7 +7343,9 @@ app.post('/api/sync/trigger', asyncHandler(async (req, res) => {
   const { type = 'all' } = req.body;
   
   try {
-    const syncService = getSyncService();
+    if (!syncService) {
+      return res.status(503).json({ error: 'Sync service not initialized' });
+    }
     await syncService.manualSync(type);
     
     res.json({ success: true, type });
@@ -7361,7 +7358,9 @@ app.post('/api/sync/trigger', asyncHandler(async (req, res) => {
 // Restore data from cloud (disaster recovery)
 app.post('/api/sync/restore', asyncHandler(async (req, res) => {
   try {
-    const syncService = getSyncService();
+    if (!syncService) {
+      return res.status(503).json({ error: 'Sync service not initialized' });
+    }
     const result = await syncService.restoreFromCloud();
     
     res.json({ 
@@ -7382,7 +7381,9 @@ app.post('/api/sync/restore', asyncHandler(async (req, res) => {
 // Process sync queue manually
 app.post('/api/sync/process-queue', asyncHandler(async (req, res) => {
   try {
-    const syncService = getSyncService();
+    if (!syncService) {
+      return res.status(503).json({ error: 'Sync service not initialized' });
+    }
     syncService.processQueue();
     
     res.json({ success: true });
@@ -7440,7 +7441,11 @@ app.post('/api/sync/settings/poll', asyncHandler(async (req, res) => {
 app.ws('/ws/sync-status', (ws, req) => {
   console.log('[sync] Client connected to sync status WebSocket');
   
-  const syncService = getSyncService();
+  if (!syncService) {
+    ws.send(JSON.stringify({ error: 'Sync service not initialized' }));
+    ws.close();
+    return;
+  }
   
   // Send initial status
   ws.send(JSON.stringify(syncService.getStatus()));
@@ -17471,12 +17476,13 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
 app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
   const { farmId } = req.params;
   
-  // Allow demo farms (LOCAL-FARM and GR-00001) without authentication
-  const isDemoFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001');
+  // Allow Edge device farms (LOCAL-FARM, GR-00001, or FARM-*) without authentication
+  // Edge devices are trusted to access their own data locally
+  const isEdgeFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001' || farmId.startsWith('FARM-'));
   let session = null;
   
-  if (!isDemoFarm) {
-    // Verify authentication for non-demo farms
+  if (!isEdgeFarm) {
+    // Verify authentication for cloud-managed farms
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
@@ -17639,11 +17645,12 @@ app.get('/api/billing/usage/:farmId', asyncHandler(async (req, res) => {
   
   console.log(`[billing] GET /api/billing/usage/${farmId} called`);
   
-  // Allow demo farms (LOCAL-FARM and GR-00001) without authentication
-  const isDemoFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001');
+  // Allow Edge device farms (LOCAL-FARM, GR-00001, or FARM-*) without authentication
+  // Edge devices are trusted to access their own billing data locally
+  const isEdgeFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001' || farmId.startsWith('FARM-'));
   
-  if (!isDemoFarm) {
-    // Verify authentication for non-demo farms
+  if (!isEdgeFarm) {
+    // Verify authentication for cloud-managed farms
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
@@ -19055,6 +19062,9 @@ app.get('/index.html', (req, res, next) => {
 
 // Explicit demo data routes to avoid 404s if static middleware wins
 app.get('/data/farm.json', (req, res, next) => {
+  if (process.env.DEMO_MODE !== 'true') {
+    return next(); // In production, fall through to static file or Edge data
+  }
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19071,7 +19081,11 @@ app.get('/data/farm.json', (req, res, next) => {
 });
 
 app.get('/data/rooms.json', (req, res, next) => {
-  const farm = loadDemoFarmSnapshot();
+  let farm = null;
+  if (process.env.DEMO_MODE === 'true') {
+    farm = loadDemoFarmSnapshot();
+  }
+  // Production mode: farm stays null, use actual Edge device data
   if (!farm) {
     try {
       const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
@@ -19181,7 +19195,11 @@ app.get('/data/rooms.json', (req, res, next) => {
 
 // IoT devices (sensors)
 app.get('/data/iot-devices.json', (req, res, next) => {
-  const farm = loadDemoFarmSnapshot();
+  let farm = null;
+  if (process.env.DEMO_MODE === 'true') {
+    farm = loadDemoFarmSnapshot();
+  }
+  // Production: farm stays null, use actual device data
   if (!farm) {
     try {
       const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
@@ -19299,7 +19317,11 @@ app.post('/iot/devices/scan', async (req, res) => {
 });
 
 app.get('/data/groups.json', (req, res, next) => {
-  const farm = loadDemoFarmSnapshot();
+  let farm = null;
+  if (process.env.DEMO_MODE === 'true') {
+    farm = loadDemoFarmSnapshot();
+  }
+  // Production: farm stays null, use actual groups data
   if (!farm) {
     try {
       // FIX: Use GROUPS_PATH which points to public/data/groups.json (correct location)
@@ -19390,6 +19412,9 @@ app.get('/data/groups.json', (req, res, next) => {
 });
 
 app.get('/data/ctrl-map.json', (req, res, next) => {
+  if (process.env.DEMO_MODE !== 'true') {
+    return next(); // Production: use actual control map
+  }
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19398,6 +19423,9 @@ app.get('/data/ctrl-map.json', (req, res, next) => {
 });
 
 app.get('/data/equipment.json', (req, res, next) => {
+  if (process.env.DEMO_MODE !== 'true') {
+    return next(); // Production: use actual equipment data
+  }
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   
@@ -19571,6 +19599,9 @@ app.get('/data/equipment.json', (req, res, next) => {
 
 // Equipment metadata (controller assignments and status)
 app.get('/data/equipment-metadata.json', (req, res, next) => {
+  if (process.env.DEMO_MODE !== 'true') {
+    return next(); // Production: use actual metadata
+  }
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   
@@ -19611,7 +19642,11 @@ app.get('/data/equipment-metadata.json', (req, res, next) => {
 
 // Room map for farm summary view
 app.get('/data/room-map.json', (req, res, next) => {
-  const farm = loadDemoFarmSnapshot();
+  let farm = null;
+  if (process.env.DEMO_MODE === 'true') {
+    farm = loadDemoFarmSnapshot();
+  }
+  // Production: farm stays null, aggregate actual room maps
   
   // Non-demo mode: Aggregate zones from all room-map files
   if (!farm) {
@@ -19865,6 +19900,9 @@ app.get('/data/room-map.json', (req, res, next) => {
 });
 
 app.get('/data/devices.cache.json', (req, res, next) => {
+  if (process.env.DEMO_MODE !== 'true') {
+    return next(); // Production: use actual device cache
+  }
   const farm = loadDemoFarmSnapshot();
   if (!farm) return next();
   const devices = [];
@@ -26095,6 +26133,19 @@ async function startServer() {
     console.log(`[charlie]  Server successfully started on ${address.address}:${address.port}`);
     console.log(`[charlie] running http://127.0.0.1:${PORT} → ${getController()}`);
     console.log(`[charlie] Demo mode: DISABLED (production mode)`);
+    
+    // Startup validation - ensure no demo farm IDs in production
+    if (PRODUCTION_MODE) {
+      const farmId = edgeConfig.getFarmId();
+      try {
+        validateNoDemoFarm(farmId);
+        console.log(`[Startup] ✅ Production mode validated - Farm ID: ${farmId}`);
+      } catch (err) {
+        console.error(`[Startup] ❌ FATAL: ${err.message}`);
+        console.error(`[Startup] Server shutting down - demo farm not allowed in PRODUCTION_MODE`);
+        process.exit(1);
+      }
+    }
     
     // Validate license (Task #2 - License Validation)
     try {
