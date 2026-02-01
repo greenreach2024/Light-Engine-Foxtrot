@@ -390,43 +390,34 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         dbStatus = 'inactive';
       }
       
-      // Extract farm data from metadata with safe defaults
-      const farmName = metadata?.farmName || metadata?.name || farmId;
-      const contactName = metadata?.contact_name 
-        || metadata?.contactName 
-        || metadata?.contact?.name
-        || 'Farm Admin';
-      const planType = metadata?.plan_type || metadata?.planType || 'free';
-      const apiKeyValue = req.apiKey; // From authenticateFarm middleware
-      const apiSecret = metadata?.api_secret || metadata?.apiSecret || 'auto-generated';
-      
-      // Upsert farm - production schema discovered via error messages
-      // Required fields: farm_id, name, contact_name, plan_type, api_key, api_secret
-      await query(
-        `INSERT INTO farms (farm_id, name, contact_name, plan_type, api_key, api_secret, status, last_heartbeat, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, NOW(), NOW())
-         ON CONFLICT (farm_id) 
-         DO UPDATE SET 
-           status = EXCLUDED.status,
-           name = COALESCE(EXCLUDED.name, farms.name),
-           contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
-           plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type),
-           last_heartbeat = NOW(),
-           metadata = EXCLUDED.metadata,
-           updated_at = NOW()`,
-        [
-          farmId, 
-          farmName,
-          contactName,
-          planType,
-          apiKeyValue,
-          apiSecret,
-          dbStatus, 
-          JSON.stringify(metadata || {})
-        ]
+      // Check if farm exists first
+      const existingFarm = await query(
+        'SELECT farm_id FROM farms WHERE farm_id = $1',
+        [farmId]
       );
       
-      logger.info(`[Sync] Farm ${farmId} upserted successfully with status ${dbStatus}`);
+      if (existingFarm.rows.length > 0) {
+        // Farm exists - UPDATE only
+        await query(
+          `UPDATE farms SET 
+             status = $1,
+             last_heartbeat = NOW(),
+             metadata = $2,
+             updated_at = NOW()
+           WHERE farm_id = $3`,
+          [dbStatus, JSON.stringify(metadata || {}), farmId]
+        );
+        
+        logger.info(`[Sync] Farm ${farmId} heartbeat updated - status ${dbStatus}`);
+      } else {
+        // Farm doesn't exist - return error (farm must be pre-registered)
+        logger.error(`[Sync] Farm ${farmId} not registered in database`);
+        return res.status(404).json({
+          success: false,
+          error: 'Farm not registered',
+          message: `Farm ${farmId} must be registered in GreenReach Central before syncing`
+        });
+      }
     }
     
     res.json({ 
@@ -442,6 +433,154 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
       success: false,
       error: 'Failed to process heartbeat',
       message: error.message 
+    });
+  }
+});
+
+/**
+ * Deep merge utility - preserves existing (Central) values over new (Edge) values
+ * Used to prevent Edge metadata from overwriting manual Central edits
+ */
+function deepMergePreferExisting(edge, central) {
+  const result = { ...edge };
+  
+  for (const key in central) {
+    if (central[key] && typeof central[key] === 'object' && !Array.isArray(central[key])) {
+      result[key] = deepMergePreferExisting(edge[key] || {}, central[key]);
+    } else if (central[key] !== null && central[key] !== undefined && central[key] !== '') {
+      result[key] = central[key]; // Central wins
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * POST /api/sync/farm-registration
+ * One-time farm metadata registration from edge device
+ * Called on edge startup to sync farm.json data to Central
+ */
+router.post('/farm-registration', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req;
+    const { farmData } = req.body;
+    
+    logger.info(`[Sync] Farm registration from ${farmId}`);
+    
+    if (!farmData) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing farmData in request body'
+      });
+    }
+    
+    // Validate required fields
+    if (!farmData.farmId || !farmData.name) {
+      return res.status(400).json({
+        success: false,
+        error: 'farmData missing required fields (farmId, name)'
+      });
+    }
+    
+    // Validate farmId format
+    if (!/^FARM-[A-Z0-9]+-[A-Z0-9]+$/i.test(farmData.farmId) && !/^[a-z0-9-]+$/i.test(farmData.farmId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid farmId format'
+      });
+    }
+    
+    if (await isDatabaseAvailable()) {
+      // Build metadata object from farm.json
+      const metadata = {
+        contact: farmData.contact || {},
+        location: {
+          region: farmData.region,
+          city: farmData.location,
+          coordinates: farmData.coordinates
+        },
+        status: farmData.status
+      };
+      
+      // Check if farm exists
+      const existingFarm = await query(
+        'SELECT farm_id, email, api_url, metadata FROM farms WHERE farm_id = $1',
+        [farmId]
+      );
+      
+      if (existingFarm.rows.length > 0) {
+        const currentFarm = existingFarm.rows[0];
+        const currentMetadata = currentFarm.metadata || {};
+        
+        // Merge strategy: Central wins, Edge fills gaps
+        const mergedMetadata = deepMergePreferExisting(metadata, currentMetadata);
+        
+        // Only update empty fields (preserve Central edits)
+        const updates = [];
+        const values = [];
+        let paramCount = 1;
+        
+        updates.push(`metadata = $${paramCount++}`);
+        values.push(JSON.stringify(mergedMetadata));
+        
+        updates.push(`updated_at = NOW()`);
+        
+        if (!currentFarm.email && farmData.contact?.email) {
+          updates.push(`email = $${paramCount++}`);
+          values.push(farmData.contact.email);
+        }
+        
+        if (!currentFarm.api_url && farmData.api_url) {
+          updates.push(`api_url = $${paramCount++}`);
+          values.push(farmData.api_url);
+        }
+        
+        values.push(farmId); // WHERE clause parameter
+        
+        await query(
+          `UPDATE farms SET ${updates.join(', ')} WHERE farm_id = $${paramCount}`,
+          values
+        );
+        
+        logger.info(`[Sync] Farm ${farmId} registration updated (metadata merged)`);
+      } else {
+        // Farm doesn't exist - create with full metadata
+        // Generate unique registration code
+        const registrationCode = `REG-${farmId.split('-').pop()}-${Date.now().toString(36).toUpperCase()}`;
+        
+        await query(
+          `INSERT INTO farms (
+            farm_id, name, email, api_url, status, metadata, registration_code,
+            last_heartbeat, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NOW())`,
+          [
+            farmId,
+            farmData.name,
+            farmData.contact?.email,
+            farmData.api_url,
+            'active',
+            JSON.stringify(metadata),
+            registrationCode
+          ]
+        );
+        
+        logger.info(`[Sync] Farm ${farmId} registered for first time`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'Farm registration successful',
+      farmId,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error processing farm registration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to register farm',
+      message: error.message
     });
   }
 });
