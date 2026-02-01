@@ -41,7 +41,7 @@ const ALLOW_MOCKS = String(process.env.ALLOW_MOCKS || 'false').toLowerCase() ===
 // DEMO MODE REMOVED - Production only uses real farm data and sensors
 
 import { createProxyMiddleware } from "http-proxy-middleware";
-import fs from "fs";
+import fs from "fs/promises";
 import http from 'node:http';
 import https from 'node:https';
 import path from "path";
