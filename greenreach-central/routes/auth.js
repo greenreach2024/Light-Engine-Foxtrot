@@ -55,7 +55,7 @@ router.post('/login', async (req, res) => {
     const FALLBACK_FARM = {
       farm_id: farm_id || 'FARM-MKLOMAT3-A9D8',
       email: 'shelbygilbert@rogers.com',
-      password: 'biggreen2025', // Plain text for comparison
+      password: 'ReTerminal2026!', // Plain text for comparison
       name: 'Peter Gilbert',
       role: FARM_ROLES.ADMIN
     };
