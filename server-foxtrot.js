@@ -437,35 +437,8 @@ function validateNoDemoFarm(farmId) {
   }
 }
 
-// Demo data helper so /data/*.json can fall back even if demo middleware is skipped
-function loadDemoFarmSnapshot() {
-  try {
-    // Check DEMO_MODE env var directly instead of relying on isDemoMode()
-    // (which may not be initialized yet when routes are registered)
-    const demoMode = process.env.DEMO_MODE === 'true';
-    
-    if (demoMode) {
-      // Try multiple fallback locations (in order of preference)
-      const possiblePaths = [
-        path.join(__dirname, 'data', 'demo', 'demo-farm-complete.json'),
-        path.join(__dirname, 'public', 'data', 'demo-farm-data.json'),
-        path.join(__dirname, 'docs', 'data', 'demo-farm-data.json')
-      ];
-
-      for (const demoDataPath of possiblePaths) {
-        if (fs.existsSync(demoDataPath)) {
-          console.log(`[demo] Loading demo farm data from: ${demoDataPath}`);
-          return JSON.parse(fs.readFileSync(demoDataPath, 'utf8'));
-        }
-      }
-      
-      console.warn('[demo] No demo farm data file found in any expected location');
-    }
-  } catch (error) {
-    console.warn('[demo] Failed to load demo farm snapshot:', error?.message || error);
-  }
-  return null;
-}
+// DEMO MODE REMOVED - Production only uses real farm data and sensors
+// All routes serve actual Edge device data from public/data/ files
 
 const DEFAULT_NUTRIENT_MQTT_URL = process.env.NUTRIENT_MQTT_URL || 'mqtt://192.168.2.42:1883';
 const DEFAULT_NUTRIENT_COMMAND_TOPIC = process.env.NUTRIENT_COMMAND_TOPIC || 'commands/NutrientRoom';
@@ -16282,7 +16255,6 @@ app.get('/api/admin/harvest/forecast', adminAuthMiddleware, asyncHandler(async (
  * Farm admin login endpoint
  * DEPRECATED: Use /api/auth/login instead (routes/auth.js)
  * This endpoint is maintained for backward compatibility only
- * DEMO MODE: Bypasses authentication when DEMO_MODE=true
  */
 
 // Rate limiter for login endpoint: 5 attempts per 15 minutes
@@ -19060,43 +19032,24 @@ app.get('/index.html', (req, res, next) => {
   res.type('html').send(html);
 });
 
-// Explicit demo data routes to avoid 404s if static middleware wins
+// Production data routes - serve actual Edge device data
 app.get('/data/farm.json', (req, res, next) => {
-  if (process.env.DEMO_MODE !== 'true') {
-    return next(); // In production, fall through to static file or Edge data
-  }
-  const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'no-cache');
-  return res.json({
-    farmId: farm.farmId,
-    name: farm.name,
-    status: farm.status,
-    region: farm.region,
-    url: farm.url,
-    contact: farm.contact,
-    coordinates: farm.coordinates
-  });
+  // Always serve production data from public/data/farm.json
+  return next();
 });
 
 app.get('/data/rooms.json', (req, res, next) => {
-  let farm = null;
-  if (process.env.DEMO_MODE === 'true') {
-    farm = loadDemoFarmSnapshot();
-  }
-  // Production mode: farm stays null, use actual Edge device data
-  if (!farm) {
-    try {
-      const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
-      if (fs.existsSync(roomsPath)) {
-        const raw = fs.readFileSync(roomsPath, 'utf8');
-        const payload = raw ? JSON.parse(raw) : { rooms: [] };
-        const rooms = payload.rooms || payload || [];
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cache-Control', 'no-cache');
-        return res.json({ rooms: Array.isArray(rooms) ? rooms : [] });
-      }
+  // Always use production data from public/data/rooms.json
+  try {
+    const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
+    if (fs.existsSync(roomsPath)) {
+      const raw = fs.readFileSync(roomsPath, 'utf8');
+      const payload = raw ? JSON.parse(raw) : { rooms: [] };
+      const rooms = payload.rooms || payload || [];
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.json({ rooms: Array.isArray(rooms) ? rooms : [] });
+    }
 
       // Derive rooms from groups.json if rooms.json is missing
       const groupsPath = path.join(__dirname, 'public', 'data', 'groups.json');
@@ -19195,31 +19148,26 @@ app.get('/data/rooms.json', (req, res, next) => {
 
 // IoT devices (sensors)
 app.get('/data/iot-devices.json', (req, res, next) => {
-  let farm = null;
-  if (process.env.DEMO_MODE === 'true') {
-    farm = loadDemoFarmSnapshot();
-  }
-  // Production: farm stays null, use actual device data
-  if (!farm) {
-    try {
-      const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
-      if (fs.existsSync(iotDevicesPath)) {
-        const raw = fs.readFileSync(iotDevicesPath, 'utf8');
-        const payload = raw ? JSON.parse(raw) : [];
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cache-Control', 'no-cache');
-        return res.json(Array.isArray(payload) ? payload : []);
-      }
+  // Always use production data from public/data/iot-devices.json
+  try {
+    const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
+    if (fs.existsSync(iotDevicesPath)) {
+      const raw = fs.readFileSync(iotDevicesPath, 'utf8');
+      const payload = raw ? JSON.parse(raw) : [];
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'no-cache');
-      return res.json([]);
-    } catch (err) {
-      console.warn('[IoT] Failed to load iot-devices.json:', err?.message || err);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      return res.json([]);
+      return res.json(Array.isArray(payload) ? payload : []);
     }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.json([]);
+  } catch (err) {
+    console.warn('[IoT] Failed to load iot-devices.json:', err?.message || err);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.json([]);
   }
+}
   
   // Transform sensor data from demo format to IoT device format
   const sensors = (farm.devices?.sensors || []).map(sensor => ({
@@ -19317,28 +19265,23 @@ app.post('/iot/devices/scan', async (req, res) => {
 });
 
 app.get('/data/groups.json', (req, res, next) => {
-  let farm = null;
-  if (process.env.DEMO_MODE === 'true') {
-    farm = loadDemoFarmSnapshot();
-  }
-  // Production: farm stays null, use actual groups data
-  if (!farm) {
-    try {
-      // FIX: Use GROUPS_PATH which points to public/data/groups.json (correct location)
-      // Previously was reading from data/groups.json (wrong directory, stale data)
-      if (fs.existsSync(GROUPS_PATH)) {
-        const raw = fs.readFileSync(GROUPS_PATH, 'utf8');
-        const payload = raw ? JSON.parse(raw) : { groups: [] };
-        const groups = Array.isArray(payload.groups) ? payload.groups : (Array.isArray(payload) ? payload : []);
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cache-Control', 'no-cache');
-        return res.json({ groups });
-      }
+  // Always use production groups data
+  try {
+    // FIX: Use GROUPS_PATH which points to public/data/groups.json (correct location)
+    // Previously was reading from data/groups.json (wrong directory, stale data)
+    if (fs.existsSync(GROUPS_PATH)) {
+      const raw = fs.readFileSync(GROUPS_PATH, 'utf8');
+      const payload = raw ? JSON.parse(raw) : { groups: [] };
+      const groups = Array.isArray(payload.groups) ? payload.groups : (Array.isArray(payload) ? payload : []);
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ groups: [] });
-    } catch (err) {
-      console.warn('[groups] Failed to load groups.json:', err?.message || err);
+      return res.json({ groups });
+    }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.json({ groups: [] });
+  } catch (err) {
+    console.warn('[groups] Failed to load groups.json:', err?.message || err);
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'no-cache');
       return res.json({ groups: [] });
@@ -19412,93 +19355,14 @@ app.get('/data/groups.json', (req, res, next) => {
 });
 
 app.get('/data/ctrl-map.json', (req, res, next) => {
-  if (process.env.DEMO_MODE !== 'true') {
-    return next(); // Production: use actual control map
-  }
-  const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'no-cache');
-  return res.json({ groups: [], rooms: [], devices: [] });
+  // Always use production control map
+  return next();
 });
 
 app.get('/data/equipment.json', (req, res, next) => {
-  if (process.env.DEMO_MODE !== 'true') {
-    return next(); // Production: use actual equipment data
-  }
-  const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
-  
-  // Transform HVAC devices into equipment entries with IoT controller assignments
-  const equipment = [];
-  const hvacDevices = farm.devices?.hvac || [];
-  const rooms = farm.rooms || [];
-  
-  // Create equipment entries for HVAC systems
-  hvacDevices.forEach(hvac => {
-    const room = rooms.find(r => r.roomId === hvac.location);
-    if (!room) return;
-    
-    // HVAC Controller (the smart device)
-    equipment.push({
-      uniqueId: hvac.deviceId,
-      type: 'HVAC Controller',
-      make: hvac.vendor || 'Unknown',
-      model: hvac.model || 'Unknown',
-      room: room.name,
-      zone: room.zones?.[0]?.name || 'All Zones',
-      control: null, // Controller itself
-      controller: 'Integrated',
-      status: hvac.status || 'online',
-      metadata: {
-        isController: true,
-        protocol: 'ethernet'
-      }
-    });
-    
-    // Add equipment controlled by this HVAC (fans, dehumidifiers, etc.)
-    // Room A equipment
-    if (hvac.location === 'ROOM-A') {
-      equipment.push({
-        uniqueId: `${hvac.deviceId}-EXHAUST-FAN`,
-        type: 'Exhaust Fan',
-        make: 'Hurricane',
-        model: 'Pro Series 16"',
-        room: room.name,
-        zone: 'All Zones',
-        control: `IoT:${hvac.deviceId}`,
-        controller: hvac.name,
-        status: 'online',
-        metadata: {
-          cfm: 1800,
-          power: '0.9A'
-        }
-      });
-      
-      equipment.push({
-        uniqueId: `${hvac.deviceId}-CIRC-FAN-1`,
-        type: 'Circulation Fan',
-        make: 'Air King',
-        model: 'Wall Mount 20"',
-        room: room.name,
-        zone: room.zones?.[0]?.name || 'Zone 1',
-        control: `IoT:${hvac.deviceId}`,
-        controller: hvac.name,
-        status: 'online',
-        metadata: {
-          cfm: 3600,
-          power: '1.2A'
-        }
-      });
-      
-      equipment.push({
-        uniqueId: `${hvac.deviceId}-CIRC-FAN-2`,
-        type: 'Circulation Fan',
-        make: 'Air King',
-        model: 'Wall Mount 20"',
-        room: room.name,
-        zone: room.zones?.[2]?.name || 'Zone 3',
-        control: `IoT:${hvac.deviceId}`,
+  // Always use production equipment data
+  return next();
+});
         controller: hvac.name,
         status: 'online',
         metadata: {
@@ -19599,36 +19463,9 @@ app.get('/data/equipment.json', (req, res, next) => {
 
 // Equipment metadata (controller assignments and status)
 app.get('/data/equipment-metadata.json', (req, res, next) => {
-  if (process.env.DEMO_MODE !== 'true') {
-    return next(); // Production: use actual metadata
-  }
-  const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
-  
-  const metadata = {};
-  const hvacDevices = farm.devices?.hvac || [];
-  
-  // Build metadata mapping equipment IDs to their controller info
-  hvacDevices.forEach(hvac => {
-    // The HVAC controller itself
-    metadata[hvac.deviceId] = {
-      controller: 'integrated',
-      controllerType: 'hvac',
-      lastSeen: hvac.lastSeen,
-      status: hvac.status
-    };
-    
-    // Equipment controlled by this HVAC
-    [`${hvac.deviceId}-EXHAUST-FAN`, 
-     `${hvac.deviceId}-CIRC-FAN-1`,
-     `${hvac.deviceId}-CIRC-FAN-2`,
-     `${hvac.deviceId}-DEHUMID`,
-     `${hvac.deviceId}-HUMIDIFIER`
-    ].forEach(equipId => {
-      metadata[equipId] = {
-        controller: hvac.deviceId,
-        controllerName: hvac.name,
-        controlMethod: 'IoT',
+  // Always use production metadata
+  return next();
+});
         lastSeen: hvac.lastSeen,
         status: hvac.status
       };
@@ -19719,31 +19556,24 @@ app.post('/api/schedules/save', async (req, res) => {
 
 // Room map for farm summary view
 app.get('/data/room-map.json', (req, res, next) => {
-  let farm = null;
-  if (process.env.DEMO_MODE === 'true') {
-    farm = loadDemoFarmSnapshot();
-  }
-  // Production: farm stays null, aggregate actual room maps
-  
-  // Non-demo mode: Aggregate zones from all room-map files
-  if (!farm) {
-    try {
-      const dataDir = path.join(__dirname, 'public', 'data');
-      const zones = [];
-      
-      // Load rooms.json to know which rooms exist
-      const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
-      let rooms = [];
-      if (fs.existsSync(roomsPath)) {
-        const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
-        rooms = roomsData.rooms || [];
-      }
-      
-      // For each room, try to load its room-map file
-      rooms.forEach(room => {
-        const roomId = room.id || room.name;
-        const roomMapFile = `room-map-${roomId}.json`;
-        const roomMapPath = path.join(dataDir, roomMapFile);
+  // Always use production room maps - aggregate from all room-map files
+  try {
+    const dataDir = path.join(__dirname, 'public', 'data');
+    const zones = [];
+    
+    // Load rooms.json to know which rooms exist
+    const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
+    let rooms = [];
+    if (fs.existsSync(roomsPath)) {
+      const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+      rooms = roomsData.rooms || [];
+    }
+    
+    // For each room, try to load its room-map file
+    rooms.forEach(room => {
+      const roomId = room.id || room.name;
+      const roomMapFile = `room-map-${roomId}.json`;
+      const roomMapPath = path.join(dataDir, roomMapFile);
         
         if (fs.existsSync(roomMapPath)) {
           try {
@@ -19799,8 +19629,11 @@ app.get('/data/room-map.json', (req, res, next) => {
     }
   }
   
-  // Demo mode: Return comprehensive room map with positioned sensors
-  if (false) { // Demo mode removed
+  // Production only - no demo mode
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-cache');
+  return next();
+});
     const demoData = getDemoData();
     const envData = demoData.getEnvironmentalData();
     
@@ -19977,22 +19810,8 @@ app.get('/data/room-map.json', (req, res, next) => {
 });
 
 app.get('/data/devices.cache.json', (req, res, next) => {
-  if (process.env.DEMO_MODE !== 'true') {
-    return next(); // Production: use actual device cache
-  }
-  const farm = loadDemoFarmSnapshot();
-  if (!farm) return next();
-  const devices = [];
-  (farm.rooms || []).forEach((room) => {
-    (room.zones || []).forEach((zone) => {
-      (zone.groups || []).forEach((group) => {
-        devices.push(...(group.devices || []));
-      });
-    });
-  });
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'no-cache');
-  return res.json({ devices, timestamp: new Date().toISOString() });
+  // Always use production device cache
+  return next();
 });
 
 // Data file requests - serve from static files only (no demo mode)
@@ -26166,7 +25985,6 @@ async function startServer() {
   console.log('[charlie]  Starting server...');
   console.log('[charlie] PORT:', PORT);
   console.log('[charlie] NODE_ENV:', process.env.NODE_ENV);
-  console.log('[charlie] DEMO_MODE:', process.env.DEMO_MODE);
   
   // CloudWatch monitoring status
   if (isCloudWatchEnabled()) {
