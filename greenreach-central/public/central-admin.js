@@ -3466,7 +3466,8 @@ async function viewGroupDetail(farmId, roomId, zoneId, groupId) {
         document.getElementById('group-target-ppfd').textContent = 'Calculating...';
         document.getElementById('group-target-ppfd-change').textContent = 'From recipe schedule';
         
-        // Attempt to calculate current PPFD from recipe
+        // Calculate current PPFD from recipe DLI and actual photoperiod
+        // Formula: PPFD (μmol/m²/s) = DLI (mol/m²/d) × 1,000,000 / (photoperiod_hours × 3600)
         if (daysSinceSeed !== null && group.crop) {
             try {
                 const recipesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/recipes`);
@@ -3482,20 +3483,48 @@ async function viewGroupDetail(farmId, roomId, zoneId, groupId) {
                             }
                         });
                         
-                        if (closestDay && closestDay.ppfd) {
-                            const targetPPFD = Math.round(closestDay.ppfd);
+                        if (closestDay && closestDay.dli) {
+                            // Get actual photoperiod from group config (not assumed value)
+                            const photoperiodHours = group.planConfig?.schedule?.photoperiodHours 
+                                                  || group.photoperiodHours 
+                                                  || 16;  // Fallback to 16h default
+                            
+                            // Calculate PPFD from target DLI and actual photoperiod
+                            // This ensures PPFD reflects actual "lights on" schedule, not pre-calculated recipe value
+                            const targetPPFD = Math.round((closestDay.dli * 1_000_000) / (photoperiodHours * 3600));
+                            
                             document.getElementById('group-target-ppfd').textContent = `${targetPPFD} μmol/m²/s`;
-                            document.getElementById('group-target-ppfd-change').textContent = `Day ${closestDay.day} of recipe`;
-                            console.log('[group-detail] Calculated PPFD:', targetPPFD, 'for day', daysSinceSeed);
+                            document.getElementById('group-target-ppfd-change').textContent = 
+                                `Day ${closestDay.day}: ${closestDay.dli} DLI ÷ ${photoperiodHours}h`;
+                            
+                            console.log('[group-detail] Calculated PPFD from DLI:', {
+                                crop: group.crop,
+                                daysSinceSeed,
+                                recipeDay: closestDay.day,
+                                targetDLI: closestDay.dli,
+                                photoperiodHours,
+                                calculatedPPFD: targetPPFD,
+                                recipePPFD: closestDay.ppfd  // For comparison (may differ if recipe assumes different photoperiod)
+                            });
+                        } else {
+                            console.warn('[group-detail] No DLI data in recipe for', group.crop, 'day', closestDay?.day);
+                            document.getElementById('group-target-ppfd').textContent = 'No DLI data';
+                            document.getElementById('group-target-ppfd-change').textContent = 'Recipe missing DLI target';
                         }
+                    } else {
+                        console.warn('[group-detail] No recipe found for crop:', group.crop);
+                        document.getElementById('group-target-ppfd').textContent = 'No recipe';
+                        document.getElementById('group-target-ppfd-change').textContent = 'Recipe not loaded';
                     }
                 }
             } catch (err) {
                 console.warn('[group-detail] Failed to calculate PPFD:', err);
-                document.getElementById('group-target-ppfd').textContent = 'No data';
+                document.getElementById('group-target-ppfd').textContent = 'Error';
+                document.getElementById('group-target-ppfd-change').textContent = err.message;
             }
         } else {
             document.getElementById('group-target-ppfd').textContent = 'No data';
+            document.getElementById('group-target-ppfd-change').textContent = 'Missing seed date or crop';
         }
         
         // Load devices for this group
