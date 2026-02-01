@@ -69,7 +69,6 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import validator from 'validator';
-import rateLimit from 'express-rate-limit';
 import net from 'node:net';
 import mqtt from 'mqtt';
 
@@ -14469,37 +14468,7 @@ app.get('/api/admin/harvest/forecast', adminAuthMiddleware, asyncHandler(async (
  * DEMO MODE: Bypasses authentication when DEMO_MODE=true
  */
 
-// Rate limiter for login endpoint: 5 attempts per 15 minutes
-const loginRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 login attempts per window per IP
-  message: { status: 'error', message: 'Too many login attempts. Please try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Use keyGenerator to get IP from X-Forwarded-For (trust proxy must be enabled)
-  keyGenerator: (req) => {
-    const ip = req.ip || req.connection.remoteAddress;
-    console.log('[farm-auth] Rate limit key for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
-    return ip;
-  },
-  handler: (req, res) => {
-    const ip = req.ip || req.connection.remoteAddress;
-    console.error('[farm-auth] ✗ Rate limit exceeded for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
-    res.status(429).json({ 
-      status: 'error', 
-      message: 'Too many login attempts. Please try again in 15 minutes.',
-      retryAfter: Math.ceil(15 * 60) // seconds
-    });
-  },
-  skip: (req) => {
-    // Log every request for debugging
-    const ip = req.ip || req.connection.remoteAddress;
-    console.log('[farm-auth] Login attempt from IP:', ip, 'Count will be tracked');
-    return false; // Don't skip any requests
-  }
-});
-
-app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res) => {
+app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) => {
   console.log('[farm-auth] POST /api/farm/auth/login called');
   const { farmId, email, password } = req.body;
   
@@ -14544,6 +14513,67 @@ app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res)
       expiresAt: demoExpiry.toISOString(),
       demoMode: true
     });
+  }
+  
+  // EDGE MODE: Local authentication without database (NeDB mode)
+  if (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb') {
+    console.log('[farm-auth] Edge/NeDB mode - using local authentication');
+    
+    if (!email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email and password are required'
+      });
+    }
+    
+    // Edge mode: Simple admin credential check (user should set ADMIN_EMAIL and ADMIN_PASSWORD in .env)
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@localhost';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    
+    if (email.toLowerCase() === adminEmail.toLowerCase() && password === adminPassword) {
+      const edgeToken = crypto.randomBytes(32).toString('hex');
+      const edgeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      
+      if (!global.farmAdminSessions) {
+        global.farmAdminSessions = new Map();
+      }
+      
+      const edgeSession = {
+        token: edgeToken,
+        farmId: farmId || edgeConfig.getFarmId() || 'light-engine-demo',
+        email: email,
+        role: 'admin',
+        createdAt: new Date(),
+        expiresAt: edgeExpiry,
+        edgeMode: true
+      };
+      
+      global.farmAdminSessions.set(edgeToken, edgeSession);
+      
+      console.log('[farm-auth] ✅ Edge mode admin authenticated');
+      
+      return res.json({
+        status: 'success',
+        token: edgeToken,
+        farmId: edgeSession.farmId,
+        farmName: edgeConfig.getFarmName() || 'Edge Farm',
+        email: edgeSession.email,
+        role: 'admin',
+        subscription: {
+          plan: 'Edge',
+          status: 'active',
+          price: 0,
+          renewsAt: null
+        },
+        expiresAt: edgeExpiry.toISOString(),
+        edgeMode: true
+      });
+    } else {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+      });
+    }
   }
   
   // PRODUCTION MODE: PostgreSQL-backed authentication
