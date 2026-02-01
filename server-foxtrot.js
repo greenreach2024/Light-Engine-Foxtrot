@@ -29,6 +29,9 @@ import { getJwtSecret } from './server/utils/secrets-manager.js';
 import { setupConsoleWrapper } from './server/utils/console-wrapper.js';
 setupConsoleWrapper();
 
+// Framework validation - MUST run before any operational code
+import { validator as frameworkValidator } from './lib/framework-validator.js';
+
 // LOG ENVIRONMENT ON STARTUP (will be suppressed in demo mode)
 console.log(' [STARTUP] Environment variables:');
 console.log('  DEMO_MODE:', process.env.DEMO_MODE);
@@ -14472,6 +14475,67 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
   console.log('[farm-auth] POST /api/farm/auth/login called');
   const { farmId, email, password } = req.body;
   
+  // EDGE MODE: Local authentication without database (NeDB mode) - check FIRST
+  if (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb') {
+    console.log('[farm-auth] Edge/NeDB mode - using local authentication');
+    
+    if (!email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email and password are required'
+      });
+    }
+    
+    // Edge mode: Simple admin credential check (user should set ADMIN_EMAIL and ADMIN_PASSWORD in .env)
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@localhost';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    
+    if (email.toLowerCase() === adminEmail.toLowerCase() && password === adminPassword) {
+      const edgeToken = crypto.randomBytes(32).toString('hex');
+      const edgeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      
+      if (!global.farmAdminSessions) {
+        global.farmAdminSessions = new Map();
+      }
+      
+      const edgeSession = {
+        token: edgeToken,
+        farmId: farmId || edgeConfig.getFarmId() || 'light-engine-demo',
+        email: email,
+        role: 'admin',
+        createdAt: new Date(),
+        expiresAt: edgeExpiry,
+        edgeMode: true
+      };
+      
+      global.farmAdminSessions.set(edgeToken, edgeSession);
+      
+      console.log('[farm-auth] ✅ Edge mode admin authenticated');
+      
+      return res.json({
+        status: 'success',
+        token: edgeToken,
+        farmId: edgeSession.farmId,
+        farmName: edgeConfig.getFarmName() || 'Edge Farm',
+        email: edgeSession.email,
+        role: 'admin',
+        subscription: {
+          plan: 'Edge',
+          status: 'active',
+          price: 0,
+          renewsAt: null
+        },
+        expiresAt: edgeExpiry.toISOString(),
+        edgeMode: true
+      });
+    } else {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+      });
+    }
+  }
+  
   // DEMO MODE BYPASS: Grant full access without credentials
   if (isDemoMode()) {
     const demoToken = crypto.randomBytes(32).toString('hex');
@@ -23624,6 +23688,17 @@ async function startServer() {
     }
   } catch (error) {
     console.log('[mDNS] ℹ️  mDNS not enabled:', error.message);
+  }
+
+  // ============================================================
+  // FRAMEWORK VALIDATION (BLOCKING - stops server if violated)
+  // ============================================================
+  console.log('[startup] Running framework compliance validation...');
+  const isValid = frameworkValidator.validate();
+  if (!isValid) {
+    console.error('\n❌ Framework validation failed. Application cannot start.');
+    console.error('Fix the violations listed above and restart the server.\n');
+    process.exit(1);
   }
 
   SERVER = app.listen(PORT, '0.0.0.0', async () => {

@@ -1,0 +1,185 @@
+#!/bin/bash
+# Pre-commit hook: Framework compliance enforcement
+# This prevents commits that violate AGENT_SKILLS_FRAMEWORK rules
+# Location: .git/hooks/pre-commit
+# Install: chmod +x .git/hooks/pre-commit
+
+set -e
+
+RESET='\033[0m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+
+echo ""
+echo "🔍 FRAMEWORK COMPLIANCE CHECK (pre-commit hook)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+VIOLATIONS=0
+
+# ============================================================
+# RULE 1: Block direct modifications to canonical data files
+# ============================================================
+PROTECTED_FILES=(
+  "public/data/farm.json"
+  "public/data/groups.json"
+  "public/data/rooms.json"
+  "public/data/equipment.json"
+  "public/data/ctrl-map.json"
+)
+
+CHANGED_FILES=$(git diff --cached --name-only 2>/dev/null || true)
+
+for file in "${PROTECTED_FILES[@]}"; do
+  if echo "$CHANGED_FILES" | grep -q "^$file$"; then
+    echo -e "${RED}❌ BLOCKED: Direct modification of canonical data file${RESET}"
+    echo "   File: $file"
+    echo "   Rule: DATA_FORMAT_STANDARDS.md - 'Do not modify canonical data files directly'"
+    echo "   Solution: Use lib/data-adapters.js to normalize data instead"
+    echo ""
+    VIOLATIONS=$((VIOLATIONS + 1))
+  fi
+done
+
+# ============================================================
+# RULE 2: Block commits with demo data hardcoding
+# ============================================================
+DEMO_PATTERNS=(
+  'light-engine-demo'
+  'GR-00001'
+  'DEMO-FARM-001'
+  'FARM-001'
+  'FARM-002'
+  'FARM-003'
+  'mockData'
+  'fake.*data'
+  'demo.*initialization'
+)
+
+DEMO_FOUND=0
+for pattern in "${DEMO_PATTERNS[@]}"; do
+  if git diff --cached -U0 | grep -E "$pattern" > /dev/null 2>&1; then
+    if [ $DEMO_FOUND -eq 0 ]; then
+      echo -e "${YELLOW}⚠️  WARNING: Potential demo data found in staged changes${RESET}"
+      echo ""
+      DEMO_FOUND=1
+    fi
+    LINES=$(git diff --cached -U0 | grep -n "$pattern" | head -3)
+    echo "   Pattern: $pattern"
+    echo "$LINES" | sed 's/^/     /'
+    echo ""
+  fi
+done
+
+if [ $DEMO_FOUND -eq 1 ]; then
+  read -p "Are you intentionally adding demo data? (type 'yes' to continue): " CONFIRM
+  if [ "$CONFIRM" != "yes" ]; then
+    echo -e "${RED}Commit aborted.${RESET}"
+    exit 1
+  fi
+  echo ""
+fi
+
+# ============================================================
+# RULE 3: Require schema validation for data file changes
+# ============================================================
+if echo "$CHANGED_FILES" | grep -q "public/data/"; then
+  echo "  Checking data files changed - validating schemas..."
+  if command -v npm &> /dev/null; then
+    if ! npm run validate-schemas > /tmp/schema-validation.log 2>&1; then
+      echo -e "${RED}❌ Schema validation failed${RESET}"
+      echo "   Run: npm run validate-schemas"
+      echo "   Error details:"
+      cat /tmp/schema-validation.log | head -20
+      echo ""
+      VIOLATIONS=$((VIOLATIONS + 1))
+    else
+      echo -e "${GREEN}✅ Schema validation passed${RESET}"
+    fi
+  else
+    echo -e "${YELLOW}⚠️  npm not found - skipping schema validation${RESET}"
+  fi
+  echo ""
+fi
+
+# ============================================================
+# RULE 4: Check farm.json for demo farm IDs
+# ============================================================
+if echo "$CHANGED_FILES" | grep -q "public/data/farm.json"; then
+  echo "  Validating farm.json..."
+  FARM_ID=$(git show :public/data/farm.json 2>/dev/null | jq -r '.farmId' 2>/dev/null || echo "")
+  
+  if [ -z "$FARM_ID" ] || [ "$FARM_ID" = "null" ]; then
+    echo -e "${RED}❌ farm.json missing farmId${RESET}"
+    VIOLATIONS=$((VIOLATIONS + 1))
+  elif [ "$FARM_ID" = "light-engine-demo" ] || [ "$FARM_ID" = "DEMO-FARM-001" ]; then
+    echo -e "${RED}❌ farm.json contains DEMO farm ID: $FARM_ID${RESET}"
+    echo "   Update to production farm ID (e.g., FARM-MKLOMAT3-A9D8)"
+    VIOLATIONS=$((VIOLATIONS + 1))
+  else
+    echo -e "${GREEN}✅ farm.json farm ID valid: $FARM_ID${RESET}"
+  fi
+  echo ""
+fi
+
+# ============================================================
+# RULE 5: Enforce commit message format
+# ============================================================
+COMMIT_MSG_FILE="${1:-}"
+if [ -z "$COMMIT_MSG_FILE" ] || [ ! -f "$COMMIT_MSG_FILE" ]; then
+  # Try to get from environment if running in hook
+  COMMIT_MSG_FILE=$(git rev-parse --git-dir)/COMMIT_EDITMSG
+fi
+
+if [ -f "$COMMIT_MSG_FILE" ]; then
+  FIRST_LINE=$(head -1 "$COMMIT_MSG_FILE" 2>/dev/null || echo "")
+  
+  if [ -n "$FIRST_LINE" ]; then
+    # Check for merge commits or skip rules
+    if ! echo "$FIRST_LINE" | grep -qE "^(Merge|WIP|merge)"; then
+      # Require conventional format for code changes
+      if echo "$CHANGED_FILES" | grep -qE "\.(js|ts|json)$"; then
+        if ! echo "$FIRST_LINE" | grep -qE "^(Fix|Feat|Docs|Refactor|Test|Framework|CRITICAL):"; then
+          echo -e "${YELLOW}⚠️  Commit message should use conventional format${RESET}"
+          echo "   Format: Fix: | Feat: | Docs: | Refactor: | Test: | Framework: | CRITICAL:"
+          echo "   Your message: $FIRST_LINE"
+          echo ""
+        fi
+      fi
+      
+      # Check for review approval in commit message for significant changes
+      if echo "$CHANGED_FILES" | grep -qE "^(lib/|server-foxtrot|public/data)"; then
+        if ! echo "$(cat $COMMIT_MSG_FILE)" | grep -iqE "(Review Agent approved|Architecture Agent approved|multi-agent review)"; then
+          echo -e "${YELLOW}⚠️  Significant code change without review notation${RESET}"
+          echo "   Add to commit message: '(Review Agent approved)' or '(Architecture Agent approved)'"
+          echo ""
+        fi
+      fi
+    fi
+  fi
+fi
+
+# ============================================================
+# REPORT RESULTS
+# ============================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ $VIOLATIONS -gt 0 ]; then
+  echo ""
+  echo -e "${RED}❌ FRAMEWORK COMPLIANCE CHECK FAILED ($VIOLATIONS violations)${RESET}"
+  echo ""
+  echo "Cannot proceed with commit. Fix violations above and try again."
+  echo ""
+  echo "📖 Framework Documentation:"
+  echo "   - .github/AGENT_SKILLS_FRAMEWORK.md"
+  echo "   - .github/DATA_FORMAT_STANDARDS.md"
+  echo "   - .github/FRAMEWORK_ENFORCEMENT_SYSTEM.md"
+  echo ""
+  exit 1
+fi
+
+echo ""
+echo -e "${GREEN}✅ Framework compliance check PASSED${RESET}"
+echo ""
+exit 0
