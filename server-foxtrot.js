@@ -923,6 +923,23 @@ function saveGroupsFile(groups) {
   }
 }
 
+function loadRecipes() {
+  const recipesPath = path.join(DATA_DIR, 'lighting-recipes.json');
+  try {
+    if (!fs.existsSync(recipesPath)) {
+      console.warn('[loadRecipes] lighting-recipes.json not found at', recipesPath);
+      return null;
+    }
+    const raw = fs.readFileSync(recipesPath, 'utf8');
+    const data = JSON.parse(raw);
+    console.log(`[loadRecipes] Loaded lighting-recipes.json with ${Object.keys(data.crops || {}).length} crops`);
+    return data;
+  } catch (err) {
+    console.error('[loadRecipes] Failed to load lighting-recipes.json:', err.message);
+    return null;
+  }
+}
+
 function readDeviceCache() {
   try {
     if (!fs.existsSync(DEVICES_CACHE_PATH)) return null;
