@@ -1480,6 +1480,39 @@ async function loadKPIs() {
         document.getElementById('kpi-plants').textContent = kpis.plants.toLocaleString();
         document.getElementById('kpi-plants-change').textContent = '';
         
+        // Add data freshness indicator
+        if (data.dataFreshness) {
+            const staleMins = data.dataFreshness.staleFarms;
+            if (staleMins !== null && staleMins !== undefined) {
+                let freshnessText = '';
+                let freshnessColor = '';
+                
+                if (staleMins < 10) {
+                    freshnessText = 'Fresh';
+                    freshnessColor = 'var(--accent-green)';
+                } else if (staleMins < 60) {
+                    const minsAgo = Math.floor(staleMins);
+                    freshnessText = `${minsAgo}m ago`;
+                    freshnessColor = 'var(--accent-yellow)';
+                } else if (staleMins < 1440) {  // < 24 hours
+                    const hoursAgo = Math.floor(staleMins / 60);
+                    freshnessText = `${hoursAgo}h ago`;
+                    freshnessColor = 'var(--accent-red)';
+                } else {
+                    const daysAgo = Math.floor(staleMins / 1440);
+                    freshnessText = `${daysAgo}d ago`;
+                    freshnessColor = 'var(--accent-red)';
+                }
+                
+                // Update the mode indicator to show freshness
+                const farmsChangeEl = document.getElementById('kpi-farms-change');
+                if (farmsChangeEl) {
+                    farmsChangeEl.innerHTML = `<span style="color: ${freshnessColor}">● ${freshnessText}</span>`;
+                    farmsChangeEl.title = `Last sync: ${new Date(data.dataFreshness.newestSync).toLocaleString()}`;
+                }
+            }
+        }
+        
         // Hide energy and alerts cards for now (no data source yet)
         const energyCard = document.getElementById('kpi-energy')?.closest('.kpi-card');
         const alertsCard = document.getElementById('kpi-alerts')?.closest('.kpi-card');

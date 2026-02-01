@@ -1253,27 +1253,69 @@ router.get('/analytics/aggregate', async (req, res) => {
         try {
             const groupsResult = await query("SELECT data FROM farm_data WHERE data_type = 'groups'");
             const uniqueZones = new Set();
+            const uniqueRooms = new Set();
+            const uniqueDevices = new Set();
+            
             groupsResult.rows.forEach(row => {
-                if (Array.isArray(row.data)) {
-                    row.data.forEach(group => {
-                        // Count unique zones, not groups
-                        if (group.zone) uniqueZones.add(group.zone);
+                // FIX: Handle nested structure - data.groups[] is the array, not data[] directly
+                const groups = Array.isArray(row.data?.groups) ? row.data.groups : 
+                              Array.isArray(row.data) ? row.data : [];
+                
+                groups.forEach(group => {
+                    // Count unique zones (not groups)
+                    if (group.zone || group.zoneId) {
+                        uniqueZones.add(group.zone || group.zoneId);
+                    }
+                    
+                    // Infer rooms from group.roomId (Database-Driven principle)
+                    if (group.roomId || group.room) {
+                        uniqueRooms.add(group.roomId || group.room);
+                    }
+                    
+                    // Infer devices from group.devices[] array
+                    if (Array.isArray(group.devices)) {
+                        group.devices.forEach(deviceId => {
+                            if (deviceId) uniqueDevices.add(deviceId);
+                        });
+                    }
 
-                        const trayCount = Array.isArray(group.trays)
-                            ? group.trays.length
-                            : (Number.isFinite(group.trays) ? group.trays : 0);
-                        totalTrays += trayCount;
+                    // Count trays
+                    const trayCount = Array.isArray(group.trays)
+                        ? group.trays.length
+                        : (Number.isFinite(group.trays) ? group.trays : 0);
+                    totalTrays += trayCount;
 
-                        const plants = Number.isFinite(group.plants)
-                            ? group.plants
-                            : (trayCount > 0 ? trayCount * 48 : 0);
-                        totalPlants += plants;
-                    });
-                }
+                    // Count plants (use actual value, fallback to 128 per tray for aeroponic)
+                    const plants = Number.isFinite(group.plants)
+                        ? group.plants
+                        : (trayCount > 0 ? trayCount * 128 : 0);  // 128 plants/tray for aeroponic (not 48)
+                    totalPlants += plants;
+                });
             });
+            
             totalZones = uniqueZones.size;
+            // Override rooms count with inferred data if we found any
+            if (uniqueRooms.size > 0) {
+                totalRooms = uniqueRooms.size;
+            }
+            totalDevices = uniqueDevices.size;
         } catch (e) {
             console.warn('[Admin API] Groups data query failed:', e.message);
+        }
+        
+        // Get data freshness info
+        let oldestSync = null;
+        let newestSync = null;
+        try {
+            const syncResult = await query(
+                "SELECT MIN(updated_at) as oldest, MAX(updated_at) as newest FROM farm_data WHERE data_type = 'groups'"
+            );
+            if (syncResult.rows[0]) {
+                oldestSync = syncResult.rows[0].oldest;
+                newestSync = syncResult.rows[0].newest;
+            }
+        } catch (e) {
+            console.warn('[Admin API] Sync freshness query failed:', e.message);
         }
         
         // Return top-level fields (UI expects this structure)
@@ -1285,7 +1327,12 @@ router.get('/analytics/aggregate', async (req, res) => {
             totalDevices,
             totalTrays,
             totalPlants,
-            mode: 'live'
+            mode: 'live',
+            dataFreshness: {
+                oldestSync,
+                newestSync,
+                staleFarms: oldestSync ? Math.floor((Date.now() - new Date(oldestSync).getTime()) / 1000 / 60) : null  // minutes
+            }
         });
     } catch (error) {
         console.error('[Admin API] Error fetching analytics:', error);
