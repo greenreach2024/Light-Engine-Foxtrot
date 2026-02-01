@@ -1,99 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nutrient Management - Light Engine Charlie</title>
-  <link rel="stylesheet" href="../styles.foxtrot.css?v=1761603573">
-  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg-gradient-start: #1a1a2e;
-      --bg-gradient-end: #16213e;
-      --card-bg: rgba(30, 41, 59, 0.72);
-      --card-border: rgba(59, 130, 246, 0.2);
-      --accent-blue: #3b82f6;
-      --accent-cyan: #0ea5e9;
-      --accent-green: #22c55e;
-      --accent-amber: #f59e0b;
-      --accent-rose: #f43f5e;
-      --neutral-100: #f1f5f9;
-      --neutral-300: #94a3b8;
-      --neutral-500: #64748b;
-      --neutral-700: #334155;
-    }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-      color: var(--neutral-100);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    header.page-header {
-      padding: 1.5rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      backdrop-filter: blur(12px);
-      background: rgba(0, 0, 0, 0.3);
-      border-bottom: 2px solid var(--accent-blue);
-      position: sticky;
-      top: 0;
-      z-index: 1001;
-    }
-
-    .page-header h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      color: #60a5fa;
-    }
-
-    .page-header p {
-      color: var(--neutral-300);
-      font-size: 0.9rem;
-      max-width: 420px;
-      line-height: 1.4;
-      margin-top: 0.5rem;
-    }
-
-    .header-actions {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-    }
-
-    .nav-btn {
-      background: rgba(59, 130, 246, 0.2);
-      border: 2px solid #3b82f6;
-      color: #93c5fd;
-      padding: 0.75rem 1.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .nav-btn:hover {
-      background: rgba(59, 130, 246, 0.35);
-      transform: scale(1.05);
-    }
-
-    /* Dropdown Navigation Menu */
-    .nav-menu {
-      display: flex;
-      gap: 0.5rem;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -618,6 +522,10 @@
       gap: 1.25rem;
     }
 
+    .irrigation-cycle-field.hidden {
+      display: none;
+    }
+
     .chart-container {
       display: flex;
       flex-direction: column;
@@ -708,7 +616,51 @@
   </header>
 
   <main>
-    <!-- Tank 1: Mock Vegetative System -->
+    <section class="card" id="systemConfigCard">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
+        <h2>System Configuration</h2>
+        <span class="pill">System Automation</span>
+      </div>
+      <p style="color: var(--neutral-300); margin-bottom: 1.25rem;">Define the hydroponic system and irrigation strategy. Automation uses environmental conditions and day/night timing to optimize cycles without user inputs.</p>
+      <form id="systemConfigForm" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="split">
+          <label>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Hydroponic System</span>
+            <select name="hydroponicSystem" id="hydroponicSystem" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+              <option value="DWC">Deep Water Culture (DWC)</option>
+              <option value="NFT">Nutrient Film Technique (NFT)</option>
+              <option value="LPA">Low Pressure Aeroponics</option>
+              <option value="HPA">High Pressure Aeroponics</option>
+            </select>
+          </label>
+          <label>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Irrigation Mode</span>
+            <select name="irrigationMode" id="irrigationMode" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+              <option value="always_on">Always On</option>
+              <option value="cycle">On/Off Cycle</option>
+            </select>
+          </label>
+          <label class="irrigation-cycle-field">
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">On Duration (minutes)</span>
+            <input type="number" name="irrigationOnMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+          </label>
+          <label class="irrigation-cycle-field">
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Off Duration (minutes)</span>
+            <input type="number" name="irrigationOffMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+          </label>
+          <label style="display: flex; gap: 0.5rem; align-items: center; margin-top: 1.8rem;">
+            <input type="checkbox" name="dayNightSync" id="dayNightSync" style="width: auto;" />
+            <span style="color: var(--neutral-200);">Sync cycles to day/night</span>
+          </label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <button type="submit" style="padding: 0.75rem 1.5rem; background: var(--accent-blue); border: none; border-radius: 10px; color: white; font-weight: 600; cursor: pointer;">Save Configuration</button>
+          <div id="systemConfigStatus" style="font-size: 0.85rem; color: var(--neutral-300);"></div>
+        </div>
+      </form>
+    </section>
+
+    <!-- Tank 1: Vegetative System -->
     <section class="card" id="tank1Card">
       <h2>Tank 1 - Vegetative</h2>
       
@@ -982,6 +934,21 @@
       minDoseIntervalSec: 60
     });
 
+    const DEFAULT_SYSTEM_CONFIG = Object.freeze({
+      hydroponicSystem: 'DWC',
+      irrigation: {
+        mode: 'always_on',
+        onMinutes: 15,
+        offMinutes: 15,
+        dayNightSync: true
+      },
+      automation: {
+        mode: 'system',
+        envAware: true,
+        dayNightAware: true
+      }
+    });
+
     // EC targets by stage (mS/cm)
     const EC_TARGETS = {
       establishment: 1.4,  // First 10-14 days
@@ -1064,6 +1031,7 @@
         tank2EC: 1.6,
       },
       autodose: { ...DEFAULT_AUTODOSE },
+      system: JSON.parse(JSON.stringify(DEFAULT_SYSTEM_CONFIG)),
       history: {
         tank2: {
           ph: [],
@@ -1121,6 +1089,106 @@
         return `${formatNumber(milli, precision)} mS/cm`;
       }
       return `${formatNumber(value, precision)} µS/cm`;
+    }
+
+    function normalizeSystemConfig(config) {
+      const base = JSON.parse(JSON.stringify(DEFAULT_SYSTEM_CONFIG));
+      if (!config || typeof config !== 'object') return base;
+      const hydro = typeof config.hydroponicSystem === 'string' ? config.hydroponicSystem : base.hydroponicSystem;
+      const irrigation = config.irrigation || {};
+      return {
+        hydroponicSystem: hydro,
+        irrigation: {
+          mode: ['always_on', 'cycle'].includes(irrigation.mode) ? irrigation.mode : base.irrigation.mode,
+          onMinutes: toFiniteNumber(irrigation.onMinutes, base.irrigation.onMinutes),
+          offMinutes: toFiniteNumber(irrigation.offMinutes, base.irrigation.offMinutes),
+          dayNightSync: typeof irrigation.dayNightSync === 'boolean' ? irrigation.dayNightSync : base.irrigation.dayNightSync
+        },
+        automation: {
+          mode: 'system',
+          envAware: true,
+          dayNightAware: true
+        }
+      };
+    }
+
+    function updateIrrigationCycleVisibility() {
+      const modeSelect = document.getElementById('irrigationMode');
+      const mode = modeSelect?.value || 'always_on';
+      document.querySelectorAll('.irrigation-cycle-field').forEach((field) => {
+        field.classList.toggle('hidden', mode !== 'cycle');
+      });
+    }
+
+    function renderSystemConfig() {
+      const systemConfig = normalizeSystemConfig(state.raw?.system || state.system);
+      state.system = systemConfig;
+
+      const hydroSelect = document.getElementById('hydroponicSystem');
+      const modeSelect = document.getElementById('irrigationMode');
+      const onInput = document.querySelector('[name="irrigationOnMinutes"]');
+      const offInput = document.querySelector('[name="irrigationOffMinutes"]');
+      const dayNightToggle = document.getElementById('dayNightSync');
+
+      if (hydroSelect) hydroSelect.value = systemConfig.hydroponicSystem;
+      if (modeSelect) modeSelect.value = systemConfig.irrigation.mode;
+      if (onInput) onInput.value = systemConfig.irrigation.onMinutes;
+      if (offInput) offInput.value = systemConfig.irrigation.offMinutes;
+      if (dayNightToggle) dayNightToggle.checked = systemConfig.irrigation.dayNightSync;
+
+      updateIrrigationCycleVisibility();
+    }
+
+    function getSystemConfigFromForm() {
+      const hydroSelect = document.getElementById('hydroponicSystem');
+      const modeSelect = document.getElementById('irrigationMode');
+      const onInput = document.querySelector('[name="irrigationOnMinutes"]');
+      const offInput = document.querySelector('[name="irrigationOffMinutes"]');
+      const dayNightToggle = document.getElementById('dayNightSync');
+
+      const mode = modeSelect?.value || 'always_on';
+      return {
+        hydroponicSystem: hydroSelect?.value || 'DWC',
+        irrigation: {
+          mode,
+          onMinutes: toFiniteNumber(onInput?.value, DEFAULT_SYSTEM_CONFIG.irrigation.onMinutes),
+          offMinutes: toFiniteNumber(offInput?.value, DEFAULT_SYSTEM_CONFIG.irrigation.offMinutes),
+          dayNightSync: Boolean(dayNightToggle?.checked)
+        },
+        automation: {
+          mode: 'system',
+          envAware: true,
+          dayNightAware: true
+        }
+      };
+    }
+
+    function setSystemConfigStatus(message, type = 'neutral') {
+      const status = document.getElementById('systemConfigStatus');
+      if (!status) return;
+      status.textContent = message;
+      status.style.color = type === 'error' ? 'var(--accent-red)' : 'var(--neutral-300)';
+    }
+
+    async function handleSystemConfigSave(event) {
+      event.preventDefault();
+      try {
+        const config = normalizeSystemConfig(getSystemConfigFromForm());
+        const payload = deepClone(state.raw || {});
+        payload.system = {
+          ...config,
+          updatedAt: new Date().toISOString()
+        };
+
+        await persistData(payload, 'System configuration saved');
+        state.raw = payload;
+        state.system = config;
+        renderSystemConfig();
+        setSystemConfigStatus(`Saved at ${new Date().toLocaleTimeString()}`);
+      } catch (error) {
+        console.error('[nutrient] system config save failed:', error);
+        setSystemConfigStatus(error.message || 'Failed to save configuration', 'error');
+      }
     }
 
     function pushHistory(buffer, value, limit = HISTORY_LIMIT) {
@@ -2723,31 +2791,13 @@
       const tapBaseline = Number(tankData?.tapBaseline) || 0;
       const autodoseConfig = tankData?.autodose || state.autodose || DEFAULT_AUTODOSE;
       
-      if (tankId === 'tank1') {
-        // Mock system indicator
-        status.style.borderColor = 'rgba(100, 116, 139, 0.45)';
-        status.style.color = '#cbd5e1';
-        status.innerHTML = `Ready`;
-        return;
-      }
-
-      // Tank 2: Show as flowering and operational (demo mode)
-      if (tankId === 'tank2') {
-        // Default to flowering operational status
-        if (!Number.isFinite(ec) || ec === 0) {
-          status.style.borderColor = 'rgba(244, 63, 94, 0.45)';
-          status.style.color = '#fda4af';
-          status.innerHTML = 'Flowering - Operational';
-          return;
-        }
-      }
-
       if (!Number.isFinite(ec)) {
         status.style.borderColor = 'rgba(59, 130, 246, 0.35)';
         status.style.color = '#bfdbfe';
         status.innerHTML = 'Awaiting telemetry';
         return;
       }
+
 
       if (!autodoseConfig?.autodoseEnabled) {
         status.style.borderColor = 'rgba(148, 163, 184, 0.35)';
@@ -3144,111 +3194,11 @@
       }
     }
 
-    function generateMockTank1Data() {
-      // Generate mock data for Tank 1 (vegetative system)
-      // Create smooth, realistic trends with very small variations
-      const now = new Date();
-      const mockHistory = Array.from({ length: 24 }, (_, i) => {
-        // Use sine wave for smooth trends plus tiny random noise
-        const timeOffset = i / 24 * Math.PI * 2;
-        const baseValue = {
-          ph: 5.8 + Math.sin(timeOffset) * 0.05 + (Math.random() - 0.5) * 0.02,
-          ec: 1600 + Math.sin(timeOffset + 1) * 15 + (Math.random() - 0.5) * 8,
-          temperature: 20 + Math.sin(timeOffset + 2) * 0.3 + (Math.random() - 0.5) * 0.15
-        };
-        return baseValue;
-      });
-      
-      return {
-        nutrientProvider: 'EZ-GRO FIRE PROFESSIONAL - Veg and Growth',
-        // phSetpoint and ecSetpoint will be set by initialize() based on group plans
-        tapBaseline: 500,
-        emptyThreshold: 400,
-        sensors: {
-          ph: {
-            current: 5.8 + (Math.random() - 0.5) * 0.04,
-            history: mockHistory.map(h => h.ph)
-          },
-          ec: {
-            current: 1600 + (Math.random() - 0.5) * 12,
-            history: mockHistory.map(h => h.ec)
-          },
-          temperature: {
-            current: 20 + (Math.random() - 0.5) * 0.25,
-            history: mockHistory.map(h => h.temperature)
-          }
-        },
-        metadata: {
-          updatedAt: now.toISOString(),
-          calibrationFactor: 1.0,
-          pumpRatingGPD: 5
-        },
-        dosing: {
-          history: [],
-          averageDailyVolumeMl: 450,
-          dailyVolumeWindow: 7,
-          pailVolumeLiters: 20,
-          pailRemainingEstimateLiters: 15.5,
-          tankVolumeLiters: 100
-        },
-        calibration: {
-          lastCalibratedAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          pump: {
-            channel: 'ecMixA',
-            runTimeSeconds: 180,
-            measuredVolumeMl: 120,
-            flowMlPerSec: 0.667,
-            recordedAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
-            notes: 'Mock calibration'
-          },
-          sensors: {
-            ph: {
-              sensor: 'ph',
-              target: 7.0,
-              reading: 7.02,
-              recordedAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
-              step: 'mid'
-            },
-            ec: {
-              sensor: 'ec',
-              target: 1413,
-              reading: 1405,
-              recordedAt: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(),
-              step: 'one'
-            }
-          },
-          logs: [
-            {
-              sensor: 'ph',
-              step: 'mid',
-              target: 7.0,
-              reading: 7.02,
-              recordedAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString()
-            },
-            {
-              sensor: 'ec',
-              step: 'one',
-              target: 1413,
-              reading: 1405,
-              recordedAt: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString()
-            }
-          ]
-        },
-        computed: {
-          todaysVolume: 420
-        },
-        pid: {
-          notes: 'Mock PID controller for vegetative tank simulation'
-        }
-      };
-    }
-    
     async function initialize() {
       computeState(state.raw);
       
-      // Generate mock data for Tank 1 with computed targets
       if (!state.raw.tanks) state.raw.tanks = {};
-      state.raw.tanks.tank1 = generateMockTank1Data();
+      state.raw.tanks.tank1 = state.raw.tanks.tank1 || {};
       state.raw.tanks.tank1.ecSetpoint = state.computed.tank1EC;
       state.raw.tanks.tank1.phSetpoint = state.computed.tank1PH;
       
@@ -3276,7 +3226,7 @@
         tank2.nutrientProvider = 'EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit';
       }
       
-      // Render Tank 1 (Mock)
+      // Render Tank 1
       renderCurrentMetrics(state.raw, 'tank1');
       renderSetpoints(state.raw, 'tank1');
       renderWarnings([], document.getElementById('tank1CurrentWarnings'));
@@ -3316,6 +3266,7 @@
       populateCalibrationForms(state.raw);
       populateSetpointForm();
       renderAutodoseSummary();
+      renderSystemConfig();
     }
 
     async function fetchGroups() {
@@ -3471,6 +3422,8 @@
     });
 
     document.getElementById('tank2SetpointForm')?.addEventListener('submit', handleSetpointSubmit);
+    document.getElementById('systemConfigForm')?.addEventListener('submit', handleSystemConfigSave);
+    document.getElementById('irrigationMode')?.addEventListener('change', updateIrrigationCycleVisibility);
     hydrate();
   </script>
 

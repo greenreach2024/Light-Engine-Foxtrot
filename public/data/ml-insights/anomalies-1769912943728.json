@@ -1,0 +1,12 @@
+{
+  "job": "anomalies",
+  "timestamp": "2026-02-01T02:29:03.728Z",
+  "data": {
+    "error": "Process exited with code 1\nStderr: Traceback (most recent call last):\n  File \"/Users/petergilbert/Light-Engine-Foxtrot/scripts/simple-anomaly-detector.py\", line 26, in <module>\n    from outdoor_sensor_validator import OutdoorSensorValidator\n  File \"/Users/petergilbert/Light-Engine-Foxtrot/backend/outdoor_sensor_validator.py\", line 13, in <module>\n    import requests\n  File \"/Users/petergilbert/Library/Python/3.9/lib/python/site-packages/requests/__init__.py\", line 43, in <module>\n    import urllib3\n  File \"/Users/petergilbert/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py\", line 11, in <module>\n    from . import exceptions\n  File \"/Users/petergilbert/Library/Python/3.9/lib/python/site-packages/urllib3/exceptions.py\", line 3, in <module>\n    from .packages.six.moves.http_client import IncompleteRead as httplib_IncompleteRead\n  File \"/Users/petergilbert/Library/Python/3.9/lib/python/site-packages/urllib3/packages/six.py\", line 234, in create_module\n    return self.load_module(spec.name)\n  File \"/Users/petergilbert/Library/Python/3.9/lib/python/site-packages/urllib3/packages/six.py\", line 209, in load_module\n    mod = mod._resolve()\n  File \"/Users/petergilbert/Library/Python/3.9/lib/python/site-packages/urllib3/packages/six.py\", line 118, in _resolve\n    return _import_module(self.mod)\n  File \"/Users/petergilbert/Library/Python/3.9/lib/python/site-packages/urllib3/packages/six.py\", line 87, in _import_module\n    __import__(name)\n  File \"/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py\", line 71, in <module>\n    import email.parser\nModuleNotFoundError: No module named 'email.parser'\n",
+    "timestamp": "2026-02-01T02:29:03.728Z"
+  },
+  "metadata": {
+    "generatedAt": "2026-02-01T02:29:03.728Z",
+    "validUntil": "2026-02-02T02:29:03.728Z"
+  }
+}

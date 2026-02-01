@@ -3595,8 +3595,9 @@ async function loadGroupTrays(farmId, roomId, zoneId, groupId, group) {
 async function loadFarmSummary(farmId, farm) {
     try {
         console.log('[FarmSummary] Loading summary for farm:', farmId);
+        console.log('[FarmSummary] Farm object received:', farm);
         
-        // Fetch farm config to get contact info and notes
+        // Fetch farm config to get contact info and notes (requires auth)
         const configResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/config`);
         let config = {};
         let settings = {};
@@ -3607,10 +3608,10 @@ async function loadFarmSummary(farmId, farm) {
             settings = config.settings || {};
             console.log('[FarmSummary] Config loaded:', config);
         } else {
-            console.warn('[FarmSummary] Config request failed or unavailable');
+            console.warn('[FarmSummary] Config request failed (likely not logged in), using farm object data only');
         }
         
-        // Extract metadata from farm object (this comes from edge farm.json or heartbeat)
+        // Extract metadata from farm object (this comes from database farms.metadata)
         let metadata = farm.metadata || {};
         if (typeof metadata === 'string') {
             try {

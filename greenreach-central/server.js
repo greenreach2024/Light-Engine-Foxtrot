@@ -31,7 +31,7 @@ import { requestLogger } from './middleware/logger.js';
 import { authMiddleware } from './middleware/auth.js';
 
 // Import services
-import { initDatabase } from './config/database.js';
+import { initDatabase, getDatabase } from './config/database.js';
 import { startHealthCheckService } from './services/healthCheck.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
@@ -111,13 +111,29 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Request logging
 app.use(requestLogger);
 
-// Rate limiting
+// Attach database pool to request when available
+app.use((req, res, next) => {
+  if (app.locals.databaseReady) {
+    try {
+      req.db = getDatabase();
+    } catch (error) {
+      req.db = null;
+    }
+  }
+  next();
+});
+
+// Rate limiting - increased limits for dashboard usage
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // 500 requests per 15 min
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for debug/tracking endpoints (logging only)
+    return req.path.startsWith('/api/debug/') || req.path.startsWith('/api/sync/');
+  }
 });
 app.use('/api/', limiter);
 

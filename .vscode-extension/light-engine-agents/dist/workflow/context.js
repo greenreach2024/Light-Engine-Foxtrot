@@ -41,6 +41,7 @@ class ContextBuilder {
      * - Full codebase access
      * - Can read all files
      * - Can propose changes
+     * - Enhanced with semantic search for better codebase understanding
      */
     static async forImplementation(task, workspaceRoot) {
         const frameworkPath = vscode.Uri.file(`${workspaceRoot}/.github/AGENT_SKILLS_FRAMEWORK.md`);
@@ -52,10 +53,13 @@ class ContextBuilder {
         catch (e) {
             frameworkRules = 'Framework file not found';
         }
+        // Perform semantic search to find relevant context
+        const semanticContext = await this.performSemanticSearch(task, workspaceRoot);
         return {
             task,
             state: 'proposing',
             frameworkRules,
+            semanticContext,
             allowedFiles: undefined // No restrictions
         };
     }
@@ -125,6 +129,54 @@ class ContextBuilder {
             frameworkRules: context,
             allowedFiles: ['.github/AGENT_SKILLS_FRAMEWORK.md', 'DATA_FORMAT_STANDARDS.md', 'SCHEMA_CONSUMERS.md']
         };
+    }
+    /**
+     * Perform semantic search to find relevant files and code
+     * Uses keywords and code patterns from the task
+     */
+    static async performSemanticSearch(task, workspaceRoot) {
+        const context = [];
+        // Extract meaningful keywords from task
+        const keywords = this.extractKeywords(task);
+        if (keywords.length === 0) {
+            return context;
+        }
+        try {
+            // Search for files containing keywords
+            for (const keyword of keywords.slice(0, 5)) { // Limit to top 5 keywords
+                const searchPattern = `**/*${keyword}*.*`;
+                const files = await vscode.workspace.findFiles(searchPattern, '**/node_modules/**', 10);
+                for (const file of files.slice(0, 3)) {
+                    const relativePath = vscode.workspace.asRelativePath(file);
+                    if (!context.includes(relativePath)) {
+                        context.push(relativePath);
+                    }
+                }
+            }
+        }
+        catch (e) {
+            // Semantic search failed, return empty context
+        }
+        return context.slice(0, 10); // Limit to top 10 results
+    }
+    /**
+     * Extract meaningful keywords from task description
+     * Filters out common words and focuses on technical terms
+     */
+    static extractKeywords(task) {
+        const stopWords = new Set([
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be',
+            'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+            'would', 'should', 'could', 'may', 'might', 'must', 'can', 'add',
+            'create', 'update', 'modify', 'change', 'fix', 'remove', 'delete'
+        ]);
+        const words = task
+            .toLowerCase()
+            .replace(/[^\w\s]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length > 3 && !stopWords.has(w));
+        return [...new Set(words)]; // Deduplicate
     }
 }
 exports.ContextBuilder = ContextBuilder;

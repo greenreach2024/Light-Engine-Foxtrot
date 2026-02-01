@@ -1,12 +1,17 @@
 import * as vscode from 'vscode';
 import { WorkflowOrchestrator } from '../workflow/orchestrator';
 import { ContextBuilder } from '../workflow/context';
+import { LLMClient } from '../utils/llmClient';
 
 export class ImplementationAgent {
+    private llmClient: LLMClient;
+
     constructor(
         private orchestrator: WorkflowOrchestrator,
         private context: vscode.ExtensionContext
-    ) {}
+    ) {
+        this.llmClient = new LLMClient();
+    }
 
     async handler(
         request: vscode.ChatRequest,
@@ -68,8 +73,13 @@ export class ImplementationAgent {
             }
 
             stream.markdown('\n### Proposal\n');
+            stream.markdown('🤖 Generating intelligent proposal using LLM...\n\n');
             
-            const proposal = this.generateProposal(task, relevantFiles);
+            // Get code context for relevant files
+            const codeContext = await this.getCodeContext(relevantFiles);
+            
+            // Use LLM to generate proposal
+            const proposal = await this.generateProposalWithLLM(task, relevantFiles, codeContext);
             stream.markdown(proposal);
 
             // Save proposal to orchestrator
@@ -110,47 +120,88 @@ export class ImplementationAgent {
         return files.slice(0, 10); // Limit to 10 most relevant
     }
 
-    private generateProposal(task: string, relevantFiles: string[]): string {
-        // Simplified proposal generation
-        // Real version would use LLM with framework rules
+    private async getCodeContext(files: string[]): Promise<string[]> {
+        const codeContext: string[] = [];
+        const workspaceFolders = vscode.workspace.workspaceFolders;
         
-        let proposal = `**Implementation Proposal**\n\n`;
-        proposal += `**Objective:** ${task}\n\n`;
+        if (!workspaceFolders) {
+            return codeContext;
+        }
+
+        for (const file of files.slice(0, 5)) { // Limit to 5 files to avoid token limits
+            try {
+                const uri = vscode.Uri.joinPath(workspaceFolders[0].uri, file);
+                const doc = await vscode.workspace.openTextDocument(uri);
+                const text = doc.getText();
+                // Limit each file to 500 lines
+                const lines = text.split('\n').slice(0, 500).join('\n');
+                codeContext.push(lines);
+            } catch (e) {
+                // File might not exist yet
+                codeContext.push('');
+            }
+        }
+
+        return codeContext;
+    }
+
+    private async generateProposalWithLLM(
+        task: string,
+        relevantFiles: string[],
+        codeContext: string[]
+    ): Promise<string> {
+        try {
+            const proposal = await this.llmClient.generateProposal(
+                task,
+                relevantFiles,
+                codeContext
+            );
+            return proposal;
+        } catch (error) {
+            // Fallback to template-based proposal if LLM fails
+            this.orchestrator.log('implementation', `LLM failed: ${error}. Using fallback.`);
+            return this.generateFallbackProposal(task, relevantFiles);
+        }
+    }
+
+    private generateFallbackProposal(task: string, relevantFiles: string[]): string {
+        let proposal = '**Implementation Proposal** _(Generated via fallback)_\n\n';
+        proposal += '**Objective:** ' + task + '\n\n';
         
         if (relevantFiles.length > 0) {
-            proposal += `**Files to Modify:**\n`;
+            proposal += '**Files to Modify:**\n';
             relevantFiles.forEach(file => {
-                proposal += `- ${file}\n`;
+                proposal += '- ' + file + '\n';
             });
             proposal += '\n';
         } else {
-            proposal += `**Files to Create:**\n`;
-            proposal += `- (New files based on task requirements)\n\n`;
+            proposal += '**Files to Create:**\n';
+            proposal += '- (New files based on task requirements)\n\n';
         }
 
-        proposal += `**Changes:**\n`;
-        proposal += `1. Investigate existing implementation\n`;
-        proposal += `2. Follow data format standards (if applicable)\n`;
-        proposal += `3. Use canonical field names from DATA_FORMAT_STANDARDS.md\n`;
-        proposal += `4. Add appropriate error handling\n`;
-        proposal += `5. Update related tests\n\n`;
+        proposal += '**Changes:**\n';
+        proposal += '1. Investigate existing implementation\n';
+        proposal += '2. Follow data format standards (if applicable)\n';
+        proposal += '3. Use canonical field names from DATA_FORMAT_STANDARDS.md\n';
+        proposal += '4. Add appropriate error handling\n';
+        proposal += '5. Update related tests\n\n';
 
-        proposal += `**Verification Steps:**\n`;
-        proposal += `- [ ] Run \`npm run validate-schemas\` (if data formats changed)\n`;
-        proposal += `- [ ] Test functionality in browser/terminal\n`;
-        proposal += `- [ ] Check console for errors\n`;
-        proposal += `- [ ] Verify no regressions in related features\n\n`;
+        proposal += '**Verification Steps:**\n';
+        proposal += '- [ ] Run `npm run validate-schemas` (if data formats changed)\n';
+        proposal += '- [ ] Test functionality in browser/terminal\n';
+        proposal += '- [ ] Check console for errors\n';
+        proposal += '- [ ] Verify no regressions in related features\n\n';
 
-        proposal += `**Scope Limits:**\n`;
-        proposal += `- Changes limited to files listed above\n`;
-        proposal += `- No modifications to canonical data formats without migration plan\n`;
-        proposal += `- No new dependencies without justification\n\n`;
+        proposal += '**Scope Limits:**\n';
+        proposal += '- Changes limited to files listed above\n';
+        proposal += '- No modifications to canonical data formats without migration plan\n';
+        proposal += '- No new dependencies without justification\n\n';
 
-        proposal += `**Framework Compliance:**\n`;
-        proposal += `- ✅ Investigation-First: Searched codebase before proposing\n`;
-        proposal += `- ✅ Scope-Limited: Clear boundaries defined\n`;
-        proposal += `- ✅ Verification Required: Steps provided\n`;
-        proposal += `- ⏳ Multi-Agent Review: Awaiting Review Agent validation\n`;
+        proposal += '**Framework Compliance:**\n';
+        proposal += '- ✅ Investigation-First: Searched codebase before proposing\n';
+        proposal += '- ✅ Scope-Limited: Clear boundaries defined\n';
+        proposal += '- ✅ Verification Required: Steps provided\n';
+        proposal += '- ⏳ Multi-Agent Review: Awaiting Review Agent validation\n';
 
         return proposal;
     }

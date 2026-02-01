@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anomaly Diagnostics | Light Engine Foxtrot</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .header {
+      max-width: 1200px;
+      margin: 0 auto 30px;
+      padding: 20px;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 12px;
+      border: 1px solid rgba(100, 116, 139, 0.3);
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #3b82f6 0%, #10b981 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .header p {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    
+    .controls {
+      max-width: 1200px;
+      margin: 0 auto 20px;
+      display: flex;
+      gap: 12px;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    button.secondary {
+      background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    }
+    
+    button.secondary:hover {
+      box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
+    }
+    
+    #diagnostics-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .status {
+      max-width: 1200px;
+      margin: 0 auto 20px;
+      padding: 12px 16px;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 8px;
+      border-left: 4px solid #10b981;
+      font-size: 14px;
+      color: #94a3b8;
+    }
+    
+    .status.loading {
+      border-left-color: #3b82f6;
+    }
+    
+    .status.error {
+      border-left-color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Anomaly Diagnostics</h1>
+    <p>AI-powered root cause analysis for environmental anomalies</p>
+  </div>
+  
+  <div class="controls">
+    <button id="refresh-btn">Refresh Diagnostics</button>
+    <button id="toggle-refresh-btn" class="secondary">Auto-refresh: ON</button>
+  </div>
+  
+  <div id="status" class="status" style="display: none;"></div>
+  
+  <div id="diagnostics-container"></div>
+  
+  <script type="module">
+    import AnomalyDiagnosticsDisplay from './anomaly-diagnostics.js';
+    
+    // Initialize display
+    const display = new AnomalyDiagnosticsDisplay('diagnostics-container', {
+      baseUrl: '',
+      autoRefresh: true,
+      refreshInterval: 300000 // 5 minutes
+    });
+    
+    // Status element
+    const statusEl = document.getElementById('status');
+    
+    function showStatus(message, type = 'info') {
+      statusEl.textContent = message;
+      statusEl.className = `status ${type}`;
+      statusEl.style.display = 'block';
+      
+      if (type !== 'loading') {
+        setTimeout(() => {
+          statusEl.style.display = 'none';
+        }, 3000);
+      }
+    }
+    
+    // Load initial data
+    showStatus('Loading diagnostics...', 'loading');
+    display.load()
+      .then(() => {
+        showStatus('Diagnostics loaded', 'info');
+      })
+      .catch(err => {
+        showStatus(`Error: ${err.message}`, 'error');
+      });
+    
+    // Refresh button
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+      showStatus('Refreshing...', 'loading');
+      display.refresh()
+        .then(() => {
+          showStatus('Diagnostics refreshed', 'info');
+        })
+        .catch(err => {
+          showStatus(`Error: ${err.message}`, 'error');
+        });
+    });
+    
+    // Toggle auto-refresh
+    let autoRefresh = true;
+    const toggleBtn = document.getElementById('toggle-refresh-btn');
+    toggleBtn.addEventListener('click', () => {
+      autoRefresh = !autoRefresh;
+      toggleBtn.textContent = `Auto-refresh: ${autoRefresh ? 'ON' : 'OFF'}`;
+      
+      if (autoRefresh) {
+        display.refresh();
+      }
+    });
+  </script>
+</body>
+</html>

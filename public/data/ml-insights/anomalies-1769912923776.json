@@ -1,0 +1,12 @@
+{
+  "job": "anomalies",
+  "timestamp": "2026-02-01T02:28:43.776Z",
+  "data": {
+    "error": "Failed to start process: spawn /Users/petergilbert/Light-Engine-Foxtrot/venv/bin/python ENOENT",
+    "timestamp": "2026-02-01T02:28:43.774Z"
+  },
+  "metadata": {
+    "generatedAt": "2026-02-01T02:28:43.776Z",
+    "validUntil": "2026-02-02T02:28:43.776Z"
+  }
+}

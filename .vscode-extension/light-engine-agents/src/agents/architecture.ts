@@ -1,12 +1,17 @@
 import * as vscode from 'vscode';
 import { WorkflowOrchestrator } from '../workflow/orchestrator';
 import { ContextBuilder } from '../workflow/context';
+import { LLMClient } from '../utils/llmClient';
 
 export class ArchitectureAgent {
+    private llmClient: LLMClient;
+
     constructor(
         private orchestrator: WorkflowOrchestrator,
         private context: vscode.ExtensionContext
-    ) {}
+    ) {
+        this.llmClient = new LLMClient();
+    }
 
     async handler(
         request: vscode.ChatRequest,
@@ -52,9 +57,13 @@ export class ArchitectureAgent {
 
             stream.markdown('---\n\n');
             stream.markdown('### Strategic Review\n\n');
+            stream.markdown('🤖 Performing strategic assessment using LLM...\n\n');
 
-            // Perform strategic assessment
-            const assessment = await this.performAssessment(proposal, agentContext);
+            // Use LLM for intelligent assessment
+            const llmAssessment = await this.performLLMAssessment(task, proposal);
+
+            // Perform strategic assessment with LLM insights
+            const assessment = await this.performAssessment(proposal, agentContext, llmAssessment);
 
             // Display assessment
             stream.markdown('**Mission Alignment:**\n');
@@ -114,9 +123,22 @@ export class ArchitectureAgent {
         }
     }
 
+    private async performLLMAssessment(
+        task: string,
+        proposal: string
+    ): Promise<{ approved: boolean; reason: string; concerns: string[] } | null> {
+        try {
+            return await this.llmClient.generateArchitectureAssessment(proposal, task);
+        } catch (error) {
+            this.orchestrator.log('architecture', `LLM assessment failed: ${error}. Using rule-based fallback.`);
+            return null;
+        }
+    }
+
     private async performAssessment(
         proposal: string, 
-        context: any
+        context: any,
+        llmAssessment?: { approved: boolean; reason: string; concerns: string[] } | null
     ): Promise<{
         missionAlignment: { icon: string; summary: string; detail: string };
         dataIntegrity: { icon: string; summary: string; detail: string };
@@ -128,6 +150,19 @@ export class ArchitectureAgent {
         concerns?: string;
         alternative?: string;
     }> {
+        // If LLM assessment is available, incorporate its insights
+        let llmInfluence = {
+            approved: true,
+            concerns: [] as string[]
+        };
+        
+        if (llmAssessment) {
+            llmInfluence = {
+                approved: llmAssessment.approved,
+                concerns: llmAssessment.concerns
+            };
+        }
+
         // Check for data format changes
         const affectsDataFormats = proposal.toLowerCase().includes('groups.json') ||
                                    proposal.toLowerCase().includes('farm.json') ||
@@ -216,6 +251,13 @@ export class ArchitectureAgent {
         let conditions: string | undefined;
         let concerns: string | undefined;
 
+        // Factor in LLM assessment
+        if (!llmInfluence.approved && llmInfluence.concerns.length > 0) {
+            recommendation = 'reject';
+            concerns = 'LLM Strategic Assessment: ' + llmInfluence.concerns.join('; ');
+        }
+
+        // Rule-based checks override if critical
         if (dataIntegrity.icon === '❌') {
             recommendation = 'reject';
             concerns = 'CRITICAL: Modifying canonical data formats violates architecture principles. Use adapters from lib/data-adapters.js instead.';
@@ -225,6 +267,10 @@ export class ArchitectureAgent {
         } else if (systemImpact.icon === '⚠️' && !proposal.includes('adapter')) {
             recommendation = 'conditional';
             conditions = '- Use data adapters (lib/data-adapters.js)\n- Run schema validation: npm run validate-schemas\n- Test against all 56+ consumer files';
+        } else if (llmInfluence.concerns.length > 0 && recommendation === 'approve') {
+            // Downgrade to conditional if LLM has concerns but not critical
+            recommendation = 'conditional';
+            conditions = llmInfluence.concerns.map(c => `- ${c}`).join('\n');
         }
 
         return {

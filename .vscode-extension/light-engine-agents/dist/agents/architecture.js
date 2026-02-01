@@ -36,10 +36,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ArchitectureAgent = void 0;
 const vscode = __importStar(require("vscode"));
 const context_1 = require("../workflow/context");
+const llmClient_1 = require("../utils/llmClient");
 class ArchitectureAgent {
     constructor(orchestrator, context) {
         this.orchestrator = orchestrator;
         this.context = context;
+        this.llmClient = new llmClient_1.LLMClient();
     }
     async handler(request, chatContext, stream, token) {
         // Check workflow state
@@ -74,8 +76,11 @@ class ArchitectureAgent {
             stream.markdown('- Technical Debt: Adding complexity or reducing it?\n\n');
             stream.markdown('---\n\n');
             stream.markdown('### Strategic Review\n\n');
-            // Perform strategic assessment
-            const assessment = await this.performAssessment(proposal, agentContext);
+            stream.markdown('🤖 Performing strategic assessment using LLM...\n\n');
+            // Use LLM for intelligent assessment
+            const llmAssessment = await this.performLLMAssessment(task, proposal);
+            // Perform strategic assessment with LLM insights
+            const assessment = await this.performAssessment(proposal, agentContext, llmAssessment);
             // Display assessment
             stream.markdown('**Mission Alignment:**\n');
             stream.markdown(`${assessment.missionAlignment.icon} ${assessment.missionAlignment.summary}\n`);
@@ -124,7 +129,27 @@ class ArchitectureAgent {
             this.orchestrator.log('architecture', `Error: ${error}`);
         }
     }
-    async performAssessment(proposal, context) {
+    async performLLMAssessment(task, proposal) {
+        try {
+            return await this.llmClient.generateArchitectureAssessment(proposal, task);
+        }
+        catch (error) {
+            this.orchestrator.log('architecture', `LLM assessment failed: ${error}. Using rule-based fallback.`);
+            return null;
+        }
+    }
+    async performAssessment(proposal, context, llmAssessment) {
+        // If LLM assessment is available, incorporate its insights
+        let llmInfluence = {
+            approved: true,
+            concerns: []
+        };
+        if (llmAssessment) {
+            llmInfluence = {
+                approved: llmAssessment.approved,
+                concerns: llmAssessment.concerns
+            };
+        }
         // Check for data format changes
         const affectsDataFormats = proposal.toLowerCase().includes('groups.json') ||
             proposal.toLowerCase().includes('farm.json') ||
@@ -206,6 +231,12 @@ class ArchitectureAgent {
         let justification = 'Proposal aligns with strategic goals and follows best practices.';
         let conditions;
         let concerns;
+        // Factor in LLM assessment
+        if (!llmInfluence.approved && llmInfluence.concerns.length > 0) {
+            recommendation = 'reject';
+            concerns = 'LLM Strategic Assessment: ' + llmInfluence.concerns.join('; ');
+        }
+        // Rule-based checks override if critical
         if (dataIntegrity.icon === '❌') {
             recommendation = 'reject';
             concerns = 'CRITICAL: Modifying canonical data formats violates architecture principles. Use adapters from lib/data-adapters.js instead.';
@@ -217,6 +248,11 @@ class ArchitectureAgent {
         else if (systemImpact.icon === '⚠️' && !proposal.includes('adapter')) {
             recommendation = 'conditional';
             conditions = '- Use data adapters (lib/data-adapters.js)\n- Run schema validation: npm run validate-schemas\n- Test against all 56+ consumer files';
+        }
+        else if (llmInfluence.concerns.length > 0 && recommendation === 'approve') {
+            // Downgrade to conditional if LLM has concerns but not critical
+            recommendation = 'conditional';
+            conditions = llmInfluence.concerns.map(c => `- ${c}`).join('\n');
         }
         return {
             missionAlignment,

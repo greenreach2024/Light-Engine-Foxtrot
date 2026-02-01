@@ -322,10 +322,20 @@
         <!-- Step 3: Grow Rooms -->
         <div class="step" id="step-2">
             <div class="step-content">
-                <h2 class="step-title">Grow Rooms</h2>
+                <h2 class="step-title">Grow Rooms & Light Controllers</h2>
                 <p class="step-description">
-                    Add the growing spaces in your farm. You need at least one room to continue.
+                    Add the growing spaces in your farm and discover light controllers automatically.
                 </p>
+
+                <!-- Device Discovery Section -->
+                <div class="card" style="margin-bottom: 2rem; background: rgba(16, 185, 129, 0.05); border: 2px solid rgba(16, 185, 129, 0.2);">
+                    <h3 style="color: var(--accent-green); margin-bottom: 1rem;">🔍 Auto-Discover Light Controllers</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                        Scan your network to find GROW3 and DMX light controllers automatically - no manual IP entry needed!
+                    </p>
+                    <div id="device-scanner-container"></div>
+                    <div id="device-results" style="margin-top: 1rem;"></div>
+                </div>
 
                 <div id="rooms-container"></div>
 
@@ -404,10 +414,13 @@
         </div>
     </div>
 
+    <script src="device-scanner.js"></script>
     <script>
         let currentStep = 0;
         const totalSteps = 5;
         let roomCounter = 0;
+        let deviceScanner = null;
+        let discoveredDevices = [];
 
         // Extract farmId from JWT token
         function getFarmIdFromToken() {
@@ -521,6 +534,20 @@
             const roomId = `room-${roomCounter}`;
             const roomsContainer = document.getElementById('rooms-container');
 
+            // Build light controller options from discovered devices
+            let lightControllerOptions = '<option value="">No light controller</option>';
+            if (discoveredDevices.length > 0) {
+                discoveredDevices.forEach((device, idx) => {
+                    const label = `${device.manufacturer || 'Unknown'} - ${device.ip}:${device.port} (${device.protocol})`;
+                    const value = JSON.stringify({
+                        ip: device.ip,
+                        port: device.port,
+                        protocol: device.protocol
+                    });
+                    lightControllerOptions += `<option value='${value}'>${label}</option>`;
+                });
+            }
+
             const roomCard = document.createElement('div');
             roomCard.className = 'room-card';
             roomCard.id = roomId;
@@ -542,6 +569,15 @@
                         <option value="storage">Storage</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Light Controller</label>
+                    <select class="form-select" data-field="lightController">
+                        ${lightControllerOptions}
+                    </select>
+                    <small style="color: var(--text-muted);">
+                        ${discoveredDevices.length === 0 ? 'Run device scan above to auto-discover controllers' : 'Select from discovered devices or leave empty'}
+                    </small>
+                </div>
             `;
             roomsContainer.appendChild(roomCard);
         }
@@ -558,12 +594,24 @@
             roomCards.forEach(card => {
                 const name = card.querySelector('[data-field="name"]').value.trim();
                 const type = card.querySelector('[data-field="type"]').value;
+                const lightControllerValue = card.querySelector('[data-field="lightController"]').value;
 
                 if (name) {
-                    farmData.rooms.push({
+                    const room = {
                         name,
                         type
-                    });
+                    };
+
+                    // Add light controller if selected
+                    if (lightControllerValue) {
+                        try {
+                            room.lightController = JSON.parse(lightControllerValue);
+                        } catch (e) {
+                            console.error('Failed to parse light controller:', e);
+                        }
+                    }
+
+                    farmData.rooms.push(room);
                 }
             });
         }
@@ -665,12 +713,78 @@
         // Initialize
         updateUI();
         
+        // Initialize device scanner
+        function initDeviceScanner() {
+            deviceScanner = new DeviceScanner({
+                baseUrl: '',
+                onDevicesFound: (devices, summary) => {
+                    discoveredDevices = devices;
+                    const resultsDiv = document.getElementById('device-results');
+                    resultsDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            ✅ Found ${summary.devicesFound} device(s) in ${summary.duration}
+                            ${summary.lightControllers > 0 ? `<br>🎯 ${summary.lightControllers} light controller(s) ready to use` : ''}
+                        </div>
+                    `;
+                    
+                    // Refresh existing room cards to show discovered devices
+                    const existingRooms = document.querySelectorAll('#rooms-container .room-card');
+                    if (existingRooms.length > 0) {
+                        alert(`${devices.length} device(s) discovered! Remove and re-add rooms to see the new controllers in the dropdown.`);
+                    }
+                },
+                onError: (error) => {
+                    const resultsDiv = document.getElementById('device-results');
+                    resultsDiv.innerHTML = `
+                        <div class="alert" style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--accent-red);">
+                            ❌ Scan failed: ${error.message}
+                        </div>
+                    `;
+                },
+                onProgress: (progress) => {
+                    console.log('Scan progress:', progress);
+                }
+            });
+
+            // Inject styles
+            deviceScanner.injectStyles();
+
+            // Render scan button
+            const container = document.getElementById('device-scanner-container');
+            container.innerHTML = deviceScanner.renderScanButton(false);
+
+            // Add click handler
+            const scanBtn = container.querySelector('.scan-button');
+            scanBtn.addEventListener('click', async () => {
+                scanBtn.disabled = true;
+                scanBtn.classList.add('scanning');
+                scanBtn.querySelector('.scan-text').textContent = 'Scanning Network...';
+                scanBtn.querySelector('.scan-icon').textContent = '⟳';
+
+                try {
+                    await deviceScanner.scanLightControllers();
+                } catch (error) {
+                    console.error('Scan failed:', error);
+                } finally {
+                    scanBtn.disabled = false;
+                    scanBtn.classList.remove('scanning');
+                    scanBtn.querySelector('.scan-text').textContent = 'Scan Again';
+                    scanBtn.querySelector('.scan-icon').textContent = '🔍';
+                }
+            });
+        }
+        
         // Generate Activity Hub QR when step loads
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
                 if (mutation.target.classList.contains('active')) {
                     const stepId = mutation.target.id;
-                    if (stepId === 'step-3') {
+                    if (stepId === 'step-2') {
+                        // Initialize device scanner when room setup step loads
+                        if (!deviceScanner) {
+                            initDeviceScanner();
+                        }
+                    } else if (stepId === 'step-3') {
                         generateActivityHubQR();
                     }
                 }

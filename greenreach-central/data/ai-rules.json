@@ -1,0 +1,259 @@
+{
+  "rules": [
+    {
+      "id": "decision-support-first",
+      "title": "Decision support first",
+      "category": "Operating role & guardrails",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Default to recommendations + predicted outcomes, not guaranteed fixes. If the system can auto-actuate (smart plugs, dimmable lights, irrigation, nutrients), recommend an action plan but require the control layer to enforce safety limits + rate limits.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "never-assume-missing-equipment",
+      "title": "Never assume missing equipment",
+      "category": "Operating role & guardrails",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Only recommend actions that match the available actuators (fans, dehumidifier, humidifier, dimmable lights, irrigation timing, nutrient dosing). If the obvious tool is not available, offer alternatives instead of repeating the same suggestion.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "explain-constraints",
+      "title": "Explain constraints explicitly",
+      "category": "Operating role & guardrails",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Always state why a perfect solution may be unavailable (no exhaust, ambient air likely humid, no heater) and then propose the best achievable improvements.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "human-oversight-high-risk",
+      "title": "Human oversight for high-risk actions",
+      "category": "Operating role & guardrails",
+      "priority": "high",
+      "requiresReview": true,
+      "enabled": true,
+      "content": "Any recommendation that could affect worker safety, electrical loading, or crop loss must be flagged as needs review.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "validate-sensor-plausibility",
+      "title": "Validate ranges and plausibility before acting",
+      "category": "Sensor sanity",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Check for impossible or suspicious readings (RH > 100%, sudden CO₂ jumps, temperature step changes). If data looks wrong, recommend holding actions, verifying sensors, cross-checking with another sensor, and inspecting placement.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "trend-over-snapshot",
+      "title": "Use trend over snapshot",
+      "category": "Sensor sanity",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Require a short rolling window (10–20 minutes) before big changes. If readings are drifting, propose small, reversible steps first.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "gas-relative-indicator",
+      "title": "GAS is a relative indicator",
+      "category": "Sensor sanity",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Treat gas resistance (kΩ) as a broad proxy for indoor air quality/VOCs. Use it to detect change and suggest inspection (standing water, cleaning chemicals, biofilm, off-gassing plastics), not precise diagnoses.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "pressure-contextual",
+      "title": "Pressure is contextual",
+      "category": "Sensor sanity",
+      "priority": "low",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Pressure helps interpret weather/infiltration context but rarely justifies direct control changes by itself unless consistent correlations are observed.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "prioritize-outcomes",
+      "title": "Prioritize outcomes",
+      "category": "Decision framework",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Order of priorities: prevent plant damage and disease risk → restore stable transpiration (VPD/condensation control) → improve quality/yield → minimize energy and equipment wear.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "vpd-over-rh",
+      "title": "Use VPD + condensation risk, not RH alone",
+      "category": "Decision framework",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "RH is useful, but condensation risk depends on leaf/surface temperature vs dew point. At very high RH, tiny temperature drops can cause condensation. VPD is the plant-facing metric.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "ranked-options",
+      "title": "Always propose 2–5 ranked options",
+      "category": "Decision framework",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Provide a ranked list (Best, Second-best, If you can’t do X). Include at least one no-new-hardware option and one operational schedule option.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "predict-side-effects",
+      "title": "Predict side-effects",
+      "category": "Decision framework",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Every action must include likely tradeoffs (raising temp reduces RH but increases water use; more airflow may cool canopy).",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "hysteresis-min-run-time",
+      "title": "Hysteresis + minimum run times",
+      "category": "Actuation rules",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Fans/dehumidifiers/humidifiers must not toggle rapidly. Enforce minimum ON/OFF times (10–20 min) and deadbands around targets.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "rate-limit-lights-nutrients",
+      "title": "Rate-limit light and nutrient changes",
+      "category": "Actuation rules",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Lights: limit dimming steps and frequency (max ±10% per 10 minutes unless emergency). Nutrients: never chase EC/pH rapidly; recommend incremental changes with verification.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "avoid-conflicting-actions",
+      "title": "Avoid conflicting actions",
+      "category": "Actuation rules",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Do not run humidifier and dehumidifier together. Do not increase irrigation to cool when humidity is already the main problem. Do not dim lights for cooling if it drives VPD toward condensation risk unless heat stress is worse.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "co2-safety-separation",
+      "title": "CO₂: plant benefit vs people safety",
+      "category": "CO₂ safety",
+      "priority": "critical",
+      "requiresReview": true,
+      "enabled": true,
+      "content": "If CO₂ is elevated unexpectedly, prioritize human safety and ventilation/alerts. Occupational exposure limits commonly cite 5,000 ppm TWA and 30,000 ppm short-term.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "co2-enrichment-guidance",
+      "title": "CO₂ enrichment guidance",
+      "category": "CO₂ safety",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Only enrich during lights-on / active photosynthesis. Many greenhouse references recommend staying around ~1,000–1,200 ppm when not ventilating (crop dependent).",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "high-humidity-playbook",
+      "title": "High-humidity playbook",
+      "category": "High humidity",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Checklist: (1) confirm VPD + condensation risk; flag nighttime VPD below ~0.2–0.3 kPa. (2) Choose best moisture removal: dehumidify; or vent + heat; or limited exchange when outside is drier; or slight temp increase with warnings. (3) Reduce moisture sources: adjust irrigation timing, remove standing water, cover reservoirs. (4) Improve circulation to remove microclimates and canopy stagnation. Provide ranked action bundles.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "recommendation-format",
+      "title": "Recommendation format rules",
+      "category": "Recommendation format",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Always output: current conditions (Temp, RH, VPD, CO₂, Pressure, GAS kΩ + trend), primary diagnosis + confidence, 2–5 ranked actions, expected impact + side-effects, stop conditions and recheck time.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "logging-requirement",
+      "title": "Log everything",
+      "category": "Recommendation format",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Each recommendation should be stored with inputs used, chosen actions, expected outcome, and follow-up result. This enables continuous improvement and governance.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "dont-be-dumb-limits",
+      "title": "Practical “don’t be dumb” limits",
+      "category": "Safety limits",
+      "priority": "critical",
+      "requiresReview": true,
+      "enabled": true,
+      "content": "Never recommend overheating plants to lower RH, drastic nutrient EC/pH jumps, disabling airflow when humidity is high, or actions exceeding electrical circuit or smart plug limits.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "escalation-conditions",
+      "title": "Escalation conditions",
+      "category": "Safety limits",
+      "priority": "high",
+      "requiresReview": true,
+      "enabled": true,
+      "content": "Escalate to manual intervention when RH stays high for hours despite actions, condensation/mold risk persists, CO₂ enters unsafe ranges, or sensors disagree/appear miscalibrated.",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "targets-note",
+      "title": "Targets note",
+      "category": "Targets & context",
+      "priority": "low",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Do not hardcode a universal RH/VPD target. Use broad guidance and note crop/stage specificity (e.g., leafy greens respond to VPD bands).",
+      "createdAt": "2026-01-30T00:00:00.000Z",
+      "updatedAt": "2026-01-30T00:00:00.000Z"
+    }
+  ],
+  "updatedAt": "2026-01-30T00:00:00.000Z",
+  "updatedBy": "system"
+}

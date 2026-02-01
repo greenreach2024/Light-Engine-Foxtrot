@@ -2022,32 +2022,58 @@
     async function loadFarmNameIntoHeader() {
       try {
         const token = localStorage.getItem('token');
-        if (!token) {
-          console.log('[Farm Summary] No token, skipping farm name load');
-          return;
+        let farmName = null;
+        
+        // Try authenticated API first if token exists
+        if (token) {
+          try {
+            const response = await fetch('/api/farm/profile', {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.status === 'success' && data.farm && data.farm.name) {
+                farmName = data.farm.name;
+                console.log('[Farm Summary] Loaded farm name from API:', farmName);
+              }
+            }
+          } catch (error) {
+            console.log('[Farm Summary] API failed, falling back to farm.json:', error.message);
+          }
         }
         
-        const response = await fetch('/api/farm/profile', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.status === 'success' && data.farm && data.farm.name) {
-            const farmName = data.farm.name;
-            
-            // Update the h1 header
-            const h1 = document.querySelector('h1');
-            if (h1) {
-              h1.textContent = `${farmName} Room Summary`;
-              console.log('[Farm Summary] Updated header to:', h1.textContent);
+        // Fallback to /data/farm.json if API didn't work
+        if (!farmName) {
+          try {
+            const response = await fetch('/data/farm.json');
+            if (response.ok) {
+              const farmData = await response.json();
+              if (farmData && farmData.name) {
+                farmName = farmData.name;
+                console.log('[Farm Summary] Loaded farm name from farm.json:', farmName);
+              }
             }
-            
-            // Update page title
-            document.title = `${farmName} Room Summary - Light Engine`;
+          } catch (error) {
+            console.error('[Farm Summary] Failed to load farm.json:', error);
           }
+        }
+        
+        // Update UI if we got a farm name
+        if (farmName) {
+          // Update the h1 header
+          const h1 = document.querySelector('h1');
+          if (h1) {
+            h1.textContent = `${farmName} Room Summary`;
+            console.log('[Farm Summary] Updated header to:', h1.textContent);
+          }
+          
+          // Update page title
+          document.title = `${farmName} Room Summary - Light Engine`;
+        } else {
+          console.warn('[Farm Summary] Could not load farm name from any source');
         }
       } catch (error) {
         console.error('[Farm Summary] Failed to load farm name:', error);
@@ -2087,6 +2113,17 @@
       initializeNewPlantingModal();
       initializeMLToggle();
       initializeAdminTooltipTracking(); // Initialize tooltip tracking for highlighted cards
+      
+      // Initialize Harvest Predictions AI (P3)
+      if (typeof HarvestPredictions !== 'undefined') {
+        console.log('[Farm Summary] Initializing Harvest Predictions AI component...');
+        window.harvestPredictions = new HarvestPredictions('/api/harvest/predictions');
+        harvestPredictions.loadAll().catch(err => {
+          console.warn('[Farm Summary] Harvest predictions not available:', err.message);
+        });
+      } else {
+        console.warn('[Farm Summary] HarvestPredictions component not loaded');
+      }
       
       // Wait for Chart.js to load before initializing ML widgets (with timeout)
       let chartJsAttempts = 0;
@@ -3205,6 +3242,9 @@
                             ${harvestStatus}
                           </div>
                           ${currentStage ? `<div class="harvest-stage">Day ${currentDay} • ${currentStage}</div>` : ''}
+                          <div id="ai-prediction-${group.id}" style="margin-top: 8px;">
+                            <!-- AI Prediction Badge will be inserted here -->
+                          </div>
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;" onclick="event.stopPropagation();">
                           <button 
@@ -3643,6 +3683,29 @@
         console.log('[Zone Summaries] Rendering', zones.length, 'zone cards');
         container.innerHTML = html;
         console.log('[Zone Summaries] Zone summaries rendered successfully');
+        
+        // Render AI Harvest Predictions for all groups (P3)
+        if (window.harvestPredictions) {
+          console.log('[Zone Summaries] Rendering AI harvest predictions for groups...');
+          let predictionCount = 0;
+          zones.forEach(zone => {
+            const zoneGroups = groups.filter(g => {
+              const groupZone = g.zone || g.roomZone || '';
+              return normalizeToken(groupZone) === normalizeToken(zone.zone);
+            });
+            zoneGroups.forEach(group => {
+              const targetEl = document.getElementById(`ai-prediction-${group.id}`);
+              if (targetEl) {
+                const badge = harvestPredictions.renderBadge(group.id);
+                if (badge) {
+                  targetEl.innerHTML = badge;
+                  predictionCount++;
+                }
+              }
+            });
+          });
+          console.log(`[Zone Summaries] Rendered ${predictionCount} AI prediction badges`);
+        }
       } catch (error) {
         console.error('[Zone Summaries] Failed to load zone summaries:', error);
         container.innerHTML = '';
@@ -3715,6 +3778,16 @@
       return candidates.some((candidate) => normalizeToken(candidate) === normalized);
     }
 
+    function normalizeZoneKey(token) {
+      const raw = normalizeToken(token);
+      if (!raw) return '';
+      const roomDashMatch = raw.match(/^(.*?)-z(\d+)$/i);
+      if (roomDashMatch) return `${roomDashMatch[1]}:${roomDashMatch[2]}`;
+      const roomColonMatch = raw.match(/^(.*?):z(\d+)$/i);
+      if (roomColonMatch) return `${roomColonMatch[1]}:${roomColonMatch[2]}`;
+      return raw;
+    }
+
     function matchesGroupZoneToZone(group, zone) {
       if (!group || !zone) return false;
       const groupTokens = [
@@ -3738,6 +3811,11 @@
 
       // Direct token match
       if (groupTokens.some((token) => zoneTokens.some((zoneToken) => normalizeToken(token) === normalizeToken(zoneToken)))) {
+        return true;
+      }
+
+      // Normalized zone-key match (ROOM-A:1 vs ROOM-A-Z1)
+      if (groupTokens.some((token) => zoneTokens.some((zoneToken) => normalizeZoneKey(token) === normalizeZoneKey(zoneToken)))) {
         return true;
       }
 
@@ -6956,5 +7034,8 @@
     });
   </script>
   <script src="/js/farm-assistant.js"></script>
+  
+  <!-- Harvest Predictions AI Component (P3) -->
+  <script src="/harvest-predictions.js"></script>
 </body>
 </html>

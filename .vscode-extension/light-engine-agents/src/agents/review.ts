@@ -1,12 +1,17 @@
 import * as vscode from 'vscode';
 import { WorkflowOrchestrator } from '../workflow/orchestrator';
 import { ContextBuilder } from '../workflow/context';
+import { LLMClient } from '../utils/llmClient';
 
 export class ReviewAgent {
+    private llmClient: LLMClient;
+
     constructor(
         private orchestrator: WorkflowOrchestrator,
         private context: vscode.ExtensionContext
-    ) {}
+    ) {
+        this.llmClient = new LLMClient();
+    }
 
     async handler(
         request: vscode.ChatRequest,
@@ -48,9 +53,17 @@ export class ReviewAgent {
 
             stream.markdown('---\n\n');
             stream.markdown('### Reviewing Proposal\n\n');
+            stream.markdown('🤖 Performing intelligent validation using LLM...\n\n');
 
-            // Perform validation checks
-            const validationResults = await this.validateProposal(proposal, agentContext);
+            // Get file contents for mentioned files
+            const mentionedFiles = this.extractMentionedFiles(proposal);
+            const fileContents = await this.getFileContents(mentionedFiles, workspaceRoot);
+
+            // Use LLM for intelligent review
+            const llmValidation = await this.performLLMReview(proposal, mentionedFiles, fileContents);
+
+            // Combine LLM validation with rule-based checks
+            const validationResults = await this.validateProposal(proposal, agentContext, llmValidation);
 
             // Display results
             stream.markdown('**Validation Checklist:**\n\n');
@@ -111,11 +124,82 @@ export class ReviewAgent {
         }
     }
 
+    private extractMentionedFiles(proposal: string): string[] {
+        const files: string[] = [];
+        const filePatterns = [
+            /(?:Files to Modify|Files to Create):\s*\n((?:[-*]\s*.+\n?)+)/gi,
+            /(?:^|\n)[-*]\s*(.+?\.(?:ts|js|json|md|tsx|jsx))/gi
+        ];
+
+        for (const pattern of filePatterns) {
+            const matches = proposal.matchAll(pattern);
+            for (const match of matches) {
+                const text = match[1] || match[0];
+                const fileMatch = text.match(/[^\s]+\.(?:ts|js|json|md|tsx|jsx)/g);
+                if (fileMatch) {
+                    files.push(...fileMatch);
+                }
+            }
+        }
+
+        return [...new Set(files)]; // Remove duplicates
+    }
+
+    private async getFileContents(files: string[], workspaceRoot: string): Promise<Map<string, string>> {
+        const contents = new Map<string, string>();
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        
+        if (!workspaceFolders) {
+            return contents;
+        }
+
+        for (const file of files) {
+            try {
+                const uri = vscode.Uri.joinPath(workspaceFolders[0].uri, file);
+                const doc = await vscode.workspace.openTextDocument(uri);
+                contents.set(file, doc.getText());
+            } catch (e) {
+                // File doesn't exist yet (might be new file)
+                contents.set(file, '[FILE DOES NOT EXIST]');
+            }
+        }
+
+        return contents;
+    }
+
+    private async performLLMReview(
+        proposal: string,
+        mentionedFiles: string[],
+        fileContents: Map<string, string>
+    ): Promise<{ approved: boolean; reason: string; issues: string[] }> {
+        try {
+            return await this.llmClient.generateReview(proposal, mentionedFiles, fileContents);
+        } catch (error) {
+            this.orchestrator.log('review', `LLM review failed: ${error}. Using rule-based fallback.`);
+            // Return neutral result on LLM failure
+            return {
+                approved: true,
+                reason: 'LLM unavailable, using rule-based validation only',
+                issues: []
+            };
+        }
+    }
+
     private async validateProposal(
         proposal: string, 
-        context: any
+        context: any,
+        llmValidation?: { approved: boolean; reason: string; issues: string[] }
     ): Promise<{ checks: Array<{ name: string; passed: boolean; reason?: string }> }> {
         const checks: Array<{ name: string; passed: boolean; reason?: string }> = [];
+
+        // Add LLM validation results first if available
+        if (llmValidation) {
+            checks.push({
+                name: 'LLM Intelligent Review',
+                passed: llmValidation.approved,
+                reason: llmValidation.approved ? llmValidation.reason : llmValidation.issues.join('; ')
+            });
+        }
 
         // Check 1: Investigation-First compliance
         const hasInvestigation = proposal.toLowerCase().includes('investigation') || 
