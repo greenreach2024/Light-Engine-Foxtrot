@@ -51,8 +51,6 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const dbEnabled = String(process.env.DB_ENABLED || 'false').toLowerCase() === 'true';
-
     // Fallback credentials for non-database mode
     const FALLBACK_FARM = {
       farm_id: farm_id || 'FARM-MKLOMAT3-A9D8',
@@ -63,8 +61,23 @@ router.post('/login', async (req, res) => {
     };
 
     let user = null;
+    let useDatabase = false;
 
-    if (dbEnabled && req.db) {
+    // Check if database mode is enabled AND tables exist
+    if (req.db) {
+      try {
+        // Try to query farm_users table
+        const testQuery = `SELECT 1 FROM farm_users LIMIT 1`;
+        await req.db.query(testQuery);
+        useDatabase = true;
+      } catch (error) {
+        // Table doesn't exist, use fallback mode
+        console.log('[Auth] Database not ready, using fallback mode');
+        useDatabase = false;
+      }
+    }
+
+    if (useDatabase) {
       // Database mode: Query farm_users table
       const userQuery = `
         SELECT 
