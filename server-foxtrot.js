@@ -14580,11 +14580,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
   }
   
   // EDGE MODE: Local authentication without database (NeDB mode)
-  const dbMode = getDatabaseMode();
-  const isEdge = edgeConfig.isEdgeMode();
-  console.log(`[farm-auth] Mode check: edgeConfig.isEdgeMode()=${isEdge}, getDatabaseMode()=${dbMode}`);
-  
-  if (isEdge || dbMode === 'nedb') {
+  if (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb') {
     console.log('[farm-auth] Edge/NeDB mode - using local authentication');
     
     if (!email || !password) {
