@@ -480,6 +480,105 @@ Result: Complete seed-to-sale traceability without spreadsheets
 - Update all relevant systems in background
 - Provide visual feedback ("Tray TRY-00142 harvested, 2.4 lbs added to available inventory")
 
+### 6. **Component-First UI Pattern** ✨ NEW
+
+**Rule**: Build reusable components first, then integrate into multiple dashboards.
+
+**Workflow** (validated by P3 Harvest Predictions):
+```
+1. Build Component       → Create standalone class (e.g., HarvestPredictions)
+2. Test Standalone       → Create demo page (e.g., harvest-predictions-demo.html)
+3. Integrate Dashboards  → Add to Farm Summary, Activity Hub, Groups V2
+4. Track Integration     → Update DASHBOARD_INTEGRATIONS.md registry
+5. Validate              → Create integration validation script
+```
+
+**Why This Matters:**
+- **Reusability**: One component, N dashboards (P3 used in 2+ locations)
+- **Testability**: Validate before integration (P3 had 39/39 component tests before Farm Summary integration)
+- **Maintainability**: Single source of truth (fix once, fixes everywhere)
+- **Discoverability**: Registry prevents duplicate work (P3 integration already existed, agent almost rebuilt it)
+
+**Example** (P3 Harvest Predictions - February 2026):
+```javascript
+// 1. Component: public/harvest-predictions.js (518 lines)
+class HarvestPredictions {
+  constructor() {
+    this.cache = new Map();
+    this.cacheTTL = 300000; // 5 minutes
+  }
+  
+  async loadForGroup(groupId) { /* Fetch + cache */ }
+  renderBadge(groupId) { /* Return HTML string */ }
+  renderPanel(groupId) { /* Return detailed view */ }
+}
+
+// 2. Demo: public/harvest-predictions-demo.html
+// Standalone testing interface, validates all methods
+
+// 3. Integration: public/views/farm-summary.html (lines 3683-3697)
+if (window.harvestPredictions) {
+  groups.forEach(group => {
+    const badge = harvestPredictions.renderBadge(group.id);
+    if (badge) {
+      targetEl.innerHTML = badge;
+    }
+  });
+}
+
+// 4. Registry: .github/DASHBOARD_INTEGRATIONS.md
+// Tracks: Component name, integration locations, validation status
+
+// 5. Validation: scripts/validate-farm-summary-p3-integration.cjs
+// 7 checks: script import, placeholder, rendering, auto-refresh, API
+```
+
+**Agent Checklist Before Dashboard Integration:**
+- [ ] Check `.github/DASHBOARD_INTEGRATIONS.md` for existing integrations
+- [ ] Search codebase for component script imports: `grep -r "component-name.js" public/views/`
+- [ ] Search for component class usage: `grep -r "window.componentName" public/views/`
+- [ ] If integration exists: Create validation script, confirm working
+- [ ] If integration missing: Proceed with proposal
+- [ ] After integration: Update registry with locations, line numbers, validation results
+
+**Investigation-First Applied:**
+```markdown
+## P3 Dashboard Integration Investigation
+
+SEARCH:
+grep -r "harvest-predictions.js" public/views/
+→ Found: farm-summary.html:7039 (<script src="/harvest-predictions.js"></script>)
+
+grep -r "harvestPredictions.renderBadge" public/views/
+→ Found: farm-summary.html:3693 (badge rendering logic)
+
+CONCLUSION:
+✅ P3 integration ALREADY EXISTS (lines 3683-3697)
+❌ DO NOT implement (would be duplicate work)
+✅ CREATE VALIDATION SCRIPT instead
+
+Time saved: 1.75 hours (would have rebuilt existing integration)
+```
+
+**Component Design Principles:**
+1. **Self-Contained**: Component has no dependencies on specific dashboards
+2. **Cacheable**: Component manages its own data caching (reduce API calls)
+3. **HTML Strings**: Return HTML strings, let dashboard insert (flexibility)
+4. **Graceful Degradation**: Component fails → Dashboard continues working
+5. **Progressive Enhancement**: Tier 1 (basic) → Tier 2 (enhanced) → Tier 3 (advanced)
+
+**Registry Maintenance:**
+- Update `.github/DASHBOARD_INTEGRATIONS.md` after each integration
+- Document: Component name, dashboard path, line numbers, features, validation status
+- Create validation scripts: Format `validate-DASHBOARD-COMPONENT-integration.cjs`
+- Run validation before marking priority "complete"
+
+**Lessons from P3** (Investigation-First Success):
+- Proposed "implement P3 integration" → Investigation revealed "already exists"
+- Scope changed from "implementation" (1.75 hrs) → "validation" (1 hr)
+- Result: 43% time savings, zero duplicate work
+- Framework principle proven: **Always investigate first, assume nothing**
+
 ---
 
 ## 🌐 GreenReach Ecosystem (Key Concepts)

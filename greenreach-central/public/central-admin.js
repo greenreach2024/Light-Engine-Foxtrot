@@ -3802,6 +3802,11 @@ async function saveFarmInfo() {
             body: JSON.stringify({ contact: farmInfo })
         });
         
+        // Handle null response (authentication failed)
+        if (!response) {
+            throw new Error('Authentication failed. Please log in again.');
+        }
+        
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
             throw new Error(errorData.message || `HTTP ${response.status}`);
@@ -3810,7 +3815,7 @@ async function saveFarmInfo() {
         const result = await response.json();
         console.log('[FarmInfo] Save response:', result);
         
-        // Update display values
+        // Update display values (database was updated successfully)
         document.getElementById('detail-owner').textContent = farmInfo.owner || '--';
         document.getElementById('detail-contact').textContent = farmInfo.contactName || '--';
         document.getElementById('detail-phone').textContent = farmInfo.phone || '--';
@@ -3829,8 +3834,33 @@ async function saveFarmInfo() {
         // Exit edit mode
         cancelFarmInfoEdit();
         
-        // Show success message
-        showNotification('Farm info updated successfully and synced to edge device', 'success');
+        // Show status-specific notification based on sync result
+        const syncStatus = result.syncStatus || 'not_attempted';
+        const statusMessages = {
+            'synced': {
+                type: 'success',
+                text: '✓ Changes saved and synced to farm device'
+            },
+            'sync_error': {
+                type: 'warning',
+                text: '⚠ Changes saved to Central. Could not reach farm device - will sync on next heartbeat'
+            },
+            'sync_failed': {
+                type: 'warning',
+                text: '⚠ Changes saved to Central. Farm device returned error - check device status'
+            },
+            'no_api_url': {
+                type: 'warning',
+                text: '⚠ Changes saved to Central. No device URL configured - manual sync required'
+            },
+            'not_attempted': {
+                type: 'info',
+                text: 'ℹ Changes saved to Central. Sync not attempted'
+            }
+        };
+        
+        const statusInfo = statusMessages[syncStatus] || statusMessages['not_attempted'];
+        showNotification(statusInfo.text, statusInfo.type);
         
     } catch (error) {
         console.error('[FarmInfo] Error saving:', error);
@@ -3839,29 +3869,40 @@ async function saveFarmInfo() {
 }
 
 function showNotification(message, type = 'info') {
-    // Simple notification system
+    // Simple notification system with status-specific styling
+    const colors = {
+        'success': '#10b981',
+        'error': '#ef4444',
+        'warning': '#f59e0b',
+        'info': '#3b82f6'
+    };
+    
     const notification = document.createElement('div');
     notification.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
         padding: 16px 24px;
-        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        background: ${colors[type] || colors['info']};
         color: white;
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         z-index: 10000;
         font-size: 14px;
         max-width: 400px;
+        line-height: 1.5;
     `;
     notification.textContent = message;
     document.body.appendChild(notification);
+    
+    // Show warnings longer (5s vs 3s)
+    const duration = type === 'warning' ? 5000 : 3000;
     
     setTimeout(() => {
         notification.style.opacity = '0';
         notification.style.transition = 'opacity 0.3s';
         setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    }, duration);
 }
 
 /**

@@ -72,7 +72,7 @@ The Light Engine application has experienced **data format drift** where:
 
 ### 2. Farm Format (farm.json)
 
-**CANONICAL FORMAT**:
+**CANONICAL FORMAT** (Updated 2026-02-01):
 
 ```json
 {
@@ -82,21 +82,62 @@ The Light Engine application has experienced **data format drift** where:
   "region": "string",
   "location": "string",
   "contact": {
-    "name": "string",
-    "email": "string",
-    "phone": "string"
+    // Core fields (required for all consumers)
+    "name": "string",                    // Primary contact person name
+    "email": "string",                   // Contact email address
+    "phone": "string",                   // Contact phone number
+    
+    // Extended fields (optional, GreenReach Central features)
+    "owner": "string",                   // Legal owner or business entity name
+    "contactName": "string",             // Alias for name (legacy compatibility)
+    "website": "string",                 // Farm website URL (e.g., https://farm.com)
+    "address": "string"                  // Physical farm address
   },
   "coordinates": {
     "lat": "number",
     "lng": "number"
+  },
+  "metadata": {                          // Extended metadata (GreenReach Central)
+    "contact": {                         // Same structure as contact above
+      "name": "string",
+      "email": "string",
+      "phone": "string",
+      "owner": "string",
+      "contactName": "string",
+      "website": "string",
+      "address": "string"
+    },
+    "location": {
+      "region": "string",                // e.g., "Ontario, Canada"
+      "city": "string",                  // e.g., "Kingston, Ontario"
+      "coordinates": {
+        "lat": "number",
+        "lng": "number"
+      }
+    },
+    "lastUpdated": "ISO8601 string",     // Last metadata update timestamp
+    "updatedBy": "string"                // Update source (e.g., "GreenReach Central")
   }
 }
 ```
 
-**CONSUMERS** (8 locations):
+**SCHEMA VERSION**: 2.1 (Extended contact fields added 2026-02-01)
+
+**FIELD RULES**:
+- ✅ Core fields (`name`, `email`, `phone`): ALL consumers must support
+- ✅ Extended fields (`owner`, `website`, `address`): Consumers may use or ignore
+- ✅ Graceful degradation: Ignore unknown fields, don't error
+- ⚠️ `contactName` is legacy alias for `name` - prefer using `name`
+
+**CONSUMERS** (12 locations):
 - `/public/views/farm-summary.html` (farm header)
-- `/greenreach-central/routes/admin.js` (farm list)
-- `/server-foxtrot.js` (API endpoint `/data/farm.json`)
+- `/greenreach-central/public/GR-central-admin.html` (Farm Summary card - uses all 7 fields)
+- `/greenreach-central/public/central-admin.js` (Edit farm info - uses all 7 fields)
+- `/greenreach-central/routes/admin.js` (farm list, metadata PATCH endpoint)
+- `/greenreach-central/routes/sync.js` (farm registration endpoint)
+- `/greenreach-central/scripts/register-farm.js` (farm metadata population)
+- `/server-foxtrot.js` (API endpoint `/data/farm.json`, PATCH `/api/config/farm-metadata`)
+- `/lib/sync-service.js` (farm registration on startup)
 
 ---
 

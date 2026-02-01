@@ -18635,13 +18635,41 @@ app.get('/api/config/app', async (req, res) => {
 });
 
 /**
+ * Authentication middleware for farm metadata updates
+ * Validates X-API-Key header from GreenReach Central
+ */
+function authenticateFarmMetadata(req, res, next) {
+  const apiKey = req.headers['x-api-key'];
+  const expectedKey = process.env.SYNC_API_KEY || 'default-sync-key';
+  
+  if (!apiKey) {
+    console.warn('[API] Farm metadata update rejected: Missing X-API-Key header');
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized - X-API-Key header required'
+    });
+  }
+  
+  if (apiKey !== expectedKey) {
+    console.warn('[API] Farm metadata update rejected: Invalid X-API-Key');
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized - Invalid API key'
+    });
+  }
+  
+  next();
+}
+
+/**
  * PATCH /api/config/farm-metadata
  * Update farm metadata (contact info) from GreenReach Central
  * Updates farm.json on the edge device
+ * Requires: X-API-Key header authentication
  */
-app.patch('/api/config/farm-metadata', async (req, res) => {
+app.patch('/api/config/farm-metadata', authenticateFarmMetadata, async (req, res) => {
   try {
-    console.log('[API] PATCH /api/config/farm-metadata - Received update from GreenReach Central');
+    console.log('[API] PATCH /api/config/farm-metadata - Received authenticated update from GreenReach Central');
     const { contact } = req.body;
     
     if (!contact || typeof contact !== 'object') {
