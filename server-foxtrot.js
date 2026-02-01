@@ -25,24 +25,41 @@ import {
 } from './server/middleware/audit-logger.js';
 import { getJwtSecret } from './server/utils/secrets-manager.js';
 
-// Setup console wrapper
+// Setup console wrapper for demo mode BEFORE any other logs
 import { setupConsoleWrapper } from './server/utils/console-wrapper.js';
 setupConsoleWrapper();
 
-// LOG ENVIRONMENT ON STARTUP
-console.log('========== Light Engine Foxtrot Server ==========');
+// LOG ENVIRONMENT ON STARTUP (will be suppressed in demo mode)
+console.log(' [STARTUP] Environment variables:');
+console.log('  DEMO_MODE:', process.env.DEMO_MODE);
+console.log('  DEMO_FARM_ID:', process.env.DEMO_FARM_ID);
+console.log('  DEMO_REALTIME:', process.env.DEMO_REALTIME);
 console.log('  NODE_ENV:', process.env.NODE_ENV);
 console.log('  PORT:', process.env.PORT);
-console.log('  EDGE_MODE:', process.env.EDGE_MODE);
 
 // --- Feature flag: ALLOW_MOCKS (default OFF) ---
 const ALLOW_MOCKS = String(process.env.ALLOW_MOCKS || 'false').toLowerCase() === 'true';
 
-// DEMO MODE REMOVED - Production only uses real farm data and sensors
+// --- Demo Mode imports ---
+import { 
+  initializeDemoMode, 
+  createDemoModeHandler, 
+  isDemoMode, 
+  getDemoData,
+  getDemoBannerHTML 
+} from './server/middleware/demo-mode-handler.js';
+
+// Initialize demo mode immediately at module load
+console.log('[charlie] 🎬 Module loading - initializing demo mode...');
+try {
+  initializeDemoMode();
+  console.log('[charlie]  Demo mode initialized at module scope');
+} catch (error) {
+  console.error('[charlie]  Demo mode initialization failed:', error?.message || error);
+}
 
 import { createProxyMiddleware } from "http-proxy-middleware";
 import fs from "fs";
-import fsPromises from "fs/promises";
 import http from 'node:http';
 import https from 'node:https';
 import path from "path";
@@ -52,12 +69,9 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import validator from 'validator';
+import rateLimit from 'express-rate-limit';
 import net from 'node:net';
 import mqtt from 'mqtt';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const execAsync = promisify(exec);
 
 // =====================================================
 // Plan-Based Access Control Middleware
@@ -94,7 +108,7 @@ function requireEdgeForControl(req, res, next) {
       });
     }
     
-    // Edge users get full control access
+    // Edge users and demo mode get full control access
     next();
   } catch (error) {
     // Invalid token - let other middleware handle auth
@@ -145,7 +159,6 @@ function authenticateToken(req, res, next) {
 
 import AutomationRulesEngine from './lib/automation-engine.js';
 import { createPreAutomationLayer } from './automation/index.js';
-import { sendEmail } from './lib/email-service.js';
 import {
   buildSetupWizards,
   mergeDiscoveryPayload,
@@ -201,12 +214,6 @@ import auditLogger, { auditMiddleware, createAuditRoutes } from './lib/wholesale
 import { checkAndControlEnvironment } from './controller/checkAndControlEnvironment.js';
 import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
-import DeviceDiscovery from './lib/device-discovery.js';
-import HarvestPredictor from './lib/harvest-predictor.js';
-import AnomalyDiagnostics from './lib/anomaly-diagnostics.js';
-import AdaptiveControl from './lib/adaptive-control.js';
-import AdaptiveVpd from './lib/adaptive-vpd.js';
-import SuccessionPlanner from './lib/succession-planner.js';
 import anomalyHistory from './lib/anomaly-history.js';
 import mlAutomation from './lib/ml-automation-controller.js';
 
@@ -245,7 +252,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com", "https://code.responsivevoice.org", "https://web.squarecdn.com", "https://cdn.jsdelivr.net"], // Note: unsafe-inline/eval needed for dynamic UI
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://code.responsivevoice.org", "https://web.squarecdn.com", "https://cdn.jsdelivr.net"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
@@ -425,19 +432,35 @@ const INDEX_CHARLIE_PATH = path.join(PUBLIC_DIR, 'index.charlie.html');
 let INDEX_CHARLIE_HTML = null;
 let indexCharlieLoadErrorLogged = false;
 
-// Production mode flag - used for demo farm validation
-const PRODUCTION_MODE = process.env.PRODUCTION_MODE === 'true' || process.env.NODE_ENV === 'production';
+// Demo data helper so /data/*.json can fall back even if demo middleware is skipped
+function loadDemoFarmSnapshot() {
+  try {
+    // Check DEMO_MODE env var directly instead of relying on isDemoMode()
+    // (which may not be initialized yet when routes are registered)
+    const demoMode = process.env.DEMO_MODE === 'true';
+    
+    if (demoMode) {
+      // Try multiple fallback locations (in order of preference)
+      const possiblePaths = [
+        path.join(__dirname, 'data', 'demo', 'demo-farm-complete.json'),
+        path.join(__dirname, 'public', 'data', 'demo-farm-data.json'),
+        path.join(__dirname, 'docs', 'data', 'demo-farm-data.json')
+      ];
 
-// Demo farm validation - prevent demo farm IDs in production
-function validateNoDemoFarm(farmId) {
-  const demoFarmIds = ['GR-00001', 'LOCAL-FARM', 'DEMO-FARM'];
-  if (PRODUCTION_MODE && demoFarmIds.includes(farmId)) {
-    throw new Error(`Demo farm ID ${farmId} not allowed in PRODUCTION_MODE`);
+      for (const demoDataPath of possiblePaths) {
+        if (fs.existsSync(demoDataPath)) {
+          console.log(`[demo] Loading demo farm data from: ${demoDataPath}`);
+          return JSON.parse(fs.readFileSync(demoDataPath, 'utf8'));
+        }
+      }
+      
+      console.warn('[demo] No demo farm data file found in any expected location');
+    }
+  } catch (error) {
+    console.warn('[demo] Failed to load demo farm snapshot:', error?.message || error);
   }
+  return null;
 }
-
-// DEMO MODE REMOVED - Production only uses real farm data and sensors
-// All routes serve actual Edge device data from public/data/ files
 
 const DEFAULT_NUTRIENT_MQTT_URL = process.env.NUTRIENT_MQTT_URL || 'mqtt://192.168.2.42:1883';
 const DEFAULT_NUTRIENT_COMMAND_TOPIC = process.env.NUTRIENT_COMMAND_TOPIC || 'commands/NutrientRoom';
@@ -452,26 +475,6 @@ const DEFAULT_AUTODOSE_CONFIG = Object.freeze({
   ecDoseSeconds: 2.5,
   phDownDoseSeconds: 1.0,
   minDoseIntervalSec: 60
-});
-
-const IRRIGATION_PLUG_ID = process.env.NUTRIENT_IRRIGATION_PLUG_ID || process.env.IRRIGATION_PLUG_ID || null;
-const parsedIrrigationInterval = Number.parseInt(process.env.IRRIGATION_SCHEDULER_INTERVAL_MS || '', 10);
-const IRRIGATION_SCHEDULER_INTERVAL_MS = Number.isFinite(parsedIrrigationInterval) ? parsedIrrigationInterval : 15000;
-const parsedIrrigationMinSwitch = Number.parseInt(process.env.IRRIGATION_MIN_SWITCH_MS || '', 10);
-const IRRIGATION_MIN_SWITCH_MS = Number.isFinite(parsedIrrigationMinSwitch) ? parsedIrrigationMinSwitch : 60000;
-const parsedDayStartHour = Number.parseInt(process.env.IRRIGATION_DAY_START_HOUR || '', 10);
-const IRRIGATION_DAY_START_HOUR = Number.isFinite(parsedDayStartHour) ? parsedDayStartHour : 6;
-const parsedPhotoperiodHours = Number.parseFloat(process.env.IRRIGATION_PHOTOPERIOD_HOURS || '');
-const IRRIGATION_PHOTOPERIOD_HOURS = Number.isFinite(parsedPhotoperiodHours) ? parsedPhotoperiodHours : 16;
-const parsedMaxRh = Number.parseFloat(process.env.IRRIGATION_MAX_RH || '');
-const IRRIGATION_MAX_RH = Number.isFinite(parsedMaxRh) ? parsedMaxRh : 90;
-const DEFAULT_IRRIGATION_CONFIG = Object.freeze({
-  mode: 'always_on',
-  onMinutes: 15,
-  offMinutes: 15,
-  dayNightSync: true,
-  plugId: IRRIGATION_PLUG_ID,
-  enabled: true
 });
 
 const LEGACY_CHANNEL_MAP = Object.freeze({
@@ -610,7 +613,6 @@ async function writeJsonQueued(fullPath, jsonString) {
 
 // In-memory caches for hot data paths
 let __envCache = null; // { zones: [...], updatedAt?: ISO }
-let __envCacheMtimeMs = null;
 let __envWriteInFlight = false;
 let __envDirty = false;
 
@@ -922,23 +924,6 @@ function saveGroupsFile(groups) {
   }
 }
 
-function loadRecipes() {
-  const recipesPath = path.join(DATA_DIR, 'lighting-recipes.json');
-  try {
-    if (!fs.existsSync(recipesPath)) {
-      console.warn('[loadRecipes] lighting-recipes.json not found at', recipesPath);
-      return null;
-    }
-    const raw = fs.readFileSync(recipesPath, 'utf8');
-    const data = JSON.parse(raw);
-    console.log(`[loadRecipes] Loaded lighting-recipes.json with ${Object.keys(data.crops || {}).length} crops`);
-    return data;
-  } catch (err) {
-    console.error('[loadRecipes] Failed to load lighting-recipes.json:', err.message);
-    return null;
-  }
-}
-
 function readDeviceCache() {
   try {
     if (!fs.existsSync(DEVICES_CACHE_PATH)) return null;
@@ -973,96 +958,10 @@ function cloneSamplePlanDocument() {
   return JSON.parse(JSON.stringify(SAMPLE_PLAN_DOCUMENT));
 }
 
-async function loadPlansDocument() {
+function loadPlansDocument() {
   ensureDataDir();
   
-  // Try to load from database first (if available)
-  try {
-    const db = await initDatabase();
-    const dbMode = getDatabaseMode();
-    
-    if (db && db.pool && dbMode === 'postgresql') {
-      console.log('[plans] Loading recipes from PostgreSQL database...');
-      const result = await db.query(
-        `SELECT id, name, category, description, total_days, data
-         FROM recipes
-         ORDER BY category, name`
-      );
-      
-      if (result.rows && result.rows.length > 0) {
-        const slugify = (str) => String(str || '')
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        
-        // Convert database recipes to plan format
-        const plans = result.rows.map(recipe => {
-          const schedule = recipe.data?.schedule || [];
-          const id = `crop-${slugify(recipe.name)}`;
-          
-          // Convert schedule to light.days format
-          const lightDays = schedule.map(row => ({
-            day: Number(row.day),
-            stage: String(row.stage || ''),
-            ppfd: Number(row.ppfd || row.ppfd_target || 0),
-            dli: Number(row.dli || row.dli_target || 0),
-            mix: {
-              cw: 0,
-              ww: 0,
-              bl: Number(row.blue || 0),
-              gn: Number(row.green || 0),
-              rd: Number(row.red || 0),
-              fr: Number(row.far_red || 0)
-            }
-          }));
-          
-          // Convert schedule to env.days format
-          const envDays = schedule
-            .filter(row => row.temperature != null || row.temp_target != null)
-            .map(row => ({
-              day: Number(row.day),
-              tempC: Number(row.temperature || row.temp_target || 20),
-              vpd: Number(row.vpd || row.vpd_target || 0),
-              maxHumidity: Number(row.max_humidity || 0)
-            }));
-          
-          return {
-            id,
-            key: id,
-            name: recipe.name,
-            crop: recipe.name,
-            kind: 'recipe',
-            category: recipe.category || 'Unknown',
-            description: recipe.description || `Lighting recipe for ${recipe.name}`,
-            totalDays: recipe.total_days || lightDays.length,
-            light: { days: lightDays },
-            ...(envDays.length ? { env: { days: envDays } } : {}),
-            meta: {
-              source: 'database',
-              category: recipe.category,
-              appliesTo: { category: ['Crop'], varieties: [] }
-            },
-            defaults: { photoperiod: 12 }
-          };
-        });
-        
-        console.log(`[plans] Loaded ${plans.length} recipes from database`);
-        return {
-          plans,
-          meta: {
-            source: 'database',
-            loadedAt: new Date().toISOString(),
-            count: plans.length
-          }
-        };
-      }
-    }
-  } catch (dbErr) {
-    console.log('[plans] Database not available or query failed:', dbErr.message);
-    console.log('[plans] Falling back to lighting-recipes.json file');
-  }
-  
-  // Fallback: Load plans from lighting-recipes.json
+  // Load plans from lighting-recipes.json (single source of truth)
   const RECIPES_PATH = path.join(DATA_DIR, 'lighting-recipes.json');
   
   try {
@@ -1128,14 +1027,13 @@ async function loadPlansDocument() {
       });
     }
     
-    console.log(`[plans] Loaded ${plans.length} plans from lighting-recipes.json (FALLBACK - database preferred)`);
+    console.log(`[plans] Loaded ${plans.length} plans from lighting-recipes.json`);
     return { 
       plans, 
       meta: { 
         source: 'lighting-recipes',
         loadedAt: new Date().toISOString(),
-        count: plans.length,
-        warning: 'Using fallback JSON file - connect to database for full recipe library (50 recipes)'
+        count: plans.length
       } 
     };
     
@@ -2592,27 +2490,11 @@ function readJsonSafe(filePath, fallback = null) {
 
 // --- ENV hot path helpers: in-memory cache + async write queue ---
 async function ensureEnvCacheLoaded() {
-  if (__envCache) {
-    try {
-      if (fs.existsSync(ENV_PATH)) {
-        const stat = await fs.promises.stat(ENV_PATH);
-        if (__envCacheMtimeMs && stat.mtimeMs <= __envCacheMtimeMs) {
-          return __envCache;
-        }
-      } else {
-        return __envCache;
-      }
-    } catch (error) {
-      console.warn('[env] Failed to stat env.json, using cache:', error?.message || error);
-      return __envCache;
-    }
-  }
+  if (__envCache) return __envCache;
   try {
     if (fs.existsSync(ENV_PATH)) {
-      const stat = await fs.promises.stat(ENV_PATH);
       const raw = await fs.promises.readFile(ENV_PATH, 'utf8');
       __envCache = JSON.parse(raw || '{"zones":[]}');
-      __envCacheMtimeMs = stat.mtimeMs;
       if (!__envCache || typeof __envCache !== 'object') __envCache = { zones: [] };
       if (!Array.isArray(__envCache.zones)) __envCache.zones = [];
 
@@ -2677,12 +2559,10 @@ async function ensureEnvCacheLoaded() {
       }
     } else {
       __envCache = { zones: [] };
-      __envCacheMtimeMs = null;
     }
   } catch (error) {
     console.warn('[env] Failed to load env.json, starting empty:', error?.message || error);
     __envCache = { zones: [] };
-    __envCacheMtimeMs = null;
   }
   return __envCache;
 }
@@ -5040,23 +4920,101 @@ app.get('/env', async (req, res) => {
   try {
     setPreAutomationCors(req, res);
     
-    // DEMO MODE REMOVED - Always serve real sensor data from preEnvStore
+    // Demo mode: Return demo environmental data
+    if (isDemoMode()) {
+      const demoData = getDemoData();
+      const envData = demoData.getEnvironmentalData();
+      
+      // Generate 24 hours of historical data (288 points at 5-minute intervals)
+      const now = Date.now();
+      const generateHistory = (baseValue, variance, count = 288) => {
+        const history = [];
+        for (let i = count - 1; i >= 0; i--) {
+          const timeOffset = i * 5 * 60 * 1000; // 5 minutes per point
+          const hourOfDay = new Date(now - timeOffset).getHours();
+          
+          // Add daily cycle (warmer during "day" hours 6-18, cooler at "night")
+          const dailyCycle = Math.sin(((hourOfDay - 6) / 12) * Math.PI) * variance * 0.5;
+          
+          // Add random variation
+          const randomVar = (Math.random() - 0.5) * variance;
+          
+          history.push(parseFloat((baseValue + dailyCycle + randomVar).toFixed(2)));
+        }
+        console.log('[ENV] Generated history:', history.length, 'points, first 3:', history.slice(0, 3));
+        return history;
+      };
+      
+      // Transform demo data to match expected frontend structure
+      const zones = envData.zones.map(zone => ({
+        id: zone.id || zone.zoneId,
+        name: zone.name,
+        sensors: {
+          tempC: {
+            current: zone.temperature,
+            unit: '°C',
+            history: generateHistory(zone.temperature, 2),
+            setpoint: { min: 18, max: 24 }
+          },
+          rh: {
+            current: zone.humidity,
+            unit: '%',
+            history: generateHistory(zone.humidity, 5),
+            setpoint: { min: 55, max: 75 }
+          },
+          co2: {
+            current: zone.co2,
+            unit: 'ppm',
+            history: generateHistory(zone.co2, 100),
+            setpoint: { min: 800, max: 1200 }
+          },
+          ppfd: {
+            current: zone.ppfd,
+            unit: 'μmol/m²/s',
+            history: generateHistory(zone.ppfd, 50),
+            setpoint: { min: 200, max: 600 }
+          },
+          vpd: {
+            current: zone.vpd,
+            unit: 'kPa',
+            history: generateHistory(zone.vpd, 0.2),
+            setpoint: { min: 0.8, max: 1.2 }
+          }
+        },
+        updatedAt: zone.timestamp,
+        meta: {
+          status: zone.status,
+          alerts: zone.alerts || [],
+          lastSync: new Date(now).toISOString()
+        }
+      }));
+      
+      return res.json({
+        ok: true,
+        zones,
+        rooms: [],
+        meta: {
+          envSource: 'demo',
+          provider: 'demo-mode',
+          cache: false,
+          updatedAt: new Date().toISOString()
+        }
+      });
+    }
+    
     const zoneBindingSummary = __zoneBindingsSnapshot || { bindings: [], meta: { source: 'cache', bindings: 0 } };
     const snapshot = preEnvStore.getSnapshot();
     const zonesFromScopes = Object.entries(snapshot.scopes || {}).map(([scopeId, scopeData]) => {
       const sensors = Object.entries(scopeData.sensors || {}).reduce((acc, [sensorKey, sensorData]) => {
-        // Limit history to last 100 points for trending charts
+        // Limit history to last 12 points (1 hour at 5min intervals) for performance
         const fullHistory = Array.isArray(sensorData.history) ? sensorData.history : [];
-        const fullTimestamps = Array.isArray(sensorData.timestamps) ? sensorData.timestamps : [];
-        const limitedHistory = fullHistory.slice(-100);
-        const limitedTimestamps = fullTimestamps.slice(-100);
+        const limitedHistory = fullHistory.slice(-12);
         
         acc[sensorKey] = {
           current: sensorData.value,
           unit: sensorData.unit || null,
           observedAt: sensorData.observedAt || null,
           history: limitedHistory,
-          timestamps: limitedTimestamps,
           setpoint: snapshot.targets?.[scopeId]?.[sensorKey] || null
         };
         return acc;
@@ -5098,16 +5056,14 @@ app.get('/env', async (req, res) => {
     // If cloud returned empty zones but we have scopes, use zonesFromScopes as fallback
     const hasCloudZones = Array.isArray(zonesPayload.zones) && zonesPayload.zones.length > 0;
     
-    // FILTER OUT MOCK DEVICES AND SENSOR-AS-ZONE: Only keep real zones
+    // FILTER OUT MOCK DEVICES AND SENSOR-AS-ZONE: Only keep real zones (zone-1, zone-2, zone-3)
     const mockDeviceIds = ['E8F9A2B4C6D1', 'D7C3B9A5E8F2', 'D5B8E1C4F7A2'];
-    // Allow: zone-1, zone-2, zone-3, OR just numeric zone IDs like "1", "2", "3"
-    // Block: long hex IDs like zone-CE2A, zone-C3343 (sensor IDs being treated as zones)
-    const realZonePattern = /^(zone-[0-9]+|[0-9]+)$/;
+    const realZonePattern = /^zone-[123]$/; // Only zone-1, zone-2, zone-3 are real zones
     
     const filterRealZones = (zones) => zones.filter(zone => {
       // Exclude mock devices
       if (mockDeviceIds.some(mockId => zone.id.includes(mockId))) return false;
-      // Include real zones (zone-1, zone-2, zone-3, OR numeric 1, 2, 3)
+      // Only include real zones (zone-1, zone-2, zone-3)
       // Exclude sensor IDs being treated as zones (zone-CE2A..., zone-C3343..., etc.)
       return realZonePattern.test(zone.id);
     });
@@ -5126,29 +5082,6 @@ app.get('/env', async (req, res) => {
     // allZones is already filtered to only real zones (zone-1, zone-2, zone-3)
     // showAllZones query param can bypass for debugging, but still filter mocks/sensors
     const zones = req.query.showAllZones === 'true' ? allZones : allZones;
-    const zonesUpdatedAt = zones.reduce((latest, zone) => {
-      const candidateValues = [
-        zone?.updatedAt,
-        zone?.meta?.lastUpdated,
-        ...Object.values(zone?.sensors || {}).flatMap((sensor) => [
-          sensor?.updatedAt,
-          sensor?.observedAt
-        ])
-      ].filter(Boolean);
-      for (const value of candidateValues) {
-        const ts = Date.parse(value);
-        if (Number.isFinite(ts) && (!latest || ts > latest)) {
-          latest = ts;
-        }
-      }
-      return latest;
-    }, null);
-    const payloadUpdatedAt = zonesPayload.meta?.updatedAt || null;
-    const resolvedUpdatedAt = [payloadUpdatedAt, zonesUpdatedAt]
-      .map((value) => Date.parse(value))
-      .filter((ts) => Number.isFinite(ts))
-      .reduce((max, ts) => (max == null || ts > max ? ts : max), null);
-    const resolvedUpdatedAtIso = resolvedUpdatedAt ? new Date(resolvedUpdatedAt).toISOString() : payloadUpdatedAt || null;
     const legacyEnvState = readEnv();
     const automationState = evaluateRoomAutomationState(snapshot, zones, legacyEnvState, zoneBindingSummary);
     const aiBundle = buildAiAdvisory(automationState.rooms, legacyEnvState);
@@ -5193,7 +5126,7 @@ app.get('/env', async (req, res) => {
         totalSuggestions: automationState.totalSuggestions,
         provider: zonesPayload.meta?.provider || null,
         cache: Boolean(zonesPayload.meta?.cached),
-        updatedAt: resolvedUpdatedAtIso,
+        updatedAt: zonesPayload.meta?.updatedAt || null,
         error: zonesPayload.meta?.error || null,
         zoneBindingsUpdatedAt: zoneBindingSummary.meta?.updatedAt || null,
         zoneBindingsSource: zoneBindingSummary.meta?.source || null,
@@ -6184,11 +6117,18 @@ app.options('/devices', (req,res)=>{ setApiCors(res); res.status(204).end(); });
 app.options('/devices/:id', (req,res)=>{ setApiCors(res); res.status(204).end(); });
 
 // GET /devices → list
-app.get('/devices', async (req, res) => {
+app.get('/devices', createDemoModeHandler(), async (req, res) => {
   try {
     setApiCors(res);
     
-    // Always return real devices from database
+    // Handle demo mode - always return demo devices when demo mode is enabled
+    if (isDemoMode()) {
+      const demoData = getDemoData();
+      const devices = demoData.getDevices();
+      console.log('[charlie] Demo mode: serving demo devices (' + devices.length + ' devices)');
+      return res.json({ devices });
+    }
+    
     const rows = await devicesStore.find({});
     rows.sort((a,b)=> String(a.id||'').localeCompare(String(b.id||'')));
     return res.json({ devices: rows.map(deviceDocToJson) });
@@ -6418,14 +6358,6 @@ app.get('/recipes', async (req, res) => {
     setApiCors(res);
     const { search, category, limit = 10 } = req.query;
     
-    const pool = req.app.locals?.db;
-    if (!pool) {
-      return res.status(503).json({ 
-        ok: false, 
-        error: 'Recipe database not available on edge devices. Use local recipe files.' 
-      });
-    }
-    
     let whereClause = [];
     let params = [];
     let paramIndex = 1;
@@ -6443,7 +6375,7 @@ app.get('/recipes', async (req, res) => {
     const whereSQL = whereClause.length > 0 ? 'WHERE ' + whereClause.join(' AND ') : '';
     
     // Get total count
-    const countResult = await pool.query(
+    const countResult = await dbPool.query(
       `SELECT COUNT(*) as total FROM recipes ${whereSQL}`,
       params
     );
@@ -6451,7 +6383,7 @@ app.get('/recipes', async (req, res) => {
     
     // Get recipes (name and basic info only for listing)
     params.push(parseInt(limit));
-    const result = await pool.query(
+    const result = await dbPool.query(
       `SELECT id, name, category, description, total_days
        FROM recipes
        ${whereSQL}
@@ -6488,15 +6420,7 @@ app.get('/recipes/:crop', async (req, res) => {
     setApiCors(res);
     const cropName = decodeURIComponent(req.params.crop);
     
-    const pool = req.app.locals?.db;
-    if (!pool) {
-      return res.status(503).json({ 
-        ok: false, 
-        error: 'Recipe database not available on edge devices. Use local recipe files.' 
-      });
-    }
-    
-    const result = await pool.query(
+    const result = await dbPool.query(
       'SELECT * FROM recipes WHERE name = $1',
       [cropName]
     );
@@ -6662,57 +6586,6 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
     console.log('[setup-wizard] Farm profile:', { farmName, ownerName, contactEmail });
     console.log('[setup-wizard] Rooms:', rooms);
     console.log('[setup-wizard] Store config:', store);
-
-    // Persist farm profile for edge UI data sources
-    try {
-      const existingFarm = readJSONSafe(FARM_PATH, null) || {};
-      const incomingContact = req.body?.contact && typeof req.body.contact === 'object' ? req.body.contact : {};
-      const contactNameResolved = ownerName || incomingContact.name || null;
-      const contactEmailResolved = contactEmail || incomingContact.email || null;
-      const contactPhoneResolved = contactPhone || incomingContact.phone || null;
-      const contactWebsiteResolved = incomingContact.website || incomingContact.site || null;
-      const location = req.body?.location && typeof req.body.location === 'object' ? req.body.location : {};
-      const coords = req.body?.coordinates && typeof req.body.coordinates === 'object' ? req.body.coordinates : {};
-      const lat = location.latitude ?? location.lat ?? coords.lat;
-      const lng = location.longitude ?? location.lng ?? coords.lng;
-      const hasProfileUpdate = Boolean(
-        farmId ||
-        farmName ||
-        contactNameResolved ||
-        contactEmailResolved ||
-        contactPhoneResolved ||
-        (Number.isFinite(Number(lat)) || Number.isFinite(Number(lng)))
-      );
-
-      if (hasProfileUpdate) {
-        const mergedFarm = {
-          ...existingFarm,
-          farmId: farmId || existingFarm.farmId || null,
-          name: farmName || existingFarm.name || existingFarm.farmName || '',
-          status: existingFarm.status || 'online',
-          region: existingFarm.region || existingFarm.location?.state || existingFarm.location?.region || '',
-          url: existingFarm.url || '',
-          contact: {
-            ...(existingFarm.contact || {}),
-            ...(contactNameResolved ? { name: contactNameResolved } : {}),
-            ...(contactEmailResolved ? { email: contactEmailResolved } : {}),
-            ...(contactPhoneResolved ? { phone: contactPhoneResolved } : {}),
-            ...(contactWebsiteResolved ? { website: contactWebsiteResolved } : {})
-          },
-          coordinates: {
-            ...(existingFarm.coordinates || {}),
-            ...(Number.isFinite(Number(lat)) ? { lat: Number(lat) } : {}),
-            ...(Number.isFinite(Number(lng)) ? { lng: Number(lng) } : {})
-          }
-        };
-
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-        fs.writeFileSync(FARM_PATH, JSON.stringify(mergedFarm, null, 2));
-        console.log('[setup-wizard] Updated farm.json from registration data');
-      }
-    } catch (profileError) {
-      console.error('[setup-wizard] Failed to update farm.json:', profileError.message);
-    }
     
     // Save setup configuration to database
     const setupConfig = {
@@ -6796,20 +6669,13 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
           console.error('[setup-wizard] Room error detail:', roomError.detail);
         }
       }
-    } else {
+    } else if (db) {
       // For Edge device: use NeDB
-      console.log('[setup-wizard] Saving setup config to NeDB for edge device');
-      try {
-        await wizardStatesDB.updateAsync(
-          { key: 'setup_config' },
-          { ...setupConfig, key: 'setup_config' },
-          { upsert: true }
-        );
-        console.log('[setup-wizard] Successfully saved to NeDB');
-      } catch (nedbError) {
-        console.error('[setup-wizard] NeDB save failed:', nedbError);
-        throw new Error(`Failed to save setup configuration: ${nedbError.message}`);
-      }
+      await db.update(
+        { key: 'setup_config' },
+        { ...setupConfig, key: 'setup_config' },
+        { upsert: true }
+      );
     }
 
     // If connected to GreenReach Central, sync certifications
@@ -6859,11 +6725,7 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
 app.get('/api/setup/status', asyncHandler(async (req, res) => {
   try {
     // Check if using PostgreSQL (Cloud plan) or NeDB (Edge device)
-    // Edge devices always use NeDB regardless of pool availability
-    const isEdgeDevice = process.env.EDGE_MODE === 'true';
-    const pool = req.app.locals?.db;
-    
-    if (!isEdgeDevice && pool) {
+    if (dbPool) {
       // For Cloud plan: check farm status and if rooms exist
       // Get farmId from query or authenticated session
       const farmId = req.query.farmId || req.session?.farmId || req.user?.farmId;
@@ -6877,7 +6739,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       }
       
       // Check if farm exists and is active
-      const farmResult = await pool.query(
+      const farmResult = await dbPool.query(
         'SELECT status FROM farms WHERE farm_id = $1',
         [farmId]
       );
@@ -6886,7 +6748,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       const isActive = farm && farm.status === 'active';
       
       // Also check if rooms exist (more thorough)
-      const roomResult = await pool.query(
+      const roomResult = await dbPool.query(
         'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
         [farmId]
       );
@@ -6904,7 +6766,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
       });
     } else {
       // For Edge device: use NeDB
-      const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' });
+      const setupConfig = await db.findOne({ key: 'setup_config' });
       
       if (setupConfig && setupConfig.completed) {
         res.json({
@@ -6929,378 +6791,23 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
   }
 }));
 
-// Save rooms endpoint (for Room Mapper and Grow Room Setup)
-app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
-  try {
-    const { rooms } = req.body;
-    
-    if (!Array.isArray(rooms)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Rooms must be an array' 
-      });
-    }
-    
-    console.log(`[save-rooms] Saving ${rooms.length} rooms to disk`);
-    
-    // Save to rooms.json file
-    const roomsFilePath = path.join(__dirname, 'public', 'data', 'rooms.json');
-    const roomsData = { rooms };
-    
-    await fs.promises.writeFile(
-      roomsFilePath, 
-      JSON.stringify(roomsData, null, 2),
-      'utf8'
-    );
-    
-    console.log(`[save-rooms] Successfully saved to ${roomsFilePath}`);
-    
-    // Also dispatch event to notify other systems
-    if (typeof io !== 'undefined') {
-      io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
-    }
-    
-    res.json({ 
-      success: true, 
-      message: `Saved ${rooms.length} rooms`,
-      count: rooms.length
-    });
-    
-  } catch (error) {
-    console.error('[save-rooms] Error saving rooms:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to save rooms',
-      message: error.message 
+// Sync service routes
+let syncServiceInstance = null;
+
+// Get sync service instance
+function getSyncService() {
+  if (!syncServiceInstance) {
+    const SyncServiceClass = require('./services/sync-service.js').default;
+    syncServiceInstance = new SyncServiceClass({
+      centralUrl: process.env.GREENREACH_CENTRAL_URL,
+      wsUrl: process.env.GREENREACH_WS_URL,
+      farmId: process.env.FARM_ID,
+      apiKey: process.env.GREENREACH_API_KEY,
+      apiSecret: process.env.GREENREACH_API_SECRET
     });
   }
-}));
-
-// Room Mapper save rooms endpoint (alias for setup/save-rooms)
-app.post('/api/room-mapper/save', asyncHandler(async (req, res) => {
-  try {
-    const { rooms } = req.body;
-    
-    if (!Array.isArray(rooms)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Rooms must be an array' 
-      });
-    }
-    
-    console.log(`[room-mapper] Saving ${rooms.length} rooms to disk`);
-    
-    // Save to rooms.json file
-    const roomsFilePath = path.join(__dirname, 'public', 'data', 'rooms.json');
-    const roomsData = { rooms };
-    
-    await fs.promises.writeFile(
-      roomsFilePath, 
-      JSON.stringify(roomsData, null, 2),
-      'utf8'
-    );
-    
-    console.log(`[room-mapper] Successfully saved to ${roomsFilePath}`);
-    
-    // Dispatch event to notify other systems
-    if (typeof io !== 'undefined') {
-      io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
-    }
-    
-    // Sync to cloud if configured (using singleton syncService from line 293)
-    if (syncService && syncService.isConnected && syncService.isConnected()) {
-      try {
-        await syncService.syncRooms(rooms);
-        console.log('[room-mapper] Synced rooms to GreenReach Central');
-      } catch (syncError) {
-        console.error('[room-mapper] Failed to sync rooms to cloud:', syncError.message);
-        // Don't fail the save if sync fails
-      }
-    }
-    
-    res.json({ 
-      success: true, 
-      message: `Saved ${rooms.length} rooms`,
-      count: rooms.length,
-      synced: !!(process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY)
-    });
-    
-  } catch (error) {
-    console.error('[room-mapper] Error saving rooms:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to save rooms',
-      message: error.message 
-    });
-  }
-}));
-
-// POST /data/rooms.json - Save rooms and sync to cloud
-app.post('/data/rooms.json', asyncHandler(async (req, res) => {
-  try {
-    const { rooms } = req.body;
-    
-    if (!Array.isArray(rooms)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Rooms must be an array' 
-      });
-    }
-    
-    console.log(`[rooms] Saving ${rooms.length} rooms to disk`);
-    
-    // Save to rooms.json file
-    const roomsFilePath = path.join(__dirname, 'public', 'data', 'rooms.json');
-    const roomsData = {
-      rooms,
-      metadata: {
-        lastUpdated: new Date().toISOString(),
-        version: '1.0'
-      }
-    };
-    
-    await fs.promises.writeFile(
-      roomsFilePath, 
-      JSON.stringify(roomsData, null, 2),
-      'utf8'
-    );
-    
-    console.log(`[rooms] Successfully saved to ${roomsFilePath}`);
-    
-    // Dispatch event to notify other systems
-    if (typeof io !== 'undefined') {
-      io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
-    }
-    
-    // Sync to cloud if configured (using singleton syncService from line 293)
-    if (syncService && syncService.isConnected && syncService.isConnected()) {
-      try {
-        await syncService.syncRooms(rooms);
-        console.log('[rooms] Synced rooms to GreenReach Central');
-      } catch (syncError) {
-        console.error('[rooms] Failed to sync rooms to cloud:', syncError.message);
-        // Don't fail the save if sync fails
-      }
-    }
-    
-    res.json({ 
-      success: true, 
-      message: `Saved ${rooms.length} rooms`,
-      count: rooms.length,
-      synced: !!(process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY)
-    });
-    
-  } catch (error) {
-    console.error('[rooms] Error saving rooms:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to save rooms',
-      message: error.message 
-    });
-  }
-}));
-
-// Groups V2 save groups endpoint
-app.post('/data/groups.json', asyncHandler(async (req, res) => {
-  try {
-    const { groups } = req.body;
-    
-    if (!Array.isArray(groups)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Groups must be an array' 
-      });
-    }
-    
-    console.log(`[groups-v2] Saving ${groups.length} groups to disk`);
-    
-    // Save to groups.json file
-    const groupsFilePath = path.join(__dirname, 'public', 'data', 'groups.json');
-    const groupsData = {
-      groups,
-      metadata: {
-        lastUpdated: new Date().toISOString(),
-        version: '1.0'
-      }
-    };
-    
-    await fs.promises.writeFile(
-      groupsFilePath, 
-      JSON.stringify(groupsData, null, 2),
-      'utf8'
-    );
-    
-    console.log(`[groups-v2] Successfully saved to ${groupsFilePath}`);
-    
-    // Dispatch event to notify other systems
-    if (typeof io !== 'undefined') {
-      io.emit('farmDataChanged', { type: 'groups', count: groups.length });
-    }
-    
-    // Sync to cloud if configured (using singleton syncService from line 293)
-    if (syncService && syncService.isConnected && syncService.isConnected()) {
-      try {
-        await syncService.syncGroups(groups);
-        console.log('[groups-v2] Synced groups to GreenReach Central');
-      } catch (syncError) {
-        console.error('[groups-v2] Failed to sync groups to cloud:', syncError.message);
-        // Don't fail the save if sync fails
-      }
-    }
-    
-    res.json({ 
-      success: true, 
-      message: `Saved ${groups.length} groups`,
-      count: groups.length,
-      synced: !!(process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY)
-    });
-    
-  } catch (error) {
-    console.error('[groups-v2] Error saving groups:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to save groups',
-      message: error.message 
-    });
-  }
-}));
-
-// Save certifications endpoint
-app.post('/api/setup/certifications', asyncHandler(async (req, res) => {
-  try {
-    const { certifications, practices, attributes } = req.body;
-    
-    // Load current farm data
-    const farmDataPath = path.join(process.cwd(), 'data', 'farm.json');
-    let farmData = {};
-    
-    try {
-      if (fs.existsSync(farmDataPath)) {
-        const fileContent = fs.readFileSync(farmDataPath, 'utf8');
-        farmData = JSON.parse(fileContent);
-      }
-    } catch (error) {
-      console.warn('[Certifications] Could not load existing farm.json:', error.message);
-    }
-    
-    // Update certifications
-    farmData.certifications = {
-      certifications: certifications || [],
-      practices: practices || [],
-      attributes: attributes || []
-    };
-    
-    // Save back to farm.json
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    fs.writeFileSync(farmDataPath, JSON.stringify(farmData, null, 2));
-    
-    console.log('[Certifications] Updated certifications:', farmData.certifications);
-    
-    // Bidirectional sync: Push changes to cloud (if connected)
-    if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY && process.env.FARM_ID) {
-      try {
-        const centralUrl = process.env.GREENREACH_CENTRAL_URL;
-        const farmId = process.env.FARM_ID;
-        const apiKey = process.env.GREENREACH_API_KEY;
-        
-        const fetch = (await import('node-fetch')).default;
-        const syncResponse = await fetch(
-          `${centralUrl}/api/farm-settings/${farmId}/certifications`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-API-Key': apiKey,
-              'X-Farm-ID': farmId
-            },
-            body: JSON.stringify({
-              certifications: certifications || [],
-              practices: practices || []
-            }),
-            timeout: 5000
-          }
-        );
-        
-        if (syncResponse.ok) {
-          console.log('[Certifications] ✓ Synced to cloud');
-        } else {
-          console.warn('[Certifications] ⚠️  Cloud sync failed:', syncResponse.statusText);
-        }
-      } catch (syncError) {
-        // Non-fatal: Log warning but don't fail the request
-        console.warn('[Certifications] ⚠️  Cloud sync error:', syncError.message);
-      }
-    }
-    
-    res.json({ 
-      success: true, 
-      message: 'Certifications updated successfully',
-      certifications: farmData.certifications
-    });
-    
-  } catch (error) {
-    console.error('[Certifications] Error saving:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to save certifications',
-      message: error.message 
-    });
-  }
-}));
-
-// Save rooms endpoint (for Room Mapper and Grow Room Setup)
-app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
-  try {
-    const { rooms } = req.body;
-    
-    if (!Array.isArray(rooms)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Rooms must be an array' 
-      });
-    }
-    
-    console.log(`[save-rooms] Saving ${rooms.length} rooms to disk`);
-    
-    // Save to rooms.json file
-    const roomsFilePath = path.join(__dirname, 'public', 'data', 'rooms.json');
-    const roomsData = { rooms };
-    
-    await fs.promises.writeFile(
-      roomsFilePath, 
-      JSON.stringify(roomsData, null, 2),
-      'utf8'
-    );
-    
-    console.log(`[save-rooms] Successfully saved to ${roomsFilePath}`);
-    
-    // Also dispatch event to notify other systems
-    if (typeof io !== 'undefined') {
-      io.emit('farmDataChanged', { type: 'rooms', count: rooms.length });
-    }
-    
-    res.json({ 
-      success: true, 
-      message: `Saved ${rooms.length} rooms`,
-      count: rooms.length
-    });
-    
-  } catch (error) {
-    console.error('[save-rooms] Error saving rooms:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to save rooms',
-      message: error.message 
-    });
-  }
-}));
-
-// Sync service instance removed - using singleton syncService from line 293
-// which correctly uses edge-config.json instead of environment variables
+  return syncServiceInstance;
+}
 
 // Sync monitor UI
 app.get('/sync-monitor', (req, res) => {
@@ -7310,9 +6817,7 @@ app.get('/sync-monitor', (req, res) => {
 // Get sync status
 app.get('/api/sync/status', asyncHandler(async (req, res) => {
   try {
-    if (!syncService) {
-      return res.status(503).json({ error: 'Sync service not initialized' });
-    }
+    const syncService = getSyncService();
     const status = syncService.getStatus();
     
     res.json({
@@ -7332,9 +6837,7 @@ app.post('/api/sync/trigger', asyncHandler(async (req, res) => {
   const { type = 'all' } = req.body;
   
   try {
-    if (!syncService) {
-      return res.status(503).json({ error: 'Sync service not initialized' });
-    }
+    const syncService = getSyncService();
     await syncService.manualSync(type);
     
     res.json({ success: true, type });
@@ -7344,35 +6847,10 @@ app.post('/api/sync/trigger', asyncHandler(async (req, res) => {
   }
 }));
 
-// Restore data from cloud (disaster recovery)
-app.post('/api/sync/restore', asyncHandler(async (req, res) => {
-  try {
-    if (!syncService) {
-      return res.status(503).json({ error: 'Sync service not initialized' });
-    }
-    const result = await syncService.restoreFromCloud();
-    
-    res.json({ 
-      success: true, 
-      message: 'Data restored from cloud',
-      ...result
-    });
-  } catch (error) {
-    console.error('[sync] Restore error:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to restore from cloud',
-      message: error.message 
-    });
-  }
-}));
-
 // Process sync queue manually
 app.post('/api/sync/process-queue', asyncHandler(async (req, res) => {
   try {
-    if (!syncService) {
-      return res.status(503).json({ error: 'Sync service not initialized' });
-    }
+    const syncService = getSyncService();
     syncService.processQueue();
     
     res.json({ success: true });
@@ -7382,59 +6860,11 @@ app.post('/api/sync/process-queue', asyncHandler(async (req, res) => {
   }
 }));
 
-// Get farm settings sync status
-app.get('/api/sync/settings/status', asyncHandler(async (req, res) => {
-  try {
-    if (!global.settingsSync) {
-      return res.json({
-        enabled: false,
-        message: 'Farm settings sync not initialized (edge mode required)'
-      });
-    }
-    
-    const status = global.settingsSync.getStatus();
-    res.json({
-      enabled: true,
-      ...status,
-      farmId: process.env.FARM_ID,
-      centralUrl: process.env.GREENREACH_CENTRAL_URL
-    });
-  } catch (error) {
-    console.error('[settings-sync] Status error:', error);
-    res.status(500).json({ error: 'Failed to get settings sync status' });
-  }
-}));
-
-// Manually trigger settings sync poll
-app.post('/api/sync/settings/poll', asyncHandler(async (req, res) => {
-  try {
-    if (!global.settingsSync) {
-      return res.status(400).json({ error: 'Settings sync not initialized' });
-    }
-    
-    await global.settingsSync.pollForChanges();
-    const status = global.settingsSync.getStatus();
-    
-    res.json({ 
-      success: true, 
-      lastSync: status.lastSync,
-      recentChanges: status.recentChanges 
-    });
-  } catch (error) {
-    console.error('[settings-sync] Manual poll error:', error);
-    res.status(500).json({ error: 'Failed to poll for changes' });
-  }
-}));
-
 // WebSocket endpoint for real-time sync status
 app.ws('/ws/sync-status', (ws, req) => {
   console.log('[sync] Client connected to sync status WebSocket');
   
-  if (!syncService) {
-    ws.send(JSON.stringify({ error: 'Sync service not initialized' }));
-    ws.close();
-    return;
-  }
+  const syncService = getSyncService();
   
   // Send initial status
   ws.send(JSON.stringify(syncService.getStatus()));
@@ -8380,226 +7810,6 @@ app.get('/health', asyncHandler(async (req, res) => {
                      health.status === 'degraded' ? 200 : 503;
   
   res.status(statusCode).json(health);
-}));
-
-// Enhanced health check endpoints for frontend HealthCheck class
-app.get('/api/health/database', asyncHandler(async (req, res) => {
-  const dbHealth = await checkDatabaseHealth();
-  res.json({
-    status: dbHealth.connected ? 'healthy' : (dbHealth.enabled ? 'error' : 'disabled'),
-    mode: dbHealth.mode,
-    enabled: dbHealth.enabled,
-    connected: dbHealth.connected,
-    latencyMs: dbHealth.latencyMs || 0,
-    error: dbHealth.error || null,
-    timestamp: new Date().toISOString()
-  });
-}));
-
-// Device discovery endpoint
-app.post('/api/devices/scan', asyncHandler(async (req, res) => {
-  const { subnet, filter } = req.body;
-  
-  try {
-    const discovery = new DeviceDiscovery({ timeout: 5000 });
-    const result = await discovery.discoverDevices({ subnet, filter });
-    
-    res.json({
-      success: true,
-      ...result
-    });
-  } catch (error) {
-    console.error('[DeviceDiscovery] Scan failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      devices: [],
-      summary: { totalHosts: 0, devicesFound: 0, lightControllers: 0 }
-    });
-  }
-}));
-
-// Quick light controller discovery
-app.post('/api/devices/scan/lights', asyncHandler(async (req, res) => {
-  try {
-    const discovery = new DeviceDiscovery({ timeout: 5000 });
-    const result = await discovery.discoverLightControllers();
-    
-    res.json({
-      success: true,
-      ...result
-    });
-  } catch (error) {
-    console.error('[DeviceDiscovery] Light scan failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      devices: [],
-      summary: { totalHosts: 0, devicesFound: 0, lightControllers: 0 }
-    });
-  }
-}));
-
-// Test light controller connectivity
-app.post('/api/lights/ping', asyncHandler(async (req, res) => {
-  const { ip, port, protocol } = req.body;
-  
-  if (!ip) {
-    return res.status(400).json({ 
-      status: 'error', 
-      error: 'IP address required' 
-    });
-  }
-  
-  const targetProtocol = protocol || 'grow3';
-  const targetPort = port || (targetProtocol === 'dmx' ? 6038 : 80);
-  
-  try {
-    // For GROW3, try to fetch device info
-    if (targetProtocol === 'grow3') {
-      const controller = `http://${ip}:${targetPort}`;
-      const response = await fetch(`${controller}/info`, {
-        method: 'GET',
-        timeout: 5000
-      });
-      
-      if (response.ok) {
-        const info = await response.json();
-        return res.json({
-          status: 'healthy',
-          protocol: 'grow3',
-          ip,
-          port: targetPort,
-          reachable: true,
-          info: info,
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-    
-    // For DMX or if GROW3 failed, just check TCP connectivity
-    const net = require('net');
-    const socket = new net.Socket();
-    const timeout = 5000;
-    
-    const pingPromise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        socket.destroy();
-        reject(new Error('Connection timeout'));
-      }, timeout);
-      
-      socket.connect(targetPort, ip, () => {
-        clearTimeout(timer);
-        socket.destroy();
-        resolve(true);
-      });
-      
-      socket.on('error', (err) => {
-        clearTimeout(timer);
-        socket.destroy();
-        reject(err);
-      });
-    });
-    
-    await pingPromise;
-    
-    res.json({
-      status: 'healthy',
-      protocol: targetProtocol,
-      ip,
-      port: targetPort,
-      reachable: true,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    res.json({
-      status: 'error',
-      protocol: targetProtocol,
-      ip,
-      port: targetPort,
-      reachable: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-}));
-
-// Sensor data freshness check
-app.get('/api/health/sensors', asyncHandler(async (req, res) => {
-  try {
-    const envPath = path.join(__dirname, 'public', 'data', 'env.json');
-    
-    if (!fs.existsSync(envPath)) {
-      return res.json({
-        status: 'disabled',
-        message: 'No sensor data file found',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    const envData = JSON.parse(fs.readFileSync(envPath, 'utf8'));
-    const now = Date.now();
-    const fiveMinutesAgo = now - (5 * 60 * 1000);
-    
-    const sensors = {
-      temperature: envData.temperature || null,
-      humidity: envData.humidity || null,
-      vpd: envData.vpd || null,
-      pressure: envData.pressure || null,
-      co2: envData.co2 || null,
-      air_quality: envData.air_quality || null
-    };
-    
-    const checks = {};
-    let anyStale = false;
-    let anyHealthy = false;
-    
-    for (const [type, data] of Object.entries(sensors)) {
-      if (!data) {
-        checks[type] = { status: 'disabled', message: 'No data' };
-        continue;
-      }
-      
-      const timestamp = new Date(data.timestamp).getTime();
-      const ageMinutes = Math.round((now - timestamp) / 60000);
-      
-      if (timestamp < fiveMinutesAgo) {
-        checks[type] = {
-          status: 'stale',
-          value: data.value,
-          unit: data.unit,
-          ageMinutes,
-          timestamp: data.timestamp
-        };
-        anyStale = true;
-      } else {
-        checks[type] = {
-          status: 'healthy',
-          value: data.value,
-          unit: data.unit,
-          ageMinutes,
-          timestamp: data.timestamp
-        };
-        anyHealthy = true;
-      }
-    }
-    
-    const overallStatus = anyHealthy ? (anyStale ? 'degraded' : 'healthy') : 'disabled';
-    
-    res.json({
-      status: overallStatus,
-      sensors: checks,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    res.json({
-      status: 'error',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
 }));
 
 // Metrics endpoint for Prometheus/monitoring tools
@@ -10333,8 +9543,8 @@ app.post('/api/schedule-executor/tick', async (req, res) => {
 // Get ML anomalies from executor
 app.get('/api/schedule-executor/ml-anomalies', (req, res) => {
   try {
-    // Return real ML anomalies from schedule executor
-    if (!scheduleExecutor) {
+    // Demo mode: return synthetic anomaly data
+    if (isDemoMode() || !scheduleExecutor) {
       const now = new Date();
       const demoAnomalies = [];
       
@@ -10534,132 +9744,6 @@ app.get('/api/harvest', (req, res) => {
 });
 
 /**
- * Harvest Prediction Endpoints
- * AI-powered predictions based on historical data and environmental conditions
- */
-
-// Initialize harvest predictor
-const harvestPredictor = new HarvestPredictor(DATA_DIR);
-
-// Initialize anomaly diagnostics
-const anomalyDiagnostics = new AnomalyDiagnostics(DATA_DIR);
-
-// Initialize adaptive control (P2 Tier 1: Outdoor-aware adjustments)
-const adaptiveControlEnabled = process.env.ADAPTIVE_CONTROL_ENABLED === 'true';
-const adaptiveControlTier = parseInt(process.env.ADAPTIVE_CONTROL_TIER || '1', 10);
-const adaptiveControl = adaptiveControlEnabled 
-  ? new AdaptiveControl({ tier: adaptiveControlTier })
-  : null;
-if (adaptiveControl) {
-  console.log(`[Foxtrot] Adaptive Control enabled: Tier ${adaptiveControlTier} (outdoor-aware adjustments)`);
-} else {
-  console.log('[Foxtrot] Adaptive Control disabled (set ADAPTIVE_CONTROL_ENABLED=true to enable)');
-}
-
-// Initialize adaptive VPD
-const adaptiveVpd = new AdaptiveVpd();
-
-// Initialize succession planner
-const successionPlanner = new SuccessionPlanner(DATA_DIR);
-
-/**
- * GET /api/harvest/predictions/all
- * Predict harvest dates for all active groups
- */
-app.get('/api/harvest/predictions/all', async (req, res) => {
-  try {
-    const activeGroups = await harvestPredictor.getActiveGroups();
-    const groupIds = activeGroups.map(g => g.id);
-
-    if (groupIds.length === 0) {
-      return res.json({
-        ok: true,
-        predictions: [],
-        message: 'No active groups found'
-      });
-    }
-
-    const predictions = await harvestPredictor.predictMultiple(groupIds);
-
-    return res.json({
-      ok: true,
-      predictions,
-      count: predictions.length
-    });
-
-  } catch (error) {
-    console.error('[Harvest Prediction All] Error:', error);
-    return res.status(500).json({
-      ok: false,
-      error: error.message
-    });
-  }
-});
-
-/**
- * GET /api/harvest/predictions/:groupId
- * Predict harvest date for a specific group
- */
-app.get('/api/harvest/predictions/:groupId', async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const { avgTemp, avgPPFD, targetPPFD } = req.query;
-
-    // Build options from query parameters
-    const options = {};
-    if (avgTemp) options.avgTemp = parseFloat(avgTemp);
-    if (avgPPFD) options.avgPPFD = parseFloat(avgPPFD);
-    if (targetPPFD) options.targetPPFD = parseFloat(targetPPFD);
-
-    const prediction = await harvestPredictor.predict(groupId, options);
-
-    return res.json({
-      ok: true,
-      prediction
-    });
-
-  } catch (error) {
-    console.error('[Harvest Prediction] Error:', error);
-    return res.status(500).json({
-      ok: false,
-      error: error.message
-    });
-  }
-});
-
-/**
- * POST /api/harvest/predictions/batch
- * Predict harvest dates for multiple groups
- */
-app.post('/api/harvest/predictions/batch', async (req, res) => {
-  try {
-    const { groupIds, options } = req.body;
-
-    if (!Array.isArray(groupIds) || groupIds.length === 0) {
-      return res.status(400).json({
-        ok: false,
-        error: 'groupIds must be a non-empty array'
-      });
-    }
-
-    const predictions = await harvestPredictor.predictMultiple(groupIds, options || {});
-
-    return res.json({
-      ok: true,
-      predictions,
-      count: predictions.length
-    });
-
-  } catch (error) {
-    console.error('[Harvest Prediction Batch] Error:', error);
-    return res.status(500).json({
-      ok: false,
-      error: error.message
-    });
-  }
-});
-
-/**
  * ML API Routes
  * - /api/ml/anomalies: Outdoor-aware anomaly detection with IsolationForest
  * - /api/ml/effects: Learn device effects on RH/temp using Ridge regression
@@ -10685,20 +9769,6 @@ app.use('/api', licenseRouter);
  * - /api/health/insights: Get health insights with scores and recommendations
  */
 app.use('/api/health', healthRouter);
-
-/**
- * System Management API Routes (Edge Device Remote Management)
- * Requires SYSTEM_TOKEN authentication for security
- * - GET /api/system/health: Detailed system health & diagnostics
- * - GET /api/system/logs: Stream recent logs (with filtering)
- * - GET /api/system/diagnostics: Comprehensive diagnostic bundle
- * - GET /api/system/version: Get current version info
- * - POST /api/system/restart: Restart services gracefully
- * - POST /api/system/update: Trigger git pull & restart
- * - POST /api/system/config: Update environment configuration
- */
-const systemRouter = await import('./routes/system.js').then(m => m.default);
-app.use('/api/system', systemRouter);
 
 /**
  * Farm Purchase & Onboarding Routes (Removed - now using ES module import below at line ~9757)
@@ -10735,10 +9805,8 @@ app.use('/api/migration', migrationRouter);
  * - GET /api/qr-generator/available-range: Get next available code range
  * - POST /api/qr-generator/validate: Check if codes already exist
  */
-// Dynamic import to avoid syntax error (ES modules require imports at top)
-import('./routes/qr-generator.js').then(module => {
-  app.use('/api/qr-generator', module.router);
-}).catch(err => console.warn('[QR Generator] Routes not available:', err.message));
+import { router as qrGeneratorRouter } from './routes/qr-generator.js';
+app.use('/api/qr-generator', qrGeneratorRouter);
 
 /**
  * Thermal Printer API Routes
@@ -10753,9 +9821,8 @@ import('./routes/qr-generator.js').then(module => {
  * - POST /api/printer/test: Test printer connection
  * - GET /api/printer/list: List available USB printers
  */
-// TODO: Move this import to top of file
-// import { router as printerRouter } from './routes/thermal-printer.js';
-// app.use('/api/printer', printerRouter);
+import { router as printerRouter } from './routes/thermal-printer.js';
+app.use('/api/printer', printerRouter);
 
 /**
  * Edge Device Setup & Activation Routes
@@ -11165,79 +10232,59 @@ console.log(' Audit logging initialized - capturing all wholesale operations');
  * - Cannot access farm management systems or other farms' data
  */
 
-// TODO: ES MODULE FIX REQUIRED - These mid-file imports violate ES module rules
-// All imports must be at the top of the file. These routes are temporarily disabled
-// until the imports are moved to the top of the file.
-// See CLOUD_EDGE_SYNC_DEPLOYMENT_STATUS.md for resolution steps.
+// Import farm authentication
+import { createAuthRoutes, farmAuthMiddleware, blockFarmManagementEndpoints } from './lib/farm-auth.js';
 
-// // Import farm authentication
-// import { createAuthRoutes, farmAuthMiddleware, blockFarmManagementEndpoints } from './lib/farm-auth.js';
-// 
-// /**
-//  * Farm Sales: Authentication & Authorization
-//  * JWT-based multi-tenant authentication system
-//  * - POST /api/farm-auth/login: Login and get JWT token
-//  * - GET /api/farm-auth/verify: Verify token validity
-//  * - GET /api/farm-auth/demo-tokens: Get test tokens (dev only)
-//  */
-// app.use('/api/farm-auth', createAuthRoutes());
-// 
-// // Apply security isolation middleware
-// app.use(blockFarmManagementEndpoints);
-// 
-// console.log(' Farm authentication system initialized - multi-tenant JWT with security isolation');
-// 
-// // Import farm-sales routes
-// import farmSalesOrdersRouter from './routes/farm-sales/orders.js';
-// import farmSalesInventoryRouter from './routes/farm-sales/inventory.js';
-// import farmSalesPaymentsRouter from './routes/farm-sales/payments.js';
-// import farmSalesPOSRouter from './routes/farm-sales/pos.js';
-// import farmSalesDeliveryRouter from './routes/farm-sales/delivery.js';
-// import farmSalesSubscriptionsRouter from './routes/farm-sales/subscriptions.js';
-// import farmSalesDonationsRouter from './routes/farm-sales/donations.js';
-// import farmSalesCustomersRouter from './routes/farm-sales/customers.js';
-// import farmSalesProgramsRouter from './routes/farm-sales/programs.js';
-// import farmSalesFulfillmentRouter from './routes/farm-sales/fulfillment.js';
-// import farmSalesReportsRouter from './routes/farm-sales/reports.js';
-// import farmSalesQuickBooksRouter from './routes/farm-sales/quickbooks.js';
-// import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
-// import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
+/**
+ * Farm Sales: Authentication & Authorization
+ * JWT-based multi-tenant authentication system
+ * - POST /api/farm-auth/login: Login and get JWT token
+ * - GET /api/farm-auth/verify: Verify token validity
+ * - GET /api/farm-auth/demo-tokens: Get test tokens (dev only)
+ */
+app.use('/api/farm-auth', createAuthRoutes());
+
+// Apply security isolation middleware
+app.use(blockFarmManagementEndpoints);
+
+console.log(' Farm authentication system initialized - multi-tenant JWT with security isolation');
+
+// Import farm-sales routes
+import farmSalesOrdersRouter from './routes/farm-sales/orders.js';
+import farmSalesInventoryRouter from './routes/farm-sales/inventory.js';
+import farmSalesPaymentsRouter from './routes/farm-sales/payments.js';
+import farmSalesPOSRouter from './routes/farm-sales/pos.js';
+import farmSalesDeliveryRouter from './routes/farm-sales/delivery.js';
+import farmSalesSubscriptionsRouter from './routes/farm-sales/subscriptions.js';
+import farmSalesDonationsRouter from './routes/farm-sales/donations.js';
+import farmSalesCustomersRouter from './routes/farm-sales/customers.js';
+import farmSalesProgramsRouter from './routes/farm-sales/programs.js';
+import farmSalesFulfillmentRouter from './routes/farm-sales/fulfillment.js';
+import farmSalesReportsRouter from './routes/farm-sales/reports.js';
+import farmSalesQuickBooksRouter from './routes/farm-sales/quickbooks.js';
+import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
+import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
 import authRouter from './routes/auth.js';
-// import farmsRouter from './routes/farms.js';
-// import purchaseRouter from './routes/purchase.js';
-// import purchaseLeadsRouter from './routes/purchase-leads.js';
-// import setupWizardRouter from './routes/setup-wizard.js';
+import farmsRouter from './routes/farms.js';
+import purchaseRouter from './routes/purchase.js';
+import purchaseLeadsRouter from './routes/purchase-leads.js';
+import setupWizardRouter from './routes/setup-wizard.js';
 import pg from 'pg';
 
-console.log('[WARNING] Farm-sales routes temporarily disabled due to ES module syntax errors');
-console.log('[WARNING] See CLOUD_EDGE_SYNC_DEPLOYMENT_STATUS.md for fix instructions');
-// const pg = null; // Placeholder
+// Initialize PostgreSQL pool for purchase flow
+const dbPool = new pg.Pool({
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+});
 
-// Initialize PostgreSQL pool for purchase flow (Cloud deployments AND edge devices with DB credentials)
-// Edge devices can optionally have DB credentials for authentication against central database
-let dbPool = null;
-const dbHost = process.env.DB_HOST || process.env.RDS_HOSTNAME;
-const dbName = process.env.DB_NAME || process.env.RDS_DB_NAME;
-const dbUser = process.env.DB_USER || process.env.RDS_USERNAME;
-
-if (dbHost && dbName && dbUser) {
-  console.log('[Database] Initializing PostgreSQL pool (RDS connection)');
-  dbPool = new pg.Pool({
-    host: dbHost,
-    port: parseInt(process.env.DB_PORT || process.env.RDS_PORT) || 5432,
-    database: dbName,
-    user: dbUser,
-    password: process.env.DB_PASSWORD || process.env.RDS_PASSWORD,
-    ssl: process.env.DB_SSL === 'true' || process.env.RDS_HOSTNAME ? { rejectUnauthorized: false } : false,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000
-  });
-} else {
-  console.log('[Database] PostgreSQL pool disabled (no DB credentials)');
-}
-
-// Store database pool in app.locals for routes (will be null on Edge devices)
+// Store database pool in app.locals for routes
 app.locals.db = dbPool;
 
 /**
@@ -11249,7 +10296,7 @@ app.locals.db = dbPool;
  * - GET /api/farms/list: List all registered farms (admin)
  * - GET /api/farms/codes/list: List all registration codes (admin)
  */
-// app.use('/api/farms', farmsRouter); // Disabled - router undefined
+app.use('/api/farms', farmsRouter);
 
 /**
  * Purchase & Onboarding Flow
@@ -11258,7 +10305,7 @@ app.locals.db = dbPool;
  * - POST /api/farms/create-checkout-session: Create Square payment link
  * - GET /api/farms/verify-session/:session_id: Verify payment and create account
  */
-// app.use('/api/farms', purchaseRouter); // Disabled - router undefined
+app.use('/api/farms', purchaseRouter);
 
 /**
  * Purchase Leads CRM
@@ -11268,7 +10315,7 @@ app.locals.db = dbPool;
  * - GET /api/purchase/leads/:leadId: Get specific lead
  * - PUT /api/purchase/leads/:leadId/status: Update lead status
  */
-// app.use('/api/purchase', purchaseLeadsRouter); // Disabled - router undefined
+app.use('/api/purchase', purchaseLeadsRouter);
 
 /**
  * Authentication & Device Pairing
@@ -11320,38 +10367,18 @@ app.use('/api/admin', adminFarmManagementRouter);
 // Note: This endpoint accepts tokens but doesn't require them to allow login flow to proceed
 app.get('/api/setup-wizard/status', async (req, res) => {
   try {
-    const pool = req.app.locals?.db;
-    const isEdgeDevice = process.env.EDGE_MODE === 'true';
-    
     // Try to extract token if provided
     const authHeader = req.headers.authorization;
     let farmId = null;
     let email = null;
     
-    // Only try to verify token if on cloud (not edge device)
-    if (!isEdgeDevice && authHeader && authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       try {
-        // First decode without verification to get farmId
-        const decoded = jwt.decode(token);
-        farmId = decoded?.farmId;
-        
-        // Fetch farm's JWT secret from database
-        let jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
-        
-        if (pool && farmId) {
-          const farmResult = await pool.query(
-            'SELECT jwt_secret FROM farms WHERE farm_id = $1',
-            [farmId]
-          );
-          if (farmResult.rows.length > 0) {
-            jwtSecret = farmResult.rows[0].jwt_secret || jwtSecret;
-          }
-        }
-        
-        // Now verify with the correct secret
-        const verified = jwt.verify(token, jwtSecret);
-        email = verified.email;
+        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+        const decoded = jwt.verify(token, jwtSecret);
+        farmId = decoded.farmId;
+        email = decoded.email;
         console.log('[setup-wizard] Token decoded successfully for', farmId, email);
       } catch (tokenError) {
         console.warn('[setup-wizard] Token verification failed:', tokenError.message);
@@ -11359,33 +10386,11 @@ app.get('/api/setup-wizard/status', async (req, res) => {
       }
     }
     
-    // Edge device: Check NeDB for setup completion
-    if (isEdgeDevice || !pool) {
-      console.log('[setup-wizard] Edge device - checking NeDB for setup status');
-      try {
-        const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' });
-        const setupCompleted = setupConfig?.completed || false;
-        console.log('[setup-wizard] NeDB setup status:', setupCompleted);
-        
-        return res.json({
-          success: true,
-          setupCompleted: setupCompleted,
-          farmId: farmId || 'edge-device'
-        });
-      } catch (nedbError) {
-        console.error('[setup-wizard] NeDB check failed:', nedbError);
-        return res.json({
-          success: true,
-          setupCompleted: false,
-          farmId: farmId || 'edge-device'
-        });
-      }
-    }
+    const pool = req.app.locals?.db;
     
-    // Cloud deployment: Check PostgreSQL
-    if (!farmId || !email) {
-      // If no valid token, assume setup not completed (safe default)
-      console.log('[setup-wizard] Returning default - no valid token');
+    if (!pool || !farmId || !email) {
+      // If no database or no valid token, assume setup not completed (safe default)
+      console.log('[setup-wizard] Returning default - no pool or token');
       return res.json({
         success: true,
         setupCompleted: false,
@@ -11393,15 +10398,15 @@ app.get('/api/setup-wizard/status', async (req, res) => {
       });
     }
     
-    // Check farm's setup_completed flag
-    const farmResult = await pool.query(
-      'SELECT setup_completed FROM farms WHERE farm_id = $1',
-      [farmId]
+    // Check if user has setup_completed flag
+    const userResult = await pool.query(
+      'SELECT setup_completed FROM users WHERE farm_id = $1 AND email = $2',
+      [farmId, email]
     );
     
-    if (farmResult.rows.length === 0) {
-      // Farm not found - return default (new farms haven't completed setup)
-      console.log('[setup-wizard] Farm not found, returning default');
+    if (userResult.rows.length === 0) {
+      // User not found - return default (new users haven't completed setup)
+      console.log('[setup-wizard] User not found, returning default');
       return res.json({
         success: true,
         setupCompleted: false,
@@ -11409,7 +10414,7 @@ app.get('/api/setup-wizard/status', async (req, res) => {
       });
     }
     
-    const setupCompleted = farmResult.rows[0].setup_completed || false;
+    const setupCompleted = userResult.rows[0].setup_completed || false;
     console.log('[setup-wizard] Setup status:', setupCompleted, 'for', farmId);
     
     return res.json({
@@ -11428,72 +10433,6 @@ app.get('/api/setup-wizard/status', async (req, res) => {
   }
 });
 
-// Mark setup wizard as complete
-app.post('/api/setup-wizard/complete', async (req, res) => {
-  try {
-    console.log('[setup-wizard] Marking setup as complete');
-    
-    const pool = req.app.locals?.db;
-    
-    // Edge device: Update NeDB (no auth required)
-    if (!pool) {
-      console.log('[setup-wizard] Edge device - updating NeDB');
-      await wizardStatesDB.updateAsync(
-        { key: 'setup_config' },
-        { key: 'setup_config', completed: true, completedAt: new Date().toISOString() },
-        { upsert: true }
-      );
-      
-      console.log('[setup-wizard] ✅ NeDB setup marked as complete');
-      return res.json({
-        success: true,
-        message: 'Setup marked as complete',
-        setupCompleted: true
-      });
-    }
-    
-    // Cloud deployment: Update PostgreSQL (requires auth)
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required'
-      });
-    }
-    
-    const token = authHeader.substring(7);
-    const decoded = jwt.decode(token);
-    const farmId = decoded?.farmId;
-    
-    if (!farmId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Farm ID required'
-      });
-    }
-    
-    await pool.query(
-      'UPDATE farms SET setup_completed = true, updated_at = NOW() WHERE farm_id = $1',
-      [farmId]
-    );
-    
-    console.log('[setup-wizard] Setup marked as complete for farm:', farmId);
-    return res.json({
-      success: true,
-      message: 'Setup marked as complete',
-      farmId,
-      setupCompleted: true
-    });
-  } catch (error) {
-    console.error('[setup-wizard] Error marking setup as complete:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to mark setup as complete',
-      message: error.message
-    });
-  }
-});
-
 // Note: setupWizardRouter would go here if we had additional wizard routes
 // app.use('/api/setup-wizard', setupWizardRouter);
 
@@ -11508,7 +10447,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - POST /api/farm-sales/customers/:customerId/use-credits: Use store credits
  * - GET /api/farm-sales/customers/:customerId/credit-history: Get credit history
  */
-// app.use('/api/farm-sales/customers', farmSalesCustomersRouter);
+app.use('/api/farm-sales/customers', farmSalesCustomersRouter);
 
 /**
  * Farm Sales: Order Management
@@ -11519,7 +10458,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - PATCH /api/farm-sales/orders/:orderId: Update order status/fulfillment
  * - GET /api/farm-sales/orders/stats/summary: Order statistics
  */
-// app.use('/api/farm-sales/orders', farmSalesOrdersRouter);
+app.use('/api/farm-sales/orders', farmSalesOrdersRouter);
 
 /**
  * Farm Sales: Inventory Management
@@ -11532,7 +10471,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - PATCH /api/farm-sales/inventory/:skuId: Update product (restock, pricing)
  * - GET /api/farm-sales/inventory/categories/list: Get product categories
  */
-// app.use('/api/farm-sales/inventory', farmSalesInventoryRouter);
+app.use('/api/farm-sales/inventory', farmSalesInventoryRouter);
 
 /**
  * Farm Sales: Payment Processing
@@ -11543,7 +10482,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - POST /api/farm-sales/payments/:paymentId/refund: Issue refund
  * - PATCH /api/farm-sales/payments/:paymentId: Update payment status
  */
-// app.use('/api/farm-sales/payments', farmSalesPaymentsRouter);
+app.use('/api/farm-sales/payments', farmSalesPaymentsRouter);
 
 /**
  * Farm Sales: Point of Sale (POS) Terminal
@@ -11553,7 +10492,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - POST /api/farm-sales/pos/card: Process card payment via Square
  * - GET /api/farm-sales/pos/session/summary: Get cashier session summary
  */
-// app.use('/api/farm-sales/pos', farmSalesPOSRouter);
+app.use('/api/farm-sales/pos', farmSalesPOSRouter);
 
 /**
  * Farm Sales: Delivery Management
@@ -11566,7 +10505,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - GET /api/farm-sales/delivery/routes: List delivery routes
  * - GET /api/farm-sales/delivery/zones: Get delivery zones and fees
  */
-// app.use('/api/farm-sales/delivery', farmSalesDeliveryRouter);
+app.use('/api/farm-sales/delivery', farmSalesDeliveryRouter);
 
 /**
  * Farm Sales: Subscription Management
@@ -11579,7 +10518,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - POST /api/farm-sales/subscriptions/:subscriptionId/skip: Skip upcoming delivery
  * - POST /api/farm-sales/subscriptions/generate-orders: Generate orders (cron job)
  */
-// app.use('/api/farm-sales/subscriptions', farmSalesSubscriptionsRouter);
+app.use('/api/farm-sales/subscriptions', farmSalesSubscriptionsRouter);
 
 /**
  * Farm Sales: Programs Management
@@ -11592,7 +10531,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - POST /api/farm-sales/programs/:programId/box-selections: Save customer box selections
  * - GET /api/farm-sales/programs/:programId/box-selections/:customerId: Get customer selections
  */
-// app.use('/api/farm-sales/programs', farmSalesProgramsRouter);
+app.use('/api/farm-sales/programs', farmSalesProgramsRouter);
 
 /**
  * Farm Sales: Fulfillment & Operations
@@ -11601,7 +10540,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - GET /api/farm-sales/fulfillment/pack-list: Generate pack list (by customer)
  * - GET /api/farm-sales/fulfillment/delivery-manifest: Generate delivery manifest
  */
-// app.use('/api/farm-sales/fulfillment', farmSalesFulfillmentRouter);
+app.use('/api/farm-sales/fulfillment', farmSalesFulfillmentRouter);
 
 /**
  * Farm Sales: Reports & Analytics
@@ -11612,7 +10551,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - GET /api/farm-sales/reports/customer-analytics: Customer insights
  * - GET /api/farm-sales/reports/product-performance: Product analysis
  */
-// app.use('/api/farm-sales/reports', farmSalesReportsRouter);
+app.use('/api/farm-sales/reports', farmSalesReportsRouter);
 
 /**
  * Farm Sales: QuickBooks Integration
@@ -11625,7 +10564,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - POST /api/farm-sales/quickbooks/sync-payments: Sync payments to QuickBooks
  * - POST /api/farm-sales/quickbooks/webhook: Handle QuickBooks webhooks
  */
-// app.use('/api/farm-sales/quickbooks', farmSalesQuickBooksRouter);
+app.use('/api/farm-sales/quickbooks', farmSalesQuickBooksRouter);
 
 /**
  * Farm Sales: Lot Code Traceability System
@@ -11639,7 +10578,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - PATCH /api/farm-sales/lots/:lotCode: Update lot status (consumed, expired, recalled)
  * - DELETE /api/farm-sales/lots/:lotCode: Delete unassigned lot
  */
-// app.use('/api/farm-sales/lots', farmSalesLotTrackingRouter);
+app.use('/api/farm-sales/lots', farmSalesLotTrackingRouter);
 
 /**
  * Farm Sales: Donations & Food Security Programs
@@ -11653,7 +10592,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - GET /api/farm-sales/donations/reports/impact: Generate impact report
  * - PATCH /api/farm-sales/donations/programs/:programId: Update program
  */
-// app.use('/api/farm-sales/donations', farmSalesDonationsRouter);
+app.use('/api/farm-sales/donations', farmSalesDonationsRouter);
 
 /**
  * Farm Sales: AI Agent Assistant
@@ -11672,7 +10611,7 @@ app.post('/api/setup-wizard/complete', async (req, res) => {
  * - Reports generation (sales reports, inventory reports)
  * - System health checks (status, health check)
  */
-// app.use('/api/farm-sales/ai-agent', farmSalesAIAgentRouter);
+app.use('/api/farm-sales/ai-agent', farmSalesAIAgentRouter);
 
 console.log(' Farm sales terminal initialized - POS, D2C, B2B, food security programs, lot traceability, and AI agent enabled');
 
@@ -11814,8 +10753,8 @@ print(json.dumps(result))
  * Get latest cached anomaly detection results
  */
 app.get('/api/ml/insights/anomalies', asyncHandler(async (req, res) => {
-  // Demo mode removed - always use real data
-  if (false) {
+  // Demo mode: generate realistic anomaly detection results
+  if (isDemoMode()) {
     const now = new Date();
     const hoursAgo = (hours) => new Date(now.getTime() - hours * 60 * 60 * 1000);
     
@@ -11995,258 +10934,14 @@ app.get('/api/ml/insights/anomalies', asyncHandler(async (req, res) => {
 }));
 
 /**
- * GET /api/ml/diagnostics
- * Get anomaly diagnostics with root cause analysis
- * Progressive enhancement: works with minimal data, enhances with available context
- */
-app.get('/api/ml/diagnostics', asyncHandler(async (req, res) => {
-  setCors(req, res);
-  
-  const insightsPath = path.join(__dirname, 'public', 'data', 'ml-insights', 'anomalies-latest.json');
-  
-  try {
-    // Check if anomaly file exists
-    await fs.promises.access(insightsPath);
-    
-    // Read anomalies
-    const content = await fs.promises.readFile(insightsPath, 'utf-8');
-    const insights = JSON.parse(content);
-    
-    if (!insights.anomalies || insights.anomalies.length === 0) {
-      return res.json({
-        ok: true,
-        diagnostics: [],
-        summary: {
-          total: 0,
-          needsAttention: 0,
-          weatherRelated: 0,
-          message: 'No anomalies detected'
-        },
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // Get context for diagnostics
-    const context = {
-      weather: null,
-      history: null,
-      automationLogs: null
-    };
-    
-    // Try to get weather data
-    try {
-      const weatherData = LAST_WEATHER; // Use cached weather if available
-      if (weatherData && weatherData.current) {
-        context.weather = {
-          temp: weatherData.current.temperature_c,
-          rh: weatherData.current.humidity,
-          tempChange24h: null // Could calculate from hourly data if needed
-        };
-      }
-    } catch (err) {
-      // Weather data optional
-    }
-    
-    // Try to get sensor history for each zone
-    try {
-      const envPath = path.join(__dirname, 'public', 'data', 'env.json');
-      const envContent = await fs.promises.readFile(envPath, 'utf-8');
-      const envData = JSON.parse(envContent);
-      
-      // Store zone histories
-      context.zoneHistories = {};
-      for (const zone of envData.zones || []) {
-        if (zone.history && zone.history.length > 0) {
-          context.zoneHistories[zone.name] = zone.history;
-        }
-      }
-    } catch (err) {
-      // History optional
-    }
-    
-    // Try to get automation logs (if available)
-    try {
-      const logsPath = path.join(__dirname, 'logs', 'automation.log');
-      const logsContent = await fs.promises.readFile(logsPath, 'utf-8');
-      const recentLogs = logsContent.split('\n').slice(-50); // Last 50 lines
-      context.automationLogs = recentLogs
-        .filter(line => line.trim())
-        .map(line => {
-          try {
-            return JSON.parse(line);
-          } catch {
-            return null;
-          }
-        })
-        .filter(log => log !== null);
-    } catch (err) {
-      // Automation logs optional
-    }
-    
-    // Diagnose each anomaly
-    const diagnostics = insights.anomalies.map(anomaly => {
-      // Add zone-specific history if available
-      const zoneHistory = context.zoneHistories?.[anomaly.zone_name] || context.zoneHistories?.[anomaly.zone];
-      const anomalyContext = {
-        ...context,
-        history: zoneHistory
-      };
-      
-      return anomalyDiagnostics.diagnose(anomaly, anomalyContext);
-    });
-    
-    // Get summary
-    const summary = anomalyDiagnostics.getSummary(diagnostics);
-    
-    return res.json({
-      ok: true,
-      diagnostics,
-      summary,
-      timestamp: new Date().toISOString(),
-      meta: {
-        total_anomalies: insights.anomalies.length,
-        diagnosed: diagnostics.length,
-        weather_available: context.weather !== null,
-        history_available: Object.keys(context.zoneHistories || {}).length > 0,
-        automation_logs_available: (context.automationLogs?.length || 0) > 0
-      }
-    });
-    
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return res.json({
-        ok: true,
-        diagnostics: [],
-        summary: {
-          total: 0,
-          needsAttention: 0,
-          weatherRelated: 0,
-          message: 'No anomaly data available yet'
-        },
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    return res.status(500).json({
-      ok: false,
-      error: error.message
-    });
-  }
-}));
-
-/**
- * POST /api/vpd/adapt
- * Adapt VPD targets based on weather, crop, and facility conditions
- * 
- * Body:
- *   recipe: { min, max, target } - Recipe VPD band (required)
- *   outdoor: { temp, rh, tempChange24h } - Outdoor conditions (optional)
- *   crop: { daysSinceSeed, daysToHarvest } - Crop info (optional)
- *   facility: { hvacLoad, energyCost, hour } - Facility status (optional)
- * 
- * Returns adapted VPD band with reasoning
- */
-app.post('/api/vpd/adapt', asyncHandler(async (req, res) => {
-  const { recipe, outdoor, crop, facility } = req.body;
-  
-  // Validate recipe band
-  if (!recipe || typeof recipe.min !== 'number' || typeof recipe.max !== 'number') {
-    return res.status(400).json({
-      ok: false,
-      error: 'Missing or invalid recipe band (requires min, max)'
-    });
-  }
-  
-  // Get current weather if not provided
-  let outdoorConditions = outdoor;
-  if (!outdoorConditions && LAST_WEATHER) {
-    const w = LAST_WEATHER.current;
-    const forecast = LAST_WEATHER.hourly;
-    
-    // Calculate 24h temp change from forecast
-    let tempChange24h = null;
-    if (forecast && forecast.time && forecast.temperature_2m) {
-      const now = new Date();
-      const past24hIndex = forecast.time.findIndex(t => {
-        const forecastTime = new Date(t);
-        return forecastTime >= now;
-      }) - 24; // 24 hours ago (hourly data)
-      
-      if (past24hIndex >= 0 && forecast.temperature_2m[past24hIndex]) {
-        tempChange24h = w.temperature_2m - forecast.temperature_2m[past24hIndex];
-      }
-    }
-    
-    outdoorConditions = {
-      temp: w.temperature_2m,
-      rh: w.relative_humidity_2m,
-      tempChange24h
-    };
-  }
-  
-  // Adapt VPD targets
-  const decision = adaptiveVpd.adapt({
-    recipe,
-    outdoor: outdoorConditions,
-    crop,
-    facility
-  });
-  
-  res.json({
-    ok: true,
-    decision,
-    timestamp: new Date().toISOString()
-  });
-}));
-
-/**
- * GET /api/vpd/adapt/example
- * Get example adaptation scenarios
- */
-app.get('/api/vpd/adapt/example', (req, res) => {
-  const examples = {
-    heat_wave: {
-      recipe: { min: 0.8, max: 1.2, target: 1.0 },
-      outdoor: { temp: 35, rh: 70, tempChange24h: 18 },
-      crop: { daysSinceSeed: 30, daysToHarvest: 5 },
-      facility: { hvacLoad: 0.85, energyCost: 0.35, hour: 15 }
-    },
-    cold_snap: {
-      recipe: { min: 0.8, max: 1.2, target: 1.0 },
-      outdoor: { temp: 2, rh: 60, tempChange24h: -12 },
-      crop: { daysSinceSeed: 10, daysToHarvest: 20 },
-      facility: { hvacLoad: 0.60, energyCost: 0.28, hour: 8 }
-    },
-    peak_demand: {
-      recipe: { min: 0.8, max: 1.2, target: 1.0 },
-      outdoor: { temp: 22, rh: 65, tempChange24h: 2 },
-      crop: { daysSinceSeed: 20, daysToHarvest: 12 },
-      facility: { hvacLoad: 0.75, energyCost: 0.32, hour: 17 }
-    },
-    normal: {
-      recipe: { min: 0.8, max: 1.2, target: 1.0 },
-      outdoor: { temp: 18, rh: 55, tempChange24h: 3 },
-      crop: { daysSinceSeed: 15, daysToHarvest: 15 },
-      facility: { hvacLoad: 0.55, energyCost: 0.18, hour: 11 }
-    }
-  };
-  
-  res.json({
-    ok: true,
-    examples,
-    instructions: 'POST these examples to /api/vpd/adapt to see adaptations'
-  });
-});
-
-/**
  * GET /api/ml/insights/forecast/:zone
  * Get latest cached forecast for a zone
  */
 app.get('/api/ml/insights/forecast/:zone', asyncHandler(async (req, res) => {
   const { zone } = req.params;
   
-  // Demo mode removed - always use real forecast data
-  if (false) {
+  // Demo mode: generate mock forecast data
+  if (isDemoMode()) {
     const now = new Date();
     const predictions = [];
     
@@ -12447,8 +11142,7 @@ app.get('/api/ml/anomalies/statistics', asyncHandler(async (req, res) => {
   
   try {
     // In demo mode, return synthetic anomaly data
-    // Demo mode removed
-    if (false) {
+    if (isDemoMode()) {
       const now = new Date();
       const since = new Date(now.getTime() - (hours * 60 * 60 * 1000));
       
@@ -12699,8 +11393,8 @@ app.get('/api/ml/automation/actions', asyncHandler(async (req, res) => {
  */
 app.get('/api/ml/energy-forecast', asyncHandler(async (req, res) => {
   try {
-    // Demo mode removed - always use real energy forecast
-    if (false) {
+    // Demo mode: generate synthetic energy forecast
+    if (isDemoMode()) {
       const now = new Date();
       const predictions = [];
       
@@ -13231,267 +11925,6 @@ app.get('/api/ml/metrics/alerts', asyncHandler(async (req, res) => {
 }));
 
 // ============================================================================
-// SUCCESSION PLANTING AUTOMATION - P4
-// AI-powered planting schedules for continuous harvest
-// ============================================================================
-
-/**
- * POST /api/planting/schedule/generate
- * Generate succession planting schedule for a crop
- * 
- * Handles tray formats, crop spacing, and facility capacity
- */
-app.post('/api/planting/schedule/generate', async (req, res) => {
-  try {
-    const { crop, weeklyDemand, startDate, weeks, facility } = req.body;
-
-    // Validate required fields
-    if (!crop) {
-      return res.status(400).json({ ok: false, error: 'Missing required field: crop' });
-    }
-    if (!weeklyDemand || weeklyDemand <= 0) {
-      return res.status(400).json({ ok: false, error: 'Missing or invalid weeklyDemand (must be > 0)' });
-    }
-    if (!startDate) {
-      return res.status(400).json({ ok: false, error: 'Missing required field: startDate' });
-    }
-
-    // Generate schedule
-    const schedule = await successionPlanner.generateSchedule({
-      crop,
-      weeklyDemand,
-      startDate,
-      weeks: weeks || 12,
-      facility
-    });
-
-    res.json(schedule);
-
-  } catch (error) {
-    console.error('[API] /api/planting/schedule/generate error:', error);
-    res.status(500).json({
-      ok: false,
-      error: 'Failed to generate planting schedule',
-      message: error.message
-    });
-  }
-});
-
-/**
- * POST /api/planting/suggest-from-demand
- * Generate seeding recommendations from wholesale demand forecast
- * 
- * Integrates with GreenReach Central for AI optimization
- */
-app.post('/api/planting/suggest-from-demand', async (req, res) => {
-  try {
-    const { farmId, demandForecast, facility, requestAI } = req.body;
-
-    // Validate required fields
-    if (!demandForecast || !Array.isArray(demandForecast)) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Missing or invalid demandForecast array'
-      });
-    }
-
-    // Generate suggestions
-    const suggestions = await successionPlanner.suggestFromDemand({
-      farmId: farmId || 'unknown',
-      demandForecast,
-      facility,
-      requestAI: requestAI || false
-    });
-
-    res.json(suggestions);
-
-  } catch (error) {
-    console.error('[API] /api/planting/suggest-from-demand error:', error);
-    res.status(500).json({
-      ok: false,
-      error: 'Failed to generate planting suggestions',
-      message: error.message
-    });
-  }
-});
-
-/**
- * POST /api/planting/ai-recommendations
- * Receive AI-optimized planting recommendations from GreenReach Central
- * 
- * This endpoint enables bidirectional communication:
- * - Central analyzes demand patterns, facility constraints, historical data
- * - Central uses OpenAI to generate intelligent schedule optimizations
- * - Central pushes recommendations back to edge device
- */
-app.post('/api/planting/ai-recommendations', async (req, res) => {
-  try {
-    // Verify API key (Central authentication)
-    const apiKey = req.headers['x-api-key'];
-    const validKey = process.env.CENTRAL_API_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-    
-    if (apiKey !== validKey) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
-
-    const { farmId, recommendations, generatedAt, modelUsed } = req.body;
-
-    // Validate payload
-    if (!recommendations || !Array.isArray(recommendations)) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Missing or invalid recommendations array'
-      });
-    }
-
-    // Log received recommendations
-    console.log(`[Succession Planner] Received ${recommendations.length} AI recommendations from Central`);
-    console.log(`[Succession Planner] Farm: ${farmId}, Model: ${modelUsed}, Generated: ${generatedAt}`);
-    
-    recommendations.forEach((rec, idx) => {
-      console.log(`[Succession Planner] ${idx + 1}. ${rec.crop}: ${rec.message} (confidence: ${rec.confidence})`);
-    });
-
-    res.json({
-      ok: true,
-      received: recommendations.length,
-      farmId: farmId,
-      message: 'AI recommendations received successfully'
-    });
-
-  } catch (error) {
-    console.error('[API] /api/planting/ai-recommendations error:', error);
-    res.status(500).json({
-      ok: false,
-      error: 'Failed to process AI recommendations',
-      message: error.message
-    });
-  }
-});
-
-/**
- * GET /api/planting/tray-formats
- * Get available tray formats with plant counts
- * 
- * Returns standard tray format definitions (matches backend/seed_tray_formats.py)
- */
-app.get('/api/planting/tray-formats', (req, res) => {
-  try {
-    // Return standard tray format catalog
-    const formats = [
-      { key: 'microgreens-4-hole', name: 'Microgreen Tray - 4 Hole', plantSiteCount: 4, density: 'ultra-high', isWeightBased: true, crops: ['Sunflower Shoots', 'Pea Shoots'] },
-      { key: 'microgreens-8-hole', name: 'Microgreen Tray - 8 Hole', plantSiteCount: 8, density: 'ultra-high', isWeightBased: true, crops: ['Microgreens'] },
-      { key: 'microgreens-12-hole', name: 'Microgreen Tray - 12 Hole', plantSiteCount: 12, density: 'ultra-high', isWeightBased: true, crops: ['Pea Shoots'] },
-      { key: 'microgreens-21-hole', name: 'Microgreen Tray - 21 Hole', plantSiteCount: 21, density: 'ultra-high', isWeightBased: true, crops: ['Microgreens'] },
-      { key: 'baby-greens-10x20', name: '10x20 Baby Greens Tray', plantSiteCount: 200, density: 'high', isWeightBased: false, crops: ['Baby Arugula', 'Mixed Baby Greens'] },
-      { key: 'baby-leaf-128', name: 'Baby Leaf - 128 Site', plantSiteCount: 128, density: 'high', isWeightBased: false, crops: ['Baby Kale', 'Baby Spinach', 'Cultivated Arugula', 'Wild Arugula'] },
-      { key: 'nft-channel-128', name: 'NFT Channel - 128 Site', plantSiteCount: 128, density: 'standard', isWeightBased: false, crops: ['Butterhead Lettuce', 'Buttercrunch Lettuce', 'Red Leaf Lettuce', 'Oak Leaf Lettuce', 'Genovese Basil', 'Thai Basil', 'Mei Qing Pak Choi', 'Tatsoi'] },
-      { key: 'nft-channel-72', name: 'NFT Channel - 72 Site', plantSiteCount: 72, density: 'standard', isWeightBased: false, crops: ['Romaine Lettuce', 'Lacinato Kale', 'Curly Kale', 'Dinosaur Kale', 'Bok Choy'] },
-      { key: 'standard-tray-24', name: 'Standard Tray - 24 Site', plantSiteCount: 24, density: 'standard', isWeightBased: false, crops: ['Lettuce', 'Basil', 'Herbs'] },
-      { key: 'tomato-tower-8', name: 'Tomato Tower - 8 Site', plantSiteCount: 8, density: 'low', isWeightBased: false, crops: ['Tomato'] },
-      { key: 'aeroponic-tower-72', name: 'Aeroponic Tower - 72 Site', plantSiteCount: 72, density: 'low', isWeightBased: false, crops: ['Cherry Tomato', 'Strawberry'] },
-      { key: 'zipgrow-tower-128', name: 'ZipGrow Tower - 128 Site', plantSiteCount: 128, density: 'low', isWeightBased: false, crops: ['Various'] }
-    ];
-
-    res.json({
-      ok: true,
-      formats: formats,
-      count: formats.length
-    });
-
-  } catch (error) {
-    console.error('[API] /api/planting/tray-formats error:', error);
-    res.status(500).json({
-      ok: false,
-      error: 'Failed to load tray formats',
-      message: error.message
-    });
-  }
-});
-
-/**
- * GET /api/succession/forecast/:crop
- * P5 DATA HOOK: Get harvest volume forecast for dynamic pricing
- * 
- * Used by P5 (Dynamic Pricing) to analyze supply-demand equilibrium
- * Returns predicted harvest dates and volumes over next 12 weeks
- */
-app.get('/api/succession/forecast/:crop', asyncHandler(async (req, res) => {
-  const { crop } = req.params;
-  const { weeks = 12 } = req.query;
-
-  if (!crop) {
-    return res.status(400).json({ ok: false, error: 'Missing crop parameter' });
-  }
-
-  const forecast = await successionPlanner.getHarvestForecast(crop, parseInt(weeks));
-  
-  res.json({
-    ok: true,
-    crop: crop,
-    weeks: parseInt(weeks),
-    forecast: forecast,
-    generatedAt: new Date().toISOString()
-  });
-}));
-
-/**
- * GET /api/succession/gaps/:crop
- * P5 DATA HOOK: Detect inventory gaps for scarcity-based pricing
- * 
- * Used by P5 (Dynamic Pricing) to adjust prices based on availability
- * Returns gap analysis with fulfillment rate and conflict details
- */
-app.get('/api/succession/gaps/:crop', asyncHandler(async (req, res) => {
-  const { crop } = req.params;
-  const { targetRate = 0.99 } = req.query;
-
-  if (!crop) {
-    return res.status(400).json({ ok: false, error: 'Missing crop parameter' });
-  }
-
-  const gapAnalysis = await successionPlanner.detectInventoryGaps(crop, parseFloat(targetRate));
-  
-  res.json({
-    ok: true,
-    ...gapAnalysis,
-    generatedAt: new Date().toISOString()
-  });
-}));
-
-/**
- * POST /api/succession/network-suggestions
- * TIER 2 PLACEHOLDER: Receive network-level succession suggestions from Central
- * 
- * Enables multi-farm load balancing:
- * - Central analyzes demand across buyer network
- * - Central distributes planting recommendations across farms
- * - Example: "Farm A seed extra lettuce, Farm B at capacity"
- */
-app.post('/api/succession/network-suggestions', asyncHandler(async (req, res) => {
-  const { crop, additionalTrays, reason, source = 'central' } = req.body;
-
-  if (!crop || !additionalTrays) {
-    return res.status(400).json({ ok: false, error: 'Missing required fields: crop, additionalTrays' });
-  }
-
-  // TODO TIER 2: Store network suggestions in local database
-  // For now, just log and acknowledge
-  console.log(`[Network Suggestion] ${crop}: +${additionalTrays} trays (Reason: ${reason})`);
-
-  res.json({
-    ok: true,
-    message: 'Network suggestion received',
-    crop: crop,
-    additionalTrays: additionalTrays,
-    reason: reason,
-    source: source,
-    status: 'acknowledged', // Tier 2 will change to 'pending' and display in UI
-    receivedAt: new Date().toISOString()
-  });
-}));
-
-// ============================================================================
 // Notification Endpoints (Mobile App) - Placeholders
 // ============================================================================
 
@@ -13825,16 +12258,6 @@ const nutrientAutomationState = {
   dashboardWriteTimer: null
 };
 
-const irrigationSchedulerState = {
-  lastDecisionAt: 0,
-  lastSwitchAt: 0,
-  nextToggleAt: 0,
-  cycleState: 'on',
-  appliedState: null,
-  lastReason: null,
-  lastError: null
-};
-
 function clone(value) {
   if (value === null || value === undefined) return null;
   try {
@@ -13842,85 +12265,6 @@ function clone(value) {
   } catch {
     return null;
   }
-}
-
-function normalizeIrrigationConfig(raw) {
-  const source = raw && typeof raw === 'object' ? raw : {};
-  const mode = typeof source.mode === 'string' && ['always_on', 'cycle'].includes(source.mode)
-    ? source.mode
-    : DEFAULT_IRRIGATION_CONFIG.mode;
-  const onMinutes = toNumberOrNull(source.onMinutes ?? source.on_minutes) ?? DEFAULT_IRRIGATION_CONFIG.onMinutes;
-  const offMinutes = toNumberOrNull(source.offMinutes ?? source.off_minutes) ?? DEFAULT_IRRIGATION_CONFIG.offMinutes;
-  const dayNightSync = typeof source.dayNightSync === 'boolean'
-    ? source.dayNightSync
-    : DEFAULT_IRRIGATION_CONFIG.dayNightSync;
-  const plugId = typeof source.plugId === 'string' && source.plugId.trim()
-    ? source.plugId.trim()
-    : DEFAULT_IRRIGATION_CONFIG.plugId;
-  const enabled = typeof source.enabled === 'boolean' ? source.enabled : DEFAULT_IRRIGATION_CONFIG.enabled;
-  const dayStartHour = toNumberOrNull(source.dayStartHour ?? source.day_start_hour) ?? IRRIGATION_DAY_START_HOUR;
-  const photoperiodHours = toNumberOrNull(source.photoperiodHours ?? source.photoperiod_hours) ?? IRRIGATION_PHOTOPERIOD_HOURS;
-  const maxRh = toNumberOrNull(source.maxRh ?? source.max_rh) ?? IRRIGATION_MAX_RH;
-
-  return {
-    mode,
-    onMinutes: Math.max(1, Math.min(240, onMinutes)),
-    offMinutes: Math.max(1, Math.min(240, offMinutes)),
-    dayNightSync,
-    plugId,
-    enabled: Boolean(enabled),
-    dayStartHour: Math.max(0, Math.min(23, dayStartHour)),
-    photoperiodHours: Math.max(1, Math.min(23, photoperiodHours)),
-    maxRh: Math.max(50, Math.min(100, maxRh))
-  };
-}
-
-function resolveDayNightWindow(now = new Date(), config) {
-  const startHour = Math.max(0, Math.min(23, config.dayStartHour));
-  const hours = Math.max(1, Math.min(23, config.photoperiodHours));
-  const start = new Date(now);
-  start.setHours(startHour, 0, 0, 0);
-  const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
-  const isDay = now >= start && now < end;
-  return { isDay, start, end, hours };
-}
-
-function resolveNutrientEnvSnapshot() {
-  if (!preEnvStore || typeof preEnvStore.getRoom !== 'function') return null;
-  return preEnvStore.getRoom(NUTRIENT_SCOPE_ID) || null;
-}
-
-function readHumidityFromEnv(roomSnapshot) {
-  if (!roomSnapshot || typeof roomSnapshot !== 'object') return null;
-  const sensors = roomSnapshot.sensors || {};
-  const rh = sensors.rh?.current ?? sensors.humidity?.current ?? roomSnapshot?.telemetry?.rh ?? roomSnapshot?.telemetry?.humidity;
-  const num = toNumberOrNull(rh);
-  return Number.isFinite(num) ? num : null;
-}
-
-function computeCycleDurations(config, isDay) {
-  const onMinutes = config.onMinutes;
-  const offMinutes = config.offMinutes;
-  if (!config.dayNightSync || isDay) {
-    return { onMinutes, offMinutes };
-  }
-  const nightOn = Math.max(1, Math.round(onMinutes * 0.5));
-  const nightOff = Math.max(offMinutes, Math.round(offMinutes * 1.5));
-  return { onMinutes: nightOn, offMinutes: nightOff };
-}
-
-function updateIrrigationRuntime(doc, runtime) {
-  if (!doc || typeof doc !== 'object') return;
-  doc.system = doc.system && typeof doc.system === 'object' ? { ...doc.system } : {};
-  doc.system.irrigation = doc.system.irrigation && typeof doc.system.irrigation === 'object'
-    ? { ...doc.system.irrigation }
-    : {};
-  doc.system.irrigation.runtime = {
-    ...(doc.system.irrigation.runtime || {}),
-    ...runtime,
-    updatedAt: new Date().toISOString()
-  };
-  schedulePersistNutrientDashboard(doc);
 }
 
 function loadNutrientDashboardCache() {
@@ -14430,123 +12774,6 @@ async function refreshNutrientAutomation({ force = false, reason = 'interval' } 
   return nutrientAutomationState.pollInFlight;
 }
 
-let irrigationSchedulerTimer = null;
-
-async function refreshIrrigationScheduler({ force = false, reason = 'interval' } = {}) {
-  const now = Date.now();
-  if (!force && irrigationSchedulerState.lastDecisionAt && (now - irrigationSchedulerState.lastDecisionAt) < IRRIGATION_SCHEDULER_INTERVAL_MS / 2) {
-    return;
-  }
-
-  const doc = loadNutrientDashboardCache() || {};
-  const system = doc.system && typeof doc.system === 'object' ? doc.system : {};
-  const irrigationConfig = normalizeIrrigationConfig(system.irrigation || {});
-  const automationEnabled = system.automation ? system.automation.mode !== 'disabled' : true;
-
-  const runtime = {
-    enabled: irrigationConfig.enabled && automationEnabled,
-    mode: irrigationConfig.mode,
-    plugId: irrigationConfig.plugId || null,
-    decisionAt: new Date().toISOString(),
-    reason
-  };
-
-  if (!irrigationConfig.enabled || !automationEnabled) {
-    runtime.status = 'disabled';
-    updateIrrigationRuntime(doc, runtime);
-    return;
-  }
-
-  const roomSnapshot = resolveNutrientEnvSnapshot();
-  const humidity = readHumidityFromEnv(roomSnapshot);
-  const dayWindow = resolveDayNightWindow(new Date(), irrigationConfig);
-  const { onMinutes, offMinutes } = computeCycleDurations(irrigationConfig, dayWindow.isDay);
-
-  runtime.isDay = dayWindow.isDay;
-  runtime.dayWindow = {
-    start: dayWindow.start.toISOString(),
-    end: dayWindow.end.toISOString(),
-    hours: dayWindow.hours
-  };
-  runtime.humidity = humidity;
-
-  const humidityPause = Number.isFinite(humidity) && humidity >= irrigationConfig.maxRh;
-  let desired = false;
-  let decisionReason = 'cycle';
-
-  if (irrigationConfig.mode === 'always_on') {
-    desired = true;
-    decisionReason = 'always_on';
-  } else {
-    if (!irrigationSchedulerState.nextToggleAt || now >= irrigationSchedulerState.nextToggleAt) {
-      irrigationSchedulerState.cycleState = irrigationSchedulerState.cycleState === 'on' ? 'off' : 'on';
-      const durationMinutes = irrigationSchedulerState.cycleState === 'on' ? onMinutes : offMinutes;
-      irrigationSchedulerState.nextToggleAt = now + durationMinutes * 60 * 1000;
-    }
-    desired = irrigationSchedulerState.cycleState === 'on';
-  }
-
-  if (humidityPause) {
-    desired = false;
-    decisionReason = 'humidity_pause';
-  }
-
-  runtime.desiredState = desired ? 'on' : 'off';
-  runtime.decisionReason = decisionReason;
-  runtime.nextToggleAt = irrigationSchedulerState.nextToggleAt
-    ? new Date(irrigationSchedulerState.nextToggleAt).toISOString()
-    : null;
-  runtime.cycleState = irrigationSchedulerState.cycleState;
-  runtime.onMinutes = onMinutes;
-  runtime.offMinutes = offMinutes;
-
-  if (!irrigationConfig.plugId || !preAutomationEngine || typeof preAutomationEngine.setPlugState !== 'function') {
-    runtime.status = irrigationConfig.plugId ? 'engine-unavailable' : 'plug-unconfigured';
-    updateIrrigationRuntime(doc, runtime);
-    return;
-  }
-
-  const shouldSwitch = irrigationSchedulerState.appliedState === null || irrigationSchedulerState.appliedState !== desired;
-  const canSwitch = !irrigationSchedulerState.lastSwitchAt || (now - irrigationSchedulerState.lastSwitchAt) >= IRRIGATION_MIN_SWITCH_MS;
-
-  if (shouldSwitch && canSwitch) {
-    try {
-      await preAutomationEngine.setPlugState(irrigationConfig.plugId, desired);
-      irrigationSchedulerState.appliedState = desired;
-      irrigationSchedulerState.lastSwitchAt = now;
-      irrigationSchedulerState.lastError = null;
-      runtime.status = desired ? 'running' : 'paused';
-      runtime.appliedState = desired ? 'on' : 'off';
-    } catch (error) {
-      irrigationSchedulerState.lastError = error?.message || 'plug-control-failed';
-      runtime.status = 'error';
-      runtime.error = irrigationSchedulerState.lastError;
-    }
-  } else {
-    runtime.status = irrigationSchedulerState.appliedState ? 'running' : 'paused';
-    runtime.appliedState = irrigationSchedulerState.appliedState ? 'on' : 'off';
-    if (!canSwitch) {
-      runtime.guard = `min-switch ${IRRIGATION_MIN_SWITCH_MS}ms`;
-    }
-  }
-
-  irrigationSchedulerState.lastDecisionAt = now;
-  irrigationSchedulerState.lastReason = decisionReason;
-  updateIrrigationRuntime(doc, runtime);
-}
-
-function ensureIrrigationScheduler() {
-  if (irrigationSchedulerTimer) return;
-  irrigationSchedulerTimer = setInterval(() => {
-    refreshIrrigationScheduler({ reason: 'timer' }).catch((error) => {
-      console.warn('[irrigation] Scheduler tick failed:', error?.message || error);
-    });
-  }, IRRIGATION_SCHEDULER_INTERVAL_MS);
-  if (typeof irrigationSchedulerTimer?.unref === 'function') {
-    irrigationSchedulerTimer.unref();
-  }
-}
-
 let nutrientPollTimer = null;
 
 function ensureNutrientAutomationTimer() {
@@ -14584,10 +12811,6 @@ async function getNutrientAutomationState({ forceRefresh = false } = {}) {
 ensureNutrientAutomationTimer();
 refreshNutrientAutomation({ force: true, reason: 'startup' }).catch((error) => {
   console.warn('[nutrients] Initial nutrient poll failed:', error?.message || error);
-});
-ensureIrrigationScheduler();
-refreshIrrigationScheduler({ force: true, reason: 'startup' }).catch((error) => {
-  console.warn('[irrigation] Initial scheduler run failed:', error?.message || error);
 });
 
 app.options('/api/nutrients/targets', (req, res) => {
@@ -15200,9 +13423,6 @@ app.use('/py', async (req, res) => {
 
 // Global trace middleware - catches ALL requests before any routing
 app.use((req, res, next) => {
-  // Log ALL requests to debug routing
-  console.log(`[DEBUG TRACE] ${req.method} ${req.path} (originalUrl: ${req.originalUrl})`);
-  
   if (req.path.startsWith('/grow3')) {
     console.log(`[GLOBAL TRACE] Request intercepted: ${req.method} ${req.path} (originalUrl: ${req.originalUrl})`);
     console.log(`[GLOBAL TRACE] Headers:`, req.headers);
@@ -15227,15 +13447,9 @@ grow3Router.all('*', async (req, res) => {
   const fullPath = `${req.baseUrl}${req.path}`;
   console.log(`[Grow3 Proxy] Handler executing for ${req.method} ${fullPath}`);
   try {
-    // req.path already has /grow3 stripped by Express router
-    // e.g., request to /grow3/api/devicedatas gives req.path = /api/devicedatas
-    // But request to /grow3/devicedatas gives req.path = /devicedatas (missing /api)
-    // Ensure path starts with /api for controller
+    // Transform /grow3/devicedatas/device/2 → /api/devicedatas/device/2
     const controllerBase = getController().replace(/\/+$/, '');
-    let targetPath = req.path;
-    if (!targetPath.startsWith('/api')) {
-      targetPath = `/api${targetPath}`;
-    }
+    const targetPath = fullPath.replace(/^\/grow3/, '/api');
     const targetUrl = `${controllerBase}${targetPath}`;
     
     console.log(`[Grow3 Proxy] ${req.method} ${fullPath} → ${targetUrl}`);
@@ -15243,25 +13457,19 @@ grow3Router.all('*', async (req, res) => {
       console.log(`[Grow3 Proxy] Payload:`, JSON.stringify(req.body, null, 2));
     }
     
-    // Check if this is a device control request and transform channelsValue → value
+    // Check if this is a device control request (use channelsValue field)
     const deviceMatch = targetPath.match(/^\/api\/devicedatas\/device\/(\d+)$/);
-    let requestBody = req.body;
-    if (deviceMatch && req.method === 'PATCH' && req.body) {
-      const { status, channelsValue } = req.body;
+    if (deviceMatch && req.method === 'PATCH') {
+      const { status, channelsValue } = req.body || {};
       console.log(`[Grow3 Proxy] Device control request: device=${deviceMatch[1]}, status=${status}, channelsValue=${channelsValue}`);
-      // Transform channelsValue → value for Code3 controller
-      if (channelsValue !== undefined) {
-        requestBody = { status, value: channelsValue };
-        console.log(`[Grow3 Proxy] Transformed to: value=${channelsValue}`);
-      }
     }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     
     try {
-      const bodyString = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && requestBody !== undefined
-        ? JSON.stringify(requestBody)
+      const bodyString = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.body !== undefined
+        ? JSON.stringify(req.body)
         : undefined;
       
       const response = await fetch(targetUrl, {
@@ -15656,11 +13864,16 @@ app.get('/api/admin/farms', adminAuthMiddleware, asyncHandler(async (req, res) =
  * Returns detailed data for a specific farm
  * PROTECTED: Requires admin authentication
  */
-app.get('/api/admin/farms/:farmId', adminAuthMiddleware, asyncHandler(async (req, res) => {
+app.get('/api/admin/farms/:farmId', adminAuthMiddleware, createDemoModeHandler(), asyncHandler(async (req, res) => {
   console.log(`[admin] GET /api/admin/farms/${req.params.farmId} called`);
   const { farmId } = req.params;
   
-  // Demo mode removed - always use real farm data
+  // Handle demo mode
+  if (req.isDemoRequest && isDemoMode()) {
+    const demoData = getDemoData();
+    const farm = demoData.getFarm();
+    return res.json(farm);
+  }
   
   const registry = loadFarmRegistry();
   const farmConfig = registry.farms.find(f => f.farmId === farmId);
@@ -15725,16 +13938,8 @@ app.get('/api/admin/farms/:farmId', adminAuthMiddleware, asyncHandler(async (req
 app.get('/api/admin/farms/db', adminAuthMiddleware, asyncHandler(async (req, res) => {
   console.log('[admin] GET /api/admin/farms/db called');
   
-  const pool = req.app.locals?.db;
-  if (!pool) {
-    return res.status(503).json({
-      status: 'error',
-      message: 'Database not available on edge devices. Admin panel requires cloud deployment.'
-    });
-  }
-  
   try {
-    const result = await pool.query(`
+    const result = await dbPool.query(`
       SELECT 
         farm_id as "farmId",
         name,
@@ -15779,22 +13984,14 @@ app.delete('/api/admin/farms/:email', adminAuthMiddleware, asyncHandler(async (r
     });
   }
   
-  const pool = req.app.locals?.db;
-  if (!pool) {
-    return res.status(503).json({
-      status: 'error',
-      message: 'Database not available on edge devices. Admin operations require cloud deployment.'
-    });
-  }
-  
   try {
     // Find all farms and users with this email
-    const farmsResult = await pool.query(
+    const farmsResult = await dbPool.query(
       'SELECT farm_id, name FROM farms WHERE email = $1',
       [email]
     );
     
-    const usersResult = await pool.query(
+    const usersResult = await dbPool.query(
       'SELECT user_id FROM users WHERE email = $1',
       [email]
     );
@@ -15811,13 +14008,13 @@ app.delete('/api/admin/farms/:email', adminAuthMiddleware, asyncHandler(async (r
     
     // Delete users first (foreign key constraint)
     if (usersResult.rows.length > 0) {
-      await pool.query('DELETE FROM users WHERE email = $1', [email]);
+      await dbPool.query('DELETE FROM users WHERE email = $1', [email]);
       console.log(`[admin] Deleted ${usersResult.rows.length} users`);
     }
     
     // Delete farms
     if (farmsResult.rows.length > 0) {
-      await pool.query('DELETE FROM farms WHERE email = $1', [email]);
+      await dbPool.query('DELETE FROM farms WHERE email = $1', [email]);
       console.log(`[admin] Deleted ${farmsResult.rows.length} farms`);
     }
     
@@ -16269,52 +14466,45 @@ app.get('/api/admin/harvest/forecast', adminAuthMiddleware, asyncHandler(async (
 /**
  * POST /api/farm/auth/login
  * Farm admin login endpoint
- * DEPRECATED: Use /api/auth/login instead (routes/auth.js)
- * This endpoint is maintained for backward compatibility only
+ * DEMO MODE: Bypasses authentication when DEMO_MODE=true
  */
 
-// Use authRateLimiter from middleware (10 attempts per 15 minutes)
-app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) => {
+// Rate limiter for login endpoint: 5 attempts per 15 minutes
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 login attempts per window per IP
+  message: { status: 'error', message: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Use keyGenerator to get IP from X-Forwarded-For (trust proxy must be enabled)
+  keyGenerator: (req) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    console.log('[farm-auth] Rate limit key for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
+    return ip;
+  },
+  handler: (req, res) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    console.error('[farm-auth] ✗ Rate limit exceeded for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
+    res.status(429).json({ 
+      status: 'error', 
+      message: 'Too many login attempts. Please try again in 15 minutes.',
+      retryAfter: Math.ceil(15 * 60) // seconds
+    });
+  },
+  skip: (req) => {
+    // Log every request for debugging
+    const ip = req.ip || req.connection.remoteAddress;
+    console.log('[farm-auth] Login attempt from IP:', ip, 'Count will be tracked');
+    return false; // Don't skip any requests
+  }
+});
+
+app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res) => {
   console.log('[farm-auth] POST /api/farm/auth/login called');
-  console.warn('[farm-auth] ⚠️  DEPRECATED: Use /api/auth/login instead. This endpoint will be removed in a future version.');
   const { farmId, email, password } = req.body;
   
-  // EDGE DEVICE: Proxy authentication to central server if no local database
-  const dbPool = req.app.locals?.db;
-  const centralUrl = process.env.GREENREACH_CENTRAL_URL;
-  
-  if (!dbPool && centralUrl) {
-    console.log('[farm-auth] Edge device mode - proxying to central server:', centralUrl);
-    
-    try {
-      const authResponse = await fetch(`${centralUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ farm_id: farmId, email, password })
-      });
-      
-      const authData = await authResponse.json();
-      
-      if (!authResponse.ok) {
-        return res.status(authResponse.status).json(authData);
-      }
-      
-      console.log('[farm-auth] ✅ Central auth successful');
-      return res.json(authData);
-      
-    } catch (error) {
-      console.error('[farm-auth] ❌ Central auth failed:', error.message);
-      return res.status(500).json({
-        status: 'error',
-        message: 'Failed to authenticate with central server',
-        error: error.message
-      });
-    }
-  }
-  
-  // DEMO MODE REMOVED: No bypass - always require real authentication
-  if (false) {
-    // Demo mode removed
+  // DEMO MODE BYPASS: Grant full access without credentials
+  if (isDemoMode()) {
     const demoToken = crypto.randomBytes(32).toString('hex');
     const demoExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     
@@ -16432,24 +14622,17 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       });
     }
 
-    // Fetch farm's JWT secret for token signing
-    const farmSecretResult = await pool.query(
-      'SELECT jwt_secret FROM farms WHERE farm_id = $1',
-      [farmId]
-    );
-    
-    const farmJwtSecret = farmSecretResult.rows[0]?.jwt_secret || process.env.JWT_SECRET || 'fallback-secret-change-in-production';
-    
-    // Generate JWT token using farm-specific secret
+    // Generate JWT token
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
     const jwtToken = jwt.sign(
       {
         farmId: farm.farm_id,
         email: user.email,
         role: user.role || 'admin',
         userId: user.user_id,
-        planType: farm.plan_type || 'edge'
+        planType: farm.plan_type || 'cloud'
       },
-      farmJwtSecret,
+      jwtSecret,
       { expiresIn: '24h' }
     );
 
@@ -17081,70 +15264,9 @@ app.post('/api/users/create', asyncHandler(async (req, res) => {
       [farmId, email, name, role, passwordHash]
     );
     
-    // Send confirmation email to new user
-    try {
-      const farmResult = await req.app.locals.db.query(
-        'SELECT name FROM farms WHERE farm_id = $1',
-        [farmId]
-      );
-      const farmName = farmResult.rows[0]?.name || 'Your Farm';
-      
-      await sendEmail({
-        to: email,
-        subject: `Welcome to ${farmName} - Light Engine Access Granted`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #10b981;">Welcome to Light Engine</h2>
-            <p>Hi ${name},</p>
-            <p>Your account has been created for <strong>${farmName}</strong>.</p>
-            
-            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #1f2937;">Login Credentials</h3>
-              <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
-              <p style="margin: 10px 0;"><strong>Role:</strong> ${role.charAt(0).toUpperCase() + role.slice(1)}</p>
-              <p style="margin: 10px 0;"><strong>Temporary Password:</strong> ${password}</p>
-            </div>
-            
-            <p><strong>⚠️ Important:</strong> Please change your password after your first login for security.</p>
-            
-            <p>You can access the system at:</p>
-            <p><a href="${req.protocol}://${req.get('host')}/login.html" style="color: #10b981; text-decoration: none; font-weight: bold;">${req.protocol}://${req.get('host')}/login.html</a></p>
-            
-            <p>If you have any questions, please contact your farm administrator.</p>
-            
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-            <p style="color: #6b7280; font-size: 12px;">This is an automated message from Light Engine Foxtrot. Please do not reply to this email.</p>
-          </div>
-        `,
-        text: `
-Welcome to Light Engine
-
-Hi ${name},
-
-Your account has been created for ${farmName}.
-
-Login Credentials:
-- Email: ${email}
-- Role: ${role.charAt(0).toUpperCase() + role.slice(1)}
-- Temporary Password: ${password}
-
-⚠️ Important: Please change your password after your first login for security.
-
-Access the system at: ${req.protocol}://${req.get('host')}/login.html
-
-If you have any questions, please contact your farm administrator.
-        `
-      });
-      
-      console.log(`[/api/users/create] Confirmation email sent to ${email}`);
-    } catch (emailError) {
-      console.error('[/api/users/create] Failed to send confirmation email:', emailError);
-      // Don't fail the user creation if email fails
-    }
-    
     res.json({
       status: 'success',
-      message: 'User created successfully. Confirmation email sent.',
+      message: 'User created successfully',
       user: { email, name, role }
     });
     
@@ -17327,7 +15449,7 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     // First decode JWT without verification to get farmId
     const decoded = jwt.decode(token);
     
-    if (!decoded || (!decoded.farmId && !decoded.farm_id)) {
+    if (!decoded || !decoded.farmId) {
       console.error('[/api/farm/profile] JWT decode failed or missing farmId');
       return res.status(403).json({
         status: 'error',
@@ -17335,29 +15457,14 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
       });
     }
     
-    const farmId = decoded.farm_id || decoded.farmId;
+    const farmId = decoded.farmId;
     const db = req.app.locals.db;
     
     if (!db) {
       console.error('[/api/farm/profile] Database not available');
-      const farmData = readJSONSafe(FARM_PATH, null);
-      const roomsData = readJSONSafe(path.join(DATA_DIR, 'rooms.json'), null);
-      const fallbackFarmId = farmData?.farmId || process.env.FARM_ID || farmId;
-      const fallbackName = farmData?.name || process.env.FARM_NAME || 'Light Engine Farm';
-      return res.json({
-        status: 'success',
-        farm: {
-          farmId: fallbackFarmId,
-          name: fallbackName,
-          planType: 'edge',
-          email: farmData?.contact?.email || '',
-          contactName: farmData?.contact?.name || '',
-          location: farmData?.coordinates || null,
-          timezone: farmData?.timezone || 'America/New_York',
-          posInstanceId: null,
-          storeSubdomain: null,
-          rooms: Array.isArray(roomsData?.rooms) ? roomsData.rooms : []
-        }
+      return res.status(500).json({
+        status: 'error',
+        message: 'Database connection not available'
       });
     }
     
@@ -17440,13 +15547,12 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
 app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
   const { farmId } = req.params;
   
-  // Allow Edge device farms (LOCAL-FARM, GR-00001, or FARM-*) without authentication
-  // Edge devices are trusted to access their own data locally
-  const isEdgeFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001' || farmId.startsWith('FARM-'));
+  // Allow demo farms (LOCAL-FARM and GR-00001) without authentication
+  const isDemoFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001');
   let session = null;
   
-  if (!isEdgeFarm) {
-    // Verify authentication for cloud-managed farms
+  if (!isDemoFarm) {
+    // Verify authentication for non-demo farms
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
@@ -17466,71 +15572,44 @@ app.get('/api/farm/activity/:farmId', asyncHandler(async (req, res) => {
     }
   }
   
-  // Read actual activity from audit logs
-  const activity = [];
-  
-  try {
-    const auditLogPath = join(publicDataDir, '..', 'logs', 'audit.log');
-    
-    // Check if audit log exists
-    if (await fsPromises.access(auditLogPath).then(() => true).catch(() => false)) {
-      const logContent = await fsPromises.readFile(auditLogPath, 'utf-8');
-      const logLines = logContent.split('\n').filter(line => line.trim()).slice(-50); // Last 50 events
-      
-      for (const line of logLines) {
-        try {
-          const entry = JSON.parse(line);
-          
-          // Format audit log entry as activity
-          let description = '';
-          let user = entry.userId || 'System';
-          
-          if (entry.eventType === 'LOGIN_SUCCESS') {
-            description = `User logged in: ${entry.email || user}`;
-          } else if (entry.eventType === 'LOGIN_FAILURE') {
-            description = `Failed login attempt: ${entry.email || 'unknown'}`;
-            user = 'Security';
-          } else if (entry.eventType === 'AUTOMATION_TRIGGERED') {
-            description = entry.message || 'Automation action triggered';
-          } else if (entry.eventType === 'SENSOR_UPDATE') {
-            description = `Environmental data updated`;
-          } else if (entry.action) {
-            description = `${entry.action}: ${entry.resource_type || 'resource'}`;
-          } else {
-            description = entry.message || JSON.stringify(entry).substring(0, 100);
-          }
-          
-          activity.push({
-            timestamp: entry.timestamp,
-            description,
-            user,
-            status: entry.success === false ? 'error' : 'active'
-          });
-        } catch (parseError) {
-          // Skip malformed log lines
-          continue;
-        }
-      }
+  // Mock activity data (in production, fetch from database)
+  const userEmail = session?.email || 'demo@farm.com';
+  const activity = [
+    {
+      timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+      description: 'Irrigation cycle completed in ROOM-A-Z1',
+      user: 'System',
+      status: 'active'
+    },
+    {
+      timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      description: 'New growth group planted: ROOM-A-Z1-G03',
+      user: userEmail,
+      status: 'active'
+    },
+    {
+      timestamp: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      description: 'Environmental data synced to GreenReach',
+      user: 'System',
+      status: 'active'
+    },
+    {
+      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      description: 'Device SENSOR-012 came online',
+      user: 'System',
+      status: 'active'
+    },
+    {
+      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+      description: 'Subscription payment processed',
+      user: 'Billing',
+      status: 'active'
     }
-  } catch (error) {
-    console.warn('[Activity] Failed to read audit log:', error.message);
-  }
-  
-  // If no real activity found, return empty array (NOT mock data)
-  if (activity.length === 0) {
-    return res.json({
-      status: 'success',
-      activity: [],
-      message: 'No recent activity recorded'
-    });
-  }
-  
-  // Sort by timestamp descending and limit to 20
-  activity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  ];
   
   res.json({
     status: 'success',
-    activity: activity.slice(0, 20)
+    activity
   });
 }));
 
@@ -17609,12 +15688,11 @@ app.get('/api/billing/usage/:farmId', asyncHandler(async (req, res) => {
   
   console.log(`[billing] GET /api/billing/usage/${farmId} called`);
   
-  // Allow Edge device farms (LOCAL-FARM, GR-00001, or FARM-*) without authentication
-  // Edge devices are trusted to access their own billing data locally
-  const isEdgeFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001' || farmId.startsWith('FARM-'));
+  // Allow demo farms (LOCAL-FARM and GR-00001) without authentication
+  const isDemoFarm = (farmId === 'LOCAL-FARM' || farmId === 'GR-00001');
   
-  if (!isEdgeFarm) {
-    // Verify authentication for cloud-managed farms
+  if (!isDemoFarm) {
+    // Verify authentication for non-demo farms
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
@@ -17900,14 +15978,14 @@ app.get('/api/demo/intro-cards', (req, res) => {
     return res.json({
       ok: true,
       card: introCards[page],
-      demo: false
+      demo: isDemoMode()
     });
   }
   
   return res.json({
     ok: true,
     cards: introCards,
-    demo: false
+    demo: isDemoMode()
   });
 });
 
@@ -17917,8 +15995,6 @@ app.get('/api/demo/intro-cards', (req, res) => {
  */
 app.get('/api/inventory/current', (req, res) => {
   try {
-    const farmId = process.env.FARM_ID || 'FARM-LOCAL';
-    const farmName = process.env.FARM_NAME || 'Light Engine Farm';
     // Load from groups.json (real crop data)
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
     if (!fs.existsSync(groupsPath)) {
@@ -17982,8 +16058,8 @@ app.get('/api/inventory/current', (req, res) => {
       farmCount: 1,
       byFarm: [
         {
-          farmId,
-          name: farmName,
+          farmId: 'GR-00001',
+          name: 'Demo Vertical Farm',
           activeTrays: totalTrays,
           totalPlants: totalPlants,
           trays: allTrays
@@ -18369,7 +16445,7 @@ app.post('/api/trays/register', (req, res) => {
   }
   
   // In demo mode, just acknowledge registration
-  if (false) { // Demo mode removed
+  if (isDemoMode()) {
     console.log('[inventory] Demo mode: Tray registered:', trayId);
     return res.json({ success: true, trayId, message: 'Tray registered (demo mode)' });
   }
@@ -18386,8 +16462,7 @@ app.post('/api/trays/:trayId/seed', (req, res) => {
   const { trayId } = req.params;
   const { recipe, seedDate, plantCount } = req.body;
   
-  // Demo mode removed - always use real seeding logic
-  if (false) {
+  if (isDemoMode()) {
     console.log('[inventory] Demo mode: Tray seeded:', { trayId, recipe, seedDate, plantCount });
     return res.json({ success: true, message: 'Seeding recorded (demo mode)' });
   }
@@ -18458,8 +16533,8 @@ app.post('/api/tray-runs/:id/loss', async (req, res) => {
   }
   
   try {
-    // Demo mode removed - always use real loss recording
-    if (false) {
+    // In demo mode, just mock the operation
+    if (isDemoMode()) {
       console.log('[inventory] Demo mode: Tray loss recorded:', { 
         trayRunId, 
         crop_name, 
@@ -18540,8 +16615,7 @@ app.get('/api/tray-runs/:id/loss-events', async (req, res) => {
   const { id: trayRunId } = req.params;
   
   try {
-    // Demo mode removed
-    if (false) {
+    if (isDemoMode()) {
       return res.json({ 
         trayRunId,
         lossEvents: [],
@@ -18570,7 +16644,7 @@ app.get('/api/losses/current', async (req, res) => {
   const { farmId, tenant_id } = req.query;
   
   try {
-    if (false) { // Demo mode removed
+    if (isDemoMode()) {
       return res.json({
         totalLosses: 0,
         lossesByReason: {},
@@ -18664,8 +16738,8 @@ app.get('/api/config/app', async (req, res) => {
     // Return configuration with fallback
     const config = {
       ok: true,
-      farmId: (farmData && farmData.farmId) ? farmData.farmId : (process.env.FARM_ID || 'light-engine-demo'),
-      farmName: (farmData && farmData.name) ? farmData.name : (process.env.FARM_NAME || 'GreenReach Demo Farm'),
+      farmId: (farmData && farmData.farmId) ? farmData.farmId : 'light-engine-demo',
+      farmName: (farmData && farmData.name) ? farmData.name : 'GreenReach Demo Farm',
       farmSlug: subdomain !== 'default' ? subdomain : 'demo',
       storeUrl: subdomain !== 'default' ? `https://${subdomain}.greenreachgreens.com` : null,
       region: (farmData && farmData.region) ? farmData.region : 'Pacific Northwest',
@@ -18679,108 +16753,11 @@ app.get('/api/config/app', async (req, res) => {
     // Even on error, return valid config with defaults
     res.json({
       ok: true,
-      farmId: process.env.FARM_ID || 'light-engine-demo',
-      farmName: process.env.FARM_NAME || 'GreenReach Demo Farm',
+      farmId: 'light-engine-demo',
+      farmName: 'GreenReach Demo Farm',
       farmSlug: 'demo',
       region: 'Pacific Northwest',
       status: 'online'
-    });
-  }
-});
-
-/**
- * Authentication middleware for farm metadata updates
- * Validates X-API-Key header from GreenReach Central
- */
-function authenticateFarmMetadata(req, res, next) {
-  const apiKey = req.headers['x-api-key'];
-  const expectedKey = process.env.SYNC_API_KEY || 'default-sync-key';
-  
-  if (!apiKey) {
-    console.warn('[API] Farm metadata update rejected: Missing X-API-Key header');
-    return res.status(401).json({
-      success: false,
-      error: 'Unauthorized - X-API-Key header required'
-    });
-  }
-  
-  if (apiKey !== expectedKey) {
-    console.warn('[API] Farm metadata update rejected: Invalid X-API-Key');
-    return res.status(401).json({
-      success: false,
-      error: 'Unauthorized - Invalid API key'
-    });
-  }
-  
-  next();
-}
-
-/**
- * PATCH /api/config/farm-metadata
- * Update farm metadata (contact info) from GreenReach Central
- * Updates farm.json on the edge device
- * Requires: X-API-Key header authentication
- */
-app.patch('/api/config/farm-metadata', authenticateFarmMetadata, async (req, res) => {
-  try {
-    console.log('[API] PATCH /api/config/farm-metadata - Received authenticated update from GreenReach Central');
-    const { contact } = req.body;
-    
-    if (!contact || typeof contact !== 'object') {
-      return res.status(400).json({
-        success: false,
-        error: 'Contact object is required'
-      });
-    }
-    
-    // Load current farm.json
-    const farmJsonPath = path.join(__dirname, 'farm.json');
-    let farmData = {};
-    
-    try {
-      const farmJsonContent = await fsPromises.readFile(farmJsonPath, 'utf-8');
-      farmData = JSON.parse(farmJsonContent);
-    } catch (readError) {
-      console.warn('[API] farm.json not found or invalid, creating new one');
-      farmData = {
-        farmId: process.env.FARM_ID || 'unknown',
-        farmName: process.env.FARM_NAME || 'Unknown Farm'
-      };
-    }
-    
-    // Update contact metadata
-    farmData.metadata = farmData.metadata || {};
-    farmData.metadata.contact = {
-      ...(farmData.metadata.contact || {}),
-      owner: contact.owner || farmData.metadata.contact?.owner,
-      name: contact.name || farmData.metadata.contact?.name,
-      contactName: contact.name || farmData.metadata.contact?.contactName,
-      phone: contact.phone || farmData.metadata.contact?.phone,
-      email: contact.email || farmData.metadata.contact?.email,
-      website: contact.website || farmData.metadata.contact?.website,
-      address: contact.address || farmData.metadata.contact?.address
-    };
-    
-    farmData.metadata.lastUpdated = new Date().toISOString();
-    farmData.metadata.updatedBy = 'GreenReach Central';
-    
-    // Write updated farm.json
-    await fsPromises.writeFile(farmJsonPath, JSON.stringify(farmData, null, 2), 'utf-8');
-    
-    console.log('[API] farm.json updated successfully with new contact metadata');
-    
-    res.json({
-      success: true,
-      message: 'Farm metadata updated successfully',
-      metadata: farmData.metadata
-    });
-    
-  } catch (error) {
-    console.error('[API] Error updating farm metadata:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update farm metadata',
-      message: error.message
     });
   }
 });
@@ -18795,15 +16772,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Ensure Node.js handlers win for groups before proxy middleware
-app.get('/api/groups', asyncHandler(async (req, res) => {
-  const groups = loadGroupsFile();
-
-  // Return full group data including plan, lights, schedule, etc.
-  // Group v2 needs this complete data to populate the load group dropdown
-  res.json(groups);
-}));
-
 // Only set up proxy middleware if controller is not explicitly disabled
 const isControllerDisabled = process.env.CTRL === 'DISABLED' || process.env.CTRL === 'disabled' || process.env.CTRL === 'false';
 if (!isControllerDisabled) {
@@ -18817,14 +16785,13 @@ if (!isControllerDisabled) {
   logLevel: 'debug',
   timeout: 5000,
   proxyTimeout: 5000,
-  // Note: agent removed - incompatible with http-proxy-middleware v3+
+  agent: (url) => (String(url).startsWith('https:') ? keepAliveHttpsAgent : keepAliveHttpAgent),
   // Filter: only proxy paths that should go to the Grow3 controller
   // Exclude paths handled by Node.js server (env, automation, switchbot, kasa, etc.)
   filter: (pathname, req) => {
     // Don't proxy these paths - they're handled by Node.js server
     // Note: pathname may or may not include /api prefix depending on middleware order
     const fullPath = req.originalUrl || pathname;
-    const normalizedFullPath = String(fullPath).replace(/^\/api\/api\//, '/api/');
     const excludePaths = [
       '/api/env',
       '/api/automation/',
@@ -18854,12 +16821,8 @@ if (!isControllerDisabled) {
       '/api/crop-pricing',   // Crop pricing configuration
       '/api/farm-auth/',     // Farm authentication for Sales Terminal
       '/api/farm/auth/',     // Farm authentication alternate path
-      '/api/auth/',          // Authentication endpoints (farm login, device tokens)
       '/api/farm-sales/',    // Farm Sales Terminal inventory and POS
-      '/api/wholesale/',     // Wholesale inventory and catalog
-      '/api/groups',         // Groups management (handled by Node.js)
-      '/api/rooms',          // Rooms management
-      '/api/zones'           // Zones management
+      '/api/wholesale/'      // Wholesale inventory and catalog
     ];
     
     // Also check without /api prefix (in case pathname is just the path without /api)
@@ -18868,7 +16831,6 @@ if (!isControllerDisabled) {
     
     // Check if full path or pathname starts with any excluded pattern
     const shouldExclude = excludePaths.some(excluded => 
-      normalizedFullPath.startsWith(excluded) || 
       fullPath.startsWith(excluded) || 
       pathname.startsWith(excluded) ||
       withApiPrefix.startsWith(excluded) ||
@@ -18876,7 +16838,7 @@ if (!isControllerDisabled) {
     );
     
     if (shouldExclude) {
-      console.log(`[Proxy Filter] Skipping ${normalizedFullPath} - handled by Node.js server`);
+      console.log(`[Proxy Filter] Skipping ${fullPath} - handled by Node.js server`);
       return false;
     }
     
@@ -18945,7 +16907,7 @@ if (!isControllerDisabled) {
   logLevel: 'debug',
   timeout: 5000,
   proxyTimeout: 5000,
-  // Note: agent removed - incompatible with http-proxy-middleware v3+
+  agent: (url) => (String(url).startsWith('https:') ? keepAliveHttpsAgent : keepAliveHttpAgent),
   pathRewrite: (path) => path.replace(/^\/controller/, ''),
   onProxyReq(proxyReq, req) {
     console.log(`[→] ${req.method} ${req.originalUrl} -> ${getController()}${req.url}`);
@@ -19024,84 +16986,26 @@ app.get('/index.html', (req, res, next) => {
   res.type('html').send(html);
 });
 
-// Production data routes - serve actual Edge device data
+// Explicit demo data routes to avoid 404s if static middleware wins
 app.get('/data/farm.json', (req, res, next) => {
-  // Always serve production data from public/data/farm.json
-  return next();
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.json({
+    farmId: farm.farmId,
+    name: farm.name,
+    status: farm.status,
+    region: farm.region,
+    url: farm.url,
+    contact: farm.contact,
+    coordinates: farm.coordinates
+  });
 });
 
 app.get('/data/rooms.json', (req, res, next) => {
-  // Always use production data from public/data/rooms.json
-  try {
-    const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
-    if (fs.existsSync(roomsPath)) {
-      const raw = fs.readFileSync(roomsPath, 'utf8');
-      const payload = raw ? JSON.parse(raw) : { rooms: [] };
-      const rooms = payload.rooms || payload || [];
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ rooms: Array.isArray(rooms) ? rooms : [] });
-    }
-
-      // Derive rooms from groups.json if rooms.json is missing
-      const groupsPath = path.join(__dirname, 'public', 'data', 'groups.json');
-      if (fs.existsSync(groupsPath)) {
-        const raw = fs.readFileSync(groupsPath, 'utf8');
-        const payload = raw ? JSON.parse(raw) : { groups: [] };
-        const groups = Array.isArray(payload.groups) ? payload.groups : [];
-        const roomMap = new Map();
-        const zoneMap = new Map();
-        
-        groups.forEach(group => {
-          const roomId = group.roomId || group.room || 'Unknown';
-          const zoneName = group.zone || 'Zone 1';
-          const zoneId = group.zoneId || `${roomId}:1`;
-          
-          // Extract zone number from zoneId (e.g., "GreenReach:1" -> "1")
-          const zoneMatch = zoneId.match(/:(\d+)$/);
-          const zoneNumber = zoneMatch ? zoneMatch[1] : '1';
-          
-          if (!roomMap.has(roomId)) {
-            roomMap.set(roomId, {
-              id: roomId,
-              roomId,
-              name: roomId,
-              type: group.roomType || 'grow',
-              zones: []
-            });
-          }
-          
-          // Track zones per room
-          const zoneKey = `${roomId}:${zoneNumber}`;
-          if (!zoneMap.has(zoneKey)) {
-            zoneMap.set(zoneKey, {
-              id: zoneNumber,
-              name: zoneName,
-              groups: []
-            });
-            roomMap.get(roomId).zones.push(zoneMap.get(zoneKey));
-          }
-          
-          // Add group to zone
-          zoneMap.get(zoneKey).groups.push(group.id);
-        });
-        
-        const rooms = Array.from(roomMap.values());
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cache-Control', 'no-cache');
-        return res.json({ rooms });
-      }
-
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ rooms: [] });
-    } catch (err) {
-      console.warn('[rooms] Failed to load rooms.json:', err?.message || err);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ rooms: [] });
-    }
-  }
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
   
   // Transform rooms to include fixtures
   const lights = farm.devices?.lights || [];
@@ -19140,26 +17044,8 @@ app.get('/data/rooms.json', (req, res, next) => {
 
 // IoT devices (sensors)
 app.get('/data/iot-devices.json', (req, res, next) => {
-  // Always use production data from public/data/iot-devices.json
-  try {
-    const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
-    if (fs.existsSync(iotDevicesPath)) {
-      const raw = fs.readFileSync(iotDevicesPath, 'utf8');
-      const payload = raw ? JSON.parse(raw) : [];
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      return res.json(Array.isArray(payload) ? payload : []);
-    }
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-    return res.json([]);
-  } catch (err) {
-    console.warn('[IoT] Failed to load iot-devices.json:', err?.message || err);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-    return res.json([]);
-  }
-}
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
   
   // Transform sensor data from demo format to IoT device format
   const sensors = (farm.devices?.sensors || []).map(sensor => ({
@@ -19191,94 +17077,9 @@ app.get('/data/iot-devices.json', (req, res, next) => {
   return res.json(sensors);
 });
 
-// Persist IoT devices list (non-demo)
-app.post('/data/iot-devices.json', (req, res) => {
-  try {
-    const payload = Array.isArray(req.body) ? req.body : [];
-    const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
-    fs.writeFileSync(iotDevicesPath, JSON.stringify(payload, null, 2));
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-    return res.json({ ok: true, count: payload.length });
-  } catch (err) {
-    console.warn('[IoT] Failed to persist iot-devices.json:', err?.message || err);
-    return res.status(500).json({ ok: false, error: 'Failed to persist IoT devices' });
-  }
-});
-
-// Generic JSON persistence for /data/*.json (non-demo only)
-app.post('/data/:filename', (req, res) => {
-  try {
-    const fileName = String(req.params.filename || '');
-    if (!fileName.endsWith('.json')) {
-      return res.status(400).json({ ok: false, error: 'Only .json files are supported' });
-    }
-    if (!/^[a-zA-Z0-9._-]+\.json$/.test(fileName)) {
-      return res.status(400).json({ ok: false, error: 'Invalid file name' });
-    }
-
-    const targetPath = path.join(__dirname, 'public', 'data', fileName);
-    const payload = req.body ?? null;
-    fs.writeFileSync(targetPath, JSON.stringify(payload, null, 2));
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-    return res.json({ ok: true, file: fileName });
-  } catch (err) {
-    console.warn('[data] Failed to persist JSON:', err?.message || err);
-    return res.status(500).json({ ok: false, error: 'Failed to persist JSON' });
-  }
-});
-
-// IoT devices API (used by IoT Devices Manager)
-app.get('/iot/devices', (req, res) => {
-  try {
-    const iotDevicesPath = path.join(__dirname, 'public', 'data', 'iot-devices.json');
-    if (!fs.existsSync(iotDevicesPath)) {
-      return res.json({ devices: [] });
-    }
-    const raw = fs.readFileSync(iotDevicesPath, 'utf8');
-    const payload = raw ? JSON.parse(raw) : [];
-    return res.json({ devices: Array.isArray(payload) ? payload : [] });
-  } catch (err) {
-    console.warn('[IoT] Failed to load /iot/devices:', err?.message || err);
-    return res.json({ devices: [] });
-  }
-});
-
-app.post('/iot/devices/scan', async (req, res) => {
-  try {
-    const response = await fetch('http://127.0.0.1:8091/discovery/scan', { method: 'POST' });
-    const data = await response.json();
-    return res.json({ devices: Array.isArray(data?.devices) ? data.devices : [] });
-  } catch (err) {
-    console.warn('[IoT] Scan failed:', err?.message || err);
-    return res.json({ devices: [] });
-  }
-});
-
 app.get('/data/groups.json', (req, res, next) => {
-  // Always use production groups data
-  try {
-    // FIX: Use GROUPS_PATH which points to public/data/groups.json (correct location)
-    // Previously was reading from data/groups.json (wrong directory, stale data)
-    if (fs.existsSync(GROUPS_PATH)) {
-      const raw = fs.readFileSync(GROUPS_PATH, 'utf8');
-      const payload = raw ? JSON.parse(raw) : { groups: [] };
-      const groups = Array.isArray(payload.groups) ? payload.groups : (Array.isArray(payload) ? payload : []);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ groups });
-    }
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-    return res.json({ groups: [] });
-  } catch (err) {
-    console.warn('[groups] Failed to load groups.json:', err?.message || err);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ groups: [] });
-    }
-  }
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
   const groups = [];
   (farm.rooms || []).forEach((room) => {
     (room.zones || []).forEach((zone) => {
@@ -19347,14 +17148,87 @@ app.get('/data/groups.json', (req, res, next) => {
 });
 
 app.get('/data/ctrl-map.json', (req, res, next) => {
-  // Always use production control map
-  return next();
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.json({ groups: [], rooms: [], devices: [] });
 });
 
 app.get('/data/equipment.json', (req, res, next) => {
-  // Always use production equipment data
-  return next();
-});
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
+  
+  // Transform HVAC devices into equipment entries with IoT controller assignments
+  const equipment = [];
+  const hvacDevices = farm.devices?.hvac || [];
+  const rooms = farm.rooms || [];
+  
+  // Create equipment entries for HVAC systems
+  hvacDevices.forEach(hvac => {
+    const room = rooms.find(r => r.roomId === hvac.location);
+    if (!room) return;
+    
+    // HVAC Controller (the smart device)
+    equipment.push({
+      uniqueId: hvac.deviceId,
+      type: 'HVAC Controller',
+      make: hvac.vendor || 'Unknown',
+      model: hvac.model || 'Unknown',
+      room: room.name,
+      zone: room.zones?.[0]?.name || 'All Zones',
+      control: null, // Controller itself
+      controller: 'Integrated',
+      status: hvac.status || 'online',
+      metadata: {
+        isController: true,
+        protocol: 'ethernet'
+      }
+    });
+    
+    // Add equipment controlled by this HVAC (fans, dehumidifiers, etc.)
+    // Room A equipment
+    if (hvac.location === 'ROOM-A') {
+      equipment.push({
+        uniqueId: `${hvac.deviceId}-EXHAUST-FAN`,
+        type: 'Exhaust Fan',
+        make: 'Hurricane',
+        model: 'Pro Series 16"',
+        room: room.name,
+        zone: 'All Zones',
+        control: `IoT:${hvac.deviceId}`,
+        controller: hvac.name,
+        status: 'online',
+        metadata: {
+          cfm: 1800,
+          power: '0.9A'
+        }
+      });
+      
+      equipment.push({
+        uniqueId: `${hvac.deviceId}-CIRC-FAN-1`,
+        type: 'Circulation Fan',
+        make: 'Air King',
+        model: 'Wall Mount 20"',
+        room: room.name,
+        zone: room.zones?.[0]?.name || 'Zone 1',
+        control: `IoT:${hvac.deviceId}`,
+        controller: hvac.name,
+        status: 'online',
+        metadata: {
+          cfm: 3600,
+          power: '1.2A'
+        }
+      });
+      
+      equipment.push({
+        uniqueId: `${hvac.deviceId}-CIRC-FAN-2`,
+        type: 'Circulation Fan',
+        make: 'Air King',
+        model: 'Wall Mount 20"',
+        room: room.name,
+        zone: room.zones?.[2]?.name || 'Zone 3',
+        control: `IoT:${hvac.deviceId}`,
         controller: hvac.name,
         status: 'online',
         metadata: {
@@ -19455,9 +17329,33 @@ app.get('/data/equipment.json', (req, res, next) => {
 
 // Equipment metadata (controller assignments and status)
 app.get('/data/equipment-metadata.json', (req, res, next) => {
-  // Always use production metadata
-  return next();
-});
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
+  
+  const metadata = {};
+  const hvacDevices = farm.devices?.hvac || [];
+  
+  // Build metadata mapping equipment IDs to their controller info
+  hvacDevices.forEach(hvac => {
+    // The HVAC controller itself
+    metadata[hvac.deviceId] = {
+      controller: 'integrated',
+      controllerType: 'hvac',
+      lastSeen: hvac.lastSeen,
+      status: hvac.status
+    };
+    
+    // Equipment controlled by this HVAC
+    [`${hvac.deviceId}-EXHAUST-FAN`, 
+     `${hvac.deviceId}-CIRC-FAN-1`,
+     `${hvac.deviceId}-CIRC-FAN-2`,
+     `${hvac.deviceId}-DEHUMID`,
+     `${hvac.deviceId}-HUMIDIFIER`
+    ].forEach(equipId => {
+      metadata[equipId] = {
+        controller: hvac.deviceId,
+        controllerName: hvac.name,
+        controlMethod: 'IoT',
         lastSeen: hvac.lastSeen,
         status: hvac.status
       };
@@ -19469,163 +17367,13 @@ app.get('/data/equipment-metadata.json', (req, res, next) => {
   return res.json(metadata);
 });
 
-// =====================================================
-// Equipment & Schedule Save Endpoints
-// =====================================================
-// These endpoints allow UI to persist equipment and schedule data to files
-// Fixes backup system gap where UI changes weren't saved to disk
-
-// POST /api/equipment/save - Save equipment metadata to file
-app.post('/api/equipment/save', async (req, res) => {
-  try {
-    const { metadata } = req.body;
-    
-    if (!metadata || typeof metadata !== 'object') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing or invalid metadata object' 
-      });
-    }
-    
-    const filePath = path.join(__dirname, 'public/data/equipment-metadata.json');
-    
-    const data = {
-      metadata: metadata,
-      lastUpdated: new Date().toISOString(),
-      version: '1.0.0'
-    };
-    
-    await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
-    
-    const count = Object.keys(metadata).length;
-    console.log(`✅ Equipment metadata saved (${count} items)`);
-    
-    res.json({ 
-      success: true, 
-      count: count,
-      saved: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Equipment save failed:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
-// POST /api/schedules/save - Save schedules to file
-app.post('/api/schedules/save', async (req, res) => {
-  try {
-    const { schedules } = req.body;
-    
-    if (!Array.isArray(schedules)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Schedules must be an array' 
-      });
-    }
-    
-    const filePath = path.join(__dirname, 'public/data/schedules.json');
-    
-    await fsPromises.writeFile(filePath, JSON.stringify(schedules, null, 2), 'utf8');
-    
-    console.log(`✅ Schedules saved (${schedules.length} schedules)`);
-    
-    res.json({ 
-      success: true, 
-      count: schedules.length,
-      saved: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Schedule save failed:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
 // Room map for farm summary view
 app.get('/data/room-map.json', (req, res, next) => {
-  // Always use production room maps - aggregate from all room-map files
-  try {
-    const dataDir = path.join(__dirname, 'public', 'data');
-    const zones = [];
-    
-    // Load rooms.json to know which rooms exist
-    const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
-    let rooms = [];
-    if (fs.existsSync(roomsPath)) {
-      const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
-      rooms = roomsData.rooms || [];
-    }
-    
-    // For each room, try to load its room-map file
-    rooms.forEach(room => {
-      const roomId = room.id || room.name;
-      const roomMapFile = `room-map-${roomId}.json`;
-      const roomMapPath = path.join(dataDir, roomMapFile);
-        
-        if (fs.existsSync(roomMapPath)) {
-          try {
-            const roomMapData = JSON.parse(fs.readFileSync(roomMapPath, 'utf8'));
-            if (roomMapData.zones && Array.isArray(roomMapData.zones)) {
-              roomMapData.zones.forEach(zone => {
-                zones.push({
-                  zone: `${roomMapData.roomId}:${zone.zone}`,
-                  name: zone.name || `Zone ${zone.zone}`,
-                  room: roomMapData.roomId,
-                  roomName: roomMapData.name,
-                  crop: null
-                });
-              });
-            }
-          } catch (err) {
-            console.warn(`[room-map] Failed to parse ${roomMapFile}:`, err.message);
-          }
-        }
-      });
-      
-      // Fallback: also check generic room-map.json if no room-specific files found
-      if (zones.length === 0) {
-        const genericMapPath = path.join(dataDir, 'room-map.json');
-        if (fs.existsSync(genericMapPath)) {
-          try {
-            const roomMapData = JSON.parse(fs.readFileSync(genericMapPath, 'utf8'));
-            if (roomMapData.zones && Array.isArray(roomMapData.zones)) {
-              roomMapData.zones.forEach(zone => {
-                zones.push({
-                  zone: `${roomMapData.roomId}:${zone.zone}`,
-                  name: zone.name || `Zone ${zone.zone}`,
-                  room: roomMapData.roomId,
-                  roomName: roomMapData.name,
-                  crop: null
-                });
-              });
-            }
-          } catch (err) {
-            console.warn('[room-map] Failed to parse room-map.json:', err.message);
-          }
-        }
-      }
-      
-      console.log(`[room-map] Serving ${zones.length} zones from ${rooms.length} rooms`);
-      
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      return res.json({ zones });
-    } catch (error) {
-      console.error('[room-map] Error aggregating zones:', error);
-      return res.json({ zones: [] });
-    }
-  }
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
   
-  // Production only - no demo mode
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'no-cache');
-  return next();
-});
+  // Demo mode: Return comprehensive room map with positioned sensors
+  if (isDemoMode()) {
     const demoData = getDemoData();
     const envData = demoData.getEnvironmentalData();
     
@@ -19802,18 +17550,29 @@ app.get('/data/room-map.json', (req, res, next) => {
 });
 
 app.get('/data/devices.cache.json', (req, res, next) => {
-  // Always use production device cache
-  return next();
+  const farm = loadDemoFarmSnapshot();
+  if (!farm) return next();
+  const devices = [];
+  (farm.rooms || []).forEach((room) => {
+    (room.zones || []).forEach((zone) => {
+      (zone.groups || []).forEach((group) => {
+        devices.push(...(group.devices || []));
+      });
+    });
+  });
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.json({ devices, timestamp: new Date().toISOString() });
 });
 
-// Data file requests - serve from static files only (no demo mode)
+// Demo mode: Intercept data file requests BEFORE static middleware
 app.use('/data', (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'OPTIONS') return next();
   
-  // Demo mode removed - always serve real data from files
-  if (false) {
-    const demoData = null;
-    const farm = null;
+  // Demo mode data intercepts
+  if (isDemoMode()) {
+    const demoData = getDemoData();
+    const farm = demoData ? demoData.getFarm() : null;
     
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-cache');
@@ -19925,11 +17684,9 @@ app.use(express.static(PUBLIC_DIR, {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     }
-    // Disable caching for JS/CSS during active development
+    // Cache JS/CSS for 1 hour but allow revalidation
     else if (path.endsWith('.js') || path.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
     }
     // Cache images/fonts longer
     else if (path.match(/\.(jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot)$/)) {
@@ -20803,21 +18560,7 @@ async function loadEnvZonesPayload(query = {}) {
 // Expected body: { zoneId, name, temperature, humidity, vpd, co2, battery, rssi, source }
 app.post("/ingest/env", async (req, res) => {
   try {
-    const {
-      zoneId,
-      name,
-      temperature,
-      humidity,
-      vpd,
-      co2,
-      pressureHpa,
-      gasKohm,
-      pressure,
-      gas,
-      battery,
-      rssi,
-      source
-    } = req.body || {};
+    const { zoneId, name, temperature, humidity, vpd, co2, battery, rssi, source } = req.body || {};
     if (!zoneId) return res.status(400).json({ ok: false, error: "zoneId required" });
     
     // Load/ensure in-memory state
@@ -20835,36 +18578,17 @@ app.post("/ingest/env", async (req, res) => {
     if (typeof battery === "number") zone.meta.battery = battery;
     if (typeof rssi === "number") zone.meta.rssi = rssi;
 
-    // Auto-calculate VPD if not provided but temp and humidity are available
-    let calculatedVpd = vpd;
-    if (calculatedVpd == null && typeof temperature === "number" && typeof humidity === "number") {
-      calculatedVpd = computeVPDkPa(temperature, humidity);
-      console.log(`[ingest/env] Auto-calculated VPD for ${zoneId}: ${calculatedVpd?.toFixed(2)} kPa`);
-    }
-
     const ensure = (k, val, unit) => {
       zone.sensors[k] = zone.sensors[k] || { current: null, setpoint: { min: null, max: null }, history: [] };
       if (typeof val === "number" && !Number.isNaN(val)) {
         zone.sensors[k].current = val;
-        zone.sensors[k].updatedAt = new Date().toISOString();
         zone.sensors[k].history = [val, ...(zone.sensors[k].history || [])].slice(0, 100);
       }
     };
-    const resolvedPressure = pressureHpa ?? pressure;
-    const resolvedGas = gasKohm ?? gas;
-
     ensure("tempC", temperature);
     ensure("rh", humidity);
-    ensure("vpd", calculatedVpd);
+    ensure("vpd", vpd);
     ensure("co2", co2);
-    ensure("pressureHpa", resolvedPressure);
-    ensure("gasKohm", resolvedGas);
-
-    const nowIso = new Date().toISOString();
-    zone.meta.lastSampleAt = nowIso;
-    zone.meta.lastSync = nowIso;
-    zone.meta.lastUpdated = nowIso;
-    data.updatedAt = nowIso;
 
   // Persist in the background; coalesce high-churn writes
   persistEnvCache().catch((e)=>console.warn('[env] async persist failed:', e?.message || e));
@@ -21173,12 +18897,12 @@ app.put('/groups/:id', pinGuard, async (req, res) => {
 });
 
 app.options('/plans', (req, res) => { setCors(req, res); res.status(204).end(); });
-app.get('/plans', async (req, res) => {
+app.get('/plans', (req, res) => {
   try {
     setCors(req, res);
     
     // Demo mode: Return sample lighting recipes with environmental targets
-    if (false) { // Demo mode removed
+    if (isDemoMode()) {
       const demoPlans = [
         {
           id: 'crop-lettuce',
@@ -21592,7 +19316,7 @@ app.get('/plans', async (req, res) => {
       });
     }
     
-    const doc = await loadPlansDocument();
+    const doc = loadPlansDocument();
     const plans = Array.isArray(doc.plans) ? doc.plans : [];
     const envelope = sanitizePlansEnvelope(doc);
 
@@ -21834,7 +19558,7 @@ app.get('/sched', (req, res) => {
     setCors(req, res);
     
     // Demo mode: Return sample schedules
-    if (false) { // Demo mode removed
+    if (isDemoMode()) {
       const demoData = getDemoData();
       const farm = demoData.getFarm();
       const schedules = [];
@@ -21984,21 +19708,9 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
       });
       if (response && response.ok) {
         const body = await response.json();
-        // Check if controller actually succeeded (some controllers return success:false)
-        if (body?.success === false || (Array.isArray(body?.networks) && body.networks.length === 0 && body?.message)) {
-          console.log('[WiFi Scan] Network bridge returned success:false or 0 networks with message, trying local scan');
-          console.log('[WiFi Scan] Bridge message:', body?.message);
-          errors.push(`Network bridge: ${body?.message || 'returned no networks'}`);
-          // Don't return here - fall through to local scan
-        } else {
-          const networks = body?.networks || body || [];
-          console.log(`[WiFi Scan] Network bridge returned ${Array.isArray(networks) ? networks.length : 0} networks`);
-          if (Array.isArray(networks) && networks.length > 0) {
-            return res.json(networks);
-          }
-          // If 0 networks but no error message, fall through to local scan
-          console.log('[WiFi Scan] Network bridge returned 0 networks, trying local scan');
-        }
+        const networks = body?.networks || body || [];
+        console.log(`[WiFi Scan] Network bridge returned ${Array.isArray(networks) ? networks.length : 0} networks`);
+        return res.json(Array.isArray(networks) ? networks : []);
       } else if (response && response.status === 404) {
         // Controller exists but doesn't support WiFi scanning - skip to manual entry
         console.log('[WiFi Scan] Network bridge does not support WiFi scanning (404), use manual entry');
@@ -22101,13 +19813,10 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
       }
       // No macOS methods yielded networks; continue to Linux/return 503
     } else if (platform === 'linux') {
-      // Linux: try multiple methods for WiFi scanning
-      let lastError = null;
-      
-      // Method 1: Try nmcli (NetworkManager)
+      // Linux: prefer nmcli, fallback to iwlist (requires sudo for some distros)
       try {
-        const { stdout: nmcliOut } = await execAsync('nmcli -t -f SSID,SIGNAL,SECURITY dev wifi list');
-        const networks = nmcliOut
+        stdout = await execAsync('nmcli -t -f SSID,SIGNAL,SECURITY dev wifi list');
+        const networks = stdout
           .split('\n')
           .filter(Boolean)
           .map((line) => {
@@ -22115,68 +19824,11 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
             return { ssid: ssid || '', signal: parseInt(signal || '-60', 10), security: (security || 'OPEN').toUpperCase() };
           })
           .filter(n => n.ssid);
-        if (networks.length > 0) {
-          console.log(`[WiFi Scan] nmcli found ${networks.length} networks`);
-          return res.json(networks);
-        }
-      } catch (nmcliErr) {
-        lastError = nmcliErr;
-        console.log('[WiFi Scan] nmcli failed:', nmcliErr.message);
-        errors.push(`nmcli: ${nmcliErr.message}`);
-      }
-      
-      // Method 2: Try wpa_cli (common on Raspberry Pi)
-      try {
-        // First trigger a scan
-        await execAsync('wpa_cli -i wlan0 scan').catch(() => {});
-        // Wait a moment for scan to complete
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        // Get scan results
-        const { stdout: wpaOut } = await execAsync('wpa_cli -i wlan0 scan_results');
-        const lines = wpaOut.split('\n').slice(1); // Skip header
-        const networks = [];
-        const seenSSIDs = new Map(); // Track best signal for each SSID
-        
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 5) {
-            const [bssid, freq, signal, flags, ...ssidParts] = parts;
-            const ssid = ssidParts.join(' ').trim();
-            
-            // Filter out hidden networks (empty SSIDs or SSIDs with null bytes)
-            if (ssid && ssid !== '' && !ssid.includes('\\x00')) {
-              const signalStrength = parseInt(signal, 10);
-              
-              // Only keep the strongest signal for each SSID
-              if (!seenSSIDs.has(ssid) || seenSSIDs.get(ssid).signal < signalStrength) {
-                seenSSIDs.set(ssid, {
-                  ssid: ssid,
-                  signal: signalStrength,
-                  security: flags.includes('WPA') ? 'WPA' : flags.includes('WEP') ? 'WEP' : 'OPEN'
-                });
-              }
-            }
-          }
-        }
-        
-        // Convert map to array and sort by signal strength
-        const uniqueNetworks = Array.from(seenSSIDs.values())
-          .sort((a, b) => b.signal - a.signal);
-        
-        if (uniqueNetworks.length > 0) {
-          console.log(`[WiFi Scan] wpa_cli found ${uniqueNetworks.length} unique networks`);
-          return res.json(uniqueNetworks);
-        }
-      } catch (wpaErr) {
-        lastError = wpaErr;
-        console.log('[WiFi Scan] wpa_cli failed:', wpaErr.message);
-        errors.push(`wpa_cli: ${wpaErr.message}`);
-      }
-      
-      // Method 3: Try iwlist as last resort
-      try {
-        const { stdout: iwOut } = await execAsync("/sbin/iwlist wlan0 scan | grep -E 'ESSID|Signal level|Quality' -A1");
-        const lines = iwOut.split('\n');
+        return res.json(networks);
+      } catch (e) {
+        // Try iwlist as a last resort
+        stdout = await execAsync("/sbin/iwlist wlan0 scan | grep -E 'ESSID|Signal level|Quality' -A1");
+        const lines = stdout.split('\n');
         const networks = [];
         let current = {};
         for (const raw of lines) {
@@ -22190,21 +19842,7 @@ app.get('/forwarder/network/wifi/scan', async (req, res) => {
           if (signalMatch) current.signal = parseInt(signalMatch[1], 10);
         }
         if (current.ssid) networks.push(current);
-        const filteredNetworks = networks.filter(n => n.ssid);
-        if (filteredNetworks.length > 0) {
-          console.log(`[WiFi Scan] iwlist found ${filteredNetworks.length} networks`);
-          return res.json(filteredNetworks);
-        }
-      } catch (iwlistErr) {
-        lastError = iwlistErr;
-        console.log('[WiFi Scan] iwlist failed:', iwlistErr.message);
-        errors.push(`iwlist: ${iwlistErr.message}`);
-      }
-      
-      // If all methods failed but we have an error, log it
-      if (lastError) {
-        console.error('[WiFi Scan] All Linux scan methods failed');
-        console.error('[WiFi Scan] Last error:', lastError.message);
+        return res.json(networks.filter(n => n.ssid));
       }
     }
     } catch (osScanErr) {
@@ -23066,70 +20704,6 @@ app.post('/discovery/scan', async (req, res) => {
       console.warn('Kasa direct discovery failed:', e.message);
     }
     
-    // BLE device discovery
-    try {
-      const controller = getController();
-      if (controller) {
-        const bleResponse = await fetch(`${controller}/api/devices/ble?timeout=8`);
-        if (bleResponse.ok) {
-          const bleData = await bleResponse.json();
-          if (bleData.devices && Array.isArray(bleData.devices)) {
-            bleData.devices.forEach(device => {
-              allDevices.push({
-                name: device.name,
-                brand: device.vendor || 'Unknown',
-                model: device.category,
-                ip: '—',
-                mac: device.device_id,
-                protocol: 'Bluetooth LE',
-                confidence: 0.8,
-                category: 'BLE Device',
-                deviceId: device.device_id,
-                comm_type: 'ble',
-                rssi: device.rssi
-              });
-            });
-            console.log(` Found ${bleData.devices.length} BLE devices`);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('BLE discovery failed:', e.message);
-    }
-    
-    // USB/Serial device discovery (ESP32 sensors)
-    try {
-      const controller = getController();
-      if (controller) {
-        const serialResponse = await fetch(`${controller}/discovery/scan`, {
-          method: 'POST'
-        });
-        if (serialResponse.ok) {
-          const serialData = await serialResponse.json();
-          if (serialData.devices && Array.isArray(serialData.devices)) {
-            serialData.devices.forEach(device => {
-              allDevices.push({
-                name: device.name,
-                brand: device.brand || device.vendor || 'Unknown',
-                model: device.category || 'USB Serial',
-                ip: '—',
-                mac: device.port || device.deviceId,
-                protocol: device.protocol || 'USB Serial',
-                confidence: 0.95,
-                category: device.category || 'Sensor',
-                deviceId: device.deviceId,
-                comm_type: device.comm_type || 'usb-serial',
-                port: device.port
-              });
-            });
-            console.log(` Found ${serialData.devices.length} USB/Serial devices`);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('USB/Serial discovery failed:', e.message);
-    }
-    
     console.log(` Universal scan complete: ${allDevices.length} devices found`);
     
     res.json({
@@ -23261,9 +20835,6 @@ const wizardStatesDB = Datastore.create({
   autoload: true,
   timestampData: true
 });
-// Make wizardStatesDB accessible to routers
-app.locals.wizardStatesDB = wizardStatesDB;
-
 const wizardStates = new Map(); // In-memory cache for fast access
 const wizardDiscoveryContext = new Map();
 
@@ -25795,18 +23366,13 @@ function setupLiveSensorSync() {
           targets[zone.id] = preEnvStore.getTargets(zone.id) || {};
         }
         
-        // Get outdoor context for adaptive control
-        const outdoorContext = envData.outdoor || null;
-        
-        // Call ML-enhanced room-level control with adaptive targets (P2)
+        // Call ML-enhanced room-level control
         await checkAndControlEnvironment(envData.zones, iotDevices, {
           coreAllocator,
           plugManager: prePlugManager,
           groups,
           targets,
-          lastActions: preAutomationEngine._lastEnvironmentalActions || {},
-          outdoorContext,
-          adaptiveControl  // P2: Inject adaptive control module
+          lastActions: preAutomationEngine._lastEnvironmentalActions || {}
         });
         
         // Save last actions
@@ -25900,6 +23466,20 @@ app.post('/api/channels/:channelId/identify', asyncHandler(async (req, res) => {
   });
 }));
 
+// Get list of groups for assignment
+app.get('/api/groups', asyncHandler(async (req, res) => {
+  const groups = await readJson('groups.json', []);
+  
+  const formatted = groups.map(g => ({
+    id: g.id || g.name,
+    name: g.name,
+    zone: g.zone,
+    devices: g.devices?.length || 0
+  }));
+
+  res.json(formatted);
+}));
+
 // Get all bus mappings
 app.get('/api/bus-mappings', asyncHandler(async (req, res) => {
   const mappings = await readJson('bus-mappings.json', []);
@@ -25977,6 +23557,7 @@ async function startServer() {
   console.log('[charlie]  Starting server...');
   console.log('[charlie] PORT:', PORT);
   console.log('[charlie] NODE_ENV:', process.env.NODE_ENV);
+  console.log('[charlie] DEMO_MODE:', process.env.DEMO_MODE);
   
   // CloudWatch monitoring status
   if (isCloudWatchEnabled()) {
@@ -26019,25 +23600,9 @@ async function startServer() {
     const address = SERVER.address();
     console.log(`[charlie]  Server successfully started on ${address.address}:${address.port}`);
     console.log(`[charlie] running http://127.0.0.1:${PORT} → ${getController()}`);
-    console.log(`[charlie] Demo mode: DISABLED (production mode)`);
-    
-    // Startup validation - ensure no demo farm IDs in production
-    if (PRODUCTION_MODE) {
-      const farmId = edgeConfig.getFarmId();
-      try {
-        validateNoDemoFarm(farmId);
-        console.log(`[Startup] ✅ Production mode validated - Farm ID: ${farmId}`);
-      } catch (err) {
-        console.error(`[Startup] ❌ FATAL: ${err.message}`);
-        console.error(`[Startup] Server shutting down - demo farm not allowed in PRODUCTION_MODE`);
-        process.exit(1);
-      }
-      
-      // Phase 3: Warn about dual config sources
-      if (process.env.FARM_ID && process.env.FARM_ID !== farmId) {
-        console.warn(`[Startup] ⚠️  WARNING: .env FARM_ID (${process.env.FARM_ID}) differs from edge-config.json (${farmId})`);
-        console.warn(`[Startup] ⚠️  Using edge-config.json as authoritative source`);
-      }
+    console.log(`[charlie] Demo mode check: isDemoMode() = ${isDemoMode()}`);
+    if (isDemoMode()) {
+      console.log(`[charlie] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
     }
     
     // Validate license (Task #2 - License Validation)
@@ -26185,56 +23750,9 @@ async function startServer() {
             syncService = new SyncService(db);
             syncService.start();
             
-            // Start periodic telemetry (environmental/zone data) sync
-            const TELEMETRY_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
-            const syncTelemetry = async () => {
-              try {
-                // Fetch current environmental data from /env endpoint
-                const envData = await ensureEnvCacheLoaded();
-                if (envData && envData.zones && envData.zones.length > 0) {
-                  const telemetryData = {
-                    zones: envData.zones,
-                    timestamp: new Date().toISOString()
-                  };
-                  await syncService.syncTelemetry(telemetryData);
-                  console.log(`[telemetry-sync] Synced ${envData.zones.length} zones to Central`);
-                } else {
-                  console.log('[telemetry-sync] No zone data available to sync');
-                }
-              } catch (error) {
-                console.warn('[telemetry-sync] Sync failed:', error?.message || error);
-              }
-            };
-            
-            // Initial sync
-            syncTelemetry().catch(e => console.warn('[telemetry-sync] Initial sync failed:', e?.message));
-            
-            // Periodic sync every 5 minutes
-            setInterval(syncTelemetry, TELEMETRY_SYNC_INTERVAL);
-            console.log(`[EdgeMode] ✓ Telemetry sync enabled (interval: ${TELEMETRY_SYNC_INTERVAL / 60000} minutes)`);
-            
             // Start wholesale inventory sync service
             wholesaleService = new EdgeWholesaleService(db);
             wholesaleService.start();
-            
-            // Start farm settings sync service (cloud-to-edge bidirectional sync)
-            import('./services/farm-settings-sync.js').then((module) => {
-              const { initializeSettingsSync } = module;
-              const settingsSync = initializeSettingsSync({
-                centralUrl: process.env.GREENREACH_CENTRAL_URL,
-                farmId: process.env.FARM_ID,
-                apiKey: process.env.GREENREACH_API_KEY,
-                pollInterval: 30000, // 30 seconds
-                farmDataPath: path.join(__dirname, 'data', 'farm.json')
-              });
-              
-              // Make globally available for API routes
-              global.settingsSync = settingsSync;
-              
-              console.log('[EdgeMode] ✓ Farm settings sync started (30s polling)');
-            }).catch((error) => {
-              console.warn('[EdgeMode] ⚠️  Farm settings sync unavailable:', error?.message || error);
-            });
             
             // Make services globally available for API routes
             global.syncService = syncService;
@@ -26256,7 +23774,7 @@ async function startServer() {
       } else {
         console.log('[EdgeMode] Running in cloud mode (set EDGE_MODE=true for edge mode)');
       }
-  }); // Close SERVER.listen callback
+  });
 
   // Add error handler for server startup failures
   SERVER.on('error', (error) => {
@@ -26285,12 +23803,13 @@ async function startServer() {
   });
 }
 
-// Start the server after all routes are defined
-// Always start server (works with PM2, node, and direct execution)
-startServer().catch((error) => {
-  console.error('[charlie] Unexpected startup failure:', error?.message || error);
-  process.exit(1);
-});
+// Start the server after all routes are defined when executed directly
+if (process.argv[1] === __filename) {
+  startServer().catch((error) => {
+    console.error('[charlie] Unexpected startup failure:', error?.message || error);
+    process.exit(1);
+  });
+}
 
 export { app };
 export function __resetWizardSystemForTests() {
