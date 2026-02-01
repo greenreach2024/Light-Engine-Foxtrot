@@ -1,10 +1,190 @@
 # Light Engine Foxtrot: AI Agent Skills Framework
 
-**Version**: 1.1.0  
+**Version**: 1.2.0  
 **Date**: January 31, 2026  
-**Last Updated**: January 31, 2026 (Added continuous improvement system)  
+**Last Updated**: January 31, 2026 (Critical update: Investigation-First enforcement)  
 **Purpose**: Strategic guidance for AI agents contributing to Light Engine development  
 **Authority**: This document supersedes generic coding advice when conflicts arise
+
+---
+
+## 🚨 CRITICAL: Investigation-First Methodology (NON-NEGOTIABLE)
+
+**Real Incident #1 (January 31, 2026 - Morning):**
+Agent created comprehensive AI integration proposal without reviewing existing codebase. Result:
+- Proposed rebuilding VPD controller (already exists, 405 lines)
+- Proposed SARIMAX forecasting (already exists, line 11509)
+- Proposed anomaly detection (already exists, IsolationForest)
+- Proposed lot tracking (already exists, FDA-compliant)
+- **Cost**: 2 hours wasted, user frustration, framework credibility damaged
+
+**Real Incident #2 (January 31, 2026 - Afternoon):**
+Agent implemented zone data display fix without investigation or multi-agent review. Result:
+- Added inline field fallbacks (`z.id || z.zone_id || z.zoneId`) in 8 locations
+- Violated DATA_FORMAT_STANDARDS.md requirement to use `lib/data-adapters.js`
+- Never checked if `normalizeZone()` adapter already existed (it does)
+- Never grepped codebase for adapter usage pattern
+- Skipped multi-agent review process entirely (no proposal, no validation)
+- Implemented directly without Review Agent or Architecture Agent approval
+- **Cost**: Framework violation, technical debt, pattern inconsistency across codebase
+- **Root Cause**: Rushed to "fix" without reading framework rules or investigating existing patterns
+- **Resolution (January 31, 2026)**: 
+  - Proper Investigation-First process followed on second attempt
+  - Inline normalization functions added following farm-summary.html pattern (15-min investigation)
+  - Multi-agent review completed (Implementation → Review → Approval)
+  - Documented as technical debt for future build system migration
+  - Review Agent approved pragmatic solution given HTML `<script>` limitations
+  - Changes: central-admin.js (normalization functions), SCHEMA_CONSUMERS.md (registry update)
+  - Framework compliance achieved through proper process
+
+### The Iron Law
+
+**BEFORE proposing ANY solution, you MUST:**
+
+1. **Read the Framework** (this document)
+   - [ ] Core philosophy (Simplicity, Database-Driven, Workflow-Centric)
+   - [ ] Data format standards
+   - [ ] Multi-agent collaboration model
+
+2. **Investigate the Codebase**
+   ```bash
+   # Required searches BEFORE proposing:
+   
+   # 1. Does this feature already exist?
+   grep -r "feature_keyword" **/*.js
+   
+   # 2. What files handle this domain?
+   find . -name "*feature*.js"
+   
+   # 3. What's the current implementation?
+   # READ the files you found (don't just scan)
+   
+   # 4. What data structures are involved?
+   cat public/data/*.json | jq 'keys'
+   
+   # 5. Are there existing APIs?
+   grep "app.get\|app.post" server-foxtrot.js | grep feature
+   ```
+
+3. **Document What Exists**
+   ```markdown
+   ## Existing Implementation
+   - File: automation/controllers/vpd-controller.js (405 lines)
+   - Features: Hysteresis, duty cycle management, psychrometrics
+   - Gap: Doesn't adapt to outdoor conditions
+   - Opportunity: Add weather API integration (don't rebuild)
+   ```
+
+4. **ONLY THEN** Propose Enhancements
+   ```markdown
+   ## Proposal: Adaptive VPD Control
+   
+   ### Leverage (What Exists):
+   - ✅ VPD controller with dynamic band support
+   - ✅ outdoor-sensor-validator.js
+   - ✅ Psychrometric calculations
+   
+   ### Add (What's Missing):
+   - Weather API integration (OpenWeather)
+   - AI adapter layer: Recipe → Weather Adjustment → VPD Controller
+   - 50 lines of code (not 500)
+   
+   ### Result:
+   - Enhance existing system (don't rebuild)
+   - Minimal changes (low risk)
+   - Leverage framework (database-driven)
+   ```
+
+### Consequences of Skipping Investigation
+
+**Time Lost:**
+- Agent: 1-2 hours creating redundant proposal
+- User: 30 minutes reviewing/correcting
+- Iteration: Additional hour for proper investigation
+- **Total**: 3-4 hours per incident
+
+**Trust Damage:**
+- User questions agent competence
+- Framework credibility undermined
+- Future proposals treated with skepticism
+
+**Opportunity Cost:**
+- Could have implemented actual gap in same time
+- Delays real improvements
+- User frustration increases
+
+### Verification Checklist (Use This EVERY Time)
+
+**Before writing ANY proposal:**
+
+```markdown
+## Pre-Proposal Investigation Checklist
+
+- [ ] Read Agent Skills Framework sections relevant to task
+- [ ] Searched codebase for existing implementations
+- [ ] Read (not just scanned) relevant source files
+- [ ] Checked public/data/*.json for related data structures
+- [ ] Grepped server-foxtrot.js for related API endpoints
+- [ ] Reviewed automation/ directory for control logic
+- [ ] Listed what EXISTS (with file paths and line numbers)
+- [ ] Listed what's MISSING (actual gaps)
+- [ ] Identified OPPORTUNITIES (enhance existing, don't rebuild)
+- [ ] Confirmed proposal aligns with framework principles
+
+Investigation completed: [DATE]
+Time spent investigating: [X minutes]
+Agent: [Your designation]
+```
+
+### When Investigation Shows "Already Exists"
+
+**DO:**
+```markdown
+✅ "Investigated VPD control. Found sophisticated implementation
+at automation/controllers/vpd-controller.js (405 lines).
+
+Existing: Hysteresis, duty cycle caps, psychrometrics
+Gap: No outdoor weather adaptation
+
+Proposal: Add weather API integration (50 lines)
+Leverage: Existing controller accepts dynamic bands"
+```
+
+**DON'T:**
+```markdown
+❌ "We should build a VPD controller with hysteresis..."
+(DIDN'T CHECK - ALREADY EXISTS!)
+
+❌ "Zone data not displaying, adding inline fallbacks..."
+(DIDN'T CHECK - data-adapters.js ALREADY EXISTS!)
+
+❌ "Fixed the bug" (WITHOUT checking framework rules on adapters)
+```
+
+### What To Do When You Realize You Violated Framework
+
+**STOP IMMEDIATELY. Do NOT continue implementing.**
+
+1. **Acknowledge the specific violations:**
+   - Which rules were broken (Investigation-First, Data Adapters, Multi-Agent Review)
+   - What should have been done instead
+   - No excuses or justifications
+
+2. **Ask for direction:**
+   - Should changes be reverted?
+   - Should proper investigation/proposal process start now?
+   - Wait for user guidance before proceeding
+
+3. **Do NOT try to "fix" violations with more changes** - that compounds the problem
+
+### Emergency Override (Rare)
+
+Only skip investigation if:
+1. **Production down** (not "user wants feature fast")
+2. **Data loss imminent** (not "data might be inconsistent")
+3. **Security breach active** (not "potential vulnerability")
+
+Even then: Document what investigation was skipped and commit to do it post-emergency.
 
 ---
 
@@ -2353,6 +2533,7 @@ Project Velocity:
    - Critical security issue discovered
    - Data loss risk identified
    - Production outage pattern detected
+   - **Framework violation causes significant delay/rework** ← Added Jan 31, 2026
 
 2. **Weekly** (Tactical)  
    - Review script identifies HIGH priority issues
@@ -2363,6 +2544,52 @@ Project Velocity:
    - Trend analysis shows rule effectiveness
    - User feedback indicates friction
    - New technology/approach validated
+
+### Recent Framework Violations (Learn From These)
+
+**January 31, 2026 - Investigation-First Violation**
+
+**Incident**: Agent created AI integration proposal without code review
+
+**What Happened**:
+- Agent received request: "AI integration for device/IoT, grow workflow, environmental management"
+- Agent wrote theoretical 500+ line proposal
+- User asked: "Did you review current code and workflow before creating the AI Integration Proposal?"
+- Agent admitted: "No, I did not do a fresh, thorough code review"
+- Subsequent investigation revealed:
+  - VPD controller exists (405 lines, sophisticated)
+  - SARIMAX forecasting exists (server-foxtrot.js:11509)
+  - IsolationForest anomaly detection exists (server-foxtrot.js:10493)
+  - Lot tracking exists (FDA-compliant)
+  - Activity Hub exists (5,037 lines PWA)
+
+**Root Cause**: Agent violated investigation-first methodology
+
+**Impact**:
+- 2+ hours wasted on redundant proposal
+- User frustration (framework violation)
+- Additional 1+ hour for proper investigation
+- **Total delay**: 3+ hours
+
+**Fix Applied**: 
+- Added "Investigation-First Methodology" as CRITICAL non-negotiable section
+- Created pre-proposal verification checklist
+- Added real examples of investigation vs. non-investigation
+- Documented consequences explicitly
+
+**Prevention**:
+```markdown
+BEFORE proposing solutions, agents MUST:
+1. grep for existing implementations
+2. Read (not scan) source files
+3. List what EXISTS with file paths
+4. List what's MISSING (actual gaps)
+5. Propose ENHANCEMENTS (not rebuilds)
+```
+
+**Lesson**: Investigation-first is not optional. It saves time, preserves trust, and produces better solutions.
+
+---
 
 **Update Template:**
 ```markdown

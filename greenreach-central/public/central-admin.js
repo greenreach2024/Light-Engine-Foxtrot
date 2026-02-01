@@ -514,6 +514,52 @@ function closeInfoCard() {
 
 window.closeInfoCard = closeInfoCard;
 
+/**
+ * Data Normalization Functions
+ * 
+ * These functions handle field variations in zone and group data to ensure
+ * consistent access across different data formats.
+ * 
+ * NOTE: This is duplicated from lib/data-adapters.js due to HTML <script> tag
+ * limitations (cannot import ES6 modules without bundler).
+ * 
+ * TODO: When build system is implemented, import from lib/data-adapters.js instead
+ * 
+ * Pattern from: farm-summary.html (existing precedent)
+ * See: DATA_FORMAT_STANDARDS.md
+ * 
+ * @see lib/data-adapters.js - Canonical implementation
+ */
+
+/**
+ * Normalize zone data to handle field variations
+ * @param {Object} zone - Raw zone object
+ * @returns {Object|null} Normalized zone object with consistent field names
+ */
+function normalizeZone(zone) {
+    if (!zone) return null;
+    return {
+        id: zone.id || zone.zone_id || zone.zoneId || 'unknown',
+        name: zone.name || zone.zone_name || zone.id || 'Unnamed Zone',
+        ...zone
+    };
+}
+
+/**
+ * Normalize group data to handle field variations
+ * @param {Object} group - Raw group object
+ * @returns {Object|null} Normalized group object with consistent field names
+ */
+function normalizeGroup(group) {
+    if (!group) return null;
+    return {
+        id: group.id,
+        name: group.name,
+        zone: group.zone || group.zone_id || group.zoneId || group.location,
+        ...group
+    };
+}
+
 // Info Card Content for Each Page
 const INFO_CARDS = {
     'overview': {
@@ -2816,24 +2862,63 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
         const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
         if (farmRes && farmRes.ok) {
             const farmData = await farmRes.json();
-            console.log('[zone-detail] Farm data:', farmData);
+            console.log('[zone-detail] Farm data received');
             const environmental = farmData.farm?.environmental || farmData.environmental;
             const zones = environmental?.zones || [];
-            console.log('[zone-detail] Environmental zones:', zones);
+            console.log('[zone-detail] Environmental zones count:', zones.length);
             
-            // Find the specific zone - match by zone number
-            const zoneNumber = zoneId.match(/\d+$/)?.[0];
+            // Extract zone number and room from zoneId
+            // Handles formats: "room-knukf2:zone-1", "room-knukf2:1", "zone-1", "1"
+            const zoneNumber = zoneId.match(/\d+$/)?.[0]; // Extract trailing number
+            const roomPart = zoneId.includes(':') ? zoneId.split(':')[0] : roomId;
+            
+            console.log('[zone-detail] Looking for zone with:', {
+                zoneId,
+                zoneNumber,
+                roomId,
+                roomPart,
+                availableZones: zones.map(z => {
+                    const normalized = normalizeZone(z);
+                    return { id: normalized.id, name: normalized.name };
+                })
+            });
+            
+            // Try multiple matching strategies
             const zone = zones.find(z => {
-                const zId = z.id || z.zone_id || z.zoneId || '';
-                const zName = z.name || z.zone_name || '';
-                // Match: "zone-1", "room-knukf2:1", or name containing zone number
-                return zId === zoneId || 
-                       zName === zoneId ||
-                       (zoneNumber && (zId.endsWith(`:${zoneNumber}`) || zId.endsWith(`-${zoneNumber}`) || zName.includes(`Zone ${zoneNumber}`)));
+                const normalized = normalizeZone(z);
+                const zId = normalized.id || '';
+                const zName = normalized.name || '';
+                
+                // Strategy 1: Exact match on any ID field
+                if (zId === zoneId || zName === zoneId) return true;
+                
+                // Strategy 2: Match compound format "room:zone-1" with "room:1"
+                if (zoneNumber) {
+                    // Check if zone ID matches room:number format
+                    if (zId === `${roomPart}:${zoneNumber}`) return true;
+                    if (zId === `${roomId}:${zoneNumber}`) return true;
+                    
+                    // Check if zone ID ends with :number or -number
+                    if (zId.endsWith(`:${zoneNumber}`) || zId.endsWith(`-${zoneNumber}`)) return true;
+                    
+                    // Check if zone ID is just the number
+                    if (zId === zoneNumber) return true;
+                    
+                    // Check zone name for number
+                    if (zName.includes(`Zone ${zoneNumber}`) || zName === zoneNumber) return true;
+                }
+                
+                return false;
             });
             
             if (zone) {
-                console.log('[zone-detail] Found zone:', zone);
+                console.log('[zone-detail] ✅ Found matching zone:', {
+                    id: zone.id || zone.zone_id || zone.zoneId,
+                    name: zone.name || zone.zone_name,
+                    hasSensors: !!zone.sensors,
+                    hasTemp: !!(zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? zone.tempC),
+                    hasHumidity: !!(zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh)
+                });
                 zoneData = {
                     zoneId: zone.id || zone.zone_id || zone.zoneId || zoneId,
                     name: zone.name || zone.zone_name || zoneId,
@@ -2859,7 +2944,21 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
                     }).length;
                 }
             } else {
-                console.warn('[zone-detail] Zone not found in environmental data:', zoneId, 'Available zones:', zones.map(z => z.id || z.name));
+                console.error('[zone-detail] ❌ Zone not found!', {
+                    requestedZoneId: zoneId,
+                    requestedRoomId: roomId,
+                    zoneNumber,
+                    availableZones: zones.map(z => {
+                        const normalized = normalizeZone(z);
+                        return { id: normalized.id, name: normalized.name };
+                    }),
+                    totalZones: zones.length
+                });
+                // Show error message on page
+                const errorMsg = zones.length === 0 
+                    ? `No telemetry data available for farm ${farmId}. Edge device may not be syncing.`
+                    : `Zone "${zoneId}" not found. Available zones: ${zones.map(z => z.id || z.name).join(', ')}`;
+                console.warn('[zone-detail]', errorMsg);
             }
         }
         
@@ -2868,30 +2967,66 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
         if (groupsRes && groupsRes.ok) {
             const groupsData = await groupsRes.json();
             const groups = groupsData.groups || [];
-            console.log('[zone-detail] Groups data:', groups.length, 'groups');
+            console.log('[zone-detail] Groups data received:', groups.length, 'total groups');
             
             // Count groups assigned to this zone
-            // Zone format in groups: "room-knukf2:1", zoneId: "zone-1"
+            // Zone format variations: "room-knukf2:1", "room-knukf2:zone-1", "zone-1", "1"
             const zoneNumber = zoneId.match(/\d+$/)?.[0];
+            const roomPart = zoneId.includes(':') ? zoneId.split(':')[0] : roomId;
+            
             const zoneGroups = groups.filter(g => {
-                const groupZone = g.zone || g.zone_id || g.location;
+                const normalized = normalizeGroup(g);
+                const groupZone = normalized.zone;
                 if (!groupZone) return false;
                 
-                // Match exact zone ID or by compound format or zone number
-                return groupZone === zoneId || 
-                       (zoneNumber && (
-                           groupZone === `${roomId}:${zoneNumber}` ||
-                           groupZone.endsWith(`:${zoneNumber}`) || 
-                           groupZone.endsWith(`-${zoneNumber}`) ||
-                           groupZone === `zone-${zoneNumber}`
-                       ));
+                // Strategy 1: Exact match
+                if (groupZone === zoneId) return true;
+                
+                // Strategy 2: Match by zone number
+                if (zoneNumber) {
+                    // Match compound formats
+                    if (groupZone === `${roomPart}:${zoneNumber}`) return true;
+                    if (groupZone === `${roomId}:${zoneNumber}`) return true;
+                    if (groupZone === `${roomPart}:zone-${zoneNumber}`) return true;
+                    if (groupZone === `${roomId}:zone-${zoneNumber}`) return true;
+                    
+                    // Match endings
+                    if (groupZone.endsWith(`:${zoneNumber}`) || groupZone.endsWith(`-${zoneNumber}`)) return true;
+                    
+                    // Match plain number or zone-N format
+                    if (groupZone === `zone-${zoneNumber}` || groupZone === zoneNumber) return true;
+                }
+                
+                return false;
             });
             
             zoneData.groups = zoneGroups.length;
-            console.log('[zone-detail] Found groups for zone:', zoneData.groups, 'matching zoneId:', zoneId, 'roomId:', roomId);
+            console.log('[zone-detail] Found', zoneData.groups, 'groups for zone:', {
+                zoneId,
+                roomId,
+                zoneNumber,
+                matchingGroups: zoneGroups.map(g => {
+                    const normalized = normalizeGroup(g);
+                    return { 
+                        id: normalized.id, 
+                        name: normalized.name,
+                        zone: normalized.zone
+                    };
+                })
+            });
         }
     } catch (error) {
         console.error('[zone-detail] Failed to fetch zone data:', error);
+        // Show error notification on page
+        const title = document.getElementById('zone-detail-title');
+        if (title) {
+            title.innerHTML = `
+                <span style="color: var(--accent-red);">⚠️ Error Loading Zone Data</span>
+                <div style="font-size: 14px; font-weight: normal; color: var(--text-secondary); margin-top: 8px;">
+                    ${error.message || 'Failed to load zone information. Check console for details.'}
+                </div>
+            `;
+        }
     }
     
     // Update title and KPIs with real data or empty states
@@ -2954,24 +3089,43 @@ async function loadZoneGroupsAndPPFD(farmId, roomId, zoneId, count) {
         const allGroups = groupsData.groups || [];
         console.log('[loadZoneGroupsAndPPFD] All groups:', allGroups.length);
         
-        // Filter groups for this zone
-        // Zone ID formats: "room-knukf2:1" (compound), "zone-1" (legacy), or just "1" (number)
+        // Filter groups for this zone with improved matching
+        // Zone ID formats: "room-knukf2:zone-1" (compound), "room-knukf2:1", "zone-1" (legacy), or just "1" (number)
         const zoneNumber = zoneId.match(/\d+$/)?.[0];
+        const roomPart = zoneId.includes(':') ? zoneId.split(':')[0] : roomId;
+        
         const zoneGroups = allGroups.filter(g => {
-            const groupZone = g.zone || g.zone_id || g.location;
+            const normalized = normalizeGroup(g);
+            const groupZone = normalized.zone;
             if (!groupZone) return false;
             
-            // Match exact zone ID or by compound format or zone number
-            return groupZone === zoneId || 
-                   (zoneNumber && (
-                       groupZone === `${roomId}:${zoneNumber}` ||
-                       groupZone.endsWith(`:${zoneNumber}`) || 
-                       groupZone.endsWith(`-${zoneNumber}`) ||
-                       groupZone === `zone-${zoneNumber}`
-                   ));
+            // Strategy 1: Exact match
+            if (groupZone === zoneId) return true;
+            
+            // Strategy 2: Match by zone number
+            if (zoneNumber) {
+                // Match compound formats
+                if (groupZone === `${roomPart}:${zoneNumber}`) return true;
+                if (groupZone === `${roomId}:${zoneNumber}`) return true;
+                if (groupZone === `${roomPart}:zone-${zoneNumber}`) return true;
+                if (groupZone === `${roomId}:zone-${zoneNumber}`) return true;
+                
+                // Match endings
+                if (groupZone.endsWith(`:${zoneNumber}`) || groupZone.endsWith(`-${zoneNumber}`)) return true;
+                
+                // Match plain number or zone-N format
+                if (groupZone === `zone-${zoneNumber}` || groupZone === zoneNumber) return true;
+            }
+            
+            return false;
         });
         
-        console.log('[loadZoneGroupsAndPPFD] Filtered to zone:', zoneGroups.length, 'groups for', zoneId);
+        console.log('[loadZoneGroupsAndPPFD] Filtered to zone:', zoneGroups.length, 'groups for', zoneId, {
+            matchingGroups: zoneGroups.map(g => {
+                const normalized = normalizeGroup(g);
+                return { id: normalized.id, name: normalized.name, zone: normalized.zone };
+            })
+        });
         
         // Fetch lighting recipes to calculate PPFD
         let recipesData = null;
@@ -3195,63 +3349,244 @@ async function loadZoneSensors(farmId, roomId, zoneId) {
  * View Group Detail (Drill-down to specific group)
  */
 async function viewGroupDetail(farmId, roomId, zoneId, groupId) {
-    console.log(`Loading group detail: ${groupId} in zone ${zoneId}, room ${roomId}, farm ${farmId}`);
+    console.log(`[group-detail] Loading group detail: ${groupId} in zone ${zoneId}, room ${roomId}, farm ${farmId}`);
     currentFarmId = farmId;
     
     showView('group-detail-view');
     
-    // Group-level data not synced from edge devices
-    const groupData = {
-        groupId,
-        name: groupId,
-        devices: 0,
-        trays: 0,
-        intensity: null,
-        ppfd: null,
-        recipe: 'Not configured',
-        schedule: 'Not configured'
-    };
-    
-    // Update title and KPIs with empty states
-    document.getElementById('group-detail-title').textContent = groupData.name;
-    document.getElementById('group-devices').textContent = '0';
-    document.getElementById('group-devices-change').textContent = 'Groups not synced';
-    document.getElementById('group-trays').textContent = '0';
-    document.getElementById('group-trays-change').textContent = 'Groups not synced';
-    document.getElementById('group-days-since-seed').textContent = 'No data';
-    document.getElementById('group-days-since-seed-change').textContent = 'Seed date not configured';
-    document.getElementById('group-target-ppfd').textContent = 'No data';
-    document.getElementById('group-target-ppfd-change').textContent = 'From recipe schedule';
-    document.getElementById('group-recipe').textContent = 'Not configured';
-    document.getElementById('group-recipe-change').textContent = 'Recipes managed on edge';
-    document.getElementById('group-schedule').textContent = 'Not configured';
-    document.getElementById('group-schedule-change').textContent = 'Schedules managed on edge';
-    
-    // Load devices for this group
-    await loadGroupDevices(farmId, roomId, zoneId, groupId, groupData.devices);
-    
-    // Load trays for this group
-    await loadGroupTrays(farmId, roomId, zoneId, groupId, groupData.trays);
+    try {
+        // Fetch groups data from admin API
+        const groupsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (!groupsRes || !groupsRes.ok) {
+            throw new Error(`Failed to fetch groups data: ${groupsRes?.status || 'network error'}`);
+        }
+        
+        const groupsData = await groupsRes.json();
+        const groups = groupsData.groups || [];
+        console.log('[group-detail] Groups data received:', groups.length, 'total groups');
+        
+        // Find matching group with enhanced ID matching
+        const group = groups.find(g => {
+            const normalized = normalizeGroup(g);
+            // Match on normalized ID or any ID variation
+            return normalized.id === groupId || 
+                   g.id === groupId || 
+                   g.group_id === groupId || 
+                   g.groupId === groupId;
+        });
+        
+        if (!group) {
+            console.error('[group-detail] ❌ Group not found:', groupId);
+            console.error('[group-detail] Available groups:', groups.map(g => g.id || g.group_id));
+            
+            // Show error state in UI
+            document.getElementById('group-detail-title').textContent = `Group Not Found: ${groupId}`;
+            document.getElementById('group-devices').textContent = '0';
+            document.getElementById('group-devices-change').textContent = 'Group not found in sync data';
+            document.getElementById('group-trays').textContent = '0';
+            document.getElementById('group-trays-change').textContent = 'Group not found in sync data';
+            document.getElementById('group-days-since-seed').textContent = 'No data';
+            document.getElementById('group-days-since-seed-change').textContent = 'Group not found';
+            document.getElementById('group-target-ppfd').textContent = 'No data';
+            document.getElementById('group-target-ppfd-change').textContent = 'Group not found';
+            document.getElementById('group-recipe').textContent = 'Not found';
+            document.getElementById('group-recipe-change').textContent = 'Group not found';
+            document.getElementById('group-schedule').textContent = 'Not found';
+            document.getElementById('group-schedule-change').textContent = 'Group not found';
+            
+            const devicesBody = document.getElementById('group-devices-tbody');
+            devicesBody.innerHTML = '<tr><td colspan="6" class="empty error">Group not found in database</td></tr>';
+            const traysBody = document.getElementById('group-trays-tbody');
+            traysBody.innerHTML = '<tr><td colspan="5" class="empty error">Group not found in database</td></tr>';
+            return;
+        }
+        
+        console.log('[group-detail] ✅ Found matching group:', {
+            id: group.id,
+            name: group.name,
+            crop: group.crop,
+            lights: group.lights?.length || 0,
+            trays: group.trays,
+            hasSeedDate: !!group.planConfig?.anchor?.seedDate
+        });
+        
+        // Extract canonical fields (DATA_FORMAT_STANDARDS.md compliant)
+        const cropName = group.crop || 'Not configured';  // Use canonical 'crop' field
+        const devices = group.lights?.length || 0;         // Count light devices assigned
+        const trays = group.trays || 0;                    // Canonical 'trays' field (number)
+        const groupName = group.name || group.id;
+        const photoperiod = group.planConfig?.schedule?.photoperiodHours;
+        
+        // Calculate days since seed date
+        let daysSinceSeed = null;
+        if (group.planConfig?.anchor?.seedDate) {
+            try {
+                const seedDate = new Date(group.planConfig.anchor.seedDate);
+                const now = new Date();
+                seedDate.setHours(0, 0, 0, 0);
+                now.setHours(0, 0, 0, 0);
+                daysSinceSeed = Math.floor((now - seedDate) / (1000 * 60 * 60 * 24)) + 1;
+                console.log('[group-detail] Calculated days since seed:', daysSinceSeed);
+            } catch (err) {
+                console.warn('[group-detail] Failed to calculate days since seed:', err);
+            }
+        }
+        
+        // Update title and KPIs with real data
+        document.getElementById('group-detail-title').textContent = `${groupName} - ${cropName}`;
+        
+        // Devices KPI
+        document.getElementById('group-devices').textContent = devices.toString();
+        document.getElementById('group-devices-change').textContent = 
+            devices > 0 ? `${devices} light ${devices === 1 ? 'device' : 'devices'} assigned` : 'No devices assigned';
+        
+        // Trays KPI
+        document.getElementById('group-trays').textContent = trays.toString();
+        document.getElementById('group-trays-change').textContent = 
+            trays > 0 ? `${trays} ${trays === 1 ? 'tray' : 'trays'} in group` : 'No trays assigned';
+        
+        // Days Since Seed KPI
+        document.getElementById('group-days-since-seed').textContent = 
+            daysSinceSeed !== null ? daysSinceSeed.toString() : 'No data';
+        document.getElementById('group-days-since-seed-change').textContent = 
+            daysSinceSeed !== null ? `Seeded ${daysSinceSeed} days ago` : 'Seed date not configured';
+        
+        // Recipe KPI
+        document.getElementById('group-recipe').textContent = cropName;
+        document.getElementById('group-recipe-change').textContent = 
+            group.planConfig ? 'Active grow plan' : 'No active plan';
+        
+        // Schedule Status KPI
+        const scheduleStatus = photoperiod ? `${photoperiod}h photoperiod` : 'Not configured';
+        document.getElementById('group-schedule').textContent = scheduleStatus;
+        document.getElementById('group-schedule-change').textContent = 
+            photoperiod ? 'From grow plan' : 'Schedule not configured';
+        
+        // Target PPFD KPI - will be calculated from recipe if available
+        document.getElementById('group-target-ppfd').textContent = 'Calculating...';
+        document.getElementById('group-target-ppfd-change').textContent = 'From recipe schedule';
+        
+        // Attempt to calculate current PPFD from recipe
+        if (daysSinceSeed !== null && group.crop) {
+            try {
+                const recipesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/recipes`);
+                if (recipesRes && recipesRes.ok) {
+                    const recipesData = await recipesRes.json();
+                    const recipes = recipesData.crops?.[group.crop];
+                    if (recipes && Array.isArray(recipes)) {
+                        // Find closest recipe day
+                        let closestDay = recipes[0];
+                        recipes.forEach(recipeDay => {
+                            if (Math.abs(recipeDay.day - daysSinceSeed) < Math.abs(closestDay.day - daysSinceSeed)) {
+                                closestDay = recipeDay;
+                            }
+                        });
+                        
+                        if (closestDay && closestDay.ppfd) {
+                            const targetPPFD = Math.round(closestDay.ppfd);
+                            document.getElementById('group-target-ppfd').textContent = `${targetPPFD} μmol/m²/s`;
+                            document.getElementById('group-target-ppfd-change').textContent = `Day ${closestDay.day} of recipe`;
+                            console.log('[group-detail] Calculated PPFD:', targetPPFD, 'for day', daysSinceSeed);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('[group-detail] Failed to calculate PPFD:', err);
+                document.getElementById('group-target-ppfd').textContent = 'No data';
+            }
+        } else {
+            document.getElementById('group-target-ppfd').textContent = 'No data';
+        }
+        
+        // Load devices for this group
+        await loadGroupDevices(farmId, roomId, zoneId, groupId, group);
+        
+        // Load trays for this group
+        await loadGroupTrays(farmId, roomId, zoneId, groupId, group);
+        
+    } catch (error) {
+        console.error('[group-detail] ❌ Failed to load group detail:', error);
+        
+        // Show error state in UI
+        document.getElementById('group-detail-title').textContent = `Error Loading Group: ${groupId}`;
+        document.getElementById('group-devices').textContent = '0';
+        document.getElementById('group-devices-change').textContent = 'Failed to load data';
+        document.getElementById('group-trays').textContent = '0';
+        document.getElementById('group-trays-change').textContent = 'Failed to load data';
+        document.getElementById('group-days-since-seed').textContent = 'Error';
+        document.getElementById('group-days-since-seed-change').textContent = error.message;
+        document.getElementById('group-target-ppfd').textContent = 'Error';
+        document.getElementById('group-target-ppfd-change').textContent = 'Failed to load';
+        document.getElementById('group-recipe').textContent = 'Error';
+        document.getElementById('group-recipe-change').textContent = error.message;
+        document.getElementById('group-schedule').textContent = 'Error';
+        document.getElementById('group-schedule-change').textContent = 'Failed to load';
+        
+        const devicesBody = document.getElementById('group-devices-tbody');
+        devicesBody.innerHTML = `<tr><td colspan="6" class="empty error">Error: ${escapeHtml(error.message)}</td></tr>`;
+        const traysBody = document.getElementById('group-trays-tbody');
+        traysBody.innerHTML = `<tr><td colspan="5" class="empty error">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
 }
 
 /**
  * Load devices for a specific group
  */
-async function loadGroupDevices(farmId, roomId, zoneId, groupId, count) {
+async function loadGroupDevices(farmId, roomId, zoneId, groupId, group) {
     const tbody = document.getElementById('group-devices-tbody');
     
-    // Group-level device assignments not synced
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">No device data for this group. Group-level device assignments are managed on the edge device.</td></tr>';
+    if (!group || !group.lights || group.lights.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No devices assigned to this group. Device assignments are managed on the edge device.</td></tr>';
+        return;
+    }
+    
+    console.log('[group-detail] Rendering devices:', group.lights.length);
+    
+    // Display assigned light devices
+    tbody.innerHTML = group.lights.map((light, index) => {
+        const deviceId = light.deviceId || light.device_id || light.id || `device-${index + 1}`;
+        const status = light.status || 'unknown';
+        const currentState = light.on ? 'ON' : light.on === false ? 'OFF' : 'Unknown';
+        const lastSeen = light.lastSeen || light.last_seen || 'Never';
+        
+        return `
+            <tr>
+                <td>${escapeHtml(deviceId)}</td>
+                <td>Light</td>
+                <td><span class="badge badge-${status === 'online' ? 'success' : 'neutral'}">${status}</span></td>
+                <td>${currentState}</td>
+                <td>${lastSeen !== 'Never' ? new Date(lastSeen).toLocaleString() : 'Never'}</td>
+                <td><button class="btn-secondary btn-sm" onclick="viewDeviceDetail('${escapeHtml(deviceId)}')">View</button></td>
+            </tr>
+        `;
+    }).join('');
 }
 
 /**
  * Load trays for a specific group
  */
-async function loadGroupTrays(farmId, roomId, zoneId, groupId, count) {
+async function loadGroupTrays(farmId, roomId, zoneId, groupId, group) {
     const tbody = document.getElementById('group-trays-tbody');
     
-    // Group-level tray assignments not synced
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">No tray data for this group. Trays are managed locally on the edge device.</td></tr>';
+    if (!group || !group.trays || group.trays === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">No trays assigned to this group. Tray assignments are managed on the edge device.</td></tr>';
+        return;
+    }
+    
+    console.log('[group-detail] Group has', group.trays, 'trays (count only, detailed tray data managed on edge)');
+    
+    // Show tray count info (detailed tray data is managed on edge device)
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5" class="empty">
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 2rem; font-weight: 600; color: var(--accent-blue); margin-bottom: 8px;">${group.trays}</div>
+                    <div style="color: var(--text-secondary);">Total ${group.trays === 1 ? 'Tray' : 'Trays'} in Group</div>
+                    <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted);">Detailed tray data is managed on the edge device</div>
+                </div>
+            </td>
+        </tr>
+    `;
 }
 
 /**
