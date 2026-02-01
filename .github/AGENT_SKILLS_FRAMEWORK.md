@@ -120,6 +120,46 @@ Agent built VS Code extension for multi-agent workflow enforcement WITHOUT using
 - **Resolution**: Retroactive review conducted, Real Incident #4 documented, functional testing required before considering approved
 - **Framework Lesson**: The bigger the change, the MORE important the review process. Building tools to enforce discipline while bypassing discipline defeats the purpose.
 
+**Real Incident #5 (February 1, 2026 - Production Login Fix):**
+Agent implemented missing `/api/auth` routes for production login WITHOUT investigating existing credentials. Result:
+- User reported: "Route POST /api/auth/login not found" on production
+- Agent correctly identified missing route (greenreach-central missing auth.js)
+- Agent created new auth routes with fallback credentials
+- **INVENTED PASSWORD** "biggreen2025" without checking codebase or asking user
+- Never searched for existing farm credentials in codebase
+- Never asked user for correct credentials before implementing
+- Deployed to production with WRONG password
+- User correction: Actual password is "ReTerminal2026!" for FARM-MKLOMAT3-A9D8
+- **Cost**: Deployed incorrect credentials to production, required immediate fix + redeploy, user confusion
+- **Root Cause**: 
+  - Rushed to fix 404 error without investigating credential requirements
+  - Made assumption about fallback password without verification
+  - Skipped user consultation for missing authentication data
+  - Did not search codebase for existing credential patterns/references
+- **What Was Missing**:
+  - ❌ Search for existing farm credentials: `grep -r "FARM-MKLOMAT3-A9D8" **/*.{js,json,sql}`
+  - ❌ User consultation: "What are the correct credentials for Big Green Farm?"
+  - ❌ Verification before hardcoding: Test data should be documented or confirmed
+  - ❌ Review Agent validation: Hardcoded credentials should trigger security review
+- **How To Avoid**:
+  1. **Never invent authentication data** - Always search codebase or ask user
+  2. **grep for existing credentials** - `FARM-*` IDs often referenced in docs/SQL
+  3. **Fallback = Ask user** - Missing required data → User consultation required
+  4. **Security review** - Hardcoded passwords trigger Review Agent validation
+  5. **Mental checkpoint**: "Am I making up data that should exist? → Search or ask"
+- **What Should Have Happened**:
+  ```
+  Implementation Agent: Found missing /api/auth routes, need fallback credentials
+  grep -r "FARM-MKLOMAT3-A9D8" reveals email but no password
+  Implementation Agent: "User, what are correct credentials for FARM-MKLOMAT3-A9D8?"
+  User provides: shelbygilbert@rogers.com / ReTerminal2026!
+  Implementation Agent: Implement auth routes with VERIFIED credentials
+  @ReviewAgent: Validate auth logic + hardcoded fallback approach
+  Deploy: With correct credentials tested
+  ```
+- **Resolution**: Password corrected to "ReTerminal2026!" and redeployed
+- **Framework Lesson**: Never fabricate authentication data. When required information is missing, investigation → user consultation → implementation. Making assumptions about security-critical data bypasses verification and deploys incorrect/insecure systems.
+
 ### The Iron Law
 
 **BEFORE proposing ANY solution, you MUST:**
