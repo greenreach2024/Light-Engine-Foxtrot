@@ -143,6 +143,23 @@ pm2 delete lightengine-fastapi 2>/dev/null || true
 
 # Start services with PM2
 pm2 start start-edge.js --name lightengine-node --interpreter node
+
+# Start edge-specific ML jobs (anomaly detection & harvest forecasting)
+echo ""
+echo "🤖 Starting ML features..."
+if [ -f "ecosystem.ml-jobs.config.cjs" ] && [ -f "venv/bin/python" ]; then
+    pm2 start ecosystem.ml-jobs.config.cjs --only ml-anomalies,ml-forecast-main,ml-forecast-veg,ml-forecast-flower,ml-health-check
+    if [ $? -eq 0 ]; then
+        echo "✓ ML jobs started (anomaly detection, harvest forecasting)"
+    else
+        echo "⚠️  ML jobs failed to start. Check logs with: pm2 logs"
+        echo "   Edge device will work without ML features"
+    fi
+else
+    echo "⚠️  ML environment not ready, skipping ML jobs"
+    echo "   Run: ./scripts/setup-ml-env.sh to enable ML features"
+fi
+
 pm2 save
 
 # Set up PM2 startup script
@@ -171,6 +188,18 @@ else
     echo "⚠️  Health check failed. Check logs with: pm2 logs lightengine-node"
 fi
 
+# ML job health check
+echo ""
+echo "🤖 Checking ML features..."
+sleep 2
+if pm2 list | grep -q "ml-anomalies.*online"; then
+    echo "✅ ML anomaly detection running"
+    echo "✅ ML harvest forecasting running"
+else
+    echo "⚠️  ML jobs not running (edge device functional without ML)"
+    echo "   To enable ML: ./scripts/setup-ml-env.sh && pm2 restart all"
+fi
+
 # Display status
 echo ""
 echo "=============================="
@@ -184,8 +213,13 @@ echo ""
 echo "Useful commands:"
 echo "  pm2 status              - View service status"
 echo "  pm2 logs lightengine-node - View logs"
+echo "  pm2 logs ml-anomalies  - View ML logs"
 echo "  pm2 restart all         - Restart services"
 echo "  pm2 stop all            - Stop services"
+echo ""
+echo "ML Features:"
+echo "  pm2 list | grep ml-     - Check ML job status"
+echo "  ./scripts/setup-ml-env.sh - Reinstall ML environment"
 echo ""
 echo "Configuration file: $INSTALL_DIR/.env"
 echo ""

@@ -1,0 +1,25 @@
+# ===================================================================
+# COPY THESE LINES - Paste into reTerminal .env file
+# ===================================================================
+
+# 1. Find this line in .env:
+#    DEMO_MODE=true
+#
+# 2. Change it to:
+DEMO_MODE=false
+
+# 3. Add these 4 lines at the bottom of .env:
+EDGE_MODE=true
+FARM_ID=FARM-MKLOMAT3-A9D8
+GREENREACH_CENTRAL_URL=https://greenreachgreens.com
+GREENREACH_API_KEY=ae61e0c94acc6c2f6611f2864902dfe8085d18c6aa4b975b33a10b3d6a0e9b3b
+
+# ===================================================================
+# After saving .env, restart services:
+# ===================================================================
+# pm2 restart all
+# sleep 5
+# curl http://localhost:8091/api/edge/status | jq '.syncEnabled'
+#
+# Should return: true
+# ===================================================================

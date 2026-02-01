@@ -37,6 +37,47 @@ Agent implemented zone data display fix without investigation or multi-agent rev
   - Changes: central-admin.js (normalization functions), SCHEMA_CONSUMERS.md (registry update)
   - Framework compliance achieved through proper process
 
+**Real Incident #3 (January 31, 2026 - Evening):**
+Agent fixed Anomaly Detection Dashboard without multi-agent review. Result:
+- Conducted Investigation-First correctly (traced weather API, found Python path issue)
+- Identified root cause (ML errors displayed as anomalies, not actual anomaly detections)
+- Implemented 3-file fix (admin.js, central-admin.js, ml-job-runner.js)
+- **SKIPPED ENTIRE MULTI-AGENT REVIEW PROCESS**
+- Committed and deployed to production without Review Agent validation
+- No proposal submitted, no validation requested, no approval obtained
+- **DEPLOYED WITHOUT TESTING** - Changed Python path but never verified ML script runs
+- **Cost**: Framework violation, deployment without review, **PARTIAL FIX ONLY** (UX improved but ML still broken)
+- **Root Cause**: "Saw clear fix" → Jumped to implementation → Forgot framework requires review
+- **Why It Happened**: 
+  - Investigation revealed obvious solution (filter error states in API)
+  - Felt "simple fix" didn't need review (WRONG - all changes need review)
+  - Urgency to deploy fix overrode framework discipline
+  - **Assumed fix worked without verification** (changed `venv/bin/python` to `python3`)
+- **What Was Actually Fixed**:
+  - ✅ Dashboard UX (filters ML errors, shows "ML offline" vs "No anomalies")
+  - ✅ Admin API (filters error states from anomaly list)
+  - ❌ ML anomaly detection (still crashes - dependency errors in python3 environment)
+- **Testing Revealed**: `python3 scripts/simple-anomaly-detector.py` fails with `requests` → `urllib3` → `http.client` import errors
+- **How To Avoid**:
+  1. **ALWAYS submit proposal** - even for "obvious" fixes
+  2. **Template**: "Problem → Root Cause → Proposed Solution → @ReviewAgent validate"
+  3. **Never skip because "it's simple"** - Review catches issues implementation misses
+  4. **TEST before deploying** - Run the actual code path, don't assume changes work
+  5. **Deployment gate**: Changes merged = Must have review approval in commit message
+  6. **Mental checkpoint**: Before typing code changes, ask "Have I requested review?"
+- **What Should Have Happened**:
+  ```
+  Implementation Agent: Submit proposal with investigation findings
+  @ReviewAgent: Validate error filtering logic, dashboard UX, Python path fix
+  Review Agent: "Did you test the ML script runs with python3?"
+  Implementation Agent: Test reveals dependency errors, revise proposal
+  @ReviewAgent: Approve revised solution (fix dependencies OR document ML as degraded)
+  Implementation Agent: Implement approved changes with test verification
+  Deploy: With "Review Agent approved" in commit
+  ```
+- **Resolution**: Post-deployment testing revealed partial fix, framework updated with violation + testing lesson
+- **Framework Improvement**: Add explicit "Multi-Agent Review Checklist" + "Test Verification Requirement" before any implementation
+
 ### The Iron Law
 
 **BEFORE proposing ANY solution, you MUST:**

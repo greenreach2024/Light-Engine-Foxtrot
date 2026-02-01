@@ -201,6 +201,11 @@ import auditLogger, { auditMiddleware, createAuditRoutes } from './lib/wholesale
 import { checkAndControlEnvironment } from './controller/checkAndControlEnvironment.js';
 import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
+import DeviceDiscovery from './lib/device-discovery.js';
+import HarvestPredictor from './lib/harvest-predictor.js';
+import AnomalyDiagnostics from './lib/anomaly-diagnostics.js';
+import AdaptiveVpd from './lib/adaptive-vpd.js';
+import SuccessionPlanner from './lib/succession-planner.js';
 import anomalyHistory from './lib/anomaly-history.js';
 import mlAutomation from './lib/ml-automation-controller.js';
 
@@ -6655,6 +6660,57 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
     console.log('[setup-wizard] Farm profile:', { farmName, ownerName, contactEmail });
     console.log('[setup-wizard] Rooms:', rooms);
     console.log('[setup-wizard] Store config:', store);
+
+    // Persist farm profile for edge UI data sources
+    try {
+      const existingFarm = readJSONSafe(FARM_PATH, null) || {};
+      const incomingContact = req.body?.contact && typeof req.body.contact === 'object' ? req.body.contact : {};
+      const contactNameResolved = ownerName || incomingContact.name || null;
+      const contactEmailResolved = contactEmail || incomingContact.email || null;
+      const contactPhoneResolved = contactPhone || incomingContact.phone || null;
+      const contactWebsiteResolved = incomingContact.website || incomingContact.site || null;
+      const location = req.body?.location && typeof req.body.location === 'object' ? req.body.location : {};
+      const coords = req.body?.coordinates && typeof req.body.coordinates === 'object' ? req.body.coordinates : {};
+      const lat = location.latitude ?? location.lat ?? coords.lat;
+      const lng = location.longitude ?? location.lng ?? coords.lng;
+      const hasProfileUpdate = Boolean(
+        farmId ||
+        farmName ||
+        contactNameResolved ||
+        contactEmailResolved ||
+        contactPhoneResolved ||
+        (Number.isFinite(Number(lat)) || Number.isFinite(Number(lng)))
+      );
+
+      if (hasProfileUpdate) {
+        const mergedFarm = {
+          ...existingFarm,
+          farmId: farmId || existingFarm.farmId || null,
+          name: farmName || existingFarm.name || existingFarm.farmName || '',
+          status: existingFarm.status || 'online',
+          region: existingFarm.region || existingFarm.location?.state || existingFarm.location?.region || '',
+          url: existingFarm.url || '',
+          contact: {
+            ...(existingFarm.contact || {}),
+            ...(contactNameResolved ? { name: contactNameResolved } : {}),
+            ...(contactEmailResolved ? { email: contactEmailResolved } : {}),
+            ...(contactPhoneResolved ? { phone: contactPhoneResolved } : {}),
+            ...(contactWebsiteResolved ? { website: contactWebsiteResolved } : {})
+          },
+          coordinates: {
+            ...(existingFarm.coordinates || {}),
+            ...(Number.isFinite(Number(lat)) ? { lat: Number(lat) } : {}),
+            ...(Number.isFinite(Number(lng)) ? { lng: Number(lng) } : {})
+          }
+        };
+
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(FARM_PATH, JSON.stringify(mergedFarm, null, 2));
+        console.log('[setup-wizard] Updated farm.json from registration data');
+      }
+    } catch (profileError) {
+      console.error('[setup-wizard] Failed to update farm.json:', profileError.message);
+    }
     
     // Save setup configuration to database
     const setupConfig = {
@@ -8328,6 +8384,226 @@ app.get('/health', asyncHandler(async (req, res) => {
                      health.status === 'degraded' ? 200 : 503;
   
   res.status(statusCode).json(health);
+}));
+
+// Enhanced health check endpoints for frontend HealthCheck class
+app.get('/api/health/database', asyncHandler(async (req, res) => {
+  const dbHealth = await checkDatabaseHealth();
+  res.json({
+    status: dbHealth.connected ? 'healthy' : (dbHealth.enabled ? 'error' : 'disabled'),
+    mode: dbHealth.mode,
+    enabled: dbHealth.enabled,
+    connected: dbHealth.connected,
+    latencyMs: dbHealth.latencyMs || 0,
+    error: dbHealth.error || null,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+// Device discovery endpoint
+app.post('/api/devices/scan', asyncHandler(async (req, res) => {
+  const { subnet, filter } = req.body;
+  
+  try {
+    const discovery = new DeviceDiscovery({ timeout: 5000 });
+    const result = await discovery.discoverDevices({ subnet, filter });
+    
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[DeviceDiscovery] Scan failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      devices: [],
+      summary: { totalHosts: 0, devicesFound: 0, lightControllers: 0 }
+    });
+  }
+}));
+
+// Quick light controller discovery
+app.post('/api/devices/scan/lights', asyncHandler(async (req, res) => {
+  try {
+    const discovery = new DeviceDiscovery({ timeout: 5000 });
+    const result = await discovery.discoverLightControllers();
+    
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[DeviceDiscovery] Light scan failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      devices: [],
+      summary: { totalHosts: 0, devicesFound: 0, lightControllers: 0 }
+    });
+  }
+}));
+
+// Test light controller connectivity
+app.post('/api/lights/ping', asyncHandler(async (req, res) => {
+  const { ip, port, protocol } = req.body;
+  
+  if (!ip) {
+    return res.status(400).json({ 
+      status: 'error', 
+      error: 'IP address required' 
+    });
+  }
+  
+  const targetProtocol = protocol || 'grow3';
+  const targetPort = port || (targetProtocol === 'dmx' ? 6038 : 80);
+  
+  try {
+    // For GROW3, try to fetch device info
+    if (targetProtocol === 'grow3') {
+      const controller = `http://${ip}:${targetPort}`;
+      const response = await fetch(`${controller}/info`, {
+        method: 'GET',
+        timeout: 5000
+      });
+      
+      if (response.ok) {
+        const info = await response.json();
+        return res.json({
+          status: 'healthy',
+          protocol: 'grow3',
+          ip,
+          port: targetPort,
+          reachable: true,
+          info: info,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    
+    // For DMX or if GROW3 failed, just check TCP connectivity
+    const net = require('net');
+    const socket = new net.Socket();
+    const timeout = 5000;
+    
+    const pingPromise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        socket.destroy();
+        reject(new Error('Connection timeout'));
+      }, timeout);
+      
+      socket.connect(targetPort, ip, () => {
+        clearTimeout(timer);
+        socket.destroy();
+        resolve(true);
+      });
+      
+      socket.on('error', (err) => {
+        clearTimeout(timer);
+        socket.destroy();
+        reject(err);
+      });
+    });
+    
+    await pingPromise;
+    
+    res.json({
+      status: 'healthy',
+      protocol: targetProtocol,
+      ip,
+      port: targetPort,
+      reachable: true,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    res.json({
+      status: 'error',
+      protocol: targetProtocol,
+      ip,
+      port: targetPort,
+      reachable: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+}));
+
+// Sensor data freshness check
+app.get('/api/health/sensors', asyncHandler(async (req, res) => {
+  try {
+    const envPath = path.join(__dirname, 'public', 'data', 'env.json');
+    
+    if (!fs.existsSync(envPath)) {
+      return res.json({
+        status: 'disabled',
+        message: 'No sensor data file found',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    const envData = JSON.parse(fs.readFileSync(envPath, 'utf8'));
+    const now = Date.now();
+    const fiveMinutesAgo = now - (5 * 60 * 1000);
+    
+    const sensors = {
+      temperature: envData.temperature || null,
+      humidity: envData.humidity || null,
+      vpd: envData.vpd || null,
+      pressure: envData.pressure || null,
+      co2: envData.co2 || null,
+      air_quality: envData.air_quality || null
+    };
+    
+    const checks = {};
+    let anyStale = false;
+    let anyHealthy = false;
+    
+    for (const [type, data] of Object.entries(sensors)) {
+      if (!data) {
+        checks[type] = { status: 'disabled', message: 'No data' };
+        continue;
+      }
+      
+      const timestamp = new Date(data.timestamp).getTime();
+      const ageMinutes = Math.round((now - timestamp) / 60000);
+      
+      if (timestamp < fiveMinutesAgo) {
+        checks[type] = {
+          status: 'stale',
+          value: data.value,
+          unit: data.unit,
+          ageMinutes,
+          timestamp: data.timestamp
+        };
+        anyStale = true;
+      } else {
+        checks[type] = {
+          status: 'healthy',
+          value: data.value,
+          unit: data.unit,
+          ageMinutes,
+          timestamp: data.timestamp
+        };
+        anyHealthy = true;
+      }
+    }
+    
+    const overallStatus = anyHealthy ? (anyStale ? 'degraded' : 'healthy') : 'disabled';
+    
+    res.json({
+      status: overallStatus,
+      sensors: checks,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    res.json({
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 }));
 
 // Metrics endpoint for Prometheus/monitoring tools
@@ -10262,6 +10538,120 @@ app.get('/api/harvest', (req, res) => {
 });
 
 /**
+ * Harvest Prediction Endpoints
+ * AI-powered predictions based on historical data and environmental conditions
+ */
+
+// Initialize harvest predictor
+const harvestPredictor = new HarvestPredictor(DATA_DIR);
+
+// Initialize anomaly diagnostics
+const anomalyDiagnostics = new AnomalyDiagnostics(DATA_DIR);
+
+// Initialize adaptive VPD
+const adaptiveVpd = new AdaptiveVpd();
+
+// Initialize succession planner
+const successionPlanner = new SuccessionPlanner(DATA_DIR);
+
+/**
+ * GET /api/harvest/predictions/all
+ * Predict harvest dates for all active groups
+ */
+app.get('/api/harvest/predictions/all', async (req, res) => {
+  try {
+    const activeGroups = await harvestPredictor.getActiveGroups();
+    const groupIds = activeGroups.map(g => g.id);
+
+    if (groupIds.length === 0) {
+      return res.json({
+        ok: true,
+        predictions: [],
+        message: 'No active groups found'
+      });
+    }
+
+    const predictions = await harvestPredictor.predictMultiple(groupIds);
+
+    return res.json({
+      ok: true,
+      predictions,
+      count: predictions.length
+    });
+
+  } catch (error) {
+    console.error('[Harvest Prediction All] Error:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/harvest/predictions/:groupId
+ * Predict harvest date for a specific group
+ */
+app.get('/api/harvest/predictions/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { avgTemp, avgPPFD, targetPPFD } = req.query;
+
+    // Build options from query parameters
+    const options = {};
+    if (avgTemp) options.avgTemp = parseFloat(avgTemp);
+    if (avgPPFD) options.avgPPFD = parseFloat(avgPPFD);
+    if (targetPPFD) options.targetPPFD = parseFloat(targetPPFD);
+
+    const prediction = await harvestPredictor.predict(groupId, options);
+
+    return res.json({
+      ok: true,
+      prediction
+    });
+
+  } catch (error) {
+    console.error('[Harvest Prediction] Error:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/harvest/predictions/batch
+ * Predict harvest dates for multiple groups
+ */
+app.post('/api/harvest/predictions/batch', async (req, res) => {
+  try {
+    const { groupIds, options } = req.body;
+
+    if (!Array.isArray(groupIds) || groupIds.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'groupIds must be a non-empty array'
+      });
+    }
+
+    const predictions = await harvestPredictor.predictMultiple(groupIds, options || {});
+
+    return res.json({
+      ok: true,
+      predictions,
+      count: predictions.length
+    });
+
+  } catch (error) {
+    console.error('[Harvest Prediction Batch] Error:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * ML API Routes
  * - /api/ml/anomalies: Outdoor-aware anomaly detection with IsolationForest
  * - /api/ml/effects: Learn device effects on RH/temp using Ridge regression
@@ -11597,6 +11987,250 @@ app.get('/api/ml/insights/anomalies', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/ml/diagnostics
+ * Get anomaly diagnostics with root cause analysis
+ * Progressive enhancement: works with minimal data, enhances with available context
+ */
+app.get('/api/ml/diagnostics', asyncHandler(async (req, res) => {
+  setCors(req, res);
+  
+  const insightsPath = path.join(__dirname, 'public', 'data', 'ml-insights', 'anomalies-latest.json');
+  
+  try {
+    // Check if anomaly file exists
+    await fs.promises.access(insightsPath);
+    
+    // Read anomalies
+    const content = await fs.promises.readFile(insightsPath, 'utf-8');
+    const insights = JSON.parse(content);
+    
+    if (!insights.anomalies || insights.anomalies.length === 0) {
+      return res.json({
+        ok: true,
+        diagnostics: [],
+        summary: {
+          total: 0,
+          needsAttention: 0,
+          weatherRelated: 0,
+          message: 'No anomalies detected'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Get context for diagnostics
+    const context = {
+      weather: null,
+      history: null,
+      automationLogs: null
+    };
+    
+    // Try to get weather data
+    try {
+      const weatherData = LAST_WEATHER; // Use cached weather if available
+      if (weatherData && weatherData.current) {
+        context.weather = {
+          temp: weatherData.current.temperature_c,
+          rh: weatherData.current.humidity,
+          tempChange24h: null // Could calculate from hourly data if needed
+        };
+      }
+    } catch (err) {
+      // Weather data optional
+    }
+    
+    // Try to get sensor history for each zone
+    try {
+      const envPath = path.join(__dirname, 'public', 'data', 'env.json');
+      const envContent = await fs.promises.readFile(envPath, 'utf-8');
+      const envData = JSON.parse(envContent);
+      
+      // Store zone histories
+      context.zoneHistories = {};
+      for (const zone of envData.zones || []) {
+        if (zone.history && zone.history.length > 0) {
+          context.zoneHistories[zone.name] = zone.history;
+        }
+      }
+    } catch (err) {
+      // History optional
+    }
+    
+    // Try to get automation logs (if available)
+    try {
+      const logsPath = path.join(__dirname, 'logs', 'automation.log');
+      const logsContent = await fs.promises.readFile(logsPath, 'utf-8');
+      const recentLogs = logsContent.split('\n').slice(-50); // Last 50 lines
+      context.automationLogs = recentLogs
+        .filter(line => line.trim())
+        .map(line => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter(log => log !== null);
+    } catch (err) {
+      // Automation logs optional
+    }
+    
+    // Diagnose each anomaly
+    const diagnostics = insights.anomalies.map(anomaly => {
+      // Add zone-specific history if available
+      const zoneHistory = context.zoneHistories?.[anomaly.zone_name] || context.zoneHistories?.[anomaly.zone];
+      const anomalyContext = {
+        ...context,
+        history: zoneHistory
+      };
+      
+      return anomalyDiagnostics.diagnose(anomaly, anomalyContext);
+    });
+    
+    // Get summary
+    const summary = anomalyDiagnostics.getSummary(diagnostics);
+    
+    return res.json({
+      ok: true,
+      diagnostics,
+      summary,
+      timestamp: new Date().toISOString(),
+      meta: {
+        total_anomalies: insights.anomalies.length,
+        diagnosed: diagnostics.length,
+        weather_available: context.weather !== null,
+        history_available: Object.keys(context.zoneHistories || {}).length > 0,
+        automation_logs_available: (context.automationLogs?.length || 0) > 0
+      }
+    });
+    
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.json({
+        ok: true,
+        diagnostics: [],
+        summary: {
+          total: 0,
+          needsAttention: 0,
+          weatherRelated: 0,
+          message: 'No anomaly data available yet'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * POST /api/vpd/adapt
+ * Adapt VPD targets based on weather, crop, and facility conditions
+ * 
+ * Body:
+ *   recipe: { min, max, target } - Recipe VPD band (required)
+ *   outdoor: { temp, rh, tempChange24h } - Outdoor conditions (optional)
+ *   crop: { daysSinceSeed, daysToHarvest } - Crop info (optional)
+ *   facility: { hvacLoad, energyCost, hour } - Facility status (optional)
+ * 
+ * Returns adapted VPD band with reasoning
+ */
+app.post('/api/vpd/adapt', asyncHandler(async (req, res) => {
+  const { recipe, outdoor, crop, facility } = req.body;
+  
+  // Validate recipe band
+  if (!recipe || typeof recipe.min !== 'number' || typeof recipe.max !== 'number') {
+    return res.status(400).json({
+      ok: false,
+      error: 'Missing or invalid recipe band (requires min, max)'
+    });
+  }
+  
+  // Get current weather if not provided
+  let outdoorConditions = outdoor;
+  if (!outdoorConditions && LAST_WEATHER) {
+    const w = LAST_WEATHER.current;
+    const forecast = LAST_WEATHER.hourly;
+    
+    // Calculate 24h temp change from forecast
+    let tempChange24h = null;
+    if (forecast && forecast.time && forecast.temperature_2m) {
+      const now = new Date();
+      const past24hIndex = forecast.time.findIndex(t => {
+        const forecastTime = new Date(t);
+        return forecastTime >= now;
+      }) - 24; // 24 hours ago (hourly data)
+      
+      if (past24hIndex >= 0 && forecast.temperature_2m[past24hIndex]) {
+        tempChange24h = w.temperature_2m - forecast.temperature_2m[past24hIndex];
+      }
+    }
+    
+    outdoorConditions = {
+      temp: w.temperature_2m,
+      rh: w.relative_humidity_2m,
+      tempChange24h
+    };
+  }
+  
+  // Adapt VPD targets
+  const decision = adaptiveVpd.adapt({
+    recipe,
+    outdoor: outdoorConditions,
+    crop,
+    facility
+  });
+  
+  res.json({
+    ok: true,
+    decision,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
+ * GET /api/vpd/adapt/example
+ * Get example adaptation scenarios
+ */
+app.get('/api/vpd/adapt/example', (req, res) => {
+  const examples = {
+    heat_wave: {
+      recipe: { min: 0.8, max: 1.2, target: 1.0 },
+      outdoor: { temp: 35, rh: 70, tempChange24h: 18 },
+      crop: { daysSinceSeed: 30, daysToHarvest: 5 },
+      facility: { hvacLoad: 0.85, energyCost: 0.35, hour: 15 }
+    },
+    cold_snap: {
+      recipe: { min: 0.8, max: 1.2, target: 1.0 },
+      outdoor: { temp: 2, rh: 60, tempChange24h: -12 },
+      crop: { daysSinceSeed: 10, daysToHarvest: 20 },
+      facility: { hvacLoad: 0.60, energyCost: 0.28, hour: 8 }
+    },
+    peak_demand: {
+      recipe: { min: 0.8, max: 1.2, target: 1.0 },
+      outdoor: { temp: 22, rh: 65, tempChange24h: 2 },
+      crop: { daysSinceSeed: 20, daysToHarvest: 12 },
+      facility: { hvacLoad: 0.75, energyCost: 0.32, hour: 17 }
+    },
+    normal: {
+      recipe: { min: 0.8, max: 1.2, target: 1.0 },
+      outdoor: { temp: 18, rh: 55, tempChange24h: 3 },
+      crop: { daysSinceSeed: 15, daysToHarvest: 15 },
+      facility: { hvacLoad: 0.55, energyCost: 0.18, hour: 11 }
+    }
+  };
+  
+  res.json({
+    ok: true,
+    examples,
+    instructions: 'POST these examples to /api/vpd/adapt to see adaptations'
+  });
+});
+
+/**
  * GET /api/ml/insights/forecast/:zone
  * Get latest cached forecast for a zone
  */
@@ -12587,6 +13221,185 @@ app.get('/api/ml/metrics/alerts', asyncHandler(async (req, res) => {
     });
   }
 }));
+
+// ============================================================================
+// SUCCESSION PLANTING AUTOMATION - P4
+// AI-powered planting schedules for continuous harvest
+// ============================================================================
+
+/**
+ * POST /api/planting/schedule/generate
+ * Generate succession planting schedule for a crop
+ * 
+ * Handles tray formats, crop spacing, and facility capacity
+ */
+app.post('/api/planting/schedule/generate', async (req, res) => {
+  try {
+    const { crop, weeklyDemand, startDate, weeks, facility } = req.body;
+
+    // Validate required fields
+    if (!crop) {
+      return res.status(400).json({ ok: false, error: 'Missing required field: crop' });
+    }
+    if (!weeklyDemand || weeklyDemand <= 0) {
+      return res.status(400).json({ ok: false, error: 'Missing or invalid weeklyDemand (must be > 0)' });
+    }
+    if (!startDate) {
+      return res.status(400).json({ ok: false, error: 'Missing required field: startDate' });
+    }
+
+    // Generate schedule
+    const schedule = await successionPlanner.generateSchedule({
+      crop,
+      weeklyDemand,
+      startDate,
+      weeks: weeks || 12,
+      facility
+    });
+
+    res.json(schedule);
+
+  } catch (error) {
+    console.error('[API] /api/planting/schedule/generate error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to generate planting schedule',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/planting/suggest-from-demand
+ * Generate seeding recommendations from wholesale demand forecast
+ * 
+ * Integrates with GreenReach Central for AI optimization
+ */
+app.post('/api/planting/suggest-from-demand', async (req, res) => {
+  try {
+    const { farmId, demandForecast, facility, requestAI } = req.body;
+
+    // Validate required fields
+    if (!demandForecast || !Array.isArray(demandForecast)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing or invalid demandForecast array'
+      });
+    }
+
+    // Generate suggestions
+    const suggestions = await successionPlanner.suggestFromDemand({
+      farmId: farmId || 'unknown',
+      demandForecast,
+      facility,
+      requestAI: requestAI || false
+    });
+
+    res.json(suggestions);
+
+  } catch (error) {
+    console.error('[API] /api/planting/suggest-from-demand error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to generate planting suggestions',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/planting/ai-recommendations
+ * Receive AI-optimized planting recommendations from GreenReach Central
+ * 
+ * This endpoint enables bidirectional communication:
+ * - Central analyzes demand patterns, facility constraints, historical data
+ * - Central uses OpenAI to generate intelligent schedule optimizations
+ * - Central pushes recommendations back to edge device
+ */
+app.post('/api/planting/ai-recommendations', async (req, res) => {
+  try {
+    // Verify API key (Central authentication)
+    const apiKey = req.headers['x-api-key'];
+    const validKey = process.env.CENTRAL_API_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    
+    if (apiKey !== validKey) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+
+    const { farmId, recommendations, generatedAt, modelUsed } = req.body;
+
+    // Validate payload
+    if (!recommendations || !Array.isArray(recommendations)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing or invalid recommendations array'
+      });
+    }
+
+    // Log received recommendations
+    console.log(`[Succession Planner] Received ${recommendations.length} AI recommendations from Central`);
+    console.log(`[Succession Planner] Farm: ${farmId}, Model: ${modelUsed}, Generated: ${generatedAt}`);
+    
+    recommendations.forEach((rec, idx) => {
+      console.log(`[Succession Planner] ${idx + 1}. ${rec.crop}: ${rec.message} (confidence: ${rec.confidence})`);
+    });
+
+    res.json({
+      ok: true,
+      received: recommendations.length,
+      farmId: farmId,
+      message: 'AI recommendations received successfully'
+    });
+
+  } catch (error) {
+    console.error('[API] /api/planting/ai-recommendations error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to process AI recommendations',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/planting/tray-formats
+ * Get available tray formats with plant counts
+ * 
+ * Returns standard tray format definitions (matches backend/seed_tray_formats.py)
+ */
+app.get('/api/planting/tray-formats', (req, res) => {
+  try {
+    // Return standard tray format catalog
+    const formats = [
+      { key: 'microgreens-4-hole', name: 'Microgreen Tray - 4 Hole', plantSiteCount: 4, density: 'ultra-high', isWeightBased: true, crops: ['Sunflower Shoots', 'Pea Shoots'] },
+      { key: 'microgreens-8-hole', name: 'Microgreen Tray - 8 Hole', plantSiteCount: 8, density: 'ultra-high', isWeightBased: true, crops: ['Microgreens'] },
+      { key: 'microgreens-12-hole', name: 'Microgreen Tray - 12 Hole', plantSiteCount: 12, density: 'ultra-high', isWeightBased: true, crops: ['Pea Shoots'] },
+      { key: 'microgreens-21-hole', name: 'Microgreen Tray - 21 Hole', plantSiteCount: 21, density: 'ultra-high', isWeightBased: true, crops: ['Microgreens'] },
+      { key: 'baby-greens-10x20', name: '10x20 Baby Greens Tray', plantSiteCount: 200, density: 'high', isWeightBased: false, crops: ['Baby Arugula', 'Mixed Baby Greens'] },
+      { key: 'baby-leaf-128', name: 'Baby Leaf - 128 Site', plantSiteCount: 128, density: 'high', isWeightBased: false, crops: ['Baby Kale', 'Baby Spinach', 'Cultivated Arugula', 'Wild Arugula'] },
+      { key: 'nft-channel-128', name: 'NFT Channel - 128 Site', plantSiteCount: 128, density: 'standard', isWeightBased: false, crops: ['Butterhead Lettuce', 'Buttercrunch Lettuce', 'Red Leaf Lettuce', 'Oak Leaf Lettuce', 'Genovese Basil', 'Thai Basil', 'Mei Qing Pak Choi', 'Tatsoi'] },
+      { key: 'nft-channel-72', name: 'NFT Channel - 72 Site', plantSiteCount: 72, density: 'standard', isWeightBased: false, crops: ['Romaine Lettuce', 'Lacinato Kale', 'Curly Kale', 'Dinosaur Kale', 'Bok Choy'] },
+      { key: 'standard-tray-24', name: 'Standard Tray - 24 Site', plantSiteCount: 24, density: 'standard', isWeightBased: false, crops: ['Lettuce', 'Basil', 'Herbs'] },
+      { key: 'tomato-tower-8', name: 'Tomato Tower - 8 Site', plantSiteCount: 8, density: 'low', isWeightBased: false, crops: ['Tomato'] },
+      { key: 'aeroponic-tower-72', name: 'Aeroponic Tower - 72 Site', plantSiteCount: 72, density: 'low', isWeightBased: false, crops: ['Cherry Tomato', 'Strawberry'] },
+      { key: 'zipgrow-tower-128', name: 'ZipGrow Tower - 128 Site', plantSiteCount: 128, density: 'low', isWeightBased: false, crops: ['Various'] }
+    ];
+
+    res.json({
+      ok: true,
+      formats: formats,
+      count: formats.length
+    });
+
+  } catch (error) {
+    console.error('[API] /api/planting/tray-formats error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to load tray formats',
+      message: error.message
+    });
+  }
+});
 
 // ============================================================================
 // Notification Endpoints (Mobile App) - Placeholders

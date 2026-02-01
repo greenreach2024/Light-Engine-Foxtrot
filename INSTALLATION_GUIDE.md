@@ -535,6 +535,188 @@ sudo ufw status
 
 ---
 
+## ML Features Setup
+
+The edge device includes ML-powered features that enhance farm operations:
+
+### Included ML Features
+
+**Anomaly Detection:**
+- Identifies unusual sensor readings (temperature spikes, humidity drops, etc.)
+- Runs every 15 minutes
+- Alerts appear in Activity Hub and GreenReach Central dashboard
+
+**Harvest Forecasting:**
+- Predicts yields and harvest dates based on growth patterns
+- Updates hourly for each growth zone
+- Helps plan labor and wholesale orders
+
+**Plant Health Monitoring:**
+- Analyzes growth rates and environmental conditions
+- Provides early warnings for potential issues
+- Runs every 5 minutes
+
+### ML Job Status
+
+ML features start automatically during installation. To check status:
+
+**View ML Job Status:**
+```bash
+pm2 status | grep ml-
+```
+
+**Expected output:**
+```
+ml-anomalies         │ online    │ 0      │ cron      │ ...
+ml-forecast-main     │ online    │ 0      │ cron      │ ...
+ml-forecast-veg      │ online    │ 0      │ cron      │ ...
+ml-forecast-flower   │ online    │ 0      │ cron      │ ...
+ml-health-check      │ online    │ 0      │ cron      │ ...
+```
+
+**View ML Logs:**
+```bash
+# Anomaly detection logs
+pm2 logs ml-anomalies
+
+# Harvest forecast logs
+pm2 logs ml-forecast-main
+
+# Health check logs
+pm2 logs ml-health-check
+
+# All ML logs
+pm2 logs --lines 50 | grep ml-
+```
+
+### ML Troubleshooting
+
+**Problem: ML jobs not running**
+
+**Check job status:**
+```bash
+pm2 list | grep ml-
+```
+
+**If status shows "stopped" or "errored":**
+
+1. **Restart ML jobs:**
+```bash
+pm2 restart ml-anomalies
+pm2 restart ml-forecast-main
+```
+
+2. **Check Python environment:**
+```bash
+cd /opt/greenreach/Light-Engine-Foxtrot
+source venv/bin/activate
+python scripts/simple-anomaly-detector.py --help
+```
+
+If you see import errors, the Python environment is broken.
+
+3. **Reinstall Python environment:**
+```bash
+cd /opt/greenreach/Light-Engine-Foxtrot
+./scripts/setup-ml-env.sh
+pm2 restart all
+```
+
+**Problem: Anomaly dashboard shows "ML offline"**
+
+This means ML jobs aren't writing output files.
+
+**Check ML output directory:**
+```bash
+ls -la /opt/greenreach/Light-Engine-Foxtrot/public/data/ml-insights/
+```
+
+**Should contain:**
+- `anomalies-latest.json`
+- `forecast-main-latest.json`
+- `forecast-veg-latest.json`
+- `forecast-flower-latest.json`
+
+**If files are missing or old (>24 hours):**
+
+1. **Check ML job logs for errors:**
+```bash
+pm2 logs ml-anomalies --lines 100
+```
+
+2. **Run ML script manually to see errors:**
+```bash
+cd /opt/greenreach/Light-Engine-Foxtrot
+source venv/bin/activate
+python scripts/simple-anomaly-detector.py --json
+```
+
+3. **Common fixes:**
+   - Missing sensor data: ML needs at least 1 hour of sensor readings
+   - Broken Python packages: Run `./scripts/setup-ml-env.sh`
+   - Disk space full: Free up space with `df -h`
+
+**Problem: High CPU/memory usage from ML jobs**
+
+ML jobs use ~100-200 MB RAM per job. If system is slow:
+
+1. **Check resource usage:**
+```bash
+pm2 monit
+```
+
+2. **Reduce ML job frequency (optional):**
+```bash
+# Edit ML config
+nano ecosystem.ml-jobs.config.cjs
+
+# Change cron_restart values:
+# '*/15 * * * *' = every 15 min
+# '*/30 * * * *' = every 30 min
+# '0 * * * *' = every hour
+
+# Restart jobs
+pm2 restart all
+```
+
+**Problem: "venv/bin/python not found" error**
+
+The Python virtual environment is missing.
+
+**Recreate venv:**
+```bash
+cd /opt/greenreach/Light-Engine-Foxtrot
+rm -rf venv  # Remove broken venv
+./scripts/setup-ml-env.sh  # Recreate
+pm2 restart all
+```
+
+### Disabling ML Features (Optional)
+
+If you don't want ML features:
+
+```bash
+# Stop ML jobs
+pm2 stop ml-anomalies
+pm2 stop ml-forecast-main
+pm2 stop ml-forecast-veg
+pm2 stop ml-forecast-flower
+pm2 stop ml-health-check
+
+# Remove from startup
+pm2 delete ml-anomalies
+pm2 delete ml-forecast-main
+pm2 delete ml-forecast-veg
+pm2 delete ml-forecast-flower
+pm2 delete ml-health-check
+
+pm2 save
+```
+
+Edge device will continue working normally without ML features. Anomaly dashboard will show "ML offline" (expected).
+
+---
+
 ## Verification & Testing
 
 ### System Health Check

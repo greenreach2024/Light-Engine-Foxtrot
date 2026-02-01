@@ -1,0 +1,33 @@
+# =============================================================================
+# reTerminal Edge Device Configuration
+# =============================================================================
+# Copy these lines and ADD them to the bottom of .env file on the reTerminal
+# Date: January 31, 2026
+# Device: reTerminal at 192.168.2.222
+# =============================================================================
+
+# CRITICAL: Set to false to disable demo/mock data
+DEMO_MODE=false
+
+# Edge sync configuration
+EDGE_MODE=true
+FARM_ID=FARM-MKLOMAT3-A9D8
+GREENREACH_CENTRAL_URL=https://greenreachgreens.com
+GREENREACH_API_KEY=ae61e0c94acc6c2f6611f2864902dfe8085d18c6aa4b975b33a10b3d6a0e9b3b
+
+# =============================================================================
+# Instructions for reTerminal (via VNC):
+# =============================================================================
+# 1. Open Terminal
+# 2. cd ~/Light-Engine-Foxtrot
+# 3. nano .env
+# 4. Find the line: DEMO_MODE=true
+#    Change it to: DEMO_MODE=false
+# 5. Scroll to bottom of file
+# 6. Paste the 4 lines above (EDGE_MODE through GREENREACH_API_KEY)
+# 7. Save: Ctrl+O, Enter
+# 8. Exit: Ctrl+X
+# 9. Restart services: pm2 restart all
+# 10. Verify: curl http://localhost:8091/api/edge/status | jq '.syncEnabled'
+#     Should return: true
+# =============================================================================
