@@ -6565,6 +6565,11 @@ class FarmWizard {
         if (!choice) return;
         this.data.connection.type = choice;
         document.querySelectorAll('#farmConnectionChoice .chip-option').forEach(b => b.classList.toggle('is-active', b === btn));
+        
+        // Rebuild steps based on connection type
+        this.steps = this.getVisibleSteps();
+        console.debug('[FarmWizard] Connection type changed to', choice, '- new steps:', this.steps);
+        
         // Only reset scan state, do not auto-scan
         if (choice === 'wifi') {
           this.hasScannedWifi = false;
@@ -6574,6 +6579,13 @@ class FarmWizard {
           this.data.connection.wifi.testResult = null;
           this.data.connection.wifi.tested = false;
         }
+        
+        // If Ethernet selected, skip WiFi steps entirely - auto-advance to next step
+        if (choice === 'ethernet' && this.validateCurrentStep()) {
+          console.debug('[FarmWizard] Ethernet selected - auto-advancing to location step');
+          this.nextStep();
+        }
+        
         this.renderWifiNetworks();
         this.updateWifiPasswordUI();
       });
