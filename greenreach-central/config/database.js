@@ -118,6 +118,24 @@ async function runMigrations(client) {
     logger.warn('Could not add api_url column (may already exist):', err.message);
   }
 
+  // Create farm_backups table for Edge device recovery (Phase 2)
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS farm_backups (
+      farm_id VARCHAR(255) PRIMARY KEY,
+      groups JSONB NOT NULL DEFAULT '[]',
+      rooms JSONB NOT NULL DEFAULT '[]',
+      schedules JSONB NOT NULL DEFAULT '[]',
+      config JSONB,
+      last_synced TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW(),
+      FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_farm_backups_synced ON farm_backups(last_synced);
+    CREATE INDEX IF NOT EXISTS idx_farm_backups_farm_id ON farm_backups(farm_id);
+  `);
+  logger.info('farm_backups table ready for Edge device recovery');
+
   try {
     await client.query(`
       ALTER TABLE farms ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}';

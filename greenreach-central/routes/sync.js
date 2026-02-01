@@ -86,19 +86,16 @@ router.post('/rooms', authenticateFarm, async (req, res) => {
     logger.info(`[Sync] Syncing ${rooms.length} rooms for farm ${farmId}`);
     
     if (await isDatabaseAvailable()) {
-      // Just store the data - don't auto-register farm (has required fields)
-      // Farm must already exist in database
-      
-      // Store in database
+      // Store in farm_backups table for Edge recovery (Phase 2)
       await query(
-        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (farm_id, data_type) 
-         DO UPDATE SET data = $3, updated_at = NOW()`,
-        [farmId, 'rooms', JSON.stringify(rooms)]
+        `INSERT INTO farm_backups (farm_id, rooms, last_synced)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (farm_id) 
+         DO UPDATE SET rooms = $2, last_synced = NOW()`,
+        [farmId, JSON.stringify(rooms)]
       );
       
-      logger.info(`[Sync] Saved ${rooms.length} rooms to database for farm ${farmId}`);
+      logger.info(`[Sync] Saved ${rooms.length} rooms to farm_backups for farm ${farmId}`);
     } else {
       // Store in-memory
       inMemoryStore.rooms.set(farmId, rooms);
@@ -142,19 +139,16 @@ router.post('/groups', authenticateFarm, async (req, res) => {
     logger.info(`[Sync] Syncing ${groups.length} groups for farm ${farmId}`);
     
     if (await isDatabaseAvailable()) {
-      // Just store the data - don't auto-register farm (has required fields)
-      // Farm must already exist in database
-      
-      // Store in database
+      // Store in farm_backups table for Edge recovery (Phase 2)
       await query(
-        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (farm_id, data_type) 
-         DO UPDATE SET data = $3, updated_at = NOW()`,
-        [farmId, 'groups', JSON.stringify(groups)]
+        `INSERT INTO farm_backups (farm_id, groups, last_synced)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (farm_id) 
+         DO UPDATE SET groups = $2, last_synced = NOW()`,
+        [farmId, JSON.stringify(groups)]
       );
       
-      logger.info(`[Sync] Saved ${groups.length} groups to database for farm ${farmId}`);
+      logger.info(`[Sync] Saved ${groups.length} groups to farm_backups for farm ${farmId}`);
     } else {
       // Store in-memory
       inMemoryStore.groups.set(farmId, groups);
@@ -198,16 +192,16 @@ router.post('/schedules', authenticateFarm, async (req, res) => {
     logger.info(`[Sync] Syncing ${schedules.length} schedules for farm ${farmId}`);
     
     if (await isDatabaseAvailable()) {
-      // Store in database
+      // Store in farm_backups table for Edge recovery (Phase 2)
       await query(
-        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (farm_id, data_type) 
-         DO UPDATE SET data = $3, updated_at = NOW()`,
-        [farmId, 'schedules', JSON.stringify(schedules)]
+        `INSERT INTO farm_backups (farm_id, schedules, last_synced)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (farm_id) 
+         DO UPDATE SET schedules = $2, last_synced = NOW()`,
+        [farmId, JSON.stringify(schedules)]
       );
       
-      logger.info(`[Sync] Saved ${schedules.length} schedules to database for farm ${farmId}`);
+      logger.info(`[Sync] Saved ${schedules.length} schedules to farm_backups for farm ${farmId}`);
     } else {
       // Store in-memory
       inMemoryStore.schedules.set(farmId, schedules);
@@ -910,6 +904,138 @@ router.post('/restore', authenticateFarm, async (req, res) => {
       success: false,
       error: 'Failed to restore data',
       message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/sync/data/:farmId
+ * Retrieve synced data for a farm (for recovery/debugging)
+ */
+router.get('/data/:farmId', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    const data = {
+      farmId,
+      rooms: inMemoryStore.rooms.get(farmId) || [],
+      groups: inMemoryStore.groups.get(farmId) || [],
+      schedules: inMemoryStore.schedules.get(farmId) || [],
+      inventory: inMemoryStore.inventory.get(farmId) || [],
+      telemetry: inMemoryStore.telemetry.get(farmId) || null,
+      timestamp: new Date().toISOString()
+    };
+    
+    res.json(data);
+    
+  } catch (error) {
+    logger.error('[Sync] Error retrieving farm data:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to retrieve farm data',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/sync/restore/:farmId
+ * Edge device recovery endpoint - restore data from Central backup
+ * Phase 2: Durable Backup System
+ */
+router.post('/restore/:farmId', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    
+    // Verify requesting farm matches farmId param (security)
+    if (req.farmId !== farmId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Farm ID mismatch - can only restore own data'
+      });
+    }
+    
+    logger.info(`[Recovery] Restore request from farm ${farmId}`);
+    
+    if (await isDatabaseAvailable()) {
+      // Fetch from farm_backups table
+      const result = await query(
+        `SELECT groups, rooms, schedules, config, last_synced 
+         FROM farm_backups 
+         WHERE farm_id = $1`,
+        [farmId]
+      );
+      
+      if (!result.rows || result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'No backup found',
+          message: `No backup data found for farm ${farmId}. Farm may need to sync data first.`
+        });
+      }
+      
+      const backup = result.rows[0];
+      const groups = backup.groups || [];
+      const rooms = backup.rooms || [];
+      const schedules = backup.schedules || [];
+      
+      logger.info(`[Recovery] Restored ${groups.length} groups, ${rooms.length} rooms, ${schedules.length} schedules for farm ${farmId}`);
+      
+      res.json({
+        success: true,
+        farmId,
+        data: {
+          groups,
+          rooms,
+          schedules,
+          config: backup.config
+        },
+        backup_info: {
+          last_synced: backup.last_synced,
+          group_count: groups.length,
+          room_count: rooms.length,
+          schedule_count: schedules.length
+        },
+        restored_at: new Date().toISOString()
+      });
+      
+    } else {
+      // Fallback to in-memory
+      const groups = inMemoryStore.groups.get(farmId) || [];
+      const rooms = inMemoryStore.rooms.get(farmId) || [];
+      const schedules = inMemoryStore.schedules.get(farmId) || [];
+      
+      if (groups.length === 0 && rooms.length === 0 && schedules.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'No backup found',
+          message: `No backup data in memory for farm ${farmId}`
+        });
+      }
+      
+      logger.info(`[Recovery] Restored from memory: ${groups.length} groups, ${rooms.length} rooms, ${schedules.length} schedules for farm ${farmId}`);
+      
+      res.json({
+        success: true,
+        farmId,
+        data: { groups, rooms, schedules },
+        backup_info: {
+          source: 'in-memory',
+          group_count: groups.length,
+          room_count: rooms.length,
+          schedule_count: schedules.length
+        },
+        restored_at: new Date().toISOString()
+      });
+    }
+    
+  } catch (error) {
+    logger.error('[Recovery] Error restoring farm data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Recovery failed',
+      message: error.message
     });
   }
 });

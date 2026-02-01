@@ -52,9 +52,10 @@ echo ""
 echo "Fetching backup data from Central..."
 
 HTTP_CODE=$(curl -sS -w "%{http_code}" -o /tmp/restore-data.json \
+  -X POST \
   -H "X-API-Key: ${GREENREACH_API_KEY}" \
   -H "X-Farm-ID: ${FARM_ID}" \
-  "${GREENREACH_CENTRAL_URL}/api/sync/data/${FARM_ID}")
+  "${GREENREACH_CENTRAL_URL}/api/sync/restore/${FARM_ID}")
 
 if [ "${HTTP_CODE}" -ne 200 ]; then
   echo "ERROR: Failed to fetch data from Central (HTTP ${HTTP_CODE})"
@@ -63,7 +64,7 @@ if [ "${HTTP_CODE}" -ne 200 ]; then
 fi
 
 # Validate response has data
-GROUP_COUNT=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/restore-data.json', 'utf8')).groups?.length || 0")
+GROUP_COUNT=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/restore-data.json', 'utf8')).data?.groups?.length || 0")
 
 if [ "${GROUP_COUNT}" -eq 0 ]; then
   echo "WARNING: No groups found in Central backup for farm ${FARM_ID}"
@@ -76,7 +77,8 @@ echo "✓ Found ${GROUP_COUNT} groups in Central backup"
 
 # Extract and write data files
 node -e "
-const data = JSON.parse(require('fs').readFileSync('/tmp/restore-data.json', 'utf8'));
+const response = JSON.parse(require('fs').readFileSync('/tmp/restore-data.json', 'utf8'));
+const data = response.data;
 const fs = require('fs');
 
 if (data.groups && data.groups.length > 0) {
