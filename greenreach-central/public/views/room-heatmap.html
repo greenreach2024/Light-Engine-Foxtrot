@@ -790,7 +790,7 @@
             <a href="planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
             <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
             <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
-            <a href="tray-inventory.html" class="dropdown-item" target="_blank">Activity Hub</a>
+            <a href="tray-inventory.html" class="dropdown-item">Activity Hub</a>
             <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
           </div>
         </div>
@@ -821,7 +821,7 @@
             <span class="nav-arrow">▼</span>
           </button>
           <div class="dropdown-menu dropdown-right">
-            <a href="/farm-sales-pos.html" class="dropdown-item" target="_blank">Farm Sales Terminal</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
             <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
           </div>
         </div>
@@ -1781,7 +1781,16 @@
         rh: zoneData.sensors.rh?.setpoint,
         vpd: zoneData.sensors.vpd?.setpoint
       };
-    }) return [];
+    }
+
+    /**
+     * Get historical data for sparkline rendering
+     * @param {object} sensor - Sensor object with zone property
+     * @param {string} metric - Metric name (temperature, humidity, vpd)
+     * @returns {Array<number>} Historical values (last 48 points = 4 hours at 5-min intervals)
+     */
+    function getSensorHistory(sensor, metric) {
+      if (!STATE.envData?.zones) return [];
       
       let zoneId = sensor?.zone;
       
@@ -1794,16 +1803,7 @@
       
       // Handle different zone ID formats (see getLiveSensorData)
       if (typeof zoneId === 'number' || /^\d+$/.test(zoneId)) {
-        zoneId = `zone-${zoneIdic name (temperature, humidity, vpd)
-     * @returns {Array<number>} Historical values (last 48 points = 4 hours at 5-min intervals)
-     */
-    function getSensorHistory(sensor, metric) {
-      if (!STATE.envData?.zones || !sensor?.zone) return [];
-      
-      // Handle different zone ID formats (see getLiveSensorData)
-      let zoneId = sensor.zone;
-      if (typeof sensor.zone === 'number' || /^\d+$/.test(sensor.zone)) {
-        zoneId = `zone-${sensor.zone}`;
+        zoneId = `zone-${zoneId}`;
       }
       
       const zoneData = STATE.envData.zones.find(z => z.id === zoneId);

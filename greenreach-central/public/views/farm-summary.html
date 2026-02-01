@@ -1581,7 +1581,7 @@
     .floating-new-planting-btn {
       position: fixed;
       right: 2rem;
-      top: 7.5rem;
+      top: 9.5rem;
       background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
       color: white;
       border: 2px solid #4ade80;
@@ -1683,7 +1683,7 @@
             <a href="planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
             <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
             <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
-            <a href="tray-inventory.html" class="dropdown-item" target="_blank">Activity Hub</a>
+            <a href="tray-inventory.html" class="dropdown-item">Activity Hub</a>
             <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
           </div>
         </div>
@@ -1714,7 +1714,7 @@
             <span class="nav-arrow">▼</span>
           </button>
           <div class="dropdown-menu dropdown-right">
-            <a href="/farm-sales-pos.html" class="dropdown-item" target="_blank">Farm Sales Terminal</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
             <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
           </div>
         </div>
@@ -2022,32 +2022,58 @@
     async function loadFarmNameIntoHeader() {
       try {
         const token = localStorage.getItem('token');
-        if (!token) {
-          console.log('[Farm Summary] No token, skipping farm name load');
-          return;
+        let farmName = null;
+        
+        // Try authenticated API first if token exists
+        if (token) {
+          try {
+            const response = await fetch('/api/farm/profile', {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.status === 'success' && data.farm && data.farm.name) {
+                farmName = data.farm.name;
+                console.log('[Farm Summary] Loaded farm name from API:', farmName);
+              }
+            }
+          } catch (error) {
+            console.log('[Farm Summary] API failed, falling back to farm.json:', error.message);
+          }
         }
         
-        const response = await fetch('/api/farm/profile', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.status === 'success' && data.farm && data.farm.name) {
-            const farmName = data.farm.name;
-            
-            // Update the h1 header
-            const h1 = document.querySelector('h1');
-            if (h1) {
-              h1.textContent = `${farmName} Room Summary`;
-              console.log('[Farm Summary] Updated header to:', h1.textContent);
+        // Fallback to /data/farm.json if API didn't work
+        if (!farmName) {
+          try {
+            const response = await fetch('/data/farm.json');
+            if (response.ok) {
+              const farmData = await response.json();
+              if (farmData && farmData.name) {
+                farmName = farmData.name;
+                console.log('[Farm Summary] Loaded farm name from farm.json:', farmName);
+              }
             }
-            
-            // Update page title
-            document.title = `${farmName} Room Summary - Light Engine`;
+          } catch (error) {
+            console.error('[Farm Summary] Failed to load farm.json:', error);
           }
+        }
+        
+        // Update UI if we got a farm name
+        if (farmName) {
+          // Update the h1 header
+          const h1 = document.querySelector('h1');
+          if (h1) {
+            h1.textContent = `${farmName} Room Summary`;
+            console.log('[Farm Summary] Updated header to:', h1.textContent);
+          }
+          
+          // Update page title
+          document.title = `${farmName} Room Summary - Light Engine`;
+        } else {
+          console.warn('[Farm Summary] Could not load farm name from any source');
         }
       } catch (error) {
         console.error('[Farm Summary] Failed to load farm name:', error);
@@ -2087,6 +2113,25 @@
       initializeNewPlantingModal();
       initializeMLToggle();
       initializeAdminTooltipTracking(); // Initialize tooltip tracking for highlighted cards
+      
+      // Initialize Harvest Predictions AI (P3)
+      if (typeof HarvestPredictions !== 'undefined') {
+        console.log('[Farm Summary] Initializing Harvest Predictions AI component...');
+        window.harvestPredictions = new HarvestPredictions('/api/harvest/predictions');
+        harvestPredictions.loadAll().catch(err => {
+          console.warn('[Farm Summary] Harvest predictions not available:', err.message);
+        });
+      } else {
+        console.warn('[Farm Summary] HarvestPredictions component not loaded');
+      }
+      
+      // Initialize Succession Planner AI (P4)
+      if (typeof SuccessionPlanner !== 'undefined') {
+        console.log('[Farm Summary] Initializing Succession Planner AI component...');
+        window.successionPlanner = new SuccessionPlanner('');
+      } else {
+        console.warn('[Farm Summary] SuccessionPlanner component not loaded');
+      }
       
       // Wait for Chart.js to load before initializing ML widgets (with timeout)
       let chartJsAttempts = 0;
@@ -3003,17 +3048,20 @@
               humidity = zoneSensors.rh?.current;
               vpd = zoneSensors.vpd?.current;
               
+              // Copy setpoints to zone level for rendering
+              zone.tempSetpoint = zoneSensors.tempC?.setpoint;
+              zone.rhSetpoint = zoneSensors.rh?.setpoint;
+              
               if (temp != null || humidity != null || vpd != null) {
                 console.log(`[Farm Summary] ${zone.name} using envData from ${envZone.id}: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
               }
             } else {
-              console.log(`[Farm Summary] ${zone.name} - no matching envData zone found`);
-            }
+              }
           }
 
           // Find groups in this zone, excluding cannabis
           const zoneGroups = groups.filter(g => {
-            if (String(g.zone) !== String(zone.zone)) return false;
+            if (!matchesGroupZoneToZone(g, zone)) return false;
             
             // Filter out cannabis crops
             const groupName = (g.name || '').toLowerCase();
@@ -3202,7 +3250,12 @@
                             ${harvestStatus}
                           </div>
                           ${currentStage ? `<div class="harvest-stage">Day ${currentDay} • ${currentStage}</div>` : ''}
-                        </div>
+                          <div id="ai-prediction-${group.id}" style="margin-top: 8px;">
+                            <!-- AI Prediction Badge will be inserted here -->
+                          </div>
+                          <div id="ai-succession-${group.id}" style="margin-top: 8px;">
+                            <!-- AI Succession Suggestion (P4) will be inserted here -->
+                          </div>                        </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;" onclick="event.stopPropagation();">
                           <button 
                             class="harvest-button ${daysToHarvest < 0 ? 'overdue' : ''}" 
@@ -3586,29 +3639,39 @@
               </h3>
               
               <!-- Zone Environmental Metrics (shown first) -->
-              <div class="env-grid" style="margin-bottom: 20px;">
-                <div class="env-metric ${tempInvalid ? 'invalid-reading' : ''}">
-                  <div class="label">Temperature</div>
-                  <div class="value">${Number.isFinite(temp) ? formatNumber(temp, 1) : '--'}</div>
-                  <div class="unit">°C</div>
-                  ${zone.tempSetpoint ? `<div class="target">Target: ${zone.tempSetpoint.min}–${zone.tempSetpoint.max}°C</div>` : ''}
-                  <div class="status ${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'warning' : 'critical') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'optimal' : temp >= 15 && temp <= 28 ? 'warning' : 'critical') : '')}">${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'Optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'Acceptable' : 'Alert') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'Optimal' : temp >= 15 && temp <= 28 ? 'Acceptable' : 'Alert') : '--')}</div>
+              ${!Number.isFinite(temp) && !Number.isFinite(humidity) ? `
+                <div style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 12px; text-align: center;">
+                  <div style="color: #1e40af; font-weight: 600; margin-bottom: 8px;">Environmental Monitoring</div>
+                  <div style="color: #475569; font-size: 0.9rem; margin-bottom: 12px;">View detailed sensor readings and spatial heatmap</div>
+                  <a href="/views/room-heatmap.html" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 0.9rem; transition: background 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                    Open Room Heatmap →
+                  </a>
                 </div>
-                <div class="env-metric ${humidityInvalid ? 'invalid-reading' : ''}">
-                  <div class="label">Humidity</div>
-                  <div class="value">${Number.isFinite(humidity) ? formatNumber(humidity, 0) : '--'}</div>
-                  <div class="unit">%</div>
-                  ${zone.rhSetpoint ? `<div class="target">Target: ${zone.rhSetpoint.min}–${zone.rhSetpoint.max}%</div>` : ''}
-                  <div class="status ${Number.isFinite(humidity) && zone.rhSetpoint ? (humidity >= zone.rhSetpoint.min && humidity <= zone.rhSetpoint.max ? 'optimal' : humidity >= (zone.rhSetpoint.min - 10) && humidity <= (zone.rhSetpoint.max + 10) ? 'warning' : 'critical') : (Number.isFinite(humidity) ? (humidity >= 50 && humidity <= 70 ? 'optimal' : humidity >= 40 && humidity <= 80 ? 'warning' : 'critical') : '')}">${Number.isFinite(humidity) && zone.rhSetpoint ? (humidity >= zone.rhSetpoint.min && humidity <= zone.rhSetpoint.max ? 'Optimal' : humidity >= (zone.rhSetpoint.min - 10) && humidity <= (zone.rhSetpoint.max + 10) ? 'Acceptable' : 'Alert') : (Number.isFinite(humidity) ? (humidity >= 50 && humidity <= 70 ? 'Optimal' : humidity >= 40 && humidity <= 80 ? 'Acceptable' : 'Alert') : '--')}</div>
+              ` : `
+                <div class="env-grid" style="margin-bottom: 20px;">
+                  <div class="env-metric ${tempInvalid ? 'invalid-reading' : ''}">
+                    <div class="label">Temperature</div>
+                    <div class="value">${Number.isFinite(temp) ? formatNumber(temp, 1) : '--'}</div>
+                    <div class="unit">°C</div>
+                    ${zone.tempSetpoint ? `<div class="target">Target: ${zone.tempSetpoint.min}–${zone.tempSetpoint.max}°C</div>` : ''}
+                    <div class="status ${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'warning' : 'critical') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'optimal' : temp >= 15 && temp <= 28 ? 'warning' : 'critical') : '')}">${Number.isFinite(temp) && zone.tempSetpoint ? (temp >= zone.tempSetpoint.min && temp <= zone.tempSetpoint.max ? 'Optimal' : temp >= (zone.tempSetpoint.min - 3) && temp <= (zone.tempSetpoint.max + 3) ? 'Acceptable' : 'Alert') : (Number.isFinite(temp) ? (temp >= 18 && temp <= 24 ? 'Optimal' : temp >= 15 && temp <= 28 ? 'Acceptable' : 'Alert') : '--')}</div>
+                  </div>
+                  <div class="env-metric ${humidityInvalid ? 'invalid-reading' : ''}">
+                    <div class="label">Humidity <span style="color: green; font-weight: bold;">✓</span></div>
+                    <div class="value">${Number.isFinite(humidity) ? formatNumber(humidity, 0) : '--'}</div>
+                    <div class="unit">%</div>
+                    ${zone.rhSetpoint ? `<div class="target">Target: ${zone.rhSetpoint.min}–${zone.rhSetpoint.max}%</div>` : ''}
+                    <div class="status ${Number.isFinite(humidity) && zone.rhSetpoint ? (humidity >= zone.rhSetpoint.min && humidity <= zone.rhSetpoint.max ? 'optimal' : humidity >= (zone.rhSetpoint.min - 10) && humidity <= (zone.rhSetpoint.max + 10) ? 'warning' : 'critical') : (Number.isFinite(humidity) ? (humidity >= 50 && humidity <= 70 ? 'optimal' : humidity >= 40 && humidity <= 80 ? 'warning' : 'critical') : '')}">${Number.isFinite(humidity) && zone.rhSetpoint ? (humidity >= zone.rhSetpoint.min && humidity <= zone.rhSetpoint.max ? 'Optimal' : humidity >= (zone.rhSetpoint.min - 10) && humidity <= (zone.rhSetpoint.max + 10) ? 'Acceptable' : 'Alert') : (Number.isFinite(humidity) ? (humidity >= 50 && humidity <= 70 ? 'Optimal' : humidity >= 40 && humidity <= 80 ? 'Acceptable' : 'Alert') : '--')}</div>
+                  </div>
+                  <div class="env-metric">
+                    <div class="label">VPD</div>
+                    <div class="value">${Number.isFinite(vpd) ? formatNumber(vpd, 2) : '--'}</div>
+                    <div class="unit">kPa</div>
+                    <div class="target">Target: 0.8–1.2 kPa</div>
+                    <div class="status ${Number.isFinite(vpd) ? (vpd >= 0.8 && vpd <= 1.2 ? 'optimal' : vpd >= 0.6 && vpd <= 1.5 ? 'warning' : 'critical') : ''}">${Number.isFinite(vpd) ? (vpd >= 0.8 && vpd <= 1.2 ? 'Optimal' : vpd >= 0.6 && vpd <= 1.5 ? 'Acceptable' : 'Alert') : '--'}</div>
+                  </div>
                 </div>
-                <div class="env-metric">
-                  <div class="label">VPD</div>
-                  <div class="value">${Number.isFinite(vpd) ? formatNumber(vpd, 2) : '--'}</div>
-                  <div class="unit">kPa</div>
-                  <div class="target">Target: 0.8–1.2 kPa</div>
-                  <div class="status ${Number.isFinite(vpd) ? (vpd >= 0.8 && vpd <= 1.2 ? 'optimal' : vpd >= 0.6 && vpd <= 1.5 ? 'warning' : 'critical') : ''}">${Number.isFinite(vpd) ? (vpd >= 0.8 && vpd <= 1.2 ? 'Optimal' : vpd >= 0.6 && vpd <= 1.5 ? 'Acceptable' : 'Alert') : '--'}</div>
-                </div>
-              </div>
+              `}
               
               <!-- Groups within this zone -->
               ${zoneGroups.length > 0 ? `
@@ -3630,6 +3693,55 @@
         console.log('[Zone Summaries] Rendering', zones.length, 'zone cards');
         container.innerHTML = html;
         console.log('[Zone Summaries] Zone summaries rendered successfully');
+        
+        // Render AI Harvest Predictions for all groups (P3)
+        if (window.harvestPredictions) {
+          console.log('[Zone Summaries] Rendering AI harvest predictions for groups...');
+          let predictionCount = 0;
+          zones.forEach(zone => {
+            const zoneGroups = groups.filter(g => {
+              const groupZone = g.zone || g.roomZone || '';
+              return normalizeToken(groupZone) === normalizeToken(zone.zone);
+            });
+            zoneGroups.forEach(group => {
+              const targetEl = document.getElementById(`ai-prediction-${group.id}`);
+              if (targetEl) {
+                const badge = harvestPredictions.renderBadge(group.id);
+                if (badge) {
+                  targetEl.innerHTML = badge;
+                  predictionCount++;
+                }
+              }
+            });
+          });
+          console.log(`[Zone Summaries] Rendered ${predictionCount} AI prediction badges`);
+        }
+        
+        // Render AI Succession Planning suggestions for all groups (P4)
+        if (window.successionPlanner) {
+          console.log('[Zone Summaries] Rendering AI succession planning suggestions...');
+          let suggestionCount = 0;
+          zones.forEach(zone => {
+            const zoneGroups = groups.filter(g => {
+              const groupZone = g.zone || g.roomZone || '';
+              return normalizeToken(groupZone) === normalizeToken(zone.zone);
+            });
+            zoneGroups.forEach(group => {
+              const targetEl = document.getElementById(`ai-succession-${group.id}`);
+              if (targetEl) {
+                successionPlanner.render(group.id, { compact: true }).then(html => {
+                  if (html && !html.includes('succession-card--empty')) {
+                    targetEl.innerHTML = html;
+                    suggestionCount++;
+                  }
+                }).catch(err => {
+                  console.warn(`[Zone Summaries] Succession suggestion error for ${group.id}:`, err);
+                });
+              }
+            });
+          });
+          console.log(`[Zone Summaries] Rendered ${suggestionCount} AI succession suggestions`);
+        }
       } catch (error) {
         console.error('[Zone Summaries] Failed to load zone summaries:', error);
         container.innerHTML = '';
@@ -3657,6 +3769,36 @@
       return typeof value === 'string' ? value.trim().toLowerCase() : '';
     }
 
+    function parseZoneIdentity(token) {
+      const raw = normalizeToken(token);
+      if (!raw) return { room: null, zoneNumber: null, raw };
+
+      // Format: room-id:zoneNumber (e.g., "room-a:1")
+      if (raw.includes(':')) {
+        const [room, zoneNumber] = raw.split(':');
+        return { room: room || null, zoneNumber: zoneNumber || null, raw };
+      }
+
+      // Format: room-id-zN (e.g., "room-a-z1")
+      const roomZoneMatch = raw.match(/^(.*?)-z(\d+)$/i);
+      if (roomZoneMatch) {
+        return { room: roomZoneMatch[1], zoneNumber: roomZoneMatch[2], raw };
+      }
+
+      // Format: zone-N
+      const zoneMatch = raw.match(/^zone-(\d+)$/i);
+      if (zoneMatch) {
+        return { room: null, zoneNumber: zoneMatch[1], raw };
+      }
+
+      // Format: plain number
+      if (/^\d+$/.test(raw)) {
+        return { room: null, zoneNumber: raw, raw };
+      }
+
+      return { room: null, zoneNumber: null, raw };
+    }
+
     function matchesZoneToken(zone, token) {
       const normalized = normalizeToken(token);
       if (!normalized || !zone) return false;
@@ -3670,6 +3812,64 @@
         zone.meta?.scopeId
       ];
       return candidates.some((candidate) => normalizeToken(candidate) === normalized);
+    }
+
+    function normalizeZoneKey(token) {
+      const raw = normalizeToken(token);
+      if (!raw) return '';
+      const roomDashMatch = raw.match(/^(.*?)-z(\d+)$/i);
+      if (roomDashMatch) return `${roomDashMatch[1]}:${roomDashMatch[2]}`;
+      const roomColonMatch = raw.match(/^(.*?):z(\d+)$/i);
+      if (roomColonMatch) return `${roomColonMatch[1]}:${roomColonMatch[2]}`;
+      return raw;
+    }
+
+    function matchesGroupZoneToZone(group, zone) {
+      if (!group || !zone) return false;
+      const groupTokens = [
+        group.zone,
+        group.zoneId,
+        group.location,
+        group.room,
+        group.roomId,
+        group.scope,
+        group.scopeId
+      ].filter(Boolean);
+
+      const zoneTokens = [
+        zone.zone,
+        zone.name,
+        zone.room,
+        zone.roomName,
+        zone.id,
+        zone.location
+      ].filter(Boolean);
+
+      // Direct token match
+      if (groupTokens.some((token) => zoneTokens.some((zoneToken) => normalizeToken(token) === normalizeToken(zoneToken)))) {
+        return true;
+      }
+
+      // Normalized zone-key match (ROOM-A:1 vs ROOM-A-Z1)
+      if (groupTokens.some((token) => zoneTokens.some((zoneToken) => normalizeZoneKey(token) === normalizeZoneKey(zoneToken)))) {
+        return true;
+      }
+
+      // Structured match: room + zone number
+      const zoneIdentity = parseZoneIdentity(zone.zone || zone.id || zone.name || '');
+      if (zoneIdentity.zoneNumber) {
+        for (const token of groupTokens) {
+          const groupIdentity = parseZoneIdentity(token);
+          if (!groupIdentity.zoneNumber) continue;
+
+          const roomMatches = !zoneIdentity.room || !groupIdentity.room || zoneIdentity.room === groupIdentity.room;
+          if (roomMatches && zoneIdentity.zoneNumber === groupIdentity.zoneNumber) {
+            return true;
+          }
+        }
+      }
+
+      return false;
     }
 
     function findZoneBySensorToken(zones, token) {
@@ -3814,9 +4014,10 @@
         const sensor = zone.sensors?.[metric.sensorKey] || {};
         const currentValue = Number.isFinite(sensor.current) ? Number(sensor.current) : null;
         // Note: No target display or status alerts for Indoor Conditions as this shows averaged data across all zones
+        const marker = metric.key === 'temperature' ? ' <span style="color: blue; font-weight: bold;">✓</span>' : '';
         return `
           <div class="env-metric">
-            <div class="label">${metric.label}</div>
+            <div class="label">${metric.label}${marker}</div>
             <div class="value">${metric.valueFormatter(currentValue)}</div>
             <div class="unit">${metric.unit}</div>
           </div>
@@ -4177,6 +4378,129 @@
       const refreshBtn = document.getElementById('healthRefreshBtn');
       
       if (!container) return;
+
+      const renderFallbackFromEnv = async () => {
+        try {
+          console.log('[Health] Fetching fallback from /api/env...');
+          const envResponse = await fetch('/api/env?t=' + Date.now());
+          if (!envResponse.ok) throw new Error(`HTTP ${envResponse.status}`);
+          const envData = await envResponse.json();
+          console.log('[Health] Received env data:', { zones_count: envData.zones?.length, has_zones: Array.isArray(envData.zones) });
+          const zones = Array.isArray(envData.zones) ? envData.zones : [];
+
+          if (zones.length === 0) {
+            console.log('[Health] No zones found in env data');
+            container.innerHTML = `
+              <div class="health-no-data">
+                <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">No Environmental Data Yet</div>
+                <div>Waiting for sensors to report...</div>
+              </div>
+            `;
+            return true;
+          }
+          
+          console.log('[Health] Rendering fallback for', zones.length, 'zones');
+
+          const computeQuickScore = (zone) => {
+            const temp = zone?.sensors?.tempC?.current ?? zone?.temperature ?? zone?.tempC;
+            const rh = zone?.sensors?.rh?.current ?? zone?.humidity ?? zone?.rh;
+            const vpd = zone?.sensors?.vpd?.current ?? zone?.vpd;
+
+            // Start at 40 (baseline), each metric adds 20 points
+            // This means: 0/3 metrics = 40 (F), 1/3 = 60 (D), 2/3 = 80 (B), 3/3 = 100 (A)
+            let score = 40;
+            if (Number.isFinite(temp) && temp >= 18 && temp <= 24) score += 20;
+            if (Number.isFinite(rh) && rh >= 40 && rh <= 70) score += 20;
+            if (Number.isFinite(vpd) && vpd >= 0.8 && vpd <= 1.2) score += 20;
+            return Math.max(0, Math.min(100, Math.round(score)));
+          };
+
+          const zoneScores = zones.map(zone => {
+            const score = computeQuickScore(zone);
+            return {
+              zone_id: zone.id,
+              zone_name: zone.name || zone.id,
+              overall: score,
+              grade: score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F'
+            };
+          });
+
+          const avgScore = Math.round(zoneScores.reduce((sum, z) => sum + z.overall, 0) / zoneScores.length);
+          const summary = {
+            total_zones: zoneScores.length,
+            excellent: zoneScores.filter(z => z.overall >= 90).length,
+            good: zoneScores.filter(z => z.overall >= 70 && z.overall < 90).length,
+            fair: zoneScores.filter(z => z.overall >= 50 && z.overall < 70).length,
+            poor: zoneScores.filter(z => z.overall < 50).length
+          };
+
+          let gradeClass = 'poor';
+          if (avgScore >= 90) gradeClass = 'excellent';
+          else if (avgScore >= 80) gradeClass = 'good';
+          else if (avgScore >= 70) gradeClass = 'fair';
+
+          let scoreColor = '#fca5a5';
+          if (avgScore >= 90) scoreColor = '#86efac';
+          else if (avgScore >= 80) scoreColor = '#93c5fd';
+          else if (avgScore >= 70) scoreColor = '#fdba74';
+
+          let zonesHTML = '<div class="health-zones-grid">';
+          zoneScores.forEach(zone => {
+            let zoneScoreColor = '#fca5a5';
+            if (zone.overall >= 90) zoneScoreColor = '#86efac';
+            else if (zone.overall >= 80) zoneScoreColor = '#93c5fd';
+            else if (zone.overall >= 70) zoneScoreColor = '#fdba74';
+
+            const statusClass = zone.overall >= 80 ? 'optimal' : zone.overall >= 60 ? 'warning' : 'critical';
+
+            zonesHTML += `
+              <div class="health-zone-item">
+                <div class="health-zone-name">${zone.zone_name || zone.zone_id || 'Unknown Zone'}</div>
+                <div class="health-zone-score" style="color: ${zoneScoreColor};">${zone.overall}<span style="font-size: 1rem; color: #64748b;">/100</span></div>
+                <span class="health-zone-status status ${statusClass}">${zone.grade || 'N/A'}</span>
+              </div>
+            `;
+          });
+          zonesHTML += '</div>';
+
+          const insightsHTML = `
+            <div class="health-insights">
+              <h3>Insights & Recommendations</h3>
+              <div class="health-insight-item">Using live sensor snapshot. Detailed AI insights are currently unavailable.</div>
+            </div>
+          `;
+
+          container.innerHTML = `
+            <div class="health-score-display">
+              <div class="health-score-main">
+                <div class="health-score-number" style="color: ${scoreColor};">
+                  ${avgScore}<span style="font-size: 2rem; color: #64748b;">/100</span>
+                </div>
+                <div>
+                  <div class="health-grade-badge ${gradeClass}">${avgScore >= 90 ? 'A' : avgScore >= 80 ? 'B' : avgScore >= 70 ? 'C' : avgScore >= 60 ? 'D' : 'F'}</div>
+                  <div style="margin-top: 0.5rem; font-size: 0.875rem; color: #94a3b8;">Farm Health Score</div>
+                </div>
+              </div>
+              <div style="text-align: right; color: #94a3b8; font-size: 0.875rem;">
+                <div style="margin-bottom: 0.5rem;"><strong>${summary.total_zones}</strong> zones monitored</div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                  <span>Excellent ${summary.excellent}</span>
+                  <span>Good ${summary.good}</span>
+                  <span>Fair ${summary.fair}</span>
+                  <span>Poor ${summary.poor}</span>
+                </div>
+              </div>
+            </div>
+            ${zonesHTML}
+            ${insightsHTML}
+          `;
+
+          return true;
+        } catch (fallbackError) {
+          console.error('Failed to load health status fallback:', fallbackError);
+          return false;
+        }
+      };
       
       try {
         // Disable refresh button
@@ -4187,17 +4511,32 @@
         
         container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading health data...</div>';
         
-        const response = await fetch('/api/health/insights');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        console.log('[Health] Fetching primary insights from /api/health/insights...');
+        const response = await fetch('/api/health/insights?t=' + Date.now());
+        if (!response.ok) {
+          console.log('[Health] Primary insights failed, using fallback');
+          const usedFallback = await renderFallbackFromEnv();
+          if (usedFallback) return;
+          throw new Error(`HTTP ${response.status}`);
+        }
         
         const data = await response.json();
+        console.log('[Health] Primary insights response:', { ok: data.ok, zones: data.zones?.length });
         
         if (!data.ok) {
+          console.log('[Health] Primary insights not ok, using fallback');
+          const usedFallback = await renderFallbackFromEnv();
+          if (usedFallback) return;
           throw new Error(data.message || 'Failed to load health data');
         }
         
         // Check if we have data
         if (!data.zones || data.zones.length === 0) {
+          console.log('[Health] Primary insights has no zones, using fallback');
+          const usedFallback = await renderFallbackFromEnv();
+          if (usedFallback) return;
+          
+          // If fallback also failed, show generic message
           container.innerHTML = `
             <div class="health-no-data">
               <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
@@ -4235,9 +4574,9 @@
             
             zonesHTML += `
               <div class="health-zone-item">
-                <div class="health-zone-name">${zone.zone_id}</div>
-                <div class="health-zone-score" style="color: ${zoneScoreColor};">${zone.score}<span style="font-size: 1rem; color: #64748b;">/100</span></div>
-                <span class="health-zone-status status ${statusClass}">${zone.grade || 'N/A'}</span>
+                <div class="health-zone-name">${zone.zone_name || zone.zone_id || zone.id || 'Unknown Zone'}</div>
+                <div class="health-zone-score" style="color: ${zoneScoreColor};">${zone.score || zone.overall || 0}<span style="font-size: 1rem; color: #64748b;">/100</span></div>
+                <span class="health-zone-status status ${statusClass}">${zone.grade || zone.status || 'N/A'}</span>
               </div>
             `;
           });
@@ -4250,7 +4589,16 @@
           insightsHTML = `
             <div class="health-insights">
               <h3>💡 Insights & Recommendations</h3>
-              ${data.insights.map(insight => `<div class="health-insight-item">${insight}</div>`).join('')}
+              ${data.insights.map(insight => {
+                const message = typeof insight === 'string' ? insight : insight.message || '';
+                const recommendation = (typeof insight === 'object' && insight.recommendation) ? 
+                  `<div style="margin-top: 0.25rem; font-size: 0.875rem; color: #3b82f6;">→ ${insight.recommendation}</div>` : '';
+                const source = (typeof insight === 'object' && insight.source) ?
+                  `<div style="margin-top: 0.25rem; font-size: 0.75rem; color: #10b981; font-weight: 600;">🤖 ${insight.source}</div>` : '';
+                const priority = (typeof insight === 'object' && insight.priority === 'high') ?
+                  `<span style="color: #ef4444; font-weight: 700; margin-left: 0.5rem;">⚠️ HIGH PRIORITY</span>` : '';
+                return `<div class="health-insight-item">${message}${priority}${recommendation}${source}</div>`;
+              }).join('')}
             </div>
           `;
         }
@@ -4566,13 +4914,27 @@
         // Use first zone or "all" as default
         const firstZone = envData.zones && envData.zones.length > 0 ? envData.zones[0].id : 'all';
         
-        // Load forecast via API endpoint (supports demo mode)
-        const response = await fetch(`/api/ml/insights/forecast/${firstZone}`);
+        // Try to load forecast, with fallback to common zone names
+        let response = await fetch(`/api/ml/insights/forecast/${firstZone}`);
         
         // Check if ML features are available (403 = feature not enabled)
         if (response.status === 403) {
           const errorData = await response.json();
           throw new Error('Feature not available');
+        }
+        
+        // If primary zone ID fails (404), try common zone names as fallback
+        if (!response.ok && response.status === 404) {
+          console.log(`[Temp Forecast] Zone "${firstZone}" not found, trying fallback zones...`);
+          const fallbackZones = ['main', 'veg', 'flower', 'all'];
+          
+          for (const fallbackZone of fallbackZones) {
+            response = await fetch(`/api/ml/insights/forecast/${fallbackZone}`);
+            if (response.ok) {
+              console.log(`[Temp Forecast] Using fallback zone: ${fallbackZone}`);
+              break;
+            }
+          }
         }
         
         if (!response.ok) throw new Error(`No forecast available`);
@@ -6708,5 +7070,14 @@
     });
   </script>
   <script src="/js/farm-assistant.js"></script>
+  
+  <!-- Harvest Predictions AI Component (P3) -->
+  <script src="/harvest-predictions.js"></script>
+  
+  <!-- Succession Planner AI Component (P4) -->
+  <script type="module">
+    import { SuccessionPlanner } from '/js/components/SuccessionPlanner.js';
+    window.SuccessionPlanner = SuccessionPlanner;
+  </script>
 </body>
 </html>
