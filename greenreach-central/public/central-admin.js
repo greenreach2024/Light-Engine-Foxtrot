@@ -5848,6 +5848,7 @@ async function loadAnomaliesView() {
         }
         
         const anomalies = data.anomalies || [];
+        const mlEnabled = data.mlEnabled;
         
         // Update KPIs based on actual data
         const totalAnomalies = anomalies.length;
@@ -5858,10 +5859,13 @@ async function loadAnomaliesView() {
         document.getElementById('anomalies-total').textContent = totalAnomalies;
         document.getElementById('anomalies-critical').textContent = criticalCount;
         document.getElementById('anomalies-ack').textContent = acknowledged;
-        document.getElementById('anomalies-rate').textContent = data.mlEnabled ? '98.5%' : 'N/A';
+        document.getElementById('anomalies-rate').textContent = mlEnabled ? '98.5%' : 'N/A';
         
         if (anomalies.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">No anomalies detected</td></tr>';
+            const message = mlEnabled 
+                ? 'No anomalies detected - all systems operating normally'
+                : 'ML anomaly detection not available. Check that ML jobs are running on edge devices.';
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">${message}</td></tr>`;
             return;
         }
         
@@ -5905,10 +5909,6 @@ async function loadAnomaliesView() {
         }).join('');
         
         tbody.innerHTML = html;
-        
-        if (data.demo) {
-            showToast('Demo mode: Displaying synthetic anomaly data', 'info');
-        }
         
     } catch (error) {
         console.error('[Anomalies] Error loading data:', error);

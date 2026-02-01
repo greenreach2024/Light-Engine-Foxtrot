@@ -8,6 +8,7 @@ import { adminAuthMiddleware, requireAdminRole } from '../middleware/adminAuth.j
 import adminAuthRoutes from './admin-auth.js';
 import adminWholesaleRoutes from './admin-wholesale.js';
 import adminRecipesRoutes from './admin-recipes.js';
+import adminPricingRoutes from './admin-pricing.js';
 import { getInMemoryGroups } from './sync.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
@@ -392,6 +393,9 @@ router.use('/wholesale', adminWholesaleRoutes);
 
 // Mount recipes admin routes
 router.use('/recipes', adminRecipesRoutes);
+
+// Mount pricing authority routes
+router.use('/pricing', adminPricingRoutes);
 
 /**
  * GET /api/admin/ai-rules
@@ -1457,6 +1461,13 @@ router.get('/anomalies', async (req, res) => {
 
         const anomalies = anomaliesResult.rows.flatMap(row => {
             const payload = row.data || {};
+            
+            // Skip error states (ML gated, outdoor sensor validation failed, etc.)
+            if (payload.error || payload.ml_gated) {
+                console.log(`[Admin API] Skipping error state for farm ${row.farm_id}: ${payload.error || 'ML gated'}`);
+                return [];
+            }
+            
             const list = Array.isArray(payload) ? payload : (Array.isArray(payload.anomalies) ? payload.anomalies : []);
             return list.map(item => ({
                 ...item,
