@@ -92,19 +92,36 @@ export async function checkAndControlEnvironment(allZones, iotDevices, options =
     }
   }));
 
-  // 3) Build effect matrices (prefer ML; else fallback distance-based)
+  // 3) P2: Adaptive target adjustment (outdoor-aware, energy optimization)
+  let adjustedTargets = targets;
+  if (options.adaptiveControl) {
+    try {
+      adjustedTargets = options.adaptiveControl.adjustTargets(targets, {
+        zones: zonesForControl,
+        outdoorContext,
+        groups,
+        timestamp: Date.now()
+      });
+    } catch (adaptiveError) {
+      console.warn('[env-control] Adaptive control error:', adaptiveError.message);
+      console.warn('[env-control] Using original targets');
+      adjustedTargets = targets; // Fail safe
+    }
+  }
+
+  // 4) Build effect matrices (prefer ML; else fallback distance-based)
   const ml = effects ? {
     H: effects.H,         // Humidity effect matrix
     T: effects.T,         // Temperature effect matrix
     confidence: effects.confidence
   } : null;
 
-  // 4) Call the core allocator with robustified zones + ML effects
+  // 5) Call the core allocator with robustified zones + adaptive targets + ML effects
   if (coreAllocator) {
     await coreAllocator(zonesForControl, iotDevices, ml, {
       plugManager,
       groups,
-      targets,
+      targets: adjustedTargets, // Use adaptive targets if available
       lastActions,
       outdoorContext
     });

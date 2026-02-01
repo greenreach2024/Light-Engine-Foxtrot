@@ -204,6 +204,7 @@ import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
 import DeviceDiscovery from './lib/device-discovery.js';
 import HarvestPredictor from './lib/harvest-predictor.js';
 import AnomalyDiagnostics from './lib/anomaly-diagnostics.js';
+import AdaptiveControl from './lib/adaptive-control.js';
 import AdaptiveVpd from './lib/adaptive-vpd.js';
 import SuccessionPlanner from './lib/succession-planner.js';
 import anomalyHistory from './lib/anomaly-history.js';
@@ -10547,6 +10548,18 @@ const harvestPredictor = new HarvestPredictor(DATA_DIR);
 
 // Initialize anomaly diagnostics
 const anomalyDiagnostics = new AnomalyDiagnostics(DATA_DIR);
+
+// Initialize adaptive control (P2 Tier 1: Outdoor-aware adjustments)
+const adaptiveControlEnabled = process.env.ADAPTIVE_CONTROL_ENABLED === 'true';
+const adaptiveControlTier = parseInt(process.env.ADAPTIVE_CONTROL_TIER || '1', 10);
+const adaptiveControl = adaptiveControlEnabled 
+  ? new AdaptiveControl({ tier: adaptiveControlTier })
+  : null;
+if (adaptiveControl) {
+  console.log(`[Foxtrot] Adaptive Control enabled: Tier ${adaptiveControlTier} (outdoor-aware adjustments)`);
+} else {
+  console.log('[Foxtrot] Adaptive Control disabled (set ADAPTIVE_CONTROL_ENABLED=true to enable)');
+}
 
 // Initialize adaptive VPD
 const adaptiveVpd = new AdaptiveVpd();
@@ -25745,13 +25758,18 @@ function setupLiveSensorSync() {
           targets[zone.id] = preEnvStore.getTargets(zone.id) || {};
         }
         
-        // Call ML-enhanced room-level control
+        // Get outdoor context for adaptive control
+        const outdoorContext = envData.outdoor || null;
+        
+        // Call ML-enhanced room-level control with adaptive targets (P2)
         await checkAndControlEnvironment(envData.zones, iotDevices, {
           coreAllocator,
           plugManager: prePlugManager,
           groups,
           targets,
-          lastActions: preAutomationEngine._lastEnvironmentalActions || {}
+          lastActions: preAutomationEngine._lastEnvironmentalActions || {},
+          outdoorContext,
+          adaptiveControl  // P2: Inject adaptive control module
         });
         
         // Save last actions
