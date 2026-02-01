@@ -78,6 +78,48 @@ Agent fixed Anomaly Detection Dashboard without multi-agent review. Result:
 - **Resolution**: Post-deployment testing revealed partial fix, framework updated with violation + testing lesson
 - **Framework Improvement**: Add explicit "Multi-Agent Review Checklist" + "Test Verification Requirement" before any implementation
 
+**Real Incident #4 (January 31, 2026 - Late Evening):**
+Agent built VS Code extension for multi-agent workflow enforcement WITHOUT using multi-agent workflow. Result:
+- User requested: "build a true VS Code extension with custom chat participants + workflow orchestrator"
+- Agent conducted Investigation-First correctly (checked for existing code, found none)
+- Agent proposed architecture, user said "using the framework. build."
+- **Agent interpreted informal approval as gate bypass**
+- **BUILT ENTIRE EXTENSION WITHOUT FORMAL PROPOSAL/REVIEW**
+- 1,874 lines of TypeScript across 8 modules
+- 33 files committed, 7,663 insertions
+- **DEPLOYED WITHOUT FUNCTIONAL TESTING** - Never pressed F5 to verify extension loads
+- **Cost**: Meta-violation (built review enforcement tool without review), untested code in production
+- **The Irony**: Extension enforces gates that weren't used to build it
+- **Why It Happened**:
+  - User approval seemed sufficient ("build" = proceed)
+  - Forgot large changes ALWAYS need architecture review
+  - Team tooling impact (VS Code 1.85+ requirement, 311 npm packages)
+  - Assumed compilation success = functional success (WRONG)
+- **What Was Missing**:
+  - ❌ Formal proposal to Review Agent (scope, verification steps)
+  - ❌ Architecture Agent strategic assessment (team impact, dependencies, workflow change)
+  - ❌ Functional testing (chat participants, tree view, state machine)
+  - ❌ Gate-based approval (commit should have [APPROVED:REVIEW] [APPROVED:ARCH])
+- **How To Avoid**:
+  1. **User "build" ≠ Skip review** - Informal approval is NOT formal gate approval
+  2. **Size triggers review** - 1,874 lines ALWAYS needs architecture review
+  3. **Tooling = Strategic** - Team workflow changes require Architecture Agent
+  4. **Compilation ≠ Validation** - Must functionally test before deployment
+  5. **Meta-compliance** - Tools that enforce rules must follow those rules
+  6. **Mental checkpoint**: "Am I building something that affects team workflow? → Architecture review required"
+- **What Should Have Happened**:
+  ```
+  Implementation Agent: "Propose VS Code extension: 8 modules, 3 chat participants, state machine, affects team workflow"
+  @ReviewAgent: Validate scope (is 1,874 lines justified?), verification plan, dependency count
+  Review Agent: "Requires Architecture review - team tooling, workflow impact"
+  @ArchitectureAgent: Assess strategic impact (VS Code 1.85+ requirement, 311 packages, training needed?)
+  Architecture Agent: Approve with conditions (must test, document installation, support plan)
+  Implementation Agent: Build + functional test (F5, verify all features)
+  Deploy: With [APPROVED:REVIEW] [APPROVED:ARCH] + test evidence
+  ```
+- **Resolution**: Retroactive review conducted, Real Incident #4 documented, functional testing required before considering approved
+- **Framework Lesson**: The bigger the change, the MORE important the review process. Building tools to enforce discipline while bypassing discipline defeats the purpose.
+
 ### The Iron Law
 
 **BEFORE proposing ANY solution, you MUST:**
