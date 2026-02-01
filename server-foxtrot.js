@@ -41,7 +41,8 @@ const ALLOW_MOCKS = String(process.env.ALLOW_MOCKS || 'false').toLowerCase() ===
 // DEMO MODE REMOVED - Production only uses real farm data and sensors
 
 import { createProxyMiddleware } from "http-proxy-middleware";
-import fs from "fs/promises";
+import fs from "fs";
+import fsPromises from "fs/promises";
 import http from 'node:http';
 import https from 'node:https';
 import path from "path";
@@ -18766,7 +18767,7 @@ app.patch('/api/config/farm-metadata', authenticateFarmMetadata, async (req, res
     let farmData = {};
     
     try {
-      const farmJsonContent = await fs.readFile(farmJsonPath, 'utf-8');
+      const farmJsonContent = await fsPromises.readFile(farmJsonPath, 'utf-8');
       farmData = JSON.parse(farmJsonContent);
     } catch (readError) {
       console.warn('[API] farm.json not found or invalid, creating new one');
@@ -18793,7 +18794,7 @@ app.patch('/api/config/farm-metadata', authenticateFarmMetadata, async (req, res
     farmData.metadata.updatedBy = 'GreenReach Central';
     
     // Write updated farm.json
-    await fs.writeFile(farmJsonPath, JSON.stringify(farmData, null, 2), 'utf-8');
+    await fsPromises.writeFile(farmJsonPath, JSON.stringify(farmData, null, 2), 'utf-8');
     
     console.log('[API] farm.json updated successfully with new contact metadata');
     
