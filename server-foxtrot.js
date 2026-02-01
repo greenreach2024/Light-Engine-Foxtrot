@@ -52,7 +52,6 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import validator from 'validator';
-import rateLimit from 'express-rate-limit';
 import net from 'node:net';
 import mqtt from 'mqtt';
 import { exec } from 'node:child_process';
@@ -16274,32 +16273,8 @@ app.get('/api/admin/harvest/forecast', adminAuthMiddleware, asyncHandler(async (
  * This endpoint is maintained for backward compatibility only
  */
 
-// Rate limiter for login endpoint: 5 attempts per 15 minutes
-const loginRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 login attempts per window per IP
-  message: { status: 'error', message: 'Too many login attempts. Please try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Let express-rate-limit handle IPv6 addresses properly
-  handler: (req, res) => {
-    const ip = req.ip || req.connection.remoteAddress;
-    console.error('[farm-auth] ✗ Rate limit exceeded for IP:', ip, 'X-Forwarded-For:', req.headers['x-forwarded-for']);
-    res.status(429).json({ 
-      status: 'error', 
-      message: 'Too many login attempts. Please try again in 15 minutes.',
-      retryAfter: Math.ceil(15 * 60) // seconds
-    });
-  },
-  skip: (req) => {
-    // Log every request for debugging
-    const ip = req.ip || req.connection.remoteAddress;
-    console.log('[farm-auth] Login attempt from IP:', ip, 'Count will be tracked');
-    return false; // Don't skip any requests
-  }
-});
-
-app.post('/api/farm/auth/login', loginRateLimiter, asyncHandler(async (req, res) => {
+// Use authRateLimiter from middleware (10 attempts per 15 minutes)
+app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) => {
   console.log('[farm-auth] POST /api/farm/auth/login called');
   console.warn('[farm-auth] ⚠️  DEPRECATED: Use /api/auth/login instead. This endpoint will be removed in a future version.');
   const { farmId, email, password } = req.body;
