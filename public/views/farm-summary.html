@@ -2125,6 +2125,14 @@
         console.warn('[Farm Summary] HarvestPredictions component not loaded');
       }
       
+      // Initialize Succession Planner AI (P4)
+      if (typeof SuccessionPlanner !== 'undefined') {
+        console.log('[Farm Summary] Initializing Succession Planner AI component...');
+        window.successionPlanner = new SuccessionPlanner('');
+      } else {
+        console.warn('[Farm Summary] SuccessionPlanner component not loaded');
+      }
+      
       // Wait for Chart.js to load before initializing ML widgets (with timeout)
       let chartJsAttempts = 0;
       const maxAttempts = 50; // 5 seconds max (50 * 100ms)
@@ -3245,7 +3253,9 @@
                           <div id="ai-prediction-${group.id}" style="margin-top: 8px;">
                             <!-- AI Prediction Badge will be inserted here -->
                           </div>
-                        </div>
+                          <div id="ai-succession-${group.id}" style="margin-top: 8px;">
+                            <!-- AI Succession Suggestion (P4) will be inserted here -->
+                          </div>                        </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;" onclick="event.stopPropagation();">
                           <button 
                             class="harvest-button ${daysToHarvest < 0 ? 'overdue' : ''}" 
@@ -3705,6 +3715,32 @@
             });
           });
           console.log(`[Zone Summaries] Rendered ${predictionCount} AI prediction badges`);
+        }
+        
+        // Render AI Succession Planning suggestions for all groups (P4)
+        if (window.successionPlanner) {
+          console.log('[Zone Summaries] Rendering AI succession planning suggestions...');
+          let suggestionCount = 0;
+          zones.forEach(zone => {
+            const zoneGroups = groups.filter(g => {
+              const groupZone = g.zone || g.roomZone || '';
+              return normalizeToken(groupZone) === normalizeToken(zone.zone);
+            });
+            zoneGroups.forEach(group => {
+              const targetEl = document.getElementById(`ai-succession-${group.id}`);
+              if (targetEl) {
+                successionPlanner.render(group.id, { compact: true }).then(html => {
+                  if (html && !html.includes('succession-card--empty')) {
+                    targetEl.innerHTML = html;
+                    suggestionCount++;
+                  }
+                }).catch(err => {
+                  console.warn(`[Zone Summaries] Succession suggestion error for ${group.id}:`, err);
+                });
+              }
+            });
+          });
+          console.log(`[Zone Summaries] Rendered ${suggestionCount} AI succession suggestions`);
         }
       } catch (error) {
         console.error('[Zone Summaries] Failed to load zone summaries:', error);
@@ -7037,5 +7073,11 @@
   
   <!-- Harvest Predictions AI Component (P3) -->
   <script src="/harvest-predictions.js"></script>
+  
+  <!-- Succession Planner AI Component (P4) -->
+  <script type="module">
+    import { SuccessionPlanner } from '/js/components/SuccessionPlanner.js';
+    window.SuccessionPlanner = SuccessionPlanner;
+  </script>
 </body>
 </html>

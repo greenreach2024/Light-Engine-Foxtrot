@@ -13414,6 +13414,88 @@ app.get('/api/planting/tray-formats', (req, res) => {
   }
 });
 
+/**
+ * GET /api/succession/forecast/:crop
+ * P5 DATA HOOK: Get harvest volume forecast for dynamic pricing
+ * 
+ * Used by P5 (Dynamic Pricing) to analyze supply-demand equilibrium
+ * Returns predicted harvest dates and volumes over next 12 weeks
+ */
+app.get('/api/succession/forecast/:crop', asyncHandler(async (req, res) => {
+  const { crop } = req.params;
+  const { weeks = 12 } = req.query;
+
+  if (!crop) {
+    return res.status(400).json({ ok: false, error: 'Missing crop parameter' });
+  }
+
+  const forecast = await successionPlanner.getHarvestForecast(crop, parseInt(weeks));
+  
+  res.json({
+    ok: true,
+    crop: crop,
+    weeks: parseInt(weeks),
+    forecast: forecast,
+    generatedAt: new Date().toISOString()
+  });
+}));
+
+/**
+ * GET /api/succession/gaps/:crop
+ * P5 DATA HOOK: Detect inventory gaps for scarcity-based pricing
+ * 
+ * Used by P5 (Dynamic Pricing) to adjust prices based on availability
+ * Returns gap analysis with fulfillment rate and conflict details
+ */
+app.get('/api/succession/gaps/:crop', asyncHandler(async (req, res) => {
+  const { crop } = req.params;
+  const { targetRate = 0.99 } = req.query;
+
+  if (!crop) {
+    return res.status(400).json({ ok: false, error: 'Missing crop parameter' });
+  }
+
+  const gapAnalysis = await successionPlanner.detectInventoryGaps(crop, parseFloat(targetRate));
+  
+  res.json({
+    ok: true,
+    ...gapAnalysis,
+    generatedAt: new Date().toISOString()
+  });
+}));
+
+/**
+ * POST /api/succession/network-suggestions
+ * TIER 2 PLACEHOLDER: Receive network-level succession suggestions from Central
+ * 
+ * Enables multi-farm load balancing:
+ * - Central analyzes demand across buyer network
+ * - Central distributes planting recommendations across farms
+ * - Example: "Farm A seed extra lettuce, Farm B at capacity"
+ */
+app.post('/api/succession/network-suggestions', asyncHandler(async (req, res) => {
+  const { crop, additionalTrays, reason, source = 'central' } = req.body;
+
+  if (!crop || !additionalTrays) {
+    return res.status(400).json({ ok: false, error: 'Missing required fields: crop, additionalTrays' });
+  }
+
+  // TODO TIER 2: Store network suggestions in local database
+  // For now, just log and acknowledge
+  console.log(`[Network Suggestion] ${crop}: +${additionalTrays} trays (Reason: ${reason})`);
+
+  res.json({
+    ok: true,
+    message: 'Network suggestion received',
+    crop: crop,
+    additionalTrays: additionalTrays,
+    reason: reason,
+    source: source,
+    status: 'acknowledged', // Tier 2 will change to 'pending' and display in UI
+    receivedAt: new Date().toISOString()
+  });
+}));
+
 // ============================================================================
 // Notification Endpoints (Mobile App) - Placeholders
 // ============================================================================
