@@ -26145,6 +26145,12 @@ async function startServer() {
         console.error(`[Startup] Server shutting down - demo farm not allowed in PRODUCTION_MODE`);
         process.exit(1);
       }
+      
+      // Phase 3: Warn about dual config sources
+      if (process.env.FARM_ID && process.env.FARM_ID !== farmId) {
+        console.warn(`[Startup] ⚠️  WARNING: .env FARM_ID (${process.env.FARM_ID}) differs from edge-config.json (${farmId})`);
+        console.warn(`[Startup] ⚠️  Using edge-config.json as authoritative source`);
+      }
     }
     
     // Validate license (Task #2 - License Validation)
