@@ -88,6 +88,13 @@ else
   ((BACKUP_FAILURE++))
 fi
 
+# Backup equipment metadata (CRITICAL - contains all equipment configurations)
+if sync_data "/api/sync/equipment" "${EDGE_DIR}/public/data/equipment-metadata.json" "equipment"; then
+  ((BACKUP_SUCCESS++))
+else
+  ((BACKUP_FAILURE++))
+fi
+
 # Backup edge configuration
 if [ -f "${EDGE_DIR}/config/edge-config.json" ]; then
   if sync_data "/api/sync/config" "${EDGE_DIR}/config/edge-config.json" "config"; then

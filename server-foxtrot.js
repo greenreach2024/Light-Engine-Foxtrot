@@ -19640,6 +19640,83 @@ app.get('/data/equipment-metadata.json', (req, res, next) => {
   return res.json(metadata);
 });
 
+// =====================================================
+// Equipment & Schedule Save Endpoints
+// =====================================================
+// These endpoints allow UI to persist equipment and schedule data to files
+// Fixes backup system gap where UI changes weren't saved to disk
+
+// POST /api/equipment/save - Save equipment metadata to file
+app.post('/api/equipment/save', async (req, res) => {
+  try {
+    const { metadata } = req.body;
+    
+    if (!metadata || typeof metadata !== 'object') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing or invalid metadata object' 
+      });
+    }
+    
+    const filePath = path.join(__dirname, 'public/data/equipment-metadata.json');
+    
+    const data = {
+      metadata: metadata,
+      lastUpdated: new Date().toISOString(),
+      version: '1.0.0'
+    };
+    
+    await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+    
+    const count = Object.keys(metadata).length;
+    console.log(`✅ Equipment metadata saved (${count} items)`);
+    
+    res.json({ 
+      success: true, 
+      count: count,
+      saved: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Equipment save failed:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// POST /api/schedules/save - Save schedules to file
+app.post('/api/schedules/save', async (req, res) => {
+  try {
+    const { schedules } = req.body;
+    
+    if (!Array.isArray(schedules)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Schedules must be an array' 
+      });
+    }
+    
+    const filePath = path.join(__dirname, 'public/data/schedules.json');
+    
+    await fsPromises.writeFile(filePath, JSON.stringify(schedules, null, 2), 'utf8');
+    
+    console.log(`✅ Schedules saved (${schedules.length} schedules)`);
+    
+    res.json({ 
+      success: true, 
+      count: schedules.length,
+      saved: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Schedule save failed:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Room map for farm summary view
 app.get('/data/room-map.json', (req, res, next) => {
   let farm = null;
