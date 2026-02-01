@@ -1,12 +1,12 @@
 {
-  "farmId": "light-engine-demo",
-  "name": "GreenReach Demo Farm",
+  "farmId": "FARM-MKLOMAT3-A9D8",
+  "name": "GreenReach Production Farm",
   "status": "online",
   "region": "Pacific Northwest",
-  "url": "http://light-engine-demo-env2.eba-vypvd5rj.us-east-1.elasticbeanstalk.com",
+  "url": "http://100.65.187.59:8091",
   "contact": {
-    "name": "Demo Farm Manager",
-    "email": "demo@greenreach.farm",
+    "name": "Shelby Gilbert",
+    "email": "shelbygilbert@rogers.com",
     "phone": "+1 (555) 436-7324"
   },
   "coordinates": {

@@ -1,228 +1,266 @@
-{
-  "groups": [
-    {
-      "id": "ROOM-A-Z1-G01",
-      "name": "ROOM-A-Z1-G01",
-      "zone": "ROOM-A-Z1",
-      "zoneId": "ROOM-A-Z1",
-      "roomId": "ROOM-A",
-      "crop": "Mei Qing Pak Choi",
-      "plan": "mei-qing-pak-choi",
-      "planId": "mei-qing-pak-choi",
-      "recipe": "Mei Qing Pak Choi",
-      "trays": 4,
-      "plants": 48,
-      "health": "healthy",
-      "devices": ["ROOM-A-Z1-G01-LIGHT", "ROOM-A-Z1-G01-SENSOR"],
-      "deviceCount": 2,
-      "intensity": 78,
-      "spectrum": "CW/WW + 450nm + 660nm",
-      "planConfig": {
-        "anchor": {
-          "mode": "seedDate",
-          "seedDate": "2025-12-05T00:00:00.000Z"
-        },
-        "schedule": {
-          "photoperiodHours": 16,
-          "totalOnHours": 16
-        }
+[
+  {
+    "id": "ROOM-A-Z1-G01",
+    "name": "ROOM-A-Z1-G01",
+    "zone": "ROOM-A-Z1",
+    "zoneId": "ROOM-A-Z1",
+    "roomId": "ROOM-A",
+    "crop": "Mei Qing Pak Choi",
+    "plan": "mei-qing-pak-choi",
+    "planId": "mei-qing-pak-choi",
+    "recipe": "Mei Qing Pak Choi",
+    "trays": 4,
+    "plants": 48,
+    "health": "healthy",
+    "devices": [
+      "ROOM-A-Z1-G01-LIGHT",
+      "ROOM-A-Z1-G01-SENSOR"
+    ],
+    "deviceCount": 2,
+    "intensity": 78,
+    "spectrum": "CW/WW + 450nm + 660nm",
+    "planConfig": {
+      "anchor": {
+        "mode": "seedDate",
+        "seedDate": "2025-12-05T00:00:00.000Z"
+      },
+      "schedule": {
+        "photoperiodHours": 16,
+        "totalOnHours": 16
       }
     },
-    {
-      "id": "ROOM-A-Z1-G02",
-      "name": "ROOM-A-Z1-G02",
-      "zone": "ROOM-A-Z1",
-      "zoneId": "ROOM-A-Z1",
-      "roomId": "ROOM-A",
-      "crop": "Lacinato Kale",
-      "plan": "lacinato-kale",
-      "planId": "lacinato-kale",
-      "recipe": "Lacinato Kale",
-      "trays": 4,
-      "plants": 48,
-      "health": "healthy",
-      "devices": ["ROOM-A-Z1-G02-LIGHT", "ROOM-A-Z1-G02-SENSOR"],
-      "deviceCount": 2,
-      "intensity": 76,
-      "spectrum": "CW/WW + 450nm + 660nm",
-      "planConfig": {
-        "anchor": {
-          "mode": "seedDate",
-          "seedDate": "2025-12-01T00:00:00.000Z"
-        },
-        "schedule": {
-          "photoperiodHours": 16,
-          "totalOnHours": 16
-        }
+    "status": "growing",
+    "active": true
+  },
+  {
+    "id": "ROOM-A-Z1-G02",
+    "name": "ROOM-A-Z1-G02",
+    "zone": "ROOM-A-Z1",
+    "zoneId": "ROOM-A-Z1",
+    "roomId": "ROOM-A",
+    "crop": "Lacinato Kale",
+    "plan": "lacinato-kale",
+    "planId": "lacinato-kale",
+    "recipe": "Lacinato Kale",
+    "trays": 4,
+    "plants": 48,
+    "health": "healthy",
+    "devices": [
+      "ROOM-A-Z1-G02-LIGHT",
+      "ROOM-A-Z1-G02-SENSOR"
+    ],
+    "deviceCount": 2,
+    "intensity": 76,
+    "spectrum": "CW/WW + 450nm + 660nm",
+    "planConfig": {
+      "anchor": {
+        "mode": "seedDate",
+        "seedDate": "2025-12-01T00:00:00.000Z"
+      },
+      "schedule": {
+        "photoperiodHours": 16,
+        "totalOnHours": 16
       }
     },
-    {
-      "id": "ROOM-A-Z2-G01",
-      "name": "ROOM-A-Z2-G01",
-      "zone": "ROOM-A-Z2",
-      "zoneId": "ROOM-A-Z2",
-      "roomId": "ROOM-A",
-      "crop": "Bibb Butterhead",
-      "plan": "bibb-butterhead",
-      "planId": "bibb-butterhead",
-      "recipe": "Bibb Butterhead",
-      "trays": 4,
-      "plants": 48,
-      "health": "healthy",
-      "devices": ["ROOM-A-Z2-G01-LIGHT", "ROOM-A-Z2-G01-SENSOR"],
-      "deviceCount": 2,
-      "intensity": 82,
-      "spectrum": "CW/WW + 450nm + 660nm",
-      "planConfig": {
-        "anchor": {
-          "mode": "seedDate",
-          "seedDate": "2025-12-06T00:00:00.000Z"
-        },
-        "schedule": {
-          "photoperiodHours": 16,
-          "totalOnHours": 16
-        }
+    "status": "growing",
+    "active": true
+  },
+  {
+    "id": "ROOM-A-Z2-G01",
+    "name": "ROOM-A-Z2-G01",
+    "zone": "ROOM-A-Z2",
+    "zoneId": "ROOM-A-Z2",
+    "roomId": "ROOM-A",
+    "crop": "Bibb Butterhead",
+    "plan": "bibb-butterhead",
+    "planId": "bibb-butterhead",
+    "recipe": "Bibb Butterhead",
+    "trays": 4,
+    "plants": 48,
+    "health": "healthy",
+    "devices": [
+      "ROOM-A-Z2-G01-LIGHT",
+      "ROOM-A-Z2-G01-SENSOR"
+    ],
+    "deviceCount": 2,
+    "intensity": 82,
+    "spectrum": "CW/WW + 450nm + 660nm",
+    "planConfig": {
+      "anchor": {
+        "mode": "seedDate",
+        "seedDate": "2025-12-06T00:00:00.000Z"
+      },
+      "schedule": {
+        "photoperiodHours": 16,
+        "totalOnHours": 16
       }
     },
-    {
-      "id": "ROOM-A-Z3-G01",
-      "name": "ROOM-A-Z3-G01",
-      "zone": "ROOM-A-Z3",
-      "zoneId": "ROOM-A-Z3",
-      "roomId": "ROOM-A",
-      "crop": "Frisée Endive",
-      "plan": "frisee-endive",
-      "planId": "frisee-endive",
-      "recipe": "Frisée Endive",
-      "trays": 4,
-      "plants": 48,
-      "health": "healthy",
-      "devices": ["ROOM-A-Z3-G01-LIGHT", "ROOM-A-Z3-G01-SENSOR"],
-      "deviceCount": 2,
-      "intensity": 75,
-      "spectrum": "CW/WW + 450nm + 660nm",
-      "planConfig": {
-        "anchor": {
-          "mode": "seedDate",
-          "seedDate": "2025-11-28T00:00:00.000Z"
-        },
-        "schedule": {
-          "photoperiodHours": 16,
-          "totalOnHours": 16
-        }
+    "status": "growing",
+    "active": true
+  },
+  {
+    "id": "ROOM-A-Z3-G01",
+    "name": "ROOM-A-Z3-G01",
+    "zone": "ROOM-A-Z3",
+    "zoneId": "ROOM-A-Z3",
+    "roomId": "ROOM-A",
+    "crop": "Frisée Endive",
+    "plan": "frisee-endive",
+    "planId": "frisee-endive",
+    "recipe": "Frisée Endive",
+    "trays": 4,
+    "plants": 48,
+    "health": "healthy",
+    "devices": [
+      "ROOM-A-Z3-G01-LIGHT",
+      "ROOM-A-Z3-G01-SENSOR"
+    ],
+    "deviceCount": 2,
+    "intensity": 75,
+    "spectrum": "CW/WW + 450nm + 660nm",
+    "planConfig": {
+      "anchor": {
+        "mode": "seedDate",
+        "seedDate": "2025-11-28T00:00:00.000Z"
+      },
+      "schedule": {
+        "photoperiodHours": 16,
+        "totalOnHours": 16
       }
     },
-    {
-      "id": "ROOM-A-Z4-G01",
-      "name": "ROOM-A-Z4-G01",
-      "zone": "ROOM-A-Z4",
-      "zoneId": "ROOM-A-Z4",
-      "roomId": "ROOM-A",
-      "crop": "Red Russian Kale",
-      "plan": "red-russian-kale",
-      "planId": "red-russian-kale",
-      "recipe": "Red Russian Kale",
-      "trays": 4,
-      "plants": 48,
-      "health": "healthy",
-      "devices": ["ROOM-A-Z4-G01-LIGHT", "ROOM-A-Z4-G01-SENSOR"],
-      "deviceCount": 2,
-      "intensity": 80,
-      "spectrum": "CW/WW + 450nm + 660nm",
-      "planConfig": {
-        "anchor": {
-          "mode": "seedDate",
-          "seedDate": "2025-11-20T00:00:00.000Z"
-        },
-        "schedule": {
-          "photoperiodHours": 16,
-          "totalOnHours": 16
-        }
+    "status": "growing",
+    "active": true
+  },
+  {
+    "id": "ROOM-A-Z4-G01",
+    "name": "ROOM-A-Z4-G01",
+    "zone": "ROOM-A-Z4",
+    "zoneId": "ROOM-A-Z4",
+    "roomId": "ROOM-A",
+    "crop": "Red Russian Kale",
+    "plan": "red-russian-kale",
+    "planId": "red-russian-kale",
+    "recipe": "Red Russian Kale",
+    "trays": 4,
+    "plants": 48,
+    "health": "healthy",
+    "devices": [
+      "ROOM-A-Z4-G01-LIGHT",
+      "ROOM-A-Z4-G01-SENSOR"
+    ],
+    "deviceCount": 2,
+    "intensity": 80,
+    "spectrum": "CW/WW + 450nm + 660nm",
+    "planConfig": {
+      "anchor": {
+        "mode": "seedDate",
+        "seedDate": "2025-11-20T00:00:00.000Z"
+      },
+      "schedule": {
+        "photoperiodHours": 16,
+        "totalOnHours": 16
       }
     },
-    {
-      "id": "ROOM-B-Z1-G01",
-      "name": "ROOM-B-Z1-G01",
-      "zone": "ROOM-B-Z1",
-      "zoneId": "ROOM-B-Z1",
-      "roomId": "ROOM-B",
-      "crop": "Buttercrunch Lettuce",
-      "plan": "buttercrunch-lettuce",
-      "planId": "buttercrunch-lettuce",
-      "recipe": "Buttercrunch Lettuce",
-      "trays": 4,
-      "plants": 48,
-      "health": "healthy",
-      "devices": ["ROOM-B-Z1-G01-LIGHT", "ROOM-B-Z1-G01-SENSOR"],
-      "deviceCount": 2,
-      "intensity": 77,
-      "spectrum": "CW/WW + 450nm + 660nm",
-      "planConfig": {
-        "anchor": {
-          "mode": "seedDate",
-          "seedDate": "2025-12-02T00:00:00.000Z"
-        },
-        "schedule": {
-          "photoperiodHours": 16,
-          "totalOnHours": 16
-        }
+    "status": "growing",
+    "active": true
+  },
+  {
+    "id": "ROOM-B-Z1-G01",
+    "name": "ROOM-B-Z1-G01",
+    "zone": "ROOM-B-Z1",
+    "zoneId": "ROOM-B-Z1",
+    "roomId": "ROOM-B",
+    "crop": "Buttercrunch Lettuce",
+    "plan": "buttercrunch-lettuce",
+    "planId": "buttercrunch-lettuce",
+    "recipe": "Buttercrunch Lettuce",
+    "trays": 4,
+    "plants": 48,
+    "health": "healthy",
+    "devices": [
+      "ROOM-B-Z1-G01-LIGHT",
+      "ROOM-B-Z1-G01-SENSOR"
+    ],
+    "deviceCount": 2,
+    "intensity": 77,
+    "spectrum": "CW/WW + 450nm + 660nm",
+    "planConfig": {
+      "anchor": {
+        "mode": "seedDate",
+        "seedDate": "2025-12-02T00:00:00.000Z"
+      },
+      "schedule": {
+        "photoperiodHours": 16,
+        "totalOnHours": 16
       }
     },
-    {
-      "id": "ROOM-B-Z2-G01",
-      "name": "ROOM-B-Z2-G01",
-      "zone": "ROOM-B-Z2",
-      "zoneId": "ROOM-B-Z2",
-      "roomId": "ROOM-B",
-      "crop": "Tatsoi",
-      "plan": "tatsoi",
-      "planId": "tatsoi",
-      "recipe": "Tatsoi",
-      "trays": 4,
-      "plants": 48,
-      "health": "healthy",
-      "devices": ["ROOM-B-Z2-G01-LIGHT", "ROOM-B-Z2-G01-SENSOR"],
-      "deviceCount": 2,
-      "intensity": 83,
-      "spectrum": "CW/WW + 450nm + 660nm",
-      "planConfig": {
-        "anchor": {
-          "mode": "seedDate",
-          "seedDate": "2025-12-03T00:00:00.000Z"
-        },
-        "schedule": {
-          "photoperiodHours": 16,
-          "totalOnHours": 16
-        }
+    "status": "growing",
+    "active": true
+  },
+  {
+    "id": "ROOM-B-Z2-G01",
+    "name": "ROOM-B-Z2-G01",
+    "zone": "ROOM-B-Z2",
+    "zoneId": "ROOM-B-Z2",
+    "roomId": "ROOM-B",
+    "crop": "Tatsoi",
+    "plan": "tatsoi",
+    "planId": "tatsoi",
+    "recipe": "Tatsoi",
+    "trays": 4,
+    "plants": 48,
+    "health": "healthy",
+    "devices": [
+      "ROOM-B-Z2-G01-LIGHT",
+      "ROOM-B-Z2-G01-SENSOR"
+    ],
+    "deviceCount": 2,
+    "intensity": 83,
+    "spectrum": "CW/WW + 450nm + 660nm",
+    "planConfig": {
+      "anchor": {
+        "mode": "seedDate",
+        "seedDate": "2025-12-03T00:00:00.000Z"
+      },
+      "schedule": {
+        "photoperiodHours": 16,
+        "totalOnHours": 16
       }
     },
-    {
-      "id": "ROOM-B-Z3-G01",
-      "name": "ROOM-B-Z3-G01",
-      "zone": "ROOM-B-Z3",
-      "zoneId": "ROOM-B-Z3",
-      "roomId": "ROOM-B",
-      "crop": "Watercress",
-      "plan": "watercress",
-      "planId": "watercress",
-      "recipe": "Watercress",
-      "trays": 4,
-      "plants": 48,
-      "health": "healthy",
-      "devices": ["ROOM-B-Z3-G01-LIGHT", "ROOM-B-Z3-G01-SENSOR"],
-      "deviceCount": 2,
-      "intensity": 74,
-      "spectrum": "CW/WW + 450nm + 660nm",
-      "planConfig": {
-        "anchor": {
-          "mode": "seedDate",
-          "seedDate": "2025-11-25T00:00:00.000Z"
-        },
-        "schedule": {
-          "photoperiodHours": 16,
-          "totalOnHours": 16
-        }
+    "status": "growing",
+    "active": true
+  },
+  {
+    "id": "ROOM-B-Z3-G01",
+    "name": "ROOM-B-Z3-G01",
+    "zone": "ROOM-B-Z3",
+    "zoneId": "ROOM-B-Z3",
+    "roomId": "ROOM-B",
+    "crop": "Watercress",
+    "plan": "watercress",
+    "planId": "watercress",
+    "recipe": "Watercress",
+    "trays": 4,
+    "plants": 48,
+    "health": "healthy",
+    "devices": [
+      "ROOM-B-Z3-G01-LIGHT",
+      "ROOM-B-Z3-G01-SENSOR"
+    ],
+    "deviceCount": 2,
+    "intensity": 74,
+    "spectrum": "CW/WW + 450nm + 660nm",
+    "planConfig": {
+      "anchor": {
+        "mode": "seedDate",
+        "seedDate": "2025-11-25T00:00:00.000Z"
+      },
+      "schedule": {
+        "photoperiodHours": 16,
+        "totalOnHours": 16
       }
-    }
-  ]
-}
+    },
+    "status": "growing",
+    "active": true
+  }
+]
