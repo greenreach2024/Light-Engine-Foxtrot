@@ -52,6 +52,27 @@
     // Server will fully validate on API calls
     // Just check it exists and looks like a JWT (has two dots)
     if (token && token.split('.').length === 3) {
+      // Decode JWT payload to check expiry
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp) {
+          const expiryTime = payload.exp * 1000; // Convert to milliseconds
+          const now = Date.now();
+          if (now >= expiryTime) {
+            // Token expired, remove it
+            console.log('[auth-guard] Token expired, clearing...');
+            localStorage.removeItem('token');
+            localStorage.removeItem('auth_token');
+            return false;
+          }
+        }
+      } catch (e) {
+        // Invalid JWT format, remove it
+        console.log('[auth-guard] Invalid token format, clearing...');
+        localStorage.removeItem('token');
+        localStorage.removeItem('auth_token');
+        return false;
+      }
       return true;
     }
     
