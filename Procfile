@@ -1,1 +1,1 @@
-web: node greenreach-central/server.js
+web: npm start
