@@ -12059,6 +12059,13 @@ class RoomWizard {
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         try { window.dispatchEvent(new CustomEvent('farmDataChanged')); } catch {}
       }
+      // ✅ DATA FLOW: Notify components that rooms have been updated
+      try {
+        document.dispatchEvent(new Event('rooms-updated'));
+        console.log('[saveRoom] Dispatched rooms-updated event');
+      } catch (err) {
+        console.warn('[saveRoom] Failed to dispatch rooms-updated:', err);
+      }
       showToast({ title:'Room saved', msg:`${this.data.name} saved`, kind:'success', icon:'' });
       try { localStorage.removeItem('gr.roomWizard.progress'); } catch {}
       // Only close if explicitly requested and not part of a multi-room workflow
