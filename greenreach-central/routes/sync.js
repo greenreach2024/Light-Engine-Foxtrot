@@ -384,34 +384,45 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         dbStatus = 'inactive';
       }
       
-      // Check if farm exists first
-      const existingFarm = await query(
-        'SELECT farm_id FROM farms WHERE farm_id = $1',
-        [farmId]
+      // Extract farm data from metadata with safe defaults
+      const farmName = metadata?.farmName || metadata?.name || farmId;
+      const contactName = metadata?.contact_name 
+        || metadata?.contactName 
+        || metadata?.contact?.name
+        || 'Farm Admin';
+      const planType = metadata?.plan_type || metadata?.planType || 'free';
+      const apiKeyValue = req.apiKey; // From authenticateFarm middleware
+      const apiSecret = metadata?.api_secret || metadata?.apiSecret || 'auto-generated';
+      
+      // UPSERT farm - creates on first heartbeat or updates existing
+      await query(
+        `INSERT INTO farms (
+           farm_id, name, contact_name, plan_type, api_key, api_secret, 
+           status, last_heartbeat, metadata, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, NOW(), NOW())
+         ON CONFLICT (farm_id) 
+         DO UPDATE SET 
+           status = EXCLUDED.status,
+           name = COALESCE(EXCLUDED.name, farms.name),
+           contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
+           plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type),
+           last_heartbeat = NOW(),
+           metadata = EXCLUDED.metadata,
+           updated_at = NOW()`,
+        [
+          farmId, 
+          farmName,
+          contactName,
+          planType,
+          apiKeyValue,
+          apiSecret,
+          dbStatus, 
+          JSON.stringify(metadata || {})
+        ]
       );
       
-      if (existingFarm.rows.length > 0) {
-        // Farm exists - UPDATE only
-        await query(
-          `UPDATE farms SET 
-             status = $1,
-             last_heartbeat = NOW(),
-             metadata = $2,
-             updated_at = NOW()
-           WHERE farm_id = $3`,
-          [dbStatus, JSON.stringify(metadata || {}), farmId]
-        );
-        
-        logger.info(`[Sync] Farm ${farmId} heartbeat updated - status ${dbStatus}`);
-      } else {
-        // Farm doesn't exist - return error (farm must be pre-registered)
-        logger.error(`[Sync] Farm ${farmId} not registered in database`);
-        return res.status(404).json({
-          success: false,
-          error: 'Farm not registered',
-          message: `Farm ${farmId} must be registered in GreenReach Central before syncing`
-        });
-      }
+      logger.info(`[Sync] Farm ${farmId} upserted successfully with status ${dbStatus}`);
     }
     
     res.json({ 
