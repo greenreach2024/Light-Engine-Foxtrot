@@ -102,3 +102,4 @@ desktop-app/dist/mac*/
 
 # Unused legacy directory - DO NOT EDIT
 # greenreach-central/  # COMMENTED OUT - need to track Central API files for AWS EB deployment
+greenreach-central/.elasticbeanstalk/logs/
