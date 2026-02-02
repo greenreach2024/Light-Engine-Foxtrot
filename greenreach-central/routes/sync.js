@@ -409,6 +409,7 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
            name = COALESCE(EXCLUDED.name, farms.name),
            contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
            plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type),
+           jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
            last_heartbeat = NOW(),
            metadata = EXCLUDED.metadata,
            updated_at = NOW()`,
