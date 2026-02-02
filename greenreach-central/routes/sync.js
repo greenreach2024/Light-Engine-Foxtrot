@@ -7,6 +7,7 @@
  */
 
 import express from 'express';
+import crypto from 'crypto';
 import logger from '../utils/logger.js';
 import { evaluateAndGenerateAlerts, autoResolveAlerts } from '../services/alert-manager.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
@@ -393,14 +394,15 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
       const planType = metadata?.plan_type || metadata?.planType || 'free';
       const apiKeyValue = req.apiKey; // From authenticateFarm middleware
       const apiSecret = metadata?.api_secret || metadata?.apiSecret || 'auto-generated';
+      const jwtSecret = crypto.randomBytes(32).toString('hex'); // Generate secure JWT secret
       
       // UPSERT farm - creates on first heartbeat or updates existing
       await query(
         `INSERT INTO farms (
-           farm_id, name, contact_name, plan_type, api_key, api_secret, 
+           farm_id, name, contact_name, plan_type, api_key, api_secret, jwt_secret,
            status, last_heartbeat, metadata, created_at, updated_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, NOW(), NOW())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, NOW(), NOW())
          ON CONFLICT (farm_id) 
          DO UPDATE SET 
            status = EXCLUDED.status,
@@ -417,6 +419,7 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
           planType,
           apiKeyValue,
           apiSecret,
+          jwtSecret,
           dbStatus, 
           JSON.stringify(metadata || {})
         ]
