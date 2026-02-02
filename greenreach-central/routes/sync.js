@@ -391,10 +391,12 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         || metadata?.contactName 
         || metadata?.contact?.name
         || 'Farm Admin';
-      const planType = metadata?.plan_type || metadata?.planType || 'free';
+      const planType = metadata?.plan_type || metadata?.planType || 'edge'; // Default to edge device
       const apiKeyValue = req.apiKey; // From authenticateFarm middleware
       const apiSecret = metadata?.api_secret || metadata?.apiSecret || 'auto-generated';
       const jwtSecret = crypto.randomBytes(32).toString('hex'); // Generate secure JWT secret
+      
+      logger.info(`[Sync] UPSERT values: farmId=${farmId}, jwtSecret=${jwtSecret ? 'SET(' + jwtSecret.length + ')' : 'NULL'}`);
       
       // UPSERT farm - creates on first heartbeat or updates existing
       await query(
