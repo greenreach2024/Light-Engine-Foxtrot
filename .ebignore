@@ -48,6 +48,7 @@ data/
 data.aws-backup/
 lib.aws-backup/
 server.aws-backup/
+greenreach-central/.ebextensions/
 
 # Database files (if any)
 *.db
