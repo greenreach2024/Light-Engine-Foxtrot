@@ -1,0 +1,39 @@
+{
+  "mode": "edge",
+  "farmId": "FARM-MKLOMAT3-A9D8",
+  "farmName": "Big Green Farm",
+  "apiKey": "<INSERT_GENERATED_API_KEY_HERE>",
+  "centralApiUrl": "https://greenreachgreens.com",
+  "syncInterval": 300000,
+  "heartbeatInterval": 30000,
+  "syncEnabled": true,
+  "registrationComplete": true,
+  "offlineMode": false,
+  "_comments": {
+    "mode": "Must be 'edge' for Edge device deployments",
+    "farmId": "Production farm ID from registration (FARM-{identifier})",
+    "farmName": "Human-readable farm name",
+    "apiKey": "Generated API key from scripts/generate-farm-api-key.js",
+    "centralApiUrl": "GreenReach Central production URL (no trailing slash)",
+    "syncInterval": "Milliseconds between full sync attempts (default: 5 minutes)",
+    "heartbeatInterval": "Milliseconds between heartbeat pings (default: 30 seconds)",
+    "syncEnabled": "MUST be boolean true (not string) to enable sync",
+    "registrationComplete": "Set to true after initial farm registration",
+    "offlineMode": "Set to false to allow syncing"
+  },
+  "_security": {
+    "file_permissions": "Set to 0600 (rw-------)  after deployment",
+    "gitignore": "Ensure edge-config.json is in .gitignore",
+    "api_key_rotation": "Rotate API key every 90 days or on suspected compromise"
+  },
+  "_validation_rules": {
+    "farmId": "Must match pattern: FARM-[A-Z0-9-]+",
+    "apiKey": "Must start with 'FARM-' and contain 96+ characters",
+    "centralApiUrl": "Must be valid HTTPS URL (Edge devices require TLS)",
+    "syncInterval": "Must be >= 60000 (1 minute minimum)",
+    "heartbeatInterval": "Must be >= 10000 (10 seconds minimum)",
+    "syncEnabled": "Must be boolean (not string 'true')",
+    "registrationComplete": "Must be boolean (not string)",
+    "offlineMode": "Must be boolean (not string)"
+  }
+}
