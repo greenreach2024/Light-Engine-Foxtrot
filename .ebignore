@@ -15,6 +15,7 @@ node_modules/
 .vscode/
 *.log
 npm-debug.log*
+.elasticbeanstalk/
 
 # Documentation
 *.md
