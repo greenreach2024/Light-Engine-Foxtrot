@@ -60,3 +60,4 @@ server.aws-backup/
 # OS files
 .DS_Store
 Thumbs.db
+.ebextensions/
