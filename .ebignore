@@ -39,7 +39,6 @@ desktop-app/
 backups/
 dist/
 docs/
-greenreach-central/
 frontend/
 hq-app/
 edge-app/
