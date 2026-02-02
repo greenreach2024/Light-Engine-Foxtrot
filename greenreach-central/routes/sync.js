@@ -558,24 +558,28 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
         // Farm doesn't exist - create with full metadata
         // Generate unique registration code
         const registrationCode = `REG-${farmId.split('-').pop()}-${Date.now().toString(36).toUpperCase()}`;
+        const jwtSecret = crypto.randomBytes(32).toString('hex'); // Generate JWT secret for new farm
         
         await query(
           `INSERT INTO farms (
-            farm_id, name, email, api_url, status, metadata, registration_code,
+            farm_id, name, email, contact_name, plan_type, api_url, jwt_secret, status, metadata, registration_code,
             last_heartbeat, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NOW())`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), NOW())`,
           [
             farmId,
             farmData.name,
-            farmData.contact?.email,
+            farmData.contact?.email || null,
+            farmData.contact?.name || farmData.contact?.contactName || 'Farm Admin',
+            'edge', // Default to edge device
             farmData.api_url,
+            jwtSecret,
             'active',
             JSON.stringify(metadata),
             registrationCode
           ]
         );
         
-        logger.info(`[Sync] Farm ${farmId} registered for first time`);
+        logger.info(`[Sync] Farm ${farmId} registered for first time with jwt_secret`);
       }
     }
     
