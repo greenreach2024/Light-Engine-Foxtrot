@@ -21258,6 +21258,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     };
     
+    // ✅ DATA FLOW: Register event listeners for Calibration wizard
+    // Refresh fixture/group/room lists when related data changes
+    document.addEventListener('lights-updated', () => {
+      console.log('[CalWizard] Lights updated, re-populating fixture list');
+      if (calWizard && typeof calWizard.populateLightsSelect === 'function') {
+        calWizard.populateLightsSelect();
+      }
+    });
+
+    document.addEventListener('rooms-updated', () => {
+      console.log('[CalWizard] Rooms updated, refreshing location options');
+      if (calWizard && typeof calWizard.populateGroupSelect === 'function') {
+        calWizard.populateGroupSelect();
+      }
+    });
+
+    document.addEventListener('bus-mapping-updated', () => {
+      console.log('[CalWizard] Bus mapping updated, refreshing fixture assignments');
+      if (calWizard && typeof calWizard.populateLightsSelect === 'function') {
+        calWizard.populateLightsSelect();
+      }
+    });
+    
     // Wire up Calibration button to open calibration wizard modal
     document.getElementById('btnOpenCalWizard')?.addEventListener('click', () => {
       calWizard.initialize();
