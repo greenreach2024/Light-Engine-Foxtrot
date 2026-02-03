@@ -49,6 +49,15 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Version constants
+const BUILD_TIME = Date.now().toString();
+const APP_VERSION = (process.env.APP_VERSION
+  || process.env.GIT_SHA
+  || process.env.VERSION
+  || process.env.API_VERSION
+  || `build-${BUILD_TIME}`)
+  .toString();
+
 // Import setup wizard route
 import setupWizardRoutes from './routes/setup-wizard.js';
 
@@ -150,6 +159,16 @@ app.get('/health', (req, res) => {
     databaseReady: Boolean(req.app.locals.databaseReady),
     timestamp: new Date().toISOString(),
     version: process.env.API_VERSION || 'v1.0.1', // Force version bump for restart
+    uptime: process.uptime()
+  });
+});
+
+// Version endpoint (lightweight alternative to /health)
+app.get('/api/version', (req, res) => {
+  res.json({
+    version: APP_VERSION,
+    buildTime: BUILD_TIME,
+    timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
 });
