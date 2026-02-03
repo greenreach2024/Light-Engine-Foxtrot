@@ -145,7 +145,7 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     databaseReady: Boolean(req.app.locals.databaseReady),
     timestamp: new Date().toISOString(),
-    version: process.env.API_VERSION || 'v1',
+    version: process.env.API_VERSION || 'v1.0.1', // Force version bump for restart
     uptime: process.uptime()
   });
 });
