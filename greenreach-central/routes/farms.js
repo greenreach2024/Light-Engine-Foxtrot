@@ -6,6 +6,8 @@
 import express from 'express';
 import crypto from 'crypto';
 import logger from '../utils/logger.js';
+import { query, isDatabaseAvailable } from '../config/database.js';
+import { getInMemoryGroups } from './sync.js';
 
 const router = express.Router();
 
@@ -249,6 +251,52 @@ router.get('/profile', async (req, res, next) => {
   } catch (error) {
     logger.error('Error fetching farm profile:', error);
     next(error);
+  }
+});
+
+/**
+ * GET /api/farms/:farmId/groups
+ * Compatibility route (public read access)
+ */
+router.get('/:farmId/groups', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+
+    logger.info(`[Farms] Restoring groups for farm ${farmId}`);
+
+    let groups = [];
+
+    if (await isDatabaseAvailable()) {
+      const result = await query(
+        `SELECT data FROM farm_data 
+         WHERE farm_id = $1 AND data_type = $2`,
+        [farmId, 'groups']
+      );
+
+      if (result.rows.length > 0) {
+        groups = result.rows[0].data;
+      }
+
+      logger.info(`[Farms] Retrieved ${groups.length} groups from database for farm ${farmId}`);
+    } else {
+      const inMemoryGroups = getInMemoryGroups();
+      groups = inMemoryGroups.get(farmId) || [];
+      logger.info(`[Farms] Retrieved ${groups.length} groups from memory for farm ${farmId}`);
+    }
+
+    res.json({
+      success: true,
+      groups,
+      count: groups.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('[Farms] Error restoring groups:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to restore groups',
+      message: error.message
+    });
   }
 });
 

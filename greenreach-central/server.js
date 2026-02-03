@@ -209,6 +209,10 @@ app.get('/', (req, res) => {
   res.redirect('/greenreach-org.html');
 });
 
+app.get('/farm-summary.html', (req, res) => {
+  res.redirect('/views/farm-summary.html');
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
