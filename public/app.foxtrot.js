@@ -15868,6 +15868,17 @@ function renderSmartPlugs() {
   `;
 }
 
+// ✅ DATA FLOW: Register event listener for Integrations panel
+document.addEventListener('DOMContentLoaded', () => {
+  // Refresh smart plugs list when IoT devices change
+  document.addEventListener('iot-devices-updated', () => {
+    console.log('[Integrations] IoT devices updated, refreshing smart plugs');
+    if (document.getElementById('smartPlugsTable')) {
+      loadSmartPlugs({ silent: true });
+    }
+  });
+});
+
 function setSmartPlugsAlert(message, kind = 'info') {
   const alertEl = document.getElementById('smartPlugsAlert');
   if (!alertEl) return;
