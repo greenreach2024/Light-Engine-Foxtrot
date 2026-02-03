@@ -1376,7 +1376,7 @@ function normalizeGroupLightEntry(entry, index = 0) {
 
 function normalizeGroupRecord(group) {
   if (!group || typeof group !== 'object') {
-    return { id: '', name: '', lights: [] };
+    return { id: '', name: '', lights: [], plan: '', schedule: '', room: '', zone: '' };
   }
   const normalized = { ...group };
   if (typeof normalized.id === 'string') normalized.id = normalized.id.trim();
@@ -1388,6 +1388,14 @@ function normalizeGroupRecord(group) {
         .filter((entry) => entry && entry.id)
     : [];
   normalized.lights = lights;
+  
+  // ✅ DATA FLOW FIX: Preserve plan, schedule, room, zone fields during normalization
+  // These fields were being lost when normalizeGroupsInState() was called
+  normalized.plan = group.plan || '';
+  normalized.schedule = group.schedule || '';
+  normalized.room = group.room || group.roomId || '';
+  normalized.zone = group.zone || '';
+  
   return normalized;
 }
 
