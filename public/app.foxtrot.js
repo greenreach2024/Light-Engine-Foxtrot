@@ -2354,6 +2354,14 @@ function persistIotDevices(devices) {
   }).then(res => {
     if (!res.ok) throw new Error(res.statusText || 'Failed to save devices');
     console.log('[IoT] Devices persisted:', payload.length);
+    
+    // ✅ DATA FLOW: Notify components that IoT devices have been updated
+    try {
+      document.dispatchEvent(new Event('iot-devices-updated'));
+      console.log('[persistIotDevices] Dispatched iot-devices-updated event');
+    } catch (err) {
+      console.warn('[persistIotDevices] Failed to dispatch iot-devices-updated:', err);
+    }
   }).catch(err => {
     console.warn('[IoT] Failed to persist devices:', err);
   });
@@ -2820,6 +2828,17 @@ function renderIoTDeviceCards(devices) {
   }
   console.log('[renderIoTDeviceCards] === COMPLETED ===');
 }
+
+// ✅ DATA FLOW: Register event listeners for IoT devices panel
+document.addEventListener('DOMContentLoaded', () => {
+  // Refresh IoT device cards when rooms change (room assignments in device config)
+  document.addEventListener('rooms-updated', () => {
+    console.log('[IoTDevices] Rooms updated, refreshing device cards');
+    if (window.LAST_IOT_SCAN && document.getElementById('iotDevicesList')) {
+      renderIoTDeviceCards(window.LAST_IOT_SCAN);
+    }
+  });
+});
 
 // View device details
 window.viewDeviceDetails = function(deviceId) {
