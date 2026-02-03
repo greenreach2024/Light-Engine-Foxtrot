@@ -14460,6 +14460,38 @@ function renderEquipmentOverview() {
   }).join('');
 }
 
+// ✅ DATA FLOW: Register event listeners for Equipment Overview
+document.addEventListener('DOMContentLoaded', () => {
+  // Refresh equipment overview when any equipment-related data changes
+  document.addEventListener('rooms-updated', () => {
+    console.log('[EquipmentOverview] Rooms updated, refreshing equipment display');
+    if (document.querySelector('#equipmentTable')) {
+      renderEquipmentOverview();
+    }
+  });
+
+  document.addEventListener('lights-updated', () => {
+    console.log('[EquipmentOverview] Lights updated, refreshing equipment display');
+    if (document.querySelector('#equipmentTable')) {
+      renderEquipmentOverview();
+    }
+  });
+
+  document.addEventListener('bus-mapping-updated', () => {
+    console.log('[EquipmentOverview] Bus mapping updated, refreshing equipment display');
+    if (document.querySelector('#equipmentTable')) {
+      renderEquipmentOverview();
+    }
+  });
+
+  document.addEventListener('iot-devices-updated', () => {
+    console.log('[EquipmentOverview] IoT devices updated, refreshing equipment display');
+    if (document.querySelector('#equipmentTable')) {
+      renderEquipmentOverview();
+    }
+  });
+});
+
 function renderControllerMetadata(control) {
   // Extract and format IoT device metadata for display
   if (!control || control === '—' || control === '' || typeof control !== 'string') {
