@@ -9,7 +9,7 @@
  * Endpoint: GET /api/ml/insights/forecast/:zone
  */
 
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 
 // Check if edge forecast endpoint is configured
@@ -72,4 +72,4 @@ router.get('/forecast/:zone', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
