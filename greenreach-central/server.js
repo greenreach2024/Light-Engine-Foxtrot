@@ -25,6 +25,7 @@ import farmSettingsRoutes from './routes/farm-settings.js';
 import recipesRoutes from './routes/recipes.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
 import envProxyRoutes from './routes/env-proxy.js';
+import setupWizardRoutes from '../routes/setup-wizard.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -182,6 +183,7 @@ app.post('/api/debug/track', express.json(), (req, res) => {
 app.use('/api/auth', authRoutes); // Farm authentication
 app.use('/api/farms', farmRoutes);
 app.use('/api/farm', farmRoutes); // Singular route for profile endpoint
+app.use('/api/setup-wizard', setupWizardRoutes); // First-time farm setup wizard
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 app.use('/api/inventory', authMiddleware, inventoryRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
