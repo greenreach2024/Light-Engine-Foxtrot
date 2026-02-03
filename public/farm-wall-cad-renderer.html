@@ -207,6 +207,7 @@
         <div class="buttons">
             <button class="btn-generate" onclick="generateDrawing()">🎨 Generate Drawing</button>
             <button class="btn-pdf" onclick="printToPDF()">📄 Save as PDF</button>
+            <button class="btn-pdf" onclick="downloadImage()">🖼️ Download PNG</button>
         </div>
 
         <div class="layer-controls">
@@ -613,6 +614,36 @@
 
         function printToPDF() {
             window.print();
+        }
+
+        function downloadImage() {
+            const svg = document.querySelector('#canvas-container svg');
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            canvas.width = svg.getAttribute('width');
+            canvas.height = svg.getAttribute('height');
+            
+            img.onload = function() {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+                
+                canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'farm-wall-layout.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
+            };
+            
+            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
         }
 
         // Generate initial drawing on load
