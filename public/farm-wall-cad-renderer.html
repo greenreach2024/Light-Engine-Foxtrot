@@ -216,7 +216,6 @@
             <button class="btn-toggle active" id="toggle-plumbing" onclick="toggleLayer('plumbing')">Plumbing</button>
             <button class="btn-toggle active" id="toggle-electrical" onclick="toggleLayer('electrical')">Electrical</button>
             <button class="btn-toggle active" id="toggle-racks" onclick="toggleLayer('racks')">Grow Racks</button>
-            <button class="btn-toggle" id="toggle-images" onclick="toggleLayer('images')">📷 Photo Overlay</button>
         </div>
 
         <div id="canvas-container"></div>
@@ -241,15 +240,7 @@
             dimensions: true,
             plumbing: true,
             electrical: true,
-            racks: true,
-            images: false  // Start with images off by default
-        };
-
-        // Image paths for realistic equipment overlays
-        // Update these paths to point to your actual rack and irrigation images
-        const imagePaths = {
-            growRack: 'images/plant-farm/IMG_5244.jpeg',  // Grow rack photo
-            irrigation: 'images/plant-farm/IMG_6095.jpeg'  // Irrigation unit photo
+            racks: true
         };
 
         function toggleLayer(layerName) {
@@ -612,33 +603,6 @@
                     font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">IRRIGATION UNIT</text>`;
             svg += `<text x="${irrigX + irrigW/2}" y="${irrigY + irrigH + 20}" 
                     font-family="Arial" font-size="9" text-anchor="middle" fill="#7f8c8d">53"W × 72"H × 24"D</text>`;
-            
-            svg += `</g>`;
-
-            // === REALISTIC IMAGE OVERLAYS LAYER ===
-            svg += `<g class="layer-images" style="display: ${layers.images ? 'block' : 'none'};">`;
-            
-            // Overlay images for 3 grow racks
-            for (let i = 0; i < 3; i++) {
-                const imgRackX = (startX + (i * rackWidth) + (i * spacing)) / 12 * scale;
-                const imgRackY = rackGroundY;
-                
-                // Add grow rack photo with proper scaling and positioning
-                svg += `<image href="${imagePaths.growRack}" 
-                        x="${imgRackX}" y="${imgRackY}" 
-                        width="${rackWidthScaled}" height="${rackHeightScaled}" 
-                        preserveAspectRatio="xMidYMid slice"
-                        opacity="0.9"
-                        style="mix-blend-mode: multiply;"/>`;
-            }
-            
-            // Overlay image for irrigation unit - reuse already calculated positions
-            svg += `<image href="${imagePaths.irrigation}" 
-                    x="${irrigX}" y="${irrigY}" 
-                    width="${irrigW}" height="${irrigH}" 
-                    preserveAspectRatio="xMidYMid slice"
-                    opacity="0.9"
-                    style="mix-blend-mode: multiply;"/>`;
             
             svg += `</g>`;
 
