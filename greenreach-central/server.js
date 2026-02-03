@@ -7,6 +7,7 @@ import { WebSocketServer } from 'ws';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { pathToFileURL } from 'url';
 
 // Import routes
 import farmRoutes from './routes/farms.js';
@@ -25,7 +26,11 @@ import farmSettingsRoutes from './routes/farm-settings.js';
 import recipesRoutes from './routes/recipes.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
 import envProxyRoutes from './routes/env-proxy.js';
-import setupWizardRoutes from '../routes/setup-wizard.js';
+
+// Setup wizard is in root routes/ not greenreach-central/routes/
+// Use path module for proper cross-platform path resolution
+const setupWizardPath = path.join(__dirname, '..', 'routes', 'setup-wizard.js');
+const setupWizardRoutes = (await import(pathToFileURL(setupWizardPath).href)).default;
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
