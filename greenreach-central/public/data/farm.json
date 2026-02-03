@@ -1,13 +1,13 @@
 {
   "schemaVersion": "1.0.0",
-  "farmId": "light-engine-demo",
-  "name": "GreenReach Demo Farm",
+  "farmId": "FARM-MKLOMAT3-A9D8",
+  "name": "Big Green Farm",
   "status": "online",
-  "region": "Pacific Northwest",
-  "url": "http://light-engine-demo-env2.eba-vypvd5rj.us-east-1.elasticbeanstalk.com",
+  "region": "Ontario, Canada",
+  "url": "http://100.65.187.59:8091",
   "contact": {
-    "name": "Demo Farm Manager",
-    "email": "demo@greenreach.farm",
+    "name": "Shelby Gilbert",
+    "email": "shelbygilbert@rogers.com",
     "phone": "+1 (555) 436-7324"
   },
   "coordinates": {

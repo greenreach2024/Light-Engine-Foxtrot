@@ -1,0 +1,18 @@
+{
+  "rooms": [
+    {
+      "id": "ROOM-A",
+      "name": "Room A",
+      "zones": [
+        {
+          "id": "ROOM-A-Z1",
+          "name": "Zone 1"
+        },
+        {
+          "id": "ROOM-A-Z2",
+          "name": "Zone 2"
+        }
+      ]
+    }
+  ]
+}
