@@ -46,37 +46,6 @@ router.get('/', async (req, res, next) => {
  * GET /api/farms/:farmId
  * Get farm details
  */
-router.get('/:farmId', async (req, res, next) => {
-  try {
-    const { farmId } = req.params;
-    
-    // Query database for farm
-    const { query } = await import('../config/database.js');
-    const result = await query(
-      `SELECT farm_id, name, status, last_heartbeat, metadata 
-       FROM farms 
-       WHERE farm_id = $1`,
-      [farmId]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Farm not found' });
-    }
-    
-    const farm = result.rows[0];
-    res.json({
-      farmId: farm.farm_id,
-      name: farm.name,
-      status: farm.status,
-      lastHeartbeat: farm.last_heartbeat,
-      metadata: farm.metadata || {}
-    });
-  } catch (error) {
-    logger.error('Error fetching farm:', error);
-    next(error);
-  }
-});
-
 /**
  * POST /api/farms/:farmId/heartbeat
  * Receive heartbeat from edge device
@@ -279,6 +248,41 @@ router.get('/profile', async (req, res, next) => {
     });
   } catch (error) {
     logger.error('Error fetching farm profile:', error);
+    next(error);
+  }
+});
+
+/**
+ * GET /api/farms/:farmId
+ * Get farm details
+ */
+router.get('/:farmId', async (req, res, next) => {
+  try {
+    const { farmId } = req.params;
+
+    // Query database for farm
+    const { query } = await import('../config/database.js');
+    const result = await query(
+      `SELECT farm_id, name, status, last_heartbeat, metadata 
+       FROM farms 
+       WHERE farm_id = $1`,
+      [farmId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Farm not found' });
+    }
+
+    const farm = result.rows[0];
+    res.json({
+      farmId: farm.farm_id,
+      name: farm.name,
+      status: farm.status,
+      lastHeartbeat: farm.last_heartbeat,
+      metadata: farm.metadata || {}
+    });
+  } catch (error) {
+    logger.error('Error fetching farm:', error);
     next(error);
   }
 });
