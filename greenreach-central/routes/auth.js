@@ -236,6 +236,68 @@ router.post('/validate-token', async (req, res) => {
 });
 
 /**
+ * POST /api/auth/validate-device-token
+ * Validate device pairing token (used by tablets/edge devices)
+ * 
+ * Body: { token, farm_id }
+ * Returns: { valid: true, farm_id }
+ */
+router.post('/validate-device-token', async (req, res) => {
+  try {
+    const { token, farm_id } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({ 
+        valid: false,
+        error: 'No token provided' 
+      });
+    }
+
+    // Verify JWT token
+    const payload = jwt.verify(token, JWT_SECRET, {
+      issuer: 'greenreach-central',
+      audience: 'greenreach-farms'
+    });
+
+    // Validate farm_id matches if provided
+    if (farm_id && payload.farm_id !== farm_id) {
+      return res.status(401).json({
+        valid: false,
+        error: 'Token farm_id mismatch'
+      });
+    }
+
+    res.json({
+      valid: true,
+      farm_id: payload.farm_id,
+      farm_name: payload.farm_name || payload.name,
+      role: payload.role
+    });
+
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        valid: false,
+        error: 'Token expired',
+        expired: true
+      });
+    }
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ 
+        valid: false,
+        error: 'Invalid token' 
+      });
+    }
+
+    res.status(500).json({ 
+      valid: false,
+      error: 'Token validation failed' 
+    });
+  }
+});
+
+/**
  * POST /api/auth/logout
  * Logout (client-side token removal)
  * 

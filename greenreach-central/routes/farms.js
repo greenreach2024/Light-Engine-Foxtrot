@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import crypto from 'crypto';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -93,22 +94,28 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
       || metadata?.farm_name
       || farmId;
     
+    // Generate jwt_secret and extract plan_type
+    const jwtSecret = crypto.randomBytes(32).toString('hex');
+    const planType = metadata?.plan_type || metadata?.planType || 'edge';
+    
     // Persist to database (required for farm_data FK)
     const { query } = await import('../config/database.js');
     
     // Upsert farm
     await query(
-      `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, metadata, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, jwt_secret, plan_type, metadata, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        ON CONFLICT (farm_id) 
        DO UPDATE SET 
          status = $4,
          last_heartbeat = $5,
+         jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
+         plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type, 'edge'),
          metadata = EXCLUDED.metadata,
          name = COALESCE(EXCLUDED.name, farms.name),
          contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
          updated_at = NOW()`,
-      [farmId, metadata?.name || farmId, contactName, 'online', now, JSON.stringify(metadata || {})]
+      [farmId, metadata?.name || farmId, contactName, 'online', now, jwtSecret, planType, JSON.stringify(metadata || {})]
     );
     
     // Store heartbeat

@@ -1085,7 +1085,7 @@
           font-size: 0.9rem;
           font-weight: 600;
           cursor: pointer;
-        " title="Generate QR code to pair additional tablets">📱 Pair Device</button>
+        " title="Generate QR code to pair additional tablets">[Pair] Pair Device</button>
         <button id="logoutBtn" onclick="logoutDevice()" style="
           background: rgba(239, 68, 68, 0.2);
           border: 1px solid #ef4444;
@@ -1201,7 +1201,7 @@
           </button>
           
           <button class="action-btn orange" onclick="openOrderDashboard()">
-            <span class="action-icon">📋</span>
+            <span class="action-icon">[Tasks]</span>
             <div class="action-text">
               <div>View Orders</div>
               <div class="action-subtitle">Wholesale Order Dashboard</div>
@@ -1217,7 +1217,7 @@
           </button>
           
           <button class="action-btn cyan" onclick="startQuickMove()" id="quickMoveBtn">
-            <span class="action-icon">⚡</span>
+            <span class="action-icon">[Quick]</span>
             <div class="action-text">
               <div>Quick Move</div>
               <div class="action-subtitle">Fast 2-Scan Move</div>
@@ -1225,7 +1225,7 @@
           </button>
           
           <button class="action-btn" onclick="toggleVoiceMode()" id="voiceBtn" style="opacity: 0.5;">
-            <span class="action-icon">🔊</span>
+            <span class="action-icon">[Voice]</span>
             <div class="action-text">
               <div>Voice Mode</div>
               <div class="action-subtitle">Audio Feedback</div>
@@ -1275,7 +1275,7 @@
   <!-- Orientation Warning -->
   <div id="orientationWarning" class="orientation-warning">
     <div class="orientation-content">
-      <div style="font-size: 4rem; margin-bottom: 1rem;">🔄</div>
+      <div style="font-size: 4rem; margin-bottom: 1rem;">[SYNC]</div>
       <h2>Please Rotate Device</h2>
       <p>Activity Hub is optimized for landscape mode</p>
       <p style="font-size: 0.9rem; margin-top: 1rem; opacity: 0.8;">Rotate your tablet horizontally for the best experience</p>
@@ -1284,7 +1284,7 @@
 
   <!-- Voice Assistant Button -->
   <button class="voice-assistant-btn" onclick="toggleVoiceAssistant()" id="voiceBtn">
-    <span class="voice-icon">🎤</span>
+    <span class="voice-icon">[MIC]</span>
   </button>
 
   <!-- Voice Assistant Modal -->
@@ -1681,7 +1681,7 @@
               const edgeFarmName = inventoryData.farm_name || 'Edge Farm';
               
               if (edgeFarmId) {
-                console.log('🖥️ Edge device detected - auto-authenticating:', edgeFarmId);
+                console.log('[EDGE] Edge device detected - auto-authenticating:', edgeFarmId);
                 localStorage.setItem('farmId', edgeFarmId);
                 localStorage.setItem('farmName', edgeFarmName);
                 localStorage.setItem('deviceToken', 'EDGE_DEVICE_LOCAL_ACCESS');
@@ -1730,7 +1730,7 @@
         console.error('Pairing scanner error:', err);
         document.getElementById('pairingResult').innerHTML = `
           <div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
-            ⚠️ Camera access required. Please grant camera permissions and refresh the page.
+            [WARNING] Camera access required. Please grant camera permissions and refresh the page.
           </div>
         `;
         document.getElementById('pairingResult').style.display = 'block';
@@ -1778,7 +1778,7 @@
         
         document.getElementById('pairingResult').innerHTML = `
           <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">✓</div>
+            <div style="font-size: 4rem; color: #10b981; margin-bottom: 1rem;">SUCCESS</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Paired Successfully!</div>
             <div style="font-size: 1.1rem; color: #cbd5e1;">${fName}</div>
             <div style="color: #64748b; margin-top: 1rem; font-size: 0.9rem;">Farm ID: ${fId}</div>
@@ -1794,7 +1794,7 @@
         console.error('Pairing error:', error);
         document.getElementById('pairingResult').innerHTML = `
           <div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
-            ⚠️ ${error.message || 'Pairing failed. Please try again.'}
+            [ERROR] ${error.message || 'Pairing failed. Please try again.'}
           </div>
         `;
         
@@ -1843,7 +1843,7 @@
         
         if (response.ok) {
           if (!isEdgeAvailable) {
-            console.log('🟢 Edge device detected:', EDGE_API);
+            console.log('[ONLINE] Edge device detected:', EDGE_API);
             isEdgeAvailable = true;
             currentAPI = EDGE_API;
             updateConnectionIndicator();
@@ -1852,7 +1852,7 @@
         }
       } catch (error) {
         if (isEdgeAvailable) {
-          console.log('🔴 Edge device unavailable, falling back to cloud');
+          console.log('[OFFLINE] Edge device unavailable, falling back to cloud');
           isEdgeAvailable = false;
           currentAPI = CLOUD_API;
           updateConnectionIndicator();
@@ -1909,7 +1909,7 @@
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
           db = request.result;
-          console.log('✅ Offline DB initialized');
+          console.log('[OK] Offline DB initialized');
           resolve(db);
         };
         
@@ -1925,7 +1925,7 @@
             store.createIndex('timestamp', 'timestamp', { unique: false });
             store.createIndex('type', 'type', { unique: false });
             store.createIndex('synced', 'synced', { unique: false });
-            console.log('✅ Object store created:', STORE_NAME);
+            console.log('[OK] Object store created:', STORE_NAME);
           }
         };
       });
@@ -1949,7 +1949,7 @@
         const request = store.add(action);
         
         request.onsuccess = () => {
-          console.log('📦 Queued offline action:', type, request.result);
+          console.log('[QUEUED] Offline action:', type, request.result);
           resolve(request.result);
           
           // Update UI to show queued count
@@ -1998,7 +1998,7 @@
       if (!db || !isOnline) return;
       
       const pending = await getAllPendingActions();
-      console.log(`🔄 Syncing ${pending.length} pending actions...`);
+      console.log(`[SYNC] Syncing ${pending.length} pending actions...`);
       
       for (const action of pending) {
         try {
@@ -2025,13 +2025,13 @@
           if (response && response.ok) {
             // Mark as synced
             await markActionSynced(action.id);
-            console.log('✅ Synced action:', action.id);
+            console.log('[OK] Synced action:', action.id);
           } else {
-            console.error('❌ Failed to sync action:', action.id, response?.status);
+            console.error('[FAILED] Failed to sync action:', action.id, response?.status);
           }
           
         } catch (error) {
-          console.error('❌ Error syncing action:', action.id, error);
+          console.error('[ERROR] Error syncing action:', action.id, error);
         }
       }
       
@@ -2084,7 +2084,7 @@
     
     // Network status listeners
     window.addEventListener('online', () => {
-      console.log('🌐 Back online!');
+      console.log('[ONLINE] Back online!');
       isOnline = true;
       updateOfflineIndicator();
       syncPendingActions();
@@ -2124,11 +2124,11 @@
         
         container.innerHTML = activities.map(activity => {
           const icon = {
-            'seed': '🌱',
-            'harvest': '🌾',
-            'move': '📦',
-            'qa_checkpoint': '✓',
-            'order_verified': '✅'
+            'seed': '[SEED]',
+            'harvest': '[HARVEST]',
+            'move': '[MOVE]',
+            'qa_checkpoint': '[QA]',
+            'order_verified': '[OK]'
           }[activity.action_type] || '•';
           
           const time = new Date(activity.timestamp);
@@ -2203,7 +2203,7 @@
         
         document.getElementById('scanResult').innerHTML = `
           <div style="text-align: center; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 2px solid #10b981; border-radius: 12px;">
-            <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">✓</div>
+            <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">[OK]</div>
             <div style="font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">Tray Scanned</div>
             <div style="color: #cbd5e1; margin-bottom: 1rem;">Tray: ${trayId}</div>
             <div style="font-size: 1.1rem; color: #60a5fa;">Now scan the position QR code</div>
@@ -2315,7 +2315,7 @@
               </div>
               <div style="text-align: right;">
                 <div style="color: ${textColor}; font-weight: 700; font-size: 1.1rem;">
-                  ${isUrgent ? '⚠️ URGENT' : Math.floor(hoursRemaining) + 'h left'}
+                  ${isUrgent ? '[!] URGENT' : Math.floor(hoursRemaining) + 'h left'}
                 </div>
                 <div style="color: #94a3b8; font-size: 0.9rem;">Deadline: ${deadlineStr}</div>
               </div>
@@ -3050,7 +3050,7 @@
                 </div>
                 <div style="text-align: right;">
                   <div style="color: ${textColor}; font-weight: 600;">
-                    ${isUrgent ? '⚠️ ' : ''}${Math.floor(hoursRemaining)}h remaining
+                    ${isUrgent ? '[!] ' : ''}${Math.floor(hoursRemaining)}h remaining
                   </div>
                   <div style="color: #94a3b8; font-size: 0.9rem;">${deadlineStr}</div>
                 </div>

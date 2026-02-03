@@ -22052,6 +22052,14 @@ window.finalizeBusMapping = async function() {
       busMappingState.mappedChannels++;
       updateProgressIndicator();
     }
+
+    // ✅ DATA FLOW: Notify components that bus mappings have been updated
+    try {
+      document.dispatchEvent(new Event('bus-mapping-updated'));
+      console.log('[finalizeBusMapping] Dispatched bus-mapping-updated event');
+    } catch (err) {
+      console.warn('[finalizeBusMapping] Failed to dispatch bus-mapping-updated:', err);
+    }
     
     setTimeout(() => {
       // Check if there are more unmapped channels
@@ -22260,6 +22268,26 @@ async function loadGroupsForBusMapping() {
     console.warn('Failed to load groups:', err);
   }
 }
+
+// ✅ DATA FLOW: Register event listeners for bus mapping panel
+document.addEventListener('DOMContentLoaded', () => {
+  // Reload groups when rooms change (rooms may affect group assignments)
+  document.addEventListener('rooms-updated', () => {
+    console.log('[BusMapping] Rooms updated, refreshing groups dropdown');
+    if (document.getElementById('groupSelect')) {
+      loadGroupsForBusMapping();
+    }
+  });
+
+  // Reload mappings when lights change (will be dispatched by Light Setup in Tier 1.5)
+  document.addEventListener('lights-updated', () => {
+    console.log('[BusMapping] Lights updated, refreshing bus mappings');
+    const busPanel = document.querySelector('[data-panel="bus-mapping"]');
+    if (busPanel && busPanel.classList.contains('is-active')) {
+      loadGroupsForBusMapping();
+    }
+  });
+});
 
 // Update progress indicator
 function updateProgressIndicator() {

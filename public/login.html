@@ -379,7 +379,22 @@
                 
                 console.log('[Login] Stored planType:', data.planType);
                 
-                // Check if setup is complete before redirecting
+                // Edge mode: Skip setup wizard check - go directly to redirect
+                if (data.edgeMode || data.planType === 'edge') {
+                    console.log('[Login] Edge mode detected - skipping setup wizard check');
+                    
+                    // Show success message
+                    alertDiv.className = 'alert success';
+                    alertDiv.textContent = 'Login successful! Redirecting...';
+                    alertDiv.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/LE-dashboard.html';
+                    }, 1000);
+                    return;
+                }
+                
+                // Check if setup is complete before redirecting (cloud mode only)
                 const setupResponse = await fetch('/api/setup-wizard/status', {
                     headers: { 'Authorization': `Bearer ${data.token}` }
                 });
@@ -392,27 +407,14 @@
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    // Cloud users always use farm-admin.html (monitoring dashboard)
-                    // Edge users use LE-dashboard.html (full hardware control)
-                    const planType = data.planType || localStorage.getItem('planType') || 'cloud';
-                    
-                    if (planType === 'cloud') {
-                        // Cloud users: redirect to standalone wizard if setup incomplete
-                        if (setupData.success && !setupData.setupCompleted) {
-                            window.location.href = '/setup-wizard.html';
-                        } else {
-                            window.location.href = '/farm-admin.html';
-                        }
+                    // Cloud mode: redirect based on setup status
+                    if (setupData.success && !setupData.setupCompleted) {
+                        window.location.href = '/setup-wizard.html';
                     } else {
-                        // Edge device - use farm-admin for setup with embedded wizard
-                        if (setupData.success && !setupData.setupCompleted) {
-                            window.location.href = '/farm-admin.html';
-                        } else {
-                            window.location.href = '/LE-dashboard.html';
-                        }
+                        window.location.href = '/farm-admin.html';
                     }
                 }, 1000);
-                
+                                
             } catch (error) {
                 console.error('Login error:', error);
                 alertDiv.className = 'alert error';

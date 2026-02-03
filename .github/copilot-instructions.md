@@ -25,6 +25,31 @@ This framework defines:
 - [ ] Get Architecture Agent strategic approval
 - [ ] Run `npm run validate-schemas` before commit
 
+## 🚨 DEPLOYMENT APPROVAL GATE (MANDATORY)
+
+**NO production deployments without explicit user approval.**
+
+Agents MUST receive **"APPROVED FOR DEPLOYMENT"** message from user before executing:
+- `scp` commands to edge device (100.65.187.59)
+- `ssh` commands that modify production files
+- `pm2 restart` or server restart commands
+- AWS deployment commands (Elastic Beanstalk, S3, etc.)
+
+**Deployment Workflow:**
+1. Investigate and propose solution (with line-by-line changes)
+2. Get Review Agent validation
+3. **STOP and wait for user approval**
+4. User responds: "APPROVED FOR DEPLOYMENT"
+5. Only then execute deployment commands
+
+**NEVER:**
+- Deploy and test iteratively in production
+- Make "one more quick fix" without re-approval
+- Assume user wants deployment because proposal was approved
+- Deploy to production while debugging
+
+**Violation = Immediate termination of agent session.**
+
 ## Data Format Standards (CRITICAL)
 
 **Before modifying any data files** (groups.json, farm.json, rooms.json):

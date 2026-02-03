@@ -543,9 +543,9 @@
     <div id="inventoryTree" class="inventory-tree">
       <h2>Inventory Views</h2>
       <div class="view-tabs">
-        <button class="view-tab active" onclick="switchView('location')">By Location</button>
-        <button class="view-tab" onclick="switchView('crop')">By Crop</button>
-        <button class="view-tab" onclick="switchView('harvest')">By Harvest Time</button>
+        <button class="view-tab active" onclick="switchView('location', event)">By Location</button>
+        <button class="view-tab" onclick="switchView('crop', event)">By Crop</button>
+        <button class="view-tab" onclick="switchView('harvest', event)">By Harvest Time</button>
       </div>
       <div id="locationView" class="inventory-view active">
         <!-- Dynamic location tree -->
@@ -618,7 +618,8 @@
         console.log('[loadInventory] Response status:', {
           current: currentResp.status,
           forecast: forecastResp.status,
-          groups: groupsResp.status
+          groups: groupsResp.status,
+          rooms: roomsResp.status
         });
 
         // If all requests failed, show helpful error
@@ -638,11 +639,14 @@
         const forecastData = forecastResp.ok ? await forecastResp.json() : { forecast: [] };
         const groupsResponse = groupsResp.ok ? await groupsResp.json() : { groups: [] };
         const groupsData = groupsResponse.groups || [];
+        const roomsResponse = roomsResp.ok ? await roomsResp.json() : { rooms: [] };
+        const roomsData = roomsResponse.rooms || [];
 
         console.log('[loadInventory] Data loaded:', {
           currentData: !!currentData,
           forecastData: !!forecastData,
-          groupsCount: groupsData.length
+          groupsCount: groupsData.length,
+          roomsCount: roomsData.length
         });
 
         // Calculate unique crops
@@ -651,9 +655,9 @@
         console.log('[loadInventory] Rendering...');
         renderSummaryCards(currentData, uniqueCrops.size);
         renderForecast(forecastData);
-        renderInventoryByLocation(currentData, groupsData, forecastData);
+        renderInventoryByLocation(currentData, groupsData, forecastData, roomsData);
         renderInventoryByCrop(currentData, groupsData, forecastData);
-        renderInventoryByHarvest(currentData, groupsData, forecastData);
+        renderInventoryByHarvest(currentData, groupsData, forecastData, roomsData);
         console.log('[loadInventory] Rendering complete!');
       } catch (error) {
         console.error('[loadInventory] Error:', error);
@@ -664,12 +668,14 @@
       }
     }
 
-    function switchView(viewName) {
+    function switchView(viewName, event) {
       // Update tabs
       document.querySelectorAll('.view-tab').forEach(tab => {
         tab.classList.remove('active');
       });
-      event.target.classList.add('active');
+      if (event && event.target) {
+        event.target.classList.add('active');
+      }
       
       // Update views
       document.querySelectorAll('.inventory-view').forEach(view => {
@@ -825,7 +831,7 @@
           <div class="location-section" style="background: rgba(30, 41, 59, 0.6); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
             <div class="location-header" style="cursor: pointer; margin-bottom: 1rem;" onclick="toggleLocation('${roomId}')">
               <h3 style="color: #60a5fa; font-size: 1.3rem; margin-bottom: 0.5rem;">
-                ${roomId}
+                ${roomIdToName[roomId] || roomId}
                 <span id="arrow-loc-${roomId}" style="font-size: 0.9rem; color: #94a3b8; margin-left: 0.5rem;">▼ Click to expand</span>
               </h3>
               <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; color: #94a3b8; font-size: 0.95rem;">
@@ -1118,8 +1124,16 @@
       `;
     }
 
-    function renderInventoryByHarvest(currentData, groupsData, forecastData) {
+    function renderInventoryByHarvest(currentData, groupsData, forecastData, roomsData = []) {
       console.log('[renderInventoryByHarvest] Called');
+      
+      // Create room ID to name lookup
+      const roomIdToName = {};
+      roomsData.forEach(room => {
+        if (room.id && room.name) {
+          roomIdToName[room.id] = room.name;
+        }
+      });
       
       // Create map of trays by group
       const traysByGroup = {};
@@ -1225,7 +1239,7 @@
                         </div>
                         <div>
                           <div style="color: #64748b;">Location</div>
-                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${location.split(' - ')[0]}</div>
+                          <div style="color: #f8fafc; font-weight: 600; font-size: 1.1rem;">${roomIdToName[location.split(' - ')[0]] || location.split(' - ')[0]}</div>
                         </div>
                       </div>
                     </div>

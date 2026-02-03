@@ -1130,10 +1130,6 @@
             <div class="status-dot" style="background: #34d399;"></div>
             <span id="currentTime">--:--</span>
           </div>
-          <div class="status-badge">
-            <div class="status-dot" style="background: #f59e0b;"></div>
-            <span id="currentTemp">--°C</span>
-          </div>
         </div>
       </div>
     </div>
@@ -1144,10 +1140,6 @@
       <section class="priorities-section">
         <h2 class="section-title">Today's Priorities</h2>
         <div class="priority-items">
-          <div class="priority-card" onclick="scrollToHarvest()">
-            <div class="priority-number" id="harvestCount">0</div>
-            <div class="priority-label">Ready to Harvest</div>
-          </div>
           <div class="priority-card" id="orderPriorityCard" onclick="openOrderDashboard()">
             <div class="priority-number" id="orderCount">0</div>
             <div class="priority-label">Pending Orders</div>
@@ -1160,6 +1152,14 @@
           <div class="priority-card" onclick="openInventoryView()">
             <div class="priority-number" id="activeTrays">0</div>
             <div class="priority-label">Active Trays</div>
+          </div>
+          <div class="priority-card">
+            <div class="priority-number" id="seedlingCount">0</div>
+            <div class="priority-label">Seedlings</div>
+          </div>
+          <div class="priority-card" onclick="scrollToHarvest()">
+            <div class="priority-number" id="harvestCount">0</div>
+            <div class="priority-label">Ready Soon</div>
           </div>
         </div>
       </section>
@@ -1657,9 +1657,134 @@
     let currentQACheckpoint = null;
     let selectedQAResult = null;
     
+    // === CAMERA PERMISSION FUNCTIONS ===
+    
+    /**
+     * Request camera permission with proper handling for iPad/Mac
+     * Returns: { granted: boolean, error: string|null }
+     */
+    async function requestCameraPermission() {
+      try {
+        // Check if browser supports getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          return {
+            granted: false,
+            error: 'Camera API not supported in this browser'
+          };
+        }
+        
+        // Request camera access (triggers permission prompt on first call)
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: "environment" } 
+        });
+        
+        // Permission granted - stop the stream immediately
+        stream.getTracks().forEach(track => track.stop());
+        
+        return { granted: true, error: null };
+        
+      } catch (error) {
+        console.error('[Camera] Permission denied or error:', error);
+        
+        // Parse error type
+        let errorMessage = 'Camera access denied';
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          errorMessage = 'Camera permission denied. Please allow camera access in your browser settings.';
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+          errorMessage = 'No camera found on this device.';
+        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+          errorMessage = 'Camera is already in use by another application.';
+        } else if (error.name === 'OverconstrainedError') {
+          errorMessage = 'Camera does not meet requirements.';
+        } else if (error.name === 'SecurityError') {
+          errorMessage = 'Camera access blocked by security policy.';
+        }
+        
+        return { granted: false, error: errorMessage };
+      }
+    }
+    
+    /**
+     * Check camera permission status without triggering prompt
+     * Returns: 'granted', 'denied', 'prompt', or 'unsupported'
+     */
+    async function checkCameraPermission() {
+      try {
+        // Check if Permissions API is supported (Safari 16+, Chrome, Edge)
+        if (navigator.permissions && navigator.permissions.query) {
+          const result = await navigator.permissions.query({ name: 'camera' });
+          return result.state; // 'granted', 'denied', or 'prompt'
+        }
+        
+        // Fallback: Check if mediaDevices exists
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          return 'prompt'; // We can request, but don't know current status
+        }
+        
+        return 'unsupported';
+        
+      } catch (error) {
+        console.error('[Camera] Permission check failed:', error);
+        return 'prompt'; // Assume we can try requesting
+      }
+    }
+    
     // === DEVICE PAIRING & AUTHENTICATION FUNCTIONS ===
     
     async function checkAuthentication() {
+      // Check for QR code pairing URL parameter (e.g., ?pair=token|farmId|farmName)
+      const urlParams = new URLSearchParams(window.location.search);
+      const pairParam = urlParams.get('pair');
+      
+      if (pairParam) {
+        console.log('[QR Pairing] Parameter detected:', pairParam.substring(0, 20) + '... (length: ' + pairParam.length + ')');
+        console.log('[QR Pairing] Full URL:', window.location.href);
+        try {
+          const parts = pairParam.split('|');
+          console.log('[QR Pairing] Split into', parts.length, 'parts');
+          
+          if (parts.length >= 2) {
+            const token = parts[0];
+            const farmIdFromQR = parts[1];
+            const farmNameFromQR = parts[2] || `Farm ${farmIdFromQR}`;
+            
+            console.log('[QR Pairing] Parsed credentials:', { 
+              tokenLength: token.length, 
+              farmId: farmIdFromQR, 
+              farmName: farmNameFromQR 
+            });
+            
+            // Store credentials
+            localStorage.setItem('deviceToken', token);
+            localStorage.setItem('farmId', farmIdFromQR);
+            localStorage.setItem('farmName', farmNameFromQR);
+            console.log('[QR Pairing] Credentials stored to localStorage');
+            
+            // Apply to current session
+            deviceToken = token;
+            farmId = farmIdFromQR;
+            farmName = farmNameFromQR;
+            console.log('[QR Pairing] Session variables set');
+            
+            // Clean URL (remove ?pair parameter)
+            window.history.replaceState({}, document.title, window.location.pathname);
+            console.log('[QR Pairing] URL cleaned (parameter removed)');
+            
+            // Show authenticated UI
+            document.querySelector('.main-container').style.display = 'grid';
+            document.getElementById('farmName').textContent = farmName;
+            document.getElementById('logoutBtn').style.display = 'block';
+            
+            console.log('[QR Pairing] ✅ SUCCESS - Auto-authentication complete');
+            return;
+          } else {
+            console.error('[QR Pairing] ❌ FAILED - Invalid format (need at least 2 parts, got ' + parts.length + ')');
+          }
+        } catch (error) {
+          console.error('[QR Pairing] ❌ FAILED - Exception:', error);
+        }
+      }
+      
       // Check if THIS TABLET has been paired
       if (!deviceToken || !farmId) {
         // NEW: Check if accessing from edge device itself (localhost/LAN)
@@ -1681,7 +1806,7 @@
               const edgeFarmName = inventoryData.farm_name || 'Edge Farm';
               
               if (edgeFarmId) {
-                console.log('🖥️ Edge device detected - auto-authenticating:', edgeFarmId);
+                console.log('[Edge Device] Auto-authenticating:', edgeFarmId);
                 localStorage.setItem('farmId', edgeFarmId);
                 localStorage.setItem('farmName', edgeFarmName);
                 localStorage.setItem('deviceToken', 'EDGE_DEVICE_LOCAL_ACCESS');
@@ -1717,7 +1842,25 @@
       }
     }
     
-    function startPairingScanner() {
+    async function startPairingScanner() {
+      // Request camera permission first
+      const permission = await requestCameraPermission();
+      
+      if (!permission.granted) {
+        document.getElementById('pairingResult').innerHTML = `
+          <div style="color: #f87171; padding: 1.25rem; background: rgba(239, 68, 68, 0.1); border-radius: 12px; border-left: 4px solid #ef4444;">
+            <div style="font-weight: 700; margin-bottom: 0.5rem;">Camera Access Required</div>
+            <div style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 1rem;">${permission.error}</div>
+            <div style="font-size: 0.9rem; color: #fca5a5;">
+              <strong>iPad/Mac:</strong> Go to Settings > Safari > Camera and allow access for this website.
+            </div>
+          </div>
+        `;
+        document.getElementById('pairingResult').style.display = 'block';
+        return;
+      }
+      
+      // Permission granted - start scanner
       const config = { fps: 10, qrbox: { width: 300, height: 300 } };
       
       pairingScanner = new Html5Qrcode("pairingQRReader");
@@ -1727,10 +1870,10 @@
         onPairingScanSuccess,
         () => {} // Ignore errors during continuous scanning
       ).catch(err => {
-        console.error('Pairing scanner error:', err);
+        console.error('[Camera] Pairing scanner error:', err);
         document.getElementById('pairingResult').innerHTML = `
           <div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
-            ⚠️ Camera access required. Please grant camera permissions and refresh the page.
+            Camera failed to start. Please refresh the page and try again.
           </div>
         `;
         document.getElementById('pairingResult').style.display = 'block';
@@ -1909,7 +2052,7 @@
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
           db = request.result;
-          console.log('✅ Offline DB initialized');
+          console.log('[Offline DB] Initialized successfully');
           resolve(db);
         };
         
@@ -1925,7 +2068,7 @@
             store.createIndex('timestamp', 'timestamp', { unique: false });
             store.createIndex('type', 'type', { unique: false });
             store.createIndex('synced', 'synced', { unique: false });
-            console.log('✅ Object store created:', STORE_NAME);
+            console.log('[Offline DB] Object store created:', STORE_NAME);
           }
         };
       });
@@ -1998,7 +2141,7 @@
       if (!db || !isOnline) return;
       
       const pending = await getAllPendingActions();
-      console.log(`🔄 Syncing ${pending.length} pending actions...`);
+      console.log(`[Sync] Processing ${pending.length} pending actions...`);
       
       for (const action of pending) {
         try {
@@ -2025,13 +2168,13 @@
           if (response && response.ok) {
             // Mark as synced
             await markActionSynced(action.id);
-            console.log('✅ Synced action:', action.id);
+            console.log('[Sync] Action completed:', action.id);
           } else {
-            console.error('❌ Failed to sync action:', action.id, response?.status);
+            console.error('[Sync] Failed to sync action:', action.id, response?.status);
           }
           
         } catch (error) {
-          console.error('❌ Error syncing action:', action.id, error);
+          console.error('[Sync] Error syncing action:', action.id, error);
         }
       }
       
@@ -3579,20 +3722,13 @@
     function updateTime() {
       const now = new Date();
       const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-      document.getElementById('currentTime').textContent = timeStr;
+      const timeEl = document.getElementById('currentTime');
+      if (timeEl) timeEl.textContent = timeStr;
     }
 
     // Load Dashboard Data
     async function loadDashboardData() {
       try {
-        // Load temperature
-        const envRes = await fetch(`${currentAPI}/env`);
-        const envData = await envRes.json();
-        if (envData.zones && envData.zones[0]) {
-          const temp = envData.zones[0].sensors?.tempC?.current || '--';
-          document.getElementById('currentTemp').textContent = `${temp}°C`;
-        }
-
         // Load inventory forecast
         const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`);
         const forecastData = await forecastRes.json();
@@ -3604,18 +3740,16 @@
         ) || [];
         
         document.getElementById('harvestCount').textContent = readyToHarvest.length;
-        
-        // Populate harvest list
         populateHarvestList(readyToHarvest);
 
-        // Load current inventory for seedling count
+        // Load current inventory
         const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`);
         const inventoryData = await inventoryRes.json();
         
+        // Seedling count (< 2 weeks old)
         const seedlingCount = inventoryData.inventory?.filter(item => 
-          item.days_since_seed < 14 // Seedlings are < 2 weeks old
+          item.days_since_seed < 14
         ).length || 0;
-        
         document.getElementById('seedlingCount').textContent = seedlingCount;
         
         // Active trays
@@ -4022,11 +4156,37 @@
     }
 
     // Start QR Scanner
-    function startQRScanner() {
+    async function startQRScanner() {
       if (html5QrCode) {
         stopQRScanner();
       }
       
+      // Request camera permission first
+      const permission = await requestCameraPermission();
+      
+      if (!permission.granted) {
+        document.getElementById('qrReader').innerHTML = `
+          <div style="padding: 2rem; text-align: center; color: #f87171;">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">📷</div>
+            <div style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.75rem;">Camera Access Required</div>
+            <div style="color: #fca5a5; font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.5rem;">${permission.error}</div>
+            <div style="background: rgba(59, 130, 246, 0.1); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; text-align: left; font-size: 0.9rem; line-height: 1.6;">
+              <div style="font-weight: 700; color: #60a5fa; margin-bottom: 0.5rem;">How to enable camera:</div>
+              <div style="color: #cbd5e1;">
+                <strong>iPad/iPhone:</strong> Settings > Safari > Camera<br>
+                <strong>Mac Safari:</strong> Safari > Settings > Websites > Camera<br>
+                <strong>Chrome:</strong> Click camera icon in address bar
+              </div>
+            </div>
+            <button class="button button-secondary" onclick="manualEntry()" style="width: 100%; max-width: 300px;">
+              Enter Code Manually Instead
+            </button>
+          </div>
+        `;
+        return;
+      }
+      
+      // Permission granted - start scanner
       html5QrCode = new Html5Qrcode("qrReader");
       
       html5QrCode.start(
@@ -4035,10 +4195,10 @@
         onScanSuccess,
         onScanError
       ).catch(err => {
-        console.error("Error starting scanner:", err);
+        console.error("[Camera] Error starting scanner:", err);
         document.getElementById('qrReader').innerHTML = `
           <div style="padding: 2rem; text-align: center; color: #f87171;">
-            <p>Camera access required</p>
+            <p>Camera failed to start</p>
             <button class="button button-secondary" onclick="manualEntry()">Enter Manually Instead</button>
           </div>
         `;
@@ -5029,6 +5189,154 @@
     function closeInstallModal() {
       document.getElementById('installModal').style.display = 'none';
       // Don't mark as dismissed if they viewed instructions - they might want to see them again
+    }
+  </script>
+
+  <!-- Pairing Modal (Tablet → Edge Device Authentication) -->
+  <div id="pairingModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); z-index: 20000; justify-content: center; align-items: center; padding: 2rem;">
+    <div style="max-width: 600px; width: 100%; background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%); border-radius: 24px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(52, 211, 153, 0.2); overflow: hidden;">
+      
+      <!-- Header -->
+      <div style="padding: 2rem; text-align: center; background: linear-gradient(135deg, rgba(52, 211, 153, 0.1) 0%, rgba(96, 165, 250, 0.1) 100%); border-bottom: 2px solid rgba(52, 211, 153, 0.3);">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
+        <h2 style="font-size: 2rem; font-weight: 700; background: linear-gradient(90deg, #34d399, #60a5fa); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem;">
+          Pair Tablet with Farm
+        </h2>
+        <p style="color: #cbd5e1; font-size: 1.1rem; margin: 0;">
+          Light Engine Activity Hub
+        </p>
+      </div>
+
+      <!-- Instructions -->
+      <div style="padding: 2rem; background: rgba(15, 23, 42, 0.6);">
+        <div style="display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; padding: 1.25rem; background: rgba(59, 130, 246, 0.1); border-radius: 12px; border-left: 4px solid #60a5fa;">
+          <div style="font-size: 1.75rem; line-height: 1;">📱</div>
+          <div>
+            <div style="font-weight: 700; color: #60a5fa; margin-bottom: 0.5rem; font-size: 1.1rem;">
+              First Time Setup
+            </div>
+            <ol style="color: #cbd5e1; font-size: 1rem; line-height: 1.6; margin: 0; padding-left: 1.25rem; list-style-position: outside;">
+              <li>Ask farm admin to display the pairing QR code</li>
+              <li>Scan the QR code below with your tablet camera</li>
+              <li>Wait for confirmation and you're ready to go!</li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- QR Scanner Container -->
+        <div id="pairingQRReader" style="width: 100%; max-width: 400px; margin: 0 auto 1.5rem auto; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); border: 3px solid rgba(52, 211, 153, 0.3); background: #000;"></div>
+
+        <!-- Result/Feedback Container -->
+        <div id="pairingResult" style="display: none; margin-top: 1.5rem;"></div>
+
+        <!-- Manual Entry Option -->
+        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(148, 163, 184, 0.2); text-align: center;">
+          <button onclick="showManualPairingEntry()" style="padding: 1rem 2rem; background: rgba(30, 41, 59, 0.8); color: #cbd5e1; border: 2px solid rgba(148, 163, 184, 0.3); border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; font-family: inherit;">
+            📝 Enter Code Manually
+          </button>
+          <p style="color: #64748b; font-size: 0.9rem; margin-top: 0.75rem;">
+            If camera doesn't work, you can type the pairing code
+          </p>
+        </div>
+
+        <!-- Help Text -->
+        <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(250, 204, 21, 0.1); border-radius: 12px; border-left: 4px solid #fbbf24;">
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <div style="font-size: 1.5rem; line-height: 1;">💡</div>
+            <div>
+              <div style="color: #fbbf24; font-weight: 700; margin-bottom: 0.25rem; font-size: 0.95rem;">Need Help?</div>
+              <div style="color: #cbd5e1; font-size: 0.9rem; line-height: 1.5;">
+                Contact your farm administrator to get the pairing QR code. This one-time setup connects your tablet to the farm's edge device.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Manual Pairing Entry Modal (Fallback) -->
+  <div id="manualPairingModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.97); backdrop-filter: blur(8px); z-index: 21000; justify-content: center; align-items: center; padding: 2rem;">
+    <div style="max-width: 500px; width: 100%; background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%); border-radius: 24px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(96, 165, 250, 0.2); padding: 2rem;">
+      
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <div style="font-size: 2.5rem; margin-bottom: 1rem;">🔐</div>
+        <h3 style="font-size: 1.75rem; font-weight: 700; color: #60a5fa; margin-bottom: 0.5rem;">
+          Manual Pairing
+        </h3>
+        <p style="color: #94a3b8; font-size: 1rem;">
+          Enter the pairing code from your farm administrator
+        </p>
+      </div>
+
+      <div style="margin-bottom: 1.5rem;">
+        <label style="display: block; color: #cbd5e1; font-weight: 600; margin-bottom: 0.5rem; font-size: 1rem;">
+          Pairing Code:
+        </label>
+        <input 
+          type="text" 
+          id="manualPairingCode" 
+          placeholder="Paste or type code here..."
+          style="width: 100%; padding: 1rem; font-size: 1.1rem; background: rgba(15, 23, 42, 0.8); border: 2px solid rgba(148, 163, 184, 0.3); border-radius: 12px; color: #f8fafc; font-family: 'SF Mono', 'Monaco', 'Courier New', monospace; transition: all 0.3s ease;"
+          onfocus="this.style.borderColor='rgba(96, 165, 250, 0.6)'"
+          onblur="this.style.borderColor='rgba(148, 163, 184, 0.3)'"
+        />
+        <p style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem; margin-bottom: 0;">
+          Format: DEVICE_PAIR|token|farm_id|farm_name
+        </p>
+      </div>
+
+      <div id="manualPairingResult" style="display: none; margin-bottom: 1.5rem;"></div>
+
+      <div style="display: flex; gap: 1rem;">
+        <button onclick="closeManualPairingModal()" style="flex: 1; padding: 1rem; background: rgba(30, 41, 59, 0.8); color: #cbd5e1; border: 2px solid rgba(148, 163, 184, 0.3); border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; font-family: inherit;">
+          Cancel
+        </button>
+        <button onclick="submitManualPairing()" style="flex: 1; padding: 1rem; background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); color: white; border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(96, 165, 250, 0.4); transition: all 0.3s ease; font-family: inherit;">
+          Pair Device
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Manual pairing fallback functions
+    function showManualPairingEntry() {
+      // Stop QR scanner if running
+      if (pairingScanner) {
+        pairingScanner.stop().catch(() => {});
+      }
+      document.getElementById('manualPairingModal').style.display = 'flex';
+    }
+
+    function closeManualPairingModal() {
+      document.getElementById('manualPairingModal').style.display = 'none';
+      document.getElementById('manualPairingCode').value = '';
+      document.getElementById('manualPairingResult').style.display = 'none';
+      // Restart QR scanner
+      startPairingScanner();
+    }
+
+    async function submitManualPairing() {
+      const code = document.getElementById('manualPairingCode').value.trim();
+      const resultDiv = document.getElementById('manualPairingResult');
+      
+      if (!code) {
+        resultDiv.innerHTML = '<div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px; text-align: center;">⚠️ Please enter a pairing code</div>';
+        resultDiv.style.display = 'block';
+        return;
+      }
+
+      resultDiv.innerHTML = '<div class="spinner" style="margin: 1rem auto;"></div>';
+      resultDiv.style.display = 'block';
+
+      try {
+        await onPairingScanSuccess(code);
+      } catch (error) {
+        resultDiv.innerHTML = `<div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px; text-align: center;">⚠️ ${error.message || 'Invalid pairing code'}</div>`;
+      }
     }
   </script>
 

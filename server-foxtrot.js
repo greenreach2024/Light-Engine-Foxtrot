@@ -10373,19 +10373,42 @@ app.get('/api/setup-wizard/status', async (req, res) => {
     const authHeader = req.headers.authorization;
     let farmId = null;
     let email = null;
+    let isEdgeMode = false;
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      try {
-        const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
-        const decoded = jwt.verify(token, jwtSecret);
-        farmId = decoded.farmId;
-        email = decoded.email;
-        console.log('[setup-wizard] Token decoded successfully for', farmId, email);
-      } catch (tokenError) {
-        console.warn('[setup-wizard] Token verification failed:', tokenError.message);
-        // Continue without token - return default
+      
+      // FIRST: Check if it's an edge mode session token
+      if (global.farmAdminSessions && global.farmAdminSessions.has(token)) {
+        const session = global.farmAdminSessions.get(token);
+        farmId = session.farmId;
+        email = session.email;
+        isEdgeMode = session.edgeMode || session.demoMode || false;
+        console.log('[setup-wizard] Edge/Demo session found for', farmId, email);
+      } else {
+        // SECOND: Try JWT verification (cloud mode)
+        try {
+          const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+          const decoded = jwt.verify(token, jwtSecret);
+          farmId = decoded.farmId;
+          email = decoded.email;
+          console.log('[setup-wizard] JWT decoded successfully for', farmId, email);
+        } catch (tokenError) {
+          console.warn('[setup-wizard] Token verification failed:', tokenError.message);
+          // Continue without token - return default
+        }
       }
+    }
+    
+    // Edge mode: Always return setup completed (no wizard needed)
+    if (isEdgeMode) {
+      console.log('[setup-wizard] Edge mode - returning setup completed');
+      return res.json({
+        success: true,
+        setupCompleted: true,
+        farmId: farmId || 'edge-farm',
+        edgeMode: true
+      });
     }
     
     const pool = req.app.locals?.db;
@@ -14519,6 +14542,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
         farmName: edgeConfig.getFarmName() || 'Edge Farm',
         email: edgeSession.email,
         role: 'admin',
+        planType: 'edge',
         subscription: {
           plan: 'Edge',
           status: 'active',
@@ -14623,6 +14647,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
         farmName: edgeConfig.getFarmName() || 'Edge Farm',
         email: edgeSession.email,
         role: 'admin',
+        planType: 'edge',
         subscription: {
           plan: 'Edge',
           status: 'active',
@@ -15520,6 +15545,51 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
   
   const token = authHeader.substring(7);
   console.log('[/api/farm/profile] Token extracted:', token);
+  
+  // FIRST: Check if it's an edge mode session token
+  if (global.farmAdminSessions && global.farmAdminSessions.has(token)) {
+    const session = global.farmAdminSessions.get(token);
+    console.log('[/api/farm/profile] Edge/Demo session found for', session.farmId);
+    
+    // Load farm data from public/data/farm.json for edge mode
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const farmDataPath = path.join(__dirname, 'public', 'data', 'farm.json');
+      const farmData = JSON.parse(fs.readFileSync(farmDataPath, 'utf8'));
+      
+      return res.json({
+        status: 'success',
+        farm: {
+          farmId: session.farmId,
+          name: farmData.name || 'Edge Farm',
+          planType: 'edge',
+          email: session.email,
+          contactName: farmData.contactPerson || 'Farm Admin',
+          location: farmData.location || null,
+          timezone: farmData.timezone || 'America/New_York',
+          rooms: []
+        },
+        edgeMode: true
+      });
+    } catch (fsError) {
+      console.error('[/api/farm/profile] Error reading farm.json:', fsError);
+      return res.json({
+        status: 'success',
+        farm: {
+          farmId: session.farmId,
+          name: 'Edge Farm',
+          planType: 'edge',
+          email: session.email,
+          contactName: 'Farm Admin',
+          location: null,
+          timezone: 'America/New_York',
+          rooms: []
+        },
+        edgeMode: true
+      });
+    }
+  }
   
   // Handle local-access token for development
   if (token === 'local-access') {
@@ -16916,7 +16986,9 @@ if (!isControllerDisabled) {
       '/api/farm-auth/',     // Farm authentication for Sales Terminal
       '/api/farm/auth/',     // Farm authentication alternate path
       '/api/farm-sales/',    // Farm Sales Terminal inventory and POS
-      '/api/wholesale/'      // Wholesale inventory and catalog
+      '/api/wholesale/',     // Wholesale inventory and catalog
+      '/api/rooms',          // Rooms data for edge mode
+      '/api/groups'          // Groups data for edge mode
     ];
     
     // Also check without /api prefix (in case pathname is just the path without /api)
@@ -23572,6 +23644,14 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
   }));
 
   res.json(formatted);
+}));
+
+// Get list of rooms for edge mode
+app.get('/api/rooms', asyncHandler(async (req, res) => {
+  const roomsData = readJSON('rooms.json', { rooms: [] });
+  const rooms = roomsData?.rooms || [];
+  
+  res.json(rooms);
 }));
 
 // Get all bus mappings

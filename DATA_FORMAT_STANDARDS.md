@@ -143,7 +143,7 @@ The Light Engine application has experienced **data format drift** where:
 
 ### 3. Rooms Format (rooms.json)
 
-**CANONICAL FORMAT**:
+**CANONICAL FORMAT** (Updated 2026-02-02):
 
 ```json
 {
@@ -156,13 +156,35 @@ The Light Engine application has experienced **data format drift** where:
           "id": "string (required)",     // Zone identifier
           "name": "string (required)"
         }
+      ],
+      "equipment": [                     // Equipment inventory (optional)
+        {
+          "id": "string (required)",     // Unique equipment identifier
+          "name": "string",               // Display name
+          "category": "string",           // Equipment type: "dehumidifier" | "fan" | "mini-split" | "vents" | "controllers" | "energy-monitor" | "other"
+          "vendor": "string",             // Manufacturer name
+          "model": "string",              // Model number/name
+          "control": "string|null",       // IoT device ID for automation (format: "IoT:{deviceId}") or "Manual"
+          "roomId": "string",             // Parent room ID (for validation)
+          "count": "number"               // Quantity (typically 1 for individual items)
+        }
       ]
     }
   ]
 }
 ```
 
-**CONSUMERS** (15 locations):
+**FIELD RULES**:
+- ✅ `equipment[]`: Optional array of equipment assigned to room
+- ✅ `equipment[].id`: Must be unique across all equipment
+- ✅ `equipment[].category`: Use standard categories (dehumidifier, fan, mini-split, vents, controllers, energy-monitor, other)
+- ✅ `equipment[].control`: IoT device reference for automation or "Manual" for manual control
+- ⚠️ `equipment[].count`: Always 1 for individually tracked items (legacy support for bulk counts)
+
+**CONSUMERS** (17 locations):
+- `/public/LE-dashboard.html` - Equipment Overview table
+- `/public/app.foxtrot.js` - getAllEquipment(), renderEquipmentOverview()
+- `/public/views/room-mapper.html` - Equipment placement and sync
 - `/public/LE-switchbot.html` - Device assignment
 - `/greenreach-central/routes/sync.js` - Sync operations
 - `/routes/setup-wizard.js` - Initial setup
