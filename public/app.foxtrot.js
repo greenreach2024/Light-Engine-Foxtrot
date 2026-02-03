@@ -19322,6 +19322,15 @@ class FreshLightWizard {
     window.dispatchEvent(new CustomEvent('lightSetupsChanged'));
     renderLightSetupSummary();
     renderControllerAssignments();
+    
+    // ✅ DATA FLOW: Notify components that lights have been updated
+    try {
+      document.dispatchEvent(new Event('lights-updated'));
+      console.log('[FreshLightWizard.save] Dispatched lights-updated event');
+    } catch (err) {
+      console.warn('[FreshLightWizard.save] Failed to dispatch lights-updated:', err);
+    }
+    
     // Add to group if matching group exists
     if (window.STATE && Array.isArray(window.STATE.groups)) {
       // Try to find group for this room (no zone check)
