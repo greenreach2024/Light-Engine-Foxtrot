@@ -220,4 +220,67 @@ router.post('/register', async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/farm/profile
+ * Get authenticated user's farm profile
+ * Requires JWT token with farm_id
+ */
+router.get('/profile', async (req, res, next) => {
+  try {
+    // Extract farm_id from JWT token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No authorization token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    const jwt = await import('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+    
+    let decoded;
+    try {
+      decoded = jwt.default.verify(token, JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const farmId = decoded.farm_id;
+    if (!farmId) {
+      return res.status(400).json({ error: 'No farm_id in token' });
+    }
+
+    // Query database for farm data
+    const { query } = await import('../config/database.js');
+    const result = await query(
+      `SELECT farm_id, name, status, metadata, created_at
+       FROM farms 
+       WHERE farm_id = $1`,
+      [farmId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Farm not found' });
+    }
+
+    const farm = result.rows[0];
+    
+    // Return farm profile in format expected by frontend
+    res.json({
+      status: 'success',
+      farm: {
+        farmId: farm.farm_id,
+        name: farm.name,
+        status: farm.status,
+        metadata: farm.metadata || {},
+        rooms: farm.metadata?.rooms || [],
+        groups: farm.metadata?.groups || [],
+        createdAt: farm.created_at
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching farm profile:', error);
+    next(error);
+  }
+});
+
 export default router;

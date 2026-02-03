@@ -181,6 +181,7 @@ app.post('/api/debug/track', express.json(), (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes); // Farm authentication
 app.use('/api/farms', farmRoutes);
+app.use('/api/farm', farmRoutes); // Singular route for profile endpoint
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 app.use('/api/inventory', authMiddleware, inventoryRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
