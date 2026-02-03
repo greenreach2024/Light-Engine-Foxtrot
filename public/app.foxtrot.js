@@ -17521,6 +17521,7 @@ function wireGlobalEvents() {
     const hasZoneSelection = !!(selectedZoneValue && selectedZoneValue.trim());
     const hasFilters = hasRoomSelection && hasZoneSelection;
 
+    // ✅ DATA FLOW FIX: Show all lights when no filter active (allows viewing saved groups immediately)
     const filteredLights = hasFilters
       ? (group.lights || [])
           .map((entry, idx) => normalizeGroupLightEntry(entry, idx))
@@ -17535,7 +17536,7 @@ function wireGlobalEvents() {
             const selZone = (selectedZone || '').toString().trim().toLowerCase();
             return (room === selRoomId || room === selRoomName) && zone === selZone;
           })
-      : [];
+      : (group.lights || []).map((entry, idx) => normalizeGroupLightEntry(entry, idx));
 
     if (grDebug) {
       // Defensive: log key values for troubleshooting Assigned Lights
