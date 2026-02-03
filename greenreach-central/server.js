@@ -48,10 +48,8 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Setup wizard is in root routes/ not greenreach-central/routes/
-// Use path module for proper cross-platform path resolution
-const setupWizardPath = path.join(__dirname, '..', 'routes', 'setup-wizard.js');
-const setupWizardRoutes = (await import(pathToFileURL(setupWizardPath).href)).default;
+// Import setup wizard route
+import setupWizardRoutes from './routes/setup-wizard.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
