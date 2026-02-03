@@ -136,40 +136,38 @@ router.get('/status', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get farm details first
+    // Get farm details including setup_completed flag
     const farmResult = await pool.query(
-      'SELECT name, plan_type, timezone, business_hours FROM farms WHERE farm_id = $1',
+      'SELECT name, plan_type, timezone, business_hours, setup_completed FROM farms WHERE farm_id = $1',
       [farmId]
     );
 
     const farm = farmResult.rows[0];
 
-    // Check if farm has rooms configured (indicates setup completed)
-    // Handle case where rooms table doesn't exist yet
-    let hasRooms = false;
+    // Check room count as fallback
     let roomCount = 0;
-    
     try {
       const roomsResult = await pool.query(
         'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
         [farmId]
       );
       roomCount = parseInt(roomsResult.rows[0]?.count) || 0;
-      hasRooms = roomCount > 0;
     } catch (roomError) {
-      // If rooms table doesn't exist, setup is definitely not complete
+      // If rooms table doesn't exist, roomCount stays 0
       if (roomError.message?.includes('relation') && roomError.message?.includes('does not exist')) {
-        console.log('[Setup Wizard] rooms table does not exist yet, setup not completed');
-        hasRooms = false;
+        console.log('[Setup Wizard] rooms table does not exist yet');
         roomCount = 0;
       } else {
-        throw roomError; // Re-throw if it's not a missing table error
+        throw roomError;
       }
     }
 
+    // Determine setup completion: Primary = setup_completed flag, Fallback = has rooms
+    const setupCompleted = farm?.setup_completed === true || roomCount > 0;
+
     res.json({
       success: true,
-      setupCompleted: hasRooms,
+      setupCompleted,
       farm: {
         farmId,
         name: farm?.name,
@@ -187,6 +185,44 @@ router.get('/status', authenticateToken, async (req, res) => {
       success: true,
       setupCompleted: false,
       error: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/setup-wizard/complete
+ * Mark farm setup as completed (bypass wizard)
+ * Use this for farms already configured before setup_completed flag existed
+ */
+router.post('/complete', authenticateToken, async (req, res) => {
+  try {
+    const pool = req.app.locals?.db;
+    if (!pool) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Database not configured' 
+      });
+    }
+
+    const farmId = req.farmId;
+
+    await pool.query(
+      'UPDATE farms SET setup_completed = true, setup_completed_at = NOW() WHERE farm_id = $1',
+      [farmId]
+    );
+
+    console.log(`[Setup Wizard] Marked farm ${farmId} as setup completed`);
+
+    res.json({
+      success: true,
+      message: 'Farm setup marked as complete'
+    });
+
+  } catch (error) {
+    console.error('[Setup Wizard] Complete error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to mark setup as complete' 
     });
   }
 });
