@@ -1,0 +1,112 @@
+<!-- IoT Devices Manager Panel -->
+<section class="section" data-section="iot-manager" hidden>
+  <div class="section-header">
+    <h2 class="section-title">IoT Devices Manager</h2>
+    <div class="section-controls">
+      <button type="button" class="button" id="scanDevicesBtn">
+        <span class="button-label">Scan for Devices</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="section-content">
+    <div class="iot-devices-list">
+      <!-- Loading State -->
+      <div class="iot-loading-state" hidden>
+        <div class="spinner"></div>
+        <p>Scanning for devices...</p>
+      </div>
+
+      <!-- Device Groups -->
+      <div class="iot-device-groups">
+        <!-- SwitchBot Devices -->
+        <div class="iot-device-group" data-protocol="switchbot">
+          <h3 class="device-group-header">
+            <span class="protocol-icon switchbot"></span>
+            <span class="protocol-name">SwitchBot</span>
+            <span class="device-count">(0)</span>
+          </h3>
+          <div class="device-list"></div>
+        </div>
+
+        <!-- Kasa Devices -->
+        <div class="iot-device-group" data-protocol="kasa">
+          <h3 class="device-group-header">
+            <span class="protocol-icon kasa"></span>
+            <span class="protocol-name">Kasa</span>
+            <span class="device-count">(0)</span>
+          </h3>
+          <div class="device-list"></div>
+        </div>
+
+        <!-- Shelly Devices -->
+        <div class="iot-device-group" data-protocol="shelly">
+          <h3 class="device-group-header">
+            <span class="protocol-icon shelly"></span>
+            <span class="protocol-name">Shelly</span>
+            <span class="device-count">(0)</span>
+          </h3>
+          <div class="device-list"></div>
+        </div>
+
+        <!-- MQTT Devices -->
+        <div class="iot-device-group" data-protocol="mqtt">
+          <h3 class="device-group-header">
+            <span class="protocol-icon mqtt"></span>
+            <span class="protocol-name">MQTT</span>
+            <span class="device-count">(0)</span>
+          </h3>
+          <div class="device-list"></div>
+        </div>
+
+        <!-- Other/Unknown Devices -->
+        <div class="iot-device-group" data-protocol="unknown">
+          <h3 class="device-group-header">
+            <span class="protocol-icon unknown"></span>
+            <span class="protocol-name">Other Devices</span>
+            <span class="device-count">(0)</span>
+          </h3>
+          <div class="device-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device Card Template -->
+  <template id="iot-device-template">
+    <div class="iot-device-card">
+      <div class="device-header">
+        <h4 class="device-name"></h4>
+        <span class="device-type"></span>
+      </div>
+      <div class="device-content">
+        <div class="device-info">
+          <p class="device-id"></p>
+          <p class="device-last-seen"></p>
+        </div>
+        <div class="device-assignments">
+          <select class="room-select">
+            <option value="">Select Room</option>
+          </select>
+          <select class="zone-select" required>
+            <option value="">Select Zone (Required)</option>
+          </select>
+          <select class="group-select">
+            <option value="">Select Group (Optional)</option>
+          </select>
+          <select class="equipment-select">
+            <option value="">Select Equipment</option>
+          </select>
+        </div>
+      </div>
+      <div class="device-footer">
+        <button type="button" class="button button--small button--secondary setup-device">
+          Setup
+        </button>
+        <button type="button" class="button button--small button--danger remove-device">
+          Remove
+        </button>
+      </div>
+    </div>
+  </template>
+</section>
