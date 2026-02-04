@@ -1630,6 +1630,12 @@
       }
     }
 
+    function findGroupPlan(groupId) {
+      if (!state.groups || !Array.isArray(state.groups)) return null;
+      const group = state.groups.find(g => g.id === groupId);
+      return group ? group.plan : null;
+    }
+
     function processTrays(data) {
       // Transform API data to internal format
       if (!data || !data.trays || data.trays.length === 0) {
