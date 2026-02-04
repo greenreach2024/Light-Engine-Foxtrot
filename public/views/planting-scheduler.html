@@ -1602,8 +1602,9 @@
           console.warn('Groups data unavailable, using empty data:', err.message);
         }
 
-        state.trays = processTrays(traysData);
+        // Process groups FIRST so state.groups is available for processTrays
         state.groups = processGroups(groupsData);
+        state.trays = processTrays(traysData);
 
         // Calculate seeding tasks
         state.seedingTasks = calculateSeedingTasks(state.trays);
