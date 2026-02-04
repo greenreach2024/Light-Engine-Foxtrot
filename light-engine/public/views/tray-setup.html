@@ -470,20 +470,148 @@
         font-size: 0.875rem;
       }
     }
+
+    /* Navigation Menu Styles */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .nav-menu {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .nav-item {
+      position: relative;
+    }
+
+    .nav-button {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+
+    .nav-button:hover {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+
+    .nav-button.active {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #10b981;
+    }
+
+    .nav-arrow {
+      font-size: 0.7rem;
+      transition: transform 0.2s;
+    }
+
+    .nav-item:hover .nav-arrow {
+      transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 0.5rem;
+      background: rgba(30, 41, 59, 0.98);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.2s;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .nav-item:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: block;
+      padding: 0.75rem 1rem;
+      color: #cbd5e1;
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .dropdown-item:last-child {
+      border-bottom: none;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(59, 130, 246, 0.1);
+      color: #60a5fa;
+    }
+
+    .dropdown-item.active {
+      background: rgba(16, 185, 129, 0.1);
+      color: #10b981;
+      font-weight: 600;
+    }
   </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
-  <link rel="stylesheet" href="/styles/nav-color-palette.css">
 </head>
 <body class="le-theme">
   <div class="container">
     <div class="header">
       <h1>Tray Setup</h1>
-      <div class="header-nav">
-        <a href="/LE-farm-admin.html" class="nav-link">Admin</a>
-        <a href="/views/farm-summary.html" class="nav-link">Farm Summary</a>
-        <a href="/views/tray-inventory.html" class="nav-link">Activity Hub</a>
-        <a href="/views/tray-setup.html" class="nav-link active">Tray Setup</a>
-        <a href="/farm-sales-pos.html" class="nav-link">Lot Traceability</a>
+      <div class="header-actions">
+        <nav class="nav-menu">
+          <div class="nav-item inventory">
+            <button class="nav-button inventory active">
+              Inventory Management
+              <span class="nav-arrow">▼</span>
+            </button>
+            <div class="dropdown-menu">
+              <a href="planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
+              <a href="tray-setup.html" class="dropdown-item active">Tray Setup</a>
+              <a href="tray-inventory.html" class="dropdown-item">Activity Hub</a>
+              <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
+            </div>
+          </div>
+          <div class="nav-item farm-monitoring">
+            <button class="nav-button farm-monitoring">
+              Farm Monitoring
+              <span class="nav-arrow">▼</span>
+            </button>
+            <div class="dropdown-menu">
+              <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+              <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+              <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
+            </div>
+          </div>
+          <div class="nav-item admin">
+            <button class="nav-button admin">
+              Admin
+              <span class="nav-arrow">▼</span>
+            </button>
+            <div class="dropdown-menu">
+              <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
+              <a href="/" class="dropdown-item">Setup/Update</a>
+            </div>
+          </div>
+        </nav>
       </div>
     </div>
 

@@ -8,6 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Farm Room Summary - Light Engine Charlie</title>
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <style>
     * {
       margin: 0;
@@ -1674,8 +1675,8 @@
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item inventory">
+          <button class="nav-button inventory">
             Inventory Management
             <span class="nav-arrow">▼</span>
           </button>
@@ -1687,8 +1688,8 @@
             <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button active">
+        <div class="nav-item farm-monitoring">
+          <button class="nav-button farm-monitoring active">
             Farm Monitoring
             <span class="nav-arrow">▼</span>
           </button>
@@ -1698,8 +1699,8 @@
             <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item admin">
+          <button class="nav-button admin">
             Admin
             <span class="nav-arrow">▼</span>
           </button>
@@ -1708,8 +1709,8 @@
             <a href="/" class="dropdown-item">Setup/Update</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item sales">
+          <button class="nav-button sales">
             Sales
             <span class="nav-arrow">▼</span>
           </button>
@@ -2118,7 +2119,7 @@
       if (typeof HarvestPredictions !== 'undefined') {
         console.log('[Farm Summary] Initializing Harvest Predictions AI component...');
         window.harvestPredictions = new HarvestPredictions('/api/harvest/predictions');
-        harvestPredictions.loadAll().catch(err => {
+        window.harvestPredictions.loadAll().catch(err => {
           console.warn('[Farm Summary] Harvest predictions not available:', err.message);
         });
       } else {
@@ -3090,17 +3091,27 @@
               const planLookupKey = group.planId || group.plan || group.planKey || group.planConfig?.planId || group.planConfig?.preview?.planId;
               const plan = findPlanById(plans, planLookupKey);
               console.log(`[Zone ${zone.name}] Plan lookup: key="${planLookupKey}" → found=${!!plan}, crop=${plan?.crop}`);
+              const planLabel = plan?.crop
+                || plan?.name
+                || group.planConfig?.preview?.planName
+                || group.planConfig?.preview?.planLabel
+                || group.planConfig?.preview?.planId
+                || group.planId
+                || group.plan
+                || '';
               let harvestInfo = '';
               
-              if (plan && (group.planConfig?.anchor || group.planConfig?.preview?.anchor || group.planConfig?.seedDate || group.seedDate || group.planSeedDate)) {
-                // Prefer explicit anchor, then preview anchor, then legacy top-level fields
+              // Show detailed card if we have a plan, even without seed date (use Day 1 as default)
+              if (plan) {
+                // Prefer explicit anchor, then preview anchor, then legacy top-level fields, or create default
                 const resolvedAnchor = group.planConfig?.anchor || group.planConfig?.preview?.anchor || {};
                 const anchor = { ...resolvedAnchor };
                 if (!anchor.seedDate) {
                   const resolvedSeed = planSummaryGetSeedDate(group.planConfig, group);
                   anchor.seedDate = resolvedSeed ? resolvedSeed.toISOString() : (group.planConfig?.seedDate || group.seedDate || group.planSeedDate || null);
                 }
-                let currentDay = null;
+                // Default to Day 1 if no seed date provided
+                let currentDay = 1;
                 
                 // Calculate current day based on anchor mode
                 if ((anchor.mode === 'seedDate' || anchor.mode == null) && anchor.seedDate) {
@@ -3113,6 +3124,10 @@
                   // Use days post seed directly
                   currentDay = anchor.dps;
                 }
+                // If still null, default to Day 1
+                if (currentDay == null || currentDay < 1) {
+                  currentDay = 1;
+                }
                 
                 // Get plan days from various possible locations
                 const planDays = Array.isArray(plan?.days)
@@ -3120,6 +3135,7 @@
                   : (Array.isArray(plan?.light?.days) ? plan.light.days
                     : (Array.isArray(plan?.env?.days) ? plan.env.days : []));
                 
+                // Always show detailed card if we have plan days
                 if (currentDay != null && planDays.length > 0) {
                   // Variety-specific grow times (in days) - based on commercial CEA standards
                   const VARIETY_GROW_DAYS = {
@@ -3180,7 +3196,7 @@
                     }
                   }
                   
-                  const seedDateStr = anchor.seedDate ? (new Date(anchor.seedDate)).toISOString().slice(0,10) : '';
+                  const seedDateStr = anchor.seedDate ? (new Date(anchor.seedDate)).toISOString().slice(0,10) : 'Not set';
                   
                   // Get today's light recipe details
                   const todaysDay = planDays.find(d => d.day === currentDay) || planDays[0];
@@ -3398,14 +3414,6 @@
                 }
 
                 const stageLabel = group.planConfig?.preview?.stage || '';
-                const planLabel = plan?.crop
-                  || plan?.name
-                  || group.planConfig?.preview?.planName
-                  || group.planConfig?.preview?.planLabel
-                  || group.planConfig?.preview?.planId
-                  || group.planId
-                  || group.plan
-                  || '';
 
                 const statusParts = [];
                 if (currentDay != null) statusParts.push(`Day ${currentDay}`);
@@ -3575,7 +3583,7 @@
                       <div class="harvest-details">
                         <div class="harvest-label">
                           ${group.name || 'Group'}
-                          ${planLabel ? `<span class="crop-badge">${planLabel}</span>` : ''}
+                          ${(typeof planLabel !== 'undefined' && planLabel) ? `<span class="crop-badge">${planLabel}</span>` : ''}
                         </div>
                         ${seedDateText ? `<div class="harvest-seed">Seed: ${seedDateText}</div>` : ''}
                         <div class="harvest-status" style="color: #2563eb;">
@@ -3587,8 +3595,10 @@
                   </div>
                 `;
               }
-              
-              groupsHtml += harvestInfo;
+
+              if (harvestInfo) {
+                groupsHtml += harvestInfo;
+              }
             }
           }
 
@@ -3695,7 +3705,7 @@
         console.log('[Zone Summaries] Zone summaries rendered successfully');
         
         // Render AI Harvest Predictions for all groups (P3)
-        if (window.harvestPredictions) {
+        if (window.harvestPredictions && typeof window.harvestPredictions.renderBadge === 'function') {
           console.log('[Zone Summaries] Rendering AI harvest predictions for groups...');
           let predictionCount = 0;
           zones.forEach(zone => {
@@ -3706,10 +3716,14 @@
             zoneGroups.forEach(group => {
               const targetEl = document.getElementById(`ai-prediction-${group.id}`);
               if (targetEl) {
-                const badge = harvestPredictions.renderBadge(group.id);
-                if (badge) {
-                  targetEl.innerHTML = badge;
-                  predictionCount++;
+                try {
+                  const badge = window.harvestPredictions.renderBadge(group.id);
+                  if (badge) {
+                    targetEl.innerHTML = badge;
+                    predictionCount++;
+                  }
+                } catch (err) {
+                  console.warn(`[Zone Summaries] Failed to render prediction for ${group.id}:`, err);
                 }
               }
             });
@@ -3718,7 +3732,7 @@
         }
         
         // Render AI Succession Planning suggestions for all groups (P4)
-        if (window.successionPlanner) {
+        if (window.successionPlanner && typeof window.successionPlanner.render === 'function') {
           console.log('[Zone Summaries] Rendering AI succession planning suggestions...');
           let suggestionCount = 0;
           zones.forEach(zone => {
@@ -3766,7 +3780,9 @@
     }
 
     function normalizeToken(value) {
-      return typeof value === 'string' ? value.trim().toLowerCase() : '';
+      if (typeof value === 'string') return value.trim().toLowerCase();
+      if (typeof value === 'number') return String(value).trim().toLowerCase();
+      return '';
     }
 
     function parseZoneIdentity(token) {
@@ -5797,12 +5813,12 @@
       // seed date, day, harvest countdown, and crop for each zone's active group(s).
 
       const scheduleInfo = document.getElementById('scheduleInfo');
-      if (scheduleInfo) {
-        scheduleInfo.innerHTML = html;
-        console.log('[Schedule] Rendered schedule HTML to DOM');
-      } else {
-        console.error('[Schedule] scheduleInfo container not found!');
+      if (!scheduleInfo) {
+        console.warn('[Schedule] scheduleInfo container not found; skipping render');
+        return;
       }
+      scheduleInfo.innerHTML = html;
+      console.log('[Schedule] Rendered schedule HTML to DOM');
     }
 
     /**
@@ -6725,11 +6741,11 @@
         // Load plan to get default schedule
         let plan = null;
         try {
-          const response = await fetch('/data/plans.json');
-          if (response.ok) {
-            const data = await response.json();
-            plan = (data.plans || []).find(p => p.id === planId || p.name === planId);
-          }
+          const plansPayload = await fetchPlansWithFallback();
+          const plansList = Array.isArray(plansPayload?.plans)
+            ? plansPayload.plans
+            : (Array.isArray(plansPayload) ? plansPayload : []);
+          plan = plansList.find(p => p.id === planId || p.name === planId);
         } catch (e) {
           console.warn('Failed to load plan:', e);
         }
@@ -6846,18 +6862,18 @@
     async function initializeNewPlantingModal() {
       try {
         // Load available plans
-        const plansResponse = await fetch('/data/plans.json');
-        if (plansResponse.ok) {
-          const plansData = await plansResponse.json();
-          availablePlans = (plansData.plans || []).filter(plan => {
-            // Filter out cannabis plans
-            const planName = (plan.name || '').toLowerCase();
-            const planId = (plan.id || '').toLowerCase();
-            const crop = (plan.crop || '').toLowerCase();
-            
-            return !(planName.includes('cannabis') || planId.includes('cannabis') || crop.includes('cannabis'));
-          });
-        }
+        const plansPayload = await fetchPlansWithFallback();
+        const plansList = Array.isArray(plansPayload?.plans)
+          ? plansPayload.plans
+          : (Array.isArray(plansPayload) ? plansPayload : []);
+        availablePlans = plansList.filter(plan => {
+          // Filter out cannabis plans
+          const planName = (plan.name || '').toLowerCase();
+          const planId = (plan.id || '').toLowerCase();
+          const crop = (plan.crop || '').toLowerCase();
+          
+          return !(planName.includes('cannabis') || planId.includes('cannabis') || crop.includes('cannabis'));
+        });
 
         // Load available zones
         const roomMapResponse = await fetch('/data/room-map.json');
@@ -7071,13 +7087,15 @@
   </script>
   <script src="/js/farm-assistant.js?v=20260203"></script>
   
-  <!-- Harvest Predictions AI Component (P3) -->
-  <script src="/harvest-predictions.js?v=20260203"></script>
+  <!-- Harvest Predictions AI Component (P3) - Disabled (requires AI backend) -->
+  <!-- <script src="/harvest-predictions.js?v=20260203"></script> -->
   
-  <!-- Succession Planner AI Component (P4) -->
+  <!-- Succession Planner AI Component (P4) - Disabled (requires AI backend) -->
+  <!--
   <script type="module">
     import { SuccessionPlanner } from '/js/components/SuccessionPlanner.js';
     window.SuccessionPlanner = SuccessionPlanner;
   </script>
+  -->
 </body>
 </html>

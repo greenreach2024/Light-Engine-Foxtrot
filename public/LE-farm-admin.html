@@ -679,6 +679,182 @@
             text-align: right;
         }
 
+        /* Dropdown Navigation Styles */
+        .nav-menu {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-button {
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid #3b82f6;
+            color: #93c5fd;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-button:hover {
+            background: rgba(59, 130, 246, 0.35);
+            transform: scale(1.05) translateY(-2px);
+            border-color: #60a5fa;
+            color: white;
+        }
+
+        .nav-arrow {
+            font-size: 0.7rem;
+            transition: transform 0.3s ease;
+        }
+
+        .nav-item:hover .nav-arrow {
+            transform: rotate(180deg);
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            left: 0;
+            background: rgba(15, 23, 42, 0.95);
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 0.5rem;
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .dropdown-menu.dropdown-right {
+            left: auto;
+            right: 0;
+        }
+
+        .nav-item:hover .dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-item {
+            display: block;
+            padding: 0.75rem 1rem;
+            color: #93c5fd;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+            white-space: nowrap;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(59, 130, 246, 0.3);
+            color: white;
+            transform: translateX(4px);
+        }
+
+        .dropdown-item.active {
+            background: rgba(59, 130, 246, 0.4);
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Color Palette Variants */
+        
+        /* Inventory Management - Amber/Orange */
+        .nav-button.inventory {
+            background: rgba(245, 158, 11, 0.2);
+            border-color: #f59e0b;
+            color: #fcd34d;
+        }
+
+        .nav-button.inventory:hover {
+            background: rgba(245, 158, 11, 0.35);
+            border-color: #fbbf24;
+        }
+
+        .nav-item.inventory .dropdown-menu {
+            border-color: #f59e0b;
+        }
+
+        .nav-item.inventory .dropdown-item:hover {
+            background: rgba(245, 158, 11, 0.3);
+        }
+
+        /* Farm Monitoring - Emerald Green */
+        .nav-button.farm-monitoring {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: #10b981;
+            color: #6ee7b7;
+        }
+
+        .nav-button.farm-monitoring:hover {
+            background: rgba(16, 185, 129, 0.35);
+            border-color: #34d399;
+        }
+
+        .nav-item.farm-monitoring .dropdown-menu {
+            border-color: #10b981;
+        }
+
+        .nav-item.farm-monitoring .dropdown-item:hover {
+            background: rgba(16, 185, 129, 0.3);
+        }
+
+        /* Admin - Purple */
+        .nav-button.admin {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: #8b5cf6;
+            color: #c4b5fd;
+        }
+
+        .nav-button.admin:hover {
+            background: rgba(139, 92, 246, 0.35);
+            border-color: #a78bfa;
+        }
+
+        .nav-item.admin .dropdown-menu {
+            border-color: #8b5cf6;
+        }
+
+        .nav-item.admin .dropdown-item:hover {
+            background: rgba(139, 92, 246, 0.3);
+        }
+
+        /* Sales - Cyan */
+        .nav-button.sales {
+            background: rgba(6, 182, 212, 0.2);
+            border-color: #06b6d4;
+            color: #67e8f9;
+        }
+
+        .nav-button.sales:hover {
+            background: rgba(6, 182, 212, 0.35);
+            border-color: #22d3ee;
+        }
+
+        .nav-item.sales .dropdown-menu {
+            border-color: #06b6d4;
+        }
+
+        .nav-item.sales .dropdown-item:hover {
+            background: rgba(6, 182, 212, 0.3);
+        }
+
         .pricing-input:focus {
             outline: none;
             border-color: var(--accent-blue);
@@ -921,10 +1097,58 @@
     <header class="page-header">
         <h1>Farm Admin Dashboard</h1>
         <div class="header-actions">
-            <a href="/" class="nav-btn">Dashboard</a>
-            <a href="/views/farm-summary.html" class="nav-btn farm-summary">Farm Summary</a>
-            <a href="/views/farm-inventory.html" class="nav-btn inventory">Farm Inventory</a>
-            <a href="/views/nutrient-management.html" class="nav-btn nutrient">Nutrient Management</a>
+            <nav class="nav-menu">
+                <!-- Dropdown 1: Inventory Management (Amber) -->
+                <div class="nav-item inventory">
+                    <button class="nav-button inventory active">
+                        Inventory Management
+                        <span class="nav-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+                        <a href="/views/planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
+                        <a href="/views/tray-setup.html" class="dropdown-item">Tray Setup</a>
+                        <a href="/views/farm-inventory.html" class="dropdown-item">Farm Inventory</a>
+                        <a href="/views/tray-inventory.html" class="dropdown-item">Activity Hub</a>
+                    </div>
+                </div>
+
+                <!-- Dropdown 2: Farm Monitoring (Green) -->
+                <div class="nav-item farm-monitoring">
+                    <button class="nav-button farm-monitoring">
+                        Farm Monitoring
+                        <span class="nav-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+                        <a href="/views/farm-summary.html" class="dropdown-item">Farm Summary</a>
+                        <a href="/views/nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+                        <a href="/views/room-heatmap.html" class="dropdown-item">Room Heat Map</a>
+                    </div>
+                </div>
+
+                <!-- Dropdown 3: Admin (Purple) -->
+                <div class="nav-item admin">
+                    <button class="nav-button admin">
+                        Admin
+                        <span class="nav-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+                        <a href="/LE-farm-admin.html" class="dropdown-item active">Farm Admin</a>
+                        <a href="/LE-dashboard.html" class="dropdown-item">Dashboard Setup</a>
+                    </div>
+                </div>
+
+                <!-- Dropdown 4: Sales (Cyan) -->
+                <div class="nav-item sales">
+                    <button class="nav-button sales">
+                        Sales
+                        <span class="nav-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-right">
+                        <a href="/farm-sales-pos.html" class="dropdown-item">POS</a>
+                        <a href="/views/farm-wholesale.html" class="dropdown-item">Wholesale Orders</a>
+                    </div>
+                </div>
+            </nav>
         </div>
     </header>
 

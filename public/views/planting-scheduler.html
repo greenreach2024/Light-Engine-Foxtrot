@@ -1133,6 +1133,7 @@
     }
   </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
 </head>
 <body class="le-theme">
   <!-- Tray Details Modal -->
@@ -1154,8 +1155,8 @@
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
-        <div class="nav-item">
-          <button class="nav-button active">
+        <div class="nav-item inventory">
+          <button class="nav-button inventory active">
             Inventory Management
             <span class="nav-arrow">▼</span>
           </button>
@@ -1167,8 +1168,8 @@
             <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item farm-monitoring">
+          <button class="nav-button farm-monitoring">
             Farm Monitoring
             <span class="nav-arrow">▼</span>
           </button>
@@ -1178,8 +1179,8 @@
             <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item admin">
+          <button class="nav-button admin">
             Admin
             <span class="nav-arrow">▼</span>
           </button>
@@ -1295,6 +1296,66 @@
       </div>
     </div>
 
+    <!-- AI-Powered Crop Recommendations -->
+    <div class="card" style="border: 2px solid #3b82f6;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <h2 style="margin: 0;">AI Crop Recommendations</h2>
+          <span id="aiEngineBadge" style="background: rgba(59, 130, 246, 0.2); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; color: #93c5fd;">
+            Loading...
+          </span>
+        </div>
+        <div id="aiReadinessIndicator" style="font-size: 0.85rem; color: #94a3b8; text-align: right;">
+          <div id="aiProgressBar" style="width: 150px; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-bottom: 0.25rem;">
+            <div id="aiProgressFill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); width: 0%; transition: width 0.5s;"></div>
+          </div>
+          <span id="aiProgressText">0% Ready</span>
+        </div>
+      </div>
+      <p style="color: #94a3b8; margin-bottom: 1.5rem;">
+        Get intelligent crop recommendations based on nutrient compatibility, market demand, inventory management, harvest timing, and environmental fit.
+      </p>
+      
+      <div class="form-group" style="margin-bottom: 1rem;">
+        <label for="aiGroupSelect">Select Group for Recommendations</label>
+        <select id="aiGroupSelect" style="padding: 0.75rem; border-radius: 8px; border: 2px solid #3b82f6; background: rgba(0,0,0,0.3); color: #e4e4e7;">
+          <option value="">Choose a group to replant...</option>
+        </select>
+      </div>
+
+      <button 
+        type="button" 
+        id="getRecommendationsBtn"
+        class="timeline-btn primary"
+        style="width: 100%; margin-bottom: 1.5rem;"
+        onclick="getAIRecommendations()"
+      >
+        Get AI Recommendations
+      </button>
+
+      <!-- Recommendations Display -->
+      <div id="recommendationsDisplay" style="display: none;">
+        <div style="background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;">
+          <h3 style="color: #60a5fa; margin-bottom: 1rem;">Top Recommendation</h3>
+          <div id="topRecommendation"></div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <h4 style="color: #94a3b8; margin-bottom: 0.75rem;">Alternative Options</h4>
+          <div id="alternativeRecommendations"></div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="timeline-btn secondary" onclick="hideRecommendations()">
+            Cancel
+          </button>
+          <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()">
+            Accept & Schedule Top Recommendation
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Manual Scheduling -->
     <div class="card">
       <h2>Manual Scheduling</h2>
@@ -1367,6 +1428,29 @@
         .split('-')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
+    }
+
+    /**
+     * Get harvest duration (in days) for a crop plan from lighting recipe
+     * @param {string} planId - Plan ID like "crop-bibb-butterhead"
+     * @returns {number} - Harvest days from lighting recipe, or 35 as default
+     */
+    function getPlanHarvestDays(planId) {
+      if (!planId || !state.plans || state.plans.length === 0) return 35;
+      
+      const plan = state.plans.find(p => 
+        p.id === planId || 
+        p.name === planId || 
+        p.crop === planId
+      );
+      
+      if (plan && plan.light && plan.light.days && Array.isArray(plan.light.days)) {
+        // Get the maximum day value from the schedule
+        const maxDay = Math.max(...plan.light.days.map(d => d.day || 0));
+        return Math.ceil(maxDay);
+      }
+      
+      return 35; // Default for leafy greens
     }
 
     // ============================================================================
@@ -1624,6 +1708,8 @@
         renderTrayForecast();
         renderLightAdjustments();
         populateTrayDropdown();
+        populateGroupDropdown(); // Populate AI recommendations dropdown
+        loadAIStatus(); // Load AI training status
 
       } catch (error) {
         console.error('Error loading scheduler data:', error);
@@ -1631,9 +1717,72 @@
       }
     }
 
+    // ============================================================================
+    // AI STATUS & READINESS DISPLAY
+    // ============================================================================
+
+    async function loadAIStatus() {
+      try {
+        const response = await fetch('/api/ai/status');
+        if (!response.ok) {
+          console.warn('[AI Status] Failed to load:', response.status);
+          return;
+        }
+
+        const status = await response.json();
+        updateAIStatusDisplay(status);
+      } catch (error) {
+        console.error('[AI Status] Error:', error);
+      }
+    }
+
+    function updateAIStatusDisplay(status) {
+      const badge = document.getElementById('aiEngineBadge');
+      const progressBar = document.getElementById('aiProgressFill');
+      const progressText = document.getElementById('aiProgressText');
+
+      // Update badge
+      if (status.engine.type === 'ml') {
+        badge.textContent = '🚀 AI Model Active';
+        badge.style.background = 'rgba(16, 185, 129, 0.2)';
+        badge.style.color = '#34d399';
+      } else {
+        badge.textContent = 'Rules Engine (Bridge Phase)';
+        badge.style.background = 'rgba(59, 130, 246, 0.2)';
+        badge.style.color = '#93c5fd';
+      }
+
+      // Update progress bar
+      const readiness = status.progress.overall_readiness_pct;
+      progressBar.style.width = `${readiness}%`;
+
+      // Update progress text
+      if (readiness >= 100 && status.ml.ready) {
+        progressText.textContent = '✅ AI Ready!';
+        progressText.style.color = '#34d399';
+      } else {
+        const daysRemaining = status.timeline.days_remaining;
+        progressText.textContent = `${readiness}% • ${daysRemaining} days`;
+        progressText.style.color = '#94a3b8';
+      }
+
+      // Add tooltip
+      badge.title = `Decisions: ${status.progress.decisions.total}/500 | Cycles: ${status.progress.crop_cycles.total}/100 | Acceptance: ${status.progress.decisions.acceptance_rate}%`;
+    }
+
     function findGroupPlan(groupId) {
-      if (!state.groups || !Array.isArray(state.groups)) return null;
+      if (!state.groups || !Array.isArray(state.groups)) {
+        console.warn('[findGroupPlan] state.groups not available:', state.groups);
+        return null;
+      }
+      console.log(`[findGroupPlan] Looking for groupId: "${groupId}" in ${state.groups.length} groups`);
       const group = state.groups.find(g => g.id === groupId);
+      if (!group) {
+        console.warn(`[findGroupPlan] Group not found for: "${groupId}"`);
+        console.log('[findGroupPlan] Available group IDs:', state.groups.map(g => g.id));
+      } else {
+        console.log(`[findGroupPlan] Found group with plan: "${group.plan}"`);
+      }
       return group ? group.plan : null;
     }
 
@@ -1728,6 +1877,9 @@
         return {
           id: group.id || group.groupId,
           name: group.name || `Group ${group.id}`,
+          room: group.room || 'Unknown Room',
+          zone: group.zone || '?',
+          plan: group.plan,  // Preserve canonical plan field for findGroupPlan()
           currentPPFD: currentPPFD,
           ppfdMin: 100,
           ppfdMax: 600,
@@ -1740,6 +1892,82 @@
     // ============================================================================
     // SEEDING FORECAST ALGORITHM
     // ============================================================================
+    
+    /**
+     * 🚨 AI RECOMMENDATION SYSTEM OPPORTUNITY 🚨
+     * 
+     * CURRENT STATE: Simplistic - recommends replanting same crop
+     * 
+     * REQUIREMENTS FOR INTELLIGENT SYSTEM:
+     * 
+     * 1. DEMAND-DRIVEN PLANNING
+     *    - Analyze sales data: which crops are selling? At what volumes?
+     *    - Forecast demand: seasonal trends, buyer preferences, market conditions
+     *    - Prioritize high-demand crops to maximize revenue
+     * 
+     * 2. HARVEST STAGGERING
+     *    - Avoid harvesting all trays of same crop simultaneously
+     *    - Spread harvest dates to balance labor and fulfillment workload
+     *    - Ensure consistent weekly/daily harvest quantities for buyers
+     *    - Example: If 40 trays of lettuce, stagger plantings across 4 weeks
+     * 
+     * 3. NUTRIENT COMPATIBILITY
+     *    - Groups share the same nutrient tank/reservoir
+     *    - Cannot mix crops with incompatible EC, pH, or nutrient profiles
+     *    - Leafy greens (lettuce, kale): EC 1.2-1.8, pH 5.5-6.0
+     *    - Herbs (basil): EC 1.0-1.6, pH 5.5-6.5
+     *    - Fruiting crops (tomatoes): EC 2.0-3.5, pH 5.8-6.3
+     *    - Must recommend crops that can share the zone's current nutrient mix
+     * 
+     * 4. LIGHTING OPTIMIZATION
+     *    - Consider current DLI target for the zone/group
+     *    - High-light crops (tomatoes: DLI 25+) vs low-light (lettuce: DLI 12-17)
+     *    - Maximize light utilization - don't waste high-DLI zones on low-light crops
+     *    - Balance spectrum requirements (R/B ratio) across co-located groups
+     * 
+     * 5. CROP ROTATION & VARIETY
+     *    - Avoid monoculture - rotate crop families for nutrient balance
+     *    - Vary varieties within crop types (different lettuce types)
+     *    - Consider pest/disease management through rotation
+     * 
+     * 6. SCALE CONSIDERATIONS
+     *    - Farms may have 100-500+ trays
+     *    - Recommendations must be computationally efficient
+     *    - Need batch optimization, not per-tray calculations
+     * 
+     * IMPLEMENTATION APPROACH:
+     * - Machine learning model trained on:
+     *   - Historical sales data
+     *   - Harvest timing patterns
+     *   - Crop performance metrics
+     *   - Environmental conditions
+     * - Multi-objective optimization:
+     *   - Maximize revenue (demand matching)
+     *   - Minimize harvest clustering (labor smoothing)
+     *   - Respect constraints (nutrients, lighting)
+     * - Real-time adjustment based on:
+     *   - Current inventory levels
+     *   - Recent order patterns
+     *   - Equipment/zone availability
+     * 
+     * DATA SOURCES NEEDED:
+     * - Sales API: /api/wholesale/orders, /api/wholesale/buyers
+     * - Inventory API: /api/inventory/current
+     * - Environmental data: /api/farm/profile (zones, lighting capacity)
+     * - Crop library: /data/lighting-recipes.json (growth requirements)
+     * 
+     * RECOMMENDED ARCHITECTURE:
+     * - Backend service: /api/planting/recommendations
+     * - Input: farmId, targetDate, zoneId (optional)
+     * - Output: Ranked list of crop recommendations per tray/slot
+     * - Caching: 1-hour TTL, regenerate on inventory changes
+     * 
+     * TODO: Assign to Architecture Agent for ML system design
+     * TODO: Integrate with wholesale demand forecasting
+     * TODO: Create recommendation scoring algorithm
+     * 
+     * For now: Simple fallback - recommend same crop (continuity planning)
+     */
 
     // Map display crop names to database IDs
     function mapCropNameToId(cropName) {
@@ -1785,18 +2013,20 @@
         const slotFreeDate = new Date(harvestDate);
         slotFreeDate.setDate(slotFreeDate.getDate() + cleaningBuffer);
 
-        // Determine next crop - map display name to database ID
-        const nextCropId = mapCropNameToId(tray.currentCrop);
-        const nextCrop = CROP_DATABASE[nextCropId];
-        
-        if (!nextCrop) {
-          console.warn(`No crop data found for: ${tray.currentCrop} (mapped to ${nextCropId})`);
+        // Get the group's plan (what the grower has configured for this location)
+        const groupPlan = findGroupPlan(tray.groupId);
+        if (!groupPlan) {
+          console.warn(`No plan found for group: ${tray.groupId}`);
           return;
         }
 
-        // Calculate seeding window
-        const germMax = nextCrop.phases.germination.daysMax;
-        const germMin = nextCrop.phases.germination.daysMin;
+        // Get actual harvest duration from the lighting recipe
+        const harvestDays = getPlanHarvestDays(groupPlan);
+        const cropName = extractCropDisplayName(groupPlan);
+
+        // Calculate seeding window (default germination times for leafy greens)
+        const germMax = 10; // days
+        const germMin = 7;  // days
         
         const earliestSeedDate = new Date(slotFreeDate);
         earliestSeedDate.setDate(earliestSeedDate.getDate() - germMax);
@@ -1821,14 +2051,14 @@
           trayId: tray.id,
           groupId: tray.groupId,
           location: tray.location,
-          cropId: nextCropId,
-          cropName: nextCrop.name,
-          cropClass: nextCrop.cropClass,
+          cropId: groupPlan,
+          cropName: cropName,
+          cropClass: 'leafy', // Most crops in system are leafy greens
           targetSeedDate,
           earliestSeedDate,
           latestSeedDate,
           targetTransplantDate: slotFreeDate,
-          expectedNewHarvest: new Date(slotFreeDate.getTime() + nextCrop.harvestDays * 24 * 60 * 60 * 1000),
+          expectedNewHarvest: new Date(slotFreeDate.getTime() + harvestDays * 24 * 60 * 60 * 1000),
           quantity: tray.capacity,
           urgency,
           daysUntil: daysUntilSeeding
@@ -1843,6 +2073,35 @@
     // COMPATIBILITY SCORING
     // ============================================================================
 
+    function getCompatibilityTooltip(compatibility) {
+      if (!compatibility || !compatibility.reason) {
+        return 'No compatibility data available';
+      }
+
+      const parts = [
+        `Rating: ${compatibility.rating.toUpperCase()}`,
+        `Score: ${compatibility.score}/100`
+      ];
+
+      // Add companion tray count
+      if (compatibility.companionCount !== undefined) {
+        parts.push(`Companion trays: ${compatibility.companionCount}`);
+      }
+
+      // Add reason details
+      if (compatibility.reason) {
+        parts.push(`\nDetails: ${compatibility.reason}`);
+      }
+
+      // Add PPFD information if available
+      if (compatibility.ppfdDifference !== undefined && compatibility.seedlingIdealPPFD !== undefined) {
+        parts.push(`\nPPFD Difference: ${Math.round(compatibility.ppfdDifference)} µmol/m²/s`);
+        parts.push(`Seedling Ideal: ${Math.round(compatibility.seedlingIdealPPFD)} µmol/m²/s`);
+      }
+
+      return parts.join('\n');
+    }
+
     function calculateCompatibility(task, groups) {
       const group = groups.find(g => g.id === task.groupId);
       if (!group) return { score: 0, rating: 'poor', reason: 'Group not found' };
@@ -1853,20 +2112,44 @@
       let score = 100;
       let reasons = [];
 
-      // Check for hard incompatibilities
-      const hasIncompatibleCrop = group.crops.some(existingCrop => {
-        return COMPATIBILITY_RULES.incompatibleClasses.some(([class1, class2]) => {
-          return (crop.cropClass === class1 && existingCrop.cropClass === class2) ||
-                 (crop.cropClass === class2 && existingCrop.cropClass === class1);
-        });
-      });
+      // Find companion tasks (future crops) in the same group
+      // These are trays that will be planted around the same time window
+      const companionTasks = state.seedingTasks.filter(t => 
+        t.groupId === task.groupId && 
+        t.trayId !== task.trayId &&
+        Math.abs(t.daysUntil - task.daysUntil) <= 14 // Within 2 weeks of each other
+      );
 
-      if (hasIncompatibleCrop) {
-        return {
-          score: 0,
-          rating: 'poor',
-          reason: 'Incompatible crop classes in group (leafy/herb cannot mix with fruiting)'
-        };
+      // Check for hard incompatibilities with companion crops
+      if (companionTasks.length > 0) {
+        const companionCrops = companionTasks.map(t => CROP_DATABASE[t.cropId]).filter(Boolean);
+        
+        const hasIncompatibleCrop = companionCrops.some(companionCrop => {
+          return COMPATIBILITY_RULES.incompatibleClasses.some(([class1, class2]) => {
+            return (crop.cropClass === class1 && companionCrop.cropClass === class2) ||
+                   (crop.cropClass === class2 && companionCrop.cropClass === class1);
+          });
+        });
+
+        if (hasIncompatibleCrop) {
+          return {
+            score: 0,
+            rating: 'poor',
+            reason: 'Incompatible crop classes with companion trays (leafy/herb cannot mix with fruiting)',
+            companionCount: companionTasks.length
+          };
+        }
+
+        // Check nutrient profile compatibility with companions
+        const nutrientMismatch = companionCrops.some(c => c.nutrientProfile !== crop.nutrientProfile);
+        if (nutrientMismatch) {
+          score -= 30;
+          reasons.push(`Nutrient profile mismatch with ${companionCrops.length} companion tray(s)`);
+        } else {
+          reasons.push(`Good nutrient compatibility with ${companionCrops.length} companion tray(s)`);
+        }
+      } else {
+        reasons.push('No companion trays in same planting window');
       }
 
       // Check PPFD compatibility
@@ -1884,12 +2167,6 @@
         reasons.push('Significant PPFD adjustment required');
       }
 
-      // Check nutrient profile match
-      if (group.nutrientProfile !== crop.nutrientProfile) {
-        score -= 15;
-        reasons.push('Nutrient profile mismatch');
-      }
-
       // Determine rating
       let rating;
       if (score >= 85) rating = 'excellent';
@@ -1902,7 +2179,8 @@
         rating,
         reason: reasons.join('; ') || 'Compatible',
         ppfdDifference,
-        seedlingIdealPPFD
+        seedlingIdealPPFD,
+        companionCount: companionTasks.length
       };
     }
 
@@ -2192,9 +2470,9 @@
           </div>
 
           <div class="tray-compatibility">
-            <div class="tray-compatibility-header">Compatibility</div>
+            <div class="tray-compatibility-header" title="${getCompatibilityTooltip(compat)}" style="cursor: help;">Compatibility ℹ️</div>
             <div class="tray-compatibility-details">
-              <span class="compatibility-tag">Rating: ${compat.rating.toUpperCase()}</span>
+              <span class="compatibility-tag" title="${getCompatibilityTooltip(compat)}" style="cursor: help;">Rating: ${compat.rating.toUpperCase()}</span>
               ${compat.reasons && compat.reasons.length > 0 ? 
                 compat.reasons.map(reason => `<span class="compatibility-tag">${reason}</span>`).join('') : 
                 '<span class="compatibility-tag">No details available</span>'
@@ -2259,7 +2537,7 @@
             <td>${harvestStr}</td>
             <td>${seedWindowStr}</td>
             <td>${task.cropName}</td>
-            <td><span class="compat-badge ${task.compatibility.rating}">${task.compatibility.rating.toUpperCase()}</span></td>
+            <td><span class="compat-badge ${task.compatibility.rating}" title="${getCompatibilityTooltip(task.compatibility)}" style="cursor: help;">${task.compatibility.rating.toUpperCase()}</span></td>
             <td>
               <button class="timeline-btn primary" onclick="scheduleTask('${task.id}')" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
                 Schedule
@@ -2390,14 +2668,30 @@
       const task = state.seedingTasks.find(t => t.id === taskId);
       if (!task) return;
 
+      // Ensure dropdown is populated
+      populateGroupDropdown();
+      
+      // Populate AI recommendations group selector with task's group
+      const aiGroupSelect = document.getElementById('aiGroupSelect');
+      if (task.groupId && aiGroupSelect) {
+        console.log(`[scheduleTask] Setting aiGroupSelect to: "${task.groupId}"`);
+        aiGroupSelect.value = task.groupId;
+        
+        // Verify the value was set
+        if (aiGroupSelect.value !== task.groupId) {
+          console.warn(`[scheduleTask] Failed to set value. Expected: "${task.groupId}", Got: "${aiGroupSelect.value}"`);
+          console.log('[scheduleTask] Available options:', Array.from(aiGroupSelect.options).map(opt => opt.value));
+        }
+      }
+
       // Populate manual form with task data
       document.getElementById('manualCrop').value = task.cropId;
       document.getElementById('manualTray').value = task.trayId;
       document.getElementById('manualSeedDate').value = task.targetSeedDate.toISOString().split('T')[0];
       document.getElementById('manualQuantity').value = task.quantity;
 
-      // Scroll to form
-      document.getElementById('manualSchedulingForm').scrollIntoView({ behavior: 'smooth' });
+      // Scroll to AI recommendations section
+      aiGroupSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function viewTaskDetails(taskId) {
@@ -2422,6 +2716,265 @@
 
     function showError(message) {
       alert(`Error: ${message}`);
+    }
+
+    // ============================================================================
+    // AI CROP RECOMMENDATION FUNCTIONS
+    // ============================================================================
+
+    let currentRecommendations = null;
+
+    async function getAIRecommendations() {
+      const groupSelect = document.getElementById('aiGroupSelect');
+      const groupId = groupSelect.value;
+
+      if (!groupId) {
+        alert('Please select a group first');
+        return;
+      }
+
+      const btn = document.getElementById('getRecommendationsBtn');
+      btn.disabled = true;
+      btn.textContent = 'Analyzing...';
+
+      try {
+        // Get current group data
+        const group = state.groups.find(g => g.id === groupId);
+        if (!group) {
+          throw new Error('Group not found');
+        }
+
+        // Get all available crops from crop database
+        const availableCrops = Object.keys(CROP_DATABASE);
+
+        // Build zone conditions from group
+        const zoneConditions = {
+          ec: group.nutrientEC || 1.5,
+          ph: group.nutrientPH || 5.8,
+          vpd: group.targetVPD || 1.0,
+          dli_capacity: group.ppfdMax ? (group.ppfdMax * 12 / 1000000) : 22 // Estimate DLI from max PPFD
+        };
+
+        const response = await fetch('/api/planting/recommendations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            groupId,
+            currentCrop: group.planId || group.crop,
+            availableCrops,
+            targetSeedDate: new Date().toISOString().split('T')[0],
+            zoneConditions
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        currentRecommendations = await response.json();
+        displayRecommendations(currentRecommendations);
+
+      } catch (error) {
+        console.error('Failed to get recommendations:', error);
+        alert(`Failed to get recommendations: ${error.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Get AI Recommendations';
+      }
+    }
+
+    function displayRecommendations(recommendations) {
+      const topRec = recommendations.topRecommendation;
+      if (!topRec) {
+        alert('No recommendations available');
+        return;
+      }
+
+      // Display top recommendation
+      const topDiv = document.getElementById('topRecommendation');
+      topDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+          <div>
+            <h3 style="color: #60a5fa; margin-bottom: 0.5rem;">
+              ${topRec.cropName}
+            </h3>
+            <div style="color: #94a3b8; font-size: 0.9rem;">
+              Expected harvest: ${topRec.expectedHarvestDate} (${topRec.durationDays} days)
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 2rem; font-weight: bold; color: #60a5fa;">
+              ${Math.round(topRec.scores.overall)}
+            </div>
+            <div style="color: #94a3b8; font-size: 0.85rem;">Overall Score</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+          ${renderScoreBadge('Nutrient Fit', topRec.scores.nutrient_fit)}
+          ${renderScoreBadge('Demand', topRec.scores.demand)}
+          ${renderScoreBadge('Stagger', topRec.scores.harvest_stagger)}
+          ${renderScoreBadge('Light', topRec.scores.light_efficiency)}
+          ${renderScoreBadge('VPD', topRec.scores.vpd_fit)}
+        </div>
+
+        <details style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; cursor: pointer;">
+          <summary style="font-weight: 600; color: #60a5fa; user-select: none;">
+            View Technical Details
+          </summary>
+          <div style="margin-top: 1rem; font-size: 0.9rem; color: #94a3b8;">
+            <div style="margin-bottom: 0.5rem;"><strong>EC Delta:</strong> ${topRec.deltas.ec}</div>
+            <div style="margin-bottom: 0.5rem;"><strong>pH Delta:</strong> ${topRec.deltas.ph}</div>
+            <div><strong>DLI Delta:</strong> ${topRec.deltas.dli}</div>
+          </div>
+        </details>
+      `;
+
+      // Display alternatives
+      const altDiv = document.getElementById('alternativeRecommendations');
+      if (recommendations.alternatives && recommendations.alternatives.length > 0) {
+        altDiv.innerHTML = recommendations.alternatives.map(alt => `
+          <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600; color: #60a5fa; margin-bottom: 0.25rem;">
+                  ${alt.cropName}
+                </div>
+                <div style="font-size: 0.85rem; color: #94a3b8;">
+                  Score: ${Math.round(alt.scores.overall)} | Harvest: ${alt.expectedHarvestDate}
+                </div>
+              </div>
+              <button 
+                class="timeline-btn secondary" 
+                style="padding: 0.5rem 1rem; font-size: 0.85rem;"
+                onclick="selectAlternative('${alt.cropId}')"
+              >
+                Select
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        altDiv.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 1rem;">No alternatives available</div>';
+      }
+
+      document.getElementById('recommendationsDisplay').style.display = 'block';
+    }
+
+    function renderScoreBadge(label, score) {
+      const color = score >= 85 ? '#60a5fa' : score >= 70 ? '#3b82f6' : score >= 50 ? '#f59e0b' : '#ef4444';
+      return `
+        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; text-align: center;">
+          <div style="font-size: 1.5rem; font-weight: bold; color: ${color};">
+            ${Math.round(score)}
+          </div>
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">
+            ${label}
+          </div>
+        </div>
+      `;
+    }
+
+    function selectAlternative(cropId) {
+      if (!currentRecommendations || !currentRecommendations.allScored) return;
+      
+      const selected = currentRecommendations.allScored.find(r => r.cropId === cropId);
+      if (selected) {
+        currentRecommendations.topRecommendation = selected;
+        displayRecommendations(currentRecommendations);
+      }
+    }
+
+    function acceptRecommendation() {
+      if (!currentRecommendations || !currentRecommendations.topRecommendation) return;
+
+      const topRec = currentRecommendations.topRecommendation;
+      const groupId = currentRecommendations.groupId;
+
+      // Find group to get tray info
+      const group = state.groups.find(g => g.id === groupId);
+      if (!group) {
+        alert('Group not found');
+        return;
+      }
+
+      // Populate manual form with recommendation
+      document.getElementById('manualCrop').value = topRec.cropId;
+      // Use first tray from group (can be enhanced to select specific tray)
+      const firstTray = state.trays.find(t => t.groupId === groupId);
+      if (firstTray) {
+        document.getElementById('manualTray').value = firstTray.id;
+      }
+      document.getElementById('manualSeedDate').value = currentRecommendations.targetSeedDate;
+      document.getElementById('manualQuantity').value = group.plantCount || 48;
+
+      // Log feedback and record decision for AI training
+      Promise.all([
+        fetch('/api/planting/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            groupId,
+            recommendedCrop: topRec.cropId,
+            actualCrop: topRec.cropId,
+            action: 'accepted'
+          })
+        }),
+        fetch('/api/ai/record-decision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'accepted',
+            recommendedCrop: topRec.cropId,
+            actualCrop: topRec.cropId,
+            groupId
+          })
+        })
+      ])
+      .then(() => {
+        // Reload AI status to show updated progress
+        loadAIStatus();
+      })
+      .catch(err => console.warn('Failed to log feedback:', err));
+
+      hideRecommendations();
+      
+      // Scroll to manual form
+      document.getElementById('manualSchedulingForm').scrollIntoView({ behavior: 'smooth' });
+      
+      alert(`Recommendation accepted!\n\n${topRec.cropName} has been loaded into the manual scheduling form.\n\nReview the details and click "Schedule Seeding Task" to confirm.`);
+    }
+
+    function hideRecommendations() {
+      document.getElementById('recommendationsDisplay').style.display = 'none';
+      currentRecommendations = null;
+    }
+
+    // Populate group dropdown when page loads
+    function populateGroupDropdown() {
+      const groupSelect = document.getElementById('aiGroupSelect');
+      groupSelect.innerHTML = '<option value="">Choose a group to replant...</option>';
+      
+      state.groups.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.id;
+        
+        // Extract room and zone from group data or parse from ID
+        let room = group.room;
+        let zone = group.zone;
+        
+        // Fallback: parse from ID if properties missing (format: "Room:Zone:Group")
+        if (!room || !zone) {
+          const parts = group.id.split(':');
+          if (parts.length === 3) {
+            room = room || parts[0];
+            zone = zone || parts[1];
+          }
+        }
+        
+        option.textContent = `${group.name} (${room} - Zone ${zone})`;
+        groupSelect.appendChild(option);
+      });
     }
 
     // ============================================================================

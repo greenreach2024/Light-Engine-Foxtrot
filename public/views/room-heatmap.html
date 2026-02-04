@@ -766,6 +766,7 @@
     } */
   </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
 </head>
 <body class="le-theme">
   <!-- Header -->
@@ -781,8 +782,8 @@
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item inventory">
+          <button class="nav-button inventory">
             Inventory Management
             <span class="nav-arrow">▼</span>
           </button>
@@ -794,8 +795,8 @@
             <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button active">
+        <div class="nav-item farm-monitoring">
+          <button class="nav-button farm-monitoring active">
             Farm Monitoring
             <span class="nav-arrow">▼</span>
           </button>
@@ -805,8 +806,8 @@
             <a href="room-heatmap.html" class="dropdown-item active">Heat Map</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item admin">
+          <button class="nav-button admin">
             Admin
             <span class="nav-arrow">▼</span>
           </button>
@@ -1439,10 +1440,10 @@
         if (!roomsResponse.ok) throw new Error(`Failed to load rooms.json: ${roomsResponse.status}`);
         const roomsData = await roomsResponse.json();
         console.log('[Heat Map] Rooms data parsed:', roomsData);
-  STATE.rooms = roomsData.rooms || [];
-  console.log('[Heat Map] Loaded rooms:', STATE.rooms.length, 'rooms', STATE.rooms);
+        STATE.rooms = roomsData.rooms || [];
+        console.log('[Heat Map] Loaded rooms:', STATE.rooms.length, 'rooms', STATE.rooms);
 
-  STATE.equipmentMetadata = await fetchEquipmentMetadata();
+        STATE.equipmentMetadata = await fetchEquipmentMetadata();
         
         // Get selected room ID from dropdown (or default to first room)
         const selectedRoomId = document.getElementById('roomSelect').value || STATE.rooms[0]?.id;
@@ -1459,26 +1460,26 @@
         STATE.roomMap = await mapResponse.json();
         console.log('[Heat Map] Loaded room map for:', STATE.roomMap.name, `(room-map-${selectedRoomId}.json)`);
 
-  // Load environmental data (prefer live API with history)
-  // Request last 24h to enable trend-aware UI and freshness
-  const envResponse = await fetch('/env?hours=24');
-  if (!envResponse.ok) throw new Error(`Failed to load /env: ${envResponse.status}`);
-  STATE.envData = await envResponse.json();
-  STATE.envLastLoadedAt = Date.now();
-  
-  // Initialize currentTimeIndex to the last available data point
-  if (STATE.currentTimeIndex === -1) {
-    STATE.currentTimeIndex = getMaxHistoryLength() - 1;
-  }
-  
-  console.log('[Heat Map] Loaded env data:', STATE.envData?.zones?.length, 'zones');
-  console.log('[Heat Map] ENV zones:', STATE.envData?.zones?.map(z => ({
-    id: z.id,
-    hasTempC: !!z.sensors?.tempC,
-    tempCCurrent: z.sensors?.tempC?.current,
-    hasRh: !!z.sensors?.rh,
-    rhCurrent: z.sensors?.rh?.current
-  })));
+        // Load environmental data (prefer live API with history)
+        // Request last 24h to enable trend-aware UI and freshness
+        const envResponse = await fetch('/env?hours=24');
+        if (!envResponse.ok) throw new Error(`Failed to load /env: ${envResponse.status}`);
+        STATE.envData = await envResponse.json();
+        STATE.envLastLoadedAt = Date.now();
+        
+        // Initialize currentTimeIndex to the last available data point
+        if (STATE.currentTimeIndex === -1) {
+          STATE.currentTimeIndex = getMaxHistoryLength() - 1;
+        }
+        
+        console.log('[Heat Map] Loaded env data:', STATE.envData?.zones?.length, 'zones');
+        console.log('[Heat Map] ENV zones:', STATE.envData?.zones?.map(z => ({
+          id: z.id,
+          hasTempC: !!z.sensors?.tempC,
+          tempCCurrent: z.sensors?.tempC?.current,
+          hasRh: !!z.sensors?.rh,
+          rhCurrent: z.sensors?.rh?.current
+        })));
 
         // Extract devices from room map (only positioned devices)
         // These are the devices that were placed in the Mapping Tool
@@ -1540,11 +1541,11 @@
           STATE.iotDevicesAll = [];
         }
 
-  const aggregatedEquipment = aggregateEquipmentFromRooms(STATE.rooms, STATE.equipmentMetadata);
-  
-  // Enrich with IoT device data from positioned devices (room-map.json)
-  // Fallback registry used ONLY for resolving names of linked controllers not placed on map
-  const enriched = enrichEquipmentWithIoT(aggregatedEquipment, STATE.iotDevices, STATE.iotDevicesAll);
+        const aggregatedEquipment = aggregateEquipmentFromRooms(STATE.rooms, STATE.equipmentMetadata);
+        
+        // Enrich with IoT device data from positioned devices (room-map.json)
+        // Fallback registry used ONLY for resolving names of linked controllers not placed on map
+        const enriched = enrichEquipmentWithIoT(aggregatedEquipment, STATE.iotDevices, STATE.iotDevicesAll);
 
         // Remove placeholder/controller-only entries when their IoT device is already linked to a real equipment item
         function isPlaceholderEquipment(eq) {

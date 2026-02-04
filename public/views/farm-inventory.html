@@ -6,6 +6,7 @@
   <title>Farm Inventory | Light Engine</title>
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
   <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <style>
     * {
       margin: 0;
@@ -479,8 +480,8 @@
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
-        <div class="nav-item">
-          <button class="nav-button active">
+        <div class="nav-item inventory">
+          <button class="nav-button inventory active">
             Inventory Management
             <span class="nav-arrow">▼</span>
           </button>
@@ -492,8 +493,8 @@
             <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item farm-monitoring">
+          <button class="nav-button farm-monitoring">
             Farm Monitoring
             <span class="nav-arrow">▼</span>
           </button>
@@ -503,8 +504,8 @@
             <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item admin">
+          <button class="nav-button admin">
             Admin
             <span class="nav-arrow">▼</span>
           </button>
@@ -513,8 +514,8 @@
             <a href="/" class="dropdown-item">Setup/Update</a>
           </div>
         </div>
-        <div class="nav-item">
-          <button class="nav-button">
+        <div class="nav-item sales">
+          <button class="nav-button sales">
             Sales
             <span class="nav-arrow">▼</span>
           </button>
@@ -639,8 +640,7 @@
         console.log('[loadInventory] Response status:', {
           current: currentResp.status,
           forecast: forecastResp.status,
-          groups: groupsResp.status,
-          rooms: roomsResp.status
+          groups: groupsResp.status
         });
 
         // If all requests failed, show helpful error
@@ -660,14 +660,11 @@
         const forecastData = forecastResp.ok ? await forecastResp.json() : { forecast: [] };
         const groupsResponse = groupsResp.ok ? await groupsResp.json() : { groups: [] };
         const groupsData = groupsResponse.groups || [];
-        const roomsResponse = roomsResp.ok ? await roomsResp.json() : { rooms: [] };
-        const roomsData = roomsResponse.rooms || [];
 
         console.log('[loadInventory] Data loaded:', {
           currentData: !!currentData,
           forecastData: !!forecastData,
-          groupsCount: groupsData.length,
-          roomsCount: roomsData.length
+          groupsCount: groupsData.length
         });
 
         // Calculate unique crops
@@ -676,9 +673,9 @@
         console.log('[loadInventory] Rendering...');
         renderSummaryCards(currentData, uniqueCrops.size);
         renderForecast(forecastData);
-        renderInventoryByLocation(currentData, groupsData, forecastData, roomsData);
+        renderInventoryByLocation(currentData, groupsData, forecastData);
         renderInventoryByCrop(currentData, groupsData, forecastData);
-        renderInventoryByHarvest(currentData, groupsData, forecastData, roomsData);
+        renderInventoryByHarvest(currentData, groupsData, forecastData);
         console.log('[loadInventory] Rendering complete!');
       } catch (error) {
         console.error('[loadInventory] Error:', error);

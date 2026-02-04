@@ -477,9 +477,24 @@
 
     .legend-icon {
       font-size: 1.25rem;
-      color: #60a5fa;
       width: 24px;
       text-align: center;
+    }
+
+    .legend-icon.sensor {
+      color: #38bdf8;
+    }
+
+    .legend-icon.light {
+      color: #f59e0b;
+    }
+
+    .legend-icon.equipment {
+      color: #a855f7;
+    }
+
+    .legend-icon.controller {
+      color: #22c55e;
     }
 
   </style>
@@ -494,7 +509,7 @@
         <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 0.875rem;">Visual layout of sensors, lights, and zones</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary" onclick="window.location.href='../index.charlie.html'">← Back to Setup/Update</button>
+        <button class="btn btn-secondary" onclick="window.location.href='../LE-dashboard.html'">← Home</button>
         <button class="btn btn-success" onclick="saveMap()">Save Map</button>
         <button class="btn btn-primary" onclick="loadMap()">Load Map</button>
         <button class="btn btn-danger" onclick="clearMap()">Clear</button>
@@ -554,19 +569,19 @@
         <div class="legend">
           <div class="legend-title">Legend</div>
           <div class="legend-item">
-            <span class="legend-icon">◉</span>
-            <span>Temperature/Humidity Sensor</span>
+            <span class="legend-icon sensor">◍</span>
+            <span>Temp/Humidy Sensor</span>
           </div>
           <div class="legend-item">
-            <span class="legend-icon">◆</span>
+            <span class="legend-icon light">▲</span>
             <span>Grow Light / Fixture</span>
           </div>
           <div class="legend-item">
-            <span class="legend-icon">◈</span>
+            <span class="legend-icon equipment">■</span>
             <span>Equipment (HVAC, Dehumidifier)</span>
           </div>
           <div class="legend-item">
-            <span class="legend-icon">●</span>
+            <span class="legend-icon controller">◆</span>
             <span>Smart Plug / Controller</span>
           </div>
         </div>
@@ -647,13 +662,22 @@
 
     // Device type icons (using simple text symbols instead of emojis)
     const DEVICE_ICONS = {
-      sensor: '◉',
-      woiosensor: '◉',
-      light: '◆',
-      plug: '●',
-      equipment: '◈',
-      switch: '●',
+      sensor: '◍',
+      woiosensor: '◍',
+      light: '▲',
+      plug: '◆',
+      equipment: '■',
+      switch: '◆',
       default: '○'
+    };
+
+    const DEVICE_COLORS = {
+      sensor: '#38bdf8',
+      light: '#f59e0b',
+      equipment: '#a855f7',
+      plug: '#22c55e',
+      switch: '#22c55e',
+      default: '#e2e8f0'
     };
 
     // Zone colors
@@ -753,13 +777,34 @@
       }
     };
 
-    async function loadRooms() {
+    async function fetchRoomsForMapper() {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const apiResp = await fetch('/api/setup/rooms', { headers });
+        if (apiResp.ok) {
+          const apiData = await apiResp.json();
+          if (apiData.success && Array.isArray(apiData.rooms)) {
+            return apiData.rooms;
+          }
+        }
+      } catch (error) {
+        console.warn('[Room Mapper] /api/setup/rooms failed, falling back to rooms.json:', error);
+      }
+
       try {
         const response = await fetch('/data/rooms.json');
         const roomsData = await response.json();
-        
-        // Extract rooms array from the response
-        STATE.rooms = roomsData.rooms || roomsData || [];
+        return roomsData.rooms || roomsData || [];
+      } catch (error) {
+        console.error('[Room Mapper] Failed to load rooms.json:', error);
+        return [];
+      }
+    }
+
+    async function loadRooms() {
+      try {
+        STATE.rooms = await fetchRoomsForMapper();
         
         console.log("[Room Mapper] Loaded", STATE.rooms.length, "rooms");
         
@@ -1037,39 +1082,19 @@
         }
       });
 
-      const equipmentIds = new Set(equipment.map(eq => eq.id));
-      Object.keys(meta).forEach(metaId => {
-        if (!equipmentIds.has(metaId)) {
-          const metaItem = meta[metaId];
-          equipment.push({
-            id: metaId,
-            name: metaItem?.name || 'Equipment',
-            category: metaItem?.category || 'Other',
-            vendor: metaItem?.vendor || 'Unknown',
-            model: metaItem?.model || 'Unknown',
-            count: 1,
-            control: metaItem?.control || null,
-            roomId: metaItem?.roomId || '',
-            roomName: metaItem?.roomName || '—',
-            isStandalone: true,
-            wifi: metaItem?.wifi,
-            wired: metaItem?.wired,
-            notes: metaItem?.notes,
-            capacity: metaItem?.capacity
-          });
-        }
-      });
+      // Do not surface metadata-only equipment in Room Mapper sidebar
 
       return equipment;
     }
 
     async function loadEquipment() {
       try {
-        const roomsResponse = await fetch('/data/rooms.json');
-        const roomsData = await roomsResponse.json();
-        const rooms = roomsData.rooms || roomsData || [];
+        if (!Array.isArray(STATE.rooms) || STATE.rooms.length === 0) {
+          STATE.rooms = await fetchRoomsForMapper();
+        }
+        const rooms = STATE.rooms;
 
-        console.log(`[Room Mapper] Fetched ${rooms.length} rooms from rooms.json`);
+        console.log(`[Room Mapper] Using ${rooms.length} rooms for equipment list`);
 
         const metadata = await fetchEquipmentMetadata();
         console.log(`[Room Mapper] Loaded ${Object.keys(metadata).length} equipment metadata entries`);
@@ -1135,13 +1160,19 @@
     function renderEquipmentList() {
       const list = document.getElementById('equipmentList');
       console.log("[Room Mapper] renderEquipmentList - Equipment count:", STATE.equipment.length, "List element:", list);
-      if (!STATE.equipment.length) {
+      const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
+      const currentRoomName = currentRoom?.name || currentRoom?.location || '';
+      const filtered = STATE.currentRoomId
+        ? STATE.equipment.filter(equip => (equip.roomId && equip.roomId === STATE.currentRoomId) || (currentRoomName && equip.roomName === currentRoomName))
+        : STATE.equipment;
+
+      if (!filtered.length) {
         list.innerHTML = '<div style="text-align: center; padding: 20px; color: #94a3b8;">No equipment found</div>';
         return;
       }
 
       list.innerHTML = '';
-      STATE.equipment.forEach(equip => {
+      filtered.forEach(equip => {
         const isPlaced = STATE.placedDevices.some(p => p.deviceId === equip.id);
         const item = document.createElement('div');
         item.className = `device-item ${isPlaced ? 'placed' : ''}`;
@@ -1191,6 +1222,26 @@
       if (type.includes('switch')) return DEVICE_ICONS.switch;
       
       return DEVICE_ICONS.default;
+    }
+
+    function getDeviceColor(device, isEquipment = false) {
+      const type = (device?.type || '').toLowerCase();
+      const category = (device?.category || '').toLowerCase();
+      const model = (device?.model || '').toLowerCase();
+
+      if (isEquipment || category.includes('dehumidifier') || category.includes('equipment') || model.includes('dehumidifier')) {
+        return DEVICE_COLORS.equipment;
+      }
+      if (type.includes('sensor') || category.includes('sensor')) {
+        return DEVICE_COLORS.sensor;
+      }
+      if (type.includes('light') || category.includes('light')) {
+        return DEVICE_COLORS.light;
+      }
+      if (type.includes('plug') || category.includes('plug') || type.includes('switch')) {
+        return DEVICE_COLORS.plug;
+      }
+      return DEVICE_COLORS.default;
     }
 
     function getEquipmentIcon(equipment) {
@@ -1496,18 +1547,23 @@
       STATE.placedDevices.forEach(device => {
         const x = device.x * STATE.cellSize + STATE.cellSize / 2;
         const y = device.y * STATE.cellSize + STATE.cellSize / 2;
+        const iconSize = Math.round(32 * 1.75);
+        const labelOffset = Math.round(iconSize * 0.65);
+        const color = getDeviceColor(device.device, device.isEquipment);
         
+        const resolvedIcon = device.isEquipment ? getEquipmentIcon(device.device || {}) : getDeviceIcon(device.device || {});
+
         // Draw device icon
-        ctx.font = '32px sans-serif';
+        ctx.font = `${iconSize}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillText(device.icon, x, y);
+        ctx.fillStyle = color;
+        ctx.fillText(resolvedIcon, x, y);
         
     // Draw device name below
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#cbd5e1';
-    ctx.fillText(device.device.name || device.device.model || device.device.category || 'Unknown', x, y + 25);
+    ctx.fillText(device.device.name || device.device.model || device.device.category || 'Unknown', x, y + labelOffset);
         
         // Draw zone indicator if assigned
         if (device.device.zone) {
@@ -1564,10 +1620,11 @@
         
         // Check if this is equipment (not a sensor)
         if (item.isEquipment) {
+          const resolvedIcon = getEquipmentIcon(device || {});
           // Equipment details
           let html = `
             <div class="details-content">
-              <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: #8b5cf6;">${item.icon}</div>
+              <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: #8b5cf6;">${resolvedIcon}</div>
               <div class="detail-row">
                 <span class="detail-label">Name</span>
                 <span class="detail-value">${device.name || 'Unknown'}</span>
@@ -1605,10 +1662,11 @@
         } else {
           // Sensor/IoT device details
           const telemetry = device.telemetry || {};
+          const resolvedIcon = getDeviceIcon(device || {});
           
           let html = `
             <div class="details-content">
-              <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: #60a5fa;">${item.icon}</div>
+              <div style="text-align: center; font-size: 32px; margin-bottom: 10px; color: #60a5fa;">${resolvedIcon}</div>
               <div class="detail-row">
                 <span class="detail-label">Name</span>
                 <span class="detail-value">${device.name || 'Unknown'}</span>
@@ -1665,12 +1723,6 @@
           content.innerHTML = html;
         }
       } else if (item.zone) {
-        // Zone details with setpoint controls
-        const tempMin = item.tempSetpoint?.min ?? 20;
-        const tempMax = item.tempSetpoint?.max ?? 24;
-        const rhMin = item.rhSetpoint?.min ?? 58;
-        const rhMax = item.rhSetpoint?.max ?? 65;
-        
         const html = `
           <div class="details-content">
             <div style="width: 100%; height: 60px; background: ${item.color}; border-radius: 8px; margin-bottom: 15px;"></div>
@@ -1686,45 +1738,14 @@
               <span class="detail-label">Size</span>
               <span class="detail-value">${item.x2 - item.x1 + 1} × ${item.y2 - item.y1 + 1} cells</span>
             </div>
-            
+
             <div style="margin: 1rem 0; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
-              <div style="font-size: 0.75rem; font-weight: 600; color: #93c5fd; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Environmental Setpoints</div>
-              
-              <div style="margin-bottom: 0.75rem;">
-                <label style="display: block; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.25rem;">Temperature (°C)</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                  <input type="number" id="tempMin_${item.zone}" value="${tempMin}" min="15" max="30" step="0.5" 
-                    style="padding: 0.375rem 0.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #e4e4e7; font-size: 0.875rem;"
-                    placeholder="Min"
-                    onchange="updateZoneSetpoint(${item.zone}, 'tempMin', this.value)">
-                  <input type="number" id="tempMax_${item.zone}" value="${tempMax}" min="15" max="30" step="0.5"
-                    style="padding: 0.375rem 0.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #e4e4e7; font-size: 0.875rem;"
-                    placeholder="Max"
-                    onchange="updateZoneSetpoint(${item.zone}, 'tempMax', this.value)">
-                </div>
-                <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 0.25rem;">Range: ${tempMin}–${tempMax}°C</div>
-              </div>
-              
-              <div>
-                <label style="display: block; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.25rem;">Humidity (%)</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                  <input type="number" id="rhMin_${item.zone}" value="${rhMin}" min="30" max="90" step="1"
-                    style="padding: 0.375rem 0.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #e4e4e7; font-size: 0.875rem;"
-                    placeholder="Min"
-                    onchange="updateZoneSetpoint(${item.zone}, 'rhMin', this.value)">
-                  <input type="number" id="rhMax_${item.zone}" value="${rhMax}" min="30" max="90" step="1"
-                    style="padding: 0.375rem 0.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #e4e4e7; font-size: 0.875rem;"
-                    placeholder="Max"
-                    onchange="updateZoneSetpoint(${item.zone}, 'rhMax', this.value)">
-                </div>
-                <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 0.25rem;">Range: ${rhMin}–${rhMax}%</div>
-              </div>
-              
-              <div style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 6px; font-size: 0.7rem; color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3);">
-                💡 These setpoints drive automation rules
+              <div style="font-size: 0.75rem; font-weight: 600; color: #93c5fd; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Environmental Setpoints</div>
+              <div style="font-size: 0.8rem; color: #cbd5e1;">
+                Managed by grow recipes. Default: <strong>22°C</strong> and <strong>60% RH</strong> until a recipe is selected.
               </div>
             </div>
-            
+
             <div class="action-buttons">
               <button class="btn btn-danger" onclick="removeZone(${item.zone})">Remove</button>
             </div>
@@ -2146,6 +2167,7 @@
             };
           }
 
+          const resolvedIcon = device ? getDeviceIcon(device) : (snapshot ? getDeviceIcon(snapshot) : DEVICE_ICONS.default);
           const devicePayload = {
             deviceId: devicePos.deviceId,
             device: device || {
@@ -2158,7 +2180,7 @@
             },
             x: devicePos.x,
             y: devicePos.y,
-            icon: snapshot?.icon || (device ? getDeviceIcon(device) : DEVICE_ICONS.default)
+            icon: resolvedIcon
           };
 
           if (!devicePayload.icon) {
