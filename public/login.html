@@ -368,8 +368,8 @@
                 
                 // Store token and farm info (standardized to 'token' and 'farm_id' keys)
                 localStorage.setItem('token', data.token);
-                localStorage.setItem('farm_id', data.farmId); // Use farm_id consistently
-                localStorage.setItem('farm_name', data.farmName || '');
+                localStorage.setItem('farm_id', data.farm_id || data.farmId); // Server returns farm_id
+                localStorage.setItem('farm_name', data.farmName || data.farm_name || '');
                 localStorage.setItem('email', email);
                 localStorage.setItem('role', data.role || 'admin');
                 localStorage.setItem('planType', data.planType || 'cloud'); // Store plan type for wizard

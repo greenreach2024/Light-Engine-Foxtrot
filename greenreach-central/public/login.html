@@ -368,7 +368,7 @@
                 
                 // Store token and farm info (standardized to 'token' and 'farm_id' keys)
                 localStorage.setItem('token', data.token);
-                localStorage.setItem('farm_id', data.farmId); // Use farm_id consistently
+                localStorage.setItem('farm_id', data.farm_id || data.farmId); // Use farm_id consistently
                 localStorage.setItem('farm_name', data.farmName || '');
                 localStorage.setItem('email', email);
                 localStorage.setItem('role', data.role || 'admin');

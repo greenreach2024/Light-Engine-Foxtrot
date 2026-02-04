@@ -430,6 +430,11 @@ const __dirname = path.dirname(__filename);
 const STRICT_DEVICE_VALIDATION = ['1', 'true', 'yes'].includes(String(process.env.STRICT_DEVICE_VALIDATION || '').toLowerCase());
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const BUILD_TIME = Date.now().toString();
+const APP_VERSION = (process.env.APP_VERSION
+  || process.env.GIT_SHA
+  || process.env.VERSION
+  || `build-${BUILD_TIME}`)
+  .toString();
 const INDEX_CHARLIE_PATH = path.join(PUBLIC_DIR, 'index.charlie.html');
 let INDEX_CHARLIE_HTML = null;
 let indexCharlieLoadErrorLogged = false;
@@ -7723,6 +7728,16 @@ app.get('/healthz', async (req, res) => {
 });
 
 // Comprehensive health endpoint with detailed metrics
+app.get('/api/version', (req, res) => {
+  res.json({
+    version: APP_VERSION,
+    buildTime: BUILD_TIME,
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Comprehensive health endpoint with detailed metrics
 app.get('/health', asyncHandler(async (req, res) => {
   const started = Date.now();
   
@@ -7730,7 +7745,8 @@ app.get('/health', asyncHandler(async (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    version: '1.0.0',
+    version: APP_VERSION,
+    buildTime: BUILD_TIME,
     checks: {
       database: { status: 'unknown' },
       memory: { status: 'unknown' },
@@ -17834,6 +17850,11 @@ app.get('/wholesale', (req, res) => {
 // GreenReach organization page - about GreenReach R&D and mission
 app.get('/greenreach-org', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'greenreach-org.html'));
+});
+
+// Legacy admin.html redirect - docs/admin.html not served, redirect to farm-admin.html
+app.get('/admin.html', (req, res) => {
+  res.redirect('/farm-admin.html');
 });
 
 // Wholesale portals are standalone and served by GreenReach Central, not Foxtrot.

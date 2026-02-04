@@ -1,0 +1,6 @@
+# Canonical data sources (do not modify format without schema update)
+# Source of truth: DATA_FORMAT_STANDARDS.md + SCHEMA_CONSUMERS.md
+
+greenreach-central/public/data/farm.json
+greenreach-central/public/data/groups.json
+greenreach-central/public/data/rooms.json

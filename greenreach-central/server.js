@@ -86,6 +86,7 @@ app.use(helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'self'", "https://web.squarecdn.com"],  // Allow Square payment iframes
+      upgradeInsecureRequests: null
     },
   },
 }));
@@ -98,12 +99,22 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // CORS configuration - Allow same-origin requests and configured origins
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow same-origin requests (no origin header) or configured origins
+    // Allow same-origin requests (no origin header)
     if (!origin) {
       return callback(null, true);
     }
+    
+    // Allow same-origin requests (when page and API are on same domain)
+    const requestHost = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+    const serverHost = (process.env.SERVER_HOST || '').replace(/:\d+$/, '');
+    
+    if (requestHost === serverHost || origin.includes('elasticbeanstalk.com')) {
+      return callback(null, true);
+    }
+    
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:3000',
+      'http://localhost:8091',
       'https://greenreachgreens.com'
     ];
     if (allowedOrigins.includes(origin)) {
@@ -230,6 +241,10 @@ app.get('/', (req, res) => {
 
 app.get('/farm-summary.html', (req, res) => {
   res.redirect('/views/farm-summary.html');
+});
+
+app.get('/admin.html', (req, res) => {
+  res.redirect('/farm-admin.html');
 });
 
 // 404 handler

@@ -123,14 +123,14 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'email and password are required' });
     }
 
-    // Edge device mode: Accept any login if farm_id not provided
+    // Edge device mode: Accept any login (ignore farm_id presence)
     const isEdgeDevice = process.env.EDGE_MODE === 'true';
     
-    if (isEdgeDevice && !farm_id) {
+    if (isEdgeDevice) {
       console.log(`[Auth] Edge login for ${email}`);
       // Generate JWT token for edge device login
       const token = generateFarmToken({
-        farm_id: process.env.FARM_ID || 'edge-device',
+        farm_id: farm_id || process.env.FARM_ID || 'edge-device',
         user_id: 'local-user',
         role: FARM_ROLES.ADMIN,
         name: email.split('@')[0],
@@ -140,7 +140,7 @@ router.post('/login', async (req, res) => {
       return res.json({
         success: true,
         token,
-        farm_id: process.env.FARM_ID || 'edge-device',
+        farm_id: farm_id || process.env.FARM_ID || 'edge-device',
         email,
         role: FARM_ROLES.ADMIN,
         planType: 'edge',
