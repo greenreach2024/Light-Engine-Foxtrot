@@ -289,74 +289,38 @@ async function loadFarmData() {
 async function loadDashboardData() {
     try {
         console.log(' Loading dashboard data...');
-        
-        // Load inventory data from demo mode endpoint
-        const inventoryRes = await fetch(`${API_BASE}/api/inventory/current`, {
-            headers: {
-                'Authorization': `Bearer ${currentSession.token}`
-            }
-        });
-        
-        if (inventoryRes.ok) {
-            const inventoryData = await inventoryRes.json();
-            console.log(' Inventory data loaded:', inventoryData);
-            
-            // Check if data is at root level (demo mode) or nested in data property
-            const data = inventoryData.data || inventoryData;
-            
-            if (data.activeTrays !== undefined && data.totalPlants !== undefined) {
-                document.getElementById('kpi-trays').textContent = data.activeTrays || 0;
-                document.getElementById('kpi-plants').textContent = (data.totalPlants || 0).toLocaleString();
-                
-                // Calculate changes (demo values)
-                document.getElementById('kpi-trays-change').textContent = '+12 this week';
-                document.getElementById('kpi-plants-change').textContent = '+324 this week';
-            } else {
-                // Fallback to demo values if data structure is unexpected
-                console.warn(' Unexpected data structure, using fallback values');
-                document.getElementById('kpi-trays').textContent = '320';
-                document.getElementById('kpi-plants').textContent = '7,680';
-                document.getElementById('kpi-trays-change').textContent = '+12 this week';
-                document.getElementById('kpi-plants-change').textContent = '+324 this week';
-            }
+        const groups = Array.isArray(farmData?.groups) ? farmData.groups : [];
+        const totals = getGroupTotals(groups);
+        const hasGrowData = groups.length > 0 && (totals.trays > 0 || totals.plants > 0);
+
+        if (hasGrowData) {
+            document.getElementById('kpi-trays').textContent = totals.trays.toLocaleString();
+            document.getElementById('kpi-plants').textContent = totals.plants.toLocaleString();
+            document.getElementById('kpi-trays-change').textContent = 'Live grow data';
+            document.getElementById('kpi-plants-change').textContent = 'Live grow data';
         } else {
-            // Fallback to demo values
-            console.warn(' Using demo inventory values');
-            document.getElementById('kpi-trays').textContent = '320';
-            document.getElementById('kpi-plants').textContent = '7,680';
-            document.getElementById('kpi-trays-change').textContent = '+12 this week';
-            document.getElementById('kpi-plants-change').textContent = '+324 this week';
+            document.getElementById('kpi-trays').textContent = '--';
+            document.getElementById('kpi-plants').textContent = '--';
+            document.getElementById('kpi-trays-change').textContent = 'Start your first grow to see live data';
+            document.getElementById('kpi-plants-change').textContent = 'Start your first grow to see live data';
         }
-        
-        // Load forecast data
-        const forecastRes = await fetch(`${API_BASE}/api/inventory/forecast/30`, {
-            headers: {
-                'Authorization': `Bearer ${currentSession.token}`
-            }
-        });
-        
-        if (forecastRes.ok) {
-            const forecastData = await forecastRes.json();
-            console.log(' Forecast data loaded:', forecastData);
-            
-            if (forecastData.status === 'success' && forecastData.data && forecastData.data.length > 0) {
-                const nextHarvest = forecastData.data[0];
-                const harvestDate = new Date(nextHarvest.harvestDate);
-                const daysUntil = Math.ceil((harvestDate - new Date()) / (1000 * 60 * 60 * 24));
-                
-                document.getElementById('kpi-harvest').textContent = `${daysUntil}d`;
-                document.getElementById('kpi-harvest-change').textContent = `${nextHarvest.cropName || 'Mixed crops'}`;
-            }
+
+        const nextHarvest = getNextHarvestFromGroups(groups);
+        if (nextHarvest) {
+            const daysUntil = Math.max(
+                0,
+                Math.ceil((nextHarvest.harvestDate - new Date()) / (1000 * 60 * 60 * 24))
+            );
+            document.getElementById('kpi-harvest').textContent = `${daysUntil}d`;
+            document.getElementById('kpi-harvest-change').textContent = nextHarvest.cropName;
         } else {
-            // Fallback to demo values
-            console.warn(' Using demo forecast values');
-            document.getElementById('kpi-harvest').textContent = '14d';
-            document.getElementById('kpi-harvest-change').textContent = 'Butterhead Lettuce';
+            document.getElementById('kpi-harvest').textContent = '--';
+            document.getElementById('kpi-harvest-change').textContent = 'Start your first grow to see live data';
         }
-        
-        // Load devices (mock data for now)
-        document.getElementById('kpi-devices').textContent = '24';
-        document.getElementById('kpi-devices-change').textContent = '2 offline';
+
+        // Devices not yet available via API
+        document.getElementById('kpi-devices').textContent = '--';
+        document.getElementById('kpi-devices-change').textContent = 'No device data yet';
         
         // Load subscription usage
         await loadSubscriptionUsage();
@@ -368,17 +332,61 @@ async function loadDashboardData() {
         
     } catch (error) {
         console.error(' Error loading dashboard data:', error);
-        
-        // Use fallback demo values
-        document.getElementById('kpi-trays').textContent = '48';
-        document.getElementById('kpi-plants').textContent = '1,440';
-        document.getElementById('kpi-harvest').textContent = '14d';
-        document.getElementById('kpi-devices').textContent = '24';
-        document.getElementById('kpi-trays-change').textContent = '+12 this week';
-        document.getElementById('kpi-plants-change').textContent = '+324 this week';
-        document.getElementById('kpi-harvest-change').textContent = 'Butterhead Lettuce';
-        document.getElementById('kpi-devices-change').textContent = '2 offline';
+
+        document.getElementById('kpi-trays').textContent = '--';
+        document.getElementById('kpi-plants').textContent = '--';
+        document.getElementById('kpi-harvest').textContent = '--';
+        document.getElementById('kpi-devices').textContent = '--';
+        document.getElementById('kpi-trays-change').textContent = 'Start your first grow to see live data';
+        document.getElementById('kpi-plants-change').textContent = 'Start your first grow to see live data';
+        document.getElementById('kpi-harvest-change').textContent = 'Start your first grow to see live data';
+        document.getElementById('kpi-devices-change').textContent = 'No device data yet';
     }
+}
+
+function getGroupTotals(groups) {
+    return groups.reduce((acc, group) => {
+        const trays = Number.isFinite(group.trays) ? group.trays : 0;
+        const plants = Number.isFinite(group.plants) ? group.plants : 0;
+        acc.trays += trays;
+        acc.plants += plants;
+        return acc;
+    }, { trays: 0, plants: 0 });
+}
+
+function getNextHarvestFromGroups(groups) {
+    const VARIETY_GROW_DAYS = {
+        'Mei Qing Pak Choi': 28,
+        'Lacinato Kale': 45,
+        'Bibb Butterhead': 35,
+        'Frisée Endive': 45,
+        'Red Russian Kale': 50,
+        'Buttercrunch Lettuce': 42,
+        'Tatsoi': 28,
+        'Watercress': 21
+    };
+
+    let nextHarvest = null;
+
+    groups.forEach((group) => {
+        const seedDateValue = group?.planConfig?.anchor?.seedDate;
+        if (!seedDateValue) return;
+
+        const seedDate = new Date(seedDateValue);
+        if (Number.isNaN(seedDate.getTime())) return;
+
+        const cropName = group.crop || 'Mixed crops';
+        const growDays = VARIETY_GROW_DAYS[cropName] || 35;
+
+        const harvestDate = new Date(seedDate);
+        harvestDate.setDate(seedDate.getDate() + growDays);
+
+        if (!nextHarvest || harvestDate < nextHarvest.harvestDate) {
+            nextHarvest = { harvestDate, cropName };
+        }
+    });
+
+    return nextHarvest;
 }
 
 /**
@@ -393,29 +401,44 @@ async function loadSubscriptionUsage() {
         });
         
         const data = await response.json();
-        
+
         if (data.status === 'success') {
-            const usage = data.usage;
-            const limits = data.limits;
-            
-            // Update subscription plan info
-            document.getElementById('sub-plan').textContent = data.plan.name + ' Plan';
-            document.getElementById('sub-detail').textContent = 
-                `$${(data.plan.price / 100).toFixed(0)}/month • Renews on ${formatDate(data.renewsAt)}`;
-            
-            // Update usage meters
-            updateUsageMeter('devices', usage.devices, limits.devices);
-            updateUsageMeter('api', usage.api_calls_today, limits.api_calls_per_day, 'K');
-            updateUsageMeter('storage', usage.storage_gb, limits.storage_gb, ' GB');
+            const usage = data.usage || {};
+            const limits = data.limits || {};
+            const plan = data.plan || {};
+            const hasNumericUsage = isFiniteNumber(usage.devices)
+                && isFiniteNumber(usage.api_calls_today)
+                && isFiniteNumber(usage.storage_gb)
+                && isFiniteNumber(limits.devices)
+                && isFiniteNumber(limits.api_calls_per_day)
+                && isFiniteNumber(limits.storage_gb);
+
+            if (hasNumericUsage && plan.name && isFiniteNumber(plan.price)) {
+                // Update subscription plan info
+                document.getElementById('sub-plan').textContent = plan.name + ' Plan';
+                document.getElementById('sub-detail').textContent =
+                    `$${(plan.price / 100).toFixed(0)}/month • Renews on ${formatDate(data.renewsAt)}`;
+
+                // Update usage meters
+                updateUsageMeter('devices', usage.devices, limits.devices);
+                updateUsageMeter('api', usage.api_calls_today, limits.api_calls_per_day, 'K');
+                updateUsageMeter('storage', usage.storage_gb, limits.storage_gb, ' GB');
+                return;
+            }
         }
+
+        if (data.status === 'unavailable' || data.dataAvailable === false) {
+            setSubscriptionUnavailable();
+            return;
+        }
+
+        console.warn(' Unexpected subscription usage response, showing unavailable state');
+        setSubscriptionUnavailable();
         
     } catch (error) {
         console.warn(' Could not load subscription usage (using defaults):', error.message);
-        
-        // Use mock data
-        updateUsageMeter('devices', 24, 50);
-        updateUsageMeter('api', 3420, 10000, 'K');
-        updateUsageMeter('storage', 12.5, 50, ' GB');
+
+        setSubscriptionUnavailable();
     }
 }
 
@@ -440,6 +463,33 @@ function updateUsageMeter(type, current, limit, suffix = '') {
             barEl.style.background = 'linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)';
         }
     }
+}
+
+function setSubscriptionUnavailable() {
+    const planEl = document.getElementById('sub-plan');
+    const detailEl = document.getElementById('sub-detail');
+
+    if (planEl) planEl.textContent = 'Not Available';
+    if (detailEl) detailEl.textContent = 'Usage data unavailable';
+
+    setUsageMeterUnavailable('devices');
+    setUsageMeterUnavailable('api');
+    setUsageMeterUnavailable('storage');
+}
+
+function setUsageMeterUnavailable(type) {
+    const valueEl = document.getElementById(`usage-${type}`);
+    const barEl = document.getElementById(`usage-${type}-bar`);
+
+    if (valueEl) valueEl.textContent = 'Not Available';
+    if (barEl) {
+        barEl.style.width = '0%';
+        barEl.style.background = '#4b5563';
+    }
+}
+
+function isFiniteNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value);
 }
 
 /**

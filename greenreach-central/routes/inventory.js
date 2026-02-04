@@ -3,9 +3,189 @@
  * Receive and store inventory data from edge devices
  */
 import express from 'express';
-import { query } from '../config/database.js';
+import jwt from 'jsonwebtoken';
+import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+
+function resolveFarmId(req) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    try {
+      const payload = jwt.verify(token, JWT_SECRET, {
+        issuer: 'greenreach-central',
+        audience: 'greenreach-farms'
+      });
+      if (payload?.farm_id) return payload.farm_id;
+    } catch (error) {
+      // Ignore token errors and fallback to other sources
+    }
+  }
+
+  return req.query.farmId || req.headers['x-farm-id'] || null;
+}
+
+function coerceNumber(value) {
+  return Number.isFinite(value) ? value : 0;
+}
+
+function pickFarmName(farmId) {
+  return farmId || 'Unknown Farm';
+}
+
+async function loadFarmGroups(farmId) {
+  if (!farmId) return [];
+
+  if (await isDatabaseAvailable()) {
+    try {
+      const result = await query(
+        `SELECT groups FROM farm_backups WHERE farm_id = $1`,
+        [farmId]
+      );
+
+      if (result.rows.length > 0 && Array.isArray(result.rows[0].groups)) {
+        return result.rows[0].groups;
+      }
+    } catch (error) {
+      console.warn('[Inventory] farm_backups lookup failed:', error.message);
+    }
+  }
+
+  return [];
+}
+
+/**
+ * GET /api/inventory/current
+ * Returns current inventory summary (cloud)
+ */
+router.get('/current', async (req, res) => {
+  try {
+    const farmId = resolveFarmId(req);
+    if (!farmId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Farm ID unavailable'
+      });
+    }
+
+    const groups = await loadFarmGroups(farmId);
+    const dataAvailable = groups.length > 0;
+
+    const totals = groups.reduce((acc, group) => {
+      const trayCount = coerceNumber(group.trays)
+        || coerceNumber(group.trayCount)
+        || 0;
+      const plantCount = coerceNumber(group.plants)
+        || coerceNumber(group.plantCount)
+        || 0;
+
+      acc.trays += trayCount;
+      acc.plants += plantCount;
+      return acc;
+    }, { trays: 0, plants: 0 });
+
+    const payload = {
+      activeTrays: totals.trays,
+      totalPlants: totals.plants,
+      farmCount: dataAvailable ? 1 : 0,
+      byFarm: dataAvailable ? [
+        {
+          farmId,
+          name: pickFarmName(farmId),
+          activeTrays: totals.trays,
+          totalPlants: totals.plants,
+          trays: []
+        }
+      ] : []
+    };
+
+    res.json({
+      status: dataAvailable ? 'success' : 'unavailable',
+      dataAvailable,
+      data: payload
+    });
+  } catch (error) {
+    console.error('[Inventory] Failed to load current inventory:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to load inventory'
+    });
+  }
+});
+
+/**
+ * GET /api/inventory/forecast/:days?
+ * Returns harvest forecast list (cloud)
+ */
+router.get('/forecast/:days?', async (req, res) => {
+  try {
+    const farmId = resolveFarmId(req);
+    if (!farmId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Farm ID unavailable'
+      });
+    }
+
+    const groups = await loadFarmGroups(farmId);
+    const daysLimit = req.params.days ? parseInt(req.params.days, 10) : null;
+
+    const VARIETY_GROW_DAYS = {
+      'Mei Qing Pak Choi': 28,
+      'Lacinato Kale': 45,
+      'Bibb Butterhead': 35,
+      'Frisée Endive': 45,
+      'Red Russian Kale': 50,
+      'Buttercrunch Lettuce': 42,
+      'Tatsoi': 28,
+      'Watercress': 21
+    };
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const forecast = [];
+
+    groups.forEach((group) => {
+      const seedDateValue = group?.planConfig?.anchor?.seedDate || group?.seedDate;
+      if (!seedDateValue) return;
+
+      const seedDate = new Date(seedDateValue);
+      if (Number.isNaN(seedDate.getTime())) return;
+
+      const cropName = group.crop || group.recipe || group.name || 'Mixed crops';
+      const growDays = VARIETY_GROW_DAYS[cropName] || 35;
+
+      const harvestDate = new Date(seedDate);
+      harvestDate.setDate(seedDate.getDate() + growDays);
+
+      const daysToHarvest = Math.floor((harvestDate - today) / (1000 * 60 * 60 * 24));
+      if (daysLimit !== null && daysToHarvest > daysLimit) return;
+
+      forecast.push({
+        harvestDate: harvestDate.toISOString(),
+        cropName
+      });
+    });
+
+    const dataAvailable = forecast.length > 0;
+
+    res.json({
+      status: dataAvailable ? 'success' : 'unavailable',
+      dataAvailable,
+      data: dataAvailable ? forecast.sort((a, b) => new Date(a.harvestDate) - new Date(b.harvestDate)) : []
+    });
+  } catch (error) {
+    console.error('[Inventory] Failed to load forecast:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to load forecast'
+    });
+  }
+});
 
 /**
  * POST /api/inventory/:farmId/sync

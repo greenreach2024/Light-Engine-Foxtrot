@@ -27,6 +27,7 @@ import recipesRoutes from './routes/recipes.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
 import envProxyRoutes from './routes/env-proxy.js';
 import mlForecastRoutes from './routes/ml-forecast.js';
+import billingRoutes from './routes/billing.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -233,6 +234,7 @@ app.use('/api/reports', reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/env', envProxyRoutes); // Environmental data proxy to farm devices
 app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge feature)
+app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 
 // Root route - redirect to main landing page
 app.get('/', (req, res) => {

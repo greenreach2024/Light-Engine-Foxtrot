@@ -199,6 +199,46 @@ Since authentication is working correctly at the code level, you can proceed dir
 
 ---
 
+## Test Results Summary - Farm Admin Dashboard (Cloud Server)
+
+**Working Endpoints (2/13)**
+
+✅ **Farm Profile** - `/api/farm/profile`
+- Status: ✅ Working
+- Returns: Big Green Farm (FARM-MKLOMAT3-A9D8) with contact/location data
+
+✅ **Recipes** - `/api/recipes`
+- Status: ✅ Working
+- Returns: Recipe list (Albion, etc.)
+
+**Missing Endpoints (11/13)**
+
+**Dashboard Section**
+- ❌ `/api/inventory/current` - Error: "Failed to fetch inventory"
+- ❌ `/api/billing/usage/:farmId` - 404 Not Found
+- ❌ `/api/inventory/forecast/:days` - 404 Not Found
+- ❌ `/api/farm/activity/:farmId` - 404 Not Found
+
+**Wholesale**
+- ❌ `/api/wholesale/orders/farm/:farmId` - 404 Not Found
+
+**Financial**
+- ❌ `/api/farm/accounting/:farmId` - 404 Not Found
+
+**Crop/Inventory**
+- ❌ `/api/groups` - 404 Not Found
+
+**Enterprise ERP**
+- ❌ `/api/planning/demand-forecast` - 404 Not Found
+- ❌ `/api/sustainability/metrics` - 404 Not Found
+- ❌ `/api/traceability/lots` - 404 Not Found
+
+**Quality Control**
+- ⚠️ Not tested yet, likely missing
+
+**Conclusion**
+The cloud server (greenreach-central) only has 2 of 13+ endpoints needed by the farm admin dashboard. Most dashboard cards will show errors or fall back to demo/mock data because the APIs don't exist in the cloud deployment.
+
 ## 🔒 Security Verification
 
 All critical security measures are **ACTIVE**:

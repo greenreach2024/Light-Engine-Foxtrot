@@ -255,6 +255,62 @@ router.get('/profile', async (req, res, next) => {
 });
 
 /**
+ * GET /api/farm/activity/:farmId
+ * Return recent activity for a farm (cloud)
+ */
+router.get('/activity/:farmId', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+
+    if (!farmId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Farm ID required'
+      });
+    }
+
+    let activity = [];
+    let dataAvailable = false;
+
+    if (await isDatabaseAvailable()) {
+      try {
+        const result = await query(
+          `SELECT action, resource_type, metadata, created_at
+           FROM admin_audit_log
+           WHERE resource_id = $1 OR metadata::text LIKE $2
+           ORDER BY created_at DESC
+           LIMIT 20`,
+          [farmId, `%${farmId}%`]
+        );
+
+        activity = result.rows.map(row => ({
+          timestamp: row.created_at,
+          description: row.action || 'Activity event',
+          user: row.metadata?.user || row.metadata?.email || 'System',
+          status: 'active'
+        }));
+
+        dataAvailable = activity.length > 0;
+      } catch (error) {
+        logger.warn(`[Farm Activity] admin_audit_log unavailable: ${error.message}`);
+      }
+    }
+
+    res.json({
+      status: dataAvailable ? 'success' : 'unavailable',
+      dataAvailable,
+      activity
+    });
+  } catch (error) {
+    logger.error('Error fetching farm activity:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch activity'
+    });
+  }
+});
+
+/**
  * GET /api/farms/:farmId/groups
  * Compatibility route (public read access)
  */

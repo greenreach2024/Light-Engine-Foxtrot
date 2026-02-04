@@ -15897,6 +15897,32 @@ app.get('/api/billing/usage/:farmId', asyncHandler(async (req, res) => {
       message: 'Farm not found'
     });
   }
+
+  const dataAvailable = isDemoFarm;
+
+  if (!dataAvailable) {
+    return res.json({
+      status: 'unavailable',
+      dataAvailable: false,
+      plan: null,
+      limits: {
+        devices: null,
+        api_calls_per_day: null,
+        storage_gb: null
+      },
+      usage: {
+        devices: null,
+        api_calls_today: null,
+        storage_gb: null
+      },
+      renewsAt: null,
+      overages: {
+        devices: null,
+        api_calls: null,
+        storage: null
+      }
+    });
+  }
   
   // Mock usage data (in production, fetch from database)
   const usage = {
@@ -15923,6 +15949,7 @@ app.get('/api/billing/usage/:farmId', asyncHandler(async (req, res) => {
   
   res.json({
     status: 'success',
+    dataAvailable: true,
     plan: plan,
     limits: plan.limits,
     usage: usage,
