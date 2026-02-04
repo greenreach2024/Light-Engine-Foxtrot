@@ -1345,6 +1345,31 @@
 
   <script>
     // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+    
+    /**
+     * Extract display name from plan ID
+     * Handles formats:
+     * - "crop-bibb-butterhead" → "Bibb Butterhead"
+     * - "mei-qing-pak-choi" → "Mei Qing Pak Choi"
+     * - "lacinato-kale" → "Lacinato Kale"
+     * - null/undefined → "Unknown"
+     */
+    function extractCropDisplayName(planId) {
+      if (!planId || typeof planId !== 'string') return 'Unknown';
+      
+      // Remove "crop-" prefix if present
+      const cleanId = planId.replace(/^crop-/, '');
+      
+      // Split on hyphens and capitalize each word
+      return cleanId
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+
+    // ============================================================================
     // CROP DATABASE & CONSTANTS
     // ============================================================================
     
@@ -1634,8 +1659,8 @@
         return {
           id: tray.trayId,
           groupId: tray.groupId,
-          location: `${tray.roomId} / ${tray.zoneId} / ${tray.groupId}`,
-          currentCrop: tray.crop,
+          location: tray.groupId, // Full ID contains room:zone:group
+          currentCrop: extractCropDisplayName(findGroupPlan(tray.groupId)),
           sowDate: sowDate,
           transplantDate: null, // Not tracked in current data
           expectedHarvest: expectedHarvest,
@@ -1673,12 +1698,12 @@
         // This matches how groups-v2.js resolves PPFD values
         let currentPPFD = 250; // Default fallback
         
-        if (group.recipe && state.plans && state.plans.length > 0) {
-          // Find the plan for this group's recipe
+        if (group.plan && state.plans && state.plans.length > 0) {
+          // Find the plan for this group's plan ID
           const plan = state.plans.find(p => 
-            p.name === group.recipe || 
-            p.crop === group.recipe ||
-            p.id === group.recipe
+            p.name === group.plan || 
+            p.crop === group.plan ||
+            p.id === group.plan
           );
           
           if (plan) {
@@ -1686,10 +1711,10 @@
             const dayData = resolvePlanTargetsForDay(plan, daysOld);
             if (dayData && dayData.ppfd != null) {
               currentPPFD = dayData.ppfd;
-              console.log(`Group ${group.id} (${group.recipe}): Day ${daysOld} PPFD = ${currentPPFD}`);
+              console.log(`Group ${group.id} (${group.plan}): Day ${daysOld} PPFD = ${currentPPFD}`);
             }
           } else {
-            console.warn(`No plan found for recipe: ${group.recipe}`);
+            console.warn(`No plan found for plan ID: ${group.plan}`);
           }
         }
         
@@ -1699,8 +1724,8 @@
           currentPPFD: currentPPFD,
           ppfdMin: 100,
           ppfdMax: 600,
-          nutrientProfile: group.recipe || 'LeafyVeg-A',
-          crops: group.crop ? [group.crop] : []
+          nutrientProfile: extractCropDisplayName(group.plan) || 'LeafyVeg-A',
+          crops: group.plan ? [extractCropDisplayName(group.plan)] : []
         };
       });
     }

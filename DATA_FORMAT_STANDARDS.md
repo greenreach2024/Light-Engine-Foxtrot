@@ -285,20 +285,58 @@ async function saveGroups(groupsData) {
 // WRONG - Breaks existing consumers
 group.recipe = group.crop; // DON'T DO THIS
 
-// CORRECT - Supports both during transition
-const cropName = group.crop || group.recipe; // ✅ Fallback pattern
+// CORRECT - Use canonical plan field (as of Feb 1, 2026)
+const cropName = group.plan; // ✅ Canonical field
+const displayName = extractCropDisplayName(group.plan); // ✅ Human-readable
+
+// LEGACY - Deprecated (crop/recipe removed in commit 92c0b52)
+// const cropName = group.crop || group.recipe; // ❌ Fields no longer exist
+```
+
+### Canonical Group Fields (Updated Feb 4, 2026)
+
+**Current Structure** (groups.json):
+- `plan` (string): Canonical crop identifier (e.g., "crop-bibb-butterhead", "mei-qing-pak-choi")
+- `room` (string): Room name (replaces deprecated `roomId`)
+- `zone` (string): Zone identifier (replaces deprecated `zoneId`)
+
+**Removed Fields** (as of commit 92c0b52):
+- ❌ `crop` - Use `plan` instead
+- ❌ `recipe` - Use `plan` instead
+- ❌ `planId` - Use `plan` instead
+- ❌ `roomId` - Use `room` instead
+- ❌ `zoneId` - Use `zone` instead
+
+**Display Name Extraction**:
+```javascript
+function extractCropDisplayName(planId) {
+  if (!planId || typeof planId !== 'string') return 'Unknown';
+  return planId.replace(/^crop-/, '').split('-')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
 ```
 
 ### Rule 2: Backward Compatibility Adapters
 
+**Server-side normalization** (server-foxtrot.js normalizeGroupForResponse):
+
+```javascript
+function normalizeGroupForResponse(group) {
+  // Returns group with canonical fields only (plan, room, zone)
+  if (typeof group.plan === 'string' && group.plan.trim()) 
+    response.plan = group.plan.trim();
+  // ...
+}
+```
+
 **For consumers that need flexible formats**:
 
 ```javascript
-// /lib/data-adapters.js
+// /lib/data-adapters.js (DEPRECATED PATTERN)
 export function normalizeGroup(group) {
   return {
     ...group,
-    crop: group.crop || group.recipe,        // Normalize to standard
+    crop: group.plan,        // Use canonical plan field
     trays: typeof group.trays === 'number' 
       ? group.trays 
       : (Array.isArray(group.trays) ? group.trays.length : 0)
