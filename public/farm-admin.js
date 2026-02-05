@@ -294,6 +294,29 @@ async function loadFarmData() {
 async function loadDashboardData() {
     try {
         console.log(' Loading dashboard data...');
+        
+        // Fetch groups from /api/groups endpoint
+        if (!farmData.groups) {
+            try {
+                const groupsResponse = await fetch(`${API_BASE}/api/groups`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentSession.token}`
+                    }
+                });
+                if (groupsResponse.ok) {
+                    const groupsData = await groupsResponse.json();
+                    farmData.groups = Array.isArray(groupsData) ? groupsData : (groupsData.groups || []);
+                    console.log(`✓ Loaded ${farmData.groups.length} groups from /api/groups`);
+                } else {
+                    console.warn(`⚠ /api/groups returned ${groupsResponse.status}, using empty groups`);
+                    farmData.groups = [];
+                }
+            } catch (err) {
+                console.error('✗ Error fetching /api/groups:', err);
+                farmData.groups = [];
+            }
+        }
+        
         const groups = Array.isArray(farmData?.groups) ? farmData.groups : [];
         const totals = getGroupTotals(groups);
         const hasGrowData = groups.length > 0 && (totals.trays > 0 || totals.plants > 0);
