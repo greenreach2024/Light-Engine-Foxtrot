@@ -92,12 +92,15 @@ async function initDashboard() {
         }
     }
     
-    const allowLocalBypass = window.location.hostname.includes('localhost') || window.location.search.includes('demo=true');
+    const allowLocalBypass = 
+        window.location.hostname.includes('localhost') || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.search.includes('demo=true');
 
     // Create a default session only for local/demo environments
     if (!currentSession) {
         if (!allowLocalBypass) {
-            window.location.href = '/farm-admin-login.html';
+            window.location.href = '/login.html';
             return;
         }
 
