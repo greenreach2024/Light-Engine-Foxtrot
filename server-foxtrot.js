@@ -17926,6 +17926,10 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
     id: g.id || g.name,
     name: g.name,
     zone: g.zone,
+    crop: g.crop,
+    plan: g.plan,
+    trays: g.trays || 0,
+    plants: g.plants || 0,
     devices: g.devices?.length || 0
   }));
 
@@ -24781,6 +24785,10 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
     id: g.id || g.name,
     name: g.name,
     zone: g.zone,
+    crop: g.crop,
+    plan: g.plan,
+    trays: g.trays || 0,
+    plants: g.plants || 0,
     devices: g.devices?.length || 0
   }));
 
