@@ -1558,6 +1558,295 @@
                         Loading alerts...
                     </div>
                 </div>
+
+                <!-- Add Seed Modal -->
+                <div id="addSeedModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="max-width: 600px;">
+                        <div class="modal-header">
+                            <h2>Add Planting Material</h2>
+                            <button onclick="closeAddSeedModal()" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="addSeedForm" onsubmit="submitAddSeed(event)">
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Seed Variety *</label>
+                                    <input type="text" id="seedName" required placeholder="e.g., Buttercrunch Lettuce" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Quantity (seeds) *</label>
+                                        <input type="number" id="seedQuantity" required min="1" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Grow Media (kg) *</label>
+                                        <input type="number" id="seedGrowerMedia" required min="0" step="0.1" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Supplier</label>
+                                    <input type="text" id="seedSupplier" placeholder="e.g., Johnny's Selected Seeds" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Expiration Date</label>
+                                    <input type="date" id="seedExpiration" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Notes</label>
+                                    <textarea id="seedNotes" rows="3" placeholder="Storage conditions, lot number, etc." style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);"></textarea>
+                                </div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                                    <button type="button" onclick="closeAddSeedModal()" style="padding: 8px 16px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
+                                    <button type="submit" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Add Seed</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Edit Seed Modal -->
+                <div id="editSeedModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="max-width: 600px;">
+                        <div class="modal-header">
+                            <h2>Edit Seed Inventory</h2>
+                            <button onclick="closeEditSeedModal()" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="editSeedForm" onsubmit="submitEditSeed(event)">
+                                <input type="hidden" id="editSeedId">
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Seed Variety</label>
+                                    <input type="text" id="editSeedName" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Quantity (seeds)</label>
+                                        <input type="number" id="editSeedQuantity" required min="0" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Grow Media (kg)</label>
+                                        <input type="number" id="editSeedGrowerMedia" required min="0" step="0.1" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Expiration Date</label>
+                                    <input type="date" id="editSeedExpiration" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                                    <button type="button" onclick="closeEditSeedModal()" style="padding: 8px 16px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
+                                    <button type="submit" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Update</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Packaging Modal -->
+                <div id="addPackagingModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="max-width: 600px;">
+                        <div class="modal-header">
+                            <h2>Add Packaging Material</h2>
+                            <button onclick="closeAddPackagingModal()" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="addPackagingForm" onsubmit="submitAddPackaging(event)">
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Packaging Type *</label>
+                                    <select id="packagingType" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                        <option value="">Select Type</option>
+                                        <option value="clamshell">Clamshell Container</option>
+                                        <option value="bag">Plastic Bag</option>
+                                        <option value="box">Cardboard Box</option>
+                                        <option value="label">Labels</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Stock Level *</label>
+                                        <input type="number" id="packagingStock" required min="0" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Reorder Point *</label>
+                                        <input type="number" id="packagingReorderPoint" required min="0" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Cost Per Unit ($)</label>
+                                    <input type="number" id="packagingCost" min="0" step="0.01" placeholder="0.00" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Supplier</label>
+                                    <input type="text" id="packagingSupplier" placeholder="Supplier name" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                                    <button type="button" onclick="closeAddPackagingModal()" style="padding: 8px 16px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
+                                    <button type="submit" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Add Packaging</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Restock Packaging Modal -->
+                <div id="restockPackagingModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header">
+                            <h2>Restock Packaging</h2>
+                            <button onclick="closeRestockPackagingModal()" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="restockPackagingForm" onsubmit="submitRestockPackaging(event)">
+                                <input type="hidden" id="restockPackagingId">
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Packaging Type</label>
+                                    <input type="text" id="restockPackagingName" disabled style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Current Stock</label>
+                                    <input type="text" id="restockPackagingCurrent" disabled style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Add Quantity *</label>
+                                    <input type="number" id="restockQuantity" required min="1" placeholder="Enter quantity to add" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Notes</label>
+                                    <textarea id="restockNotes" rows="3" placeholder="Purchase order, invoice number, etc." style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);"></textarea>
+                                </div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                                    <button type="button" onclick="closeRestockPackagingModal()" style="padding: 8px 16px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
+                                    <button type="submit" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Restock</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Record Nutrient Usage Modal -->
+                <div id="recordNutrientModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header">
+                            <h2>Record Nutrient Usage</h2>
+                            <button onclick="closeRecordNutrientModal()" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="recordNutrientForm" onsubmit="submitNutrientUsage(event)">
+                                <input type="hidden" id="nutrientId">
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Nutrient Type</label>
+                                    <input type="text" id="nutrientName" disabled style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Volume Used (L) *</label>
+                                    <input type="number" id="nutrientVolumeUsed" required min="0" step="0.1" placeholder="Liters used" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Date Used *</label>
+                                    <input type="date" id="nutrientUsageDate" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Applied To</label>
+                                    <input type="text" id="nutrientAppliedTo" placeholder="Batch ID, zone, or crop" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                                    <button type="button" onclick="closeRecordNutrientModal()" style="padding: 8px 16px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
+                                    <button type="submit" style="padding: 8px 16px; background: linear-gradient(135deg, #2196F3 0%, #1976d2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Record</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log Maintenance Modal -->
+                <div id="logMaintenanceModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="max-width: 600px;">
+                        <div class="modal-header">
+                            <h2>Log Equipment Maintenance</h2>
+                            <button onclick="closeLogMaintenanceModal()" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="logMaintenanceForm" onsubmit="submitLogMaintenance(event)">
+                                <input type="hidden" id="maintenanceEquipmentId">
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Equipment</label>
+                                    <input type="text" id="maintenanceEquipmentName" disabled style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Maintenance Type *</label>
+                                    <select id="maintenanceType" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                        <option value="">Select Type</option>
+                                        <option value="routine">Routine Maintenance</option>
+                                        <option value="repair">Repair</option>
+                                        <option value="inspection">Inspection</option>
+                                        <option value="calibration">Calibration</option>
+                                        <option value="cleaning">Deep Cleaning</option>
+                                    </select>
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Date Performed *</label>
+                                    <input type="date" id="maintenanceDate" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Performed By *</label>
+                                    <input type="text" id="maintenancePerformedBy" required placeholder="Name or team" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Description *</label>
+                                    <textarea id="maintenanceDescription" required rows="3" placeholder="What was done? Parts replaced?" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);"></textarea>
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Cost ($)</label>
+                                    <input type="number" id="maintenanceCost" min="0" step="0.01" placeholder="0.00" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                                    <button type="button" onclick="closeLogMaintenanceModal()" style="padding: 8px 16px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
+                                    <button type="submit" style="padding: 8px 16px; background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Log Maintenance</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Record Supply Usage Modal -->
+                <div id="recordSupplyModal" class="modal" style="display: none;">
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header">
+                            <h2>Record Lab Supply Usage</h2>
+                            <button onclick="closeRecordSupplyModal()" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="recordSupplyForm" onsubmit="submitSupplyUsage(event)">
+                                <input type="hidden" id="supplyId">
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Supply Name</label>
+                                    <input type="text" id="supplyName" disabled style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);">
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Quantity Used *</label>
+                                        <input type="number" id="supplyQuantityUsed" required min="0" step="0.1" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Unit</label>
+                                        <input type="text" id="supplyUnit" disabled style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);">
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Date Used *</label>
+                                    <input type="date" id="supplyUsageDate" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Purpose</label>
+                                    <input type="text" id="supplyPurpose" placeholder="Quality test, calibration, etc." style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                                    <button type="button" onclick="closeRecordSupplyModal()" style="padding: 8px 16px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
+                                    <button type="submit" style="padding: 8px 16px; background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Record</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Sustainability & ESG Section -->
@@ -4409,17 +4698,438 @@
             return badges[status] || status;
         }
 
-        // Placeholder functions for modals
-        function showAddSeedModal() { alert('Add Seed modal - to be implemented'); }
-        function showAddPackagingModal() { alert('Add Packaging modal - to be implemented'); }
-        function editSeed(id) { alert('Edit seed: ' + id); }
-        function restockPackaging(id) { alert('Restock packaging: ' + id); }
-        function showRecordNutrientUsage(id) { alert('Record nutrient usage: ' + id); }
-        function showLogMaintenance(id) { alert('Log maintenance: ' + id); }
-        function showRecordSupplyUsage(id) { alert('Record supply usage: ' + id); }
-        function recordNutrientUsage() { alert('Record Nutrient Usage - to be implemented'); }
-        function logMaintenance() { alert('Log Maintenance - to be implemented'); }
-        function recordSupplyUsage() { alert('Record Supply Usage - to be implemented'); }
+        // ===================================================================
+        // INVENTORY MANAGEMENT MODAL FUNCTIONS
+        // ===================================================================
+
+        // Add Seed Modal Functions
+        function showAddSeedModal() {
+            document.getElementById('addSeedModal').style.display = 'flex';
+            document.getElementById('addSeedForm').reset();
+            // Set today's date + 2 years as default expiration
+            const defaultExpiration = new Date();
+            defaultExpiration.setFullYear(defaultExpiration.getFullYear() + 2);
+            document.getElementById('seedExpiration').valueAsDate = defaultExpiration;
+        }
+
+        function closeAddSeedModal() {
+            document.getElementById('addSeedModal').style.display = 'none';
+        }
+
+        async function submitAddSeed(event) {
+            event.preventDefault();
+            const formData = {
+                variety: document.getElementById('seedName').value,
+                quantity: parseInt(document.getElementById('seedQuantity').value),
+                grow_media_kg: parseFloat(document.getElementById('seedGrowerMedia').value),
+                supplier: document.getElementById('seedSupplier').value,
+                expiration: document.getElementById('seedExpiration').value,
+                notes: document.getElementById('seedNotes').value,
+                added_date: new Date().toISOString().split('T')[0]
+            };
+
+            try {
+                const response = await fetch('/api/inventory/seeds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    showNotification('Seed added successfully', 'success');
+                    closeAddSeedModal();
+                    loadInventoryDashboard(); // Refresh inventory data
+                } else {
+                    const error = await response.json();
+                    showNotification('Failed to add seed: ' + (error.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error adding seed:', error);
+                showNotification('Failed to add seed: ' + error.message, 'error');
+            }
+        }
+
+        // Edit Seed Modal Functions
+        async function editSeed(id) {
+            try {
+                const response = await fetch(`/api/inventory/seeds/${id}`);
+                if (!response.ok) throw new Error('Failed to fetch seed details');
+                
+                const seed = await response.json();
+                document.getElementById('editSeedId').value = seed.seed_id;
+                document.getElementById('editSeedName').value = seed.variety;
+                document.getElementById('editSeedQuantity').value = seed.quantity;
+                document.getElementById('editSeedGrowerMedia').value = seed.grow_media_kg || 0;
+                document.getElementById('editSeedExpiration').value = seed.expiration || '';
+                
+                document.getElementById('editSeedModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading seed:', error);
+                showNotification('Failed to load seed details', 'error');
+            }
+        }
+
+        function closeEditSeedModal() {
+            document.getElementById('editSeedModal').style.display = 'none';
+        }
+
+        async function submitEditSeed(event) {
+            event.preventDefault();
+            const id = document.getElementById('editSeedId').value;
+            const formData = {
+                variety: document.getElementById('editSeedName').value,
+                quantity: parseInt(document.getElementById('editSeedQuantity').value),
+                grow_media_kg: parseFloat(document.getElementById('editSeedGrowerMedia').value),
+                expiration: document.getElementById('editSeedExpiration').value
+            };
+
+            try {
+                const response = await fetch(`/api/inventory/seeds/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    showNotification('Seed updated successfully', 'success');
+                    closeEditSeedModal();
+                    loadInventoryDashboard(); // Refresh inventory data
+                } else {
+                    const error = await response.json();
+                    showNotification('Failed to update seed: ' + (error.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error updating seed:', error);
+                showNotification('Failed to update seed: ' + error.message, 'error');
+            }
+        }
+
+        // Add Packaging Modal Functions
+        function showAddPackagingModal() {
+            document.getElementById('addPackagingModal').style.display = 'flex';
+            document.getElementById('addPackagingForm').reset();
+        }
+
+        function closeAddPackagingModal() {
+            document.getElementById('addPackagingModal').style.display = 'none';
+        }
+
+        async function submitAddPackaging(event) {
+            event.preventDefault();
+            const formData = {
+                type: document.getElementById('packagingType').value,
+                stock_level: parseInt(document.getElementById('packagingStock').value),
+                reorder_point: parseInt(document.getElementById('packagingReorderPoint').value),
+                cost_per_unit: parseFloat(document.getElementById('packagingCost').value) || 0,
+                supplier: document.getElementById('packagingSupplier').value,
+                added_date: new Date().toISOString().split('T')[0]
+            };
+
+            try {
+                const response = await fetch('/api/inventory/packaging', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    showNotification('Packaging added successfully', 'success');
+                    closeAddPackagingModal();
+                    loadInventoryDashboard(); // Refresh inventory data
+                } else {
+                    const error = await response.json();
+                    showNotification('Failed to add packaging: ' + (error.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error adding packaging:', error);
+                showNotification('Failed to add packaging: ' + error.message, 'error');
+            }
+        }
+
+        // Restock Packaging Modal Functions
+        async function restockPackaging(id) {
+            try {
+                const response = await fetch(`/api/inventory/packaging/${id}`);
+                if (!response.ok) throw new Error('Failed to fetch packaging details');
+                
+                const pkg = await response.json();
+                document.getElementById('restockPackagingId').value = pkg.packaging_id;
+                document.getElementById('restockPackagingName').value = pkg.type;
+                document.getElementById('restockPackagingCurrent').value = pkg.stock_level;
+                document.getElementById('restockQuantity').value = '';
+                document.getElementById('restockNotes').value = '';
+                
+                document.getElementById('restockPackagingModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading packaging:', error);
+                showNotification('Failed to load packaging details', 'error');
+            }
+        }
+
+        function closeRestockPackagingModal() {
+            document.getElementById('restockPackagingModal').style.display = 'none';
+        }
+
+        async function submitRestockPackaging(event) {
+            event.preventDefault();
+            const id = document.getElementById('restockPackagingId').value;
+            const addQuantity = parseInt(document.getElementById('restockQuantity').value);
+            const notes = document.getElementById('restockNotes').value;
+
+            try {
+                const response = await fetch(`/api/inventory/packaging/${id}/restock`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ add_quantity: addQuantity, notes: notes, date: new Date().toISOString().split('T')[0] })
+                });
+
+                if (response.ok) {
+                    showNotification('Packaging restocked successfully', 'success');
+                    closeRestockPackagingModal();
+                    loadInventoryDashboard(); // Refresh inventory data
+                } else {
+                    const error = await response.json();
+                    showNotification('Failed to restock packaging: ' + (error.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error restocking packaging:', error);
+                showNotification('Failed to restock packaging: ' + error.message, 'error');
+            }
+        }
+
+        // Record Nutrient Usage Modal Functions
+        async function showRecordNutrientUsage(id) {
+            try {
+                const response = await fetch(`/api/inventory/nutrients/${id}`);
+                if (!response.ok) throw new Error('Failed to fetch nutrient details');
+                
+                const nutrient = await response.json();
+                document.getElementById('nutrientId').value = nutrient.nutrient_id;
+                document.getElementById('nutrientName').value = nutrient.type;
+                document.getElementById('nutrientVolumeUsed').value = '';
+                document.getElementById('nutrientUsageDate').valueAsDate = new Date();
+                document.getElementById('nutrientAppliedTo').value = '';
+                
+                document.getElementById('recordNutrientModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading nutrient:', error);
+                showNotification('Failed to load nutrient details', 'error');
+            }
+        }
+
+        function recordNutrientUsage() {
+            // Show modal with generic form (no pre-selected nutrient)
+            document.getElementById('nutrientId').value = '';
+            document.getElementById('nutrientName').value = 'All Nutrients';
+            document.getElementById('nutrientVolumeUsed').value = '';
+            document.getElementById('nutrientUsageDate').valueAsDate = new Date();
+            document.getElementById('nutrientAppliedTo').value = '';
+            document.getElementById('recordNutrientModal').style.display = 'flex';
+        }
+
+        function closeRecordNutrientModal() {
+            document.getElementById('recordNutrientModal').style.display = 'none';
+        }
+
+        async function submitNutrientUsage(event) {
+            event.preventDefault();
+            const id = document.getElementById('nutrientId').value;
+            const formData = {
+                volume_used: parseFloat(document.getElementById('nutrientVolumeUsed').value),
+                date: document.getElementById('nutrientUsageDate').value,
+                applied_to: document.getElementById('nutrientAppliedTo').value
+            };
+
+            try {
+                const url = id ? `/api/inventory/nutrients/${id}/usage` : '/api/inventory/nutrients/usage';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    showNotification('Nutrient usage recorded successfully', 'success');
+                    closeRecordNutrientModal();
+                    loadInventoryDashboard(); // Refresh inventory data
+                } else {
+                    const error = await response.json();
+                    showNotification('Failed to record usage: ' + (error.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error recording nutrient usage:', error);
+                showNotification('Failed to record usage: ' + error.message, 'error');
+            }
+        }
+
+        // Log Maintenance Modal Functions
+        async function showLogMaintenance(id) {
+            try {
+                const response = await fetch(`/api/inventory/equipment/${id}`);
+                if (!response.ok) throw new Error('Failed to fetch equipment details');
+                
+                const equipment = await response.json();
+                document.getElementById('maintenanceEquipmentId').value = equipment.equipment_id;
+                document.getElementById('maintenanceEquipmentName').value = equipment.name;
+                document.getElementById('maintenanceType').value = '';
+                document.getElementById('maintenanceDate').valueAsDate = new Date();
+                document.getElementById('maintenancePerformedBy').value = '';
+                document.getElementById('maintenanceDescription').value = '';
+                document.getElementById('maintenanceCost').value = '';
+                
+                document.getElementById('logMaintenanceModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading equipment:', error);
+                showNotification('Failed to load equipment details', 'error');
+            }
+        }
+
+        function logMaintenance() {
+            // Show modal with generic form (no pre-selected equipment)
+            document.getElementById('maintenanceEquipmentId').value = '';
+            document.getElementById('maintenanceEquipmentName').value = 'All Equipment';
+            document.getElementById('maintenanceType').value = '';
+            document.getElementById('maintenanceDate').valueAsDate = new Date();
+            document.getElementById('maintenancePerformedBy').value = '';
+            document.getElementById('maintenanceDescription').value = '';
+            document.getElementById('maintenanceCost').value = '';
+            document.getElementById('logMaintenanceModal').style.display = 'flex';
+        }
+
+        function closeLogMaintenanceModal() {
+            document.getElementById('logMaintenanceModal').style.display = 'none';
+        }
+
+        async function submitLogMaintenance(event) {
+            event.preventDefault();
+            const id = document.getElementById('maintenanceEquipmentId').value;
+            const formData = {
+                maintenance_type: document.getElementById('maintenanceType').value,
+                date_performed: document.getElementById('maintenanceDate').value,
+                performed_by: document.getElementById('maintenancePerformedBy').value,
+                description: document.getElementById('maintenanceDescription').value,
+                cost: parseFloat(document.getElementById('maintenanceCost').value) || 0
+            };
+
+            try {
+                const url = id ? `/api/inventory/equipment/${id}/maintenance` : '/api/inventory/equipment/maintenance';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    showNotification('Maintenance logged successfully', 'success');
+                    closeLogMaintenanceModal();
+                    loadInventoryDashboard(); // Refresh inventory data
+                } else {
+                    const error = await response.json();
+                    showNotification('Failed to log maintenance: ' + (error.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error logging maintenance:', error);
+                showNotification('Failed to log maintenance: ' + error.message, 'error');
+            }
+        }
+
+        // Record Supply Usage Modal Functions
+        async function showRecordSupplyUsage(id) {
+            try {
+                const response = await fetch(`/api/inventory/supplies/${id}`);
+                if (!response.ok) throw new Error('Failed to fetch supply details');
+                
+                const supply = await response.json();
+                document.getElementById('supplyId').value = supply.supply_id;
+                document.getElementById('supplyName').value = supply.name;
+                document.getElementById('supplyUnit').value = supply.unit;
+                document.getElementById('supplyQuantityUsed').value = '';
+                document.getElementById('supplyUsageDate').valueAsDate = new Date();
+                document.getElementById('supplyPurpose').value = '';
+                
+                document.getElementById('recordSupplyModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading supply:', error);
+                showNotification('Failed to load supply details', 'error');
+            }
+        }
+
+        function recordSupplyUsage() {
+            // Show modal with generic form (no pre-selected supply)
+            document.getElementById('supplyId').value = '';
+            document.getElementById('supplyName').value = 'All Supplies';
+            document.getElementById('supplyUnit').value = 'units';
+            document.getElementById('supplyQuantityUsed').value = '';
+            document.getElementById('supplyUsageDate').valueAsDate = new Date();
+            document.getElementById('supplyPurpose').value = '';
+            document.getElementById('recordSupplyModal').style.display = 'flex';
+        }
+
+        function closeRecordSupplyModal() {
+            document.getElementById('recordSupplyModal').style.display = 'none';
+        }
+
+        async function submitSupplyUsage(event) {
+            event.preventDefault();
+            const id = document.getElementById('supplyId').value;
+            const formData = {
+                quantity_used: parseFloat(document.getElementById('supplyQuantityUsed').value),
+                date: document.getElementById('supplyUsageDate').value,
+                purpose: document.getElementById('supplyPurpose').value
+            };
+
+            try {
+                const url = id ? `/api/inventory/supplies/${id}/usage` : '/api/inventory/supplies/usage';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    showNotification('Supply usage recorded successfully', 'success');
+                    closeRecordSupplyModal();
+                    loadInventoryDashboard(); // Refresh inventory data
+                } else {
+                    const error = await response.json();
+                    showNotification('Failed to record usage: ' + (error.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error recording supply usage:', error);
+                showNotification('Failed to record usage: ' + error.message, 'error');
+            }
+        }
+
+        // Helper function for notifications
+        function showNotification(message, type = 'info') {
+            // Look for existing notification system or create a simple alert
+            if (typeof window.showToast === 'function') {
+                window.showToast(message, type);
+            } else {
+                // Fallback to creating a simple notification banner
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 16px 24px;
+                    border-radius: 8px;
+                    background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
+                    color: white;
+                    font-weight: 500;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    z-index: 10000;
+                    animation: slideInRight 0.3s ease-out;
+                `;
+                notification.textContent = message;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.animation = 'slideOutRight 0.3s ease-in';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+        }
 
         // ===================================================================
         // SUSTAINABILITY DASHBOARD FUNCTIONS
