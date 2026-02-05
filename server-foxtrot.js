@@ -16459,7 +16459,7 @@ app.get('/api/inventory/current', (req, res) => {
       }
       
       totalTrays += trayCount;
-      totalPlants += group.plants || 0;
+      totalPlants += plantsPerTray * trayCount; // Use calculated plants, not missing field
     });
 
     res.json({
