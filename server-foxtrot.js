@@ -16598,6 +16598,199 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
 });
 
 // =====================================================
+// INVENTORY MANAGEMENT CRUD API
+// =====================================================
+// In-memory stores for farm supplies inventory
+const seedsInventory = [];
+const packagingInventory = [];
+const nutrientsInventory = [];
+const equipmentInventory = [];
+const suppliesInventory = [];
+
+// Helper to generate unique IDs
+function generateId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// ===== SEEDS ENDPOINTS =====
+
+// GET /api/inventory/seeds - List all seeds
+app.get('/api/inventory/seeds', (req, res) => {
+  res.json({ ok: true, seeds: seedsInventory });
+});
+
+// GET /api/inventory/seeds/:id - Get single seed
+app.get('/api/inventory/seeds/:id', (req, res) => {
+  const seed = seedsInventory.find(s => s.seed_id === req.params.id);
+  if (!seed) return res.status(404).json({ ok: false, message: 'Seed not found' });
+  res.json(seed);
+});
+
+// POST /api/inventory/seeds - Add new seed
+app.post('/api/inventory/seeds', (req, res) => {
+  const seed = {
+    seed_id: generateId('SEED'),
+    ...req.body,
+    created_at: new Date().toISOString()
+  };
+  seedsInventory.push(seed);
+  res.json({ ok: true, seed });
+});
+
+// PUT /api/inventory/seeds/:id - Update seed
+app.put('/api/inventory/seeds/:id', (req, res) => {
+  const index = seedsInventory.findIndex(s => s.seed_id === req.params.id);
+  if (index === -1) return res.status(404).json({ ok: false, message: 'Seed not found' });
+  
+  seedsInventory[index] = {
+    ...seedsInventory[index],
+    ...req.body,
+    updated_at: new Date().toISOString()
+  };
+  res.json({ ok: true, seed: seedsInventory[index] });
+});
+
+// DELETE /api/inventory/seeds/:id - Delete seed
+app.delete('/api/inventory/seeds/:id', (req, res) => {
+  const index = seedsInventory.findIndex(s => s.seed_id === req.params.id);
+  if (index === -1) return res.status(404).json({ ok: false, message: 'Seed not found' });
+  
+  seedsInventory.splice(index, 1);
+  res.json({ ok: true, message: 'Seed deleted' });
+});
+
+// ===== PACKAGING ENDPOINTS =====
+
+// GET /api/inventory/packaging - List all packaging
+app.get('/api/inventory/packaging', (req, res) => {
+  res.json({ ok: true, packaging: packagingInventory });
+});
+
+// GET /api/inventory/packaging/:id - Get single packaging
+app.get('/api/inventory/packaging/:id', (req, res) => {
+  const pkg = packagingInventory.find(p => p.packaging_id === req.params.id);
+  if (!pkg) return res.status(404).json({ ok: false, message: 'Packaging not found' });
+  res.json(pkg);
+});
+
+// POST /api/inventory/packaging - Add new packaging
+app.post('/api/inventory/packaging', (req, res) => {
+  const packaging = {
+    packaging_id: generateId('PKG'),
+    ...req.body,
+    created_at: new Date().toISOString()
+  };
+  packagingInventory.push(packaging);
+  res.json({ ok: true, packaging });
+});
+
+// POST /api/inventory/packaging/:id/restock - Restock packaging
+app.post('/api/inventory/packaging/:id/restock', (req, res) => {
+  const pkg = packagingInventory.find(p => p.packaging_id === req.params.id);
+  if (!pkg) return res.status(404).json({ ok: false, message: 'Packaging not found' });
+  
+  const { add_quantity, notes } = req.body;
+  pkg.stock_level = (pkg.stock_level || 0) + parseInt(add_quantity);
+  pkg.last_restocked = new Date().toISOString();
+  pkg.restock_notes = notes;
+  
+  res.json({ ok: true, packaging: pkg });
+});
+
+// ===== NUTRIENTS ENDPOINTS =====
+
+// GET /api/inventory/nutrients - List all nutrients
+app.get('/api/inventory/nutrients', (req, res) => {
+  res.json({ ok: true, nutrients: nutrientsInventory });
+});
+
+// GET /api/inventory/nutrients/:id - Get single nutrient
+app.get('/api/inventory/nutrients/:id', (req, res) => {
+  const nutrient = nutrientsInventory.find(n => n.nutrient_id === req.params.id);
+  if (!nutrient) return res.status(404).json({ ok: false, message: 'Nutrient not found' });
+  res.json(nutrient);
+});
+
+// POST /api/inventory/nutrients/:id/usage - Record nutrient usage
+app.post('/api/inventory/nutrients/:id/usage', (req, res) => {
+  const nutrient = nutrientsInventory.find(n => n.nutrient_id === req.params.id);
+  if (!nutrient) return res.status(404).json({ ok: false, message: 'Nutrient not found' });
+  
+  const { volume_used, date, applied_to } = req.body;
+  nutrient.volume_remaining = (nutrient.volume_remaining || 0) - parseFloat(volume_used);
+  nutrient.last_used = date || new Date().toISOString();
+  nutrient.applied_to = applied_to;
+  
+  res.json({ ok: true, nutrient });
+});
+
+// ===== EQUIPMENT ENDPOINTS =====
+
+// GET /api/inventory/equipment - List all equipment
+app.get('/api/inventory/equipment', (req, res) => {
+  res.json({ ok: true, equipment: equipmentInventory });
+});
+
+// GET /api/inventory/equipment/:id - Get single equipment
+app.get('/api/inventory/equipment/:id', (req, res) => {
+  const equipment = equipmentInventory.find(e => e.equipment_id === req.params.id);
+  if (!equipment) return res.status(404).json({ ok: false, message: 'Equipment not found' });
+  res.json(equipment);
+});
+
+// POST /api/inventory/equipment/:id/maintenance - Log maintenance
+app.post('/api/inventory/equipment/:id/maintenance', (req, res) => {
+  const equipment = equipmentInventory.find(e => e.equipment_id === req.params.id);
+  if (!equipment) return res.status(404).json({ ok: false, message: 'Equipment not found' });
+  
+  const { maintenance_type, date_performed, performed_by, description, cost } = req.body;
+  
+  if (!equipment.maintenance_history) {
+    equipment.maintenance_history = [];
+  }
+  
+  equipment.maintenance_history.push({
+    maintenance_type,
+    date_performed,
+    performed_by,
+    description,
+    cost,
+    logged_at: new Date().toISOString()
+  });
+  
+  equipment.last_maintenance = date_performed;
+  
+  res.json({ ok: true, equipment });
+});
+
+// ===== SUPPLIES ENDPOINTS =====
+
+// GET /api/inventory/supplies - List all supplies
+app.get('/api/inventory/supplies', (req, res) => {
+  res.json({ ok: true, supplies: suppliesInventory });
+});
+
+// GET /api/inventory/supplies/:id - Get single supply
+app.get('/api/inventory/supplies/:id', (req, res) => {
+  const supply = suppliesInventory.find(s => s.supply_id === req.params.id);
+  if (!supply) return res.status(404).json({ ok: false, message: 'Supply not found' });
+  res.json(supply);
+});
+
+// POST /api/inventory/supplies/:id/usage - Record supply usage
+app.post('/api/inventory/supplies/:id/usage', (req, res) => {
+  const supply = suppliesInventory.find(s => s.supply_id === req.params.id);
+  if (!supply) return res.status(404).json({ ok: false, message: 'Supply not found' });
+  
+  const { quantity_used, date, purpose } = req.body;
+  supply.quantity = (supply.quantity || 0) - parseFloat(quantity_used);
+  supply.last_used = date || new Date().toISOString();
+  supply.usage_purpose = purpose;
+  
+  res.json({ ok: true, supply });
+});
+
+// =====================================================
 // CROP RECOMMENDATION API - Phase 1 (Rules Engine)
 // =====================================================
 
