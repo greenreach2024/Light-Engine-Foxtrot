@@ -1,0 +1,3047 @@
+{
+  "fixtures": [
+    {
+      "id": "agnetix-a3",
+      "vendor": "Agnetix",
+      "model": "A3",
+      "watts": 680,
+      "control": "WiFi",
+      "ppfd": 1750,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "tags": [
+        "agnetix",
+        "a3",
+        "wifi",
+        "tunable",
+        "professional"
+      ]
+    },
+    {
+      "id": "bestva-pro4000",
+      "vendor": "BESTVA",
+      "model": "Pro 4000",
+      "watts": 400,
+      "control": "0-10V",
+      "ppfd": 1100,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "bestva",
+        "pro4000",
+        "0-10v",
+        "static",
+        "mid-power"
+      ]
+    },
+    {
+      "id": "bloomspect-ss4000",
+      "vendor": "Bloomspect",
+      "model": "SS4000",
+      "watts": 400,
+      "control": "0-10V",
+      "ppfd": 1050,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "bloomspect",
+        "ss4000",
+        "0-10v",
+        "static",
+        "mid-power"
+      ]
+    },
+    {
+      "id": "california-lightworks-solarsystem-1100",
+      "vendor": "California Lightworks",
+      "model": "SolarSystem 1100",
+      "watts": 800,
+      "control": "WiFi",
+      "ppfd": 1800,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "tags": [
+        "california-lightworks",
+        "solarsystem",
+        "wifi",
+        "tunable",
+        "professional"
+      ]
+    },
+    {
+      "id": "chilled-growcraft-x6",
+      "vendor": "Chilled",
+      "model": "GrowCraft X6",
+      "watts": 630,
+      "control": "0-10V",
+      "ppfd": 1650,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "chilled",
+        "growcraft",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "dutch-lighting-innovations-dli-nxs-760w-347-400v-r87g8b5-8fr-mw-wd",
+      "vendor": "Dutch Lighting Innovations",
+      "model": "DLI NXS 760W 347-400V R87G8B5-8FR MW WD",
+      "watts": 767,
+      "control": "DALI",
+      "ppfd": 1758,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-HHFHVP",
+        "family_code": "IIIOXL",
+        "date_qualified": "2025-08-18",
+        "ppf_efficacy": 3.44
+      },
+      "tags": [
+        "dutch-lighting-innovations",
+        "dli-nxs-760w-347-400v-r87g8b5-8fr-mw-wd",
+        "dali",
+        "tunable",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "faven-lighting-faven-chroma-135w-undercanopy-grow-light",
+      "vendor": "Faven Lighting",
+      "model": "FAVEN CHROMA 135W Undercanopy Grow Light",
+      "watts": 128,
+      "control": "0-10V",
+      "ppfd": 255,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-Z4WFTH",
+        "family_code": "IIIOXU",
+        "date_qualified": "2025-09-29",
+        "ppf_efficacy": 2.98
+      },
+      "tags": [
+        "faven-lighting",
+        "faven-chroma-135w-undercanopy-grow-light",
+        "0-10v",
+        "tunable",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "fluence-spydr-2i",
+      "vendor": "Fluence",
+      "model": "SPYDR 2i",
+      "watts": 685,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "PhysioSpec",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "fluence",
+        "spydr",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "fluence-spydr-2p",
+      "vendor": "Fluence",
+      "model": "SPYDR 2p",
+      "watts": 645,
+      "control": "0-10V",
+      "ppfd": 1650,
+      "spectrum": "PhysioSpec Plus",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 30,
+        "ww": 45,
+        "bl": 12,
+        "rd": 13
+      },
+      "tags": [
+        "fluence",
+        "spydr",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "fluence-vypr-2p",
+      "vendor": "Fluence",
+      "model": "VYPR 2p",
+      "watts": 645,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "PhysioSpec",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "fluence",
+        "vypr",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "fohse-inc-f1v-1000w-480v",
+      "vendor": "FOHSE INC",
+      "model": "F1V 1000W 480V",
+      "watts": 1000,
+      "control": "DALI",
+      "ppfd": 1712,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 44,
+        "ww": 14,
+        "bl": 12,
+        "rd": 28
+      },
+      "dlc": {
+        "product_id": "H-DXMGL1",
+        "family_code": "UUUWBR",
+        "date_qualified": "2025-08-25",
+        "ppf_efficacy": 2.57
+      },
+      "tags": [
+        "fohse-inc",
+        "f1v-1000w-480v",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "fohse-inc-taurus-9000k-led-clone-light",
+      "vendor": "FOHSE INC",
+      "model": "Taurus 9000K LED CLONE LIGHT",
+      "watts": 16,
+      "control": "DALI",
+      "ppfd": 30,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 44,
+        "ww": 12,
+        "bl": 18,
+        "rd": 24
+      },
+      "dlc": {
+        "product_id": "H-DC1DLY",
+        "family_code": "UUUWBQ",
+        "date_qualified": "2025-08-25",
+        "ppf_efficacy": 2.67
+      },
+      "tags": [
+        "fohse-inc",
+        "taurus-9000k-led-clone-light",
+        "dali",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "gavita-1700e",
+      "vendor": "Gavita",
+      "model": "1700e LED",
+      "watts": 645,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "gavita",
+        "1700e",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "gavita-1930e",
+      "vendor": "Gavita",
+      "model": "1930e LED",
+      "watts": 680,
+      "control": "0-10V",
+      "ppfd": 1930,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "gavita",
+        "1930e",
+        "0-10v",
+        "professional",
+        "static",
+        "high-ppfd"
+      ]
+    },
+    {
+      "id": "geeklight-g600",
+      "vendor": "Geeklight",
+      "model": "G600",
+      "watts": 600,
+      "control": "0-10V",
+      "ppfd": 1550,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "geeklight",
+        "g600",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "gml-solutions-ltd-gmll0120w3f1e10b2",
+      "vendor": "GML Solutions Ltd.",
+      "model": "GMLL0120W3F1E10B2",
+      "watts": 121,
+      "control": "0-10V",
+      "ppfd": 255,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 22,
+        "ww": 23,
+        "bl": 6,
+        "rd": 47
+      },
+      "dlc": {
+        "product_id": "H-QW04RV",
+        "family_code": "IIIOXP",
+        "date_qualified": "2025-09-15",
+        "ppf_efficacy": 3.16
+      },
+      "tags": [
+        "gml-solutions-ltd.",
+        "gmll0120w3f1e10b2",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "gml-solutions-ltd-gmll0120w3l1e10e2",
+      "vendor": "GML Solutions Ltd.",
+      "model": "GMLL0120W3L1E10E2",
+      "watts": 120,
+      "control": "0-10V",
+      "ppfd": 255,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 22,
+        "ww": 23,
+        "bl": 6,
+        "rd": 47
+      },
+      "dlc": {
+        "product_id": "H-11ZVWW",
+        "family_code": "IIIOXP",
+        "date_qualified": "2025-09-15",
+        "ppf_efficacy": 3.16
+      },
+      "tags": [
+        "gml-solutions-ltd.",
+        "gmll0120w3l1e10e2",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "gml-solutions-ltd-gmll0600w6n1a23e2",
+      "vendor": "GML Solutions Ltd.",
+      "model": "GMLL0600W6N1A23E2",
+      "watts": 600,
+      "control": "0-10V",
+      "ppfd": 1113,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 55,
+        "ww": 7,
+        "bl": 22,
+        "rd": 15
+      },
+      "dlc": {
+        "product_id": "H-970ZP3",
+        "family_code": "PPPUGI",
+        "date_qualified": "2025-09-15",
+        "ppf_efficacy": 2.73
+      },
+      "tags": [
+        "gml-solutions-ltd.",
+        "gmll0600w6n1a23e2",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "gml-solutions-ltd-gmll0720w6n1a10e2",
+      "vendor": "GML Solutions Ltd.",
+      "model": "GMLL0720W6N1A10E2",
+      "watts": 720,
+      "control": "0-10V",
+      "ppfd": 1283,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 18,
+        "bl": 11,
+        "rd": 29
+      },
+      "dlc": {
+        "product_id": "H-CQ1Y8X",
+        "family_code": "PPPUGL",
+        "date_qualified": "2025-09-12",
+        "ppf_efficacy": 2.69
+      },
+      "tags": [
+        "gml-solutions-ltd.",
+        "gmll0720w6n1a10e2",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "gml-solutions-ltd-gmll1440w6n2a05e2",
+      "vendor": "GML Solutions Ltd.",
+      "model": "GMLL1440W6N2A05E2",
+      "watts": 1440,
+      "control": "0-10V",
+      "ppfd": 2520,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-VHB34Y",
+        "family_code": "PPPUGU",
+        "date_qualified": "2025-09-12",
+        "ppf_efficacy": 2.66
+      },
+      "tags": [
+        "gml-solutions-ltd.",
+        "gmll1440w6n2a05e2",
+        "0-10v",
+        "tunable",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "grow3-promax-640",
+      "vendor": "Grow3",
+      "model": "ProMax 640",
+      "watts": 640,
+      "control": "WiFi",
+      "ppfd": 1600,
+      "spectrum": "CW/WW + 450nm + 660nm",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "tags": [
+        "grow3",
+        "promax",
+        "wifi",
+        "4-channel",
+        "tunable"
+      ]
+    },
+    {
+      "id": "grow3-promax-720",
+      "vendor": "Grow3",
+      "model": "ProMax 720",
+      "watts": 720,
+      "control": "WiFi",
+      "ppfd": 1800,
+      "spectrum": "CW/WW + 450nm + 660nm",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "tags": [
+        "grow3",
+        "promax",
+        "wifi",
+        "4-channel",
+        "tunable"
+      ]
+    },
+    {
+      "id": "growers-choice-roi-e720",
+      "vendor": "Growers Choice",
+      "model": "ROI-E720",
+      "watts": 720,
+      "control": "0-10V",
+      "ppfd": 1800,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "growers-choice",
+        "roi",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "growgeneration-corp-dialedin-tri-spec-150w-ucl",
+      "vendor": "GrowGeneration Corp",
+      "model": "DialedIn Tri-Spec 150W UCL",
+      "watts": 149,
+      "control": "0-10V",
+      "ppfd": 313,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 32,
+        "ww": 19,
+        "bl": 8,
+        "rd": 40
+      },
+      "dlc": {
+        "product_id": "H-S1L4HG",
+        "family_code": "UUWCA",
+        "date_qualified": "2025-10-14",
+        "ppf_efficacy": 3.13
+      },
+      "tags": [
+        "growgeneration-corp",
+        "dialedin-tri-spec-150w-ucl",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "hawthorne-gardening-company-hgc907092",
+      "vendor": "Hawthorne Gardening Company",
+      "model": "HGC907092",
+      "watts": 155,
+      "control": "0-10V",
+      "ppfd": 312,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 19,
+        "ww": 23,
+        "bl": 6,
+        "rd": 51
+      },
+      "dlc": {
+        "product_id": "H-5PJNW1",
+        "family_code": "PPPUJM",
+        "date_qualified": "2025-10-09",
+        "ppf_efficacy": 3.02
+      },
+      "tags": [
+        "hawthorne-gardening-company",
+        "hgc907092",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "heliospectra-lx601c",
+      "vendor": "Heliospectra",
+      "model": "LX601C",
+      "watts": 600,
+      "control": "WiFi",
+      "ppfd": 1600,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd",
+        "fr"
+      ],
+      "tags": [
+        "heliospectra",
+        "lx601c",
+        "wifi",
+        "tunable",
+        "professional",
+        "5-channel"
+      ]
+    },
+    {
+      "id": "heliospectra-ab-mix6c3-e1",
+      "vendor": "Heliospectra AB",
+      "model": "MIX6C3-E1",
+      "watts": 612,
+      "control": "DALI",
+      "ppfd": 1549,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-NCJGJB",
+        "family_code": "PPPUJA",
+        "date_qualified": "2025-09-11"
+      },
+      "tags": [
+        "heliospectra-ab",
+        "mix6c3-e1",
+        "dali",
+        "tunable",
+        "high-power"
+      ]
+    },
+    {
+      "id": "hlg-650r",
+      "vendor": "HLG",
+      "model": "650R",
+      "watts": 630,
+      "control": "0-10V",
+      "ppfd": 1600,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "hlg",
+        "650r",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "hlg-scorpion-diablo",
+      "vendor": "HLG",
+      "model": "Scorpion Diablo",
+      "watts": 650,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 38,
+        "ww": 37,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "hlg",
+        "scorpion",
+        "diablo",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "hortibest-md-120a-grf",
+      "vendor": "HortiBest",
+      "model": "MD-120A GRF",
+      "watts": 121,
+      "control": "0-10V",
+      "ppfd": 283,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 9,
+        "ww": 29,
+        "bl": 7,
+        "rd": 54
+      },
+      "dlc": {
+        "product_id": "H-0M33N6",
+        "family_code": "PPPUIO",
+        "date_qualified": "2025-08-26",
+        "ppf_efficacy": 3.51
+      },
+      "tags": [
+        "hortibest",
+        "md-120a-grf",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "hortibloom-hb6500",
+      "vendor": "HortiBloom",
+      "model": "HB6500",
+      "watts": 650,
+      "control": "0-10V",
+      "ppfd": 1650,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "hortibloom",
+        "hb6500",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "hydrotek-hydroponics-wuc120",
+      "vendor": "Hydrotek Hydroponics",
+      "model": "WUC120",
+      "watts": 113,
+      "control": "DALI",
+      "ppfd": 200,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 12,
+        "ww": 25,
+        "bl": 4,
+        "rd": 58
+      },
+      "dlc": {
+        "product_id": "H-TSZ25T",
+        "family_code": "UUUWBO",
+        "date_qualified": "2025-08-22",
+        "ppf_efficacy": 2.65
+      },
+      "tags": [
+        "hydrotek-hydroponics",
+        "wuc120",
+        "dali",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "hydrotek-hydroponics-wuc120-fs",
+      "vendor": "Hydrotek Hydroponics",
+      "model": "WUC120-FS",
+      "watts": 116,
+      "control": "DALI",
+      "ppfd": 201,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 43,
+        "ww": 15,
+        "bl": 11,
+        "rd": 30
+      },
+      "dlc": {
+        "product_id": "H-9VJN2V",
+        "family_code": "UUUWBP",
+        "date_qualified": "2025-08-22",
+        "ppf_efficacy": 2.59
+      },
+      "tags": [
+        "hydrotek-hydroponics",
+        "wuc120-fs",
+        "dali",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "iluminar-lighting-il-undcpy-n-r-160w-277",
+      "vendor": "ILUMINAR Lighting",
+      "model": "IL-UNDCPY-N-R-160W-277",
+      "watts": 162,
+      "control": "0-10V",
+      "ppfd": 338,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 12,
+        "ww": 24,
+        "bl": 7,
+        "rd": 56
+      },
+      "dlc": {
+        "product_id": "H-W4KTB1",
+        "family_code": "IIIOXV",
+        "date_qualified": "2025-10-16",
+        "ppf_efficacy": 3.12
+      },
+      "tags": [
+        "iluminar-lighting",
+        "il-undcpy-n-r-160w-277",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "iluminar-lighting-il-undcpy-nr-r-160w-277",
+      "vendor": "ILUMINAR Lighting",
+      "model": "IL-UNDCPY-NR-R-160W-277",
+      "watts": 160,
+      "control": "0-10V",
+      "ppfd": 330,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 11,
+        "ww": 24,
+        "bl": 6,
+        "rd": 57
+      },
+      "dlc": {
+        "product_id": "H-JR63RH",
+        "family_code": "IIIOXV",
+        "date_qualified": "2025-10-16",
+        "ppf_efficacy": 3.09
+      },
+      "tags": [
+        "iluminar-lighting",
+        "il-undcpy-nr-r-160w-277",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "invisible-sun-ish150",
+      "vendor": "Invisible Sun",
+      "model": "ISH150",
+      "watts": 600,
+      "control": "0-10V",
+      "ppfd": 1550,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "invisible-sun",
+        "ish150",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "jumplights-ets-max-7a",
+      "vendor": "JumpLights",
+      "model": "ETS Max-7A",
+      "watts": 338,
+      "control": "0-10V",
+      "ppfd": 758,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 17,
+        "ww": 23,
+        "bl": 6,
+        "rd": 53
+      },
+      "dlc": {
+        "product_id": "H-96NSKW",
+        "family_code": "EAEGGM",
+        "date_qualified": "2025-08-25"
+      },
+      "tags": [
+        "jumplights",
+        "ets-max-7a",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "jumplights-ets-maxp-5b",
+      "vendor": "JumpLights",
+      "model": "ETS MaxP-5B",
+      "watts": 381,
+      "control": "0-10V",
+      "ppfd": 766,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 30,
+        "ww": 18,
+        "bl": 10,
+        "rd": 40
+      },
+      "dlc": {
+        "product_id": "H-7K5Q8K",
+        "family_code": "EAEGGM",
+        "date_qualified": "2025-08-25"
+      },
+      "tags": [
+        "jumplights",
+        "ets-maxp-5b",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "jumplights-ets-maxp-7a",
+      "vendor": "JumpLights",
+      "model": "ETS MaxP-7A",
+      "watts": 374,
+      "control": "0-10V",
+      "ppfd": 869,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 17,
+        "ww": 23,
+        "bl": 6,
+        "rd": 53
+      },
+      "dlc": {
+        "product_id": "H-2ZB684",
+        "family_code": "EAEGGM",
+        "date_qualified": "2025-08-25"
+      },
+      "tags": [
+        "jumplights",
+        "ets-maxp-7a",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "kind-led-x750",
+      "vendor": "Kind LED",
+      "model": "X750",
+      "watts": 750,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "kind-led",
+        "x750",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "kingbrite-720w",
+      "vendor": "Kingbrite",
+      "model": "720W",
+      "watts": 720,
+      "control": "0-10V",
+      "ppfd": 1800,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "kingbrite",
+        "720w",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "led-lighting-llc-dba-specgrade-flora-12-k1-v05-wt-6ft",
+      "vendor": "LED Lighting LLC. DBA SpecGrade",
+      "model": "FLORA-12-K1-V05-WT-6FT",
+      "watts": 485,
+      "control": "DALI",
+      "ppfd": 832,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 51,
+        "ww": 12,
+        "bl": 13,
+        "rd": 23
+      },
+      "dlc": {
+        "product_id": "H-XPWL3L",
+        "family_code": "IIIOXR",
+        "date_qualified": "2025-09-18",
+        "ppf_efficacy": 2.57
+      },
+      "tags": [
+        "led-lighting-llc.-dba-specgrade",
+        "flora-12-k1-v05-wt-6ft",
+        "dali",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "lumigrow-pro-650",
+      "vendor": "LumiGrow",
+      "model": "Pro 650",
+      "watts": 650,
+      "control": "WiFi",
+      "ppfd": 1700,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "tags": [
+        "lumigrow",
+        "pro",
+        "wifi",
+        "tunable",
+        "professional"
+      ]
+    },
+    {
+      "id": "luxx-645w-pro",
+      "vendor": "Luxx Lighting",
+      "model": "645W Pro",
+      "watts": 645,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "luxx",
+        "645w",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "mammoth-lighting-mgreen",
+      "vendor": "mammoth lighting",
+      "model": "MGREEN",
+      "watts": 718,
+      "control": "0-10V",
+      "ppfd": 1203,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 43,
+        "ww": 14,
+        "bl": 17,
+        "rd": 24
+      },
+      "dlc": {
+        "product_id": "H-9SMTM0",
+        "family_code": "UUUWCB",
+        "date_qualified": "2025-10-14",
+        "ppf_efficacy": 2.51
+      },
+      "tags": [
+        "mammoth-lighting",
+        "mgreen",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "mars-hydro-fc6500",
+      "vendor": "MARS HYDRO",
+      "model": "FC 6500",
+      "watts": 650,
+      "control": "0-10V",
+      "ppfd": 1600,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "mars-hydro",
+        "fc6500",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "mars-hydro-fc8000",
+      "vendor": "MARS HYDRO",
+      "model": "FC 8000",
+      "watts": 800,
+      "control": "0-10V",
+      "ppfd": 1800,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "mars-hydro",
+        "fc8000",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "meijiu-quantum-board-v3",
+      "vendor": "Meijiu",
+      "model": "Quantum Board V3",
+      "watts": 480,
+      "control": "0-10V",
+      "ppfd": 1250,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "meijiu",
+        "quantum-board",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "migro-array-8",
+      "vendor": "Migro",
+      "model": "Array 8",
+      "watts": 640,
+      "control": "0-10V",
+      "ppfd": 1600,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "migro",
+        "array8",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "nextlight-mega",
+      "vendor": "NextLight",
+      "model": "Mega",
+      "watts": 650,
+      "control": "0-10V",
+      "ppfd": 1650,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 38,
+        "ww": 37,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "nextlight",
+        "mega",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "optic-led-8",
+      "vendor": "Optic LED",
+      "model": "Optic 8",
+      "watts": 650,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 38,
+        "ww": 37,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "optic-led",
+        "optic8",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-balensbeam-r37:w37:b18:fr8-(230w208-400vdigital)",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "PARFX BALENSBEAM R37:W37:B18:FR8 (230W,208-400V,DIGITAL)",
+      "watts": 233,
+      "control": "DALI",
+      "ppfd": 390,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 20,
+        "bl": 12,
+        "rd": 26
+      },
+      "dlc": {
+        "product_id": "H-44ZNRM",
+        "family_code": "PPPUJE",
+        "date_qualified": "2025-09-18",
+        "ppf_efficacy": 2.51
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-balensbeam-r37:w37:b18:fr8-(230w,208-400v,digital)",
+        "dali",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-balensbeam-r44:w33:b23-(230w208-400vdigital)",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "PARFX BALENSBEAM R44:W33:B23 (230W,208-400V,DIGITAL)",
+      "watts": 234,
+      "control": "DALI",
+      "ppfd": 410,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 38,
+        "ww": 14,
+        "bl": 16,
+        "rd": 30
+      },
+      "dlc": {
+        "product_id": "H-790XJF",
+        "family_code": "PPPUJF",
+        "date_qualified": "2025-09-18",
+        "ppf_efficacy": 2.63
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-balensbeam-r44:w33:b23-(230w,208-400v,digital)",
+        "dali",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-ultra-lite-208-240v-r37:w37:b18:fr8",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "ParFX Ultra Lite 208-240V R37:W37:B18:FR8",
+      "watts": 612,
+      "control": "DALI",
+      "ppfd": 1058,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 43,
+        "ww": 18,
+        "bl": 12,
+        "rd": 25
+      },
+      "dlc": {
+        "product_id": "H-00SWYT",
+        "family_code": "PPPUJB",
+        "date_qualified": "2025-09-11",
+        "ppf_efficacy": 2.59
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-ultra-lite-208-240v-r37:w37:b18:fr8",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-ultra-lite-208-240v-r40:w40:b18:fr2",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "ParFX Ultra Lite 208-240V R40:W40:B18:FR2",
+      "watts": 604,
+      "control": "DALI",
+      "ppfd": 1034,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 46,
+        "ww": 14,
+        "bl": 12,
+        "rd": 26
+      },
+      "dlc": {
+        "product_id": "H-SDSB63",
+        "family_code": "PPPUJB",
+        "date_qualified": "2025-09-11",
+        "ppf_efficacy": 2.57
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-ultra-lite-208-240v-r40:w40:b18:fr2",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-ultra-lite-208-240v-r57:w30:b12:fr1",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "ParFX Ultra Lite 208-240V R57:W30:B12:FR1",
+      "watts": 607,
+      "control": "DALI",
+      "ppfd": 1136,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 34,
+        "ww": 18,
+        "bl": 8,
+        "rd": 39
+      },
+      "dlc": {
+        "product_id": "H-XFM66T",
+        "family_code": "PPPUJB",
+        "date_qualified": "2025-09-11",
+        "ppf_efficacy": 2.81
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-ultra-lite-208-240v-r57:w30:b12:fr1",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-ultra-lite-208-240v-r80:w5:b7:fr8",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "ParFX Ultra Lite 208-240V R80:W5:B7:FR8",
+      "watts": 616,
+      "control": "DALI",
+      "ppfd": 1348,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 8,
+        "ww": 31,
+        "bl": 4,
+        "rd": 56
+      },
+      "dlc": {
+        "product_id": "H-3M0G3H",
+        "family_code": "PPPUJB",
+        "date_qualified": "2025-09-11",
+        "ppf_efficacy": 3.28
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-ultra-lite-208-240v-r80:w5:b7:fr8",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-ultra-lite-208-240v-r90:w5:b5",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "ParFX Ultra Lite 208-240V R90:W5:B5",
+      "watts": 606,
+      "control": "DALI",
+      "ppfd": 1438,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 7,
+        "ww": 27,
+        "bl": 3,
+        "rd": 62
+      },
+      "dlc": {
+        "product_id": "H-8K2ZS8",
+        "family_code": "PPPUJG",
+        "date_qualified": "2025-09-18",
+        "ppf_efficacy": 3.56
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-ultra-lite-208-240v-r90:w5:b5",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-ultra-max-3ch-4500",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "ParFX Ultra Max 3CH 4500",
+      "watts": 1216,
+      "control": "DALI",
+      "ppfd": 3096,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-B7G2W3",
+        "family_code": "PPPUJL",
+        "date_qualified": "2025-10-01",
+        "ppf_efficacy": 3.82
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-ultra-max-3ch-4500",
+        "dali",
+        "tunable",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-parfx-ultra-plus-r90:w5:b5+fr8",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "ParFX Ultra Plus R90:W5:B5+FR8",
+      "watts": 1071,
+      "control": "DALI",
+      "ppfd": 2582,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-F87QJZ",
+        "family_code": "RRRYPR",
+        "date_qualified": "2025-08-28",
+        "ppf_efficacy": 3.62
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "parfx-ultra-plus-r90:w5:b5+fr8",
+        "dali",
+        "tunable",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-vertimax-640w-120-277v-dim",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "VERTIMAX 640W 120-277V DIM",
+      "watts": 642,
+      "control": "DALI",
+      "ppfd": 1158,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 45,
+        "ww": 14,
+        "bl": 12,
+        "rd": 28
+      },
+      "dlc": {
+        "product_id": "H-0005005",
+        "family_code": "RRRYPT",
+        "date_qualified": "2025-08-29",
+        "ppf_efficacy": 2.7
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "vertimax-640w-120-277v-dim",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "pl-light-systems-canada-inc-vertimax-640w-277-480v-dim",
+      "vendor": "P.L. Light Systems Canada Inc.",
+      "model": "VERTIMAX 640W 277-480V DIM",
+      "watts": 646,
+      "control": "DALI",
+      "ppfd": 1185,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 45,
+        "ww": 14,
+        "bl": 12,
+        "rd": 28
+      },
+      "dlc": {
+        "product_id": "H-0005006",
+        "family_code": "RRRYPT",
+        "date_qualified": "2025-08-29",
+        "ppf_efficacy": 2.8
+      },
+      "tags": [
+        "p.l.-light-systems-canada-inc.",
+        "vertimax-640w-277-480v-dim",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "parfactworks-co-ltd-shy-under-canopy-light",
+      "vendor": "Parfactworks Co., Ltd",
+      "model": "SHY-Under Canopy Light",
+      "watts": 698,
+      "control": "0-10V",
+      "ppfd": 1419,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 3,
+        "ww": 27,
+        "bl": 7,
+        "rd": 62
+      },
+      "dlc": {
+        "product_id": "H-RZ7501",
+        "family_code": "PPPUIT",
+        "date_qualified": "2025-08-29",
+        "ppf_efficacy": 3.05
+      },
+      "tags": [
+        "parfactworks-co.,-ltd",
+        "shy-under-canopy-light",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "philips-greenpower-led",
+      "vendor": "Philips",
+      "model": "GreenPower LED",
+      "watts": 645,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "philips",
+        "greenpower",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "phlizon-ph-4000",
+      "vendor": "Phlizon",
+      "model": "PH-4000",
+      "watts": 400,
+      "control": "0-10V",
+      "ppfd": 1050,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "phlizon",
+        "ph-4000",
+        "0-10v",
+        "static",
+        "mid-power"
+      ]
+    },
+    {
+      "id": "photontek-x600w-pro",
+      "vendor": "Photontek",
+      "model": "X 600W Pro",
+      "watts": 600,
+      "control": "0-10V",
+      "ppfd": 1550,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 38,
+        "ww": 37,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "photontek",
+        "x600w",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "samsung-horticulture-h-inno",
+      "vendor": "Samsung",
+      "model": "Horticulture H-inno",
+      "watts": 680,
+      "control": "0-10V",
+      "ppfd": 1750,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "samsung",
+        "horticulture",
+        "h-inno",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "scynce-raging-kush",
+      "vendor": "Scynce LED",
+      "model": "Raging Kush",
+      "watts": 680,
+      "control": "0-10V",
+      "ppfd": 1700,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "scynce",
+        "raging-kush",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "shenzhen-ctlite-technology-co-ltd-uc-160s",
+      "vendor": "Shenzhen CTLITE Technology CO., Ltd.",
+      "model": "UC-160S",
+      "watts": 162,
+      "control": "DALI",
+      "ppfd": 314,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 28,
+        "ww": 20,
+        "bl": 6,
+        "rd": 44
+      },
+      "dlc": {
+        "product_id": "H-XT266S",
+        "family_code": "IIIOXN",
+        "date_qualified": "2025-08-26",
+        "ppf_efficacy": 2.91
+      },
+      "tags": [
+        "shenzhen-ctlite-technology-co.,-ltd.",
+        "uc-160s",
+        "dali",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "shenzhen-enlite-energy-technology-co-ltd-001-fl960305312-00",
+      "vendor": "Shenzhen Enlite Energy Technology Co., Ltd",
+      "model": "001-FL960305312-00",
+      "watts": 1014,
+      "control": "0-10V",
+      "ppfd": 1972,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 33,
+        "ww": 15,
+        "bl": 17,
+        "rd": 33
+      },
+      "dlc": {
+        "product_id": "H-SUC1DEX",
+        "family_code": "PPPUJO",
+        "date_qualified": "2025-10-13",
+        "ppf_efficacy": 2.92
+      },
+      "tags": [
+        "shenzhen-enlite-energy-technology-co.,-ltd",
+        "001-fl960305312-00",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-enlite-energy-technology-co-ltd-001-tl0780305300-00",
+      "vendor": "Shenzhen Enlite Energy Technology Co., Ltd",
+      "model": "001-TL0780305300-00",
+      "watts": 816,
+      "control": "0-10V",
+      "ppfd": 1872,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 5,
+        "ww": 27,
+        "bl": 3,
+        "rd": 64
+      },
+      "dlc": {
+        "product_id": "H-W5GF99",
+        "family_code": "UUUWBV",
+        "date_qualified": "2025-09-15",
+        "ppf_efficacy": 3.44
+      },
+      "tags": [
+        "shenzhen-enlite-energy-technology-co.,-ltd",
+        "001-tl0780305300-00",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-grandyield-technology-co-ltd-kz160w27vbxdyy",
+      "vendor": "Shenzhen Grandyield Technology Co., Ltd",
+      "model": "KZ160W27VBXDYY",
+      "watts": 163,
+      "control": "0-10V",
+      "ppfd": 328,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 27,
+        "ww": 20,
+        "bl": 8,
+        "rd": 44
+      },
+      "dlc": {
+        "product_id": "H-8YWZ07",
+        "family_code": "PPPUJK",
+        "date_qualified": "2025-10-01",
+        "ppf_efficacy": 3.02
+      },
+      "tags": [
+        "shenzhen-grandyield-technology-co.,-ltd",
+        "kz160w27vbxdyy",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "shenzhen-grandyield-technology-co-ltd-kz160w34vaxdyy",
+      "vendor": "Shenzhen Grandyield Technology Co., Ltd",
+      "model": "KZ160W34VAXDYY",
+      "watts": 160,
+      "control": "0-10V",
+      "ppfd": 301,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 37,
+        "ww": 17,
+        "bl": 8,
+        "rd": 36
+      },
+      "dlc": {
+        "product_id": "H-9NK97V",
+        "family_code": "UUUVXN",
+        "date_qualified": "2025-10-01",
+        "ppf_efficacy": 2.82
+      },
+      "tags": [
+        "shenzhen-grandyield-technology-co.,-ltd",
+        "kz160w34vaxdyy",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "shenzhen-grandyield-technology-co-ltd-kz160w48vbxdyy",
+      "vendor": "Shenzhen Grandyield Technology Co., Ltd",
+      "model": "KZ160W48VBXDYY",
+      "watts": 160,
+      "control": "0-10V",
+      "ppfd": 328,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 27,
+        "ww": 20,
+        "bl": 8,
+        "rd": 44
+      },
+      "dlc": {
+        "product_id": "H-XWTN82",
+        "family_code": "PPPUJK",
+        "date_qualified": "2025-10-01",
+        "ppf_efficacy": 3.02
+      },
+      "tags": [
+        "shenzhen-grandyield-technology-co.,-ltd",
+        "kz160w48vbxdyy",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "shenzhen-hortiright-co-ltd-hr-1050-led",
+      "vendor": "Shenzhen Hortiright Co Ltd",
+      "model": "HR-1050 LED",
+      "watts": 917,
+      "control": "0-10V",
+      "ppfd": 1903,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 33,
+        "ww": 19,
+        "bl": 15,
+        "rd": 31
+      },
+      "dlc": {
+        "product_id": "H-MNJWV0",
+        "family_code": "PPPUIQ",
+        "date_qualified": "2025-08-28",
+        "ppf_efficacy": 3.11
+      },
+      "tags": [
+        "shenzhen-hortiright-co-ltd",
+        "hr-1050-led",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-hortiright-co-ltd-ucl-360e",
+      "vendor": "Shenzhen Hortiright Co Ltd",
+      "model": "UCL-360e",
+      "watts": 124,
+      "control": "0-10V",
+      "ppfd": 249,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 36,
+        "ww": 17,
+        "bl": 10,
+        "rd": 36
+      },
+      "dlc": {
+        "product_id": "H-B6NZC6",
+        "family_code": "PPPUIP",
+        "date_qualified": "2025-08-28",
+        "ppf_efficacy": 3.01
+      },
+      "tags": [
+        "shenzhen-hortiright-co-ltd",
+        "ucl-360e",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "shenzhen-number-energy-saving-corporation-led-as860f",
+      "vendor": "Shenzhen Number Energy Saving Corporation",
+      "model": "LED AS860F",
+      "watts": 868,
+      "control": "0-10V",
+      "ppfd": 1678,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 39,
+        "ww": 19,
+        "bl": 9,
+        "rd": 31
+      },
+      "dlc": {
+        "product_id": "H-8KB5K1",
+        "family_code": "PPPUIL",
+        "date_qualified": "2025-08-15",
+        "ppf_efficacy": 2.9
+      },
+      "tags": [
+        "shenzhen-number-energy-saving-corporation",
+        "led-as860f",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-number-energy-saving-corporation-ledex-f120",
+      "vendor": "Shenzhen Number Energy Saving Corporation",
+      "model": "LEDex-F120",
+      "watts": 120,
+      "control": "0-10V",
+      "ppfd": 240,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 16,
+        "ww": 30,
+        "bl": 5,
+        "rd": 47
+      },
+      "dlc": {
+        "product_id": "H-HBKKXF",
+        "family_code": "PPPUIX",
+        "date_qualified": "2025-09-05",
+        "ppf_efficacy": 3.0
+      },
+      "tags": [
+        "shenzhen-number-energy-saving-corporation",
+        "ledex-f120",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "shenzhen-xinshengyang-opto-electronics-technology-coltd-lphm8i-lo",
+      "vendor": "Shenzhen Xinshengyang Opto-electronics Technology Co.,Ltd.",
+      "model": "LPHM8I-LO",
+      "watts": 870,
+      "control": "0-10V",
+      "ppfd": 1631,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 37,
+        "ww": 17,
+        "bl": 14,
+        "rd": 31
+      },
+      "dlc": {
+        "product_id": "H-8H2MY6",
+        "family_code": "IIIOXS",
+        "date_qualified": "2025-09-19",
+        "ppf_efficacy": 2.81
+      },
+      "tags": [
+        "shenzhen-xinshengyang-opto-electronics-technology-co.,ltd.",
+        "lphm8i-lo",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-xinshengyang-opto-electronics-technology-coltd-lphm8ihv-lo",
+      "vendor": "Shenzhen Xinshengyang Opto-electronics Technology Co.,Ltd.",
+      "model": "LPHM8IHV-LO",
+      "watts": 844,
+      "control": "0-10V",
+      "ppfd": 1626,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 37,
+        "ww": 17,
+        "bl": 14,
+        "rd": 31
+      },
+      "dlc": {
+        "product_id": "H-MSDVKX",
+        "family_code": "IIIOXS",
+        "date_qualified": "2025-09-19",
+        "ppf_efficacy": 2.89
+      },
+      "tags": [
+        "shenzhen-xinshengyang-opto-electronics-technology-co.,ltd.",
+        "lphm8ihv-lo",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-xinshengyang-opto-electronics-technology-coltd-lptcp620s-tt",
+      "vendor": "Shenzhen Xinshengyang Opto-electronics Technology Co.,Ltd.",
+      "model": "LPTCP620S-TT",
+      "watts": 623,
+      "control": "0-10V",
+      "ppfd": 1158,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 36,
+        "ww": 18,
+        "bl": 12,
+        "rd": 32
+      },
+      "dlc": {
+        "product_id": "H-SQZ1ZK",
+        "family_code": "IIIOXT",
+        "date_qualified": "2025-09-25",
+        "ppf_efficacy": 2.79
+      },
+      "tags": [
+        "shenzhen-xinshengyang-opto-electronics-technology-co.,ltd.",
+        "lptcp620s-tt",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-xinshengyang-opto-electronics-technology-coltd-lptcp620shv-tt",
+      "vendor": "Shenzhen Xinshengyang Opto-electronics Technology Co.,Ltd.",
+      "model": "LPTCP620SHV-TT",
+      "watts": 668,
+      "control": "0-10V",
+      "ppfd": 1257,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 36,
+        "ww": 18,
+        "bl": 12,
+        "rd": 32
+      },
+      "dlc": {
+        "product_id": "H-XXPHTP",
+        "family_code": "IIIOXT",
+        "date_qualified": "2025-09-25",
+        "ppf_efficacy": 2.82
+      },
+      "tags": [
+        "shenzhen-xinshengyang-opto-electronics-technology-co.,ltd.",
+        "lptcp620shv-tt",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-xinshengyang-opto-electronics-technology-coltd-lptcp800s-tt",
+      "vendor": "Shenzhen Xinshengyang Opto-electronics Technology Co.,Ltd.",
+      "model": "LPTCP800S-TT",
+      "watts": 813,
+      "control": "0-10V",
+      "ppfd": 1608,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 36,
+        "ww": 18,
+        "bl": 12,
+        "rd": 32
+      },
+      "dlc": {
+        "product_id": "H-2BTZ61",
+        "family_code": "IIIOXT",
+        "date_qualified": "2025-09-25",
+        "ppf_efficacy": 2.97
+      },
+      "tags": [
+        "shenzhen-xinshengyang-opto-electronics-technology-co.,ltd.",
+        "lptcp800s-tt",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "shenzhen-xinshengyang-opto-electronics-technology-coltd-lptcp800shv-tt",
+      "vendor": "Shenzhen Xinshengyang Opto-electronics Technology Co.,Ltd.",
+      "model": "LPTCP800SHV-TT",
+      "watts": 855,
+      "control": "0-10V",
+      "ppfd": 1614,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 36,
+        "ww": 18,
+        "bl": 12,
+        "rd": 32
+      },
+      "dlc": {
+        "product_id": "H-BC4G5Y",
+        "family_code": "IIIOXT",
+        "date_qualified": "2025-09-25",
+        "ppf_efficacy": 2.83
+      },
+      "tags": [
+        "shenzhen-xinshengyang-opto-electronics-technology-co.,ltd.",
+        "lptcp800shv-tt",
+        "0-10v",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-gpl-pm-168-drw_lb-l120-32-c1",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "GPL PM 168 DRW_LB L120 3.2 C1",
+      "watts": 58,
+      "control": "DALI",
+      "ppfd": 109,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 16,
+        "ww": 24,
+        "bl": 5,
+        "rd": 54
+      },
+      "dlc": {
+        "product_id": "H-VK95TC",
+        "family_code": "RRRYJP",
+        "date_qualified": "2025-09-08",
+        "ppf_efficacy": 2.79
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "gpl-pm-168-drw_lb-l120-3.2-c1",
+        "dali",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-gpl-pm-168-drwfr_lb-l120-c2",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "GPL PM 168 DRWFR_LB L120 C2",
+      "watts": 58,
+      "control": "DALI",
+      "ppfd": 102,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-HW995L",
+        "family_code": "RRRYJP",
+        "date_qualified": "2025-09-08",
+        "ppf_efficacy": 2.64
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "gpl-pm-168-drwfr_lb-l120-c2",
+        "dali",
+        "tunable",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-gpl-pm-290-drbfr_lb-l150-32",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "GPL PM 290 DRBFR_LB L150 3.2",
+      "watts": 87,
+      "control": "DALI",
+      "ppfd": 178,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-6PSR6X",
+        "family_code": "RRRYJP",
+        "date_qualified": "2025-09-08",
+        "ppf_efficacy": 3.05
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "gpl-pm-290-drbfr_lb-l150-3.2",
+        "dali",
+        "tunable",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-gpl-pm-290-drbwfr-l150-32-c4",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "GPL PM 290 DRBWFR L150 3.2 C4",
+      "watts": 89,
+      "control": "DALI",
+      "ppfd": 177,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-CTL8MX",
+        "family_code": "RRRYJP",
+        "date_qualified": "2025-09-08",
+        "ppf_efficacy": 2.99
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "gpl-pm-290-drbwfr-l150-3.2-c4",
+        "dali",
+        "tunable",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-gpl-pm-300-drbfr_lb-l240-32",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "GPL PM 300 DRBFR_LB L240 3.2",
+      "watts": 85,
+      "control": "DALI",
+      "ppfd": 188,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-7QGY95",
+        "family_code": "RRRYJP",
+        "date_qualified": "2025-09-08",
+        "ppf_efficacy": 3.05
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "gpl-pm-300-drbfr_lb-l240-3.2",
+        "dali",
+        "tunable",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-gpl-pm-300-drbwfr-l240-32-c4",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "GPL PM 300 DRBWFR L240 3.2 C4",
+      "watts": 87,
+      "control": "DALI",
+      "ppfd": 188,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "Yes",
+      "tunable": true,
+      "dynamicSpectrum": true,
+      "channels": [
+        "cw",
+        "ww",
+        "bl",
+        "rd"
+      ],
+      "dlc": {
+        "product_id": "H-JB1RBT",
+        "family_code": "RRRYJP",
+        "date_qualified": "2025-09-08",
+        "ppf_efficacy": 2.99
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "gpl-pm-300-drbwfr-l240-3.2-c4",
+        "dali",
+        "tunable",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-rp2i-bw4-cg-ev-wc1",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "RP2i-BW4-CG-EV-WC1",
+      "watts": 1046,
+      "control": "DALI",
+      "ppfd": 1820,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 45,
+        "ww": 13,
+        "bl": 13,
+        "rd": 27
+      },
+      "dlc": {
+        "product_id": "H-LZQPJQ",
+        "family_code": "EAEGGQ",
+        "date_qualified": "2025-10-13",
+        "ppf_efficacy": 2.61
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "rp2i-bw4-cg-ev-wc1",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-rp2i-bw4-qb-ev-wc1",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "RP2i-BW4-QB-EV-WC1",
+      "watts": 1050,
+      "control": "DALI",
+      "ppfd": 1792,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 45,
+        "ww": 13,
+        "bl": 13,
+        "rd": 27
+      },
+      "dlc": {
+        "product_id": "H-S9NGH4",
+        "family_code": "EAEGGQ",
+        "date_qualified": "2025-10-13",
+        "ppf_efficacy": 2.56
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "rp2i-bw4-qb-ev-wc1",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-rp2i-bw4a-cg-ev-wc1",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "RP2i-BW4a-CG-EV-WC1",
+      "watts": 1037,
+      "control": "DALI",
+      "ppfd": 1896,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 41,
+        "ww": 14,
+        "bl": 13,
+        "rd": 30
+      },
+      "dlc": {
+        "product_id": "H-6TFPX9",
+        "family_code": "EAEGGQ",
+        "date_qualified": "2025-10-13",
+        "ppf_efficacy": 2.79
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "rp2i-bw4a-cg-ev-wc1",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "signify-north-america-corporation-\u2013-horti-led-rp2i-bw4a-qb-ev-wc1",
+      "vendor": "Signify North America Corporation \u2013 Horti LED",
+      "model": "RP2i-BW4a-QB-EV-WC1",
+      "watts": 1040,
+      "control": "DALI",
+      "ppfd": 1878,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 41,
+        "ww": 14,
+        "bl": 13,
+        "rd": 30
+      },
+      "dlc": {
+        "product_id": "H-RBP2TH",
+        "family_code": "EAEGGQ",
+        "date_qualified": "2025-10-13",
+        "ppf_efficacy": 2.71
+      },
+      "tags": [
+        "signify-north-america-corporation-\u2013-horti-led",
+        "rp2i-bw4a-qb-ev-wc1",
+        "dali",
+        "static",
+        "high-efficiency",
+        "high-power"
+      ]
+    },
+    {
+      "id": "skylight-led-inc-sky-rfr-120",
+      "vendor": "Skylight LED Inc.",
+      "model": "SKY RFR-120",
+      "watts": 117,
+      "control": "0-10V",
+      "ppfd": 257,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 9,
+        "ww": 32,
+        "bl": 3,
+        "rd": 55
+      },
+      "dlc": {
+        "product_id": "H-H3KBR9",
+        "family_code": "PPPUIS",
+        "date_qualified": "2025-08-29",
+        "ppf_efficacy": 3.28
+      },
+      "tags": [
+        "skylight-led-inc.",
+        "sky-rfr-120",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "skylight-led-inc-sky-rfr-150",
+      "vendor": "Skylight LED Inc.",
+      "model": "SKY RFR-150",
+      "watts": 150,
+      "control": "0-10V",
+      "ppfd": 321,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 9,
+        "ww": 32,
+        "bl": 3,
+        "rd": 55
+      },
+      "dlc": {
+        "product_id": "H-6F8FVM",
+        "family_code": "PPPUIU",
+        "date_qualified": "2025-09-02",
+        "ppf_efficacy": 3.2
+      },
+      "tags": [
+        "skylight-led-inc.",
+        "sky-rfr-150",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "skylight-led-inc-sky-ucr-150",
+      "vendor": "Skylight LED Inc.",
+      "model": "SKY UCR-150",
+      "watts": 149,
+      "control": "0-10V",
+      "ppfd": 360,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 8,
+        "ww": 26,
+        "bl": 3,
+        "rd": 61
+      },
+      "dlc": {
+        "product_id": "H-3X6N0R",
+        "family_code": "PPPUIV",
+        "date_qualified": "2025-09-02",
+        "ppf_efficacy": 3.6
+      },
+      "tags": [
+        "skylight-led-inc.",
+        "sky-ucr-150",
+        "0-10v",
+        "static",
+        "high-efficiency"
+      ]
+    },
+    {
+      "id": "spectrum-king-sk602",
+      "vendor": "Spectrum King",
+      "model": "SK602",
+      "watts": 602,
+      "control": "0-10V",
+      "ppfd": 1550,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "spectrum-king",
+        "sk602",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "spider-farmer-sf4000",
+      "vendor": "Spider Farmer",
+      "model": "SF 4000",
+      "watts": 450,
+      "control": "0-10V",
+      "ppfd": 1200,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "spider-farmer",
+        "sf4000",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "spider-farmer-sf7000",
+      "vendor": "Spider Farmer",
+      "model": "SF 7000",
+      "watts": 700,
+      "control": "0-10V",
+      "ppfd": 1750,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "spider-farmer",
+        "sf7000",
+        "0-10v",
+        "static"
+      ]
+    },
+    {
+      "id": "electric-sky-es300",
+      "vendor": "The Green Sunshine Company",
+      "model": "Electric Sky ES300",
+      "watts": 340,
+      "control": "Manual",
+      "ppfd": 900,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "green-sunshine",
+        "electric-sky",
+        "manual",
+        "static",
+        "mid-power"
+      ]
+    },
+    {
+      "id": "toplight-elite",
+      "vendor": "TopLight",
+      "model": "Elite",
+      "watts": 750,
+      "control": "RS485",
+      "ppfd": 2000,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "toplight",
+        "elite",
+        "rs485",
+        "professional",
+        "static",
+        "high-ppfd"
+      ]
+    },
+    {
+      "id": "toplight-pro",
+      "vendor": "TopLight",
+      "model": "Pro",
+      "watts": 700,
+      "control": "RS485",
+      "ppfd": 1850,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 40,
+        "ww": 35,
+        "bl": 15,
+        "rd": 10
+      },
+      "tags": [
+        "toplight",
+        "pro",
+        "rs485",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "tsrgrow-llc-tg-100hvr6l-fp",
+      "vendor": "TSRgrow, LLC",
+      "model": "TG-100HVR6L-FP",
+      "watts": 744,
+      "control": "DALI",
+      "ppfd": 1420,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 16,
+        "ww": 25,
+        "bl": 10,
+        "rd": 47
+      },
+      "dlc": {
+        "product_id": "H-QDB8HP",
+        "family_code": "IIIOXM",
+        "date_qualified": "2025-08-20"
+      },
+      "tags": [
+        "tsrgrow,-llc",
+        "tg-100hvr6l-fp",
+        "dali",
+        "static",
+        "high-power"
+      ]
+    },
+    {
+      "id": "valoya-ns12",
+      "vendor": "Valoya",
+      "model": "NS12",
+      "watts": 600,
+      "control": "0-10V",
+      "ppfd": 1600,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "valoya",
+        "ns12",
+        "0-10v",
+        "professional",
+        "static"
+      ]
+    },
+    {
+      "id": "viparspectra-ks5000",
+      "vendor": "ViparSpectra",
+      "model": "KS5000",
+      "watts": 500,
+      "control": "0-10V",
+      "ppfd": 1300,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "tags": [
+        "viparspectra",
+        "ks5000",
+        "0-10v",
+        "static"
+      ]
+    }
+  ]
+}

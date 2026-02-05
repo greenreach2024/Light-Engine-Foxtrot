@@ -1,0 +1,2453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Planting Scheduler - Light Engine Charlie</title>
+  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e7;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+      position: relative;
+      z-index: 1001;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .nav-btn {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .nav-btn:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: scale(1.05);
+    }
+
+    /* Dropdown Navigation Menu */
+    .nav-menu {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .nav-item {
+      position: relative;
+    }
+
+    .nav-button, .nav-link-button {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .nav-button:hover, .nav-link-button:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .nav-button.active {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .nav-arrow {
+      font-size: 0.7rem;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-item:hover .nav-arrow {
+      transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 0.5rem;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 2000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .dropdown-menu.dropdown-right {
+      left: auto;
+      right: 0;
+    }
+
+    .nav-item:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: block;
+      padding: 0.75rem 1rem;
+      color: #93c5fd;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .dropdown-item.active {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+      font-weight: 600;
+    }
+
+    .nav-btn.close {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+      color: #fca5a5;
+    }
+
+    .nav-btn.close:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .nav-btn.refresh {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: #22c55e;
+      color: #86efac;
+    }
+
+    .nav-btn.refresh:hover {
+      background: rgba(34, 197, 94, 0.35);
+    }
+
+    /* Main Container */
+    .container {
+      flex: 1;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      overflow-y: auto;
+    }
+
+    /* Card Styles */
+    .card {
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 16px;
+      padding: 2rem;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: #60a5fa;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      padding-bottom: 0.75rem;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .collapse-icon {
+      font-size: 1rem;
+      transition: transform 0.2s ease;
+    }
+
+    .collapsed {
+      display: none !important;
+    }
+
+    .card h3 {
+      font-size: 1.2rem;
+      color: #93c5fd;
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+
+    /* Summary Cards Grid */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .summary-card {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .summary-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+
+    .summary-card .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .summary-card .label {
+      color: #94a3b8;
+      font-size: 1.1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .summary-card .value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #60a5fa;
+      line-height: 1.2;
+    }
+
+    .summary-card .subvalue {
+      color: #cbd5e1;
+      font-size: 1.05rem;
+      margin-top: 0.25rem;
+    }
+
+    /* Variety Cards for Seeding Timeline */
+    .timeline-section {
+      margin-bottom: 3rem;
+    }
+
+    .timeline-section-title {
+      font-size: 1.5rem;
+      color: #60a5fa;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      padding-bottom: 0.75rem;
+    }
+
+    .variety-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+
+    .variety-card {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .variety-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(96, 165, 250, 0.5);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    }
+
+    .variety-card.urgent {
+      border-left: 4px solid #ef4444;
+    }
+
+    .variety-card.warning {
+      border-left: 4px solid #f59e0b;
+    }
+
+    .variety-card.ready {
+      border-left: 4px solid #22c55e;
+    }
+
+    .variety-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .variety-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #e4e4e7;
+      flex: 1;
+    }
+
+    .variety-urgency-badge {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 0.5rem;
+    }
+
+    .variety-urgency-badge.urgent {
+      background: #ef4444;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+    }
+
+    .variety-urgency-badge.warning {
+      background: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    }
+
+    .variety-urgency-badge.ready {
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+    }
+
+    .variety-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .variety-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .variety-stat-label {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .variety-stat-value {
+      color: #60a5fa;
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .variety-dates {
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .variety-date-label {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .variety-date-value {
+      color: #cbd5e1;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .variety-card-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2));
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      border-radius: 6px;
+      color: #93c5fd;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .variety-card-btn:hover {
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.35), rgba(37, 99, 235, 0.35));
+      border-color: rgba(96, 165, 250, 0.7);
+      transform: translateY(-1px);
+    }
+
+    /* Timeline */
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .timeline-item {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border-left: 4px solid #3b82f6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .timeline-item:hover {
+      transform: translateX(4px);
+      border-left-color: #60a5fa;
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .timeline-item.urgent {
+      border-left-color: #ef4444;
+    }
+
+    .timeline-item.warning {
+      border-left-color: #f59e0b;
+    }
+
+    .timeline-item.ready {
+      border-left-color: #22c55e;
+    }
+
+    .timeline-content {
+      flex: 1;
+    }
+
+    .timeline-date {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #60a5fa;
+      margin-bottom: 0.5rem;
+    }
+
+    .timeline-task {
+      font-size: 1rem;
+      color: #e4e4e7;
+      margin-bottom: 0.25rem;
+    }
+
+    .timeline-details {
+      font-size: 0.875rem;
+      color: #94a3b8;
+    }
+
+    .timeline-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .timeline-btn {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: 1px solid;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .timeline-btn.primary {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: #3b82f6;
+      color: #93c5fd;
+    }
+
+    .timeline-btn.primary:hover {
+      background: rgba(59, 130, 246, 0.35);
+    }
+
+    .timeline-btn.secondary {
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.3);
+      color: #cbd5e1;
+    }
+
+    .timeline-btn.secondary:hover {
+      background: rgba(148, 163, 184, 0.2);
+    }
+
+    /* Tray Forecast Table */
+    .tray-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 0.5rem;
+    }
+
+    .tray-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .tray-table th {
+      background: rgba(15, 23, 42, 0.9);
+      color: #94a3b8;
+      text-align: left;
+      padding: 1rem;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .tray-table td {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 1rem;
+      color: #e4e4e7;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .tray-table tbody tr {
+      transition: background 0.2s ease;
+    }
+
+    .tray-table tbody tr:hover {
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .tray-table tbody tr:first-child td:first-child {
+      border-top-left-radius: 8px;
+    }
+
+    .tray-table tbody tr:first-child td:last-child {
+      border-top-right-radius: 8px;
+    }
+
+    .tray-table tbody tr:last-child td:first-child {
+      border-bottom-left-radius: 8px;
+    }
+
+    .tray-table tbody tr:last-child td:last-child {
+      border-bottom-right-radius: 8px;
+    }
+
+    /* Compatibility Badge */
+    .compat-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .compat-badge.excellent {
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+      border: 1px solid #22c55e;
+    }
+
+    .compat-badge.good {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+    }
+
+    .compat-badge.fair {
+      background: rgba(251, 146, 60, 0.2);
+      color: #fdba74;
+      border: 1px solid #fb923c;
+    }
+
+    .compat-badge.poor {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
+    }
+
+    /* Light Adjustment Card */
+    .light-adjustment {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      margin-bottom: 1rem;
+    }
+
+    .light-adjustment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .light-adjustment-header h4 {
+      color: #60a5fa;
+      font-size: 1.1rem;
+    }
+
+    .ppfd-display {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .ppfd-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f59e0b;
+    }
+
+    .ppfd-arrow {
+      font-size: 1.5rem;
+      color: #94a3b8;
+    }
+
+    .ppfd-target {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #22c55e;
+    }
+
+    .ppfd-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .adjustment-timeline {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .adjustment-phase {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .adjustment-phase .phase-name {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .adjustment-phase .phase-duration {
+      font-size: 0.875rem;
+      color: #cbd5e1;
+      margin-bottom: 0.5rem;
+    }
+
+    .adjustment-phase .phase-ppfd {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+
+    /* Manual Scheduling Form */
+    .scheduling-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .form-group label {
+      color: #94a3b8;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .form-group input,
+    .form-group select {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 8px;
+      padding: 0.75rem;
+      color: #e4e4e7;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: flex-end;
+      margin-top: 1.5rem;
+    }
+
+    /* Loading and Empty States */
+    .loading {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #94a3b8;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(148, 163, 184, 0.3);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #94a3b8;
+    }
+
+    .empty-state .icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+      color: #cbd5e1;
+    }
+
+    .empty-state p {
+      margin-bottom: 1.5rem;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      cursor: help;
+    }
+
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      width: 250px;
+      background: rgba(15, 23, 42, 0.95);
+      color: #e4e4e7;
+      text-align: left;
+      border-radius: 8px;
+      padding: 0.75rem;
+      position: absolute;
+      z-index: 1000;
+      bottom: 125%;
+      left: 50%;
+      margin-left: -125px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    .tooltip .tooltiptext::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -5px;
+      border-width: 5px;
+      border-style: solid;
+      border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
+    }
+
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* Status Indicators */
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+    }
+
+    .status-dot.active {
+      background: #22c55e;
+    }
+
+    .status-dot.pending {
+      background: #f59e0b;
+    }
+
+    .status-dot.inactive {
+      background: #64748b;
+    }
+
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-content {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-radius: 12px;
+      max-width: 900px;
+      width: 90%;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      animation: slideUp 0.3s ease;
+    }
+
+    .modal-header {
+      padding: 1.5rem 2rem;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #60a5fa;
+      margin: 0;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      line-height: 1;
+      transition: all 0.2s ease;
+    }
+
+    .modal-close:hover {
+      color: #ef4444;
+      transform: scale(1.1);
+    }
+
+    .modal-body {
+      padding: 2rem;
+      overflow-y: auto;
+    }
+
+    .tray-details-grid {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .tray-detail-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 8px;
+      padding: 1.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .tray-detail-card:hover {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: rgba(30, 41, 59, 0.8);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .tray-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .tray-detail-id {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #60a5fa;
+    }
+
+    .tray-detail-urgency {
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .tray-detail-urgency.overdue {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
+    }
+
+    .tray-detail-urgency.urgent {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border: 1px solid #f59e0b;
+    }
+
+    .tray-detail-urgency.soon {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+    }
+
+    .tray-detail-urgency.ready {
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+      border: 1px solid #22c55e;
+    }
+
+    .tray-detail-info {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .tray-detail-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .tray-detail-label {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .tray-detail-value {
+      color: #e4e4e7;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .tray-detail-value.highlight {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .tray-compatibility {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .tray-compatibility-header {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .tray-compatibility-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .compatibility-tag {
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+
+      .header-actions {
+        flex-wrap: wrap;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .tray-table {
+        font-size: 0.875rem;
+      }
+
+      .tray-table th,
+      .tray-table td {
+        padding: 0.75rem;
+      }
+
+      .adjustment-timeline {
+        flex-direction: column;
+      }
+
+      .tray-detail-info {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-content {
+        width: 95%;
+        max-height: 90vh;
+      }
+
+      .modal-body {
+        padding: 1rem;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+</head>
+<body class="le-theme">
+  <!-- Tray Details Modal -->
+  <div id="trayDetailsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Tray Details</h2>
+        <button class="modal-close" onclick="closeTrayModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Tray details will be populated here -->
+      </div>
+    </div>
+  </div>
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>Planting Scheduler</h1>
+    </div>
+    <div class="header-actions">
+      <nav class="nav-menu">
+        <div class="nav-item">
+          <button class="nav-button active">
+            Inventory Management
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="planting-scheduler.html" class="dropdown-item active">Planting Scheduler</a>
+            <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
+            <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
+            <a href="tray-inventory.html" class="dropdown-item">Activity Hub</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Farm Monitoring
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+            <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Admin
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
+            <a href="/" class="dropdown-item">Setup/Update</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Sales
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu dropdown-right">
+            <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Summary Cards -->
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="icon"></div>
+        <div class="label">Upcoming Seeding Tasks</div>
+        <div class="value" id="upcomingTasksCount">0</div>
+        <div class="subvalue">Next 14 days</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="icon"></div>
+        <div class="label">Active Seedling Batches</div>
+        <div class="value" id="activeSeedlingsCount">0</div>
+        <div class="subvalue">In germination</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="icon"></div>
+        <div class="label">Trays Ready for Planting</div>
+        <div class="value" id="readyTraysCount">0</div>
+        <div class="subvalue">Available slots</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="icon"></div>
+        <div class="label">Light Adjustments Needed</div>
+        <div class="value" id="lightAdjustmentsCount">0</div>
+        <div class="subvalue">For new seedlings</div>
+      </div>
+    </div>
+
+    <!-- Upcoming Seeding Timeline -->
+    <div class="card">
+      <h2>Upcoming Seeding Timeline</h2>
+      <div id="seedingTimeline" class="timeline">
+        <div class="loading">
+          <div class="loading-spinner"></div>
+          <p>Loading seeding schedule...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tray Forecast -->
+    <div class="card">
+      <h2 style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;" onclick="document.getElementById('trayForecastContent').classList.toggle('collapsed'); this.querySelector('.collapse-icon').textContent = document.getElementById('trayForecastContent').classList.contains('collapsed') ? '▶' : '▼';">
+        <span class="collapse-icon">▶</span>
+        Tray Harvest & Seeding Forecast
+      </h2>
+      <div id="trayForecastContent" class="collapsed" style="overflow-x: auto;">
+        <table class="tray-table">
+          <thead>
+            <tr>
+              <th>Tray ID</th>
+              <th>Group/Location</th>
+              <th>Current Crop</th>
+              <th>Expected Harvest</th>
+              <th>Next Seeding Window</th>
+              <th>Recommended Crop</th>
+              <th>Compatibility</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trayForecastBody">
+            <tr>
+              <td colspan="8">
+                <div class="loading">
+                  <div class="loading-spinner"></div>
+                  <p>Loading tray forecast...</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Light Adjustments -->
+    <div class="card">
+      <h2 style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;" onclick="document.getElementById('lightAdjustmentsContainer').classList.toggle('collapsed'); this.querySelector('.collapse-icon').textContent = document.getElementById('lightAdjustmentsContainer').classList.contains('collapsed') ? '▶' : '▼';">
+        <span class="collapse-icon">▶</span>
+        Light Engine Adjustments
+      </h2>
+      <div id="lightAdjustmentsContainer" class="collapsed">
+        <div class="empty-state">
+          <div class="icon">LIGHT</div>
+          <h3>No Adjustments Needed</h3>
+          <p>All groups are currently optimized for their crop stages</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Scheduling -->
+    <div class="card">
+      <h2>Manual Scheduling</h2>
+      <p style="color: #94a3b8; margin-bottom: 1.5rem;">
+        Override automatic recommendations and manually schedule seeding tasks.
+      </p>
+      <form class="scheduling-form" id="manualSchedulingForm">
+        <div class="form-group">
+          <label for="manualCrop">Crop</label>
+          <select id="manualCrop" required>
+            <option value="">Select crop...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="manualTray">Target Tray</label>
+          <select id="manualTray" required>
+            <option value="">Select tray...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="manualSeedDate">Seeding Date</label>
+          <input type="date" id="manualSeedDate" required>
+        </div>
+
+        <div class="form-group">
+          <label for="manualQuantity">Quantity (plants)</label>
+          <input type="number" id="manualQuantity" min="1" required>
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="manualNotes">Notes</label>
+          <input type="text" id="manualNotes" placeholder="Optional notes...">
+        </div>
+
+        <div class="form-actions" style="grid-column: 1 / -1;">
+          <button type="button" class="timeline-btn secondary" onclick="document.getElementById('manualSchedulingForm').reset()">
+            Clear
+          </button>
+          <button type="submit" class="timeline-btn primary">
+            Schedule Seeding Task
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // CROP DATABASE & CONSTANTS
+    // ============================================================================
+    
+    const CROP_DATABASE = {
+      'lettuce-buttercrunch': {
+        id: 'lettuce-buttercrunch',
+        name: 'Buttercrunch Lettuce',
+        cropClass: 'leafy',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
+          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
+          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
+        },
+        nutrientProfile: 'LeafyVeg-A',
+        targetDLI: 14,
+        harvestDays: 35
+      },
+      'lettuce-romaine': {
+        id: 'lettuce-romaine',
+        name: 'Romaine Lettuce',
+        cropClass: 'leafy',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
+          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
+          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
+        },
+        nutrientProfile: 'LeafyVeg-A',
+        targetDLI: 15,
+        harvestDays: 35
+      },
+      'kale': {
+        id: 'kale',
+        name: 'Kale',
+        cropClass: 'leafy',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 10, ppfdMin: 150, ppfdMax: 240 },
+          vegetative: { days: 21, ppfdMin: 240, ppfdMax: 320 },
+          finish: { days: 7, ppfdMin: 280, ppfdMax: 350 }
+        },
+        nutrientProfile: 'LeafyVeg-A',
+        targetDLI: 16,
+        harvestDays: 45
+      },
+      'basil': {
+        id: 'basil',
+        name: 'Basil',
+        cropClass: 'herb',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
+          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
+          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
+        },
+        nutrientProfile: 'Herb-Mix',
+        targetDLI: 14,
+        harvestDays: 35
+      },
+      'tomato': {
+        id: 'tomato',
+        name: 'Cherry Tomato',
+        cropClass: 'fruiting',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 14, ppfdMin: 150, ppfdMax: 250 },
+          vegetative: { days: 21, ppfdMin: 300, ppfdMax: 450 },
+          flowering: { days: 21, ppfdMin: 400, ppfdMax: 600 },
+          fruiting: { days: 28, ppfdMin: 450, ppfdMax: 650 }
+        },
+        nutrientProfile: 'Fruiting-Hi',
+        targetDLI: 25,
+        harvestDays: 91
+      }
+    };
+
+    const SEEDLING_ACCLIMATION_RULES = {
+      initialReductionPercent: 0.75, // Reduce to 75% of normal for first 3-5 days
+      acclimationDays: 4,
+      rampUpDays: 5,
+      maxPPFDJump: 80 // Max µmol·m⁻²·s⁻¹ increase at transplant
+    };
+
+    const COMPATIBILITY_RULES = {
+      // Hard no: never mix these crop classes in same group
+      incompatibleClasses: [
+        ['leafy', 'fruiting'],
+        ['herb', 'fruiting']
+      ],
+      // PPFD penalty thresholds
+      ppfdPenalty: {
+        low: 30,    // < 30 µmol difference = small penalty
+        medium: 80, // 30-80 = moderate penalty
+        high: 80    // > 80 = heavy penalty
+      }
+    };
+
+    // ============================================================================
+    // STATE MANAGEMENT
+    // ============================================================================
+
+    let state = {
+      trays: [],
+      groups: [],
+      seedingTasks: [],
+      activeSeedlings: [],
+      lightAdjustments: []
+    };
+
+    // ============================================================================
+    // INITIALIZATION
+    // ============================================================================
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeManualForm();
+      loadSchedulerData();
+      
+      // Set up form submission
+      document.getElementById('manualSchedulingForm').addEventListener('submit', handleManualScheduling);
+    });
+
+    function initializeManualForm() {
+      // Populate crop dropdown
+      const cropSelect = document.getElementById('manualCrop');
+      Object.values(CROP_DATABASE).forEach(crop => {
+        const option = document.createElement('option');
+        option.value = crop.id;
+        option.textContent = crop.name;
+        cropSelect.appendChild(option);
+      });
+
+      // Set default date to today
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('manualSeedDate').value = today;
+    }
+
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+
+    // Resolve plan targets for a specific day (from groups-v2.js)
+    function resolvePlanTargetsForDay(plan, dayNumber) {
+      if (!plan || typeof plan !== 'object') return null;
+      
+      // Get light days from the plan
+      const lightDays = Array.isArray(plan.light?.days) ? plan.light.days : [];
+      
+      if (!lightDays.length) {
+        // No daily data, use plan-level defaults
+        return {
+          stage: plan.stage || '',
+          ppfd: plan.ppfd || null,
+          dli: plan.dli || null
+        };
+      }
+      
+      // Sort by day number
+      const sorted = lightDays.slice().sort((a, b) => (a.day || 0) - (b.day || 0));
+      
+      // Find the applicable entry for this day
+      const effectiveDay = Math.max(1, dayNumber || 1);
+      let target = sorted[0];
+      
+      for (const entry of sorted) {
+        if (entry.day && effectiveDay >= entry.day) {
+          target = entry;
+        } else {
+          break;
+        }
+      }
+      
+      return {
+        stage: target?.stage || plan.stage || '',
+        ppfd: target?.ppfd || plan.ppfd || null,
+        dli: target?.dli || plan.dli || null
+      };
+    }
+
+    // ============================================================================
+    // DATA LOADING
+    // ============================================================================
+
+    async function loadSchedulerData() {
+      try {
+        let traysData = { trays: [] };
+        let groupsData = { groups: [] };
+
+        // Load lighting recipes/plans from backend
+        try {
+          const plansResponse = await fetch('/plans', { cache: 'no-store' });
+          if (plansResponse.ok) {
+            const plansDoc = await plansResponse.json();
+            state.plans = Array.isArray(plansDoc?.plans) ? plansDoc.plans : [];
+            console.log(`Loaded ${state.plans.length} lighting recipe plans`);
+          } else {
+            console.warn('Plans endpoint returned status:', plansResponse.status);
+            state.plans = [];
+          }
+        } catch (err) {
+          console.warn('Plans endpoint unavailable:', err.message);
+          state.plans = [];
+        }
+
+        // Load current inventory data (includes all trays)
+        try {
+          const inventoryResponse = await fetch('/api/inventory/current');
+          if (inventoryResponse.ok) {
+            const inventoryData = await inventoryResponse.json();
+            // Extract trays from the nested structure
+            if (inventoryData.byFarm && inventoryData.byFarm.length > 0) {
+              traysData = { trays: inventoryData.byFarm[0].trays || [] };
+            }
+          } else {
+            console.warn('Inventory API returned status:', inventoryResponse.status);
+          }
+        } catch (err) {
+          console.warn('Inventory API unavailable, using empty data:', err.message);
+        }
+        
+        // Load groups from data file
+        try {
+          const groupsResponse = await fetch('/data/groups.json');
+          if (groupsResponse.ok) {
+            groupsData = await groupsResponse.json();
+          } else {
+            console.warn('Groups data returned status:', groupsResponse.status);
+          }
+        } catch (err) {
+          console.warn('Groups data unavailable, using empty data:', err.message);
+        }
+
+        state.trays = processTrays(traysData);
+        state.groups = processGroups(groupsData);
+
+        // Calculate seeding tasks
+        state.seedingTasks = calculateSeedingTasks(state.trays);
+        
+        // Calculate compatibility scores
+        state.seedingTasks = state.seedingTasks.map(task => ({
+          ...task,
+          compatibility: calculateCompatibility(task, state.groups)
+        }));
+
+        // Calculate light adjustments needed
+        state.lightAdjustments = calculateLightAdjustments(state.seedingTasks, state.groups);
+
+        // Render UI
+        renderSummaryCards();
+        renderSeedingTimeline();
+        renderTrayForecast();
+        renderLightAdjustments();
+        populateTrayDropdown();
+
+      } catch (error) {
+        console.error('Error loading scheduler data:', error);
+        showError('Failed to load scheduling data. Please refresh the page.');
+      }
+    }
+
+    function processTrays(data) {
+      // Transform API data to internal format
+      if (!data || !data.trays || data.trays.length === 0) {
+        console.log('No tray data available');
+        return [];
+      }
+      
+      console.log(`Processing ${data.trays.length} trays from inventory`);
+      
+      return data.trays.map(tray => {
+        // Calculate expected harvest date from daysOld and harvestIn
+        let expectedHarvest = null;
+        if (tray.harvestIn && tray.harvestIn > 0) {
+          expectedHarvest = new Date();
+          expectedHarvest.setDate(expectedHarvest.getDate() + tray.harvestIn);
+        }
+        
+        // Calculate sow date from seedingDate or daysOld
+        let sowDate = null;
+        if (tray.seedingDate) {
+          sowDate = new Date(tray.seedingDate);
+        } else if (tray.daysOld) {
+          sowDate = new Date();
+          sowDate.setDate(sowDate.getDate() - tray.daysOld);
+        }
+        
+        return {
+          id: tray.trayId,
+          groupId: tray.groupId,
+          location: `${tray.roomId} / ${tray.zoneId} / ${tray.groupId}`,
+          currentCrop: tray.crop,
+          sowDate: sowDate,
+          transplantDate: null, // Not tracked in current data
+          expectedHarvest: expectedHarvest,
+          capacity: tray.plantCount || 50,
+          status: 'active'
+        };
+      });
+    }
+
+    function processGroups(data) {
+      // Transform groups data
+      if (!data || !data.groups || data.groups.length === 0) {
+        console.log('No groups data available');
+        return [];
+      }
+      
+      console.log(`Processing ${data.groups.length} groups`);
+      
+      return data.groups.map(group => {
+        // Calculate days old from seed date
+        let daysOld = 1;
+        if (group.planConfig?.anchor?.seedDate) {
+          try {
+            const seedDate = new Date(group.planConfig.anchor.seedDate);
+            const now = new Date();
+            const diffMs = now - seedDate;
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            daysOld = Math.max(1, diffDays); // At least day 1
+          } catch (err) {
+            console.warn(`Failed to calculate daysOld for group ${group.id}:`, err);
+          }
+        }
+
+        // Get the actual PPFD from the light recipe for the current day
+        // This matches how groups-v2.js resolves PPFD values
+        let currentPPFD = 250; // Default fallback
+        
+        if (group.recipe && state.plans && state.plans.length > 0) {
+          // Find the plan for this group's recipe
+          const plan = state.plans.find(p => 
+            p.name === group.recipe || 
+            p.crop === group.recipe ||
+            p.id === group.recipe
+          );
+          
+          if (plan) {
+            // Resolve PPFD for this specific day in the recipe
+            const dayData = resolvePlanTargetsForDay(plan, daysOld);
+            if (dayData && dayData.ppfd != null) {
+              currentPPFD = dayData.ppfd;
+              console.log(`Group ${group.id} (${group.recipe}): Day ${daysOld} PPFD = ${currentPPFD}`);
+            }
+          } else {
+            console.warn(`No plan found for recipe: ${group.recipe}`);
+          }
+        }
+        
+        return {
+          id: group.id || group.groupId,
+          name: group.name || `Group ${group.id}`,
+          currentPPFD: currentPPFD,
+          ppfdMin: 100,
+          ppfdMax: 600,
+          nutrientProfile: group.recipe || 'LeafyVeg-A',
+          crops: group.crop ? [group.crop] : []
+        };
+      });
+    }
+
+    // ============================================================================
+    // SEEDING FORECAST ALGORITHM
+    // ============================================================================
+
+    // Map display crop names to database IDs
+    function mapCropNameToId(cropName) {
+      if (!cropName) return 'lettuce-buttercrunch'; // default
+      
+      const mapping = {
+        'Butterhead Lettuce': 'lettuce-buttercrunch',
+        'Romaine Lettuce': 'lettuce-romaine',
+        'Oak Leaf Lettuce': 'lettuce-buttercrunch', // fallback to buttercrunch
+        'Red Leaf Lettuce': 'lettuce-buttercrunch',
+        'Mixed Lettuce': 'lettuce-buttercrunch',
+        'Genovese Basil': 'basil',
+        'Thai Basil': 'basil',
+        'Lemon Basil': 'basil',
+        'Purple Basil': 'basil',
+        'Holy Basil': 'basil',
+        'Baby Arugula': 'lettuce-buttercrunch', // use lettuce profile for similar growth
+        'Cultivated Arugula': 'lettuce-buttercrunch',
+        'Kale': 'kale',
+        'Spinach': 'kale', // similar growth profile
+        'Swiss Chard': 'kale',
+        'Collard Greens': 'kale'
+      };
+      
+      return mapping[cropName] || 'lettuce-buttercrunch';
+    }
+
+    function calculateSeedingTasks(trays) {
+      const tasks = [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      console.log(`Calculating seeding tasks for ${trays.length} trays`);
+
+      trays.forEach(tray => {
+        if (!tray.expectedHarvest || tray.status !== 'active') {
+          return;
+        }
+
+        // Calculate when slot will be free
+        const harvestDate = new Date(tray.expectedHarvest);
+        const cleaningBuffer = 1; // days
+        const slotFreeDate = new Date(harvestDate);
+        slotFreeDate.setDate(slotFreeDate.getDate() + cleaningBuffer);
+
+        // Determine next crop - map display name to database ID
+        const nextCropId = mapCropNameToId(tray.currentCrop);
+        const nextCrop = CROP_DATABASE[nextCropId];
+        
+        if (!nextCrop) {
+          console.warn(`No crop data found for: ${tray.currentCrop} (mapped to ${nextCropId})`);
+          return;
+        }
+
+        // Calculate seeding window
+        const germMax = nextCrop.phases.germination.daysMax;
+        const germMin = nextCrop.phases.germination.daysMin;
+        
+        const earliestSeedDate = new Date(slotFreeDate);
+        earliestSeedDate.setDate(earliestSeedDate.getDate() - germMax);
+        
+        const latestSeedDate = new Date(slotFreeDate);
+        latestSeedDate.setDate(latestSeedDate.getDate() - germMin);
+        
+        // Target seed date (midpoint)
+        const targetSeedDate = new Date(earliestSeedDate);
+        const daysDiff = Math.floor((latestSeedDate - earliestSeedDate) / (1000 * 60 * 60 * 24));
+        targetSeedDate.setDate(targetSeedDate.getDate() + Math.floor(daysDiff / 2));
+
+        // Calculate urgency
+        const daysUntilSeeding = Math.floor((targetSeedDate - today) / (1000 * 60 * 60 * 24));
+        let urgency = 'normal';
+        if (daysUntilSeeding < 0) urgency = 'overdue';
+        else if (daysUntilSeeding <= 2) urgency = 'urgent';
+        else if (daysUntilSeeding <= 5) urgency = 'soon';
+
+        tasks.push({
+          id: `task-${tray.id}-${targetSeedDate.getTime()}`,
+          trayId: tray.id,
+          groupId: tray.groupId,
+          location: tray.location,
+          cropId: nextCropId,
+          cropName: nextCrop.name,
+          cropClass: nextCrop.cropClass,
+          targetSeedDate,
+          earliestSeedDate,
+          latestSeedDate,
+          targetTransplantDate: slotFreeDate,
+          expectedNewHarvest: new Date(slotFreeDate.getTime() + nextCrop.harvestDays * 24 * 60 * 60 * 1000),
+          quantity: tray.capacity,
+          urgency,
+          daysUntil: daysUntilSeeding
+        });
+      });
+
+      // Sort by target seed date
+      return tasks.sort((a, b) => a.targetSeedDate - b.targetSeedDate);
+    }
+
+    // ============================================================================
+    // COMPATIBILITY SCORING
+    // ============================================================================
+
+    function calculateCompatibility(task, groups) {
+      const group = groups.find(g => g.id === task.groupId);
+      if (!group) return { score: 0, rating: 'poor', reason: 'Group not found' };
+
+      const crop = CROP_DATABASE[task.cropId];
+      if (!crop) return { score: 0, rating: 'poor', reason: 'Crop data not found' };
+
+      let score = 100;
+      let reasons = [];
+
+      // Check for hard incompatibilities
+      const hasIncompatibleCrop = group.crops.some(existingCrop => {
+        return COMPATIBILITY_RULES.incompatibleClasses.some(([class1, class2]) => {
+          return (crop.cropClass === class1 && existingCrop.cropClass === class2) ||
+                 (crop.cropClass === class2 && existingCrop.cropClass === class1);
+        });
+      });
+
+      if (hasIncompatibleCrop) {
+        return {
+          score: 0,
+          rating: 'poor',
+          reason: 'Incompatible crop classes in group (leafy/herb cannot mix with fruiting)'
+        };
+      }
+
+      // Check PPFD compatibility
+      const seedlingIdealPPFD = (crop.phases.seedling.ppfdMin + crop.phases.seedling.ppfdMax) / 2;
+      const ppfdDifference = Math.abs(group.currentPPFD - seedlingIdealPPFD);
+
+      if (ppfdDifference < COMPATIBILITY_RULES.ppfdPenalty.low) {
+        score -= 5;
+        reasons.push('Excellent PPFD match');
+      } else if (ppfdDifference < COMPATIBILITY_RULES.ppfdPenalty.medium) {
+        score -= 20;
+        reasons.push('Moderate PPFD adjustment needed');
+      } else {
+        score -= 40;
+        reasons.push('Significant PPFD adjustment required');
+      }
+
+      // Check nutrient profile match
+      if (group.nutrientProfile !== crop.nutrientProfile) {
+        score -= 15;
+        reasons.push('Nutrient profile mismatch');
+      }
+
+      // Determine rating
+      let rating;
+      if (score >= 85) rating = 'excellent';
+      else if (score >= 65) rating = 'good';
+      else if (score >= 40) rating = 'fair';
+      else rating = 'poor';
+
+      return {
+        score,
+        rating,
+        reason: reasons.join('; ') || 'Compatible',
+        ppfdDifference,
+        seedlingIdealPPFD
+      };
+    }
+
+    // ============================================================================
+    // LIGHT ADJUSTMENT CALCULATIONS
+    // ============================================================================
+
+    function calculateLightAdjustments(tasks, groups) {
+      const adjustments = [];
+      const upcomingTasks = tasks.filter(t => t.daysUntil >= 0 && t.daysUntil <= 7);
+
+      upcomingTasks.forEach(task => {
+        const group = groups.find(g => g.id === task.groupId);
+        if (!group) return;
+
+        const crop = CROP_DATABASE[task.cropId];
+        if (!crop) return;
+
+        const seedlingIdealPPFD = (crop.phases.seedling.ppfdMin + crop.phases.seedling.ppfdMax) / 2;
+        const currentPPFD = group.currentPPFD;
+
+        // Calculate compromise PPFD
+        const compromisePPFD = Math.min(
+          currentPPFD,
+          seedlingIdealPPFD * 1.2
+        );
+
+        // Clamp to group limits
+        const initialPPFD = Math.max(
+          group.ppfdMin,
+          Math.min(group.ppfdMax, compromisePPFD)
+        );
+
+        // Calculate ramp schedule
+        const acclimationDays = SEEDLING_ACCLIMATION_RULES.acclimationDays;
+        const rampDays = SEEDLING_ACCLIMATION_RULES.rampUpDays;
+        
+        const ppfdIncrement = (currentPPFD - initialPPFD) / rampDays;
+
+        adjustments.push({
+          taskId: task.id,
+          groupId: group.id,
+          groupName: group.name,
+          cropName: task.cropName,
+          currentPPFD,
+          targetPPFD: initialPPFD,
+          finalPPFD: currentPPFD,
+          schedule: [
+            { phase: 'Initial (Days 0-' + acclimationDays + ')', ppfd: Math.round(initialPPFD), duration: acclimationDays + ' days' },
+            { phase: 'Ramp Up (Days ' + acclimationDays + '-' + (acclimationDays + rampDays) + ')', ppfd: Math.round(initialPPFD + ppfdIncrement * 2.5), duration: rampDays + ' days' },
+            { phase: 'Normal', ppfd: Math.round(currentPPFD), duration: 'Ongoing' }
+          ],
+          transplantDate: task.targetTransplantDate
+        });
+      });
+
+      return adjustments;
+    }
+
+    // ============================================================================
+    // UI RENDERING
+    // ============================================================================
+
+    function renderSummaryCards() {
+      document.getElementById('upcomingTasksCount').textContent = 
+        state.seedingTasks.filter(t => t.daysUntil >= 0 && t.daysUntil <= 14).length;
+      
+      document.getElementById('activeSeedlingsCount').textContent = 
+        state.seedingTasks.filter(t => t.daysUntil < 0 && t.daysUntil >= -10).length;
+      
+      document.getElementById('readyTraysCount').textContent = 
+        state.trays.filter(t => t.status === 'empty' || !t.currentCrop).length;
+      
+      document.getElementById('lightAdjustmentsCount').textContent = 
+        state.lightAdjustments.length;
+    }
+
+    function renderSeedingTimeline() {
+      const container = document.getElementById('seedingTimeline');
+      
+      // Group tasks by variety for two time windows
+      const thisWeekTasks = state.seedingTasks.filter(t => t.daysUntil >= 0 && t.daysUntil <= 7);
+      const upcomingTasks = state.seedingTasks.filter(t => t.daysUntil >= 8 && t.daysUntil <= 14);
+      
+      const thisWeekVarieties = groupTasksByVariety(thisWeekTasks);
+      const upcomingVarieties = groupTasksByVariety(upcomingTasks);
+
+      if (thisWeekVarieties.length === 0 && upcomingVarieties.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <h3>No Upcoming Seeding</h3>
+            <p>All seeding tasks are scheduled beyond the next 2 weeks</p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      
+      // This Week's Seeding Section
+      if (thisWeekVarieties.length > 0) {
+        html += `
+          <div class="timeline-section">
+            <h3 class="timeline-section-title">This Week's Seeding</h3>
+            <div class="variety-cards-grid">
+              ${thisWeekVarieties.map(variety => renderVarietyCard(variety)).join('')}
+            </div>
+          </div>
+        `;
+      }
+      
+      // Upcoming Varieties Section
+      if (upcomingVarieties.length > 0) {
+        html += `
+          <div class="timeline-section">
+            <h3 class="timeline-section-title">Upcoming Varieties (Week 2)</h3>
+            <div class="variety-cards-grid">
+              ${upcomingVarieties.map(variety => renderVarietyCard(variety)).join('')}
+            </div>
+          </div>
+        `;
+      }
+      
+      container.innerHTML = html;
+    }
+
+    function groupTasksByVariety(tasks) {
+      const varietyGroups = {};
+      
+      tasks.forEach(task => {
+        if (!varietyGroups[task.cropId]) {
+          varietyGroups[task.cropId] = {
+            cropId: task.cropId,
+            cropName: task.cropName,
+            totalSeedlings: 0,
+            traysCount: 0,
+            trays: [],
+            earliestDate: task.targetSeedDate,
+            latestDate: task.targetSeedDate,
+            mostUrgent: task.urgency
+          };
+        }
+        
+        const group = varietyGroups[task.cropId];
+        group.totalSeedlings += task.quantity;
+        group.traysCount++;
+        group.trays.push(task);
+        
+        // Track date range
+        if (task.targetSeedDate < group.earliestDate) {
+          group.earliestDate = task.targetSeedDate;
+        }
+        if (task.targetSeedDate > group.latestDate) {
+          group.latestDate = task.targetSeedDate;
+        }
+        
+        // Track most urgent status
+        const urgencyLevel = { overdue: 4, urgent: 3, soon: 2, ready: 1 };
+        if (urgencyLevel[task.urgency] > urgencyLevel[group.mostUrgent]) {
+          group.mostUrgent = task.urgency;
+        }
+      });
+      
+      return Object.values(varietyGroups).sort((a, b) => 
+        a.earliestDate - b.earliestDate
+      );
+    }
+
+    function renderVarietyCard(variety) {
+      const urgencyClass = variety.mostUrgent === 'overdue' || variety.mostUrgent === 'urgent' ? 'urgent' : 
+                           variety.mostUrgent === 'soon' ? 'warning' : 'ready';
+      
+      const dateRange = variety.earliestDate.getTime() === variety.latestDate.getTime()
+        ? variety.earliestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : `${variety.earliestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${variety.latestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      
+      return `
+        <div class="variety-card ${urgencyClass}">
+          <div class="variety-card-header">
+            <div class="variety-name">${variety.cropName}</div>
+            <div class="variety-urgency-badge ${urgencyClass}"></div>
+          </div>
+          <div class="variety-stats">
+            <div class="variety-stat">
+              <div class="variety-stat-label">Total Seedlings</div>
+              <div class="variety-stat-value">${variety.totalSeedlings.toLocaleString()}</div>
+            </div>
+            <div class="variety-stat">
+              <div class="variety-stat-label">Number of Trays</div>
+              <div class="variety-stat-value">${variety.traysCount}</div>
+            </div>
+          </div>
+          <div class="variety-dates">
+            <div class="variety-date-label">Seeding Window</div>
+            <div class="variety-date-value">${dateRange}</div>
+          </div>
+          <button class="variety-card-btn" onclick="showVarietyDetails('${variety.cropId}', ${variety.trays.map(t => `'${t.id}'`).join(',')})">
+            View ${variety.traysCount} Tray${variety.traysCount > 1 ? 's' : ''}
+          </button>
+        </div>
+      `;
+    }
+
+    function showVarietyDetails(cropId, ...trayIds) {
+      // Find all tasks for these trays
+      const trayTasks = state.seedingTasks.filter(task => 
+        trayIds.includes(task.trayId) || trayIds.includes(task.id)
+      );
+
+      if (trayTasks.length === 0) {
+        alert('No tray details found.');
+        return;
+      }
+
+      // Get crop name from first task
+      const cropName = trayTasks[0]?.cropName || 'Unknown Crop';
+
+      // Update modal title
+      document.getElementById('modalTitle').textContent = `${cropName} - ${trayTasks.length} Tray${trayTasks.length > 1 ? 's' : ''}`;
+
+      // Build modal content
+      const modalBody = document.getElementById('modalBody');
+      modalBody.innerHTML = `
+        <div class="tray-details-grid">
+          ${trayTasks.map(task => renderTrayDetailCard(task)).join('')}
+        </div>
+      `;
+
+      // Show modal
+      document.getElementById('trayDetailsModal').classList.add('show');
+    }
+
+    function renderTrayDetailCard(task) {
+      const urgencyClass = task.urgency || 'ready';
+      const urgencyLabel = {
+        'overdue': 'Overdue',
+        'urgent': 'Urgent',
+        'soon': 'Due Soon',
+        'ready': 'Ready'
+      }[urgencyClass] || 'Ready';
+
+      const seedDate = task.targetSeedDate ? 
+        task.targetSeedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 
+        'Not scheduled';
+
+      const harvestWindow = task.harvestWindow ? 
+        `${task.harvestWindow.earliest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${task.harvestWindow.latest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 
+        'N/A';
+
+      // Compatibility details
+      const compat = task.compatibility || { rating: 'unknown', reasons: [] };
+      const compatDetails = compat.reasons && compat.reasons.length > 0 ? 
+        compat.reasons.join(', ') : 'No compatibility data';
+
+      return `
+        <div class="tray-detail-card">
+          <div class="tray-detail-header">
+            <div class="tray-detail-id">${task.trayId || task.id}</div>
+            <div class="tray-detail-urgency ${urgencyClass}">${urgencyLabel}</div>
+          </div>
+          
+          <div class="tray-detail-info">
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Location</div>
+              <div class="tray-detail-value">${task.location || 'Unknown'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Seedlings</div>
+              <div class="tray-detail-value highlight">${task.quantity?.toLocaleString() || '0'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Target Seed Date</div>
+              <div class="tray-detail-value highlight">${seedDate}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Harvest Window</div>
+              <div class="tray-detail-value">${harvestWindow}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Current Crop</div>
+              <div class="tray-detail-value">${task.currentCrop || 'Empty'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Current Harvest</div>
+              <div class="tray-detail-value">${task.expectedHarvest ? task.expectedHarvest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}</div>
+            </div>
+          </div>
+
+          <div class="tray-compatibility">
+            <div class="tray-compatibility-header">Compatibility</div>
+            <div class="tray-compatibility-details">
+              <span class="compatibility-tag">Rating: ${compat.rating.toUpperCase()}</span>
+              ${compat.reasons && compat.reasons.length > 0 ? 
+                compat.reasons.map(reason => `<span class="compatibility-tag">${reason}</span>`).join('') : 
+                '<span class="compatibility-tag">No details available</span>'
+              }
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function closeTrayModal() {
+      document.getElementById('trayDetailsModal').classList.remove('show');
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', (e) => {
+      const modal = document.getElementById('trayDetailsModal');
+      if (e.target === modal) {
+        closeTrayModal();
+      }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeTrayModal();
+      }
+    });
+
+    function renderTrayForecast() {
+      const tbody = document.getElementById('trayForecastBody');
+      const forecastTasks = state.seedingTasks.slice(0, 20); // Show first 20
+
+      if (forecastTasks.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">
+                <div class="icon">TRAY</div>
+                <h3>No Trays to Forecast</h3>
+                <p>Add trays with active crops to see the seeding schedule</p>
+              </div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = forecastTasks.map(task => {
+        const tray = state.trays.find(t => t.id === task.trayId);
+        const harvestStr = tray && tray.expectedHarvest ? 
+          tray.expectedHarvest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 
+          'N/A';
+        
+        const seedWindowStr = `${task.earliestSeedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${task.latestSeedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+        return `
+          <tr>
+            <td><strong>${task.trayId}</strong></td>
+            <td>${task.location}</td>
+            <td>${tray ? (tray.currentCrop || 'Empty') : 'Unknown'}</td>
+            <td>${harvestStr}</td>
+            <td>${seedWindowStr}</td>
+            <td>${task.cropName}</td>
+            <td><span class="compat-badge ${task.compatibility.rating}">${task.compatibility.rating.toUpperCase()}</span></td>
+            <td>
+              <button class="timeline-btn primary" onclick="scheduleTask('${task.id}')" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
+                Schedule
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderLightAdjustments() {
+      const container = document.getElementById('lightAdjustmentsContainer');
+
+      if (state.lightAdjustments.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">LIGHT</div>
+            <h3>No Adjustments Needed</h3>
+            <p>All groups are currently optimized for their crop stages</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Sort adjustments by group name (rack)
+      const sortedAdjustments = state.lightAdjustments.slice().sort((a, b) => {
+        return (a.groupName || '').localeCompare(b.groupName || '');
+      });
+
+      container.innerHTML = sortedAdjustments.map(adj => `
+        <div class="light-adjustment">
+          <div class="light-adjustment-header">
+            <h4>${adj.groupName} - ${adj.cropName}</h4>
+            <span style="color: #94a3b8; font-size: 0.875rem;">
+              Transplant: ${adj.transplantDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          </div>
+          
+          <div class="ppfd-display">
+            <div style="text-align: center;">
+              <div class="ppfd-label">Current</div>
+              <div class="ppfd-value">${adj.currentPPFD}</div>
+              <div class="ppfd-label">µmol·m⁻²·s⁻¹</div>
+            </div>
+            <div class="ppfd-arrow">→</div>
+            <div style="text-align: center;">
+              <div class="ppfd-label">Initial Target</div>
+              <div class="ppfd-target">${adj.targetPPFD}</div>
+              <div class="ppfd-label">µmol·m⁻²·s⁻¹</div>
+            </div>
+          </div>
+
+          <h4 style="color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.75rem; text-transform: uppercase;">
+            Acclimation Schedule
+          </h4>
+          <div class="adjustment-timeline">
+            ${adj.schedule.map(phase => `
+              <div class="adjustment-phase">
+                <div class="phase-name">${phase.phase}</div>
+                <div class="phase-duration">${phase.duration}</div>
+                <div class="phase-ppfd">${phase.ppfd}</div>
+                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">µmol·m⁻²·s⁻¹</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="margin-top: 1rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
+            <button class="timeline-btn secondary">
+              Preview
+            </button>
+            <button class="timeline-btn primary" onclick="applyLightAdjustment('${adj.taskId}')">
+              Apply Adjustment
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function populateTrayDropdown() {
+      const select = document.getElementById('manualTray');
+      select.innerHTML = '<option value="">Select tray...</option>';
+      
+      state.trays.forEach(tray => {
+        const option = document.createElement('option');
+        option.value = tray.id;
+        option.textContent = `Tray ${tray.id} - ${tray.location} (${tray.status})`;
+        select.appendChild(option);
+      });
+    }
+
+    // ============================================================================
+    // EVENT HANDLERS
+    // ============================================================================
+
+    function handleManualScheduling(e) {
+      e.preventDefault();
+      
+      const formData = {
+        cropId: document.getElementById('manualCrop').value,
+        trayId: document.getElementById('manualTray').value,
+        seedDate: document.getElementById('manualSeedDate').value,
+        quantity: parseInt(document.getElementById('manualQuantity').value),
+        notes: document.getElementById('manualNotes').value
+      };
+
+      console.log('Manual scheduling:', formData);
+      
+      // TODO: Send to backend API
+      alert(`Seeding task scheduled:\n${formData.quantity} x ${CROP_DATABASE[formData.cropId].name}\nTray: ${formData.trayId}\nDate: ${formData.seedDate}`);
+      
+      // Reset form
+      e.target.reset();
+      document.getElementById('manualSeedDate').value = new Date().toISOString().split('T')[0];
+    }
+
+    function confirmTask(taskId) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      if (confirm(`Confirm seeding task for ${task.quantity} x ${task.cropName}?\nThis will schedule the task and apply any necessary light adjustments.`)) {
+        console.log('Confirming task:', taskId);
+        // TODO: Send to backend
+        alert('Task confirmed! Seeding reminder added to calendar.');
+      }
+    }
+
+    function scheduleTask(taskId) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      // Populate manual form with task data
+      document.getElementById('manualCrop').value = task.cropId;
+      document.getElementById('manualTray').value = task.trayId;
+      document.getElementById('manualSeedDate').value = task.targetSeedDate.toISOString().split('T')[0];
+      document.getElementById('manualQuantity').value = task.quantity;
+
+      // Scroll to form
+      document.getElementById('manualSchedulingForm').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function viewTaskDetails(taskId) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const crop = CROP_DATABASE[task.cropId];
+      
+      alert(`Task Details:\n\nCrop: ${task.cropName}\nTray: ${task.trayId}\nLocation: ${task.location}\nQuantity: ${task.quantity} plants\n\nSeeding Window:\n${task.earliestSeedDate.toDateString()} - ${task.latestSeedDate.toDateString()}\n\nTransplant Date: ${task.targetTransplantDate.toDateString()}\nExpected Harvest: ${task.expectedNewHarvest.toDateString()}\n\nCompatibility: ${task.compatibility.rating.toUpperCase()}\n${task.compatibility.reason}`);
+    }
+
+    function applyLightAdjustment(taskId) {
+      const adjustment = state.lightAdjustments.find(a => a.taskId === taskId);
+      if (!adjustment) return;
+
+      if (confirm(`Apply light adjustment to ${adjustment.groupName}?\n\nThis will reduce PPFD from ${adjustment.currentPPFD} to ${adjustment.targetPPFD} µmol·m⁻²·s⁻¹ for ${SEEDLING_ACCLIMATION_RULES.acclimationDays} days, then gradually ramp back up.`)) {
+        console.log('Applying light adjustment:', adjustment);
+        // TODO: Send to light engine API
+        alert('Light adjustment scheduled! The system will automatically adjust PPFD based on the acclimation schedule.');
+      }
+    }
+
+    function showError(message) {
+      alert(`Error: ${message}`);
+    }
+
+    // ============================================================================
+    // DEMO DATA FALLBACK (for testing without backend)
+    // ============================================================================
+
+    // If API calls fail, you can uncomment this to use demo data
+    /*
+    function loadSchedulerData() {
+      state.trays = [
+        {
+          id: 'T001',
+          groupId: 'G1',
+          location: 'Room A - Zone 1',
+          currentCrop: 'lettuce-buttercrunch',
+          expectedHarvest: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          capacity: 50,
+          status: 'active'
+        },
+        {
+          id: 'T002',
+          groupId: 'G1',
+          location: 'Room A - Zone 1',
+          currentCrop: 'kale',
+          expectedHarvest: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          capacity: 50,
+          status: 'active'
+        }
+      ];
+
+      state.groups = [
+        {
+          id: 'G1',
+          name: 'Group 1',
+          currentPPFD: 280,
+          ppfdMin: 100,
+          ppfdMax: 400,
+          nutrientProfile: 'LeafyVeg-A',
+          crops: []
+        }
+      ];
+
+      state.seedingTasks = calculateSeedingTasks(state.trays);
+      state.seedingTasks = state.seedingTasks.map(task => ({
+        ...task,
+        compatibility: calculateCompatibility(task, state.groups)
+      }));
+      state.lightAdjustments = calculateLightAdjustments(state.seedingTasks, state.groups);
+
+      renderSummaryCards();
+      renderSeedingTimeline();
+      renderTrayForecast();
+      renderLightAdjustments();
+      populateTrayDropdown();
+    }
+    */
+  </script>
+  <script src="/js/farm-assistant.js"></script>
+</body>
+</html>

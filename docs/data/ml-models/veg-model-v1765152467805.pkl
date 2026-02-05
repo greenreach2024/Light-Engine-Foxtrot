@@ -1,1 +1,0 @@
-{"zone":"veg","trained_at":"2025-12-08T00:07:47.805Z","model_type":"SARIMAX","order":[1,0,1],"seasonal_order":[1,0,1,24]}

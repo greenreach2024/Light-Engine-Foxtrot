@@ -1,0 +1,1 @@
+{"zone":"flower","trained_at":"2025-12-08T00:08:18.560Z","model_type":"SARIMAX","order":[1,0,1],"seasonal_order":[1,0,1,24]}

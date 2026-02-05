@@ -1,0 +1,2948 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#10b981">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Light Engine">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Light Engine Foxtrot</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+  <link rel="stylesheet" href="./styles.foxtrot.css?v={{BUILD_TIME}}">
+  <link rel="stylesheet" href="./styles/switchbot-manager.css?v={{BUILD_TIME}}">
+  <link rel="stylesheet" href="./styles/iot-manager.css?v={{BUILD_TIME}}">
+  <link rel="stylesheet" href="/css/pwa.css?v={{BUILD_TIME}}">
+  <script src="/js/console-wrapper.js?v={{BUILD_TIME}}"></script>
+  <script>
+    // Use current page protocol (HTTPS in production, HTTP in local dev)
+    // This prevents mixed content warnings when page loads over HTTPS
+    window.API_BASE = window.location.origin;
+    console.log('[index.html] Set window.API_BASE to:', window.API_BASE);
+  </script>
+  <script src="/js/net.guard.js?v={{BUILD_TIME}}" defer></script>
+    <script src="/js/iot-manager.js?v={{BUILD_TIME}}" defer></script>
+  
+  <!-- Wizard Modal Styles - must be in head to ensure they load before modal opens -->
+  <style id="wizard-styles">
+.wizard-modal {position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center;}
+.wizard-overlay {position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:1;}
+.wizard-container {position:relative;background:white;border-radius:12px;max-width:800px;width:90%;max-height:90vh;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.3);display:flex;flex-direction:column;z-index:2;}
+.wizard-header {padding:2rem;border-bottom:1px solid #e5e7eb;background:linear-gradient(135deg,#2e7d32 0%,#1b5e20 100%);color:white;position:relative;}
+.wizard-header h2 {margin:0 0 0.5rem 0;font-size:1.75rem;}
+.wizard-subtitle {margin:0;opacity:0.9;font-size:0.95rem;}
+.wizard-close {position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+.wizard-close:hover {background:rgba(255,255,255,0.3);transform:scale(1.1);}
+.wizard-progress {display:flex;justify-content:space-between;padding:2rem;background:#f9fafb;border-bottom:1px solid #e5e7eb;}
+.wizard-step {flex:1;display:flex;flex-direction:column;align-items:center;position:relative;}
+.wizard-step:not(:last-child)::after {content:'';position:absolute;top:16px;left:50%;width:100%;height:2px;background:#e5e7eb;z-index:0;}
+.wizard-step.active .wizard-step-number {background:#2e7d32;color:white;border-color:#2e7d32;}
+.wizard-step.completed .wizard-step-number {background:#10b981;color:white;border-color:#10b981;}
+.wizard-step.completed::after {background:#10b981;}
+.wizard-step-number {width:32px;height:32px;border-radius:50%;border:2px solid #e5e7eb;background:white;display:flex;align-items:center;justify-content:center;font-weight:600;z-index:1;margin-bottom:0.5rem;transition:all 0.3s;}
+.wizard-step-label {font-size:0.875rem;color:#6b7280;text-align:center;}
+.wizard-step.active .wizard-step-label {color:#2e7d32;font-weight:600;}
+.wizard-content {flex:1;overflow-y:auto;padding:2rem;min-height:300px !important;display:block !important;}
+.wizard-panel {animation:fadeIn 0.3s ease;display:block !important;}
+.wizard-panel[style*="display: none"] {display:none !important;}
+.wizard-panel[style*="display: block"] {display:block !important;}
+@keyframes fadeIn {from {opacity:0;transform:translateY(10px);}to {opacity:1;transform:translateY(0);}}
+.wizard-panel h3 {margin:0 0 0.5rem 0;font-size:1.5rem;color:#111827;}
+.wizard-description {color:#6b7280;margin-bottom:1.5rem;}
+.wizard-options {display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin:2rem 0;}
+.wizard-option-card {border:2px solid #e5e7eb;border-radius:8px;padding:1.5rem;text-align:center;cursor:pointer;transition:all 0.2s;background:white;}
+.wizard-option-card:hover {border-color:#2e7d32;transform:translateY(-2px);box-shadow:0 4px 12px rgba(46,125,50,0.1);}
+.wizard-option-card.selected {border-color:#2e7d32;background:#f0f9ff;}
+.wizard-option-icon {font-size:2.5rem;margin-bottom:0.5rem;}
+.wizard-option-title {font-weight:600;margin-bottom:0.5rem;color:#111827;}
+.wizard-option-desc {font-size:0.875rem;color:#6b7280;}
+.wizard-info-box {background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:1.5rem;margin:1.5rem 0;}
+.wizard-info-box h4 {margin:0 0 0.75rem 0;color:#1e40af;}
+.wizard-info-box ul {margin:0;padding-left:1.5rem;}
+.wizard-info-box li {margin-bottom:0.5rem;color:#1e3a8a;}
+.wizard-note {background:#fef3c7;border-left:4px solid #f59e0b;padding:1rem;margin:1.5rem 0;border-radius:4px;}
+.wizard-note strong {color:#92400e;}
+.wizard-success-box {background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:1.5rem;margin:1.5rem 0;display:flex;gap:1rem;}
+.wizard-success-icon {width:40px;height:40px;background:#10b981;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;}
+.wizard-form-group {margin-bottom:1.5rem;}
+.wizard-form-group label {display:block;font-weight:600;margin-bottom:0.5rem;color:#374151;}
+.wizard-input {width:100%;padding:0.75rem;border:1px solid #d1d5db;border-radius:6px;font-size:1rem;transition:all 0.2s;}
+.wizard-input:focus {outline:none;border-color:#2e7d32;box-shadow:0 0 0 3px rgba(46,125,50,0.1);}
+.wizard-input-group {display:flex;align-items:center;}
+.wizard-input-group .wizard-input {border-top-right-radius:0;border-bottom-right-radius:0;}
+.wizard-input-suffix {padding:0.75rem 1rem;background:#f3f4f6;border:1px solid #d1d5db;border-left:none;border-top-right-radius:6px;border-bottom-right-radius:6px;color:#6b7280;}
+.wizard-checkbox-group {display:flex;flex-direction:column;gap:0.75rem;}
+.wizard-checkbox {display:flex;align-items:center;gap:0.5rem;cursor:pointer;}
+.wizard-checkbox input[type="checkbox"] {width:18px;height:18px;cursor:pointer;}
+.wizard-actions {display:flex;justify-content:space-between;gap:1rem;margin-top:2rem;padding-top:2rem;border-top:1px solid #e5e7eb;}
+.wizard-btn-primary,.wizard-btn-secondary {padding:0.75rem 2rem;border-radius:6px;font-weight:600;font-size:1rem;cursor:pointer;transition:all 0.2s;border:none;display:inline-flex;align-items:center;gap:0.5rem;text-decoration:none;}
+.wizard-btn-primary {background:#2e7d32;color:white;}
+.wizard-btn-primary:hover {background:#1b5e20;transform:translateY(-1px);box-shadow:0 4px 12px rgba(46,125,50,0.3);}
+.wizard-btn-primary:disabled {background:#9ca3af;cursor:not-allowed;transform:none;}
+.wizard-btn-success {background:#10b981;}
+.wizard-btn-success:hover {background:#059669;}
+.wizard-btn-secondary {background:#f3f4f6;color:#374151;}
+.wizard-btn-secondary:hover {background:#e5e7eb;}
+.wizard-steps-list {margin:2rem 0;}
+.wizard-step-item {display:flex;gap:1rem;margin-bottom:1.5rem;}
+.wizard-step-number-small {width:32px;height:32px;background:#2e7d32;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0;}
+.wizard-step-content strong {display:block;margin-bottom:0.25rem;color:#111827;}
+.wizard-step-content p {margin:0;color:#6b7280;font-size:0.95rem;}
+.wizard-upload-area {border:2px dashed #d1d5db;border-radius:8px;padding:2rem;text-align:center;}
+.wizard-color-picker {display:flex;gap:2rem;}
+.wizard-color-picker > div {display:flex;flex-direction:column;gap:0.5rem;}
+.wizard-color-input {width:100px;height:50px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;}
+.wizard-preview-box {margin:2rem 0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;}
+.wizard-preview-box h4 {margin:0;padding:1rem;background:#f9fafb;border-bottom:1px solid #e5e7eb;}
+.store-preview {background:white;}
+.store-preview-header {padding:2rem;text-align:center;}
+.wizard-summary-box {background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:1.5rem;margin:1.5rem 0;}
+.wizard-summary-box h4 {margin:0 0 1rem 0;}
+.wizard-summary-list {margin:0;}
+.wizard-summary-list dt {font-weight:600;color:#374151;margin-top:0.75rem;}
+.wizard-summary-list dd {margin:0.25rem 0 0 0;color:#6b7280;}
+.wizard-checklist {margin:2rem 0;}
+.wizard-checklist h4 {margin:0 0 1rem 0;}
+.wizard-test-area {background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:1.5rem;margin:1.5rem 0;}
+.wizard-test-area h4 {margin:0 0 1rem 0;}
+  </style>
+
+  <script src="/app.foxtrot.js?v={{BUILD_TIME}}" defer></script>
+  <!-- Groups V2 module: handles plan dropdown, anchor toggle, and schedule UI -->
+  <script src="/groups-v2.js?v={{BUILD_TIME}}" defer></script>
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+</head>
+<body>
+  <div class="dashboard-shell">
+
+<aside class="dashboard-sidebar" aria-label="Setup and management navigation">
+  <div class="sidebar-header">
+    <h2 class="sidebar-title">Setup &amp; Management</h2>
+    <p class="tiny text-muted">Organize farm setup, device control, and daily grow operations.</p>
+  </div>
+  <nav class="sidebar-nav" data-role="sidebar-nav">
+    <!-- Title card always at top; Overview button removed -->
+
+    <div class="sidebar-group" data-group="farm-setup">
+      <button class="sidebar-group__trigger" type="button" aria-expanded="false">
+        <span>Farm Setup</span>
+        <span class="sidebar-group__icon" aria-hidden="true"></span>
+      </button>
+      <div class="sidebar-group__items" role="menu" hidden>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="farm-registration">
+          Farm Registration
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="grow-rooms">
+          Grow Rooms
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="light-setup">
+          Light Setup
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="bus-mapping">
+          Bus Mapping
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="farm-setup" data-target="integrations">
+          Integrations
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-group" data-group="control-devices">
+      <button class="sidebar-group__trigger" type="button" aria-expanded="false">
+        <span>Control Devices</span>
+        <span class="sidebar-group__icon" aria-hidden="true"></span>
+      </button>
+      <div class="sidebar-group__items" role="menu" hidden>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="control-devices" data-target="iot-devices">
+          IoT Devices
+        </button>
+        
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="control-devices" data-target="equipment-overview">
+          Equipment Overview
+        </button>
+
+        <a class="sidebar-link" href="./views/room-mapper.html" role="menuitem" data-room-mapper-link>
+          Room Mapper
+        </a>
+      </div>
+    </div>
+
+    <div class="sidebar-group" data-group="business-setup">
+      <button class="sidebar-group__trigger" type="button" aria-expanded="false">
+        <span>Business Setup</span>
+        <span class="sidebar-group__icon" aria-hidden="true"></span>
+      </button>
+      <div class="sidebar-group__items" role="menu" hidden>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="business-setup" data-wizard="payment-setup">
+          Payment Processing Setup
+        </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="business-setup" data-wizard="store-setup">
+          Online Store Setup
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-group" data-group="resources">
+      <button class="sidebar-group__trigger" type="button" aria-expanded="false">
+        <span>Resources</span>
+        <span class="sidebar-group__icon" aria-hidden="true"></span>
+      </button>
+      <div class="sidebar-group__items" role="menu" hidden>
+        <a class="sidebar-link" href="/downloads.html" role="menuitem">
+          Desktop App Downloads
+        </a>
+      </div>
+    </div>
+
+    <!-- Grow Management group removed - Plans and Schedules are now embedded in Groups V2 -->
+  </nav>
+
+  <div class="sidebar-standalone">
+    <button type="button" class="sidebar-link" data-sidebar-link data-target="groups-v2">
+      Groups V2
+    </button>
+  </div>
+</aside>
+
+
+
+    <main class="dashboard-main">
+
+  <section id="topCard" class="card card--hero top-card">
+              <div class="row row--between row--center top-card__content">
+                <!-- Left side: Farm branding -->
+                <div class="row row--center row--gap-md flex-1">
+                  <img id="farmLogo" src="" alt="Farm logo" class="farm-logo" onerror="this.style.display='none'">
+                  <div id="farmBrandingSection" class="farm-branding">
+                    <h1 id="farmName" class="farm-name"></h1>
+                    <div id="farmTagline" class="tiny farm-tagline"></div>
+                  </div>
+                </div>
+
+                <!-- Right side: Light Engine Foxtrot and controls -->
+                <div class="row row--gap-lg row--center top-card__status">
+                  <div class="text-right">
+                    <h1 id="lightEngineTitle" class="top-card__title">Light Engine Foxtrot</h1>
+                    <div class="automation-indicator" id="automationIndicator" aria-live="polite">
+                      <span class="automation-indicator__dot" aria-hidden="true"></span>
+                      <span class="automation-indicator__label">Centralized Automation</span>
+                      <span class="automation-indicator__status" id="automationIndicatorStatus">Idle</span>
+                    </div>
+                    <div 
+                      id="communicationStatus" 
+                      class="tiny text-muted top-card__status-text" 
+                      style="cursor: help;"
+                      title="Loading connection status...">System Online</div>
+                    <div id="controllerTargetChip" class="chip tiny" title="Controller target">CTRL: not configured</div>
+                    
+                    <!-- Farm Summary Button -->
+                    <a 
+                      href="/views/farm-summary.html" 
+                      rel="noopener"
+                      class="btn btn--primary" 
+                      style="margin-top: 0.75rem; margin-right: 0.5rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
+                      title="Open full-screen farm room summary">
+                      Farm Summary
+                    </a>
+                    
+                    <!-- Farm Admin Button -->
+                    <a 
+                      href="/login.html" 
+                      rel="noopener"
+                      class="btn btn--secondary" 
+                      style="margin-top: 0.75rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
+                      title="Access farm administration portal">
+                      Farm Admin
+                    </a>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </section>
+      <section id="environmentalAiCard" class="card card--feature">
+              <div class="row row--between row--center mb-md">
+                <h2 class="section-title">Environmental & AI Features</h2>
+                <span class="tiny text-muted">Autonomous Growing Intelligence</span>
+              </div>
+
+              <div class="ai-features-horizontal">
+            <!-- SpectraSync Feature -->
+            <div class="ai-feature-card active" id="spectraSyncFeature" data-feature="spectrasync">
+              <div class="ai-feature-icon spectrasync-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M3 12L6 8L9 14L12 6L15 12L18 4L21 12" stroke="url(#spectrumGradient)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <defs>
+                    <linearGradient id="spectrumGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" style="stop-color:#EF4444"/>
+                      <stop offset="33%" style="stop-color:#3B82F6"/>
+                      <stop offset="66%" style="stop-color:#E0F2FE"/>
+                      <stop offset="100%" style="stop-color:#FEF3C7"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              <div class="ai-feature-content">
+                <h3>SpectraSync®</h3>
+                <div class="ai-feature-status on">ON</div>
+                <div class="ai-feature-description">Real-time spectrum optimization synchronized with plant growth cycles</div>
+              </div>
+            </div>
+
+            <!-- E.V.I.E Feature -->
+            <div class="ai-feature-card" id="evieFeature" data-feature="evie">
+              <div class="ai-feature-icon evie-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M8 12L10 14L12 10L14 14L16 12" fill="currentColor" opacity="0.3"/>
+                  <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.6"/>
+                </svg>
+              </div>
+              <div class="ai-feature-content">
+                <h3>E.V.I.E</h3>
+                <div class="ai-feature-status off">OFF</div>
+                <div class="ai-feature-description">Environmental Virtual Intelligence Engine for autonomous climate control</div>
+              </div>
+            </div>
+
+            <!-- IA In Training Feature -->
+            <div class="ai-feature-card active" id="iaTrainingFeature" data-feature="ia-training">
+              <div class="ai-feature-icon ia-training-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <polygon points="12,2 22,20 2,20" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  <path d="M12 8L12 14" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="12" cy="16" r="1" fill="currentColor"/>
+                  <circle cx="8" cy="18" r="1" fill="currentColor" opacity="0.3"/>
+                  <circle cx="16" cy="18" r="1" fill="currentColor" opacity="0.3"/>
+                </svg>
+              </div>
+              <div class="ai-feature-content">
+                <h3>IA In Training</h3>
+                <div class="ai-feature-status always-on">ALWAYS ON</div>
+                <div class="ai-feature-description">Intelligent Agent continuously learning from farm operations and outcomes</div>
+              </div>
+            </div>
+
+            <!-- AI Assist Feature -->
+            <div class="ai-feature-card active" id="iaAssistFeature" data-feature="ia-assist">
+              <div class="ai-feature-icon ia-assist-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2L15 9L22 9L17 14L19 22L12 18L5 22L7 14L2 9L9 9L12 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  <path d="M12 8L12 14" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+              </div>
+              <div class="ai-feature-content">
+                <h3>AI Assist</h3>
+                <div class="ai-feature-status always-on">ALWAYS ON</div>
+                <div class="ai-feature-description">AI-powered recommendations and automated decision support system</div>
+              </div>
+            </div>
+
+            <!-- Environmental Impact Index Feature -->
+            <div class="ai-feature-card" id="eiiFeature" data-feature="eii">
+              <div class="ai-feature-icon eii-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M8 12L10 10L12 14L16 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="12" cy="12" r="1" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="ai-feature-content">
+                <h3>E.I²</h3>
+                <div class="ai-feature-status dev">DEV</div>
+                <div class="ai-feature-description">Environmental Impact Index measuring sustainability metrics and carbon footprint</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      <!-- Overview card removed -->
+
+      </section>
+
+      <!-- All main dashboard cards open below the environment and AI card -->
+      <div id="mainDashboardCards">
+        <section id="farmPanel" class="card card--compact" data-panel="farm-registration">
+              <header class="panel-header">
+                <div>
+                  <h2>Farm Registration</h2>
+                  <span class="hint" tabindex="0" data-tip="Guided setup to get the reTerminal online, capture the farm address, and map Rooms/Zones. We save as we go and collapse to a summary badge when complete.">?</span>
+                </div>
+                <div class="row row--gap-xs">
+                  <button id="btnLaunchFarm" type="button" class="primary">Register Farm</button>
+                  <button id="btnEditFarm" type="button" class="primary pulse-button cta-start is-hidden">Start here</button>
+                </div>
+              </header>
+              <div class="panel-summary">
+                <span class="tiny text-muted">Status</span>
+                <span id="farmSummaryChip" class="summary-chip"></span>
+              </div>
+      <div id="farmPanelBody" class="panel-body">
+                <div id="farmBadge" class="farm-summary is-hidden"></div>
+                <!-- <button id="btnStartDeviceSetup" type="button" class="ghost is-hidden">Continue device setup</button> -->
+              </div>
+            </section>
+        <section id="roomsPanel" class="card card--compact" data-panel="grow-rooms">
+              <header class="panel-header">
+                <div>
+                  <h2>Grow Rooms</h2>
+                  <span class="hint" tabindex="0" data-tip="Set up rooms with layout, fixtures, schedule, sensors, and energy monitoring. Saved rooms appear below.">?</span>
+                </div>
+                <button id="btnLaunchRoom" type="button" class="primary">New Grow Room</button>
+              </header>
+      <div id="roomsPanelBody" class="panel-body">
+                <div id="roomsList"></div>
+              </div>
+            </section>
+        <section id="lightsPanel" class="card card--compact" data-panel="light-setup">
+              <header class="panel-header">
+                <div>
+                  <h2>Light Setup</h2>
+                  <span class="hint" tabindex="0" data-tip="Set up grow lights across rooms. We carry forward devices discovered in deep scans.">?</span>
+                </div>
+                <button id="btnLaunchLightSetup" type="button" class="primary">New Light Setup</button>
+              </header>
+      <div id="lightsPanelBody" class="panel-body">
+                <div id="lightSetupSummary" class="panel-callout">
+                  <!-- Summary will be populated by JavaScript -->
+                </div>
+                <div id="lightSetupsList"></div>
+              </div>
+            </section>
+
+  <section id="pairDevicesPanel" class="card" data-panel="pair-devices">
+  <div class="row row--between row--center">
+    <div>
+      <h2 class="section-title" style="margin:0">Pair Devices</h2>
+      <p class="tiny text-muted">Link new controllers, sensors, and fixtures to the dashboard.</p>
+    </div>
+    <span id="pairDevicesStatus" class="tiny" aria-live="polite"></span>
+  </div>
+  <p class="tiny" style="margin:8px 0 12px;color:#475569">Walk through Wi‑Fi, Bluetooth, and wired pairing with contextual AI assistance. We detect network details, confirm hub requirements, and document installation notes.</p>
+  <div class="row row--gap-sm row--wrap">
+    <button id="btnLaunchPairWizard" type="button" class="primary">Start Pairing Wizard</button>
+    <button id="btnPairWizardDocs" type="button" class="ghost">Pairing checklist</button>
+  </div>
+</section>
+        <section id="iotPanel" class="card card--compact" data-panel="iot-devices">
+        <div class="card-header">
+          <h2>IoT Devices</h2>
+          <span class="hint" tabindex="0" data-tip="Manage all connected IoT devices including SwitchBot, Kasa, Shelly, and GreenReach devices. View status, set names and locations, and identify controlled equipment.">?</span>
+        </div>
+        <div class="panel-body">
+          <!-- Added IoT Devices -->
+          <div id="addedIoTDevicesContainer" style="display: none; margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #1e293b;">My IoT Devices</h3>
+              <span id="addedIoTDevicesCount" style="font-size: 12px; color: #64748b;"></span>
+            </div>
+            <div id="addedIoTDevicesList" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;"></div>
+          </div>
+          
+          <!-- IoT Devices List (for renderIoTDeviceCards function) -->
+          <div id="iotDevicesList"></div>
+          
+          
+        </div>
+        
+        <!-- Generic IoT Ecosystem Modal -->
+        <div id="iotEcosystemModal" class="modal" style="display:none;position:fixed;z-index:10001;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;">
+          <div id="iotEcosystemModalContent" style="background:#fff;border-radius:10px;max-width:90vw;max-height:90vh;width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.25);position:relative;display:flex;flex-direction:column;padding:32px 24px 24px 24px;">
+            <button id="closeIotEcosystemModal" style="position:absolute;top:10px;right:10px;background:none;border:none;font-size:1.5em;cursor:pointer;z-index:2;">&times;</button>
+            <div id="iotEcosystemModalBody"></div>
+          </div>
+        </div>
+        
+        <p class="tiny" style="margin:8px 0 0;color:#475569">Use the Universal Scanner to discover all IoT devices on your network. Assign devices to equipment for automated control and monitoring. Device managers provide detailed configuration for supported ecosystems.</p>
+      </section>
+
+          <!-- Controller Assignments panel removed -->
+      <!-- Plans card removed -->
+        <section id="calibrationPanel" class="card" data-panel="calibration">
+            <div class="row row--between row--center">
+              <h2 style="margin:0">
+                Calibration
+                <span class="hint" tabindex="0" data-tip="Match lights to a target using controller or meter readings. Gains apply at send-time as a correction layer.">?</span>
+              </h2>
+              <span id="calStatus" class="tiny" aria-live="polite"></span>
+            </div>
+            <p class="tiny" style="margin:8px 0 12px;color:#475569">Pick a scope (Light, Group, or Location), choose a target light, and preview corrections before applying. Calibrations store per-light gains that wrap all future writes.</p>
+            <div class="row row--gap-sm row--wrap mb-md">
+              <button id="btnOpenCalWizard" type="button" class="primary">Open Calibration Wizard</button>
+              <button id="btnReloadCal" type="button" class="ghost">Reload Profiles</button>
+            </div>
+            <div id="calibrationRegistry" class="cal-registry"></div>
+          </section>
+
+  <section id="profilePanel" class="card" data-panel="profile">
+  <div class="row row--between row--center">
+    <h2 style="margin:0">Profile</h2>
+    <span id="profileStatus" class="tiny" aria-live="polite"></span>
+  </div>
+  <p class="tiny" style="margin:8px 0 12px;color:#475569">Manage the farm operator details and contact preferences used across reports and support requests.</p>
+  <form id="profileForm" class="grid cols-2" style="gap:12px;align-items:end;max-width:640px">
+    <label class="tiny">Name
+      <input id="profileName" type="text" placeholder="Operator name" autocomplete="name">
+    </label>
+    <label class="tiny">Role
+      <input id="profileRole" type="text" placeholder="e.g., Head Grower">
+    </label>
+    <label class="tiny">Email
+      <input id="profileEmail" type="email" placeholder="name@example.com" autocomplete="email">
+    </label>
+    <label class="tiny">Phone
+      <input id="profilePhone" type="tel" placeholder="+1 (555) 123-4567" autocomplete="tel">
+    </label>
+    <div class="row row--gap-sm" style="grid-column:1 / -1">
+      <button id="profileSave" type="submit" class="primary">Save Profile</button>
+      <button id="profileReset" type="button" class="ghost">Reset</button>
+    </div>
+  </form>
+  
+  <!-- Password Change Section -->
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">Change Password</h3>
+    <p class="tiny" style="margin:0 0 16px;color:#475569">Update your password for added security. Use a strong password with at least 8 characters.</p>
+    <form id="passwordChangeForm" class="grid cols-2" style="gap:12px;align-items:end;max-width:640px">
+      <label class="tiny" style="grid-column:1 / -1">Current Password
+        <input id="currentPassword" type="password" placeholder="Enter current password" autocomplete="current-password" required>
+      </label>
+      <label class="tiny">New Password
+        <input id="newPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" required minlength="8">
+      </label>
+      <label class="tiny">Confirm New Password
+        <input id="confirmPassword" type="password" placeholder="Re-enter new password" autocomplete="new-password" required minlength="8">
+      </label>
+      <div class="row row--gap-sm" style="grid-column:1 / -1">
+        <button id="passwordChangeSave" type="submit" class="primary">Change Password</button>
+        <button id="passwordChangeReset" type="button" class="ghost">Clear</button>
+      </div>
+      <span id="passwordChangeStatus" class="tiny" style="grid-column:1 / -1" aria-live="polite"></span>
+    </form>
+  </div>
+</section>
+        <section id="groupsV2Panel" class="card hud-shell gr-card" data-panel="groups-v2" data-card-prefix="GR" data-card-code="GV2" hidden>
+        <div class="row row--between row--center hud-shell__header">
+          <h2 class="hud-shell__title">Groups V2</h2>
+          <span id="groupsV2Status" class="tiny" aria-live="polite"></span>
+        </div>
+        <div class="panel-body" style="display:flex;flex-direction:column;gap:18px;">
+          <div class="gr-card" id="groupsV2PlanForm" style="padding:16px;border:1px solid #cbd5e1;border-radius:12px;background:linear-gradient(120deg,#f8fafc 0%,#e0f2fe 100%);display:flex;flex-direction:column;gap:16px;">
+            <div class="row row--wrap" style="gap:12px;align-items:flex-end;" id="groupsV2PlanControls">
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:180px;">
+                Room
+                <select id="groupsV2RoomSelect" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option value="">(select room)</option>
+                </select>
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">
+                Zone
+                <select id="groupsV2ZoneSelect" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <!-- Zones loaded dynamically from room mapper -->
+                  <option value="">(none)</option>
+                </select>
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
+                Group name
+                <input id="groupsV2ZoneName" type="text" placeholder="Propagation North — Bench A" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <div class="row" style="gap:8px;flex-wrap:wrap;">
+                <button id="groupsV2SaveGroup" type="button" class="primary">Save Group</button>
+                <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">
+                  Load group
+                  <select id="groupsV2LoadGroup" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                    <option value="">(none)</option>
+                  </select>
+                </label>
+                <button id="groupsV2DeleteGroup" type="button" class="ghost" style="align-self:flex-end;">Delete selected group</button>
+              </div>
+            </div>
+
+            <div class="row row--wrap" style="gap:12px;align-items:flex-start;">
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:200px;">
+                Search plans
+                <select id="groupsV2PlanSearch" size="1" style="margin-top:4px;min-height:32px;max-height:300px;overflow-y:auto;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option value="">All plans</option>
+                </select>
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:220px;">
+                Plan
+                <select id="groupsV2PlanSelect" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option value="">(select plan)</option>
+                </select>
+              </label>
+              <button id="applyPlanToGroupBtn" type="button" class="primary">Apply to Current Plan</button>
+            </div>
+
+            <div class="groupsV2-anchor" style="display:flex;flex-direction:column;gap:8px;">
+              <span class="tiny" style="font-weight:600;">Anchor</span>
+              <div id="groupsV2AnchorToggle" role="group" aria-label="Anchor mode" style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button id="groupsV2SeedDateBtn" type="button" class="primary" aria-pressed="true" data-mode="seed" style="min-height:32px;padding:6px 12px;">Seed date</button>
+                <button id="groupsV2DpsBtn" type="button" class="ghost" aria-pressed="false" data-mode="dps" style="min-height:32px;padding:6px 12px;">DPS (Days Post Seeding)</button>
+              </div>
+              <label id="groupsV2SeedWrapper" class="tiny" style="display:flex;flex-direction:column;gap:4px;max-width:220px;">
+                <span>Seed date</span>
+                <input id="groupsV2SeedDate" type="date" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <label id="groupsV2DpsWrapper" class="tiny" style="display:none;flex-direction:column;gap:4px;max-width:220px;">
+                <span>Days post seeding</span>
+                <select id="groupsV2Dps" style="width:120px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option value="1">1 day</option>
+                  <option value="2">2 days</option>
+                  <option value="3">3 days</option>
+                  <option value="5">5 days</option>
+                  <option value="7">7 days</option>
+                  <option value="10">10 days</option>
+                  <option value="14">14 days</option>
+                  <option value="21">21 days</option>
+                  <option value="30">30 days</option>
+                  <option value="45">45 days</option>
+                  <option value="60">60 days</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="row row--wrap" style="gap:16px;align-items:flex-start;">
+              <div class="tiny" style="display:flex;flex-direction:column;gap:6px;min-width:180px;padding:12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;">
+                <div class="row row--between row--center">
+                  <strong>Cycle 1</strong>
+                  <button id="groupsV2AddCycle2Btn" type="button" class="ghost" style="font-size:11px;padding:4px 8px;min-height:24px;">+ Add Cycle 2</button>
+                </div>
+                <label style="display:flex;flex-direction:column;gap:4px;">
+                  <span>Start</span>
+                  <input id="groupsV2Cycle1On" type="time" value="08:00" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:4px;">
+                  <span>ON duration (h)</span>
+                  <input id="groupsV2Cycle1Hours" type="number" min="0" max="24" step="0.25" value="12" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+                </label>
+                <div id="groupsV2Cycle1End" class="tiny text-muted">End: 20:00</div>
+              </div>
+              <div id="groupsV2Cycle2Container" class="tiny" style="display:none;flex-direction:column;gap:6px;min-width:180px;padding:12px;border-radius:8px;border:1px solid #cbd5e1;background:#eff6ff;">
+                <div class="row row--between row--center">
+                  <strong>Cycle 2</strong>
+                  <button id="groupsV2RemoveCycle2Btn" type="button" class="ghost" style="font-size:11px;padding:4px 8px;min-height:24px;color:#dc2626;">× Remove</button>
+                </div>
+                <label style="display:flex;flex-direction:column;gap:4px;">
+                  <span>Start</span>
+                  <input id="groupsV2Cycle2On" type="time" value="20:00" readonly aria-readonly="true" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;background:#e2e8f0;color:#475569;">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:4px;">
+                  <span>ON duration (h)</span>
+                  <input id="groupsV2Cycle2Hours" type="number" min="0" max="24" step="0.5" value="12" readonly aria-readonly="true" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;background:#e2e8f0;color:#475569;">
+                </label>
+                <div id="groupsV2Cycle2End" class="tiny text-muted">End: 08:00</div>
+              </div>
+            </div>
+
+            <div id="groupsV2ScheduleSummary" class="tiny text-muted"></div>
+
+            <!-- Target Temperature and Humidity -->
+            <div class="row row--wrap" style="gap:12px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #86efac;">
+              <div class="tiny" style="display:flex;flex-direction:column;min-width:140px;">
+                <strong style="margin-bottom:4px;">Target Temp (°C)</strong>
+                <div id="groupsV2TargetTemp" style="padding:8px;background:#fff;border-radius:6px;border:1px solid #86efac;min-height:32px;display:flex;align-items:center;">
+                  <span class="text-muted">—</span>
+                </div>
+                <span class="text-muted" style="font-size:10px;margin-top:2px;">From recipe</span>
+              </div>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:140px;">
+                <strong style="margin-bottom:4px;">Target Humidity (%)</strong>
+                <input id="groupsV2TargetHumidity" type="number" min="0" max="100" step="1" placeholder="Enter RH %" style="min-height:32px;border-radius:6px;border:1px solid #86efac;">
+              </label>
+            </div>
+
+            <div class="row row--wrap" style="gap:12px;">
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+                PPFD Δ (µmol)
+                <input id="groupsV2GradientPpfd" type="number" step="1" value="0" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+                Blue Δ (%)
+                <input id="groupsV2GradientBlue" type="number" step="0.5" value="0" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+                Temp Δ (°C)
+                <input id="groupsV2GradientTemp" type="number" step="0.5" value="0" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+              <label class="tiny" style="display:flex;flex-direction:column;min-width:120px;">
+                RH Δ (%)
+                <input id="groupsV2GradientRh" type="number" step="0.5" value="0" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+              </label>
+            </div>
+
+            <div id="groupsV2PlanPreview" class="gr-card" style="padding:12px;border:1px dashed #38bdf8;border-radius:10px;background:linear-gradient(120deg,#f0f9ff 0%,#e0f2fe 100%);"></div>
+          </div>
+
+          <!-- Light Assignment Section (Unassigned Lights) -->
+          <div class="gr-card" style="margin-top:8px;padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
+            <h3 style="margin:0 0 12px 0;font-size:14px;font-weight:600;color:#1e293b;">Light Assignment</h3>
+
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <label class="tiny" style="display:flex;flex-direction:column;">
+                Available Lights (Not Yet Assigned)
+                <select id="groupsV2UnassignedLightsSelect" multiple size="5" style="margin-top:4px;min-height:120px;border-radius:6px;border:1px solid #cbd5e1;">
+                  <option disabled>Loading...</option>
+                </select>
+                <span class="tiny text-muted" style="margin-top:4px;">Select light(s) from setup wizard or IoT devices</span>
+              </label>
+
+              <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;">
+                <button id="assignLightsToGroupBtn" type="button" class="primary">Assign Selected Light</button>
+                <span class="tiny text-muted">Assign the selected light to the current group</span>
+              </div>
+
+              <!-- Light Info Card -->
+              <div id="lightInfoCard" class="gr-card" style="display:none;padding:12px;border:1px solid #cbd5e1;border-radius:8px;background:white;">
+                <div id="lightInfoCardBody"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Side-by-side comparison: Plan vs Light -->
+          <div id="groupsV2Comparison" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;display:none;">
+            <div class="gr-card" style="padding:16px;border:2px solid #38bdf8;border-radius:12px;background:linear-gradient(120deg,#f0f9ff 0%,#e0f2fe 100%);">
+              <h3 style="margin-top:0;margin-bottom:12px;font-size:16px;display:flex;align-items:center;gap:8px;">
+                Plan Target
+              </h3>
+              <div id="groupsV2PlanComparisonCard" class="tiny"></div>
+            </div>
+            <div class="gr-card" style="padding:16px;border:2px solid #a78bfa;border-radius:12px;background:linear-gradient(120deg,#faf5ff 0%,#f3e8ff 100%);">
+              <h3 style="margin-top:0;margin-bottom:12px;font-size:16px;display:flex;align-items:center;gap:8px;">
+                Light Capability
+              </h3>
+              <div id="groupsV2LightComparisonCard" class="tiny"></div>
+            </div>
+          </div>
+
+          <!-- Assigned Lights -->
+          <div class="gr-card" style="padding:16px;border:1px solid #cbd5e1;border-radius:12px;margin-bottom:16px;">
+            <div class="row row--between row--center" style="margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+              <h3 style="margin:0;font-size:16px;color:#0f172a;">Assigned Lights</h3>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <select id="groupsV2AssignController" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;">
+                  <option value="">Assign Controller...</option>
+                </select>
+                <button id="groupsV2SaveLightAssignments" type="button" class="primary tiny">💾 Save Assigned Lights</button>
+                <button id="groupsV2TestGroupLights" type="button" class="primary tiny" style="background:#f59e0b;border-color:#d97706;">🔦 Test Assigned Lights</button>
+                <button id="groupsV2RunGroup" type="button" class="primary" style="background:#10b981;border-color:#059669;">▶️ Run Group</button>
+                <div id="groupsV2RunningIndicator" style="display:none;align-items:center;gap:6px;padding:4px 12px;background:#10b981;color:#fff;border-radius:6px;font-size:13px;font-weight:600;">
+                  <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;animation:pulse 1.5s ease-in-out infinite;"></span>
+                  RUNNING
+                </div>
+                <div id="groupsV2TestingIndicator" style="display:none;align-items:center;gap:6px;padding:4px 12px;background:#f59e0b;color:#fff;border-radius:6px;font-size:13px;font-weight:600;">
+                  <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;animation:pulse 1.5s ease-in-out infinite;"></span>
+                  TESTING
+                </div>
+                <button id="groupLightRemoveSelected" type="button" class="ghost danger tiny" disabled>Remove selected</button>
+              </div>
+            </div>
+            <div id="groupLightList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;"></div>
+          </div>
+
+          <!-- Calibration Button -->
+          <div class="gr-card" style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:linear-gradient(120deg,#fef3c7 0%,#fde68a 100%);">
+            <button id="btnOpenCalWizardFromGroupsV2" type="button" class="primary" style="width:100%;">🔬 Open Calibration Wizard</button>
+            <p class="tiny" style="margin:8px 0 0;color:#78350f;text-align:center;">Calibrate light output to match target spectrum</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings > Integrations Panel -->
+      <section id="integrationsPanel" class="card card--compact" data-panel="integrations" hidden>
+        <div class="card-header">
+          <h2>Integrations</h2>
+          <span class="hint" tabindex="0" data-tip="Manage credentials for third-party ecosystems like SwitchBot and Kasa.">?</span>
+        </div>
+        <div class="panel-body">
+          <!-- Universal Device Scanner -->
+          <div class="switchbot-card" id="universalScannerCard" style="margin-bottom: 16px;">
+            <div class="switchbot-card__header">
+              <div class="switchbot-card__title">
+                <span class="switchbot-dot"></span>
+                <strong>Universal Device Scanner</strong>
+              </div>
+              <div class="switchbot-card__actions">
+                <button id="btnUniversalScan" type="button" class="primary">Start Scan</button>
+              </div>
+            </div>
+            <div class="tiny" style="color:#475569">Multi-protocol discovery: BLE, mDNS, SSDP, Kasa UDP, SwitchBot Cloud</div>
+            <div id="universalScanProgress" style="display: none; margin-top: 12px;">
+              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                <div style="width: 16px; height: 16px; border: 2px solid #0ea5e9; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span id="universalScanStatus" style="font-size: 13px; color:#334155">Scanning networks...</span>
+              </div>
+              <div style="background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden;">
+                <div id="universalScanProgressBar" style="background: #0ea5e9; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+              </div>
+            </div>
+            <!-- Scan Results -->
+            <div id="universalScanResults" style="display: none; margin-top: 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #1e293b;">Discovered Devices</h3>
+                <span id="universalScanCount" style="font-size: 12px; color: #64748b;"></span>
+              </div>
+              <div style="padding: 8px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; margin-bottom: 12px;">
+                <p class="tiny" style="margin: 0; color: #0369a1;">
+                  <strong>Accept</strong> devices to add to IoT Devices panel, or <strong>Ignore</strong> to remove from list. Accepted devices requiring authentication will prompt for sign-in.
+                </p>
+              </div>
+              <div id="universalScanResultsTable" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; background: white;">
+                <!-- Results populated here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Add Device action moved here from sidebar (below Universal Scan) -->
+          <div style="display:flex;justify-content:flex-start;margin:8px 0 16px;">
+            <button id="btnAddDeviceIntegrations" type="button" class="primary">Add Device</button>
+          </div>
+
+          <!-- Code3 Controller Card (matches SwitchBot sizing/style) -->
+          <div class="switchbot-card" id="code3ControllerCard" style="margin-bottom:16px;">
+            <div class="switchbot-card__header">
+              <div class="switchbot-card__title">
+                <span class="switchbot-dot" id="code3StatusDot"></span>
+                <strong>Code3 Light Controller</strong>
+              </div>
+              <div class="switchbot-card__actions">
+                <button id="btnTestGrow3" type="button" class="primary">Test Connection</button>
+              </div>
+            </div>
+            <div class="tiny" style="color:#475569">Primary light control endpoint • 4-channel spectrum control (CW/WW/Blue/Red)</div>
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+              <div class="tiny" style="display:flex;align-items:center;gap:6px;color:#334155">
+                <span style="font-weight:600;">Address:</span>
+                <code>http://192.168.2.80:3000</code>
+              </div>
+              <div id="grow3Status" class="tiny" style="display:flex;align-items:center;gap:6px;color:#334155">
+                <span class="switchbot-dot switchbot-dot--warn" id="code3StatusPill"></span>
+                <span id="code3StatusText">Checking...</span>
+              </div>
+            </div>
+            
+            <!-- 4-Channel Spectrum Control -->
+            <details style="margin-top: 12px;" open>
+              <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:8px 12px;background:#f1f5f9;border-radius:6px;user-select:none;">Manual 4-Channel Control</summary>
+              <div style="margin-top: 12px; padding: 16px; background: #ffffff; border:1px solid #e2e8f0; border-radius: 6px;">
+                
+                <!-- Target Device Selection -->
+                <div style="margin-bottom: 16px;">
+                  <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:6px;">
+                    Target Device:
+                  </label>
+                  <select id="grow3TargetDevice" style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;">
+                    <option value="broadcast">All Fixtures (Broadcast)</option>
+                    <option value="2">Controller ID 2 (F00001)</option>
+                    <option value="3">Controller ID 3 (F00002)</option>
+                    <option value="4">Controller ID 4 (F00003)</option>
+                    <option value="5">Controller ID 5 (F00005)</option>
+                    <option value="6">Controller ID 6 (F00004)</option>
+                  </select>
+                </div>
+
+                <!-- Channel Sliders -->
+                <div style="display:grid;gap:12px;">
+                  <!-- Cool White Channel -->
+                  <div>
+                    <label style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px;">
+                      <span>Cool White (CW)</span>
+                      <span id="cwValue" style="font-family:monospace;background:#f1f5f9;padding:2px 8px;border-radius:4px;">0</span>
+                    </label>
+                    <input type="range" id="cwSlider" min="0" max="100" value="0" 
+                           style="width:100%;height:6px;background:#e2e8f0;border-radius:3px;outline:none;-webkit-appearance:none;appearance:none;">
+                  </div>
+
+                  <!-- Warm White Channel -->
+                  <div>
+                    <label style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px;">
+                      <span>Warm White (WW)</span>
+                      <span id="wwValue" style="font-family:monospace;background:#f1f5f9;padding:2px 8px;border-radius:4px;">0</span>
+                    </label>
+                    <input type="range" id="wwSlider" min="0" max="100" value="0" 
+                           style="width:100%;height:6px;background:#e2e8f0;border-radius:3px;outline:none;-webkit-appearance:none;appearance:none;">
+                  </div>
+
+                  <!-- Blue Channel -->
+                  <div>
+                    <label style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px;">
+                      <span>Blue (450nm)</span>
+                      <span id="blueValue" style="font-family:monospace;background:#f1f5f9;padding:2px 8px;border-radius:4px;">0</span>
+                    </label>
+                    <input type="range" id="blueSlider" min="0" max="100" value="0" 
+                           style="width:100%;height:6px;background:#e2e8f0;border-radius:3px;outline:none;-webkit-appearance:none;appearance:none;">
+                  </div>
+
+                  <!-- Red Channel -->
+                  <div>
+                    <label style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px;">
+                      <span>Red (660nm)</span>
+                      <span id="redValue" style="font-family:monospace;background:#f1f5f9;padding:2px 8px;border-radius:4px;">0</span>
+                    </label>
+                    <input type="range" id="redSlider" min="0" max="100" value="0" 
+                           style="width:100%;height:6px;background:#e2e8f0;border-radius:3px;outline:none;-webkit-appearance:none;appearance:none;">
+                  </div>
+                </div>
+
+                <!-- HEX Format Preview -->
+                <div style="margin-top:12px;padding:10px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;">
+                  <div style="font-size:11px;font-weight:600;color:#475569;margin-bottom:4px;">HEX12 Format:</div>
+                  <code id="hexPreview" style="font-size:13px;font-weight:600;color:#1e293b;font-family:monospace;">000000000000</code>
+                  <div id="hexBreakdown" style="font-size:10px;color:#64748b;margin-top:6px;font-family:monospace;line-height:1.4;">
+                    <div>CW:<span id="hexCW" style="color:#0ea5e9;font-weight:600;">00</span> | WW:<span id="hexWW" style="color:#f59e0b;font-weight:600;">00</span> | Blue:<span id="hexBlue" style="color:#3b82f6;font-weight:600;">00</span> | Red:<span id="hexRed" style="color:#ef4444;font-weight:600;">00</span> | CH5:<span style="color:#94a3b8;">00</span> | CH6:<span style="color:#94a3b8;">00</span></div>
+                  </div>
+                </div>
+
+                <!-- Send Command Button -->
+                <div style="margin-top:12px;display:flex;gap:8px;">
+                  <button id="btnSendGrow3Command" type="button" class="primary" style="flex:1;">
+                    Send Spectrum Command
+                  </button>
+                  <button id="btnGrow3AllOff" type="button" class="ghost" style="padding:8px 16px;">
+                    All Off
+                  </button>
+                  <button id="btnGrow3DanceParty" type="button" class="ghost" style="padding:8px 16px;background:linear-gradient(45deg, #f472b6, #8b5cf6, #3b82f6, #10b981);color:white;border:none;" title="30-second light show with random color phasing">
+                    🎉 Dance Party
+                  </button>
+                </div>
+
+                <div class="tiny" style="margin-top:8px;color:#64748b;">
+                  <strong>Note:</strong> Slider values are 0-100 (mapped to 0x00-0xFF hex, i.e., 0-255). Format: [CW][WW][Blue][Red][00][00]
+                </div>
+              </div>
+            </details>
+            <details style="margin-top: 8px;">
+              <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:8px 12px;background:#f1f5f9;border-radius:6px;user-select:none;">Controlled Fixtures (5 devices)</summary>
+              <div style="margin-top: 12px; padding: 12px; background: #ffffff; border:1px solid #e2e8f0; border-radius: 6px;">
+                <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                      <th style="padding: 8px; text-align: left; font-weight: 600;">Controller ID</th>
+                      <th style="padding: 8px; text-align: left; font-weight: 600;">Fixture UID</th>
+                      <th style="padding: 8px; text-align: left; font-weight: 600;">Status</th>
+                      <th style="padding: 8px; text-align: center; font-weight: 600;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="grow3FixturesTable">
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                      <td style="padding: 8px; font-family: monospace;">2</td>
+                      <td style="padding: 8px; font-family: monospace;">F00001</td>
+                      <td style="padding: 8px;"><span class="tiny" style="opacity: 0.7;">—</span></td>
+                      <td style="padding: 8px; text-align: center;">
+                        <button onclick="window.testGrow3Fixture(2, 'F00001')" class="ghost">Test</button>
+                      </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                      <td style="padding: 8px; font-family: monospace;">3</td>
+                      <td style="padding: 8px; font-family: monospace;">F00002</td>
+                      <td style="padding: 8px;"><span class="tiny" style="opacity: 0.7;">—</span></td>
+                      <td style="padding: 8px; text-align: center;">
+                        <button onclick="window.testGrow3Fixture(3, 'F00002')" class="ghost">Test</button>
+                      </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                      <td style="padding: 8px; font-family: monospace;">4</td>
+                      <td style="padding: 8px; font-family: monospace;">F00003</td>
+                      <td style="padding: 8px;"><span class="tiny" style="opacity: 0.7;">—</span></td>
+                      <td style="padding: 8px; text-align: center;">
+                        <button onclick="window.testGrow3Fixture(4, 'F00003')" class="ghost">Test</button>
+                      </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                      <td style="padding: 8px; font-family: monospace;">5</td>
+                      <td style="padding: 8px; font-family: monospace;">F00005</td>
+                      <td style="padding: 8px;"><span class="tiny" style="opacity: 0.7;">—</span></td>
+                      <td style="padding: 8px; text-align: center;">
+                        <button onclick="window.testGrow3Fixture(5, 'F00005')" class="ghost">Test</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px; font-family: monospace;">6</td>
+                      <td style="padding: 8px; font-family: monospace;">F00004</td>
+                      <td style="padding: 8px;"><span class="tiny" style="opacity: 0.7;">—</span></td>
+                      <td style="padding: 8px; text-align: center;">
+                        <button onclick="window.testGrow3Fixture(6, 'F00004')" class="ghost">Test</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="tiny" style="margin-top: 12px; padding: 10px; background: #f8fafc; border:1px dashed #cbd5e1; border-radius: 4px;">
+                  <strong>Spectrum Control:</strong> CW (Cool White) • WW (Warm White) • Blue • Red • Format HEX12 [CW][WW][Blue][Red][00][00] (00–64)
+                </div>
+              </div>
+            </details>
+          </div>
+          
+
+          <div id="integrationsStatus" class="tiny" style="color:#475569;margin-bottom:8px">Loading status…</div>
+          <div class="row" style="gap:16px;align-items:flex-start;flex-wrap:wrap">
+            <div style="flex:1 1 320px;min-width:280px">
+              <div class="section-title" style="font-weight:600;margin-bottom:6px">SwitchBot Cloud</div>
+              <div class="farm-step__stack">
+                <input id="integSbToken" type="text" autocomplete="off" placeholder="Token (copy from SwitchBot app)">
+                <input id="integSbSecret" type="password" autocomplete="off" placeholder="Secret">
+                <div class="tiny" style="color:#64748b">We never display full secrets. They’re saved locally in farm.json.</div>
+              </div>
+            </div>
+            <div style="flex:1 1 320px;min-width:280px">
+              <div class="section-title" style="font-weight:600;margin-bottom:6px">TP-Link Kasa</div>
+              <div class="farm-step__stack">
+                <input id="integKasaEmail" type="email" autocomplete="email" placeholder="Email">
+                <input id="integKasaPassword" type="password" autocomplete="current-password" placeholder="Password">
+                <div class="tiny" style="color:#64748b">Used for Kasa cloud login if needed. Local discovery works without it.</div>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="gap:8px;margin-top:12px">
+            <button id="btnSaveIntegrations" type="button" class="primary">Save Integrations</button>
+            <button id="btnTestSwitchBot" type="button" class="ghost">Test SwitchBot</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Equipment Overview Panel -->
+      <section id="equipmentPanel" class="card card--compact" data-panel="equipment-overview" hidden>
+        <div class="card-header">
+          <h2>Equipment Overview</h2>
+          <span class="hint" tabindex="0" data-tip="Summary of equipment across rooms and zones with quick links to configure.">?</span>
+          <button type="button" class="primary" onclick="openGrowRoomWizardForEquipment()" style="margin-left: auto;">
+            + Add New Equipment
+          </button>
+        </div>
+        <div class="panel-body">
+          <div id="equipmentSummary" class="panel-callout tiny" style="margin-bottom:8px;color:#475569"></div>
+          <div class="table-scroll">
+            <table class="table" id="equipmentTable" aria-describedby="equipmentSummary">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Vendor</th>
+                  <th>Model</th>
+                  <th>Room</th>
+                  <th>Control</th>
+                  <th>Actions</th>
+                  <th>Manage</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bus Mapping Section -->
+      <section id="bus-mapping" class="card card--compact" data-panel="bus-mapping" hidden>
+        <div class="card-header">
+          <h2>Bus Mapping Wizard</h2>
+          <span class="hint" tabindex="0" data-tip="Map physical bus channels to logical light groups for advanced control systems">?</span>
+        </div>
+        <div class="panel-body">
+          <!-- Step Indicator -->
+          <div class="wizard-steps" style="display: flex; gap: 8px; margin-bottom: 24px; overflow-x: auto;">
+            <div class="wizard-step" data-step="1" data-active>
+              <div class="wizard-step__number">1</div>
+              <div class="wizard-step__label">Bus Scan</div>
+            </div>
+            <div class="wizard-step" data-step="2">
+              <div class="wizard-step__number">2</div>
+              <div class="wizard-step__label">Select Channel</div>
+            </div>
+            <div class="wizard-step" data-step="3">
+              <div class="wizard-step__number">3</div>
+              <div class="wizard-step__label">Identify Lights</div>
+            </div>
+            <div class="wizard-step" data-step="4">
+              <div class="wizard-step__number">4</div>
+              <div class="wizard-step__label">Assign Group</div>
+            </div>
+            <div class="wizard-step" data-step="5">
+              <div class="wizard-step__number">5</div>
+              <div class="wizard-step__label">Light Model</div>
+            </div>
+            <div class="wizard-step" data-step="6">
+              <div class="wizard-step__number">6</div>
+              <div class="wizard-step__label">Review</div>
+            </div>
+          </div>
+
+          <!-- Step 1: Bus Scan -->
+          <div class="bus-mapping-step" data-step="1" data-active>
+            <h3>Step 1: Scan Bus for Devices</h3>
+            <p class="tiny" style="color: #64748b; margin-bottom: 16px;">
+              Scan the physical bus to discover connected lighting nodes and channels.
+            </p>
+            
+            <!-- Progress Indicator -->
+            <div id="busProgressIndicator" style="margin-bottom: 16px;"></div>
+            
+            <div class="farm-step__stack">
+              <label>Bus ID:</label>
+              <input type="text" id="busScanId" placeholder="e.g., bus-001" />
+              
+              <button type="button" class="primary" onclick="window.startBusScan()">
+                Scan Bus
+              </button>
+            </div>
+
+            <div id="busScanStatus" style="margin-top: 12px; font-size: 13px;"></div>
+          </div>
+
+          <!-- Step 2: Select Channel -->
+          <div class="bus-mapping-step" data-step="2" hidden>
+            <h3>Step 2: Select Channel to Map</h3>
+            <p class="tiny" style="color: #64748b; margin-bottom: 16px;">
+              Choose a specific channel from the discovered nodes. Channels already mapped are marked.
+            </p>
+            
+            <div id="busNodeList" style="margin-bottom: 16px;"></div>
+            <div id="busChannelList"></div>
+          </div>
+
+          <!-- Step 3: Identify Lights -->
+          <div class="bus-mapping-step" data-step="3" hidden>
+            <h3>Step 3: Identify Physical Lights</h3>
+            <p class="tiny" style="color: #64748b; margin-bottom: 16px;">
+              Send a test signal to verify which physical lights respond.
+            </p>
+            
+            <div class="farm-step__stack">
+              <div id="identifyChannelInfo"></div>
+              
+              <button type="button" class="primary" onclick="window.identifyChannel()">
+                Flash Lights (Identify)
+              </button>
+              
+              <div id="identifyStatus" style="margin: 12px 0; font-size: 13px; padding: 8px; border-radius: 4px;"></div>
+              
+              <label style="margin-top: 8px;">Did the correct lights flash?</label>
+              <div class="row" style="gap: 8px;">
+                <button type="button" class="primary" onclick="window.confirmIdentification(true)">
+                  Yes, Continue
+                </button>
+                <button type="button" class="ghost" onclick="window.confirmIdentification(false)">
+                  No, Go Back
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Assign Group -->
+          <div class="bus-mapping-step" data-step="4" hidden>
+            <h3>Step 4: Assign to Light Group</h3>
+            <p class="tiny" style="color: #64748b; margin-bottom: 16px;">
+              Map this channel to a logical light group (room/zone).
+            </p>
+            
+            <div class="farm-step__stack">
+              <label>Select Group:</label>
+              <select id="groupSelect">
+                <option value="">Loading groups...</option>
+              </select>
+              
+              <button type="button" class="primary" onclick="window.assignToGroup()">
+                Assign to Group
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 5: Assign Light Model -->
+          <div class="bus-mapping-step" data-step="5" hidden>
+            <h3>Step 5: Select Light Model</h3>
+            <p class="tiny" style="color: #64748b; margin-bottom: 16px;">
+              Choose the physical light fixture model for accurate spectrum control.
+            </p>
+            
+            <div class="farm-step__stack">
+              <label>Manufacturer:</label>
+              <input type="text" id="lightManufacturer" placeholder="e.g., HLG, Spider Farmer" />
+              
+              <label>Model:</label>
+              <input type="text" id="lightModel" placeholder="e.g., 320W R-Spec" />
+              
+              <label>Spectrum Profile:</label>
+              <select id="spectrumProfile">
+                <option value="4ch-cwww-bl-rd">4-Channel (CW/WW/Blue/Red)</option>
+                <option value="3ch-ww-bl-rd">3-Channel (WW/Blue/Red)</option>
+                <option value="full-spectrum">Full Spectrum (White)</option>
+                <option value="custom">Custom</option>
+              </select>
+              
+              <label>Nominal Wattage:</label>
+              <input type="number" id="lightWattage" placeholder="320" min="1" step="1" />
+              
+              <label>
+                <input type="checkbox" id="lightTunable" />
+                Tunable Spectrum
+              </label>
+              
+              <button type="button" class="primary" onclick="window.saveLightModel()">
+                Save Light Model
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 6: Review & Confirm -->
+          <div class="bus-mapping-step" data-step="6" hidden>
+            <h3>Step 6: Review & Confirm Mapping</h3>
+            <p class="tiny" style="color: #64748b; margin-bottom: 16px;">
+              Verify all settings before finalizing the bus mapping.
+            </p>
+            
+            <div id="mappingReview" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px;">
+              <!-- Populated by JavaScript -->
+            </div>
+
+            <div class="row" style="gap: 8px; margin-top: 16px;">
+              <button type="button" class="primary" onclick="window.finalizeBusMapping()">
+                Finalize Mapping
+              </button>
+              <button type="button" class="ghost" onclick="window.cancelBusMapping()">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <!-- Navigation Buttons -->
+          <div class="row" style="gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+            <button type="button" class="ghost" id="busPrevBtn" onclick="window.busMappingPrevStep()" disabled>
+              ← Previous
+            </button>
+            <button type="button" class="primary" id="busNextBtn" onclick="window.busMappingNextStep()" style="margin-left: auto;">
+              Next →
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <!-- NEW FRESH Light Setup Modal -->
+  <div id="freshLightModal" class="fresh-light-modal" aria-hidden="true">
+    <div class="fresh-light-modal__backdrop"></div>
+    <div class="fresh-light-modal__dialog">
+      <div class="fresh-light-modal__header">
+        <h2>Light Setup Wizard</h2>
+        <button type="button" class="fresh-light-modal__close" id="freshLightClose">×</button>
+      </div>
+      
+      <div class="fresh-light-modal__content">
+        <div class="fresh-light-step" id="freshStep1" data-active>
+          <h3>Select Room</h3>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px;">Room:</label>
+            <select id="freshRoomSelect" style="width: 100%; padding: 8px; font-size: 14px;">
+              <option value="">Select a room</option>
+            </select>
+          </div>
+          
+          <p class="tiny" style="color: #64748b; margin-top: 12px;">
+            Note: Zone assignment is now done in the Groups V2 panel after saving your light setup.
+          </p>
+        </div>
+        
+        <div class="fresh-light-step" id="freshStep2">
+          <h3>Select Fixtures</h3>
+          
+          <div style="margin-bottom: 20px;">
+            
+            
+            <div style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 13px;">Search fixtures:</label>
+              <input id="freshFixtureSearch" type="text" placeholder="Search models (e.g., Gavita 1700e)" 
+                     style="width: 100%; padding: 8px; font-size: 14px;">
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Search Results:</div>
+              <div id="freshFixtureResults" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; min-height: 60px;">
+                <div style="padding: 20px; text-align: center; color: #64748b; font-size: 13px;">
+                  Type to search for fixture models...
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Selected Fixtures:</div>
+              <div id="freshSelectedFixtures" style="min-height: 60px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px;">
+                <div style="color: #64748b; font-size: 13px;">No fixtures selected yet</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="fresh-light-step" id="freshStep3">
+          <h3>Control Method</h3>
+          
+          <div style="margin-bottom: 20px;">
+            <div style="font-size: 13px; margin-bottom: 12px;">How will the fixtures be controlled?</div>
+            
+            <div id="freshControlMethod" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+              <button type="button" class="fresh-control-option" data-value="wifi">Wi‑Fi / App</button>
+              <button type="button" class="fresh-control-option" data-value="smart-plug">Smart Plug</button>
+              <button type="button" class="fresh-control-option" data-value="0-10v">0‑10V / Wired</button>
+              <button type="button" class="fresh-control-option" data-value="rs485">RS‑485 / Modbus</button>
+              <button type="button" class="fresh-control-option" data-value="other">Other</button>
+            </div>
+            
+            <div id="freshControlDetails" style="font-size: 13px; color: #64748b; padding: 12px; background: #f8fafc; border-radius: 4px; display: none;">
+              Control method details will appear here...
+            </div>
+          </div>
+        </div>
+        
+        <div class="fresh-light-step" id="freshStep4">
+          <h3>Review Setup</h3>
+          
+          <div style="margin-bottom: 20px;">
+            <div id="freshReviewSummary" style="background: #f8fafc; border-radius: 8px; padding: 16px;">
+              <div style="font-weight: 600; margin-bottom: 12px;">Light Setup Summary</div>
+              <div id="freshReviewDetails" style="font-size: 14px; line-height: 1.5;">
+                <!-- Review details will be populated here -->
+              </div>
+            </div>
+            
+            <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
+              <div style="font-size: 13px; color: #92400e;">
+                <strong>Ready to save:</strong> This will create your light setup configuration for the selected room. Use Groups V2 to assign lights to zones.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="fresh-light-modal__footer">
+        <button id="freshPrev" type="button" style="display: none;">Previous</button>
+        <button id="freshNext" type="button">Next</button>
+        <button id="freshSave" type="button" style="display: none;">Save</button>
+      </div>
+    </div>
+  </div>
+          <section class="light-step" data-step="fixtures">
+            <p class="light-question">Select fixtures and counts.</p>
+            <div class="farm-step__stack">
+              
+              <input id="lightKbSearch" type="text" placeholder="Search models (e.g., Gavita 1700e)" autocomplete="off">
+              <div class="tiny" style="color:#64748b">Results</div>
+              <ul id="lightKbResults" class="farm-kb-results" aria-live="polite"></ul>
+              <div class="tiny" style="color:#64748b">Selected</div>
+              <ul id="lightKbSelected" class="farm-kb-selected" aria-live="polite"></ul>
+            </div>
+          </section>
+          <section class="light-step" data-step="control">
+            <p class="light-question">How will the fixtures be controlled?</p>
+            <div class="farm-step__stack">
+              <div class="tiny">Control method</div>
+              <div id="lightControlMethod" class="chip-row" role="group" aria-label="Control method">
+                <button type="button" class="chip-option" data-value="wifi">Wi‑Fi / App</button>
+                <button type="button" class="chip-option" data-value="smart-plug">Smart plug</button>
+                <button type="button" class="chip-option" data-value="0-10v">0‑10V / Wired</button>
+                <button type="button" class="chip-option" data-value="rs485">RS‑485 / Modbus</button>
+                <button type="button" class="chip-option" data-value="other">Other</button>
+              </div>
+              <div id="lightControlDetails" style="margin-top:8px" class="tiny" aria-live="polite"></div>
+            </div>
+          </section>
+          <section class="light-step" data-step="add-more">
+            <p class="light-question">Add more lights to this room/zone?</p>
+            <div class="farm-step__stack">
+              <div id="lightSetupsSummary" class="light-setups-summary"></div>
+              <div class="row row--gap-md mt-lg row--center justify-center">
+                <button id="lightAddMoreSetup" type="button" class="primary">Add More Lights</button>
+                <button id="lightFinishSetups" type="button" class="primary">Continue to Review</button>
+              </div>
+            </div>
+          </section>
+          <section class="light-step" data-step="review">
+            <p class="light-question">Review light setup</p>
+            <div id="lightReview" class="farm-review"></div>
+          </section>
+        </div>
+
+      </form>
+    </div>
+  </div>
+  <div id="envModal" class="env-modal" aria-hidden="true">
+    <div class="env-modal__backdrop" id="envModalBackdrop"></div>
+    <div class="env-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="envModalTitle">
+      <button type="button" class="env-modal__close" id="envModalClose" aria-label="Close">×</button>
+      <div class="env-modal__content">
+        <h2 id="envModalTitle" style="margin:0 0 12px">Trend</h2>
+        <p class="tiny" id="envModalSubtitle" style="margin:0 0 12px;color:#475569"></p>
+        <div id="envModalChart" class="env-modal__chart"></div>
+        <div id="envModalStats" class="env-modal__stats"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="calModal" class="cal-modal" aria-hidden="true">
+    <div class="cal-modal__backdrop" id="calModalBackdrop"></div>
+    <div class="cal-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="calModalTitle">
+      <button type="button" class="cal-modal__close" id="calModalClose" aria-label="Close">×</button>
+      <form id="calWizardForm" novalidate>
+        <p class="tiny" id="calModalProgress" aria-live="polite">Step 1 of 5</p>
+        <h2 id="calModalTitle" style="margin:0 0 12px">Calibration Wizard</h2>
+        <div id="calSteps">
+          <section class="cal-step" data-step="scope-type">
+            <p class="cal-question">What do you want to calibrate?</p>
+            <div class="cal-options" role="radiogroup" aria-label="Calibration scope">
+              <label class="chip-option"><input type="radio" name="calScopeType" value="lights" checked><span>Specific lights</span></label>
+              <label class="chip-option"><input type="radio" name="calScopeType" value="group"><span>Group</span></label>
+              <label class="chip-option"><input type="radio" name="calScopeType" value="location"><span>Location</span></label>
+            </div>
+            <p class="tiny" style="color:#64748b">Lights scope lets you hand-pick devices. Group uses the roster. Location uses Room / Zone assignments.</p>
+          </section>
+
+          <section class="cal-step" data-step="scope-detail">
+            <p class="cal-question">Select the fixtures to calibrate.</p>
+            <div id="calScopeLights" class="cal-scope-block" aria-live="polite"></div>
+            <div id="calScopeGroup" class="cal-scope-block" style="display:none">
+              <label class="row row--gap-xs"><span>Group</span><select id="calScopeGroupSelect"></select></label>
+              <p class="tiny" style="color:#475569">Lights inherit the current group roster. Offline lights are skipped automatically.</p>
+            </div>
+            <div id="calScopeLocation" class="cal-scope-block" style="display:none">
+              <div class="row row--gap-sm row--wrap">
+                <label class="row row--gap-xs"><span>Room</span><select id="calScopeRoom"></select></label>
+                <label class="row row--gap-xs"><span>Zone</span><select id="calScopeZone"></select></label>
+              </div>
+              <p class="tiny" style="color:#475569">Lights with matching Room/Zone assignments will be included.</p>
+            </div>
+            <p id="calScopeSummary" class="tiny" style="margin-top:8px;color:#0f172a"></p>
+          </section>
+
+          <section class="cal-step" data-step="target">
+            <p class="cal-question">Choose the target light baseline.</p>
+            <select id="calTargetSelect" style="min-width:240px"></select>
+            <label class="row row--gap-xs mt-sm"><input id="calTargetReconfirm" type="checkbox"><span>Include target in calibration (reconfirm baseline)</span></label>
+            <p id="calTargetNote" class="tiny" style="color:#b91c1c"></p>
+          </section>
+
+          <section class="cal-step" data-step="sequence">
+            <div class="cal-sequence" id="calSequenceStage">
+              <div class="cal-sequence__header">
+                <p class="cal-question" id="calSequenceTitle">Run the calibration patterns.</p>
+                <span class="tiny" id="calSequenceMeta"></span>
+              </div>
+              <p class="tiny" id="calSequenceDescription" style="color:#475569"></p>
+              <div class="cal-sequence__actions">
+                <button id="calSequenceSend" type="button" class="ghost">Send pattern</button>
+                <button id="calSequenceReset" type="button" class="ghost">Restore baseline</button>
+              </div>
+              <div class="cal-sequence__body">
+                <div class="cal-sequence__target">
+                  <h3 class="tiny" style="margin:0;color:#0f172a">Target reading</h3>
+                  <div id="calSequenceTarget"></div>
+                </div>
+                <div class="cal-sequence__lights" id="calSequenceLights" aria-live="polite"></div>
+              </div>
+              <div class="cal-sequence__footer">
+                <div id="calSequenceChecklist" class="cal-sequence__status" aria-live="polite"></div>
+                <div class="row row--gap-sm">
+                  <button id="calSequencePrevTest" type="button" class="ghost">Previous pattern</button>
+                  <button id="calSequenceNextTest" type="button" class="primary" disabled>Save & Next</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="cal-step" data-step="review">
+            <p class="cal-question">Review the calibration preview.</p>
+            <div id="calPreviewSummary" class="cal-preview-summary"></div>
+            <div id="calPreviewTable" class="cal-preview-table" role="region" aria-live="polite"></div>
+            <div id="calPreviewWarnings" class="cal-preview-warnings"></div>
+          </section>
+        </div>
+
+        <div class="row cal-modal__footer" style="justify-content:space-between;margin-top:18px">
+          <button id="calPrev" type="button" class="ghost">Back</button>
+          <div class="row row--gap-sm">
+            <button id="calDryRun" type="button" class="ghost" style="display:none">Recalculate</button>
+            <button id="calNext" type="button" class="primary">Next</button>
+            <button id="calApply" type="submit" class="primary" style="display:none">Apply Calibration</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <div id="roomModal" class="room-modal" aria-hidden="true">
+    <div class="room-modal__backdrop" id="roomModalBackdrop"></div>
+    <div class="room-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="roomModalTitle">
+      <form id="roomWizardForm" novalidate style="display:flex; flex-direction:column; height:100%; min-height:0;">
+        <!-- Close button at top -->
+        <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+          <button type="button" class="room-modal__close" id="roomModalClose" aria-label="Close">×</button>
+        </div>
+        
+        <!-- Header with progress, title, and navigation buttons -->
+        <div class="room-modal__header" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 0 12px 0; border-bottom:1px solid #e2e8f0;">
+          <div>
+            <p class="tiny" id="roomModalProgress" aria-live="polite" style="margin:0 0 4px 0;">Step 1 of 5</p>
+            <h2 id="roomModalTitle" style="margin:0;">Set up a Grow Room</h2>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="roomTopPrev" type="button" class="ghost" style="font-size:12px; padding:6px 12px; display:none;">Previous</button>
+            <button id="roomTopNext" type="button" class="primary" style="font-size:12px; padding:6px 12px;">Next</button>
+            <button id="roomTopSaveClose" type="button" class="primary" style="font-size:12px; padding:6px 12px; display:none;">Save & Close</button>
+          </div>
+        </div>
+        
+        <div id="roomSteps" style="flex:1; overflow-y:auto; min-height:0; position:relative; padding-top:16px;">
+
+          
+
+          <section class="room-step" data-step="room-info">
+            <p class="room-question">Name the grow room.</p>
+            <div class="farm-step__stack">
+              <div id="roomInfoError" class="tiny" style="color:#e11d48;margin-bottom:8px;display:none"></div>
+              <label class="tiny" for="roomInfoName">Grow room name</label>
+              <input id="roomInfoName" type="text" placeholder="e.g., Flower A" required>
+              <p class="tiny" style="color: #64748b; margin-top: 12px;">
+                Note: Zone setup is now done in the Groups V2 panel for better organization and scheduling.
+              </p>
+            </div>
+          </section>
+          <section class="room-step" data-step="hardware">
+            <p class="room-question">Which equipment are you setting up in this room?</p>
+            <div class="farm-step__stack">
+              <div id="hardwareError" class="tiny" style="color:#e11d48;margin-bottom:8px;display:none"></div>
+              <div class="tiny">Select all that apply</div>
+              <div id="roomHardwareCats" class="chip-row" role="group" aria-label="Hardware categories">
+                <button type="button" class="chip-option" data-value="hvac">Central HVAC</button>
+                <button type="button" class="chip-option" data-value="mini-split">Mini Split</button>
+                <button type="button" class="chip-option" data-value="dehumidifier">Dehumidifier</button>
+                <button type="button" class="chip-option" data-value="fans">Fans</button>
+                <button type="button" class="chip-option" data-value="vents">Vents</button>
+                <button type="button" class="chip-option" data-value="controllers">Controllers / hubs</button>
+                <button type="button" class="chip-option" data-value="energy-monitor">Energy Monitor</button>
+                <button type="button" class="chip-option" data-value="other">Other</button>
+              </div>
+              <!-- Removed the hardware search UI here to reduce confusion; use Fixtures or Devices steps instead. -->
+            </div>
+          </section>
+
+          <!-- Dynamic per-category setup host (used for HVAC, mini-split, dehumidifier, fans, vents, controllers, other) -->
+          <section class="room-step" data-step="category-setup">
+            <p class="room-question" id="catSetupTitle">Category setup</p>
+            <p class="tiny" id="catSetupIntro" style="color:#475569">We’ll capture a quick count, control method, and energy metering for each device type.</p>
+            <p class="tiny" id="catSetupStatusLine" aria-live="polite" style="color:#0f172a"></p>
+            <div class="farm-step__stack" id="catSetupBody"></div>
+            <p class="tiny" id="catSetupStatus" aria-live="polite" style="color:#0f172a"></p>
+            <div class="row" id="catSetupNav" style="gap:8px;align-items:center;margin-top:8px;justify-content:center">
+              <button type="button" class="ghost" id="catPrevType">Previous Equipment</button>
+              <span class="tiny" id="catSetupProgress" style="color:#475569"></span>
+              <button type="button" class="ghost" id="catNextType">Next Equipment</button>
+            </div>
+            </div>
+          </section>
+
+
+
+          <section class="room-step" data-step="review">
+            <p class="room-question">Review this room before saving.</p>
+            <div id="roomReview" class="farm-review"></div>
+          </section>
+
+        </div>
+
+      </form>
+    </div>
+  </div>
+  <!-- Device Pairing Modal (guided Wi‑Fi / Bluetooth setup) -->
+  <div id="devicePairModal" class="device-pair-modal" aria-hidden="true">
+    <div class="device-pair-modal__backdrop" id="devicePairBackdrop"></div>
+    <div class="device-pair-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="devicePairTitle">
+      <button type="button" class="device-pair-modal__close" id="devicePairClose" aria-label="Close">×</button>
+      <form id="devicePairForm" novalidate>
+        <p class="tiny" id="devicePairProgress" aria-live="polite">Step 1 of 3</p>
+        <h2 id="devicePairTitle" style="margin:0 0 12px">Pair device</h2>
+        <div id="devicePairSteps">
+          <section class="pair-step" data-step="transport">
+            <p class="pair-question">Which transport should we use to pair?</p>
+            <div class="chip-row" id="pairTransport" role="radiogroup" aria-label="Transport">
+              <label class="chip-option"><input type="radio" name="pairTransport" value="wifi" checked><span>Wi‑Fi</span></label>
+              <label class="chip-option"><input type="radio" name="pairTransport" value="bluetooth"><span>Bluetooth</span></label>
+            </div>
+            <p class="tiny" style="color:#64748b">Select the transport that the device supports. The KB will suggest one.</p>
+            <div id="pairTransportAiSuggestion" class="ai-suggestion" style="display:none">
+              <div class="ai-suggestion__text tiny"></div>
+              <button type="button" class="ghost ai-suggestion__apply">Accept AI suggestion</button>
+            </div>
+          </section>
+
+          <!-- New: Scan step for live discovery within the wizard -->
+          <section class="pair-step" data-step="scan">
+            <p class="pair-question">Scan for nearby devices</p>
+            <div class="farm-step__stack">
+              <div class="row row--gap-sm" style="align-items:center;flex-wrap:wrap;">
+                <button id="pairScanBtn" type="button" class="primary" style="min-width:160px">Start Scan</button>
+                <span id="pairScanStatus" class="tiny" aria-live="polite" style="color:#475569"></span>
+              </div>
+              <div id="pairScanResults" style="margin-top:12px; max-height: 320px; overflow:auto; border:1px solid #e2e8f0; border-radius:6px; display:none;"></div>
+            </div>
+          </section>
+
+          <section class="pair-step" data-step="wifi">
+            <p class="pair-question">Wi‑Fi details</p>
+            <div class="farm-step__stack">
+              <input id="pairWifiSsid" type="text" placeholder="SSID" style="min-width:220px">
+              <input id="pairWifiPsk" type="password" placeholder="Wi‑Fi password (PSK)" style="min-width:220px">
+              <label class="tiny" style="align-items:center;display:flex;gap:6px"><input id="pairWifiStatic" type="checkbox"> Use static IP</label>
+              <input id="pairWifiStaticIp" type="text" placeholder="Static IP (optional)" style="min-width:160px;display:none">
+              <div class="tiny" style="color:#64748b;margin-top:8px">If the device uses AP-mode for initial setup, follow vendor instructions to connect to its temporary SSID and then return here to enter credentials.</div>
+              <div id="pairWifiAiSuggestion" class="ai-suggestion" style="display:none">
+                <div class="ai-suggestion__text tiny"></div>
+                <button type="button" class="ghost ai-suggestion__apply">Accept AI suggestion</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="pair-step" data-step="bluetooth">
+            <p class="pair-question">Bluetooth pairing</p>
+            <div class="farm-step__stack">
+              <input id="pairBtName" type="text" placeholder="Advertised device name (optional)" style="min-width:260px">
+              <input id="pairBtPin" type="text" placeholder="Pairing code (if any)" style="min-width:160px">
+              <div class="tiny" style="color:#64748b;margin-top:8px">Most BLE sensors don't require a PIN. Use the advertised name to help find the device in scans or enter a known MAC/address here.</div>
+              <div id="pairBtAiSuggestion" class="ai-suggestion" style="display:none">
+                <div class="ai-suggestion__text tiny"></div>
+                <button type="button" class="ghost ai-suggestion__apply">Accept AI suggestion</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="pair-step" data-step="review">
+            <p class="pair-question">Review pairing info</p>
+            <div id="pairReview" class="farm-review tiny" style="color:#0f172a"></div>
+            <div id="pairReviewAiSummary" class="ai-suggestion" style="display:none">
+              <div class="ai-suggestion__text tiny"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="row device-pair-modal__footer" style="justify-content:space-between;margin-top:18px">
+          <button id="pairPrev" type="button" class="ghost">Back</button>
+          <div class="row row--gap-sm">
+            <button id="pairNext" type="button" class="primary">Next</button>
+            <button id="pairSave" type="submit" class="primary" style="display:none">Save & Add</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div id="farmModal" class="farm-modal" aria-hidden="true">
+    <div class="farm-modal__backdrop" id="farmModalBackdrop"></div>
+    <div class="farm-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="farmModalTitle">
+      <button type="button" class="farm-modal__close" id="farmModalClose" aria-label="Close">×</button>
+      <form id="farmWizardForm" novalidate>
+        <p class="tiny" id="farmModalProgress" aria-live="polite">Step 1 of 6</p>
+        <h2 id="farmModalTitle" style="margin:0 0 12px">Let’s get you online</h2>
+        <div id="farmSteps">
+          <section class="farm-step" data-step="connection-choice">
+            <p class="farm-question">Let’s get you online—are you connecting this reTerminal to Wi‑Fi or Ethernet today?</p>
+            <div class="chip-row" id="farmConnectionChoice" role="radiogroup" aria-label="Connection type">
+              <button type="button" class="chip-option" data-value="wifi">Wi‑Fi</button>
+              <button type="button" class="chip-option" data-value="ethernet">Ethernet</button>
+            </div>
+            <p class="tiny" style="margin-top:8px;color:#475569">Switch anytime—Wi‑Fi walks you through SSID, password, and a connection test.</p>
+          </section>
+
+          <section class="farm-step" data-step="wifi-select">
+            <p class="farm-question">Great—let’s pick the Wi‑Fi network.</p>
+            <div class="farm-step__stack">
+              <!-- Wi-Fi Scanner (Step 2) -->
+              <div id="wifiStep2Scanner" class="scanning-container" style="display: none;">
+                <div class="scanning-radar"></div>
+                <div class="scanning-text">Scanning for Wi-Fi networks (Step 2)</div>
+                <div class="scanning-status">Please wait while we discover available networks for setup...</div>
+              </div>
+              <div class="row row--gap-xs row--center row--wrap">
+                <button id="btnScanWifi" type="button" class="ghost">Scan again</button>
+                <span id="wifiScanStatus" class="tiny" aria-live="polite"></span>
+                <button id="btnManualSsid" type="button" class="ghost">Add hidden network</button>
+              </div>
+              <div id="wifiNetworkList" class="chip-grid" role="listbox" aria-label="Available Wi‑Fi networks"></div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="wifi-password">
+            <p class="farm-question">Enter the password for <span id="wifiChosenSsid" class="inline-chip"></span>.</p>
+            <div class="farm-step__stack">
+              <input id="wifiPassword" type="password" autocomplete="new-password" placeholder="Wi‑Fi password" required>
+              <label class="tiny" style="display:flex;align-items:center;gap:6px"><input id="wifiShowPassword" type="checkbox">Show password</label>
+              <label class="tiny" style="display:flex;align-items:center;gap:6px">
+                <input id="wifiReuseDevices" type="checkbox" checked>
+                Use this network for device discovery
+              </label>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="wifi-test">
+            <p class="farm-question">Testing that connection…</p>
+            <div class="farm-step__stack">
+              <!-- Wi-Fi Test Scanner (Step 4) -->
+              <div id="wifiTestingIndicator" class="scanning-container" style="display: none;">
+                <div class="scanning-radar"></div>
+                <div class="scanning-text">Testing Wi-Fi Connection (Step 4)</div>
+                <div class="scanning-status">Verifying network connectivity and internet access...</div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button id="btnTestWifi" type="button" class="primary">Test connection</button>
+                <button id="btnSkipWifiTest" type="button" class="ghost" title="Skip if already connected via Ethernet or WiFi">Skip (Already Connected)</button>
+              </div>
+              <div id="wifiTestStatus" class="farm-review" aria-live="polite"></div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="location">
+            <p class="farm-question">Where is this farm?</p>
+            <div class="farm-step__stack">
+              <input id="farmName" name="farmName" type="text" autocomplete="organization" placeholder="Farm name" required>
+              
+              <!-- Use Current Location moved to top -->
+              <div style="display: flex; gap: 6px; align-items: center; margin: 8px 0; flex-wrap: wrap;">
+                <button type="button" id="btnUseMyLocation" class="btn-secondary" style="font-size: 14px;" title="Uses your device's current location to automatically fill address and get GPS coordinates">🧭 Use Current Location</button>
+                <span id="locationStatus" class="tiny" style="color: #666;"></span>
+              </div>
+              <div class="tiny" style="color:#666;margin-bottom:8px;line-height:1.3">
+                <strong>🧭 Use Current Location:</strong> Uses your device's GPS to automatically fill in your current address and coordinates for subscription services
+              </div>
+              
+              <p class="tiny" style="color:#64748b;margin:4px 0">Or enter your farm's address manually below (this information will be used for subscriptions):</p>
+              <input id="farmAddress" type="text" autocomplete="street-address" placeholder="Street address">
+              <div class="row row--gap-xs row--wrap">
+                <input id="farmCity" type="text" autocomplete="address-level2" placeholder="City">
+                <input id="farmState" type="text" autocomplete="address-level1" placeholder="State / Province" style="max-width:140px">
+                <input id="farmPostal" type="text" autocomplete="postal-code" placeholder="Postal code" style="max-width:140px">
+              </div>
+              <div id="locationResults" class="location-results" style="display: none; margin-top: 8px;">
+                <div class="tiny" style="margin-bottom: 4px; color: #666;">Select your farm location:</div>
+                <div id="locationOptions"></div>
+              </div>
+              <div id="weatherDisplay" class="weather-display" style="display: none; margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+                <div class="weather-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <span style="font-size: 18px;">🌤️</span>
+                  <strong style="color: #333;">Current Weather</strong>
+                </div>
+                <div id="weatherContent"></div>
+              </div>
+              <label class="tiny" style="display:flex;align-items:center;gap:6px">
+                Timezone
+                <select id="farmTimezone" style="min-width:200px"></select>
+              </label>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="contact">
+            <p class="farm-question">Who should we contact about this farm?</p>
+            <div class="farm-step__stack">
+              <input id="contactName" name="contactName" type="text" autocomplete="name" placeholder="Contact name" required>
+              <input id="contactEmail" name="contactEmail" type="email" autocomplete="email" placeholder="Email address" required>
+              <input id="contactPhone" name="contactPhone" type="tel" autocomplete="tel" placeholder="Phone number">
+              <div style="display:flex;align-items:center;gap:8px">
+                <input id="contactWebsite" name="contactWebsite" type="url" autocomplete="url" placeholder="Website (for branding)" style="border:2px solid var(--gr-accent);box-shadow:0 0 0 2px rgba(100, 199, 199, 0.1);flex:1">
+                <button id="websiteBrandingButton" type="button" style="background:var(--gr-primary);color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;white-space:nowrap;min-width:80px;opacity:0.5;transition:all 0.2s ease" disabled>
+                  🎨 Enter
+                </button>
+              </div>
+              <div id="brandingPreview" class="tiny branding-preview-card" style="margin-top:8px;padding:12px;background:var(--gr-bg);border:1px solid var(--gr-border);border-radius:6px;display:none;cursor:pointer;transition:all 0.2s ease" onclick="farmWizard.showBrandingModal()">
+                <div style="color:var(--gr-primary);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+                  🎨 Live Branding Preview 
+                  <span style="font-size:10px;opacity:0.7;background:var(--gr-primary);color:white;padding:2px 6px;border-radius:10px">CLICK TO EXPAND</span>
+                </div>
+                <div id="brandingPreviewContent" style="color:var(--medium)">Enter farm name and website to see your branding...</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="spaces">
+            <p class="farm-question">Add your spaces—rooms first, then zones within each room.</p>
+            <div class="farm-step__stack">
+              <div class="row row--gap-xs row--wrap">
+                <input id="newRoomName" type="text" placeholder="Room name (e.g., Flower A)">
+                <button id="btnAddRoom" type="button" class="ghost">Add room</button>
+              </div>
+              <div id="roomsEditor" class="farm-spaces" aria-live="polite"></div>
+            </div>
+          </section>
+
+          <section class="farm-step" data-step="review">
+            <p class="farm-question">Farm · Rooms · Zones — ready to save?</p>
+            <div class="farm-review" id="farmReview"></div>
+          </section>
+        </div>
+
+        <div class="row row--between mt-xl">
+          <button id="farmPrev" type="button" class="ghost">Back</button>
+          <div class="row row--gap-sm">
+            <button id="farmNext" type="button" class="primary">Next</button>
+            <button id="btnSaveFarm" type="submit" class="primary" style="display:none">Save Farm</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="deviceManager" class="device-manager" aria-hidden="true">
+    <div class="device-manager__backdrop" id="deviceManagerBackdrop"></div>
+    <div class="device-manager__window" role="dialog" aria-modal="true" aria-labelledby="deviceManagerTitle">
+      <header class="device-manager__header">
+        <div>
+          <h2 id="deviceManagerTitle">Device Manager</h2>
+          <p class="tiny" id="deviceManagerSubtitle">Scan Wi‑Fi, BLE, and MQTT sources to bring devices into the farm.</p>
+        </div>
+        <button type="button" id="deviceManagerClose" class="ghost" aria-label="Close">×</button>
+      </header>
+      <div class="device-manager__toolbar">
+        <button id="btnRunDiscovery" type="button" class="primary">Run discovery</button>
+        <span id="discoveryStatus" class="tiny" aria-live="polite"></span>
+        <div class="chip-row" role="tablist" aria-label="Discovery filters">
+          <button type="button" class="chip-option" data-filter="all" aria-selected="true">All</button>
+          <button type="button" class="chip-option" data-filter="added">Added</button>
+          <button type="button" class="chip-option" data-filter="ignored">Ignored</button>
+        </div>
+      </div>
+      <div id="deviceDiscoveryResults" class="device-manager__results" aria-live="polite"></div>
+      <footer class="device-manager__footer">
+        <div id="deviceManagerSummary" class="tiny"></div>
+        <button id="btnOpenAutomation" type="button" class="ghost">Open Automation Card</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="root"></div>
+  <div id="toasts" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+  
+  <!-- Intro Card Component -->
+  <script src="/js/intro-card.js?v=6"></script>
+  
+  <!-- Payment Processing Setup Wizard -->
+  <div id="paymentWizardModal" class="wizard-modal" style="display: none;">
+    <div class="wizard-overlay" onclick="closePaymentWizard()"></div>
+    <div class="wizard-container">
+      <div class="wizard-header">
+        <h2>Payment Processing Setup</h2>
+        <p class="wizard-subtitle">Connect your Square account to accept payments from customers</p>
+        <button class="wizard-close" onclick="closePaymentWizard()" aria-label="Close">&times;</button>
+      </div>
+      
+      <div class="wizard-progress">
+        <div class="wizard-step" data-step="1">
+          <div class="wizard-step-number">1</div>
+          <div class="wizard-step-label">Square Account</div>
+        </div>
+        <div class="wizard-step" data-step="2">
+          <div class="wizard-step-number">2</div>
+          <div class="wizard-step-label">Connect</div>
+        </div>
+        <div class="wizard-step" data-step="3">
+          <div class="wizard-step-number">3</div>
+          <div class="wizard-step-label">Configure</div>
+        </div>
+        <div class="wizard-step" data-step="4">
+          <div class="wizard-step-number">4</div>
+          <div class="wizard-step-label">Test & Activate</div>
+        </div>
+      </div>
+      
+      <div class="wizard-content">
+        <!-- Step 1: Square Account -->
+        <div class="wizard-panel" data-panel="1" style="display: block;">
+          <h3>Do you have a Square account?</h3>
+          <p class="wizard-description">Square is a secure payment processor that allows you to accept credit cards, debit cards, and digital payments from your customers.</p>
+          
+          <div class="wizard-info-box">
+            <h4>Why Square?</h4>
+            <ul>
+              <li>Industry-leading security and PCI compliance</li>
+              <li>Competitive processing rates (2.6% + 10¢ per transaction)</li>
+              <li>Fast deposits (1-2 business days)</li>
+              <li>Built-in fraud protection</li>
+              <li>24/7 customer support</li>
+            </ul>
+          </div>
+          
+          <div class="wizard-note">
+            <strong>Important:</strong> This is YOUR Square account for your farm business. GreenReach only processes subscription fees for the Light Engine service.
+          </div>
+          
+          <div class="wizard-options">
+            <button class="wizard-option-card" onclick="paymentWizardNext('has-account')">
+              <div class="wizard-option-icon">✓</div>
+              <div class="wizard-option-title">I have a Square account</div>
+              <div class="wizard-option-desc">Connect your existing Square account</div>
+            </button>
+            
+            <button class="wizard-option-card" onclick="paymentWizardNext('need-account')">
+              <div class="wizard-option-icon">+</div>
+              <div class="wizard-option-title">I need to create one</div>
+              <div class="wizard-option-desc">Sign up for a new Square account</div>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Step 2: Connect Square -->
+        <div class="wizard-panel" data-panel="2" style="display: none;">
+          <div id="hasAccountPanel" style="display: none;">
+            <h3>Connect Your Square Account</h3>
+            <p class="wizard-description">Click the button below to securely connect your Square account to your farm store. You'll be redirected to Square to authorize the connection.</p>
+            
+            <div class="wizard-info-box">
+              <h4>What permissions are requested?</h4>
+              <ul>
+                <li><strong>Process Payments:</strong> Accept payments from your customers</li>
+                <li><strong>Read Business Profile:</strong> Display your business name and location</li>
+                <li><strong>Manage Orders:</strong> Track and fulfill customer orders</li>
+              </ul>
+            </div>
+            
+            <div class="wizard-form-group">
+              <label>Farm Name</label>
+              <input type="text" id="paymentFarmName" placeholder="Your Farm Name" class="wizard-input">
+              <small>This will appear on customer receipts</small>
+            </div>
+            
+            <div class="wizard-actions">
+              <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
+              <button class="wizard-btn-primary" onclick="connectSquareAccount()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                </svg>
+                Connect to Square
+              </button>
+            </div>
+          </div>
+          
+          <div id="needAccountPanel" style="display: none;">
+            <h3>Create Your Square Account</h3>
+            <p class="wizard-description">Follow these steps to create your Square account:</p>
+            
+            <div class="wizard-steps-list">
+              <div class="wizard-step-item">
+                <div class="wizard-step-number-small">1</div>
+                <div class="wizard-step-content">
+                  <strong>Visit Square Sign-Up</strong>
+                  <p>Go to <a href="https://squareup.com/signup" target="_blank" rel="noopener">squareup.com/signup</a></p>
+                </div>
+              </div>
+              
+              <div class="wizard-step-item">
+                <div class="wizard-step-number-small">2</div>
+                <div class="wizard-step-content">
+                  <strong>Enter Business Information</strong>
+                  <p>Provide your farm name, contact details, and business type (Agriculture/Farm)</p>
+                </div>
+              </div>
+              
+              <div class="wizard-step-item">
+                <div class="wizard-step-number-small">3</div>
+                <div class="wizard-step-content">
+                  <strong>Verify Your Identity</strong>
+                  <p>Square will verify your identity and business for security and compliance</p>
+                </div>
+              </div>
+              
+              <div class="wizard-step-item">
+                <div class="wizard-step-number-small">4</div>
+                <div class="wizard-step-content">
+                  <strong>Set Up Banking</strong>
+                  <p>Connect your bank account to receive deposits from customer payments</p>
+                </div>
+              </div>
+            </div>
+            
+            <div class="wizard-note">
+              <strong>Estimated time:</strong> 10-15 minutes. Square may take 1-2 business days to verify your account.
+            </div>
+            
+            <div class="wizard-actions">
+              <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
+              <a href="https://squareup.com/signup" target="_blank" rel="noopener" class="wizard-btn-primary">
+                Open Square Sign-Up
+              </a>
+              <button class="wizard-btn-secondary" onclick="switchToHasAccount()">I've created my account</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Step 3: Configure Settings -->
+        <div class="wizard-panel" data-panel="3" style="display: none;">
+          <h3>Configure Payment Settings</h3>
+          <p class="wizard-description">Customize how payments are processed for your farm store.</p>
+          
+          <div id="squareConnected" style="display: none;">
+            <div class="wizard-success-box">
+              <div class="wizard-success-icon">✓</div>
+              <div>
+                <strong>Square Connected Successfully!</strong>
+                <p>Account: <span id="connectedMerchantName"></span></p>
+                <p>Location: <span id="connectedLocationName"></span></p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Payment Methods Accepted</label>
+            <div class="wizard-checkbox-group">
+              <label class="wizard-checkbox">
+                <input type="checkbox" checked disabled> Credit & Debit Cards
+              </label>
+              <label class="wizard-checkbox">
+                <input type="checkbox" id="acceptACH" checked> ACH Bank Transfer
+              </label>
+              <label class="wizard-checkbox">
+                <input type="checkbox" id="acceptCash"> Cash (in-person only)
+              </label>
+              <label class="wizard-checkbox">
+                <input type="checkbox" id="acceptGiftCards" checked> Gift Cards
+              </label>
+            </div>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Tax Rate (%)</label>
+            <input type="number" id="taxRate" value="8.00" step="0.01" min="0" max="20" class="wizard-input">
+            <small>Enter your local sales tax rate (e.g., 8.00 for 8%)</small>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Receipt Email From Name</label>
+            <input type="text" id="receiptFromName" placeholder="Your Farm Name" class="wizard-input">
+            <small>This name will appear on customer email receipts</small>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>
+              <input type="checkbox" id="autoReceipt" checked> Automatically send email receipts to customers
+            </label>
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
+            <button class="wizard-btn-primary" onclick="savePaymentSettings()">Save Settings</button>
+          </div>
+        </div>
+        
+        <!-- Step 4: Test & Activate -->
+        <div class="wizard-panel" data-panel="4" style="display: none;">
+          <h3>Test Your Payment Setup</h3>
+          <p class="wizard-description">Run a test transaction to ensure everything is working correctly.</p>
+          
+          <div class="wizard-info-box">
+            <h4>Test Mode</h4>
+            <p>Use Square's test card numbers to simulate transactions without charging real money:</p>
+            <ul>
+              <li><strong>Test Card:</strong> 4111 1111 1111 1111</li>
+              <li><strong>CVV:</strong> Any 3 digits</li>
+              <li><strong>Expiration:</strong> Any future date</li>
+              <li><strong>ZIP:</strong> Any 5 digits</li>
+            </ul>
+          </div>
+          
+          <div class="wizard-test-area">
+            <h4>Test Transaction</h4>
+            <div class="wizard-form-group">
+              <label>Test Amount ($)</label>
+              <input type="number" id="testAmount" value="10.00" step="0.01" class="wizard-input">
+            </div>
+            <button class="wizard-btn-secondary" onclick="runTestTransaction()">Run Test Transaction</button>
+            <div id="testResult" style="margin-top: 1rem; display: none;"></div>
+          </div>
+          
+          <div class="wizard-checklist">
+            <h4>Pre-Launch Checklist</h4>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkSquareConnected"> Square account connected
+            </label>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkBankingSetup"> Bank account connected in Square
+            </label>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkTestPassed"> Test transaction completed
+            </label>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkPricing"> Product pricing configured
+            </label>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkTOS"> Terms of service accepted
+            </label>
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
+            <button class="wizard-btn-primary wizard-btn-success" onclick="activatePayments()">
+              Activate Payment Processing
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Online Store Setup Wizard -->
+  <div id="storeWizardModal" class="wizard-modal" style="display: none;">
+    <div class="wizard-overlay" onclick="closeStoreWizard()"></div>
+    <div class="wizard-container">
+      <div class="wizard-header">
+        <h2>Online Store Setup</h2>
+        <p class="wizard-subtitle">Launch your farm's online store for direct-to-consumer sales</p>
+        <button class="wizard-close" onclick="closeStoreWizard()" aria-label="Close">&times;</button>
+      </div>
+      
+      <div class="wizard-progress">
+        <div class="wizard-step" data-step="1">
+          <div class="wizard-step-number">1</div>
+          <div class="wizard-step-label">Domain</div>
+        </div>
+        <div class="wizard-step" data-step="2">
+          <div class="wizard-step-number">2</div>
+          <div class="wizard-step-label">Branding</div>
+        </div>
+        <div class="wizard-step" data-step="3">
+          <div class="wizard-step-number">3</div>
+          <div class="wizard-step-label">Store Settings</div>
+        </div>
+        <div class="wizard-step" data-step="4">
+          <div class="wizard-step-number">4</div>
+          <div class="wizard-step-label">Launch</div>
+        </div>
+      </div>
+      
+      <div class="wizard-content">
+        <!-- Step 1: Domain Setup -->
+        <div class="wizard-panel" data-panel="1" style="display: block;">
+          <h3>Choose Your Store URL</h3>
+          <p class="wizard-description">Select how customers will access your online store.</p>
+          
+          <div class="wizard-options">
+            <button class="wizard-option-card" onclick="storeWizardSelectOption('subdomain')">
+              <div class="wizard-option-icon">🔗</div>
+              <div class="wizard-option-title">Use Free Subdomain</div>
+              <div class="wizard-option-desc">yourfarm.lightengine.app (Free, instant setup)</div>
+            </button>
+            
+            <button class="wizard-option-card" onclick="storeWizardSelectOption('custom')">
+              <div class="wizard-option-icon">🌐</div>
+              <div class="wizard-option-title">Use Custom Domain</div>
+              <div class="wizard-option-desc">www.yourfarm.com (Requires domain ownership)</div>
+            </button>
+          </div>
+          
+          <div id="subdomainSetup" style="display: none; margin-top: 1.5rem;">
+            <h4>Choose Your Subdomain</h4>
+            <div class="wizard-form-group">
+              <label>Store Subdomain</label>
+              <div class="wizard-input-group">
+                <input type="text" id="storeSubdomain" placeholder="yourfarm" class="wizard-input" 
+                       pattern="[a-z0-9-]+" oninput="checkSubdomainAvailability(this.value)">
+                <span class="wizard-input-suffix">.lightengine.app</span>
+              </div>
+              <small>Use lowercase letters, numbers, and hyphens only</small>
+              <div id="subdomainStatus" style="margin-top: 0.5rem;"></div>
+            </div>
+          </div>
+          
+          <div id="customDomainSetup" style="display: none; margin-top: 1.5rem;">
+            <h4>Connect Your Custom Domain</h4>
+            <p class="wizard-description">Enter your domain name and we'll provide DNS configuration instructions.</p>
+            
+            <div class="wizard-form-group">
+              <label>Your Domain Name</label>
+              <input type="text" id="customDomain" placeholder="www.yourfarm.com" class="wizard-input"
+                     oninput="validateDomain(this.value)">
+              <small>Example: www.yourfarm.com or shop.yourfarm.com</small>
+            </div>
+            
+            <div class="wizard-info-box">
+              <h4>Domain Requirements:</h4>
+              <ul>
+                <li>You must own the domain name</li>
+                <li>Access to your domain's DNS settings (usually through your domain registrar)</li>
+                <li>SSL certificate will be automatically provided (free)</li>
+              </ul>
+            </div>
+            
+            <div class="wizard-note">
+              <strong>Don't have a domain?</strong> Popular registrars include:
+              <a href="https://www.namecheap.com" target="_blank">Namecheap</a>,
+              <a href="https://www.godaddy.com" target="_blank">GoDaddy</a>,
+              <a href="https://domains.google" target="_blank">Google Domains</a>
+            </div>
+          </div>
+          
+          <div class="wizard-actions" style="margin-top: 2rem;">
+            <button class="wizard-btn-secondary" onclick="closeStoreWizard()">Cancel</button>
+            <button class="wizard-btn-primary" id="domainNextBtn" disabled onclick="storeWizardNext()">Next</button>
+          </div>
+        </div>
+        
+        <!-- Step 2: Branding -->
+        <div class="wizard-panel" data-panel="2" style="display: none;">
+          <h3>Customize Your Store Branding</h3>
+          <p class="wizard-description">Make your store reflect your farm's unique identity.</p>
+          
+          <div class="wizard-form-group">
+            <label>Farm/Store Name</label>
+            <input type="text" id="storeName" placeholder="Your Farm Name" class="wizard-input">
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Tagline/Slogan</label>
+            <input type="text" id="storeTagline" placeholder="Fresh from our farm to your table" class="wizard-input">
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Logo Image</label>
+            <div class="wizard-upload-area">
+              <input type="file" id="storeLogo" accept="image/*" style="display: none;" onchange="previewLogo(this)">
+              <button class="wizard-btn-secondary" onclick="document.getElementById('storeLogo').click()">
+                Choose Logo Image
+              </button>
+              <div id="logoPreview" style="margin-top: 1rem; display: none;">
+                <img id="logoPreviewImg" style="max-width: 200px; max-height: 100px; border-radius: 8px;">
+              </div>
+            </div>
+            <small>Recommended: PNG or SVG, 500x200px, transparent background</small>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Brand Colors</label>
+            <div class="wizard-color-picker">
+              <div>
+                <label for="primaryColor">Primary Color</label>
+                <input type="color" id="primaryColor" value="#2e7d32" class="wizard-color-input">
+              </div>
+              <div>
+                <label for="accentColor">Accent Color</label>
+                <input type="color" id="accentColor" value="#ff6f00" class="wizard-color-input">
+              </div>
+            </div>
+          </div>
+          
+          <div class="wizard-preview-box">
+            <h4>Preview</h4>
+            <div id="brandingPreviewBox" class="store-preview">
+              <div class="store-preview-header" style="background: var(--primary-color, #2e7d32); color: white; padding: 1rem;">
+                <div id="previewLogo" style="margin-bottom: 0.5rem; display: none;">Logo</div>
+                <h3 id="previewName">Your Farm Name</h3>
+                <p id="previewTagline">Your tagline here</p>
+              </div>
+              <div style="padding: 1rem; background: white;">
+                <p style="color: #666;">Your products will appear here...</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="storeWizardPrev()">Back</button>
+            <button class="wizard-btn-primary" onclick="storeWizardNext()">Next</button>
+          </div>
+        </div>
+        
+        <!-- Step 3: Store Settings -->
+        <div class="wizard-panel" data-panel="3" style="display: none;">
+          <h3>Configure Store Settings</h3>
+          <p class="wizard-description">Set up how your store will operate.</p>
+          
+          <div class="wizard-form-group">
+            <label>Store Hours</label>
+            <div class="wizard-checkbox-group">
+              <label class="wizard-checkbox">
+                <input type="checkbox" checked> Accept orders 24/7
+              </label>
+            </div>
+            <div id="storeHoursDetail" style="display: none;">
+              <!-- Custom store hours could be added here -->
+            </div>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Fulfillment Options</label>
+            <div class="wizard-checkbox-group">
+              <label class="wizard-checkbox">
+                <input type="checkbox" id="allowPickup" checked> Farm Pickup
+              </label>
+              <label class="wizard-checkbox">
+                <input type="checkbox" id="allowDelivery" checked> Home Delivery
+              </label>
+              <label class="wizard-checkbox">
+                <input type="checkbox" id="allowShipping"> Shipping (USPS/UPS)
+              </label>
+            </div>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Delivery Radius (miles)</label>
+            <input type="number" id="deliveryRadius" value="25" min="0" step="5" class="wizard-input">
+            <small>Maximum distance for home delivery</small>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Minimum Order Amount ($)</label>
+            <input type="number" id="minOrderAmount" value="15.00" min="0" step="5" class="wizard-input">
+            <small>Minimum order value for online purchases</small>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Store Description</label>
+            <textarea id="storeDescription" rows="4" class="wizard-input" 
+                      placeholder="Tell customers about your farm, growing practices, and what makes your products special..."></textarea>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Contact Information</label>
+            <input type="email" id="storeEmail" placeholder="orders@yourfarm.com" class="wizard-input">
+            <input type="tel" id="storePhone" placeholder="(555) 123-4567" class="wizard-input" style="margin-top: 0.5rem;">
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="storeWizardPrev()">Back</button>
+            <button class="wizard-btn-primary" onclick="saveStoreSettings()">Save Settings</button>
+          </div>
+        </div>
+        
+        <!-- Step 4: Launch -->
+        <div class="wizard-panel" data-panel="4" style="display: none;">
+          <h3>Ready to Launch Your Store!</h3>
+          <p class="wizard-description">Review your setup and launch your online store.</p>
+          
+          <div class="wizard-summary-box">
+            <h4>Store Summary</h4>
+            <dl class="wizard-summary-list">
+              <dt>Store URL:</dt>
+              <dd id="summaryURL">-</dd>
+              
+              <dt>Store Name:</dt>
+              <dd id="summaryName">-</dd>
+              
+              <dt>Payment Processing:</dt>
+              <dd id="summaryPayment">Not configured</dd>
+              
+              <dt>Fulfillment Options:</dt>
+              <dd id="summaryFulfillment">-</dd>
+            </dl>
+          </div>
+          
+          <div class="wizard-checklist">
+            <h4>Launch Checklist</h4>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkDomain"> Domain configured
+            </label>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkBranding"> Branding customized
+            </label>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkPaymentSetup"> Payment processing setup
+            </label>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkProducts"> Products added to inventory
+            </label>
+            <label class="wizard-checkbox">
+              <input type="checkbox" id="checkStoreTOS"> Store policies configured
+            </label>
+          </div>
+          
+          <div class="wizard-info-box">
+            <h4>Next Steps After Launch:</h4>
+            <ol>
+              <li>Add your products in the Farm Admin portal</li>
+              <li>Set pricing in the Crop Pricing section</li>
+              <li>Test the complete checkout flow</li>
+              <li>Share your store URL with customers</li>
+              <li>Monitor orders in the Farm Admin dashboard</li>
+            </ol>
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="storeWizardPrev()">Back</button>
+            <button class="wizard-btn-primary wizard-btn-success" onclick="launchStore()">
+              Launch Online Store
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Show intro card sequence when page loads
+    window.addEventListener('DOMContentLoaded', () => {
+      // First card: Welcome to Light Engine
+      setTimeout(() => {
+        showIntroCard('index').then(() => {
+          // Wait for first card to be dismissed, then show second card
+          const checkDismissed = setInterval(() => {
+            if (sessionStorage.getItem('introCard_session_dismissed_index') === 'true') {
+              clearInterval(checkDismissed);
+              setTimeout(() => {
+                showIntroCard('index-step2');
+              }, 500);
+            }
+          }, 100);
+        });
+      }, 500);
+      
+      // Initialize password change form
+      const passwordChangeForm = document.getElementById('passwordChangeForm');
+      const passwordChangeReset = document.getElementById('passwordChangeReset');
+      const passwordChangeStatus = document.getElementById('passwordChangeStatus');
+      
+      if (passwordChangeForm) {
+        passwordChangeForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const currentPassword = document.getElementById('currentPassword').value;
+          const newPassword = document.getElementById('newPassword').value;
+          const confirmPassword = document.getElementById('confirmPassword').value;
+          
+          // Validate passwords match
+          if (newPassword !== confirmPassword) {
+            passwordChangeStatus.textContent = 'New passwords do not match';
+            passwordChangeStatus.style.color = '#ef4444';
+            return;
+          }
+          
+          // Validate password length
+          if (newPassword.length < 8) {
+            passwordChangeStatus.textContent = 'Password must be at least 8 characters';
+            passwordChangeStatus.style.color = '#ef4444';
+            return;
+          }
+          
+          passwordChangeStatus.textContent = 'Changing password...';
+          passwordChangeStatus.style.color = '#3b82f6';
+          
+          try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/auth/change-password', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                currentPassword,
+                newPassword
+              })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+              passwordChangeStatus.textContent = '✓ Password changed successfully!';
+              passwordChangeStatus.style.color = '#10b981';
+              passwordChangeForm.reset();
+              
+              // Clear status after 3 seconds
+              setTimeout(() => {
+                passwordChangeStatus.textContent = '';
+              }, 3000);
+            } else {
+              passwordChangeStatus.textContent = data.message || 'Failed to change password';
+              passwordChangeStatus.style.color = '#ef4444';
+            }
+          } catch (error) {
+            console.error('Password change error:', error);
+            passwordChangeStatus.textContent = 'Error changing password. Please try again.';
+            passwordChangeStatus.style.color = '#ef4444';
+          }
+        });
+        
+        if (passwordChangeReset) {
+          passwordChangeReset.addEventListener('click', () => {
+            passwordChangeForm.reset();
+            passwordChangeStatus.textContent = '';
+          });
+        }
+      }
+    });
+    
+    // Payment Wizard Functions
+    let paymentWizardStep = 1;
+    let paymentWizardData = {
+      hasAccount: false,
+      farmName: '',
+      squareConnected: false,
+      merchantId: null,
+      locationId: null
+    };
+    
+    function openPaymentWizard() {
+      const modal = document.getElementById('paymentWizardModal');
+      if (!modal) {
+        alert('Error: Payment wizard modal not found in DOM');
+        return;
+      }
+      modal.style.display = 'flex';
+      paymentWizardStep = 1;
+      
+      // Hide all panels first
+      modal.querySelectorAll('.wizard-panel').forEach(p => p.style.display = 'none');
+      
+      // Show panel 1
+      const panel1 = modal.querySelector('.wizard-panel[data-panel="1"]');
+      if (panel1) {
+        panel1.style.display = 'block';
+        // Belt-and-suspenders: reassert after paint in case another script flips it
+        requestAnimationFrame(() => { panel1.style.display = 'block'; });
+      }
+      
+      updatePaymentWizardProgress();
+    }
+    
+    function closePaymentWizard() {
+      document.getElementById('paymentWizardModal').style.display = 'none';
+    }
+    
+    function updatePaymentWizardProgress() {
+      document.querySelectorAll('#paymentWizardModal .wizard-step').forEach((step, index) => {
+        const stepNumber = index + 1;
+        step.classList.remove('active', 'completed');
+        if (stepNumber < paymentWizardStep) {
+          step.classList.add('completed');
+        } else if (stepNumber === paymentWizardStep) {
+          step.classList.add('active');
+        }
+      });
+    }
+    
+    function paymentWizardNext(option) {
+      if (option === 'has-account') {
+        paymentWizardData.hasAccount = true;
+        document.getElementById('hasAccountPanel').style.display = 'block';
+        document.getElementById('needAccountPanel').style.display = 'none';
+      } else if (option === 'need-account') {
+        paymentWizardData.hasAccount = false;
+        document.getElementById('hasAccountPanel').style.display = 'none';
+        document.getElementById('needAccountPanel').style.display = 'block';
+      }
+      
+      document.querySelector('#paymentWizardModal .wizard-panel[data-panel="1"]').style.display = 'none';
+      document.querySelector('#paymentWizardModal .wizard-panel[data-panel="2"]').style.display = 'block';
+      paymentWizardStep = 2;
+      updatePaymentWizardProgress();
+    }
+    
+    function paymentWizardPrev() {
+      if (paymentWizardStep > 1) {
+        document.querySelector('#paymentWizardModal .wizard-panel[data-panel="' + paymentWizardStep + '"]').style.display = 'none';
+        paymentWizardStep--;
+        document.querySelector('#paymentWizardModal .wizard-panel[data-panel="' + paymentWizardStep + '"]').style.display = 'block';
+        updatePaymentWizardProgress();
+      }
+    }
+    
+    function switchToHasAccount() {
+      paymentWizardData.hasAccount = true;
+      document.getElementById('hasAccountPanel').style.display = 'block';
+      document.getElementById('needAccountPanel').style.display = 'none';
+    }
+    
+    async function connectSquareAccount() {
+      const farmName = document.getElementById('paymentFarmName').value.trim();
+      if (!farmName) {
+        alert('Please enter your farm name');
+        return;
+      }
+      
+      paymentWizardData.farmName = farmName;
+      
+      // TODO: Call backend API to initiate Square OAuth flow
+      alert('Square OAuth integration will redirect you to Square to authorize the connection. This feature is being configured.');
+      
+      // Temporary: auto-populate demo values (remove when OAuth implemented)
+      setTimeout(() => {
+        paymentWizardData.squareConnected = true;
+        paymentWizardData.merchantId = 'MERCHANT_' + Date.now();
+        paymentWizardData.locationId = 'LOCATION_' + Date.now();
+        
+        document.getElementById('squareConnected').style.display = 'block';
+        document.getElementById('connectedMerchantName').textContent = farmName;
+        document.getElementById('connectedLocationName').textContent = 'Main Location';
+        
+        document.querySelector('#paymentWizardModal .wizard-panel[data-panel="2"]').style.display = 'none';
+        document.querySelector('#paymentWizardModal .wizard-panel[data-panel="3"]').style.display = 'block';
+        paymentWizardStep = 3;
+        updatePaymentWizardProgress();
+      }, 1000);
+    }
+    
+    async function savePaymentSettings() {
+      const settings = {
+        farmName: paymentWizardData.farmName,
+        merchantId: paymentWizardData.merchantId,
+        locationId: paymentWizardData.locationId,
+        acceptACH: document.getElementById('acceptACH').checked,
+        acceptCash: document.getElementById('acceptCash').checked,
+        acceptGiftCards: document.getElementById('acceptGiftCards').checked,
+        taxRate: parseFloat(document.getElementById('taxRate').value),
+        receiptFromName: document.getElementById('receiptFromName').value,
+        autoReceipt: document.getElementById('autoReceipt').checked
+      };
+      
+      // TODO: Save to backend
+      console.log('Saving payment settings:', settings);
+      
+      document.querySelector('#paymentWizardModal .wizard-panel[data-panel="3"]').style.display = 'none';
+      document.querySelector('#paymentWizardModal .wizard-panel[data-panel="4"]').style.display = 'block';
+      paymentWizardStep = 4;
+      updatePaymentWizardProgress();
+      
+      // Pre-check some items
+      document.getElementById('checkSquareConnected').checked = true;
+    }
+    
+    function runTestTransaction() {
+      const amount = parseFloat(document.getElementById('testAmount').value);
+      const resultDiv = document.getElementById('testResult');
+      
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<p style="color: #3b82f6;">Processing test transaction...</p>';
+      
+      setTimeout(() => {
+        resultDiv.innerHTML = `
+          <div style="background: #d1fae5; border: 1px solid #6ee7b7; padding: 1rem; border-radius: 6px;">
+            <strong style="color: #065f46;">Test Successful!</strong>
+            <p style="margin: 0.5rem 0 0 0; color: #047857;">Transaction ID: TEST_${Date.now()}</p>
+            <p style="margin: 0.25rem 0 0 0; color: #047857;">Amount: $${amount.toFixed(2)}</p>
+          </div>
+        `;
+        document.getElementById('checkTestPassed').checked = true;
+      }, 2000);
+    }
+    
+    function activatePayments() {
+      const checklist = ['checkSquareConnected', 'checkBankingSetup', 'checkTestPassed', 'checkPricing', 'checkTOS'];
+      const allChecked = checklist.every(id => document.getElementById(id).checked);
+      
+      if (!allChecked) {
+        alert('Please complete all checklist items before activating payment processing.');
+        return;
+      }
+      
+      // TODO: Activate payments in backend
+      alert('Payment processing activated! Your farm store can now accept payments from customers.');
+      closePaymentWizard();
+    }
+    
+    // Store Wizard Functions
+    let storeWizardStep = 1;
+    let storeWizardData = {
+      domainType: '',
+      subdomain: '',
+      customDomain: '',
+      storeName: '',
+      tagline: '',
+      logo: null
+    };
+    
+    function openStoreWizard() {
+      const modal = document.getElementById('storeWizardModal');
+      modal.style.display = 'flex';
+      storeWizardStep = 1;
+      
+      // Hide all panels first
+      modal.querySelectorAll('.wizard-panel').forEach(p => p.style.display = 'none');
+      
+      // Show panel 1
+      const panel1 = modal.querySelector('.wizard-panel[data-panel="1"]');
+      if (panel1) {
+        panel1.style.display = 'block';
+        requestAnimationFrame(() => { panel1.style.display = 'block'; });
+      }
+      
+      updateStoreWizardProgress();
+    }
+    
+    function closeStoreWizard() {
+      document.getElementById('storeWizardModal').style.display = 'none';
+    }
+    
+    function updateStoreWizardProgress() {
+      document.querySelectorAll('#storeWizardModal .wizard-step').forEach((step, index) => {
+        const stepNumber = index + 1;
+        step.classList.remove('active', 'completed');
+        if (stepNumber < storeWizardStep) {
+          step.classList.add('completed');
+        } else if (stepNumber === storeWizardStep) {
+          step.classList.add('active');
+        }
+      });
+    }
+    
+    function storeWizardSelectOption(type) {
+      storeWizardData.domainType = type;
+      document.querySelectorAll('#storeWizardModal .wizard-option-card').forEach(card => {
+        card.classList.remove('selected');
+      });
+      event.currentTarget.classList.add('selected');
+      
+      document.getElementById('subdomainSetup').style.display = type === 'subdomain' ? 'block' : 'none';
+      document.getElementById('customDomainSetup').style.display = type === 'custom' ? 'block' : 'none';
+      document.getElementById('domainNextBtn').disabled = true;
+    }
+    
+    async function checkSubdomainAvailability(subdomain) {
+      subdomain = subdomain.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      document.getElementById('storeSubdomain').value = subdomain;
+      
+      if (subdomain.length < 3) {
+        document.getElementById('subdomainStatus').innerHTML = '<span style="color: #f59e0b;">Subdomain must be at least 3 characters</span>';
+        document.getElementById('domainNextBtn').disabled = true;
+        return;
+      }
+      
+      // TODO: Check availability via API
+      document.getElementById('subdomainStatus').innerHTML = '<span style="color: #10b981;">✓ Available: ' + subdomain + '.lightengine.app</span>';
+      storeWizardData.subdomain = subdomain;
+      document.getElementById('domainNextBtn').disabled = false;
+    }
+    
+    function validateDomain(domain) {
+      const domainPattern = /^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/i;
+      if (domainPattern.test(domain)) {
+        storeWizardData.customDomain = domain;
+        document.getElementById('domainNextBtn').disabled = false;
+      } else {
+        document.getElementById('domainNextBtn').disabled = true;
+      }
+    }
+    
+    function storeWizardNext() {
+      if (storeWizardStep < 4) {
+        document.querySelector('#storeWizardModal .wizard-panel[data-panel="' + storeWizardStep + '"]').style.display = 'none';
+        storeWizardStep++;
+        document.querySelector('#storeWizardModal .wizard-panel[data-panel="' + storeWizardStep + '"]').style.display = 'block';
+        updateStoreWizardProgress();
+        
+        if (storeWizardStep === 4) {
+          updateStoreSummary();
+        }
+      }
+    }
+    
+    function storeWizardPrev() {
+      if (storeWizardStep > 1) {
+        document.querySelector('#storeWizardModal .wizard-panel[data-panel="' + storeWizardStep + '"]').style.display = 'none';
+        storeWizardStep--;
+        document.querySelector('#storeWizardModal .wizard-panel[data-panel="' + storeWizardStep + '"]').style.display = 'block';
+        updateStoreWizardProgress();
+      }
+    }
+    
+    function previewLogo(input) {
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('logoPreviewImg').src = e.target.result;
+          document.getElementById('logoPreview').style.display = 'block';
+          storeWizardData.logo = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+    
+    // Update branding preview in real-time
+    document.addEventListener('DOMContentLoaded', () => {
+      const storeNameInput = document.getElementById('storeName');
+      const storeTaglineInput = document.getElementById('storeTagline');
+      const primaryColorInput = document.getElementById('primaryColor');
+      
+      if (storeNameInput) {
+        storeNameInput.addEventListener('input', (e) => {
+          document.getElementById('previewName').textContent = e.target.value || 'Your Farm Name';
+          storeWizardData.storeName = e.target.value;
+        });
+      }
+      
+      if (storeTaglineInput) {
+        storeTaglineInput.addEventListener('input', (e) => {
+          document.getElementById('previewTagline').textContent = e.target.value || 'Your tagline here';
+          storeWizardData.tagline = e.target.value;
+        });
+      }
+      
+      if (primaryColorInput) {
+        primaryColorInput.addEventListener('input', (e) => {
+          document.querySelector('.store-preview-header').style.background = e.target.value;
+        });
+      }
+    });
+    
+    async function saveStoreSettings() {
+      const settings = {
+        allowPickup: document.getElementById('allowPickup').checked,
+        allowDelivery: document.getElementById('allowDelivery').checked,
+        allowShipping: document.getElementById('allowShipping').checked,
+        deliveryRadius: parseInt(document.getElementById('deliveryRadius').value),
+        minOrderAmount: parseFloat(document.getElementById('minOrderAmount').value),
+        storeDescription: document.getElementById('storeDescription').value,
+        storeEmail: document.getElementById('storeEmail').value,
+        storePhone: document.getElementById('storePhone').value
+      };
+      
+      Object.assign(storeWizardData, settings);
+      
+      // TODO: Save to backend
+      console.log('Saving store settings:', storeWizardData);
+      
+      storeWizardNext();
+    }
+    
+    function updateStoreSummary() {
+      const url = storeWizardData.domainType === 'subdomain' 
+        ? storeWizardData.subdomain + '.lightengine.app'
+        : storeWizardData.customDomain;
+      
+      document.getElementById('summaryURL').textContent = url;
+      document.getElementById('summaryName').textContent = storeWizardData.storeName || 'Not set';
+      
+      const fulfillment = [];
+      if (storeWizardData.allowPickup) fulfillment.push('Farm Pickup');
+      if (storeWizardData.allowDelivery) fulfillment.push('Home Delivery');
+      if (storeWizardData.allowShipping) fulfillment.push('Shipping');
+      document.getElementById('summaryFulfillment').textContent = fulfillment.join(', ') || 'None';
+      
+      // Check if payment is configured
+      if (paymentWizardData.squareConnected) {
+        document.getElementById('summaryPayment').textContent = 'Square - Connected';
+        document.getElementById('checkPaymentSetup').checked = true;
+      }
+      
+      document.getElementById('checkDomain').checked = true;
+      document.getElementById('checkBranding').checked = !!storeWizardData.storeName;
+    }
+    
+    async function launchStore() {
+      const checklist = ['checkDomain', 'checkBranding', 'checkPaymentSetup', 'checkProducts', 'checkStoreTOS'];
+      const allChecked = checklist.every(id => document.getElementById(id).checked);
+      
+      if (!allChecked) {
+        alert('Please complete all checklist items before launching your store.');
+        return;
+      }
+      
+      // TODO: Deploy store via backend
+      alert('Congratulations! Your online store is now live at ' + (storeWizardData.domainType === 'subdomain' 
+        ? storeWizardData.subdomain + '.lightengine.app'
+        : storeWizardData.customDomain));
+      
+      closeStoreWizard();
+      
+      // Open the store in a new tab
+      const storeUrl = storeWizardData.domainType === 'subdomain'
+        ? 'http://localhost:8091/farm-sales-store.html'
+        : storeWizardData.customDomain;
+      window.open(storeUrl, '_blank');
+    }
+    
+    // Setup sidebar group accordion behavior
+    function setupSidebarGroups() {
+      document.querySelectorAll('.sidebar-group__trigger').forEach(trigger => {
+        trigger.addEventListener('click', (e) => {
+          e.preventDefault();
+          const group = trigger.closest('.sidebar-group');
+          const items = group.querySelector('.sidebar-group__items');
+          const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+          
+          // Toggle expanded state
+          trigger.setAttribute('aria-expanded', !isExpanded);
+          items.hidden = isExpanded;
+          
+          if (!isExpanded) {
+            group.classList.add('is-expanded');
+          } else {
+            group.classList.remove('is-expanded');
+          }
+        });
+      });
+    }
+    
+    // Add event listeners to wizard buttons in sidebar
+    function setupWizardHandlers() {
+      const wizardButtons = document.querySelectorAll('[data-wizard]');
+      console.log('Setting up wizard handlers for', wizardButtons.length, 'buttons');
+      
+      wizardButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const wizard = e.currentTarget.dataset.wizard;
+          console.log('Wizard button clicked:', wizard);
+          
+          if (wizard === 'payment-setup') {
+            openPaymentWizard();
+          } else if (wizard === 'store-setup') {
+            openStoreWizard();
+          }
+        });
+      });
+    }console.log('Initializing sidebar...');
+      setupSidebarGroups();
+      setupWizardHandlers();
+      console.log('Sidebar initialized successfully');
+      
+      // Make functions globally accessible for testing
+      window.testPaymentWizard = openPaymentWizard;
+      window.testStoreWizard = openStoreWizard
+    function initializeSidebar() {
+      setupSidebarGroups();
+      setupWizardHandlers();
+      console.log('Sidebar initialized');
+    }
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeSidebar);
+    } else {
+      // DOM already loaded
+      initializeSidebar();
+    }
+  </script>
+  <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
+  <script src="/js/farm-assistant.js"></script>
+  <script src="/js/pwa-installer.js"></script>
+  
+  <!-- Setup Completion Guard -->
+  <script>
+    // Check if user has completed setup wizard
+    async function checkSetupStatus() {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.log('[Dashboard] No token found, redirecting to login');
+        window.location.href = '/login.html';
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/setup-wizard/status', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+          console.log('[Dashboard] Setup status check failed, may need re-auth');
+          return; // Don't redirect on error, let normal auth flow handle it
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && !data.setupCompleted) {
+          console.log('[Dashboard] Setup not completed, continuing to dashboard');
+        } else {
+          console.log('[Dashboard] Setup complete, loading dashboard');
+        }
+      } catch (error) {
+        console.error('[Dashboard] Setup check error:', error);
+        // Don't redirect on network errors
+      }
+    }
+    
+    // Run setup check immediately
+    checkSetupStatus();
+  </script>
+</body>
+</html>
