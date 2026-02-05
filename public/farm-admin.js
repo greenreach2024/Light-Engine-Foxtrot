@@ -721,8 +721,8 @@ function logout() {
     // Clear any stored session data
     localStorage.removeItem(STORAGE_KEY_SESSION);
     
-    // Redirect to home page
-    window.location.href = '/';
+    // Redirect to LE dashboard (edge mode home page)
+    window.location.href = '/LE-dashboard.html';
 }
 
 /**
