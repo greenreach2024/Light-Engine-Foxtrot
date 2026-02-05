@@ -74,6 +74,7 @@ import jwt from 'jsonwebtoken';
 import validator from 'validator';
 import net from 'node:net';
 import mqtt from 'mqtt';
+import { exec } from 'child_process';
 
 // =====================================================
 // Plan-Based Access Control Middleware
@@ -429,6 +430,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STRICT_DEVICE_VALIDATION = ['1', 'true', 'yes'].includes(String(process.env.STRICT_DEVICE_VALIDATION || '').toLowerCase());
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const LIGHT_ENGINE_DIR = path.join(__dirname, 'light-engine', 'public');
 const BUILD_TIME = Date.now().toString();
 const APP_VERSION = (process.env.APP_VERSION
   || process.env.GIT_SHA
@@ -1962,7 +1964,7 @@ async function maybeAutoDetectLocalController() {
   const candidates = [];
   const manualCandidate = process.env.PY_BACKEND_URL && process.env.PY_BACKEND_URL.trim();
   if (manualCandidate) candidates.push(manualCandidate);
-  candidates.push('http://127.0.0.1:8000', 'http://localhost:8000');
+  // Note: Charlie backend (port 8000) deprecated - removed from candidates
 
   const timeoutMs = Number.parseInt(process.env.PY_BACKEND_HEALTH_TIMEOUT_MS ?? '', 10);
   const healthTimeout = Number.isFinite(timeoutMs) ? timeoutMs : 900;
@@ -6605,6 +6607,35 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
       certifications: certifications || { certifications: [], practices: [], attributes: [] }
     };
 
+    // Also save to farm.json for dashboard pages (edge mode)
+    const farmJsonPath = path.join(__dirname, 'public', 'data', 'farm.json');
+    try {
+      let farmData = {};
+      // Try to read existing farm.json
+      if (fs.existsSync(farmJsonPath)) {
+        const existingData = fs.readFileSync(farmJsonPath, 'utf8');
+        farmData = JSON.parse(existingData);
+      }
+      
+      // Update with registration data
+      farmData.farmId = farmId;
+      farmData.name = farmName || farmData.name || 'Unnamed Farm';
+      farmData.contactName = ownerName || farmData.contactName;
+      farmData.email = contactEmail || farmData.email;
+      farmData.phone = contactPhone || farmData.phone;
+      farmData.website = store?.website || farmData.website;
+      
+      // Preserve other fields like location, timezone, etc.
+      farmData.updatedAt = new Date().toISOString();
+      
+      // Write back to farm.json
+      fs.writeFileSync(farmJsonPath, JSON.stringify(farmData, null, 2), 'utf8');
+      console.log('[setup-wizard] Updated farm.json with registration data:', farmData.name);
+    } catch (farmJsonError) {
+      console.error('[setup-wizard] Failed to update farm.json:', farmJsonError.message);
+      // Continue anyway - database has the data
+    }
+    
     // Store in database
     // Check if using PostgreSQL (Cloud plan) or NeDB (Edge device)
     const pool = req.app.locals?.db;
@@ -9762,6 +9793,32 @@ app.get('/api/harvest', (req, res) => {
 });
 
 /**
+ * Harvest Prediction Endpoints (Stub)
+ * Returns empty predictions until AI backend service is available at port 8000
+ * TODO: Remove these stubs once AI service is deployed
+ */
+app.get('/api/harvest/predict/:groupId', (req, res) => {
+  console.log(`[Harvest Predictions] Stub endpoint called for group: ${req.params.groupId}`);
+  res.json({ 
+    ok: true, 
+    prediction: null, 
+    groupId: req.params.groupId,
+    message: 'AI prediction service not available',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/harvest/predictions/all', (req, res) => {
+  console.log('[Harvest Predictions] Stub endpoint called for all predictions');
+  res.json({ 
+    ok: true, 
+    predictions: [], 
+    message: 'AI prediction service not available',
+    timestamp: new Date().toISOString()
+  });
+});
+
+/**
  * ML API Routes
  * - /api/ml/anomalies: Outdoor-aware anomaly detection with IsolationForest
  * - /api/ml/effects: Learn device effects on RH/temp using Ridge regression
@@ -10289,20 +10346,26 @@ import purchaseLeadsRouter from './routes/purchase-leads.js';
 import setupWizardRouter from './routes/setup-wizard.js';
 import pg from 'pg';
 
-// Initialize PostgreSQL pool for purchase flow
-const dbPool = new pg.Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
-});
+// Initialize PostgreSQL pool for purchase flow (only if DB credentials provided)
+let dbPool = null;
+if (process.env.DB_HOST && process.env.DB_NAME) {
+  dbPool = new pg.Pool({
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT) || 5432,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
+  });
+  console.log('[DB] PostgreSQL pool initialized for cloud mode');
+} else {
+  console.log('[DB] No PostgreSQL credentials - running in edge mode (local data files)');
+}
 
-// Store database pool in app.locals for routes
+// Store database pool in app.locals for routes (null in edge mode)
 app.locals.db = dbPool;
 
 /**
@@ -10383,6 +10446,9 @@ app.use('/api/admin', adminFarmManagementRouter);
 
 // Setup Wizard Status Check (login flow needs this)
 // Note: This endpoint accepts tokens but doesn't require them to allow login flow to proceed
+// NOTE: /api/setup-wizard/* endpoints are handled by routes/setup-wizard.js router
+// The following inline endpoint is DISABLED in favor of the router
+/*
 app.get('/api/setup-wizard/status', async (req, res) => {
   try {
     // Try to extract token if provided
@@ -10473,9 +10539,10 @@ app.get('/api/setup-wizard/status', async (req, res) => {
     });
   }
 });
+*/
 
-// Note: setupWizardRouter would go here if we had additional wizard routes
-// app.use('/api/setup-wizard', setupWizardRouter);
+// Setup wizard router with edge session authentication
+app.use('/api/setup-wizard', setupWizardRouter);
 
 /**
  * Farm Sales: Customer Management
@@ -12199,12 +12266,13 @@ app.get('/api/weather/current', async (req, res) => {
   }
 });
 
-// ===== NUTRIENT MANAGEMENT API (MQTT-backed via Python FastAPI) =====
+// ===== NUTRIENT MANAGEMENT API (MQTT-backed) =====
 
-// Helper to fetch from Python backend
+// Note: Charlie backend (port 8000) deprecated - all nutrient endpoints use MQTT directly
+// Legacy fetchPythonBackend function kept for compatibility but not used
 async function fetchPythonBackend(endpoint, options = {}) {
-  const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
-  const url = `${backendUrl}${endpoint}`;
+  // DEPRECATED: This function is no longer used (nutrients use MQTT)
+  const url = `http://localhost:8000${endpoint}`;
   
   try {
     const response = await fetch(url, {
@@ -12955,12 +13023,148 @@ app.post('/api/nutrients/targets', requireEdgeForControl, async (req, res) => {
   }
 });
 
+app.options('/api/nutrients/pump-calibration', (req, res) => {
+  setCors(req, res);
+  res.status(204).end();
+});
 
-/**
- * MQTT-based pump and sensor calibration endpoints were replaced by NeDB-backed endpoints
- * (see lines 13367-13549)
- * These endpoints now store calibration data persistently instead of just publishing MQTT commands
- */
+app.post('/api/nutrients/pump-calibration', async (req, res) => {
+  try {
+    setCors(req, res);
+    const body = req.body || {};
+
+    const brokerUrl = typeof body.brokerUrl === 'string' && body.brokerUrl.trim()
+      ? body.brokerUrl.trim()
+      : DEFAULT_NUTRIENT_MQTT_URL;
+    const topic = typeof body.topic === 'string' && body.topic.trim()
+      ? body.topic.trim()
+      : DEFAULT_NUTRIENT_COMMAND_TOPIC;
+
+    const channel = typeof body.channel === 'string' && body.channel.trim()
+      ? body.channel.trim()
+      : 'ecMixA';
+
+    const runTimeSeconds = toNumberOrNull(body.runTimeSeconds ?? body.run_time_sec ?? body.durationSec);
+    const measuredVolumeMl = toNumberOrNull(body.measuredVolumeMl ?? body.measuredVolume ?? body.volumeMl);
+    const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
+
+    if (!Number.isFinite(runTimeSeconds) || runTimeSeconds <= 0) {
+      return res.status(400).json({ ok: false, error: 'invalid-runtime' });
+    }
+    if (!Number.isFinite(measuredVolumeMl) || measuredVolumeMl <= 0) {
+      return res.status(400).json({ ok: false, error: 'invalid-volume' });
+    }
+
+    const flowMlPerSec = measuredVolumeMl / runTimeSeconds;
+
+    const payload = {
+      action: 'savePumpCalibration',
+      calibration: {
+        channel,
+        runTimeSeconds: Number(runTimeSeconds.toFixed(2)),
+        measuredVolumeMl: Number(measuredVolumeMl.toFixed(2)),
+        flowMlPerSec: Number(flowMlPerSec.toFixed(4)),
+        recordedAt: new Date().toISOString(),
+        notes: notes || undefined
+      }
+    };
+
+    const publishResult = await publishNutrientCommand(payload, { brokerUrl, topic });
+
+    res.json({
+      ok: true,
+      brokerUrl: publishResult?.brokerUrl || brokerUrl,
+      topic: publishResult?.topic || topic,
+      translated: Boolean(publishResult?.translated),
+      payload,
+      flowMlPerSec,
+      runTimeSeconds,
+      measuredVolumeMl
+    });
+  } catch (error) {
+    console.error('[nutrients] Pump calibration publish failed:', error?.message || error);
+    res.status(502).json({
+      ok: false,
+      error: error?.message || 'pump-calibration-failed'
+    });
+  }
+});
+
+app.options('/api/nutrients/sensor-calibration', (req, res) => {
+  setCors(req, res);
+  res.status(204).end();
+});
+
+app.post('/api/nutrients/sensor-calibration', async (req, res) => {
+  try {
+    setCors(req, res);
+    const body = req.body || {};
+
+    const brokerUrl = typeof body.brokerUrl === 'string' && body.brokerUrl.trim()
+      ? body.brokerUrl.trim()
+      : DEFAULT_NUTRIENT_MQTT_URL;
+    const topic = typeof body.topic === 'string' && body.topic.trim()
+      ? body.topic.trim()
+      : DEFAULT_NUTRIENT_COMMAND_TOPIC;
+
+    const sensorRaw = typeof body.sensor === 'string' ? body.sensor.trim().toLowerCase() : null;
+    const commandRaw = typeof body.command === 'string' ? body.command.trim().toLowerCase() : null;
+
+    const sensor = sensorRaw === 'ph' ? 'ph' : sensorRaw === 'ec' ? 'ec' : null;
+    if (!sensor) {
+      return res.status(400).json({ ok: false, error: 'invalid-sensor' });
+    }
+
+    const allowedCommands = sensor === 'ph'
+      ? ['clear', 'mid', 'low', 'high', 'status']
+      : ['clear', 'dry', 'one', 'low', 'high', 'status'];
+
+    if (!commandRaw || !allowedCommands.includes(commandRaw)) {
+      return res.status(400).json({ ok: false, error: 'invalid-command' });
+    }
+
+    const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
+
+    let value = toNumberOrNull(body.value ?? body.target ?? body.solutionValue);
+    if (sensor === 'ph' && ['mid', 'low', 'high'].includes(commandRaw)) {
+      if (!Number.isFinite(value)) {
+        const defaults = { mid: 7.0, low: 4.0, high: 10.0 };
+        value = defaults[commandRaw];
+      }
+    }
+
+    if (sensor === 'ec' && ['one', 'low', 'high'].includes(commandRaw)) {
+      if (!Number.isFinite(value) || value <= 0) {
+        return res.status(400).json({ ok: false, error: 'value-required' });
+      }
+    }
+
+    const payload = {
+      action: 'sensorCal',
+      sensor,
+      command: commandRaw,
+      requestedAt: new Date().toISOString(),
+      value: Number.isFinite(value) ? Number(value.toFixed(sensor === 'ph' ? 2 : 0)) : undefined,
+      notes: notes || undefined
+    };
+
+    const publishResult = await publishNutrientCommand(payload, { brokerUrl, topic });
+
+    res.json({
+      ok: true,
+      brokerUrl: publishResult?.brokerUrl || brokerUrl,
+      topic: publishResult?.topic || topic,
+      translated: Boolean(publishResult?.translated),
+      payload
+    });
+  } catch (error) {
+    console.error('[nutrients] Sensor calibration publish failed:', error?.message || error);
+    res.status(502).json({
+      ok: false,
+      error: error?.message || 'sensor-calibration-failed'
+    });
+  }
+});
 
 app.options('/api/nutrients/command', (req, res) => {
   setCors(req, res);
@@ -13134,280 +13338,6 @@ app.post('/api/nutrients/ingest', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-/**
- * POST /api/nutrients/targets/save
- * Save nutrient setpoint configuration for a group
- */
-app.post('/api/nutrients/targets/save', requireEdgeForControl, async (req, res) => {
-  try {
-    setCors(req, res);
-    const { groupId, scope, nutrient, minTarget, maxTarget, unit, active } = req.body;
-    
-    // Validate required fields
-    if (!groupId || !scope || !nutrient || !Number.isFinite(minTarget) || !Number.isFinite(maxTarget)) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Missing required fields',
-        required: ['groupId', 'scope', 'nutrient', 'minTarget', 'maxTarget']
-      });
-    }
-    
-    // Validate min < max
-    if (minTarget >= maxTarget) {
-      return res.status(400).json({
-        ok: false,
-        error: 'minTarget must be less than maxTarget'
-      });
-    }
-    
-    const setpoint = {
-      groupId,
-      scope,
-      nutrient,
-      minTarget: parseFloat(minTarget),
-      maxTarget: parseFloat(maxTarget),
-      unit: unit || 'ppm',
-      active: active !== false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Insert or update
-    try {
-      await nutrientTargetsDB.insert(setpoint);
-      res.status(201).json({ ok: true, setpoint });
-    } catch (error) {
-      // If duplicate, update instead
-      if (error.message && error.message.includes('unique')) {
-        await nutrientTargetsDB.update(
-          { groupId, scope, nutrient },
-          { $set: { ...setpoint, updatedAt: new Date().toISOString() } }
-        );
-        res.json({ ok: true, setpoint, updated: true });
-      } else {
-        throw error;
-      }
-    }
-  } catch (error) {
-    console.error('[nutrients] Failed to save target:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/nutrients/targets/list
- * Get all saved nutrient targets for a group
- */
-app.get('/api/nutrients/targets/list', async (req, res) => {
-  try {
-    setCors(req, res);
-    const { groupId } = req.query;
-    
-    if (!groupId) {
-      return res.status(400).json({
-        ok: false,
-        error: 'groupId query parameter required'
-      });
-    }
-    
-    const targets = await nutrientTargetsDB.find({ groupId });
-    res.json({
-      ok: true,
-      groupId,
-      targets,
-      count: targets.length
-    });
-  } catch (error) {
-    console.error('[nutrients] Failed to list targets:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-/**
- * POST /api/nutrients/pump-calibration
- * Record pump calibration (flow rate in mL/s)
- */
-app.post('/api/nutrients/pump-calibration', requireEdgeForControl, async (req, res) => {
-  try {
-    setCors(req, res);
-    const { scope, pumpId, calibratedFlowRate, notes } = req.body;
-    
-    if (!scope || !pumpId || !Number.isFinite(calibratedFlowRate)) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Missing required fields',
-        required: ['scope', 'pumpId', 'calibratedFlowRate']
-      });
-    }
-    
-    if (calibratedFlowRate <= 0) {
-      return res.status(400).json({
-        ok: false,
-        error: 'calibratedFlowRate must be > 0'
-      });
-    }
-    
-    const calibration = {
-      scope,
-      pumpId,
-      calibratedFlowRate: parseFloat(calibratedFlowRate),
-      unit: 'mL/s',
-      calibrationDate: new Date().toISOString(),
-      nextTestDue: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      notes: notes || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    await pumpCalibrationsDB.insert(calibration);
-    res.status(201).json({ ok: true, calibration });
-  } catch (error) {
-    console.error('[pump-cal] Failed to save calibration:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/nutrients/pump-calibration/:scope/:pumpId
- * Get latest pump calibration for a pump
- */
-app.get('/api/nutrients/pump-calibration/:scope/:pumpId', async (req, res) => {
-  try {
-    setCors(req, res);
-    const scope = decodeURIComponent(req.params.scope);
-    const pumpId = decodeURIComponent(req.params.pumpId);
-    
-    const calibration = await pumpCalibrationsDB.findOne(
-      { scope, pumpId },
-      { sort: { calibrationDate: -1 } }
-    );
-    
-    if (!calibration) {
-      return res.status(404).json({
-        ok: false,
-        error: 'No calibration found',
-        scope,
-        pumpId
-      });
-    }
-    
-    res.json({ ok: true, calibration });
-  } catch (error) {
-    console.error('[pump-cal] Failed to fetch calibration:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-/**
- * POST /api/nutrients/sensor-calibration
- * Record sensor calibration (EC/pH multi-point calibration)
- */
-app.post('/api/nutrients/sensor-calibration', requireEdgeForControl, async (req, res) => {
-  try {
-    setCors(req, res);
-    const { scope, sensorType, calibrationPoints, notes } = req.body;
-    
-    if (!scope || !sensorType || !Array.isArray(calibrationPoints) || calibrationPoints.length < 2) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Missing required fields',
-        required: ['scope', 'sensorType', 'calibrationPoints[]']
-      });
-    }
-    
-    // Calculate offset and slope (linear regression from 2+ points)
-    if (calibrationPoints.length < 2) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Minimum 2 calibration points required'
-      });
-    }
-    
-    // Simple linear fit: y = slope * x + offset
-    const n = calibrationPoints.length;
-    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-    
-    for (const point of calibrationPoints) {
-      const { actual, measured } = point;
-      sumX += measured;
-      sumY += actual;
-      sumXY += measured * actual;
-      sumX2 += measured * measured;
-    }
-    
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-    const offset = (sumY - slope * sumX) / n;
-    
-    // Calculate confidence (R²)
-    let sumSqErr = 0, sumSqTotal = 0;
-    const meanY = sumY / n;
-    
-    for (const point of calibrationPoints) {
-      const { actual, measured } = point;
-      const predicted = slope * measured + offset;
-      sumSqErr += Math.pow(actual - predicted, 2);
-      sumSqTotal += Math.pow(actual - meanY, 2);
-    }
-    
-    const rSquared = sumSqTotal > 0 ? 1 - (sumSqErr / sumSqTotal) : 0;
-    
-    const calibration = {
-      scope,
-      sensorType, // 'EC' or 'pH'
-      calibrationPoints,
-      calculatedSlope: parseFloat(slope.toFixed(6)),
-      calculatedOffset: parseFloat(offset.toFixed(6)),
-      confidence: parseFloat(rSquared.toFixed(4)),
-      calibrationDate: new Date().toISOString(),
-      nextTestDue: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-      notes: notes || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    if (rSquared < 0.95) {
-      calibration.warning = 'Confidence < 0.95, consider additional calibration points';
-    }
-    
-    await sensorCalibrationsDB.insert(calibration);
-    res.status(201).json({ ok: true, calibration });
-  } catch (error) {
-    console.error('[sensor-cal] Failed to save calibration:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/nutrients/sensor-calibration/:scope/:sensorType
- * Get latest sensor calibration
- */
-app.get('/api/nutrients/sensor-calibration/:scope/:sensorType', async (req, res) => {
-  try {
-    setCors(req, res);
-    const scope = decodeURIComponent(req.params.scope);
-    const sensorType = decodeURIComponent(req.params.sensorType);
-    
-    const calibration = await sensorCalibrationsDB.findOne(
-      { scope, sensorType },
-      { sort: { calibrationDate: -1 } }
-    );
-    
-    if (!calibration) {
-      return res.status(404).json({
-        ok: false,
-        error: 'No calibration found',
-        scope,
-        sensorType
-      });
-    }
-    
-    res.json({ ok: true, calibration });
-  } catch (error) {
-    console.error('[sensor-cal] Failed to fetch calibration:', error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -14656,18 +14586,21 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
   if (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb') {
     console.log('[farm-auth] Edge/NeDB mode - using local authentication');
     
-    if (!email || !password) {
+    // Edge mode: farmId + password required, email optional
+    if (!farmId || !password) {
       return res.status(400).json({
         status: 'error',
-        message: 'Email and password are required'
+        message: 'Farm ID and password are required'
       });
     }
     
-    // Edge mode: Simple admin credential check (user should set ADMIN_EMAIL and ADMIN_PASSWORD in .env)
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@localhost';
+    // Edge mode: Simple admin credential check (user should set FARM_ID and ADMIN_PASSWORD in .env)
+    const edgeFarmId = process.env.FARM_ID || edgeConfig.getFarmId() || 'light-engine-demo';
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const adminEmail = email || process.env.ADMIN_EMAIL || `admin@${farmId}.local`;
     
-    if (email.toLowerCase() === adminEmail.toLowerCase() && password === adminPassword) {
+    // Match on farmId + password
+    if (farmId === edgeFarmId && password === adminPassword) {
       const edgeToken = crypto.randomBytes(32).toString('hex');
       const edgeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
       
@@ -14678,7 +14611,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       const edgeSession = {
         token: edgeToken,
         farmId: farmId || edgeConfig.getFarmId() || 'light-engine-demo',
-        email: email,
+        email: adminEmail,  // Use generated email (provided or default)
         role: 'admin',
         createdAt: new Date(),
         expiresAt: edgeExpiry,
@@ -14694,7 +14627,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
         token: edgeToken,
         farmId: edgeSession.farmId,
         farmName: edgeConfig.getFarmName() || 'Edge Farm',
-        email: edgeSession.email,
+        email: adminEmail,  // Return generated email
         role: 'admin',
         planType: 'edge',
         subscription: {
@@ -14761,18 +14694,22 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
   if (edgeConfig.isEdgeMode() || getDatabaseMode() === 'nedb') {
     console.log('[farm-auth] Edge/NeDB mode - using local authentication');
     
-    if (!email || !password) {
+    // Email is optional in edge mode - only farm_id and password required
+    if (!password) {
       return res.status(400).json({
         status: 'error',
-        message: 'Email and password are required'
+        message: 'Password is required'
       });
     }
     
     // Edge mode: Simple admin credential check (user should set ADMIN_EMAIL and ADMIN_PASSWORD in .env)
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@localhost';
+    // Use provided email or default to admin@{farmId}.local
+    const adminEmail = email || process.env.ADMIN_EMAIL || `admin@${farmId || 'localhost'}.local`;
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const edgeFarmId = process.env.FARM_ID || edgeConfig.getFarmId() || 'light-engine-demo';
     
-    if (email.toLowerCase() === adminEmail.toLowerCase() && password === adminPassword) {
+    // Match on farmId + password (email is optional, only used for session storage)
+    if (farmId === edgeFarmId && password === adminPassword) {
       const edgeToken = crypto.randomBytes(32).toString('hex');
       const edgeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
       
@@ -14783,7 +14720,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       const edgeSession = {
         token: edgeToken,
         farmId: farmId || edgeConfig.getFarmId() || 'light-engine-demo',
-        email: email,
+        email: adminEmail,  // Use adminEmail (provided or default)
         role: 'admin',
         createdAt: new Date(),
         expiresAt: edgeExpiry,
@@ -15193,116 +15130,6 @@ app.get('/api/devices/:id', asyncHandler(async (req, res) => {
       lastSeen: new Date().toISOString()
     }
   });
-}));
-
-/**
- * POST /api/devices/discover
- * Initiate device auto-discovery with Python backend fallback to manual entry
- * PHASE 3A: Graceful degradation when Python unavailable
- */
-app.post('/api/devices/discover', asyncHandler(async (req, res) => {
-  const { timeout = 3000, scope } = req.body;
-  
-  if (!scope) {
-    return res.status(400).json({
-      ok: false,
-      error: 'scope required for device discovery'
-    });
-  }
-  
-  // Try Python backend first (3s timeout)
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
-    const response = await fetch('http://localhost:8000/api/devices/discover', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope }),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const devices = await response.json();
-      return res.json({
-        ok: true,
-        source: 'python-backend',
-        devices,
-        discoveryTime: timeout
-      });
-    }
-  } catch (error) {
-    // Python backend unavailable or timed out
-    console.warn(`[device-discovery] Python backend unavailable (${error.message}), falling back to manual entry`);
-  }
-  
-  // Fallback: Return empty list with manual entry instructions
-  res.json({
-    ok: true,
-    source: 'fallback-manual',
-    devices: [],
-    message: 'Python backend unavailable. Use manual device entry form.',
-    fallbackUI: {
-      show_manual_entry: true,
-      message: 'Enter device details manually',
-      fields: [
-        { name: 'device_id', label: 'Device ID', type: 'text', required: true },
-        { name: 'device_name', label: 'Device Name', type: 'text', required: true },
-        { name: 'device_type', label: 'Device Type', type: 'select', options: ['sensor', 'actuator', 'controller'], required: true },
-        { name: 'ip_address', label: 'IP Address', type: 'text', required: false },
-        { name: 'port', label: 'Port', type: 'number', required: false }
-      ]
-    }
-  });
-}));
-
-/**
- * POST /api/devices/manual-entry
- * Manually add a device when auto-discovery fails
- */
-app.post('/api/devices/manual-entry', requireEdgeForControl, asyncHandler(async (req, res) => {
-  const { device_id, device_name, device_type, scope, ip_address, port, notes } = req.body;
-  
-  if (!device_id || !device_name || !device_type || !scope) {
-    return res.status(400).json({
-      ok: false,
-      error: 'Missing required fields',
-      required: ['device_id', 'device_name', 'device_type', 'scope']
-    });
-  }
-  
-  try {
-    // Store device entry (would normally go to database)
-    const device = {
-      device_id,
-      device_name,
-      device_type,
-      scope,
-      ip_address: ip_address || null,
-      port: port ? parseInt(port) : null,
-      notes: notes || '',
-      manual_entry: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Log for now (would insert into devices table in production)
-    console.log('[device-discovery] Manual device entry:', device);
-    
-    res.status(201).json({
-      ok: true,
-      message: 'Device manually registered',
-      device
-    });
-  } catch (error) {
-    console.error('[device-discovery] Failed to register device:', error);
-    res.status(500).json({
-      ok: false,
-      error: error.message || 'Failed to register device'
-    });
-  }
 }));
 
 /**
@@ -15820,8 +15647,41 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
       const fs = require('fs');
       const path = require('path');
       const farmDataPath = path.join(__dirname, 'public', 'data', 'farm.json');
-      const farmData = JSON.parse(fs.readFileSync(farmDataPath, 'utf8'));
+      let farmData;
       
+      // Try to read existing farm.json
+      try {
+        farmData = JSON.parse(fs.readFileSync(farmDataPath, 'utf8'));
+        // Check if farmId matches - if not, this is a new farm that needs setup
+        if (farmData.farmId && farmData.farmId !== session.farmId) {
+          console.log(`[/api/farm/profile] Existing farm ${farmData.farmId} doesn't match session ${session.farmId} - returning new farm placeholder`);
+          farmData = null; // Will create new farm data below
+        }
+      } catch (readError) {
+        console.log('[/api/farm/profile] No existing farm.json - new farm setup needed');
+        farmData = null;
+      }
+      
+      // If no matching farm data, return placeholder for wizard to populate
+      if (!farmData) {
+        return res.json({
+          status: 'success',
+          farm: {
+            farmId: session.farmId,
+            name: process.env.FARM_NAME || 'New Farm',
+            planType: 'edge',
+            email: session.email,
+            contactName: 'Farm Admin',
+            location: null,
+            timezone: 'America/New_York',
+            rooms: [],
+            setupComplete: false  // Indicate wizard is needed
+          },
+          edgeMode: true
+        });
+      }
+      
+      // Return existing farm data
       return res.json({
         status: 'success',
         farm: {
@@ -15837,18 +15697,19 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
         edgeMode: true
       });
     } catch (fsError) {
-      console.error('[/api/farm/profile] Error reading farm.json:', fsError);
+      console.error('[/api/farm/profile] Error processing farm data:', fsError);
       return res.json({
         status: 'success',
         farm: {
           farmId: session.farmId,
-          name: 'Edge Farm',
+          name: process.env.FARM_NAME || 'Edge Farm',
           planType: 'edge',
           email: session.email,
           contactName: 'Farm Admin',
           location: null,
           timezone: 'America/New_York',
-          rooms: []
+          rooms: [],
+          setupComplete: false
         },
         edgeMode: true
       });
@@ -15877,16 +15738,64 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     // First decode JWT without verification to get farmId
     const decoded = jwt.decode(token);
     
-    if (!decoded || !decoded.farmId) {
+    // Support both camelCase (farmId) and snake_case (farm_id) for compatibility
+    const farmId = decoded.farmId || decoded.farm_id;
+    
+    if (!decoded || !farmId) {
       console.error('[/api/farm/profile] JWT decode failed or missing farmId');
       return res.status(403).json({
         status: 'error',
         message: 'Invalid token format'
       });
     }
-    
-    const farmId = decoded.farmId;
     const db = req.app.locals.db;
+    
+    // EDGE MODE: If no database, load farm data from farm.json
+    if (!db && (process.env.EDGE_MODE === 'true' || decoded.type === 'farm_sales')) {
+      console.log('[/api/farm/profile] Edge mode - loading farm data from farm.json');
+      
+      try {
+        const farmDataPath = path.join(__dirname, 'public', 'data', 'farm.json');
+        const groupsDataPath = path.join(__dirname, 'public', 'data', 'groups.json');
+        
+        let farmData = { farmId, name: 'Edge Farm', planType: 'edge', rooms: [] };
+        let groupsData = [];
+        
+        // Try to load farm.json
+        if (fs.existsSync(farmDataPath)) {
+          const rawFarm = JSON.parse(fs.readFileSync(farmDataPath, 'utf8'));
+          farmData = {
+            farmId: rawFarm.farmId || farmId,
+            name: rawFarm.name || 'Edge Farm',
+            planType: 'edge',
+            email: rawFarm.contact?.email || decoded.email,
+            contactName: rawFarm.contact?.name || decoded.name,
+            location: rawFarm.coordinates || null,
+            timezone: rawFarm.timezone || 'America/New_York',
+            rooms: []
+          };
+        }
+        
+        // Try to load groups.json
+        if (fs.existsSync(groupsDataPath)) {
+          const rawGroups = JSON.parse(fs.readFileSync(groupsDataPath, 'utf8'));
+          groupsData = rawGroups.groups || [];
+        }
+        
+        return res.json({
+          status: 'success',
+          farm: farmData,
+          groups: groupsData,
+          edgeMode: true
+        });
+      } catch (fsError) {
+        console.error('[/api/farm/profile] Error reading farm data files:', fsError);
+        return res.status(500).json({
+          status: 'error',
+          message: 'Failed to load farm data'
+        });
+      }
+    }
     
     if (!db) {
       console.error('[/api/farm/profile] Database not available');
@@ -16445,6 +16354,49 @@ app.get('/api/demo/intro-cards', (req, res) => {
 });
 
 /**
+ * Helper: Get crop harvest days from lighting-recipes.json
+ * @param {string} planId - Plan ID like "crop-bibb-butterhead"
+ * @returns {number} - Total grow days, or 45 as fallback
+ */
+function getCropHarvestDays(planId) {
+  if (!planId) return 45;
+  
+  try {
+    const recipesPath = path.join(PUBLIC_DIR, 'data/lighting-recipes.json');
+    if (!fs.existsSync(recipesPath)) {
+      console.warn('[getCropHarvestDays] lighting-recipes.json not found');
+      return 45;
+    }
+    
+    const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+    if (!recipesData.crops) return 45;
+    
+    // Extract crop name from plan ID: "crop-bibb-butterhead" → "Bibb Butterhead"
+    const cropSlug = planId.replace(/^crop-/, '');
+    
+    // Find matching crop (case-insensitive, handle variations)
+    const cropEntry = Object.entries(recipesData.crops).find(([cropName]) => {
+      const normalizedName = cropName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      return normalizedName === cropSlug || cropSlug.includes(normalizedName);
+    });
+    
+    if (cropEntry && Array.isArray(cropEntry[1]) && cropEntry[1].length > 0) {
+      const schedule = cropEntry[1];
+      // Get the max day value (final harvest day)
+      const maxDay = Math.max(...schedule.map(d => Number(d.day) || 0));
+      console.log(`[getCropHarvestDays] ${planId} → ${cropEntry[0]} → ${maxDay} days`);
+      return Math.ceil(maxDay);
+    }
+    
+    console.warn(`[getCropHarvestDays] No recipe found for planId: ${planId}`);
+    return 45;
+  } catch (err) {
+    console.error('[getCropHarvestDays] Error:', err.message);
+    return 45;
+  }
+}
+
+/**
  * GET /api/inventory/current
  * Returns current inventory summary with detailed tray data
  */
@@ -16485,6 +16437,9 @@ app.get('/api/inventory/current', (req, res) => {
         daysOld = Math.floor((today - seedingDate) / (1000 * 60 * 60 * 24));
       }
       
+      // Get actual harvest days from lighting recipe
+      const harvestDays = getCropHarvestDays(group.plan);
+      
       // Create individual tray records
       for (let i = 0; i < trayCount; i++) {
         allTrays.push({
@@ -16496,7 +16451,7 @@ app.get('/api/inventory/current', (req, res) => {
           plantCount: plantsPerTray,
           seedingDate: seedingDate.toISOString(),
           daysOld: daysOld,
-          harvestIn: Math.max(0, 45 - daysOld), // Estimate 45 day cycle
+          harvestIn: Math.max(0, harvestDays - daysOld), // Use actual recipe duration
           health: group.health || 'healthy',
           recipe: group.recipe
         });
@@ -16642,202 +16597,618 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
   }
 });
 
+// =====================================================
+// CROP RECOMMENDATION API - Phase 1 (Rules Engine)
+// =====================================================
+
+import { generateCropRecommendations } from './lib/crop-recommendation-engine.js';
+
+/**
+ * POST /api/planting/recommendations
+ * Generate intelligent crop recommendations for replanting
+ * 
+ * Request body:
+ * {
+ *   "groupId": "Room-1:Zone-1:Group-A",
+ *   "currentCrop": "crop-buttercrunch-lettuce",
+ *   "availableCrops": ["crop-astro-arugula", "crop-lacinato-kale", ...],
+ *   "targetSeedDate": "2026-02-10",  // Optional, defaults to today
+ *   "zoneConditions": {              // Optional, defaults used if missing
+ *     "ec": 1.6,
+ *     "ph": 5.9,
+ *     "vpd": 1.0,
+ *     "dli_capacity": 22
+ *   }
+ * }
+ * 
+ * Response:
+ * {
+ *   "groupId": "...",
+ *   "topRecommendation": { cropId, confidence, scores, deltas, expectedHarvestDate },
+ *   "alternatives": [ ... top 3 alternatives ... ],
+ *   "allScored": [ ... all crops sorted by score ... ]
+ * }
+ */
+app.post('/api/planting/recommendations', asyncHandler(async (req, res) => {
+  const {
+    groupId,
+    currentCrop,
+    availableCrops = [],
+    targetSeedDate,
+    zoneConditions = {}
+  } = req.body;
+
+  if (!groupId) {
+    return res.status(400).json({ error: 'groupId is required' });
+  }
+
+  // Get current inventory for harvest staggering analysis
+  const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
+  let currentInventory = [];
+  
+  if (fs.existsSync(groupsPath)) {
+    const groupsData = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+    const groups = groupsData.groups || [];
+    
+    // Build inventory from groups
+    const now = new Date();
+    currentInventory = groups.map(group => {
+      const seedDate = group.planConfig?.anchor?.seedDate 
+        ? new Date(group.planConfig.anchor.seedDate) 
+        : now;
+      
+      // Estimate harvest date (will be refined by recommendation engine)
+      const harvestDate = new Date(seedDate);
+      harvestDate.setDate(harvestDate.getDate() + 35); // Average 35 days
+      
+      return {
+        groupId: group.id,
+        crop: group.plan || group.crop,
+        expectedHarvest: harvestDate.toISOString()
+      };
+    });
+  }
+
+  // If availableCrops not provided, get all crops from lighting-recipes.json
+  let cropsToConsider = availableCrops;
+  if (cropsToConsider.length === 0) {
+    const recipesPath = path.join(PUBLIC_DIR, 'data', 'lighting-recipes.json');
+    if (fs.existsSync(recipesPath)) {
+      const recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+      cropsToConsider = Object.keys(recipes.crops || {})
+        .map(name => `crop-${name.toLowerCase().replace(/\s+/g, '-')}`);
+    }
+  }
+
+  // Generate recommendations
+  const recommendations = await generateCropRecommendations({
+    groupId,
+    currentCrop,
+    availableCrops: cropsToConsider,
+    targetSeedDate: targetSeedDate ? new Date(targetSeedDate) : new Date(),
+    currentInventory,
+    zoneConditions
+  });
+
+  res.json(recommendations);
+}));
+
+/**
+ * POST /api/planting/feedback
+ * Track grower's decision (accepted/rejected/modified recommendation)
+ * Used for learning and improving future recommendations
+ */
+app.post('/api/planting/feedback', asyncHandler(async (req, res) => {
+  const {
+    groupId,
+    recommendedCrop,
+    actualCrop,
+    action, // 'accepted', 'rejected', 'modified'
+    reason
+  } = req.body;
+
+  // Phase 1: Just log to console (Phase 2 will store in database)
+  console.log('[planting-feedback]', {
+    groupId,
+    recommendedCrop,
+    actualCrop,
+    action,
+    reason,
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({ 
+    success: true, 
+    message: 'Feedback recorded (Phase 1: console logging)' 
+  });
+}));
+
+/**
+ * GET /api/ai/status
+ * Returns current AI training status and readiness
+ * Used by: Planting Scheduler UI, GreenReach Central monitoring
+ */
+app.get('/api/ai/status', asyncHandler(async (req, res) => {
+  try {
+    // Read from SQLite database (correct path: data/, not public/data/)
+    const dbPath = path.join(process.cwd(), 'data', 'lightengine.db');
+    const result = await new Promise((resolve, reject) => {
+      exec(`sqlite3 "${dbPath}" "SELECT * FROM ai_readiness_dashboard;"`, (error, stdout, stderr) => {
+        if (error) return reject(error);
+        if (stderr) return reject(new Error(stderr));
+        
+        // Parse SQLite output (pipe-delimited)
+        const values = stdout.trim().split('|');
+        if (values.length < 18) {
+          return reject(new Error('Invalid database response'));
+        }
+
+        resolve({
+          engine_type: values[0],
+          engine_version: values[1],
+          total_decisions: parseInt(values[2]) || 0,
+          accepted_decisions: parseInt(values[3]) || 0,
+          rejected_decisions: parseInt(values[4]) || 0,
+          acceptance_rate: parseFloat(values[5]) || 0,
+          total_crop_cycles: parseInt(values[6]) || 0,
+          decisions_pct: parseInt(values[7]) || 0,
+          cycles_pct: parseInt(values[8]) || 0,
+          acceptance_pct: parseInt(values[9]) || 0,
+          overall_readiness_pct: parseInt(values[10]) || 0,
+          ml_ready: parseInt(values[11]) || 0,
+          ml_training_started_at: values[12] || null,
+          ml_model_accuracy: parseFloat(values[13]) || null,
+          days_since_launch: parseInt(values[14]) || 0,
+          target_activation_date: values[15] || null,
+          days_remaining: parseInt(values[16]) || 0,
+          updated_at: values[17] || null
+        });
+      });
+    });
+
+    res.json({
+      engine: {
+        type: result.engine_type,
+        version: result.engine_version,
+        active: result.engine_type === 'ml' ? 'AI Model' : 'Rules Engine'
+      },
+      progress: {
+        decisions: {
+          total: result.total_decisions,
+          accepted: result.accepted_decisions,
+          rejected: result.rejected_decisions,
+          acceptance_rate: Math.round(result.acceptance_rate * 100),
+          progress_pct: result.decisions_pct
+        },
+        crop_cycles: {
+          total: result.total_crop_cycles,
+          progress_pct: result.cycles_pct
+        },
+        overall_readiness_pct: result.overall_readiness_pct
+      },
+      ml: {
+        ready: Boolean(result.ml_ready),
+        training_started: result.ml_training_started_at,
+        model_accuracy: result.ml_model_accuracy,
+        activated: null
+      },
+      timeline: {
+        days_since_launch: result.days_since_launch,
+        target_date: result.target_activation_date,
+        days_remaining: result.days_remaining
+      },
+      updated_at: result.updated_at
+    });
+  } catch (error) {
+    console.error('[AI Status] Error:', error);
+    res.status(500).json({ error: 'Failed to load AI status' });
+  }
+}));
+
+/**
+ * POST /api/ai/record-decision
+ * Records a grower decision (accept/reject/modify recommendation)
+ * Updates AI training progress metrics
+ */
+app.post('/api/ai/record-decision', asyncHandler(async (req, res) => {
+  const { action, recommendedCrop, actualCrop, groupId } = req.body;
+
+  if (!action) {
+    return res.status(400).json({ error: 'action required (accepted, rejected, modified)' });
+  }
+
+  try {
+    const dbPath = path.join(process.cwd(), 'data', 'lightengine.db');
+    
+    // Update counters based on action
+    let updateQuery;
+    if (action === 'accepted') {
+      updateQuery = 'UPDATE ai_training_status SET total_decisions = total_decisions + 1, accepted_decisions = accepted_decisions + 1 WHERE id = 1';
+    } else if (action === 'rejected') {
+      updateQuery = 'UPDATE ai_training_status SET total_decisions = total_decisions + 1, rejected_decisions = rejected_decisions + 1 WHERE id = 1';
+    } else {
+      updateQuery = 'UPDATE ai_training_status SET total_decisions = total_decisions + 1, overridden_decisions = overridden_decisions + 1 WHERE id = 1';
+    }
+
+    await new Promise((resolve, reject) => {
+      exec(`sqlite3 "${dbPath}" "${updateQuery}"`, (error) => {
+        if (error) return reject(error);
+        resolve();
+      });
+    });
+
+    // Log to planting_decisions table
+    const insertQuery = `INSERT INTO planting_decisions (farm_id, group_id, recommended_crop, actual_crop, decision_action, notes) VALUES ('${process.env.FARM_ID || 'UNKNOWN'}', '${groupId}', '${recommendedCrop}', '${actualCrop}', '${action}', 'Phase 2 Bridge: ${action} recommendation')`;
+    
+    await new Promise((resolve, reject) => {
+      exec(`sqlite3 "${dbPath}" "${insertQuery}"`, (error) => {
+        if (error) console.warn('[AI Record] Failed to log decision:', error);
+        resolve(); // Don't fail if logging fails
+      });
+    });
+
+    // Get updated status
+    const result = await new Promise((resolve, reject) => {
+      exec(`sqlite3 "${dbPath}" "SELECT total_decisions, acceptance_rate, overall_readiness_pct, ml_ready FROM ai_readiness_dashboard;"`, (error, stdout) => {
+        if (error) return reject(error);
+        const values = stdout.trim().split('|');
+        resolve({
+          total_decisions: parseInt(values[0]) || 0,
+          acceptance_rate: parseFloat(values[1]) || 0,
+          overall_readiness_pct: parseInt(values[2]) || 0,
+          ml_ready: parseInt(values[3]) || 0
+        });
+      });
+    });
+
+    res.json({
+      success: true,
+      recorded: action,
+      current_progress: {
+        total_decisions: result.total_decisions,
+        acceptance_rate: Math.round(result.acceptance_rate * 100),
+        overall_readiness: result.overall_readiness_pct,
+        ml_ready: Boolean(result.ml_ready)
+      }
+    });
+  } catch (error) {
+    console.error('[AI Record] Error:', error);
+    res.status(500).json({ error: 'Failed to record decision' });
+  }
+}));
+
 /**
  * GET /api/tray-formats
- * Returns available tray format definitions - proxied to backend
+ * Returns available tray format definitions (NeDB implementation)
  */
 app.get('/api/tray-formats', async (req, res) => {
   try {
-    const backendUrl = 'http://localhost:8000/api/tray-formats';
-    const response = await fetch(backendUrl);
+    // Query all formats from NeDB
+    const formats = await new Promise((resolve, reject) => {
+      trayFormatsDB.find({}).sort({ isCustom: 1, name: 1 }).exec((err, docs) => {
+        if (err) reject(err);
+        else resolve(docs);
+      });
+    });
     
-    if (!response.ok) {
-      throw new Error(`Backend returned ${response.status}`);
+    // If no formats exist, return default formats
+    if (formats.length === 0) {
+      const defaults = [
+        {
+          trayFormatId: 'microgreens-10x20',
+          name: '10x20 Microgreens Tray',
+          plantSiteCount: 200,
+          systemType: 'NFT',
+          isWeightBased: false,
+          weightUnit: 'heads',
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          trayFormatId: 'lettuce-5x10',
+          name: '5x10 Lettuce Tray',
+          plantSiteCount: 24,
+          systemType: 'DWC',
+          isWeightBased: false,
+          weightUnit: 'heads',
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      ];
+      
+      // Insert defaults into NeDB for persistence
+      for (const format of defaults) {
+        await new Promise((resolve, reject) => {
+          trayFormatsDB.insert(format, (err, doc) => {
+            if (err) reject(err);
+            else resolve(doc);
+          });
+        });
+      }
+      
+      console.log('[tray-formats] Initialized with default formats');
+      return res.json(defaults);
     }
     
-    const formats = await response.json();
     res.json(formats);
   } catch (error) {
-    console.error('[tray-formats] Failed to load formats from backend:', error);
-    // Fallback to default formats if backend is unavailable
-    res.json([
-      {
-        trayFormatId: 'microgreens-10x20',
-        name: '10x20 Microgreens Tray',
-        plantSiteCount: 200,
-        systemType: 'NFT',
-        isWeightBased: false,
-        isCustom: false
-      },
-      {
-        trayFormatId: 'lettuce-5x10',
-        name: '5x10 Lettuce Tray',
-        plantSiteCount: 24,
-        systemType: 'DWC',
-        isWeightBased: false,
-        isCustom: false
-      }
-    ]);
+    console.error('[tray-formats] Failed to load formats:', error);
+    res.status(500).json({ 
+      error: 'Failed to load formats',
+      message: error.message 
+    });
   }
 });
 
 /**
  * POST /api/tray-formats
- * Create a new custom tray format - proxied to backend
+ * Create a new custom tray format (NeDB implementation)
  */
-/**
- * POST /api/tray-formats
- * Create a new tray format (NeDB-backed, eliminates Python dependency)
- */
-app.post('/api/tray-formats', requireEdgeForControl, async (req, res) => {
+app.post('/api/tray-formats', async (req, res) => {
   try {
-    const { tray_format_id, name, rows, columns, cells, cell_height_mm, cell_depth_mm, active } = req.body;
+    const { name, plantSiteCount, systemType, trayMaterial, description, 
+            isWeightBased, targetWeightPerSite, weightUnit } = req.body;
     
     // Validate required fields
-    if (!tray_format_id || !name || !rows || !columns || !cells) {
-      return res.status(400).json({
-        error: 'Missing required fields',
-        required: ['tray_format_id', 'name', 'rows', 'columns', 'cells']
+    if (!name || !plantSiteCount) {
+      return res.status(400).json({ 
+        error: 'Missing required fields', 
+        required: ['name', 'plantSiteCount'] 
       });
     }
     
-    // Check if format already exists
-    const existing = await trayFormatsDB.findOne({ tray_format_id });
+    // Validate plant site count range
+    const count = parseInt(plantSiteCount);
+    if (isNaN(count) || count < 1 || count > 1000) {
+      return res.status(400).json({ 
+        error: 'plantSiteCount must be a number between 1 and 1000' 
+      });
+    }
+    
+    // Check for duplicate name
+    const existing = await new Promise((resolve, reject) => {
+      trayFormatsDB.findOne({ name }, (err, doc) => {
+        if (err) reject(err);
+        else resolve(doc);
+      });
+    });
+    
     if (existing) {
-      return res.status(409).json({
-        error: 'Tray format already exists',
-        tray_format_id
+      return res.status(409).json({ 
+        error: 'Format with this name already exists',
+        existingId: existing.trayFormatId
       });
     }
     
+    // Generate unique ID
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const timestamp = Date.now();
+    const trayFormatId = `custom-${slug}-${timestamp}`;
+    
+    // Create format document
     const format = {
-      tray_format_id,
+      trayFormatId,
       name,
-      rows: parseInt(rows),
-      columns: parseInt(columns),
-      cells: parseInt(cells),
-      cell_height_mm: cell_height_mm ? parseFloat(cell_height_mm) : null,
-      cell_depth_mm: cell_depth_mm ? parseFloat(cell_depth_mm) : null,
-      active: active !== false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      plantSiteCount: count,
+      systemType: systemType || null,
+      trayMaterial: trayMaterial || null,
+      description: description || null,
+      isWeightBased: isWeightBased === true,
+      targetWeightPerSite: isWeightBased ? (parseFloat(targetWeightPerSite) || null) : null,
+      weightUnit: isWeightBased ? (weightUnit || 'oz') : 'heads',
+      isCustom: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     
-    await trayFormatsDB.insert(format);
-    
-    res.status(201).json({
-      success: true,
-      tray_format_id,
-      format
+    // Insert into NeDB
+    const inserted = await new Promise((resolve, reject) => {
+      trayFormatsDB.insert(format, (err, doc) => {
+        if (err) reject(err);
+        else resolve(doc);
+      });
     });
+    
+    console.log(`[tray-formats] Created: ${inserted.trayFormatId}`);
+    res.status(201).json(inserted);
+    
   } catch (error) {
-    console.error('[tray-formats] Failed to create format:', error);
-    res.status(500).json({ error: error.message || 'Failed to create format' });
+    console.error('[tray-formats] Create failed:', error);
+    res.status(500).json({ 
+      error: 'Failed to create format',
+      message: error.message 
+    });
   }
 });
 
 /**
  * PUT /api/tray-formats/:id
- * Update an existing tray format
+ * Update an existing tray format (NeDB implementation)
  */
-app.put('/api/tray-formats/:id', requireEdgeForControl, async (req, res) => {
+app.put('/api/tray-formats/:id', async (req, res) => {
   try {
-    const { id: tray_format_id } = req.params;
-    const { name, rows, columns, cells, cell_height_mm, cell_depth_mm, active } = req.body;
+    const { id } = req.params;
+    const { name, plantSiteCount, systemType, trayMaterial, description,
+            isWeightBased, targetWeightPerSite, weightUnit } = req.body;
     
-    // Check if format exists
-    const existing = await trayFormatsDB.findOne({ tray_format_id });
+    // Find existing format
+    const existing = await new Promise((resolve, reject) => {
+      trayFormatsDB.findOne({ trayFormatId: id }, (err, doc) => {
+        if (err) reject(err);
+        else resolve(doc);
+      });
+    });
+    
     if (!existing) {
-      return res.status(404).json({
-        error: 'Tray format not found',
-        tray_format_id
+      return res.status(404).json({ error: 'Format not found' });
+    }
+    
+    // Prevent editing default formats
+    if (!existing.isCustom) {
+      return res.status(403).json({ 
+        error: 'Cannot edit default formats',
+        hint: 'Create a custom format instead'
       });
     }
     
-    // Check for active usage (referential integrity)
-    const activeTrays = await traysDB.find({ tray_format_id, archived: false });
-    if (activeTrays.length > 0) {
-      return res.status(409).json({
-        error: 'Cannot modify format with active trays',
-        activeTrayCount: activeTrays.length,
-        tray_format_id
-      });
-    }
-    
-    const updateData = {
-      updated_at: new Date().toISOString()
+    // Build update object (only include provided fields)
+    const updates = {
+      updatedAt: new Date().toISOString()
     };
     
-    // Update only provided fields
-    if (name) updateData.name = name;
-    if (rows) updateData.rows = parseInt(rows);
-    if (columns) updateData.columns = parseInt(columns);
-    if (cells) updateData.cells = parseInt(cells);
-    if (cell_height_mm !== undefined) updateData.cell_height_mm = parseFloat(cell_height_mm);
-    if (cell_depth_mm !== undefined) updateData.cell_depth_mm = parseFloat(cell_depth_mm);
-    if (active !== undefined) updateData.active = active;
+    if (name !== undefined) {
+      // Check for duplicate name (excluding current format)
+      const duplicate = await new Promise((resolve, reject) => {
+        trayFormatsDB.findOne({ 
+          name, 
+          trayFormatId: { $ne: id } 
+        }, (err, doc) => {
+          if (err) reject(err);
+          else resolve(doc);
+        });
+      });
+      
+      if (duplicate) {
+        return res.status(409).json({ 
+          error: 'Another format with this name already exists' 
+        });
+      }
+      updates.name = name;
+    }
     
-    await trayFormatsDB.update(
-      { tray_format_id },
-      { $set: updateData }
-    );
+    if (plantSiteCount !== undefined) {
+      const count = parseInt(plantSiteCount);
+      if (isNaN(count) || count < 1 || count > 1000) {
+        return res.status(400).json({ 
+          error: 'plantSiteCount must be a number between 1 and 1000' 
+        });
+      }
+      updates.plantSiteCount = count;
+    }
     
-    const updated = await trayFormatsDB.findOne({ tray_format_id });
+    if (systemType !== undefined) updates.systemType = systemType || null;
+    if (trayMaterial !== undefined) updates.trayMaterial = trayMaterial || null;
+    if (description !== undefined) updates.description = description || null;
     
-    res.json({
-      success: true,
-      tray_format_id,
-      format: updated
+    if (isWeightBased !== undefined) {
+      updates.isWeightBased = isWeightBased === true;
+      updates.targetWeightPerSite = isWeightBased 
+        ? (parseFloat(targetWeightPerSite) || null) 
+        : null;
+      updates.weightUnit = isWeightBased ? (weightUnit || 'oz') : 'heads';
+    }
+    
+    // Update in NeDB
+    const numUpdated = await new Promise((resolve, reject) => {
+      trayFormatsDB.update(
+        { trayFormatId: id },
+        { $set: updates },
+        {},
+        (err, n) => {
+          if (err) reject(err);
+          else resolve(n);
+        }
+      );
     });
+    
+    if (numUpdated === 0) {
+      return res.status(500).json({ error: 'Update operation failed' });
+    }
+    
+    // Fetch updated document
+    const updated = await new Promise((resolve, reject) => {
+      trayFormatsDB.findOne({ trayFormatId: id }, (err, doc) => {
+        if (err) reject(err);
+        else resolve(doc);
+      });
+    });
+    
+    console.log(`[tray-formats] Updated: ${id}`);
+    res.json(updated);
+    
   } catch (error) {
-    console.error('[tray-formats] Failed to update format:', error);
-    res.status(500).json({ error: error.message || 'Failed to update format' });
+    console.error('[tray-formats] Update failed:', error);
+    res.status(500).json({ 
+      error: 'Failed to update format',
+      message: error.message 
+    });
   }
 });
 
 /**
  * DELETE /api/tray-formats/:id
- * Delete a tray format (with referential integrity checks)
+ * Delete a custom tray format (NeDB implementation)
  */
-app.delete('/api/tray-formats/:id', requireEdgeForControl, async (req, res) => {
+app.delete('/api/tray-formats/:id', async (req, res) => {
   try {
-    const { id: tray_format_id } = req.params;
+    const { id } = req.params;
     
-    // Check if format exists
-    const existing = await trayFormatsDB.findOne({ tray_format_id });
+    // Find existing format
+    const existing = await new Promise((resolve, reject) => {
+      trayFormatsDB.findOne({ trayFormatId: id }, (err, doc) => {
+        if (err) reject(err);
+        else resolve(doc);
+      });
+    });
+    
     if (!existing) {
-      return res.status(404).json({
-        error: 'Tray format not found',
-        tray_format_id
+      return res.status(404).json({ error: 'Format not found' });
+    }
+    
+    // Prevent deleting default formats
+    if (!existing.isCustom) {
+      return res.status(403).json({ 
+        error: 'Cannot delete default formats' 
       });
     }
     
-    // Check for any active references
-    const activeTrays = await traysDB.find({ 
-      tray_format_id,
-      $or: [{ archived: false }, { archived: { $exists: false } }]
+    // Check if format is in use by any trays
+    const traysUsingFormat = await new Promise((resolve, reject) => {
+      traysDB.count({ trayFormatId: id }, (err, count) => {
+        if (err) reject(err);
+        else resolve(count);
+      });
     });
     
-    if (activeTrays.length > 0) {
-      return res.status(409).json({
-        error: 'Cannot delete format with active trays',
-        activeTrayCount: activeTrays.length,
-        affectedTrayIds: activeTrays.map(t => t.tray_id),
-        tray_format_id
+    if (traysUsingFormat > 0) {
+      return res.status(409).json({ 
+        error: 'Cannot delete format in use',
+        traysAffected: traysUsingFormat,
+        hint: 'Reassign or delete trays using this format first'
       });
     }
     
-    // Safe to delete
-    await trayFormatsDB.remove({ tray_format_id }, {});
-    
-    res.json({
-      success: true,
-      message: 'Tray format deleted',
-      tray_format_id
+    // Delete from NeDB
+    const numRemoved = await new Promise((resolve, reject) => {
+      trayFormatsDB.remove(
+        { trayFormatId: id }, 
+        {},
+        (err, n) => {
+          if (err) reject(err);
+          else resolve(n);
+        }
+      );
     });
+    
+    if (numRemoved === 0) {
+      return res.status(500).json({ error: 'Delete operation failed' });
+    }
+    
+    console.log(`[tray-formats] Deleted: ${id}`);
+    res.json({ 
+      success: true, 
+      deleted: id,
+      message: 'Format deleted successfully'
+    });
+    
   } catch (error) {
-    console.error('[tray-formats] Failed to delete format:', error);
-    res.status(500).json({ error: error.message || 'Failed to delete format' });
+    console.error('[tray-formats] Delete failed:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete format',
+      message: error.message 
+    });
   }
 });
 
@@ -17099,149 +17470,6 @@ app.get('/api/crops', (req, res) => {
 });
 
 /**
- * GET /api/crops/current-stage/:groupId
- * Detect current crop stage from group plan and apply delta-based setpoints
- * CRITICAL FOR PHASE 3B: Auto-switching setpoints per crop stage
- */
-app.get('/api/crops/current-stage/:groupId', async (req, res) => {
-  try {
-    setCors(req, res);
-    const { groupId } = req.params;
-    
-    if (!groupId) {
-      return res.status(400).json({
-        ok: false,
-        error: 'groupId required'
-      });
-    }
-    
-    // Load group from greenreach-central
-    const groupsPath = path.join(PUBLIC_DIR, '../greenreach-central/data/groups.json');
-    if (!fs.existsSync(groupsPath)) {
-      return res.status(404).json({
-        ok: false,
-        error: 'Groups file not found'
-      });
-    }
-    
-    const groups = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
-    const group = groups.find(g => g.id === groupId);
-    
-    if (!group) {
-      return res.status(404).json({
-        ok: false,
-        error: 'Group not found',
-        groupId
-      });
-    }
-    
-    // Determine current crop and stage
-    const cropId = group.crop || group.recipe; // Fallback for format variations
-    if (!cropId) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Group has no crop or recipe assigned'
-      });
-    }
-    
-    // Load recipes to find crop details
-    const recipesPath = path.join(PUBLIC_DIR, 'data/lighting-recipes.json');
-    if (!fs.existsSync(recipesPath)) {
-      return res.status(404).json({
-        ok: false,
-        error: 'Recipes file not found'
-      });
-    }
-    
-    const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
-    const cropData = recipesData.crops ? recipesData.crops[cropId] : null;
-    
-    if (!cropData) {
-      return res.status(404).json({
-        ok: false,
-        error: 'Crop recipe not found',
-        cropId
-      });
-    }
-    
-    // Calculate days in cycle from plantDate
-    const plantDate = group.plantDate ? new Date(group.plantDate) : new Date();
-    const daysSincePlant = Math.floor((Date.now() - plantDate.getTime()) / (24 * 60 * 60 * 1000));
-    
-    // Determine current stage based on days in cycle
-    let currentStage = null;
-    let daysInStage = 0;
-    let totalDaysInCycle = 0;
-    
-    if (cropData.stages && Array.isArray(cropData.stages)) {
-      let accumulatedDays = 0;
-      
-      for (const stage of cropData.stages) {
-        totalDaysInCycle += stage.duration || 0;
-        
-        if (daysSincePlant >= accumulatedDays && daysSincePlant < accumulatedDays + (stage.duration || 0)) {
-          currentStage = stage;
-          daysInStage = daysSincePlant - accumulatedDays;
-          break;
-        }
-        
-        accumulatedDays += stage.duration || 0;
-      }
-      
-      // If past all stages, default to last stage
-      if (!currentStage && cropData.stages.length > 0) {
-        currentStage = cropData.stages[cropData.stages.length - 1];
-        daysInStage = daysSincePlant - (totalDaysInCycle - (currentStage.duration || 0));
-      }
-    }
-    
-    // If no stages defined, return basic info
-    if (!currentStage) {
-      currentStage = {
-        name: 'Seedling',
-        duration: 10,
-        ec_delta: 0,
-        ph_delta: 0
-      };
-    }
-    
-    // Fetch persisted nutrient targets for this group to apply deltas
-    const targets = await nutrientTargetsDB.find({ groupId });
-    
-    // Build response with stage info and delta-adjusted setpoints
-    const stageInfo = {
-      ok: true,
-      groupId,
-      cropId,
-      plantDate: plantDate.toISOString(),
-      daysSincePlant,
-      totalDaysInCycle,
-      currentStage: {
-        name: currentStage.name,
-        duration: currentStage.duration,
-        daysRemaining: (currentStage.duration || 0) - daysInStage,
-        daysInStage,
-        progressPercent: Math.round((daysInStage / (currentStage.duration || 1)) * 100)
-      },
-      deltas: {
-        ec_delta: currentStage.ec_delta || 0,
-        ph_delta: currentStage.ph_delta || 0
-      },
-      nutrientSetpoints: targets.map(target => ({
-        ...target,
-        adjustedMin: (target.minTarget || 0) + (currentStage.ec_delta || 0),
-        adjustedMax: (target.maxTarget || 0) + (currentStage.ec_delta || 0)
-      }))
-    };
-    
-    res.json(stageInfo);
-  } catch (error) {
-    console.error('[crops] Failed to detect stage:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-/**
  * POST /api/tray-runs/:id/loss
  * Record a tray loss event and mark tray as lost
  */
@@ -17492,14 +17720,53 @@ app.get('/api/config/app', async (req, res) => {
   }
 });
 
-// Circuit-breaker short-circuit when controller is unhealthy
+// ============================================================================
+// Edge Mode API Routes (defined BEFORE proxy to avoid being intercepted)
+// ============================================================================
+
+// Get list of groups for assignment
+app.get('/api/groups', asyncHandler(async (req, res) => {
+  const groupsData = await readJSON('groups.json', { groups: [] });
+  const groups = groupsData?.groups || [];
+  
+  const formatted = groups.map(g => ({
+    id: g.id || g.name,
+    name: g.name,
+    zone: g.zone,
+    devices: g.devices?.length || 0
+  }));
+
+  res.json(formatted);
+}));
+
+// Get list of rooms for edge mode
+app.get('/api/rooms', asyncHandler(async (req, res) => {
+  const roomsData = readJSON('rooms.json', { rooms: [] });
+  const rooms = roomsData?.rooms || [];
+  
+  res.json(rooms);
+}));
+
+// Get all bus mappings
+app.get('/api/bus-mappings', asyncHandler(async (req, res) => {
+  const mappings = await readJSON('bus-mappings.json', []);
+  res.json(mappings);
+}));
+
+// ============================================================================
+// Proxy Middleware Setup
+// ============================================================================
+
+// Circuit-breaker short-circuit when controller is unhealthy  
 app.use('/api', (req, res, next) => {
   console.log(`[API Middleware] path=${req.path}, originalUrl=${req.originalUrl}`);
+  
+  // For controller-bound paths, check circuit breaker
   if (controllerCircuit.isOpen()) {
     const retryAfter = Math.max(0, Math.floor((controllerCircuit.openUntil - Date.now()) / 1000));
     return res.status(503).json({ error: 'controller_unavailable', retryAfter });
   }
-  next();
+  next(); // Proceed to proxy middleware
 });
 
 // Only set up proxy middleware if controller is not explicitly disabled
@@ -17515,66 +17782,67 @@ if (!isControllerDisabled) {
   logLevel: 'debug',
   timeout: 5000,
   proxyTimeout: 5000,
-  agent: (url) => (String(url).startsWith('https:') ? keepAliveHttpsAgent : keepAliveHttpAgent),
+  agent: keepAliveHttpAgent,  // Use HTTP agent directly (controller is HTTP, not HTTPS)
   // Filter: only proxy paths that should go to the Grow3 controller
   // Exclude paths handled by Node.js server (env, automation, switchbot, kasa, etc.)
   filter: (pathname, req) => {
-    // Don't proxy these paths - they're handled by Node.js server
-    // Note: pathname may or may not include /api prefix depending on middleware order
-    const fullPath = req.originalUrl || pathname;
-    const excludePaths = [
-      '/api/env',
-      '/api/automation/',
-      '/api/switchbot/',
-      '/api/kasa/',
-      '/api/schedule-executor/',
-      '/api/grow3/',
-      '/api/harvest',
-      '/api/weather',
-      '/api/geocode',
-      '/api/reverse-geocode',
-      '/api/device/',
-      '/api/notifications',
-      '/api/ml/',
-      '/api/health/',        // AI Health Monitoring endpoints
-      '/api/admin/',         // Central admin multi-farm endpoints
-      '/admin/',             // Also check without /api prefix
-      '/api/demo-farm',      // Demo farm data
-      '/api/inventory/',     // Inventory endpoints (current, forecast)
-      '/api/tray-formats',   // Tray format definitions
-      '/api/recipes',        // Lighting recipes
-      '/api/crops',          // Crop definitions
-      '/api/trays/',         // Tray operations (register, seed, etc.)
-      '/api/tray-runs/',     // Tray run operations (place, harvest, loss)
-      '/api/losses/',        // Loss tracking and statistics
-      '/api/config/',        // Farm configuration endpoints
-      '/api/crop-pricing',   // Crop pricing configuration
-      '/api/farm-auth/',     // Farm authentication for Sales Terminal
-      '/api/farm/auth/',     // Farm authentication alternate path
-      '/api/farm-sales/',    // Farm Sales Terminal inventory and POS
-      '/api/wholesale/',     // Wholesale inventory and catalog
-      '/api/rooms',          // Rooms data for edge mode
-      '/api/groups'          // Groups data for edge mode
-    ];
-    
-    // Also check without /api prefix (in case pathname is just the path without /api)
-    const withoutApiPrefix = pathname.startsWith('/') ? pathname : `/${pathname}`;
-    const withApiPrefix = `/api${withoutApiPrefix}`;
-    
-    // Check if full path or pathname starts with any excluded pattern
-    const shouldExclude = excludePaths.some(excluded => 
-      fullPath.startsWith(excluded) || 
-      pathname.startsWith(excluded) ||
-      withApiPrefix.startsWith(excluded) ||
-      withoutApiPrefix.startsWith(excluded)
-    );
-    
-    if (shouldExclude) {
-      console.log(`[Proxy Filter] Skipping ${fullPath} - handled by Node.js server`);
-      return false;
+    try {
+      // Don't proxy these paths - they're handled by Node.js server
+      // Note: When mounted at /api, pathname will be /groups not /api/groups
+      const fullPath = req.originalUrl || pathname;
+      console.log(`[Proxy Filter] Checking path: pathname="${pathname}", fullPath="${fullPath}"`);
+      
+      // Since proxy is mounted at /api, remove /api prefix for matching
+      const excludePaths = [
+        '/env',
+        '/automation/',
+        '/switchbot/',
+        '/kasa/',
+        '/schedule-executor/',
+        '/grow3/',
+        '/harvest',
+        '/weather',
+        '/geocode',
+        '/reverse-geocode',
+        '/device/',
+        '/notifications',
+        '/ml/',
+        '/health/',        // AI Health Monitoring endpoints
+        '/admin/',         // Central admin multi-farm endpoints
+        '/demo-farm',      // Demo farm data
+        '/inventory/',     // Inventory endpoints (current, forecast)
+        '/tray-formats',   // Tray format definitions
+        '/recipes',        // Lighting recipes
+        '/crops',          // Crop definitions
+        '/trays/',         // Tray operations (register, seed, etc.)
+        '/tray-runs/',     // Tray run operations (place, harvest, loss)
+        '/losses/',        // Loss tracking and statistics
+        '/config/',        // Farm configuration endpoints
+        '/setup',          // Setup activation + persistence endpoints
+        '/crop-pricing',   // Crop pricing configuration
+        '/farm-auth/',     // Farm authentication for Sales Terminal
+        '/farm/auth/',     // Farm authentication alternate path
+        '/farm-sales/',    // Farm Sales Terminal inventory and POS
+        '/wholesale/',     // Wholesale inventory and catalog
+        '/rooms',          // Rooms data for edge mode
+        '/groups',         // Groups data for edge mode
+        '/bus-mappings'    // Bus mapping configuration for edge mode
+      ];
+      
+      // Check if pathname starts with any excluded pattern
+      const shouldExclude = excludePaths.some(excluded => pathname.startsWith(excluded));
+      
+      if (shouldExclude) {
+        console.log(`[Proxy Filter] Skipping ${fullPath} - handled by Node.js server`);
+        return false;
+      }
+      
+      console.log(`[Proxy Filter] Proxying ${fullPath} to controller`);
+      return true; // Proxy everything else to controller
+    } catch (error) {
+      console.error('[Proxy Filter] ERROR:', error.message);
+      return true; // Default to proxy on error
     }
-    
-    return true; // Proxy everything else to controller
   },
   // Ensure controller receives exactly one /api prefix
   pathRewrite: (path /* e.g., "/devicedatas" or "/api/devicedatas" */) => {
@@ -18411,7 +18679,24 @@ app.get('/admin.html', (req, res) => {
 // Wholesale pages are now served directly from edge farm
 // (removed redirect to GreenReach Central - edge farms can host their own wholesale portal)
 
-// Serve static files (AFTER demo middleware so demo data takes precedence)
+// Serve consolidated Light Engine UI
+app.use('/light-engine/public', express.static(LIGHT_ENGINE_DIR, {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    else if (path.endsWith('.js') || path.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    }
+    else if (path.match(/\.(jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot)$/)) {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  }
+}));
+
+// Serve static files from public/ (AFTER demo middleware so demo data takes precedence)
 // Add cache control headers to force fresh content
 app.use(express.static(PUBLIC_DIR, {
   setHeaders: (res, path) => {
@@ -20838,36 +21123,13 @@ app.get('/discovery/devices', async (req, res) => {
     }
   }
   
-  // First, try local Python backend (port 8000)
-  try {
-    console.log('[Discovery] Attempting local Python backend at http://localhost:8000/discovery/devices');
-    const localUrl = 'http://localhost:8000/discovery/devices';
-    const localResponse = await fetchWithTimeout(localUrl, 30000).catch(err => {
-      console.warn('[Discovery] Local backend fetch failed:', err.message);
-      return null;
-    });
-    
-    if (localResponse && localResponse.ok) {
-      const body = await localResponse.json();
-      console.log('[Discovery] Local backend returned:', body);
-      if (Array.isArray(body?.devices)) {
-        console.log(`[Discovery]  Found ${body.devices.length} devices from local Python backend`);
-        return res.json({ 
-          startedAt, 
-          completedAt: new Date().toISOString(), 
-          devices: body.devices,
-          source: 'python-backend-local'
-        });
-      }
-    }
-  } catch (err) {
-    console.warn('[Discovery] Local Python backend failed:', err.message);
-  }
+  // Note: Charlie backend (port 8000) deprecated - removed from discovery
+  // Primary discovery method is MQTT-based (see /api/discovered-devices)
   
-  // Second, try remote controller if configured
+  // Try remote controller if configured
   try {
     const controller = getController();
-    if (controller && controller !== 'http://localhost:8000') {
+    if (controller) {
       console.log(`[Discovery] Attempting remote controller at ${controller}/discovery/devices`);
       const url = `${controller.replace(/\/$/, '')}/discovery/devices`;
       const response = await fetchWithTimeout(url, 30000).catch(() => null);
@@ -21361,6 +21623,65 @@ function analyzeDiscoveredDevices(devices) {
 
 // ===== UNIVERSAL DEVICE SCANNER =====
 // Simplified multi-protocol scan endpoint for Integrations panel
+app.get('/discovery/capabilities', async (req, res) => {
+  const netifs = os.networkInterfaces();
+  const ipv4 = [];
+  const ipv6 = [];
+  Object.values(netifs).forEach(list => {
+    (list || []).forEach(entry => {
+      if (entry.internal) return;
+      if (entry.family === 'IPv4') ipv4.push(entry.address);
+      if (entry.family === 'IPv6') ipv6.push(entry.address);
+    });
+  });
+
+  let mdnsAvailable = false;
+  let mdnsReason = 'module_unavailable';
+  try {
+    await import('bonjour-service');
+    mdnsAvailable = true;
+    mdnsReason = 'ok';
+  } catch (e) {
+    mdnsReason = e?.message || 'module_unavailable';
+  }
+
+  const switchbotConfigured = ensureSwitchBotConfigured();
+  const controllerBridge = getNetworkBridgeUrl();
+  const controllerUrl = getController();
+
+  const warnings = [];
+  if (!ipv4.length) warnings.push('No active IPv4 interface detected. LAN discovery may fail.');
+  if (!mdnsAvailable) warnings.push('mDNS module not available. Local multicast discovery may be limited.');
+  if (!switchbotConfigured) warnings.push('SwitchBot token/secret not configured. Cloud discovery disabled.');
+  if (!controllerBridge && (!controllerUrl || controllerUrl.includes('localhost'))) {
+    warnings.push('No network bridge configured. Local discovery only.');
+  }
+
+  res.json({
+    ok: true,
+    host: {
+      platform: process.platform,
+      hostname: os.hostname(),
+      ipv4,
+      ipv6
+    },
+    capabilities: {
+      mdns: { available: mdnsAvailable, reason: mdnsReason },
+      switchbot: { configured: switchbotConfigured },
+      kasa: { lanDiscovery: Boolean(ipv4.length) },
+      mqtt: { available: true },
+      ble: { available: false, reason: 'ble-module-not-configured' },
+      controllerBridge: { url: controllerBridge || null },
+      controller: { url: controllerUrl || null }
+    },
+    permissions: {
+      multicast: ipv4.length ? 'required' : 'unavailable',
+      ble: 'required'
+    },
+    warnings
+  });
+});
+
 app.post('/discovery/scan', async (req, res) => {
   console.log(' Universal device scan initiated');
   const startedAt = new Date().toISOString();
@@ -21439,6 +21760,61 @@ app.post('/discovery/scan', async (req, res) => {
       })));
     } catch (e) {
       console.warn('Kasa direct discovery failed:', e.message);
+    }
+
+    // Fallback to live network discovery if no devices found yet
+    if (!allDevices.length) {
+      console.warn('Universal scan found 0 devices; attempting live network discovery fallback');
+      try {
+        const networkDevices = await discoverNetworkDevices();
+        allDevices.push(...networkDevices.map(d => ({
+          name: d.name || d.deviceName || 'Network Device',
+          brand: d.vendor || identifyDeviceBrand(d),
+          model: d.hints?.type || d.deviceType || d.type || 'Unknown',
+          ip: d.address || d.host || '—',
+          mac: d.mac || d.deviceId || '—',
+          protocol: d.protocol || 'network',
+          confidence: d.confidence || 0.6,
+          category: categorizeDevice(d),
+          comm_type: d.protocol || 'network'
+        })));
+      } catch (e) {
+        console.warn('Network device discovery failed:', e.message);
+      }
+
+      try {
+        const mqttDevices = await discoverMQTTDevices();
+        allDevices.push(...mqttDevices.map(d => ({
+          name: d.name || 'MQTT Device',
+          brand: d.vendor || identifyDeviceBrand(d),
+          model: d.hints?.type || d.deviceType || d.type || 'Unknown',
+          ip: d.address || d.host || '—',
+          mac: d.mac || d.deviceId || '—',
+          protocol: d.protocol || 'mqtt',
+          confidence: d.confidence || 0.6,
+          category: categorizeDevice(d),
+          comm_type: d.protocol || 'mqtt'
+        })));
+      } catch (e) {
+        console.warn('MQTT device discovery failed:', e.message);
+      }
+
+      try {
+        const bleDevices = await discoverBLEDevices();
+        allDevices.push(...bleDevices.map(d => ({
+          name: d.name || 'BLE Device',
+          brand: d.vendor || identifyDeviceBrand(d),
+          model: d.hints?.type || d.deviceType || d.type || 'Unknown',
+          ip: d.address || d.host || '—',
+          mac: d.mac || d.deviceId || '—',
+          protocol: d.protocol || 'ble',
+          confidence: d.confidence || 0.6,
+          category: categorizeDevice(d),
+          comm_type: d.protocol || 'ble'
+        })));
+      } catch (e) {
+        console.warn('BLE device discovery failed:', e.message);
+      }
     }
     
     console.log(` Universal scan complete: ${allDevices.length} devices found`);
@@ -21602,25 +21978,6 @@ const trayFormatsDB = Datastore.create({
 
 const trayPlacementsDB = Datastore.create({
   filename: './data/tray-placements.db',
-  autoload: true,
-  timestampData: true
-});
-
-// Nutrient management databases
-const nutrientTargetsDB = Datastore.create({
-  filename: './data/nutrient-targets.db',
-  autoload: true,
-  timestampData: true
-});
-
-const pumpCalibrationsDB = Datastore.create({
-  filename: './data/pump-calibrations.db',
-  autoload: true,
-  timestampData: true
-});
-
-const sensorCalibrationsDB = Datastore.create({
-  filename: './data/sensor-calibrations.db',
   autoload: true,
   timestampData: true
 });
@@ -24222,9 +24579,10 @@ app.post('/api/channels/:channelId/identify', asyncHandler(async (req, res) => {
   });
 }));
 
-// Get list of groups for assignment
+// Get list of groups for assignment (NOTE: This route is NOW DEFINED EARLIER before proxy - this is unreachable but kept for code archaeology)
 app.get('/api/groups', asyncHandler(async (req, res) => {
-  const groups = await readJson('groups.json', []);
+  const groupsData = await readJSON('groups.json', { groups: [] });
+  const groups = groupsData?.groups || [];
   
   const formatted = groups.map(g => ({
     id: g.id || g.name,
@@ -24236,7 +24594,7 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
   res.json(formatted);
 }));
 
-// Get list of rooms for edge mode
+// Get list of rooms for edge mode (NOTE: This route is NOW DEFINED EARLIER before proxy - this is unreachable but kept for code archaeology)
 app.get('/api/rooms', asyncHandler(async (req, res) => {
   const roomsData = readJSON('rooms.json', { rooms: [] });
   const rooms = roomsData?.rooms || [];
@@ -24246,7 +24604,7 @@ app.get('/api/rooms', asyncHandler(async (req, res) => {
 
 // Get all bus mappings
 app.get('/api/bus-mappings', asyncHandler(async (req, res) => {
-  const mappings = await readJson('bus-mappings.json', []);
+  const mappings = await readJSON('bus-mappings.json', []);
   res.json(mappings);
 }));
 
@@ -24256,7 +24614,7 @@ app.post('/api/bus-mapping', asyncHandler(async (req, res) => {
   console.log('[bus-mapping] Saving mapping:', mapping);
 
   // Load existing bus mappings
-  const mappings = await readJson('bus-mappings.json', []);
+  const mappings = await readJSON('bus-mappings.json', []);
   
   const mappingId = `${mapping.selectedBus}-${mapping.selectedNode?.id}-${mapping.selectedChannel}`;
   
@@ -24411,6 +24769,16 @@ async function startServer() {
             console.log('[Migration] ✅ Cloud-to-edge migration system initialized');
           }
         }
+
+        // Start ML training worker (Phase 2 Bridge)
+        try {
+          const { startMLTrainingWorker } = await import('./lib/ml-training-pipeline.js');
+          await startMLTrainingWorker();
+          console.log('[ML Training] ✅ Background training worker started');
+        } catch (mlError) {
+          console.warn('[ML Training] Worker failed to start:', mlError.message);
+        }
+
       } catch (error) {
         console.error('[Database] ❌ Initialization error:', error.message);
       }
