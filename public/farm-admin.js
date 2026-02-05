@@ -3775,6 +3775,7 @@ let setupData = {
  * Check if first-time setup is needed
  */
 async function checkFirstTimeSetup() {
+    return;
     try {
         // Cloud users use standalone wizard (redirected from login.html)
         // Only check for embedded wizard on edge devices

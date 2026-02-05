@@ -379,13 +379,6 @@
                 
                 console.log('[Login] Stored planType:', data.planType);
                 
-                // Check if setup is complete before redirecting
-                const setupResponse = await fetch('/api/setup-wizard/status', {
-                    headers: { 'Authorization': `Bearer ${data.token}` }
-                });
-                
-                const setupData = await setupResponse.json();
-                
                 // Show success message
                 alertDiv.className = 'alert success';
                 alertDiv.textContent = 'Login successful! Redirecting...';
@@ -397,19 +390,9 @@
                     const planType = data.planType || localStorage.getItem('planType') || 'cloud';
                     
                     if (planType === 'cloud') {
-                        // Cloud users: redirect to standalone wizard if setup incomplete
-                        if (setupData.success && !setupData.setupCompleted) {
-                            window.location.href = '/setup-wizard.html';
-                        } else {
-                            window.location.href = '/farm-admin.html';
-                        }
+                        window.location.href = '/farm-admin.html';
                     } else {
-                        // Edge device - use farm-admin for setup with embedded wizard
-                        if (setupData.success && !setupData.setupCompleted) {
-                            window.location.href = '/farm-admin.html';
-                        } else {
-                            window.location.href = '/LE-dashboard.html';
-                        }
+                        window.location.href = '/LE-dashboard.html';
                     }
                 }, 1000);
                 

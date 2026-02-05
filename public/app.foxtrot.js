@@ -3329,6 +3329,20 @@ window.runUniversalScan = async function() {
   animFrame = requestAnimationFrame(animateProgress);
   
   try {
+    let capabilityWarnings = [];
+    try {
+      const capResp = await fetch('/discovery/capabilities');
+      if (capResp.ok) {
+        const capData = await capResp.json();
+        capabilityWarnings = Array.isArray(capData.warnings) ? capData.warnings : [];
+        if (capabilityWarnings.length && status) {
+          status.textContent = `Scanner warnings: ${capabilityWarnings.slice(0, 2).join(' ')}${capabilityWarnings.length > 2 ? '…' : ''}`;
+        }
+      }
+    } catch (e) {
+      console.warn('[UniversalScan] capability check failed:', e.message);
+    }
+
     // Update status text
     if (status) status.textContent = 'Scanning WiFi, BLE, MQTT, Kasa, SwitchBot...';
     
@@ -5045,13 +5059,23 @@ async function safeRoomsDelete(roomId) {
 // Helper to reload rooms from backend
 async function loadRoomsFromBackend() {
   try {
-    // Try to load from real setup data API first
     const token = localStorage.getItem('token');
-    
-    const resp = await fetch('/api/setup/data', {
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-    });
-    
+    const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+    // Prefer dedicated rooms endpoint
+    const roomsResp = await fetch('/api/setup/rooms', { headers: authHeaders });
+    if (roomsResp.ok) {
+      const roomsData = await roomsResp.json();
+      if (roomsData.success && Array.isArray(roomsData.rooms)) {
+        STATE.rooms = roomsData.rooms;
+        localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+        console.log('[loadRoomsFromBackend] Loaded rooms from', roomsData.source || 'api', ':', STATE.rooms.length);
+        return;
+      }
+    }
+
+    // Fallback to setup data API
+    const resp = await fetch('/api/setup/data', { headers: authHeaders });
     if (resp.ok) {
       const data = await resp.json();
       if (data.success && data.config) {
@@ -5061,13 +5085,14 @@ async function loadRoomsFromBackend() {
         STATE.farm.ownerName = data.config.ownerName;
         STATE.farm.contactEmail = data.config.contactEmail;
         STATE.farm.contactPhone = data.config.contactPhone;
-        
+
         // Load user's actual rooms
         STATE.rooms = data.config.rooms || [];
-        
-        console.log('[loadRoomsFromBackend] Loaded real user data:', 
+        localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+
+        console.log('[loadRoomsFromBackend] Loaded real user data:',
                     STATE.rooms.length, 'rooms from', data.config.farmName);
-        
+
         // Update header with farm name
         if (data.config.farmName) {
           updateFarmNameInHeader(data.config.farmName);
@@ -5075,7 +5100,7 @@ async function loadRoomsFromBackend() {
         return;
       }
     }
-    
+
     // If no setup data found, start with empty rooms
     console.log('[loadRoomsFromBackend] No setup data found, starting with empty state');
     STATE.rooms = [];
@@ -5089,10 +5114,13 @@ async function loadRoomsFromBackend() {
 async function safeRoomsSave() {
   const rooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
   try {
+    const token = localStorage.getItem('token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     // Try to save to the setup data endpoint (edge devices)
     const resp = await fetch('/api/setup/save-rooms', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ rooms })
     });
     if (resp.ok) {
@@ -5102,8 +5130,11 @@ async function safeRoomsSave() {
     }
     throw new Error('HTTP ' + resp.status);
   } catch (err) {
-    console.warn('[safeRoomsSave] Backend save failed, trying localStorage:', err);
-    // Fallback: save to localStorage
+    console.warn('[safeRoomsSave] Backend save failed, saving to rooms.json:', err);
+    // Fallback: save to rooms.json so main pages can load the latest room equipment
+    const ok = await saveJSON('rooms.json', { rooms });
+    if (ok) return true;
+    // Last resort: localStorage
     try {
       localStorage.setItem('gr.rooms', JSON.stringify({ rooms }));
       return true;
@@ -6328,11 +6359,32 @@ async function loadSavedIoTDevices() {
 
 // Load farm data to check demo mode status
 async function loadFarmData() {
+  const loadLocalFarmFallback = async (reason) => {
+    try {
+      const resp = await fetch('/data/farm.json', { cache: 'no-store' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      if (data && typeof data === 'object') {
+        STATE.farm = data;
+        console.log('[loadFarmData] Loaded farm from /data/farm.json:', data.farmId || data.name || data.farmName, reason ? `(${reason})` : '');
+        if (Array.isArray(data.rooms)) {
+          STATE.rooms = data.rooms;
+        }
+        updateFarmNameInHeader(data.name || data.farmName || data.farmId);
+        return true;
+      }
+    } catch (error) {
+      console.warn('[loadFarmData] Failed to load /data/farm.json fallback:', error);
+    }
+    return false;
+  };
+
   try {
     const token = localStorage.getItem('token');
     
     if (!token) {
-      console.warn('[loadFarmData] No authentication token, skipping farm data load');
+      console.warn('[loadFarmData] No authentication token, using /data/farm.json fallback');
+      await loadLocalFarmFallback('no-token');
       return;
     }
     
@@ -6357,11 +6409,12 @@ async function loadFarmData() {
         updateFarmNameInHeader(data.farm.name);
       }
     } else if (resp.status === 401) {
-      console.warn('[loadFarmData] Authentication failed, redirecting to login');
-      window.location.href = '/login.html';
+      console.warn('[loadFarmData] Authentication failed, using /data/farm.json fallback');
+      await loadLocalFarmFallback('unauthorized');
     }
   } catch (e) {
     console.warn('[loadFarmData] Failed to load farm data:', e);
+    await loadLocalFarmFallback('error');
   }
 }
 
@@ -9357,6 +9410,15 @@ class RoomWizard {
     }
     this.form?.addEventListener('submit', (e)=> this.saveRoom(e));
 
+    if (this.modal) {
+      const isOpen = this.modal.getAttribute('aria-hidden') === 'false';
+      if (!isOpen) {
+        this.modal.style.display = 'none';
+      } else if (!this.modal.dataset.leOpen) {
+        this.close();
+      }
+    }
+
     // Chip groups
     const chipGroup = (sel, target, field) => {
       const host = $(sel); if (!host) return;
@@ -9741,6 +9803,7 @@ class RoomWizard {
       // failed to reopen the wizard after the first close).
       this.modal.style.display = 'flex';
       this.modal.setAttribute('aria-hidden', 'false');
+      this.modal.dataset.leOpen = 'true';
     }
     // Always refresh the room list from STATE.farm.rooms to reflect latest Farm Registration
     const farmRooms = Array.isArray(STATE.farm?.rooms) ? STATE.farm.rooms.map(r => ({ ...r })) : [];
@@ -9976,6 +10039,9 @@ class RoomWizard {
   close(){
     this.modal.setAttribute('aria-hidden','true');
     this.modal.style.display = 'none';
+    if (this.modal && this.modal.dataset.leOpen) {
+      delete this.modal.dataset.leOpen;
+    }
   }
 
   showStep(index) {
@@ -12321,7 +12387,7 @@ async function loadAllData() {
     });
     
     // Load static data files
-    const [groups, schedules, plans, environment, calibrations, spdLibrary, deviceMeta, deviceKB, equipmentKB, deviceManufacturers, farm, rooms, switchbotDevices, storedIotDevices, equipmentMetadata] = await Promise.all([
+    const [groups, schedules, plans, environment, calibrations, spdLibrary, deviceMeta, deviceKB, equipmentKB, equipmentCatalog, deviceManufacturers, farm, rooms, switchbotDevices, storedIotDevices, equipmentMetadata] = await Promise.all([
       loadJSON('/data/groups.json', { groups: [] }),
       fetchSchedulesDocument(),
       fetchPlansDocument(),
@@ -12331,6 +12397,7 @@ async function loadAllData() {
       loadJSON('./data/device-meta.json', { devices: {} }),
       loadJSON('./data/device-kb.json', { fixtures: [] }),
       loadJSON('./data/equipment-kb.json', { equipment: [] }),
+      loadJSON('./data/equipment.catalog.json', { dehumidifiers: [] }),
       loadJSON('./data/device-manufacturers.json', { manufacturers: [] }),
       loadJSON('./data/farm.json', {}),
       loadJSON('/data/rooms.json', { rooms: [] }),
@@ -12457,8 +12524,31 @@ async function loadAllData() {
     const rawFarm = farm || (() => { try { return JSON.parse(localStorage.getItem('gr.farm') || 'null'); } catch { return null; } })() || {};
     STATE.farm = normalizeFarmDoc(rawFarm);
     try { if (STATE.farm && Object.keys(STATE.farm).length) localStorage.setItem('gr.farm', JSON.stringify(STATE.farm)); } catch {}
-    STATE.rooms = rooms?.rooms || [];
-    console.log(' [loadAllData] Loaded STATE.rooms:', STATE.rooms.length, 'rooms');
+    if (typeof updateFarmNameInHeader === 'function') {
+      updateFarmNameInHeader(STATE.farm?.name || STATE.farm?.farmName || STATE.farm?.farmId);
+    }
+    const backendRooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
+    const fileRooms = rooms?.rooms || [];
+    const localRooms = (() => {
+      try {
+        const raw = localStorage.getItem('gr.rooms');
+        const parsed = raw ? JSON.parse(raw) : null;
+        return Array.isArray(parsed?.rooms) ? parsed.rooms : [];
+      } catch {
+        return [];
+      }
+    })();
+    const hasBackendData = backendRooms.some(r => r && (r._categoryProgress || r.categoryProgress || r.category || r.equipment));
+    if (hasBackendData) {
+      STATE.rooms = backendRooms;
+      console.log(' [loadAllData] Retained backend-loaded rooms:', STATE.rooms.length);
+    } else if (localRooms.length) {
+      STATE.rooms = localRooms;
+      console.log(' [loadAllData] Loaded STATE.rooms from localStorage:', STATE.rooms.length, 'rooms');
+    } else {
+      STATE.rooms = fileRooms;
+      console.log(' [loadAllData] Loaded STATE.rooms from rooms.json:', STATE.rooms.length, 'rooms');
+    }
     STATE.equipmentMetadata = equipmentMetadata || {};
     console.log(' [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
     if (STATE.rooms.length > 0) {
@@ -12479,6 +12569,25 @@ async function loadAllData() {
     console.log('Sample fixtures:', deviceKB.fixtures.slice(0, 3).map(f => `${f.vendor} ${f.model} [${f.id}]`));
   }
   if (equipmentKB && Array.isArray(equipmentKB.equipment)) {
+    if (equipmentKB.equipment.length === 0 && equipmentCatalog && Array.isArray(equipmentCatalog.dehumidifiers)) {
+      const mappedDehums = equipmentCatalog.dehumidifiers
+        .map((item) => {
+          const vendor = item?.brand || item?.vendor || '';
+          const model = item?.model || '';
+          if (!vendor && !model) return null;
+          const pintsPerDay = item?.pintsPerDay ?? item?.capacity ?? '';
+          return {
+            category: 'dehumidifier',
+            vendor,
+            model,
+            capacity: pintsPerDay ? `${pintsPerDay} PPD` : '',
+            control: item?.control || item?.protocol || '',
+            tags: Array.isArray(item?.tags) ? item.tags : []
+          };
+        })
+        .filter(Boolean);
+      equipmentKB.equipment = mappedDehums;
+    }
     STATE.equipmentKB = equipmentKB;
     console.log(' Loaded equipment database:', equipmentKB.equipment.length, 'equipment items');
     console.log('Sample equipment:', equipmentKB.equipment.slice(0, 3).map(e => `${e.vendor} ${e.model} (${e.category})`));
@@ -12853,13 +12962,41 @@ function renderGroups() {
 // Helper function to extract equipment from nested room.category structure
 function extractRoomEquipment(room) {
   const equipment = [];
-  if (room.category && typeof room.category === 'object') {
-    Object.values(room.category).forEach(cat => {
-      if (Array.isArray(cat.selectedEquipment)) {
+  const categoryProgress = room._categoryProgress || room.categoryProgress;
+  const categoryStore = room.category && typeof room.category === 'object' ? room.category : {};
+
+  const selectedKeys = new Set();
+  if (categoryProgress && typeof categoryProgress === 'object') {
+    Object.entries(categoryProgress).forEach(([key, cat]) => {
+      if (Array.isArray(cat?.selectedEquipment)) {
+        selectedKeys.add(key);
         equipment.push(...cat.selectedEquipment);
       }
     });
   }
+  Object.entries(categoryStore).forEach(([key, cat]) => {
+    if (selectedKeys.has(key)) return;
+    if (Array.isArray(cat?.selectedEquipment)) {
+      equipment.push(...cat.selectedEquipment);
+    }
+  });
+
+  const simpleCategories = ['fans', 'vents', 'controllers', 'energy-monitor', 'other'];
+  simpleCategories.forEach(catKey => {
+    const catData = (categoryProgress && categoryProgress[catKey]) || categoryStore[catKey];
+    if (catData && catData.count && catData.count > 0) {
+      equipment.push({
+        category: catKey,
+        vendor: catData.manufacturer || 'Unknown',
+        model: catData.model || catKey,
+        count: catData.count,
+        control: catData.control || null,
+        wifi: catData.wifi || false,
+        wired: catData.wired || false,
+        notes: catData.notes || ''
+      });
+    }
+  });
   // Also check for flat room.equipment array (legacy/alternative structure)
   if (Array.isArray(room.equipment)) {
     equipment.push(...room.equipment);

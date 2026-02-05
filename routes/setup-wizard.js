@@ -13,6 +13,7 @@ const router = express.Router();
 /**
  * JWT Authentication Middleware
  * Verifies token and attaches farm_id to request
+ * PRIORITY: Check edge mode sessions first, then JWT
  */
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -25,6 +26,18 @@ function authenticateToken(req, res, next) {
     });
   }
 
+  // FIRST: Check if it's an edge mode session token
+  if (global.farmAdminSessions && global.farmAdminSessions.has(token)) {
+    const session = global.farmAdminSessions.get(token);
+    req.farmId = session.farmId;
+    req.userId = session.userId || 'edge-admin';
+    req.userEmail = session.email;
+    req.userRole = session.role || 'admin';
+    req.edgeMode = true;
+    console.log('[Setup Wizard] Edge session authenticated:', req.farmId);
+    return next();
+  }
+
   // Allow local-access token in development/demo mode
   if (token === 'local-access') {
     req.farmId = 'LOCAL-FARM';
@@ -34,6 +47,7 @@ function authenticateToken(req, res, next) {
     return next();
   }
 
+  // SECOND: Try JWT verification (cloud mode)
   try {
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
     const decoded = jwt.verify(token, jwtSecret);
@@ -111,6 +125,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 router.get('/status', authenticateToken, async (req, res) => {
   try {
     const farmId = req.farmId;
+    const isEdgeMode = req.edgeMode;
 
     // Handle local development mode
     if (farmId === 'LOCAL-FARM') {
@@ -126,6 +141,50 @@ router.get('/status', authenticateToken, async (req, res) => {
         },
         roomCount: 0
       });
+    }
+
+    // Edge mode: Check farm.json file instead of database
+    if (isEdgeMode) {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const farmJsonPath = path.join(process.cwd(), 'public', 'data', 'farm.json');
+        
+        let setupCompleted = false;
+        let farmData = null;
+        
+        if (fs.existsSync(farmJsonPath)) {
+          const farmJson = fs.readFileSync(farmJsonPath, 'utf8');
+          farmData = JSON.parse(farmJson);
+          
+          // Check if farm.json has this farmId and basic setup data
+          if (farmData.farmId === farmId && farmData.name && farmData.timezone) {
+            setupCompleted = true;
+          }
+        }
+        
+        return res.json({
+          success: true,
+          setupCompleted,
+          farm: {
+            farmId,
+            name: farmData?.name || process.env.FARM_NAME || 'New Farm',
+            planType: 'edge',
+            timezone: farmData?.timezone,
+            hasBusinessHours: !!farmData?.business_hours
+          },
+          edgeMode: true
+        });
+      } catch (fsError) {
+        console.error('[Setup Wizard] Edge mode file check error:', fsError);
+        // If file check fails, show wizard
+        return res.json({
+          success: true,
+          setupCompleted: false,
+          farmId,
+          edgeMode: true
+        });
+      }
     }
 
     const pool = req.app.locals?.db;

@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Light Engine Setup</title>
+    <script>
+        window.location.replace('/farm-admin.html');
+    </script>
     <style>
         * {
             margin: 0;
@@ -275,6 +278,7 @@
                 <div class="progress-dot active" id="dot-0"></div>
                 <div class="progress-dot" id="dot-1"></div>
                 <div class="progress-dot" id="dot-2"></div>
+                <div class="progress-dot" id="dot-3"></div>
             </div>
         </div>
 
@@ -335,52 +339,8 @@
             </div>
         </div>
 
-        <!-- Step 4: Activity Hub Setup -->
+        <!-- Step 4: Complete -->
         <div class="step" id="step-3">
-            <div class="step-content">
-                <h2 class="step-title">📱 Activity Hub</h2>
-                <p class="step-description">
-                    Install the Activity Hub on your iPad for easy farm floor operations.
-                </p>
-
-                <div class="card" style="margin-bottom: 1.5rem; text-align: center;">
-                    <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">Quick Install with QR Code</h3>
-                    <div id="activity-hub-qr" style="display: flex; justify-content: center; margin: 1.5rem 0;">
-                        <!-- QR code will be generated here -->
-                    </div>
-                    <p style="color: var(--text-muted); font-size: 0.9rem;">
-                        Scan this code with your iPad camera to open Activity Hub in Safari
-                    </p>
-                </div>
-
-                <div class="card" style="margin-bottom: 1.5rem;">
-                    <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">📝 Manual Setup</h3>
-                    <ol style="padding-left: 1.5rem; color: var(--text-secondary); line-height: 1.8;">
-                        <li>Open Safari on your iPad</li>
-                        <li>Navigate to: <code id="activity-hub-url" style="background: var(--bg-secondary); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-blue); cursor: pointer;" onclick="copyHubUrl()">Loading...</code></li>
-                        <li>Tap the Share button <span style="font-size: 1.2rem;">⎋</span></li>
-                        <li>Select "Add to Home Screen"</li>
-                        <li>Tap "Add" to install</li>
-                    </ol>
-                </div>
-
-                <div class="alert" style="background: rgba(59, 130, 246, 0.1); border-left: 3px solid var(--accent-blue);">
-                    <strong>✨ Pro Tip:</strong> Once installed, Activity Hub works offline and loads instantly - perfect for the farm floor!
-                </div>
-
-                <div style="margin-top: 1.5rem; text-align: center;">
-                    <button class="btn btn-secondary" onclick="skipActivityHub()" style="margin-right: 1rem;">
-                        Skip for Now
-                    </button>
-                    <button class="btn btn-primary" onclick="activityHubComplete()">
-                        I've Installed It
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 5: Complete -->
-        <div class="step" id="step-4">
             <div class="step-content">
                 <h2 class="step-title">Setup Complete</h2>
                 <p class="step-description">
@@ -406,7 +366,7 @@
 
     <script>
         let currentStep = 0;
-        const totalSteps = 5;
+        const totalSteps = 4;
         let roomCounter = 0;
 
         // Extract farmId from JWT token
@@ -622,64 +582,8 @@
             window.location.href = '/farm-admin.html';
         }
 
-        // Activity Hub functions
-        function generateActivityHubQR() {
-            const baseUrl = window.location.origin;
-            const hubUrl = `${baseUrl}/views/tray-inventory.html`;
-            
-            // Display URL
-            document.getElementById('activity-hub-url').textContent = hubUrl;
-            
-            // Generate QR code using Google Charts API
-            const qrContainer = document.getElementById('activity-hub-qr');
-            const qrSize = 200;
-            const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=${qrSize}x${qrSize}&chl=${encodeURIComponent(hubUrl)}&choe=UTF-8`;
-            
-            qrContainer.innerHTML = `
-                <img src="${qrUrl}" alt="Activity Hub QR Code" style="border: 2px solid var(--border); border-radius: 8px; padding: 10px; background: white;" />
-            `;
-        }
-
-        function copyHubUrl() {
-            const url = document.getElementById('activity-hub-url').textContent;
-            navigator.clipboard.writeText(url).then(() => {
-                const elem = document.getElementById('activity-hub-url');
-                const originalText = elem.textContent;
-                elem.textContent = 'Copied!';
-                elem.style.color = 'var(--accent-green)';
-                setTimeout(() => {
-                    elem.textContent = originalText;
-                    elem.style.color = 'var(--accent-blue)';
-                }, 2000);
-            });
-        }
-
-        function skipActivityHub() {
-            nextStep();
-        }
-
-        function activityHubComplete() {
-            nextStep();
-        }
-
         // Initialize
         updateUI();
-        
-        // Generate Activity Hub QR when step loads
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.target.classList.contains('active')) {
-                    const stepId = mutation.target.id;
-                    if (stepId === 'step-3') {
-                        generateActivityHubQR();
-                    }
-                }
-            });
-        });
-        
-        document.querySelectorAll('.step').forEach(step => {
-            observer.observe(step, { attributes: true, attributeFilter: ['class'] });
-        });
     </script>
 </body>
 </html>

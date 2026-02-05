@@ -119,33 +119,56 @@ router.post('/login', async (req, res) => {
   try {
     const { farm_id, email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'email and password are required' });
-    }
-
-    // Edge device mode: Accept any login (ignore farm_id presence)
+    // Edge device mode: Accept login with farm_id + password (email optional)
     const isEdgeDevice = process.env.EDGE_MODE === 'true';
     
     if (isEdgeDevice) {
-      console.log(`[Auth] Edge login for ${email}`);
+      // Edge mode: Only password is required
+      if (!password) {
+        return res.status(400).json({ error: 'password is required' });
+      }
+      
+      // Validate password matches ADMIN_PASSWORD
+      const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+      const edgeFarmId = process.env.FARM_ID || 'edge-device';
+      
+      // Check farm_id and password match
+      if (farm_id && farm_id !== edgeFarmId) {
+        return res.status(401).json({ error: 'Invalid farm ID' });
+      }
+      
+      if (password !== adminPassword) {
+        return res.status(401).json({ error: 'Invalid password' });
+      }
+      
+      console.log(`[Auth] Edge login for ${email || 'no-email'}`);
+      
       // Generate JWT token for edge device login
+      // Use provided email or generate default
+      const userEmail = email || `admin@${edgeFarmId}.local`;
+      
       const token = generateFarmToken({
-        farm_id: farm_id || process.env.FARM_ID || 'edge-device',
+        farm_id: farm_id || edgeFarmId,
         user_id: 'local-user',
         role: FARM_ROLES.ADMIN,
-        name: email.split('@')[0],
-        email
+        name: userEmail.split('@')[0],
+        email: userEmail
       });
 
       return res.json({
         success: true,
         token,
-        farm_id: farm_id || process.env.FARM_ID || 'edge-device',
-        email,
+        farm_id: farm_id || edgeFarmId,
+        email: userEmail,
         role: FARM_ROLES.ADMIN,
         planType: 'edge',
         expires_in: '24h'
       });
+    }
+
+    // Cloud mode: email and password required
+    if (!email || !password) {
+      return res.status(400).json({ error: 'email and password are required' });
     }
 
     if (!farm_id) {

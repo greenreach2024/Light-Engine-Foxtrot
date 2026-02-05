@@ -239,6 +239,106 @@ Since authentication is working correctly at the code level, you can proceed dir
 **Conclusion**
 The cloud server (greenreach-central) only has 2 of 13+ endpoints needed by the farm admin dashboard. Most dashboard cards will show errors or fall back to demo/mock data because the APIs don't exist in the cloud deployment.
 
+---
+
+## Test Results Summary - Farm Summary Dashboard (Cloud Server)
+
+### Navigation Buttons
+- Inventory Management dropdown (Planting Scheduler, Tray Setup, Farm Inventory, Activity Hub, Lot Traceability)
+- Farm Monitoring dropdown (Farm Summary, Nutrient Management, Heat Map)
+- Admin dropdown (Admin, Setup/Update)
+- Sales dropdown (Farm Sales Terminal, Lot Traceability)
+- “+ New Planting Today” floating button
+
+### Main Cards
+- **ML Insights Dashboard** (3 widgets)
+   - Anomaly Detection (24h) - sparkline chart
+   - Energy Forecast (24h) - prediction chart
+   - Temperature Forecast (4h ahead) - confidence chart
+- **Environmental Conditions**
+   - Outdoor Weather section
+   - Indoor Conditions grid
+- **AI Health Monitor** (with Refresh button)
+- **ML Anomaly Alerts** (conditionally shown)
+- **Zone Summaries** (dynamic per room)
+- **Environmental Trends** (chart with zone selector)
+
+### API Testing Results
+
+| API Endpoint | Status | Notes |
+| --- | --- | --- |
+| /api/farm/profile | ✅ 200 OK | Returns farm name & ID |
+| /data/farm.json | ✅ 200 OK | Fallback farm data |
+| /env?hours=1 | ❌ 404 | Sensor data not available |
+| /api/farm-sales/inventory | ❌ 404 | Missing route |
+| /api/weather | ❌ 404 | Missing route |
+| room-map.json | ❌ 404 | Missing file |
+| /data/groups.json | ✅ 200 OK | Returns object |
+| /plans | ✅ 200 OK | Returns plan data |
+| /data/iot-devices.json | ✅ 200 OK | Returns array |
+| /api/automation/rules | ❌ 404 | Missing route |
+| /api/schedule-executor/status | ❌ 404 | Missing route |
+| /data/schedules.json | ✅ 200 OK | Returns object |
+| /api/schedule-executor/ml-anomalies | ❌ 404 | Missing route |
+| /api/automation/history | ❌ 404 | Missing route |
+
+### Summary
+✅ Working (6 endpoints):
+- Farm profile API
+- Static data files: farm.json, groups.json, plans, schedules.json, iot-devices.json
+
+❌ Missing (9 endpoints):
+- All sensor data (/env)
+- Weather API
+- Room map data
+- All automation/schedule executor APIs
+- Farm sales inventory
+- ML anomaly detection APIs
+
+**Impact:** The ML Insights Dashboard, Environmental Conditions, and AI Health Monitor cards will show loading or error states. Only basic farm info and zone planning data loads successfully.
+
+---
+
+## Test Results Summary - Light Engine Local (http://localhost:8091)
+
+**Target Page:** `/light-engine/public/LE-farm-admin.html`
+
+### Page & Asset Availability (HTTP 200)
+- `/light-engine/public/LE-farm-admin.html`
+- `/farm-admin.js?v=2025-12-28-setup`
+- `/js/farm-assistant.js`
+- `/js/intro-card.js?v=5`
+- `/LE-dashboard.html`
+- `/lib/chart.umd.js`
+- `/light-engine/public/js/console-guard.js`
+- `/styles/farm-assistant.css`
+- `/styles/styles.charlie.css?v=2025-12-10-01`
+- `/views/farm-inventory.html`
+- `/views/farm-summary.html`
+- `/views/nutrient-management.html`
+- `/views/tray-inventory.html`
+
+### Authenticated API Checks (Bearer token)
+
+| API Endpoint | Status | Notes |
+| --- | --- | --- |
+| /api/farm/profile | ❌ 403 | Access denied for token used |
+| /api/farm-sales/inventory | ✅ 200 | Inventory payload returned |
+| /api/automation/rules | ✅ 200 | Empty rules array |
+| /api/schedule-executor/status | ✅ 200 | Executor running |
+| /api/schedule-executor/ml-anomalies | ✅ 200 | `lastError`: scikit-learn not installed |
+| /api/automation/history | ✅ 200 | History events present |
+| /api/weather?lat=44.2312&lng=-76.4860 | ✅ 200 | Weather payload returned |
+| /env?hours=1 | ✅ 200 | Env payload returned |
+
+### Key Findings
+- Farm profile API rejected the token (403). This blocks header/kpi personalization in authenticated views.
+- ML anomalies endpoint responds but reports missing ML dependencies (scikit-learn).
+- Weather endpoint works when lat/lng are provided.
+
+### UI Coverage Note
+UI button/card interaction testing was not executed (requires browser automation). The checks above confirm page load and API connectivity only.
+
 ## 🔒 Security Verification
 
 All critical security measures are **ACTIVE**:

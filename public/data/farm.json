@@ -1,17 +1,52 @@
 {
-  "schemaVersion": "1.0.0",
-  "farmId": "FARM-MKLOMAT3-A9D8",
-  "name": "Big Green Farm",
-  "status": "online",
-  "region": "Ontario, Canada",
-  "url": "http://100.65.187.59:8091",
-  "contact": {
-    "name": "Shelby Gilbert",
-    "email": "shelbygilbert@rogers.com",
-    "phone": "+1 (555) 436-7324"
+  "farmId": "FARM-TEST-WIZARD-001",
+  "name": "This is Your Farm",
+  "email": "Johndoe@thisisyourfarm.com",
+  "location": {
+    "lat": 44.2312,
+    "lng": -76.486,
+    "city": "Kingston",
+    "state": "ON",
+    "zip": "K7K",
+    "country": "CA"
   },
+  "created": "2026-02-04T13:00:00Z",
+  "mode": "edge",
+  "farmName": "This is Your Farm",
+  "address": "St Lawrence Avenue",
+  "city": "Kingston",
+  "state": "Ontario",
+  "postalCode": "K7L 5H6",
+  "timezone": "America/Toronto",
   "coordinates": {
-    "lat": 47.6062,
-    "lng": -122.3321
-  }
+    "lat": 44.258779425589154,
+    "lng": -76.37291520309648
+  },
+  "contact": {
+    "name": "John Doe",
+    "email": "Johndoe@thisisyourfarm.com",
+    "phone": "",
+    "website": ""
+  },
+  "connection": {
+    "type": "ethernet",
+    "wifi": {
+      "ssid": "",
+      "reuseDiscovery": true,
+      "tested": false,
+      "testResult": null
+    }
+  },
+  "discovery": {
+    "subnet": "",
+    "gateway": "",
+    "reuseNetwork": true,
+    "ssid": ""
+  },
+  "rooms": [],
+  "locations": [],
+  "registered": "2026-02-04T13:42:02.654Z",
+  "contactName": "John Doe",
+  "phone": "",
+  "website": ""
 }

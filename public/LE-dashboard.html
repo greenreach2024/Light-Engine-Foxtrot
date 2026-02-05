@@ -110,65 +110,7 @@
 .wizard-test-area {background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:1.5rem;margin:1.5rem 0;}
 .wizard-test-area h4 {margin:0 0 1rem 0;}
   </style>
-  
-  <!-- Inline Diagnostic Script - runs immediately to show what's happening -->
-  <script>
-    (function() {
-      const log = [];
-      const updateDiagnostic = (msg) => {
-        log.push(msg);
-        const el = document.getElementById('diagnosticStatus');
-        if (el) el.innerHTML = log.join('<br>');
-      };
-      
-      log.push('[' + new Date().toLocaleTimeString() + '] Page loaded');
-      
-      document.addEventListener('DOMContentLoaded', async () => {
-        updateDiagnostic('[' + new Date().toLocaleTimeString() + '] DOMContentLoaded fired');
-        
-        const iotList = document.getElementById('iotDevicesList');
-        updateDiagnostic('iotDevicesList element: ' + (iotList ? 'FOUND' : 'NOT FOUND'));
-        
-        try {
-          updateDiagnostic('Fetching /data/iot-devices.json...');
-          const resp = await fetch('/data/iot-devices.json');
-          updateDiagnostic('Response status: ' + resp.status);
-          
-          if (resp.ok) {
-            const devices = await resp.json();
-            const deviceArray = Array.isArray(devices) ? devices : (devices.devices || []);
-            updateDiagnostic('✓ Loaded ' + deviceArray.length + ' devices');
-            updateDiagnostic('Device IDs: ' + deviceArray.map(d => d.id || d.deviceId).join(', '));
-            
-            // Set STATE and LAST_IOT_SCAN, then call render
-            window.LAST_IOT_SCAN = deviceArray;
-            if (!window.STATE) window.STATE = {};
-            window.STATE.iotDevices = deviceArray;
-            
-            setTimeout(() => {
-              updateDiagnostic('renderIoTDeviceCards: ' + (typeof window.renderIoTDeviceCards));
-              updateDiagnostic('STATE.iotDevices length: ' + (window.STATE?.iotDevices?.length || 'STATE not set'));
-              updateDiagnostic('LAST_IOT_SCAN length: ' + (window.LAST_IOT_SCAN?.length || 'not set'));
-              
-              // Actually call the render function
-              if (typeof window.renderIoTDeviceCards === 'function') {
-                updateDiagnostic('Calling renderIoTDeviceCards with ' + deviceArray.length + ' devices...');
-                window.renderIoTDeviceCards(deviceArray);
-                updateDiagnostic('Render complete');
-              } else {
-                updateDiagnostic('ERROR: renderIoTDeviceCards not found!');
-              }
-            }, 2000);
-          } else {
-            updateDiagnostic('✗ Fetch failed: ' + resp.status);
-          }
-        } catch (e) {
-          updateDiagnostic('✗ Error: ' + e.message);
-        }
-      });
-    })();
-  </script>
-  
+
   <script src="/app.foxtrot.js?v={{BUILD_TIME}}" defer></script>
   <!-- Groups V2 module: handles plan dropdown, anchor toggle, and schedule UI -->
   <script src="/groups-v2.js?v={{BUILD_TIME}}" defer></script>
@@ -503,8 +445,6 @@
           <!-- IoT Devices List (for renderIoTDeviceCards function) -->
           <div id="iotDevicesList"></div>
           
-          <!-- Diagnostic Status Display -->
-          <div id="diagnosticStatus" style="margin-top: 12px; padding: 12px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; font-family: monospace; font-size: 12px; color: #0c4a6e;"></div>
           
         </div>
         
@@ -2992,8 +2932,7 @@
         const data = await response.json();
         
         if (data.success && !data.setupCompleted) {
-          console.log('[Dashboard] Setup not completed, redirecting to setup wizard');
-          window.location.href = '/setup-wizard.html';
+          console.log('[Dashboard] Setup not completed, continuing to dashboard');
         } else {
           console.log('[Dashboard] Setup complete, loading dashboard');
         }

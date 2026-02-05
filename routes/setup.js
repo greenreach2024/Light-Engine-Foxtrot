@@ -8,9 +8,11 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import jwt from 'jsonwebtoken';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 import { exec } from 'child_process';
+import { validateRooms, validateWithErrors } from '../lib/schema-validator.js';
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +21,7 @@ const router = express.Router();
 // Use local config directory for AWS compatibility
 const CONFIG_DIR = path.join(__dirname, '..', 'config');
 const LICENSE_DIR = path.join(CONFIG_DIR, 'licenses');
+const ROOMS_PATH = path.join(__dirname, '..', 'public', 'data', 'rooms.json');
 
 // In-memory store of activation codes (in production, this would be a database)
 // Format: { code: { farmId, tier, expiresAt, used: false } }
@@ -35,6 +38,81 @@ activationCodes.set('TEST1234', {
 });
 
 console.log('[Setup] Test activation code initialized: TEST1234');
+
+function getAuthContext(req) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return null;
+
+  if (global.farmAdminSessions && global.farmAdminSessions.has(token)) {
+    const session = global.farmAdminSessions.get(token);
+    return {
+      farmId: session.farmId,
+      userId: session.userId || 'edge-admin',
+      userEmail: session.email,
+      userRole: session.role || 'admin',
+      edgeMode: true
+    };
+  }
+
+  if (token === 'local-access') {
+    return {
+      farmId: 'LOCAL-FARM',
+      userId: 'local-user',
+      userEmail: 'admin@local-farm.com',
+      userRole: 'admin'
+    };
+  }
+
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const decoded = jwt.verify(token, jwtSecret);
+    return {
+      farmId: decoded.farmId,
+      userId: decoded.userId,
+      userEmail: decoded.email,
+      userRole: decoded.role || 'admin'
+    };
+  } catch (error) {
+    return { error: 'Invalid or expired token' };
+  }
+}
+
+function buildRoomsPayload(rooms, schemaVersion) {
+  const payload = { rooms };
+  if (schemaVersion) payload.schemaVersion = schemaVersion;
+  return payload;
+}
+
+function writeRoomsFile(payload) {
+  const dir = path.dirname(ROOMS_PATH);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const backupPath = `${ROOMS_PATH}.bak`;
+  if (fs.existsSync(ROOMS_PATH)) {
+    fs.copyFileSync(ROOMS_PATH, backupPath);
+  }
+
+  const tempPath = `${ROOMS_PATH}.tmp-${Date.now()}`;
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2));
+    fs.renameSync(tempPath, ROOMS_PATH);
+  } catch (error) {
+    if (fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+    if (fs.existsSync(backupPath)) {
+      fs.copyFileSync(backupPath, ROOMS_PATH);
+    }
+    throw error;
+  }
+}
+
+function readRoomsFile() {
+  if (!fs.existsSync(ROOMS_PATH)) return null;
+  const raw = fs.readFileSync(ROOMS_PATH, 'utf8');
+  return JSON.parse(raw);
+}
 
 /**
  * Generate hardware fingerprint for the device
@@ -553,12 +631,82 @@ router.get('/data', async (req, res) => {
 });
 
 /**
+ * GET /api/setup/rooms
+ * Returns persisted rooms data (DB in cloud, rooms.json/NeDB on edge)
+ */
+router.get('/rooms', async (req, res) => {
+  try {
+    const pool = req.app.locals?.db;
+    const auth = getAuthContext(req);
+
+    if (auth?.error) {
+      return res.status(403).json({ success: false, error: auth.error });
+    }
+
+    if (pool) {
+      if (!auth?.farmId) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+
+      const result = await pool.query(
+        `SELECT rooms_json
+         FROM farm_room_configs
+         WHERE farm_id = $1
+         ORDER BY updated_at DESC
+         LIMIT 1`,
+        [auth.farmId]
+      );
+
+      if (!result.rows.length) {
+        return res.status(404).json({ success: false, error: 'No rooms configuration found' });
+      }
+
+      const roomsPayload = result.rows[0].rooms_json || { rooms: [] };
+      return res.json({
+        success: true,
+        rooms: roomsPayload.rooms || [],
+        schemaVersion: roomsPayload.schemaVersion || null,
+        source: 'db'
+      });
+    }
+
+    const filePayload = readRoomsFile();
+    if (filePayload && Array.isArray(filePayload.rooms)) {
+      return res.json({
+        success: true,
+        rooms: filePayload.rooms,
+        schemaVersion: filePayload.schemaVersion || null,
+        source: 'file'
+      });
+    }
+
+    const wizardStatesDB = req.app.locals?.wizardStatesDB;
+    if (wizardStatesDB) {
+      const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' });
+      if (setupConfig?.rooms) {
+        return res.json({
+          success: true,
+          rooms: setupConfig.rooms,
+          schemaVersion: setupConfig.schemaVersion || null,
+          source: 'nedb'
+        });
+      }
+    }
+
+    return res.status(404).json({ success: false, error: 'No rooms configuration found' });
+  } catch (error) {
+    console.error('[api/setup/rooms] Error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to load rooms' });
+  }
+});
+
+/**
  * POST /api/setup/save-rooms
  * Save rooms data to edge device setup configuration
  */
 router.post('/save-rooms', async (req, res) => {
   try {
-    const { rooms } = req.body;
+    const { rooms, schemaVersion } = req.body;
     
     if (!Array.isArray(rooms)) {
       return res.status(400).json({
@@ -567,33 +715,75 @@ router.post('/save-rooms', async (req, res) => {
       });
     }
     
-    // Edge device - save to NeDB
+    const auth = getAuthContext(req);
+    if (auth?.error) {
+      return res.status(403).json({ success: false, message: auth.error });
+    }
+
+    const roomsPayload = buildRoomsPayload(rooms, schemaVersion);
+    const validation = validateWithErrors(validateRooms, roomsPayload, 'rooms');
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: validation.summary,
+        errors: validation.errors
+      });
+    }
+
+    const pool = req.app.locals?.db;
+    const savedTo = [];
+
+    if (pool) {
+      if (!auth?.farmId) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      await pool.query(
+        `INSERT INTO farm_room_configs (farm_id, rooms_json, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (farm_id)
+         DO UPDATE SET rooms_json = EXCLUDED.rooms_json, updated_at = NOW()`,
+        [auth.farmId, roomsPayload]
+      );
+      savedTo.push('db');
+    }
+
     const wizardStatesDB = req.app.locals?.wizardStatesDB;
-    
-    if (!wizardStatesDB) {
+    if (wizardStatesDB) {
+      const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' }) || { key: 'setup_config' };
+      setupConfig.rooms = rooms;
+      if (schemaVersion) setupConfig.schemaVersion = schemaVersion;
+      setupConfig.updatedAt = new Date().toISOString();
+      await wizardStatesDB.update(
+        { key: 'setup_config' },
+        setupConfig,
+        { upsert: true }
+      );
+      savedTo.push('nedb');
+    } else if (!pool) {
       return res.status(500).json({
         success: false,
         message: 'Wizard database not initialized'
       });
     }
-    
-    // Get existing setup config
-    const setupConfig = await wizardStatesDB.findOne({ key: 'setup_config' }) || { key: 'setup_config' };
-    
-    // Update rooms in setup config
-    setupConfig.rooms = rooms;
-    setupConfig.updatedAt = new Date().toISOString();
-    
-    // Save back to NeDB
-    await wizardStatesDB.update(
-      { key: 'setup_config' },
-      setupConfig,
-      { upsert: true }
-    );
-    
+
+    if (!pool) {
+      try {
+        writeRoomsFile(roomsPayload);
+        savedTo.push('rooms.json');
+      } catch (fileError) {
+        console.error('[api/setup/save-rooms] File write error:', fileError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to save rooms.json',
+          error: fileError.message
+        });
+      }
+    }
+
     return res.json({
       success: true,
-      message: `${rooms.length} room(s) saved successfully`
+      message: `${rooms.length} room(s) saved successfully`,
+      savedTo
     });
     
   } catch (error) {

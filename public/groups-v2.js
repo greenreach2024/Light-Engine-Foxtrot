@@ -241,19 +241,43 @@ function flushGroupsV2PendingRefresh() {
 // Initialize window.STATE.groups from server
 async function initializeGroupsV2State() {
   try {
-    console.log('[Groups V2] Loading groups from /api/groups...');
-    const response = await fetch('/api/groups');
-    if (!response.ok) {
-      console.warn('[Groups V2] Failed to load groups:', response.status);
-      return;
+    let groups = [];
+    let source = '';
+
+    try {
+      console.log('[Groups V2] Loading groups from /data/groups.json...');
+      const response = await fetch('/data/groups.json', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      if (Array.isArray(payload)) {
+        groups = payload;
+      } else if (payload && Array.isArray(payload.groups)) {
+        groups = payload.groups;
+      }
+      source = '/data/groups.json';
+    } catch (error) {
+      console.warn('[Groups V2] Failed to load /data/groups.json:', error);
     }
-    
-    const groups = await response.json();
-    console.log('[Groups V2] Loaded', groups.length, 'groups from server');
-    
+
+    if (!groups.length) {
+      console.log('[Groups V2] Falling back to /api/groups...');
+      const response = await fetch('/api/groups');
+      if (!response.ok) {
+        console.warn('[Groups V2] Failed to load groups from /api/groups:', response.status);
+        return;
+      }
+      groups = await response.json();
+      source = '/api/groups';
+    }
+
+    console.log('[Groups V2] Loaded', groups.length, 'groups from', source);
+
     // Initialize STATE if needed
     if (!window.STATE) window.STATE = {};
     window.STATE.groups = groups;
+    if (typeof window.normalizeGroupsInState === 'function') {
+      window.normalizeGroupsInState();
+    }
     
     // Trigger dropdown refresh
     document.dispatchEvent(new Event('groups-updated'));
@@ -5783,7 +5807,7 @@ function populateGroupsV2LoadGroupDropdown() {
   
   // Filter groups by selected room and zone
   console.log(`[Groups V2] Load dropdown - Filtering by room="${selectedRoom}", zone="${selectedZone}"`);
-  const filteredGroups = groups.filter(group => {
+  let filteredGroups = groups.filter(group => {
     const groupRoom = group.roomId || group.room || group.roomName || '';
     const groupZone = group.zone || '';
     
@@ -5799,6 +5823,11 @@ function populateGroupsV2LoadGroupDropdown() {
     
     return matches;
   });
+
+  if (!filteredGroups.length && groups.length) {
+    console.warn('[Groups V2] No groups matched room/zone filter; showing all groups.');
+    filteredGroups = groups.slice();
+  }
   console.log(`[Groups V2] Load dropdown - After filtering: ${filteredGroups.length} groups remain`);
   
   // Sort: deployed first, then drafts; within each category, alphabetically

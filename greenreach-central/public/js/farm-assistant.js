@@ -120,6 +120,59 @@ class FarmAssistant {
     this.createWidget();
     this.attachEventListeners();
     this.loadHistory();
+    this.initNavigationTracking();
+  }
+
+  initNavigationTracking() {
+    if (window.__leNavTrackingEnabled) return;
+    window.__leNavTrackingEnabled = true;
+
+    const storeEntry = (entry) => {
+      try {
+        const key = 'le_nav_log';
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        existing.push(entry);
+        const trimmed = existing.slice(-100);
+        localStorage.setItem(key, JSON.stringify(trimmed));
+        console.debug('[nav-track]', entry);
+      } catch (error) {
+        console.warn('[nav-track] Failed to store entry', error);
+      }
+    };
+
+    document.addEventListener('click', (event) => {
+      const target = event.target.closest('a, button');
+      if (!target) return;
+
+      const href = target.getAttribute('href') || target.dataset.target || target.dataset.wizard || '';
+      const text = (target.textContent || '').trim().slice(0, 120);
+
+      storeEntry({
+        ts: new Date().toISOString(),
+        page: window.location.pathname,
+        action: 'click',
+        text,
+        href
+      });
+    }, true);
+
+    window.addEventListener('hashchange', () => {
+      storeEntry({
+        ts: new Date().toISOString(),
+        page: window.location.pathname,
+        action: 'hashchange',
+        href: window.location.href
+      });
+    });
+
+    window.addEventListener('beforeunload', () => {
+      storeEntry({
+        ts: new Date().toISOString(),
+        page: window.location.pathname,
+        action: 'navigate',
+        href: window.location.href
+      });
+    });
   }
 
   detectContext() {
@@ -691,7 +744,6 @@ class FarmAssistant {
     // Simplified navigation - just check if query contains ANY keyword
     const navPatterns = [
       { keywords: ['planting', 'schedule', 'calendar', 'plan'], url: '/views/planting-scheduler.html', name: 'Planting Schedule', emoji: '📅' },
-      { keywords: ['tray', 'seed', 'seeding'], url: '/views/tray-inventory.html', name: 'Tray Inventory', emoji: '🌱' },
       { keywords: ['dashboard', 'home', 'main', 'summary'], url: '/views/farm-summary.html', name: 'Farm Dashboard', emoji: '🏠' },
       { keywords: ['wholesale', 'buyer'], url: '/GR-wholesale.html', name: 'Wholesale Portal', emoji: '📦' },
       { keywords: ['sales', 'pos', 'sell', 'store'], url: '/Farmsales-pos.html', name: 'POS Terminal', emoji: '💰' },

@@ -1,5 +1,17 @@
 {
   "metadata": {},
   "lastUpdated": null,
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "room-3xxjln-fans-0": {
+    "control": "Manual"
+  },
+  "room-3xxjln-fans-1": {
+    "control": "Manual"
+  },
+  "room-3xxjln-fans-2": {
+    "control": "Manual"
+  },
+  "room-3xxjln-fans-3": {
+    "control": "Manual"
+  }
 }

@@ -275,18 +275,6 @@
             </div>
             
             <div class="form-group">
-                <label for="email">Email</label>
-                <input 
-                    type="email" 
-                    id="email" 
-                    name="email" 
-                    placeholder="your@email.com" 
-                    required 
-                    autocomplete="email"
-                >
-            </div>
-            
-            <div class="form-group">
                 <label for="password">Password</label>
                 <input 
                     type="text" 
@@ -330,8 +318,15 @@
             const button = document.getElementById('loginButton');
             const alertDiv = document.getElementById('alertMessage');
             const farmId = document.getElementById('farmId').value.trim();
-            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
+            
+            // Validate required fields
+            if (!farmId || !password) {
+                alertDiv.className = 'alert error';
+                alertDiv.textContent = 'Farm ID and password are required';
+                alertDiv.style.display = 'block';
+                return;
+            }
             
             // Disable button
             button.disabled = true;
@@ -345,7 +340,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ farm_id: farmId, email, password })
+                    body: JSON.stringify({ farm_id: farmId, password })
                 });
                 
                 const data = await response.json();
@@ -370,7 +365,7 @@
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('farm_id', data.farm_id || data.farmId); // Server returns farm_id
                 localStorage.setItem('farm_name', data.farmName || data.farm_name || '');
-                localStorage.setItem('email', email);
+                localStorage.setItem('email', data.email || '');
                 localStorage.setItem('role', data.role || 'admin');
                 localStorage.setItem('planType', data.planType || 'cloud'); // Store plan type for wizard
                 // Clean up legacy keys
@@ -394,25 +389,13 @@
                     return;
                 }
                 
-                // Check if setup is complete before redirecting (cloud mode only)
-                const setupResponse = await fetch('/api/setup-wizard/status', {
-                    headers: { 'Authorization': `Bearer ${data.token}` }
-                });
-                
-                const setupData = await setupResponse.json();
-                
                 // Show success message
                 alertDiv.className = 'alert success';
                 alertDiv.textContent = 'Login successful! Redirecting...';
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    // Cloud mode: redirect based on setup status
-                    if (setupData.success && !setupData.setupCompleted) {
-                        window.location.href = '/setup-wizard.html';
-                    } else {
-                        window.location.href = '/LE-dashboard.html'; // Use LE dashboard for cloud
-                    }
+                    window.location.href = '/LE-dashboard.html'; // Use LE dashboard for cloud
                 }, 1000);
                                 
             } catch (error) {

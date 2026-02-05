@@ -120,6 +120,108 @@ class FarmAssistant {
     this.createWidget();
     this.attachEventListeners();
     this.loadHistory();
+    this.injectHomeButton();
+    this.initNavigationTracking();
+  }
+
+  initNavigationTracking() {
+    if (window.__leNavTrackingEnabled) return;
+    window.__leNavTrackingEnabled = true;
+
+    const storeEntry = (entry) => {
+      try {
+        const key = 'le_nav_log';
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        existing.push(entry);
+        const trimmed = existing.slice(-100);
+        localStorage.setItem(key, JSON.stringify(trimmed));
+        console.debug('[nav-track]', entry);
+      } catch (error) {
+        console.warn('[nav-track] Failed to store entry', error);
+      }
+    };
+
+    document.addEventListener('click', (event) => {
+      const target = event.target.closest('a, button');
+      if (!target) return;
+
+      const href = target.getAttribute('href') || target.dataset.target || target.dataset.wizard || '';
+      const text = (target.textContent || '').trim().slice(0, 120);
+
+      storeEntry({
+        ts: new Date().toISOString(),
+        page: window.location.pathname,
+        action: 'click',
+        text,
+        href
+      });
+    }, true);
+
+    window.addEventListener('hashchange', () => {
+      storeEntry({
+        ts: new Date().toISOString(),
+        page: window.location.pathname,
+        action: 'hashchange',
+        href: window.location.href
+      });
+    });
+
+    window.addEventListener('beforeunload', () => {
+      storeEntry({
+        ts: new Date().toISOString(),
+        page: window.location.pathname,
+        action: 'navigate',
+        href: window.location.href
+      });
+    });
+  }
+
+  injectHomeButton() {
+    const ensureButton = () => {
+      const containers = document.querySelectorAll('.header-actions');
+      if (!containers.length) return;
+
+      containers.forEach(container => {
+        if (!container) return;
+        const sample = container.querySelector('button, a');
+        const existing = container.querySelector('[data-le-home-button]');
+
+        const button = existing || document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('data-le-home-button', 'true');
+        button.textContent = 'Home';
+
+        if (sample) {
+          button.className = sample.className || button.className;
+          if (sample.getAttribute('style')) {
+            button.setAttribute('style', sample.getAttribute('style'));
+          }
+        } else if (!button.className) {
+          button.className = 'btn btn-secondary';
+        }
+
+        if (!button.__leHomeBound) {
+          button.addEventListener('click', () => {
+            window.location.href = '/index.charlie.html';
+          });
+          button.__leHomeBound = true;
+        }
+
+        if (!existing) {
+          if (container.firstChild) {
+            container.insertBefore(button, container.firstChild);
+          } else {
+            container.appendChild(button);
+          }
+        }
+      });
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', ensureButton, { once: true });
+    } else {
+      ensureButton();
+    }
   }
 
   detectContext() {
