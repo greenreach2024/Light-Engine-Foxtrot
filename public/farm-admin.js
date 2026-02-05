@@ -146,13 +146,15 @@ async function handleLogin(e) {
     e.preventDefault();
     
     const farmId = document.getElementById('farmId').value.trim();
-    const email = document.getElementById('email').value.trim();
+    const emailInput = document.getElementById('email');
+    const email = emailInput ? emailInput.value.trim() : '';
     const password = document.getElementById('password').value;
-    const remember = document.getElementById('remember').checked;
+    const rememberInput = document.getElementById('remember');
+    const remember = rememberInput ? rememberInput.checked : false;
     
     // Validation
-    if (!farmId || !email || !password) {
-        showAlert('error', 'Please fill in all fields');
+    if (!farmId || !password) {
+        showAlert('error', 'Please fill in Farm ID and password');
         return;
     }
     
@@ -164,12 +166,12 @@ async function handleLogin(e) {
     
     try {
         // Call authentication API
-        const response = await fetch(`${API_BASE}/api/auth/login`, {
+        const response = await fetch(`${API_BASE}/api/farm/auth/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ farm_id: farmId, email, password })
+            body: JSON.stringify({ farmId, email, password })
         });
         
         const data = await response.json();
