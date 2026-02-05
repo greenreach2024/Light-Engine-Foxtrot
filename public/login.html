@@ -335,12 +335,12 @@
             
             try {
                 // Call backend authentication API (farm login endpoint)
-                const response = await fetch('/api/auth/login', {
+                const response = await fetch('/api/farm/auth/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ farm_id: farmId, password })
+                    body: JSON.stringify({ farmId: farmId, password })
                 });
                 
                 const data = await response.json();

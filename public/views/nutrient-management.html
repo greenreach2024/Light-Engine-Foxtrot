@@ -1,3 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Nutrient Management - Light Engine</title>
+  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2026-02-04">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #e4e4e7;
+      min-height: 100vh;
+      padding-bottom: 2rem;
+    }
+
+    .page-header {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(10px);
+      padding: 2rem;
+      border-bottom: 2px solid #3b82f6;
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .page-header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      margin-bottom: 0.5rem;
+    }
+
+    .page-header p {
+      color: var(--neutral-300);
+      font-size: 0.95rem;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .nav-menu {
+      display: flex;
+      gap: 0.75rem;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -35,7 +94,7 @@
     }
 
     .nav-arrow {
-      font-size: 0.7rem;
+      font-size: 0.82rem;
       transition: transform 0.3s ease;
     }
 
@@ -118,10 +177,11 @@
     main {
       flex: 1;
       padding: 2.5rem;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      grid-auto-rows: minmax(120px, auto);
-      gap: 1.75rem;
+      max-width: 1800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
     }
 
     .card {
@@ -162,10 +222,12 @@
     }
 
     .metric-label {
-      font-size: 0.82rem;
-      color: var(--neutral-300);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
       text-transform: uppercase;
       letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
     }
 
     .metric-value {
@@ -190,10 +252,11 @@
 
     canvas.sparkline {
       width: 100%;
-      height: 54px;
+      height: 120px;
       border-radius: 10px;
-      background: rgba(15, 23, 42, 0.35);
-      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      display: block;
     }
 
     .warning {
@@ -510,7 +573,7 @@
       border-radius: 999px;
       background: rgba(59, 130, 246, 0.18);
       border: 1px solid rgba(59, 130, 246, 0.35);
-      font-size: 0.78rem;
+      font-size: 0.82rem;
       color: #bfdbfe;
       letter-spacing: 0.05em;
       text-transform: uppercase;
@@ -527,9 +590,17 @@
     }
 
     .chart-container {
-      display: flex;
-      flex-direction: column;
-      gap: 0.8rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .chart-container > div {
+      background: rgba(15, 23, 42, 0.55);
+      border-radius: 14px;
+      padding: 1.25rem;
+      border: 1px solid rgba(148, 163, 184, 0.18);
     }
 
     footer.page-footer {
@@ -542,6 +613,10 @@
     }
 
     @media (max-width: 960px) {
+      .chart-container {
+        grid-template-columns: 1fr;
+      }
+      
       header.page-header {
         flex-direction: column;
         gap: 1.5rem;
@@ -562,7 +637,7 @@
 </head>
 <body class="le-theme">
   <header class="page-header">
-    <div>
+    <div style="max-width: 420px;">
       <h1>Nutrient Management</h1>
       <p>Monitor tank health, tune setpoints, and audit nutrient usage alongside calibration-ready dosing analytics.</p>
     </div>
@@ -626,7 +701,7 @@
       <form id="systemConfigForm" style="display: flex; flex-direction: column; gap: 1rem;">
         <div class="split">
           <label>
-            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Hydroponic System</span>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Hydroponic System</span>
             <select name="hydroponicSystem" id="hydroponicSystem" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
               <option value="DWC">Deep Water Culture (DWC)</option>
               <option value="NFT">Nutrient Film Technique (NFT)</option>
@@ -635,18 +710,18 @@
             </select>
           </label>
           <label>
-            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Irrigation Mode</span>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Irrigation Mode</span>
             <select name="irrigationMode" id="irrigationMode" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
               <option value="always_on">Always On</option>
               <option value="cycle">On/Off Cycle</option>
             </select>
           </label>
           <label class="irrigation-cycle-field">
-            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">On Duration (minutes)</span>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">On Duration (minutes)</span>
             <input type="number" name="irrigationOnMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
           </label>
           <label class="irrigation-cycle-field">
-            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Off Duration (minutes)</span>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Off Duration (minutes)</span>
             <input type="number" name="irrigationOffMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
           </label>
           <label style="display: flex; gap: 0.5rem; align-items: center; margin-top: 1.8rem;">
@@ -668,8 +743,8 @@
       <!-- Nutrient Provider & Status -->
       <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
         <div style="flex: 1;">
-          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Nutrient Provider</label>
-          <select id="tank1Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Nutrient Provider</label>
+          <select id="tank1Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100); font-size: 0.82rem;">
             <option value="EZ-GRO FIRE PROFESSIONAL - Veg and Growth" selected>EZ-GRO FIRE PROFESSIONAL - Veg and Growth</option>
             <option value="EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit">EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit</option>
             <option value="General Hydroponics Flora Series">General Hydroponics Flora Series</option>
@@ -692,28 +767,30 @@
       <!-- Collapsible Vegetative Groups Section -->
       <div id="tank1VegGroupsToggle" style="margin-top: 1rem; padding: 0.5rem; background: rgba(34, 197, 94, 0.05); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(34, 197, 94, 0.2);" onclick="toggleVegGroups()">
         <div style="display: flex; align-items: center; justify-content: space-between;">
-          <span style="font-size: 0.875rem; color: var(--neutral-300); font-weight: 500;">
+          <span style="font-size: 0.82rem; color: var(--neutral-300); font-weight: 500;">
             <span id="vegGroupsIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
             <span id="vegGroupsLabel">Show Vegetative Groups</span>
           </span>
         </div>
       </div>
-      <div id="tank1VegGroups" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: rgba(34, 197, 94, 0.1); border-radius: 8px; font-size: 0.875rem; color: var(--neutral-300);"></div>
+      <div id="tank1VegGroups" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: rgba(34, 197, 94, 0.1); border-radius: 8px; font-size: 0.82rem; color: var(--neutral-300);"></div>
 
       <!-- Trending Signals -->
-      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Trending Signals (24 pts)</h3>
-      <div class="chart-container">
-        <div>
-          <div class="metric-label">pH Trend</div>
-          <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="ph"></canvas>
-        </div>
-        <div>
-          <div class="metric-label">EC Trend</div>
-          <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="ec"></canvas>
-        </div>
-        <div>
-          <div class="metric-label">Temperature (°C)</div>
-          <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="temperature"></canvas>
+      <div style="margin-top: 2rem; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 14px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
+        <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 0 0 1.25rem 0;">Trending Signals (24 pts)</h3>
+        <div class="chart-container">
+          <div>
+            <div class="metric-label">pH Trend</div>
+            <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="ph"></canvas>
+          </div>
+          <div>
+            <div class="metric-label">EC Trend</div>
+            <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="ec"></canvas>
+          </div>
+          <div>
+            <div class="metric-label">Temperature (°C)</div>
+            <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="temperature"></canvas>
+          </div>
         </div>
       </div>
 
@@ -723,20 +800,28 @@
       <div class="list" id="tank1RecentDoses"></div>
 
       <!-- Calibration -->
-      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Calibration</h3>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-        <form id="tank1CalibrationForm">
+      <div id="tank1CalibrationToggle" style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: space-between;" onclick="toggleCalibration('tank1')">
+        <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+          <span id="tank1CalibrationIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
+          Calibration
+        </h3>
+        <span style="font-size: 0.82rem; color: var(--neutral-400);">Click to expand</span>
+      </div>
+      <div id="tank1CalibrationContent" style="display: none; margin-top: 1rem;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+          <form id="tank1CalibrationForm">
           <label style="display: block; margin-bottom: 0.75rem;">
-            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Run Time (seconds)</span>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Run Time (seconds)</span>
             <input type="number" step="0.1" min="1" name="calRunTime" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
           </label>
           <label style="display: block; margin-bottom: 0.75rem;">
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Measured Volume (mL)</span>
             <input type="number" step="0.1" min="1" name="calVolume" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
           </label>
-          <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
-        </form>
-        <div class="list" id="tank1CalibrationSummary"></div>
+            <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
+          </form>
+          <div class="list" id="tank1CalibrationSummary"></div>
+        </div>
       </div>
 
       <!-- Concentrate Inventory -->
@@ -744,14 +829,19 @@
       <div class="metric-grid" id="tank1InventoryMetrics"></div>
       <div id="tank1InventoryWarnings"></div>
 
-      <!-- PID Roadmap -->
-      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">PID Roadmap</h3>
-      <p id="tank1PidNotes" style="color: var(--neutral-300); margin-bottom: 1rem;"></p>
-      <div class="list" id="tank1PidSignals"></div>
-
       <!-- Nutrient Composition -->
-      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Nutrient Composition</h3>
-      <div id="tank1NutrientCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;"></div>
+      <div id="tank1NutrientToggle" 
+           style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3);"
+           onclick="toggleNutrientComposition('tank1')">
+        <h3 style="margin: 0; font-size: 1.1rem; color: #93c5fd;">
+          <span id="tank1NutrientIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
+          Nutrient Composition
+        </h3>
+        <span style="font-size: 0.82rem; color: var(--neutral-400);">Click to expand</span>
+      </div>
+      <div id="tank1NutrientContent" style="display: none; margin-top: 1rem;">
+        <div id="tank1NutrientCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;"></div>
+      </div>
     </section>
 
     <!-- Tank 2: Live Fruiting System -->
@@ -761,8 +851,8 @@
       <!-- Nutrient Provider & Status -->
       <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
         <div style="flex: 1;">
-          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Nutrient Provider</label>
-          <select id="tank2Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Nutrient Provider</label>
+          <select id="tank2Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100); font-size: 0.82rem;">
             <option value="EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit" selected>EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit</option>
             <option value="EZ-GRO FIRE PROFESSIONAL - Veg and Growth">EZ-GRO FIRE PROFESSIONAL - Veg and Growth</option>
             <option value="General Hydroponics Flora Series">General Hydroponics Flora Series</option>
@@ -828,22 +918,24 @@
         <div id="tank2SetpointStatus" style="font-size: 0.9rem; color: var(--neutral-300);"></div>
         <div id="tank2AutodoseSummary" style="font-size: 0.85rem; color: var(--neutral-300);"></div>
       </div>
-      <div id="tank2FruitingGroups" style="margin-top: 1rem; padding: 0.75rem; background: rgba(244, 63, 94, 0.1); border-radius: 8px; font-size: 0.875rem; color: var(--neutral-300);"></div>
+      <div id="tank2FruitingGroups" style="margin-top: 1rem; padding: 0.75rem; background: rgba(244, 63, 94, 0.1); border-radius: 8px; font-size: 0.82rem; color: var(--neutral-300);"></div>
 
       <!-- Trending Signals -->
-      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Trending Signals (24 pts)</h3>
-      <div class="chart-container">
-        <div>
-          <div class="metric-label">pH Trend</div>
-          <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="ph"></canvas>
-        </div>
-        <div>
-          <div class="metric-label">EC Trend</div>
-          <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="ec"></canvas>
-        </div>
-        <div>
-          <div class="metric-label">Temperature (°C)</div>
-          <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="temperature"></canvas>
+      <div style="margin-top: 2rem; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 14px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
+        <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 0 0 1.25rem 0;">Trending Signals (24 pts)</h3>
+        <div class="chart-container">
+          <div>
+            <div class="metric-label">pH Trend</div>
+            <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="ph"></canvas>
+          </div>
+          <div>
+            <div class="metric-label">EC Trend</div>
+            <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="ec"></canvas>
+          </div>
+          <div>
+            <div class="metric-label">Temperature (°C)</div>
+            <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="temperature"></canvas>
+          </div>
         </div>
       </div>
 
@@ -853,24 +945,32 @@
       <div class="list" id="tank2RecentDoses"></div>
 
       <!-- Calibration -->
-      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Calibration</h3>
-      <div class="wizard-actions" style="margin-bottom: 1rem;">
-        <button type="button" class="wizard-launch" data-mode="pump" data-tank="tank2">Pump Calibration Wizard</button>
-        <button type="button" class="wizard-launch" data-mode="sensor" data-tank="tank2">Sensor Calibration Wizard</button>
+      <div id="tank2CalibrationToggle" style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: space-between;" onclick="toggleCalibration('tank2')">
+        <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+          <span id="tank2CalibrationIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
+          Calibration
+        </h3>
+        <span style="font-size: 0.82rem; color: var(--neutral-400);">Click to expand</span>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-        <form id="tank2CalibrationForm">
+      <div id="tank2CalibrationContent" style="display: none; margin-top: 1rem;">
+        <div class="wizard-actions" style="margin-bottom: 1rem;">
+          <button type="button" class="wizard-launch" data-mode="pump" data-tank="tank2">Pump Calibration Wizard</button>
+          <button type="button" class="wizard-launch" data-mode="sensor" data-tank="tank2">Sensor Calibration Wizard</button>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+          <form id="tank2CalibrationForm">
           <label style="display: block; margin-bottom: 0.75rem;">
-            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Run Time (seconds)</span>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Run Time (seconds)</span>
             <input type="number" step="0.1" min="1" name="calRunTime" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
           </label>
           <label style="display: block; margin-bottom: 0.75rem;">
-            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Measured Volume (mL)</span>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Measured Volume (mL)</span>
             <input type="number" step="0.1" min="1" name="calVolume" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
           </label>
-          <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
-        </form>
-        <div class="list" id="tank2CalibrationSummary"></div>
+            <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
+          </form>
+          <div class="list" id="tank2CalibrationSummary"></div>
+        </div>
       </div>
 
       <!-- Concentrate Inventory -->
@@ -878,14 +978,19 @@
       <div class="metric-grid" id="tank2InventoryMetrics"></div>
       <div id="tank2InventoryWarnings"></div>
 
-      <!-- PID Roadmap -->
-      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">PID Roadmap</h3>
-      <p id="tank2PidNotes" style="color: var(--neutral-300); margin-bottom: 1rem;"></p>
-      <div class="list" id="tank2PidSignals"></div>
-
       <!-- Nutrient Composition -->
-      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Nutrient Composition</h3>
-      <div id="tank2NutrientCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;"></div>
+      <div id="tank2NutrientToggle" 
+           style="margin-top: 2rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(59, 130, 246, 0.3);"
+           onclick="toggleNutrientComposition('tank2')">
+        <h3 style="margin: 0; font-size: 1.1rem; color: #93c5fd;">
+          <span id="tank2NutrientIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
+          Nutrient Composition
+        </h3>
+        <span style="font-size: 0.82rem; color: var(--neutral-400);">Click to expand</span>
+      </div>
+      <div id="tank2NutrientContent" style="display: none; margin-top: 1rem;">
+        <div id="tank2NutrientCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;"></div>
+      </div>
     </section>
   </main>
 
@@ -1554,7 +1659,7 @@
                 channelField.className = 'wizard-field';
                 channelField.innerHTML = `
                   <label for="wizardPumpChannel">Pump Channel</label>
-                  <select id="wizardPumpChannel" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 10px; padding: 0.75rem 0.9rem; color: var(--neutral-100);">
+                  <select id="wizardPumpChannel" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 10px; padding: 0.75rem 0.9rem; color: var(--neutral-100); font-size: 0.82rem;">
                     <option value="ecMixA">EC Mix A</option>
                     <option value="ecMixB">EC Mix B</option>
                     <option value="phDown">pH Down</option>
@@ -1826,7 +1931,7 @@
             picker.className = 'wizard-field';
             picker.innerHTML = `
               <label for="wizardSensorSelect">Sensor</label>
-              <select id="wizardSensorSelect" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 10px; padding: 0.75rem 0.9rem; color: var(--neutral-100);">
+              <select id="wizardSensorSelect" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 10px; padding: 0.75rem 0.9rem; color: var(--neutral-100); font-size: 0.82rem;">
                 <option value="ph">pH Probe</option>
                 <option value="ec">EC Probe</option>
               </select>
@@ -2758,30 +2863,6 @@
       }
     }
 
-    function renderPidRoadmap(data, tankId) {
-      const notesEl = document.getElementById(`${tankId}PidNotes`);
-      if (notesEl) {
-        const tankData = data?.tanks?.[tankId] || {};
-        notesEl.textContent = tankData?.pid?.notes || 'PID controller disabled.';
-      }
-      
-      const list = document.getElementById(`${tankId}PidSignals`);
-      if (!list) return;
-      list.innerHTML = '';
-      const items = [
-        'Signal: EC, pH, tank temperature (raw + filtered)',
-        'Control: pump runtime per channel, dosing pause state',
-        'Feedback: concentration drawdown, pail depletion trends',
-        'Guardrails: EC < empty threshold, resumed at tap baseline',
-      ];
-      items.forEach((entry) => {
-        const row = document.createElement('div');
-        row.className = 'list-item';
-        row.innerHTML = `<span>${entry}</span>`;
-        list.appendChild(row);
-      });
-    }
-
     function updateDosingStatus(data, tankId) {
       const status = document.getElementById(`${tankId}Status`);
       if (!status) return;
@@ -2836,6 +2917,38 @@
         container.style.display = 'none';
         icon.style.transform = 'rotate(0deg)';
         label.textContent = 'Show Vegetative Groups';
+      }
+    }
+    
+    function toggleCalibration(tankId) {
+      const content = document.getElementById(`${tankId}CalibrationContent`);
+      const icon = document.getElementById(`${tankId}CalibrationIcon`);
+      const toggle = document.getElementById(`${tankId}CalibrationToggle`);
+      
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.style.transform = 'rotate(90deg)';
+        toggle.querySelector('span:last-child').textContent = 'Click to collapse';
+      } else {
+        content.style.display = 'none';
+        icon.style.transform = 'rotate(0deg)';
+        toggle.querySelector('span:last-child').textContent = 'Click to expand';
+      }
+    }
+    
+    function toggleNutrientComposition(tankId) {
+      const content = document.getElementById(`${tankId}NutrientContent`);
+      const icon = document.getElementById(`${tankId}NutrientIcon`);
+      const toggle = document.getElementById(`${tankId}NutrientToggle`);
+      
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.style.transform = 'rotate(90deg)';
+        toggle.querySelector('span:last-child').textContent = 'Click to collapse';
+      } else {
+        content.style.display = 'none';
+        icon.style.transform = 'rotate(0deg)';
+        toggle.querySelector('span:last-child').textContent = 'Click to expand';
       }
     }
     
@@ -2901,7 +3014,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 0.5rem 0; border-bottom: 1px solid rgba(100, 116, 139, 0.2);">
                   <div style="flex: 1;">
                     <div style="font-size: 0.875rem; color: var(--neutral-100); font-weight: 500;">${nutrient.element}</div>
-                    ${nutrient.detail ? `<div style="font-size: 0.75rem; color: var(--neutral-400); margin-top: 0.25rem;">${nutrient.detail}</div>` : ''}
+                    ${nutrient.detail ? `<div style="font-size: 0.82rem; color: var(--neutral-400); margin-top: 0.25rem;">${nutrient.detail}</div>` : ''}
                   </div>
                   <div style="font-size: 0.875rem; font-weight: 600; color: var(--accent-green); white-space: nowrap; margin-left: 1rem;">${nutrient.value}</div>
                 </div>
@@ -3235,7 +3348,6 @@
       renderDosing(state.raw, 'tank1');
       renderCalibration(state.raw, 'tank1');
       renderInventory(state.raw, 'tank1');
-      renderPidRoadmap(state.raw, 'tank1');
       updateDosingStatus(state.raw, 'tank1');
       renderVegetativeGroups();
       renderNutrientCards('tank1', state.raw.tanks.tank1?.nutrientProvider || 'EZ-GRO FIRE PROFESSIONAL - Veg and Growth');
@@ -3248,7 +3360,6 @@
       renderDosing(state.raw, 'tank2');
       renderCalibration(state.raw, 'tank2');
       renderInventory(state.raw, 'tank2');
-      renderPidRoadmap(state.raw, 'tank2');
       updateDosingStatus(state.raw, 'tank2');
       renderFruitingGroups();
       renderNutrientCards('tank2', state.raw.tanks.tank2?.nutrientProvider || 'EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit');
