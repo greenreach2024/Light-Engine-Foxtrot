@@ -2760,7 +2760,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             groupId,
-            currentCrop: group.planId || group.crop,
+            currentCrop: group.plan || group.crop,
             availableCrops,
             targetSeedDate: new Date().toISOString().split('T')[0],
             zoneConditions
