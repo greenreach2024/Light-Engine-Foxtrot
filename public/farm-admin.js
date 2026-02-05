@@ -295,35 +295,30 @@ async function loadDashboardData() {
     try {
         console.log(' Loading dashboard data...');
         
-        // Fetch groups from /api/groups endpoint
-        if (!farmData.groups) {
-            try {
-                const groupsResponse = await fetch(`${API_BASE}/api/groups`, {
-                    headers: {
-                        'Authorization': `Bearer ${currentSession.token}`
-                    }
-                });
-                if (groupsResponse.ok) {
-                    const groupsData = await groupsResponse.json();
-                    farmData.groups = Array.isArray(groupsData) ? groupsData : (groupsData.groups || []);
-                    console.log(`✓ Loaded ${farmData.groups.length} groups from /api/groups`);
-                } else {
-                    console.warn(`⚠ /api/groups returned ${groupsResponse.status}, using empty groups`);
-                    farmData.groups = [];
+        // Fetch inventory data from /api/inventory/current (includes tray/plant counts)
+        let inventoryData = null;
+        try {
+            const inventoryResponse = await fetch(`${API_BASE}/api/inventory/current`, {
+                headers: {
+                    'Authorization': `Bearer ${currentSession.token}`
                 }
-            } catch (err) {
-                console.error('✗ Error fetching /api/groups:', err);
-                farmData.groups = [];
+            });
+            if (inventoryResponse.ok) {
+                inventoryData = await inventoryResponse.json();
+                console.log(`✓ Loaded inventory: ${inventoryData.activeTrays} trays, ${inventoryData.totalPlants} plants`);
+            } else {
+                console.warn(`⚠ /api/inventory/current returned ${inventoryResponse.status}`);
             }
+        } catch (err) {
+            console.error('✗ Error fetching /api/inventory/current:', err);
         }
         
-        const groups = Array.isArray(farmData?.groups) ? farmData.groups : [];
-        const totals = getGroupTotals(groups);
-        const hasGrowData = groups.length > 0 && (totals.trays > 0 || totals.plants > 0);
+        // Update KPI cards with inventory data
+        const hasGrowData = inventoryData && inventoryData.activeTrays > 0;
 
         if (hasGrowData) {
-            document.getElementById('kpi-trays').textContent = totals.trays.toLocaleString();
-            document.getElementById('kpi-plants').textContent = totals.plants.toLocaleString();
+            document.getElementById('kpi-trays').textContent = inventoryData.activeTrays.toLocaleString();
+            document.getElementById('kpi-plants').textContent = inventoryData.totalPlants.toLocaleString();
             document.getElementById('kpi-trays-change').textContent = 'Live grow data';
             document.getElementById('kpi-plants-change').textContent = 'Live grow data';
         } else {
@@ -333,13 +328,22 @@ async function loadDashboardData() {
             document.getElementById('kpi-plants-change').textContent = 'Start your first grow to see live data';
         }
 
-        const nextHarvest = getNextHarvestFromGroups(groups);
+        // Calculate next harvest from byFarm trays data
+        let nextHarvest = null;
+        if (inventoryData?.byFarm?.[0]?.trays) {
+            const trays = inventoryData.byFarm[0].trays;
+            const upcomingTrays = trays.filter(t => t.harvestIn > 0).sort((a, b) => a.harvestIn - b.harvestIn);
+            if (upcomingTrays.length > 0) {
+                const nextTray = upcomingTrays[0];
+                nextHarvest = {
+                    daysUntil: nextTray.harvestIn,
+                    cropName: nextTray.crop || 'Unknown'
+                };
+            }
+        }
+
         if (nextHarvest) {
-            const daysUntil = Math.max(
-                0,
-                Math.ceil((nextHarvest.harvestDate - new Date()) / (1000 * 60 * 60 * 24))
-            );
-            document.getElementById('kpi-harvest').textContent = `${daysUntil}d`;
+            document.getElementById('kpi-harvest').textContent = `${nextHarvest.daysUntil}d`;
             document.getElementById('kpi-harvest-change').textContent = nextHarvest.cropName;
         } else {
             document.getElementById('kpi-harvest').textContent = '--';
