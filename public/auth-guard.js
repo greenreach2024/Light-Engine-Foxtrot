@@ -8,9 +8,12 @@
 
   // Public pages that don't require authentication
   const PUBLIC_PAGES = [
+    '/',
+    '/index.html',
+    '/index.charlie.html',
     '/farm-sales-shop.html',  // Customer-facing online store
-    '/health',                 // System health check
-    '/healthz'                 // Simple health check
+    '/health',                // System health check
+    '/healthz'                // Simple health check
   ];
 
   // Check if current page requires authentication
@@ -23,10 +26,8 @@
     }
     
     // Landing page and farm admin interfaces require auth
-    if (currentPath === '/' || 
-        currentPath.includes('farm-admin') || 
-        currentPath.includes('farm-sales-pos') ||
-        currentPath.includes('index.charlie')) {
+    if (currentPath.includes('farm-admin') || 
+        currentPath.includes('farm-sales-pos')) {
       return true;
     }
     
@@ -85,7 +86,7 @@
   // Redirect to login page
   function redirectToLogin() {
     const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/login.html?return=${returnUrl}`;
+    window.location.href = `/farm-admin-login.html?return=${returnUrl}`;
   }
 
   // Main authentication check

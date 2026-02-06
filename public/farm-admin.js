@@ -32,10 +32,30 @@ function initLogin() {
     
     // Check if user is already logged in
     const session = getSession();
-    if (session && session.token) {
+    // Also verify token exists in localStorage to prevent redirect loop
+    const hasToken = localStorage.getItem('token');
+    if (session && session.token && hasToken) {
         console.log(' Active session found, redirecting to dashboard...');
+        // Track redirect to detect loops
+        const redirectCount = parseInt(sessionStorage.getItem('login_redirect_count') || '0');
+        sessionStorage.setItem('login_redirect_count', String(redirectCount + 1));
         window.location.href = '/LE-farm-admin.html';
         return;
+    } else if (session && !hasToken) {
+        // Clear stale session that lacks corresponding token
+        console.warn('⚠️ Clearing stale session without token');
+        localStorage.removeItem(STORAGE_KEY_SESSION);
+    }
+    
+    // Clear any redirect loop trackers
+    if (sessionStorage.getItem('login_redirect_count')) {
+        const redirectCount = parseInt(sessionStorage.getItem('login_redirect_count') || '0');
+        if (redirectCount > 2) {
+            console.warn('⚠️ Detected potential redirect loop, clearing all auth data');
+            localStorage.removeItem(STORAGE_KEY_SESSION);
+            localStorage.removeItem('token');
+            sessionStorage.removeItem('login_redirect_count');
+        }
     }
     
     // Check for remembered credentials
@@ -54,11 +74,13 @@ function initLogin() {
         form.addEventListener('submit', handleLogin);
     }
     
-    // Auto-fill demo credentials
-    if (window.location.search.includes('demo=true')) {
-        document.getElementById('farmId').value = 'GR-00001';
-        document.getElementById('email').value = 'admin@demo-farm.com';
-        document.getElementById('password').value = 'demo123';
+    // Auto-fill test credentials
+    if (window.location.search.includes('demo=true') || window.location.search.includes('test=true')) {
+        document.getElementById('farmId').value = 'FARM-TEST-WIZARD-001';
+        if (document.getElementById('email')) {
+            document.getElementById('email').value = 'admin@test-farm.com';
+        }
+        document.getElementById('password').value = 'Grow123';
     }
 }
 
@@ -100,7 +122,11 @@ async function initDashboard() {
     // Create a default session only for local/demo environments
     if (!currentSession) {
         if (!allowLocalBypass) {
-            window.location.href = '/login.html';
+            console.warn('⚠️ No valid session found, redirecting to login');
+            // Clear redirect counter and stale data before redirecting
+            sessionStorage.removeItem('login_redirect_count');
+            localStorage.removeItem(STORAGE_KEY_SESSION);
+            window.location.href = '/farm-admin-login.html';
             return;
         }
 
