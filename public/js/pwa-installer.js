@@ -189,30 +189,11 @@ class PWAInstaller {
   
   /**
    * Update online status indicator
+   * Disabled - using main System Status indicator instead
    */
   updateOnlineStatus() {
-    let indicator = document.getElementById('pwa-online-status');
-    
-    if (!indicator) {
-      indicator = document.createElement('div');
-      indicator.id = 'pwa-online-status';
-      indicator.className = 'pwa-online-status';
-      document.body.appendChild(indicator);
-    }
-    
-    if (this.isOnline) {
-      indicator.className = 'pwa-online-status online';
-      indicator.innerHTML = '<span class="status-dot"></span> Online';
-      
-      // Hide after 3 seconds
-      setTimeout(() => {
-        indicator.style.opacity = '0';
-      }, 3000);
-    } else {
-      indicator.className = 'pwa-online-status offline';
-      indicator.innerHTML = '<span class="status-dot"></span> Offline Mode';
-      indicator.style.opacity = '1';
-    }
+    // Disabled: redundant with main communicationStatus indicator
+    return;
   }
   
   /**

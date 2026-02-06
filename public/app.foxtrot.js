@@ -16905,46 +16905,8 @@ async function loadConfig(cfg) {
 // --- Research Mode Integration ---
 
 // --- Forwarder health polling ---
-let FORWARDER_POLL_TIMER = null;
-async function checkForwarderOnce() {
-  try {
-  // const r = await fetch('/forwarder/healthz');
-  // Forwarder health check disabled
-  const r = { ok: false, body: {} };
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const body = await r.json();
-    return { ok: true, body };
-  } catch (e) {
-    return { ok: false, error: e.message || String(e) };
-  }
-}
-
-function startForwarderHealthPolling(intervalMs = 10000) {
-window.startForwarderHealthPolling = startForwarderHealthPolling;
-  // Create status node in header since configChip was removed
-  let host = document.getElementById('forwarderStatus');
-  const parent = document.querySelector('.top-header') || document.body;
-  if (!host) {
-    host = document.createElement('span');
-    host.id = 'forwarderStatus';
-    host.className = 'tiny';
-    host.style.marginLeft = '12px';
-    parent.appendChild(host);
-  }
-  async function tick() {
-    const res = await checkForwarderOnce();
-    if (res.ok) {
-      host.textContent = `Forwarder: OK → ${res.body?.target || ''}`;
-      host.style.color = '#16A34A';
-    } else {
-      host.textContent = `Forwarder: down (${res.error})`;
-      host.style.color = '#EF4444';
-    }
-  }
-  clearInterval(FORWARDER_POLL_TIMER);
-  tick();
-  FORWARDER_POLL_TIMER = setInterval(tick, intervalMs);
-}
+// REMOVED: Redundant with main System Status indicator
+// Forwarder status now included in communicationStatus tooltip
 
 let HEALTHZ_TIMER = 0;
 let HEALTHZ_BACKOFF = 5000;
@@ -17004,19 +16966,7 @@ async function pollHealthz() {
     statusEl.dataset.state = state;
     statusEl.title = tooltip;
 
-    // Update controller target chip (short form: host:port)
-    const ctrlChip = document.getElementById('controllerTargetChip');
-    if (ctrlChip) {
-      const t = (controllerTarget || '').trim();
-      const short = t ? t.replace(/^https?:\/\//, '') : '';
-      ctrlChip.textContent = short ? `CTRL: ${short}` : 'CTRL: not configured';
-      ctrlChip.title = t ? `Controller target: ${t}` : 'Controller target: not configured';
-      ctrlChip.dataset.state = controllerReachable ? 'ok' : 'degraded';
-      // Subtle color cue: green when reachable, gray otherwise
-      ctrlChip.style.borderColor = controllerReachable ? '#16a34a' : '#E5E7EB';
-      ctrlChip.style.color = controllerReachable ? '#065f46' : '#6b7280';
-      ctrlChip.style.background = controllerReachable ? '#dcfce7' : '';
-    }
+    // Controller target info now included in tooltip only
     
     HEALTHZ_BACKOFF = 5000;
   } catch (error) {
@@ -17027,16 +16977,6 @@ async function pollHealthz() {
       statusEl.style.color = '#b91c1c'; // red
       statusEl.dataset.state = 'error';
       statusEl.title = ` Server Offline\n\nUnable to reach the Light Engine Charlie server. The application cannot check system health.\n\nError: ${error?.message || 'Connection failed'}\nAction: Verify server is running and check network connectivity\nImpact: All features unavailable`;
-    }
-    // Indicate unknown controller when server unreachable
-    const ctrlChip = document.getElementById('controllerTargetChip');
-    if (ctrlChip) {
-      ctrlChip.textContent = 'CTRL: unknown';
-      ctrlChip.title = 'Controller target: unknown (server offline)';
-      ctrlChip.dataset.state = 'error';
-      ctrlChip.style.borderColor = '#E5E7EB';
-      ctrlChip.style.color = '#6b7280';
-      ctrlChip.style.background = '';
     }
     HEALTHZ_BACKOFF = Math.min(HEALTHZ_BACKOFF * 2, 60000);
   } finally {
@@ -21799,8 +21739,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   })();
   // Load runtime config and show chip
   await loadConfig();
-  // Start forwarder health polling (shows status near the config chip)
-  try { startForwarderHealthPolling(10000); } catch (e) { console.warn('Failed to start forwarder polling', e); }
+  // Forwarder health polling removed - using consolidated System Status indicator
   
   // Initialize AI features and top card
   initializeTopCard();

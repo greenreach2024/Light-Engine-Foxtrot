@@ -237,7 +237,6 @@
                       class="tiny text-muted top-card__status-text" 
                       style="cursor: help;"
                       title="Loading connection status...">System Online</div>
-                    <div id="controllerTargetChip" class="chip tiny" title="Controller target">CTRL: not configured</div>
                     
                     <!-- Farm Summary Button -->
                     <a 
@@ -251,7 +250,7 @@
                     
                     <!-- Farm Admin Button -->
                     <a 
-                      href="/login.html" 
+                      href="/farm-admin-login.html" 
                       rel="noopener"
                       class="btn btn--secondary" 
                       style="margin-top: 0.75rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
@@ -2915,7 +2914,7 @@
       
       if (!token) {
         console.log('[Dashboard] No token found, redirecting to login');
-        window.location.href = '/login.html';
+        window.location.href = '/farm-admin-login.html';
         return;
       }
       
