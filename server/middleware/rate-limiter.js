@@ -91,14 +91,31 @@ export function startRateLimitCleanup(intervalMs = 60000) {
 }
 
 /**
+ * Clear all rate limit entries (for debugging)
+ */
+export function clearAllRateLimits() {
+  const count = rateLimits.size;
+  rateLimits.clear();
+  console.log(`[RateLimit] Cleared ${count} rate limit entries`);
+  return count;
+}
+
+/**
  * Predefined rate limiters for common use cases
  */
 
 // Strict rate limiter for authentication endpoints
 export const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 login attempts per 15 minutes
+  max: 1000, // 1000 login attempts per 15 minutes (increased for development/edge devices)
   message: 'Too many login attempts, please try again later.',
+  keyGenerator: (req) => {
+    // Key by IP + user agent to allow multiple devices from same network
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const userAgent = req.get('user-agent') || 'unknown';
+    const key = `${ip}:${userAgent.substring(0, 50)}`;
+    return key;
+  },
 });
 
 // Standard rate limiter for API endpoints

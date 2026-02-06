@@ -118,6 +118,9 @@ router.post('/login', async (req, res) => {
   
   try {
     const { farm_id, email, password } = req.body;
+    
+    // Log request for debugging rate limit issues
+    console.log(`[Auth] Login request from ${req.ip} - farm_id: ${farm_id}, email: ${email}, user-agent: ${req.get('user-agent')?.substring(0, 50)}`);
 
     // Edge device mode: Accept login with farm_id + password (email optional)
     const isEdgeDevice = process.env.EDGE_MODE === 'true';
