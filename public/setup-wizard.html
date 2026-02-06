@@ -624,13 +624,13 @@
                 const token = localStorage.getItem('token');
                 if (!token) {
                     alert('Authentication token not found. Please log in again.');
-                    window.location.href = '/login.html';
+                    window.location.href = '/farm-admin-login.html';
                     return;
                 }
 
                 if (!farmData.farmId) {
                     alert('Farm ID not found. Please log in again.');
-                    window.location.href = '/login.html';
+                    window.location.href = '/farm-admin-login.html';
                     return;
                 }
 

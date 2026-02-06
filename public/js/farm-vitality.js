@@ -81,7 +81,12 @@ class VitalityViewManager {
    */
   async fetchVitalityData() {
     try {
-      const response = await fetch('/api/health/vitality');
+      const fallbackUrl = `${window.location.protocol}//${window.location.hostname}:8091/api/health/vitality`;
+      let response = await fetch('/api/health/vitality');
+      
+      if (response.status === 404) {
+        response = await fetch(fallbackUrl);
+      }
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -121,10 +126,23 @@ class VitalityViewManager {
     const timestamp = new Date(this.vitalityData.timestamp);
     document.getElementById('lastUpdated').textContent = timestamp.toLocaleTimeString();
     
-    // Update overall score
+    // Update overall score with smooth transition
     const scoreEl = document.getElementById('overallScore');
-    scoreEl.textContent = this.vitalityData.overall_score;
-    scoreEl.style.color = this.getScoreColor(this.vitalityData.overall_score);
+    const newScore = this.vitalityData.overall_score;
+    const oldScore = scoreEl.textContent;
+    
+    if (oldScore !== newScore.toString()) {
+      // Add transition effect
+      scoreEl.classList.add('updating');
+      setTimeout(() => {
+        scoreEl.textContent = newScore;
+        scoreEl.style.color = this.getScoreColor(newScore);
+      }, 150);
+      setTimeout(() => scoreEl.classList.remove('updating'), 400);
+    } else {
+      scoreEl.textContent = newScore;
+      scoreEl.style.color = this.getScoreColor(newScore);
+    }
     
     // Update freshness indicators
     this.updateFreshnessIndicators();
@@ -280,7 +298,7 @@ class VitalityViewManager {
     
     const centerX = width / 2;
     const centerY = height / 2;
-    const baseRadius = 80;
+    const baseRadius = 150;
     
     // Update master time for coordinated animation
     this.time += 1;
@@ -294,62 +312,76 @@ class VitalityViewManager {
     ];
     
     // Draw organic undulating rings
+    const ringColors = ['#3b82f6', '#10b981', '#8b5cf6', '#06b6d4'];
     components.forEach((component, index) => {
-      const radius = baseRadius + (index * 60);
+      const radius = baseRadius + (index * 90);
       const score = component.score || 0;
-      const baseColor = this.getScoreColor(score);
+      const baseColor = ringColors[index % ringColors.length];
       const freshness = component.data_freshness || { status: 'no_data' };
       
       // Health-based movement with smooth easing
       const healthFactor = score / 100;
       const easedHealth = this.easeOutCubic(healthFactor);
       
-      // Healthy: calm, smooth waves | Unhealthy: urgent, sharp changes
-      const baseFreq = 2 + (1 - easedHealth) * 4; // 2-6 range
-      const baseAmp = 3 + (1 - easedHealth) * 8; // 3-11 range (reduced)
-      const breathSpeed = 0.01 + (1 - easedHealth) * 0.03; // Breathing pace
-      
-      // Smooth rotation with per-ring phase offset
-      const ringRotation = this.rotationAngle * (0.8 + index * 0.15);
-      const breathPhase = Math.sin(this.time * breathSpeed + index) * 0.5 + 0.5;
-      
-      // Draw organic undulating ring
-      const points = 80;
-      ctx.beginPath();
-      
+      // Smooth, liquid ring with traveling bulges (reference style)
+      const ringRotation = this.rotationAngle * (0.6 + index * 0.12);
+      const travelSpeed = 0.012 + (1 - easedHealth) * 0.01;
+      const bulgeAmp = 12 + (1 - easedHealth) * 10;
+      const bulgeSigma = 0.65;
+      const phaseA = this.time * travelSpeed + index * 1.4;
+      const phaseB = this.time * travelSpeed * 0.8 + index * 2.1 + Math.PI;
+      const breath = Math.sin(this.time * 0.015 + index) * (2 + (1 - easedHealth) * 2);
+
+      const points = 120;
+      const ringPoints = [];
+      const ringWidths = [];
+
       for (let i = 0; i <= points; i++) {
         const angle = (i / points) * Math.PI * 2 + ringRotation;
-        
-        // Single wave with breathing modulation
-        const wave = Math.sin(angle * baseFreq + this.time * 0.1);
-        const breathMod = Math.sin(this.time * breathSpeed * 2) * 0.3 + 0.7;
-        const undulation = wave * baseAmp * breathPhase * breathMod;
-        
+
+        const distA = Math.min(
+          Math.abs(angle - phaseA) % (Math.PI * 2),
+          Math.PI * 2 - (Math.abs(angle - phaseA) % (Math.PI * 2))
+        );
+        const distB = Math.min(
+          Math.abs(angle - phaseB) % (Math.PI * 2),
+          Math.PI * 2 - (Math.abs(angle - phaseB) % (Math.PI * 2))
+        );
+
+        const bulgeA = Math.exp(-(distA * distA) / (2 * bulgeSigma * bulgeSigma)) * bulgeAmp;
+        const bulgeB = Math.exp(-(distB * distB) / (2 * (bulgeSigma * 1.2) * (bulgeSigma * 1.2))) * bulgeAmp * 0.7;
+        const microWave = Math.sin(angle * 3 + this.time * 0.03 + index) * (2.2 + (1 - easedHealth) * 2);
+        const undulation = bulgeA + bulgeB + microWave + breath;
+
         const r = radius + undulation;
         const x = centerX + r * Math.cos(angle);
         const y = centerY + r * Math.sin(angle);
-        
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
+
+        const thicknessWave = 0.5 + 0.5 * Math.sin(angle * 2.6 + this.time * 0.06 + index);
+        const thickness = 6 + thicknessWave * 16 + (bulgeA + bulgeB) * 0.35;
+
+        ringPoints.push({ x, y, angle });
+        ringWidths.push(thickness);
       }
-      ctx.closePath();
-      
-      // Soft gradient with subtle shimmer
-      const gradient = ctx.createRadialGradient(centerX, centerY, radius - 8, centerX, centerY, radius + 8);
-      
-      const shimmerPhase = Math.sin(this.time * 0.05 + index) * 0.3 + 0.7;
-      gradient.addColorStop(0, baseColor + 'ee');
-      gradient.addColorStop(0.4, baseColor + Math.floor(shimmerPhase * 255).toString(16).padStart(2, '0'));
-      gradient.addColorStop(0.6, this.getIridescentShift(baseColor, index, this.time * 0.03));
-      gradient.addColorStop(1, baseColor + '66');
-      
+
+      // Iridescent membrane gradient with rotating color shift
+      const colorShift = this.time * 0.01 + index * 0.6;
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(colorShift);
+      ctx.translate(-centerX, -centerY);
+
+      const gradient = ctx.createLinearGradient(centerX - radius, centerY, centerX + radius, centerY);
+      gradient.addColorStop(0, '#60a5fa');
+      gradient.addColorStop(0.35, '#34d399');
+      gradient.addColorStop(0.7, '#c084fc');
+      gradient.addColorStop(1, '#22d3ee');
+
       ctx.strokeStyle = gradient;
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 14;
       ctx.lineCap = 'round';
-      
+      ctx.lineJoin = 'round';
+
       // Apply staleness visual
       if (freshness.stale) {
         ctx.globalAlpha = 0.5;
@@ -358,57 +390,50 @@ class VitalityViewManager {
         ctx.globalAlpha = 0.9;
         ctx.setLineDash([]);
       }
-      
+
+      // Soft glow halo
+      ctx.shadowBlur = 42;
+      ctx.shadowColor = baseColor;
+      ctx.beginPath();
+      ringPoints.forEach((pt, idx) => {
+        if (idx === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.closePath();
       ctx.stroke();
-      
-      // Pulsing glow for healthy rings
-      if (healthFactor > 0.7) {
-        const glowStrength = (Math.sin(this.time * 0.08 + index) * 0.3 + 0.5) * easedHealth;
-        ctx.globalAlpha = glowStrength * 0.4;
-        ctx.strokeStyle = baseColor;
-        ctx.lineWidth = 14;
+
+      // Silky membrane with variable thickness
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.95;
+      ctx.strokeStyle = gradient;
+
+      for (let i = 1; i < ringPoints.length; i++) {
+        const prev = ringPoints[i - 1];
+        const curr = ringPoints[i];
+        ctx.lineWidth = ringWidths[i];
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(curr.x, curr.y);
         ctx.stroke();
       }
-      
+      // Close the loop with variable thickness
+      const first = ringPoints[0];
+      const last = ringPoints[ringPoints.length - 1];
+      ctx.lineWidth = ringWidths[0];
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(first.x, first.y);
+      ctx.stroke();
+
+      ctx.restore();
+
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
       
-      // Label and Score on right side
-      const labelX = width - 180;
-      const labelY = 150 + (index * 140);
-      
-      ctx.fillStyle = '#e5e7eb';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(component.label, labelX, labelY);
-      
-      // Score with color
-      ctx.fillStyle = baseColor;
-      ctx.font = 'bold 32px sans-serif';
-      ctx.fillText(score, labelX, labelY + 35);
-      
-      // Freshness indicator dot
-      ctx.fillStyle = this.getFreshnessColor(freshness.status);
-      ctx.beginPath();
-      ctx.arc(labelX + 60, labelY + 20, 5, 0, Math.PI * 2);
-      ctx.fill();
+      // No text overlays for rings-only display
     });
     
-    // Center: Overall score
-    ctx.fillStyle = '#1a2332';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, baseRadius - 50, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.fillStyle = this.getScoreColor(this.vitalityData.overall_score);
-    ctx.font = 'bold 48px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(this.vitalityData.overall_score, centerX, centerY - 10);
-    
-    ctx.fillStyle = '#9ca3af';
-    ctx.font = '16px sans-serif';
-    ctx.fillText('Farm Health', centerX, centerY + 25);
+    // No center score for rings-only display
     
     // Continue animation
     this.animationFrame = requestAnimationFrame(() => this.animateRingsView(canvas));
@@ -624,12 +649,6 @@ class VitalityViewManager {
       { key: 'operations', label: 'Systems', ...this.vitalityData.components.operations }
     ];
     
-    // Draw title
-    ctx.fillStyle = '#8b5cf6';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Farm Friends', width / 2, 50);
-    
     // Grid layout: 2x2
     const cols = 2;
     const rows = 2;
@@ -643,7 +662,8 @@ class VitalityViewManager {
       const centerY = 100 + cellHeight * row + cellHeight / 2;
       
       // Draw blob and store position
-      const blobSize = this.drawBlob(ctx, component, centerX, centerY, index);
+      const maxRadius = Math.min(cellWidth, cellHeight) * 0.34;
+      const blobSize = this.drawBlob(ctx, component, centerX, centerY, index, maxRadius);
       
       // Store blob position for click detection
       this.blobPositions.push({
@@ -667,44 +687,46 @@ class VitalityViewManager {
   /**
    * Draw individual blob creature
    */
-  drawBlob(ctx, component, x, y, index) {
+  drawBlob(ctx, component, x, y, index, maxRadius) {
     const score = component.score || 0;
-    const baseColor = this.getScoreColor(score);
+    const palette = ['#3b82f6', '#10b981', '#8b5cf6', '#06b6d4'];
+    const baseColor = palette[index % palette.length];
     const freshness = component.data_freshness || { status: 'no_data' };
     
     // Determine emotion based on score
     const emotion = score >= 85 ? 'happy' : score >= 50 ? 'neutral' : 'sad';
     const healthFactor = score / 100;
     
-    // Smooth floating with easing
-    const floatPhase = (this.time * 0.03 + index * Math.PI / 2) % (Math.PI * 2);
+    // Smooth floating with controlled motion
+    const floatPhase = (this.time * 0.035 + index * Math.PI / 2) % (Math.PI * 2);
     const easedFloat = this.easeInOutCubic(Math.sin(floatPhase) * 0.5 + 0.5);
-    const floatOffset = (easedFloat - 0.5) * 25;
+    const floatOffset = (easedFloat - 0.5) * Math.min(28, maxRadius * 0.3);
     
-    // Squash and stretch based on float velocity
-    const velocity = Math.cos(floatPhase) * 0.15;
-    const squash = 1 - Math.abs(velocity) * 0.3;
+    // Subtle squash and stretch for a rounder feel
+    const velocity = Math.cos(floatPhase) * 0.2;
+    const squash = 1 - Math.abs(velocity) * 0.25;
     const stretch = 1 + Math.abs(velocity) * 0.2;
     
     const blobY = y + floatOffset;
     
-    // Size based on health with breathing
+    // Size based on health with smooth breathing animation
     const breathScale = Math.sin(this.time * 0.04 + index) * 0.08 + 1;
-    const baseSize = (55 + healthFactor * 35) * breathScale;
+    const targetSize = (80 + healthFactor * 70) * breathScale;
+    const baseSize = Math.min(targetSize, maxRadius);
     
     // Draw blob body with squash/stretch
     ctx.save();
     ctx.translate(x, blobY);
     ctx.scale(stretch, squash);
     
-    // Single smooth circle with subtle wobble
-    const wobbleAmt = (1 - healthFactor) * 8 + 2;
-    const wobblePoints = 16;
+    // Smooth blob with organic wobble (more blob-like)
+    const wobbleAmt = (1 - healthFactor) * 10 + 4;
+    const wobblePoints = 28;
     
     ctx.beginPath();
     for (let i = 0; i <= wobblePoints; i++) {
       const angle = (i / wobblePoints) * Math.PI * 2;
-      const wobble = Math.sin(angle * 3 + this.time * 0.1 + index) * wobbleAmt;
+      const wobble = Math.sin(angle * 3 + this.time * 0.08 + index) * wobbleAmt;
       const r = baseSize + wobble;
       const px = r * Math.cos(angle);
       const py = r * Math.sin(angle);
@@ -714,18 +736,42 @@ class VitalityViewManager {
     }
     ctx.closePath();
     
-    // Fill blob with gradient
-    const gradient = ctx.createRadialGradient(0, -20, 0, 0, 0, baseSize);
+    // Fill blob with iridescent gradient
+    const shimmerColor = this.getIridescentShift(baseColor, index, this.time * 0.02);
+    const gradient = ctx.createRadialGradient(-baseSize * 0.15, -baseSize * 0.25, baseSize * 0.2, 0, 0, baseSize * 1.05);
     gradient.addColorStop(0, baseColor + 'ff');
-    gradient.addColorStop(0.7, baseColor + 'cc');
+    gradient.addColorStop(0.45, shimmerColor);
     gradient.addColorStop(1, baseColor + '88');
+    ctx.shadowBlur = 32;
+    ctx.shadowColor = baseColor;
     ctx.fillStyle = gradient;
     ctx.fill();
-    
-    // Outline
-    ctx.strokeStyle = baseColor;
-    ctx.lineWidth = 3;
+
+    // GLOSSY HIGHLIGHT (silky membrane)
+    const highlightSize = baseSize * 0.38;
+    const highlightGradient = ctx.createRadialGradient(
+      -baseSize * 0.25, -baseSize * 0.35, 0,
+      -baseSize * 0.25, -baseSize * 0.35, highlightSize
+    );
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+    highlightGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = highlightGradient;
+    ctx.beginPath();
+    ctx.ellipse(-baseSize * 0.25, -baseSize * 0.35, highlightSize, highlightSize * 0.75, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Silky membrane outline (soft)
+    ctx.strokeStyle = shimmerColor;
+    ctx.lineWidth = 4;
     ctx.stroke();
+
+    ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = baseColor;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
     
     // Draw face based on emotion
     this.drawBlobFace(ctx, emotion, baseSize, freshness.stale);
@@ -759,79 +805,95 @@ class VitalityViewManager {
    */
   drawBlobFace(ctx, emotion, size, isStale) {
     const eyeY = -size * 0.2;
-    const eyeSpacing = size * 0.3;
-    const eyeSize = size * 0.12;
+    const eyeSpacing = size * 0.35; // Was 0.3, wider spacing
+    const eyeSize = size * 0.18; // Was 0.12, 50% BIGGER eyes for cute factor
     
-    // Eyes
-    ctx.fillStyle = isStale ? '#6b7280' : '#1a2332';
+    // Eyes (glossy, iridescent)
+    const irisLight = isStale ? '#9ca3af' : '#e0f2fe';
+    const irisDark = isStale ? '#6b7280' : '#a855f7';
+    const pupilColor = isStale ? '#4b5563' : '#0f172a';
+    const eyeWhite = isStale ? 'rgba(229, 231, 235, 0.6)' : 'rgba(255, 255, 255, 0.9)';
+
+    const drawEye = (ex, ey, mood) => {
+      // Eyeball
+      ctx.fillStyle = eyeWhite;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, eyeSize * 0.95, eyeSize * 0.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Iris
+      const irisGradient = ctx.createRadialGradient(
+        ex - eyeSize * 0.25,
+        ey - eyeSize * 0.25,
+        eyeSize * 0.1,
+        ex,
+        ey,
+        eyeSize * 0.7
+      );
+      irisGradient.addColorStop(0, irisLight);
+      irisGradient.addColorStop(1, irisDark);
+      ctx.fillStyle = irisGradient;
+      ctx.beginPath();
+      ctx.arc(ex, ey, eyeSize * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pupil
+      ctx.fillStyle = pupilColor;
+      ctx.beginPath();
+      ctx.arc(ex, ey, eyeSize * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Highlights
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.arc(ex - eyeSize * 0.2, ey - eyeSize * 0.2, eyeSize * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.beginPath();
+      ctx.arc(ex + eyeSize * 0.12, ey + eyeSize * 0.1, eyeSize * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Mood eyelid accents
+      if (mood === 'sad') {
+        ctx.strokeStyle = isStale ? '#6b7280' : '#1a2332';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(ex - eyeSize * 0.9, ey - eyeSize * 0.2);
+        ctx.quadraticCurveTo(ex, ey - eyeSize * 0.55, ex + eyeSize * 0.9, ey - eyeSize * 0.2);
+        ctx.stroke();
+      } else if (mood === 'happy') {
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(ex - eyeSize * 0.85, ey + eyeSize * 0.35);
+        ctx.quadraticCurveTo(ex, ey + eyeSize * 0.55, ex + eyeSize * 0.85, ey + eyeSize * 0.35);
+        ctx.stroke();
+      }
+    };
+
+    drawEye(-eyeSpacing, eyeY, emotion);
+    drawEye(eyeSpacing, eyeY, emotion);
     
-    if (emotion === 'sad') {
-      // Sad eyes (downturned)
-      ctx.beginPath();
-      ctx.arc(-eyeSpacing, eyeY - 5, eyeSize * 0.7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(eyeSpacing, eyeY - 5, eyeSize * 0.7, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Sad eyebrows
-      ctx.strokeStyle = '#1a2332';
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-eyeSpacing - 10, eyeY - 15);
-      ctx.lineTo(-eyeSpacing + 10, eyeY - 12);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(eyeSpacing - 10, eyeY - 12);
-      ctx.lineTo(eyeSpacing + 10, eyeY - 15);
-      ctx.stroke();
-    } else if (emotion === 'neutral') {
-      // Neutral eyes (circles)
-      ctx.beginPath();
-      ctx.arc(-eyeSpacing, eyeY, eyeSize, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(eyeSpacing, eyeY, eyeSize, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      // Happy eyes (sparkly)
-      ctx.beginPath();
-      ctx.arc(-eyeSpacing, eyeY, eyeSize, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(eyeSpacing, eyeY, eyeSize, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Sparkles
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(-eyeSpacing - 4, eyeY - 4, eyeSize * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(eyeSpacing - 4, eyeY - 4, eyeSize * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    
-    // Mouth
-    const mouthY = size * 0.2;
-    const mouthWidth = size * 0.4;
+    // Mouth - BIGGER and more expressive
+    const mouthY = size * 0.25;
+    const mouthWidth = size * 0.45; // Was 0.4, slightly wider
     
     ctx.strokeStyle = isStale ? '#6b7280' : '#1a2332';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5; // Was 4, thicker for cartoon style
     ctx.lineCap = 'round';
     ctx.beginPath();
     
     if (emotion === 'sad') {
-      // Sad mouth (frown)
-      ctx.arc(0, mouthY + 20, mouthWidth, 0.2 * Math.PI, 0.8 * Math.PI);
+      // Sad mouth (BIG frown)
+      ctx.arc(0, mouthY + 25, mouthWidth * 1.1, 0.2 * Math.PI, 0.8 * Math.PI);
     } else if (emotion === 'neutral') {
       // Neutral mouth (straight line)
       ctx.moveTo(-mouthWidth, mouthY);
       ctx.lineTo(mouthWidth, mouthY);
     } else {
-      // Happy mouth (smile)
-      ctx.arc(0, mouthY - 10, mouthWidth, 0.2 * Math.PI, 0.8 * Math.PI, true);
+      // Happy mouth (BIG smile)
+      ctx.arc(0, mouthY - 15, mouthWidth * 1.2, 0.15 * Math.PI, 0.85 * Math.PI, true);
     }
     
     ctx.stroke();

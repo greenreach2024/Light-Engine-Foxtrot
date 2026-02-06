@@ -55,6 +55,7 @@ from backend.ai_vision import router as ai_vision_router
 from backend.farm_sales import router as farm_sales_router
 from backend.wholesale_auth import router as wholesale_auth_router
 from backend.wholesale_orders import router as wholesale_orders_router
+from backend.production_planning import router as planning_router
 from backend.automation import AutomationEngine, lux_balancing_rule, occupancy_rule
 from backend.config import EnvironmentConfig, LightingFixture, load_config
 from backend.device_discovery import (
@@ -261,6 +262,10 @@ LOGGER.info(" Authentication routes loaded (register, login, password reset)")
 # Inventory + forecasting routes
 app.include_router(inventory_router)
 LOGGER.info(" Inventory routes loaded (trays, placements, rollups)")
+
+# Production Planning (demand forecast, schedules, plans)
+app.include_router(planning_router)
+LOGGER.info(" Production planning routes loaded (forecast, schedules, plans)")
 
 # Advanced Inventory Management (Enterprise ERP)
 app.include_router(inventory_management_router, prefix="/api/inventory", tags=["inventory-management"])

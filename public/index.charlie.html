@@ -64,49 +64,47 @@
       backdrop-filter: blur(10px);
     }
     
-    .status-icon {
-      font-size: 1.5rem;
-      margin-bottom: 0.5rem;
-      color: #86efac;
-    }
-    
     .status-text {
       color: #86efac;
       font-weight: 600;
       font-size: 1.1rem;
     }
     
+    .category-section {
+      margin-bottom: 3rem;
+    }
+    
+    .category-header {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #60a5fa;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    
     .apps-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 1.5rem;
-      margin-top: 2rem;
     }
     
     .app-card {
       background: rgba(30, 41, 59, 0.6);
       border: 2px solid rgba(59, 130, 246, 0.2);
-      border-radius: 16px;
-      padding: 2rem;
+      border-radius: 12px;
+      padding: 1.5rem;
       text-decoration: none;
       transition: all 0.3s ease;
       display: block;
       backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
     
     .app-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(59, 130, 246, 0.4);
-      border-color: #3b82f6;
-      background: rgba(30, 41, 59, 0.8);
-    }
-    
-    .app-icon {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
-      display: block;
-      color: #60a5fa;
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+      border-color: rgba(59, 130, 246, 0.5);
     }
     
     .app-title {
@@ -150,70 +148,71 @@
   
   <div class="container">
     <div class="status">
-      <div class="status-icon">✓</div>
       <div class="status-text">System Online - All Services Running</div>
     </div>
     
-    <div class="apps-grid">
-      <a href="/views/farm-summary.html" class="app-card">
-        <span class="app-icon">📋</span>
-        <div class="app-title">Farm Summary</div>
-        <div class="app-description">Overview of farm operations, inventory, and key metrics</div>
-      </a>
-      
-      <a href="/farm-admin.html" class="app-card">
-        <span class="app-icon">🌱</span>
-        <div class="app-title">Farm Admin</div>
-        <div class="app-description">Manage farm operations, automation, and environmental controls</div>
-      </a>
-      
-      <a href="/LE-dashboard.html" class="app-card">
-        <span class="app-icon">⚙️</span>
-        <div class="app-title">Dashboard Setup</div>
-        <div class="app-description">Configure rooms, zones, groups, and automation schedules</div>
-      </a>
-      
-      <a href="/LE-dashboard.html?view=inventory" class="app-card">
-        <span class="app-icon">📦</span>
-        <div class="app-title">Inventory</div>
-        <div class="app-description">Track plants, trays, and harvest inventory</div>
-      </a>
-      
-      <a href="/wholesale.html" class="app-card">
-        <span class="app-icon">🏪</span>
-        <div class="app-title">Wholesale</div>
-        <div class="app-description">Manage wholesale orders and network marketplace</div>
-      </a>
-      
-      <a href="/farm-sales-pos.html" class="app-card">
-        <span class="app-icon">💳</span>
-        <div class="app-title">POS Terminal</div>
-        <div class="app-description">Point-of-sale system for in-person farm store and market sales</div>
-      </a>
-      
-      <a href="/farm-sales-shop.html" class="app-card">
-        <span class="app-icon">🛒</span>
-        <div class="app-title">Online Store</div>
-        <div class="app-description">Customer-facing online shop for browsing and purchasing products</div>
-      </a>
-      
-      <a href="/activity-hub-qr.html" class="app-card">
-        <span class="app-icon">📱</span>
-        <div class="app-title">Activity Hub</div>
-        <div class="app-description">Track and manage farm activities with QR-based workflows</div>
-      </a>
-      
-      <a href="/LE-billing.html" class="app-card">
-        <span class="app-icon">💰</span>
-        <div class="app-title">Billing</div>
-        <div class="app-description">Manage subscription, payment methods, and invoices</div>
-      </a>
-      
-      <a href="/health-dashboard.html" class="app-card">
-        <span class="app-icon">📊</span>
-        <div class="app-title">System Health</div>
-        <div class="app-description">View detailed system status and performance metrics</div>
-      </a>
+    <!-- Farm Monitoring -->
+    <div class="category-section">
+      <div class="category-header">Farm Monitoring</div>
+      <div class="apps-grid">
+        <a href="/views/farm-summary.html" class="app-card">
+          <div class="app-title">Farm Summary</div>
+          <div class="app-description">Overview of farm operations, inventory, and key metrics</div>
+        </a>
+        
+        <a href="/LE-dashboard.html" class="app-card">
+          <div class="app-title">Setup/Update</div>
+          <div class="app-description">Configure rooms, zones, groups, and automation schedules</div>
+        </a>
+        
+        <a href="/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Activity Hub</div>
+          <div class="app-description">Track and manage farm activities with QR-based workflows</div>
+        </a>
+        
+        <a href="/views/nutrient-management.html" class="app-card">
+          <div class="app-title">Nutrient Management</div>
+          <div class="app-description">Monitor and manage nutrient levels, EC, and pH</div>
+        </a>
+      </div>
+    </div>
+    
+    <!-- Inventory Management -->
+    <div class="category-section">
+      <div class="category-header">Inventory Management</div>
+      <div class="apps-grid">
+        <a href="/LE-dashboard.html?view=inventory" class="app-card">
+          <div class="app-title">Farm Inventory</div>
+          <div class="app-description">Track plants, trays, and harvest inventory</div>
+        </a>
+      </div>
+    </div>
+    
+    <!-- Sales -->
+    <div class="category-section">
+      <div class="category-header">Sales</div>
+      <div class="apps-grid">
+        <a href="/farm-sales-pos.html" class="app-card">
+          <div class="app-title">POS</div>
+          <div class="app-description">Point-of-sale system for in-person farm store and market sales</div>
+        </a>
+        
+        <a href="/wholesale.html" class="app-card">
+          <div class="app-title">Wholesale</div>
+          <div class="app-description">Manage wholesale orders and network marketplace</div>
+        </a>
+      </div>
+    </div>
+    
+    <!-- Admin -->
+    <div class="category-section">
+      <div class="category-header">Admin</div>
+      <div class="apps-grid">
+        <a href="/farm-admin.html" class="app-card">
+          <div class="app-title">Admin</div>
+          <div class="app-description">Manage farm operations, automation, and environmental controls</div>
+        </a>
+      </div>
     </div>
   </div>
   

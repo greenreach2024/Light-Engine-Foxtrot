@@ -10,6 +10,17 @@
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2026-02-04">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <style>
+    :root {
+      --card-bg: rgba(30, 41, 59, 0.72);
+      --card-border: rgba(59, 130, 246, 0.45);
+      --neutral-100: #f5f5f5;
+      --neutral-300: #d4d4d8;
+      --neutral-400: #a1a1aa;
+      --neutral-500: #71717a;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #22d3ee;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -34,6 +45,9 @@
       justify-content: space-between;
       align-items: center;
       gap: 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
     .page-header h1 {
@@ -467,6 +481,17 @@
       resize: vertical;
     }
 
+    #systemConfigCard select,
+    #tank1Card select {
+      color: var(--neutral-300) !important;
+    }
+
+    #systemConfigCard select option,
+    #tank1Card select option {
+      color: var(--neutral-300) !important;
+      background: rgba(30, 41, 59, 0.95);
+    }
+
     form {
       display: flex;
       flex-direction: column;
@@ -663,6 +688,7 @@
           </button>
           <div class="dropdown-menu">
             <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="http://localhost:8091/farm-vitality.html" class="dropdown-item">Farm Vitality Dashboard</a>
             <a href="nutrient-management.html" class="dropdown-item active">Nutrient Management</a>
             <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
           </div>
@@ -702,7 +728,7 @@
         <div class="split">
           <label>
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Hydroponic System</span>
-            <select name="hydroponicSystem" id="hydroponicSystem" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+            <select name="hydroponicSystem" id="hydroponicSystem" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-300); font-size: 0.82rem;">
               <option value="DWC">Deep Water Culture (DWC)</option>
               <option value="NFT">Nutrient Film Technique (NFT)</option>
               <option value="LPA">Low Pressure Aeroponics</option>
@@ -711,7 +737,7 @@
           </label>
           <label>
             <span style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Irrigation Mode</span>
-            <select name="irrigationMode" id="irrigationMode" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+            <select name="irrigationMode" id="irrigationMode" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-300); font-size: 0.82rem;">
               <option value="always_on">Always On</option>
               <option value="cycle">On/Off Cycle</option>
             </select>
@@ -744,7 +770,7 @@
       <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
         <div style="flex: 1;">
           <label style="display: block; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--neutral-300);">Nutrient Provider</label>
-          <select id="tank1Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100); font-size: 0.82rem;">
+          <select id="tank1Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-300); font-size: 0.82rem;">
             <option value="EZ-GRO FIRE PROFESSIONAL - Veg and Growth" selected>EZ-GRO FIRE PROFESSIONAL - Veg and Growth</option>
             <option value="EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit">EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit</option>
             <option value="General Hydroponics Flora Series">General Hydroponics Flora Series</option>
@@ -764,6 +790,52 @@
       <!-- Setpoints & Targets (Auto-calculated) -->
       <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Setpoints & Targets <small style="color: var(--neutral-400); font-weight: 400;">(Auto-calculated from vegetative groups)</small></h3>
       <div class="metric-grid" id="tank1Setpoints"></div>
+      <div id="tank1AutodoseControls" style="margin-top: 1.5rem; padding: 1.25rem; border-radius: 14px; border: 1px solid var(--card-border); background: rgba(15, 23, 42, 0.55); display: flex; flex-direction: column; gap: 1rem;">
+        <h4 style="font-size: 1rem; color: var(--accent-cyan); margin-bottom: 0.25rem;">Autodose Controls</h4>
+        <form id="tank1SetpointForm" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="form-row">
+            <label>
+              <span>pH Target</span>
+              <input type="number" name="phTarget" step="0.01" min="4" max="7.5" required />
+            </label>
+            <label>
+              <span>pH Tolerance</span>
+              <input type="number" name="phTolerance" step="0.01" min="0.05" max="1" required />
+            </label>
+            <label style="display: flex; gap: 0.5rem; align-items: center;">
+              <span>Autodose Enabled</span>
+              <input type="checkbox" name="autodoseEnabled" style="width: auto;" />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>EC Target (µS/cm)</span>
+              <input type="number" name="ecTarget" step="1" min="100" max="2500" required />
+            </label>
+            <label>
+              <span>EC Tolerance (µS/cm)</span>
+              <input type="number" name="ecTolerance" step="1" min="5" max="500" required />
+            </label>
+            <label>
+              <span>Min Dose Interval (sec)</span>
+              <input type="number" name="minDoseIntervalSec" step="1" min="30" max="3600" required />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>EC Dose Duration (sec)</span>
+              <input type="number" name="ecDoseSeconds" step="0.1" min="0.5" max="20" required />
+            </label>
+            <label>
+              <span>pH Down Duration (sec)</span>
+              <input type="number" name="phDownDoseSeconds" step="0.1" min="0.5" max="5" required />
+            </label>
+          </div>
+          <button type="submit" style="padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 10px; color: white; font-weight: 600; cursor: pointer;">Push Setpoints to Doser</button>
+        </form>
+        <div id="tank1SetpointStatus" style="font-size: 0.9rem; color: var(--neutral-300);"></div>
+        <div id="tank1AutodoseSummary" style="font-size: 0.85rem; color: var(--neutral-300);"></div>
+      </div>
       <!-- Collapsible Vegetative Groups Section -->
       <div id="tank1VegGroupsToggle" style="margin-top: 1rem; padding: 0.5rem; background: rgba(34, 197, 94, 0.05); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(34, 197, 94, 0.2);" onclick="toggleVegGroups()">
         <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -808,6 +880,10 @@
         <span style="font-size: 0.82rem; color: var(--neutral-400);">Click to expand</span>
       </div>
       <div id="tank1CalibrationContent" style="display: none; margin-top: 1rem;">
+        <div class="wizard-actions" style="margin-bottom: 1rem;">
+          <button type="button" class="wizard-launch" data-mode="pump" data-tank="tank1">Pump Calibration Wizard</button>
+          <button type="button" class="wizard-launch" data-mode="sensor" data-tank="tank1">Sensor Calibration Wizard</button>
+        </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
           <form id="tank1CalibrationForm">
           <label style="display: block; margin-bottom: 0.75rem;">
@@ -1136,7 +1212,10 @@
         fruitingGroups: [],
         tank2EC: 1.6,
       },
-      autodose: { ...DEFAULT_AUTODOSE },
+      autodose: {
+        tank1: { ...DEFAULT_AUTODOSE },
+        tank2: { ...DEFAULT_AUTODOSE }
+      },
       system: JSON.parse(JSON.stringify(DEFAULT_SYSTEM_CONFIG)),
       history: {
         tank2: {
@@ -2415,7 +2494,8 @@
       if (!snapshot || typeof snapshot !== 'object') return;
       ensureHistoryBuffers();
       state.snapshot = snapshot;
-      state.autodose = extractAutodoseConfig(snapshot, fallbackDoc);
+      state.autodose.tank2 = extractAutodoseConfig(snapshot, fallbackDoc);
+      state.autodose.tank1 = { ...DEFAULT_AUTODOSE };
 
       const telemetry = snapshot.telemetry || {};
       const observedAt = snapshot.observedAt
@@ -2470,20 +2550,20 @@
           ...snapshot.dosing,
           history: Array.isArray(snapshot.dosing.history) ? snapshot.dosing.history.slice() : (tank2Prev.dosing?.history || [])
         } : (tank2Prev.dosing || {}),
-        autodose: { ...state.autodose }
+        autodose: { ...state.autodose.tank2 }
       };
 
-      if (Number.isFinite(state.autodose.phTarget)) {
-        tank2.phSetpoint = state.autodose.phTarget;
+      if (Number.isFinite(state.autodose.tank2.phTarget)) {
+        tank2.phSetpoint = state.autodose.tank2.phTarget;
       }
-      if (Number.isFinite(state.autodose.phTolerance)) {
-        tank2.phTolerance = state.autodose.phTolerance;
+      if (Number.isFinite(state.autodose.tank2.phTolerance)) {
+        tank2.phTolerance = state.autodose.tank2.phTolerance;
       }
-      if (Number.isFinite(state.autodose.ecTarget)) {
-        tank2.ecSetpoint = state.autodose.ecTarget;
+      if (Number.isFinite(state.autodose.tank2.ecTarget)) {
+        tank2.ecSetpoint = state.autodose.tank2.ecTarget;
       }
-      if (Number.isFinite(state.autodose.ecTolerance)) {
-        tank2.ecTolerance = state.autodose.ecTolerance;
+      if (Number.isFinite(state.autodose.tank2.ecTolerance)) {
+        tank2.ecTolerance = state.autodose.tank2.ecTolerance;
       }
 
       const calibrationData = extractCalibrationData(snapshot.calibration, fallbackDoc?.calibration, tank2Prev.calibration);
@@ -2604,7 +2684,7 @@
       root.innerHTML = '';
       
       const tankData = data?.tanks?.[tankId] || {};
-      const autodose = tankData?.autodose || state.autodose || DEFAULT_AUTODOSE;
+      const autodose = tankData?.autodose || state.autodose[tankId] || DEFAULT_AUTODOSE;
       const items = [];
 
       items.push({
@@ -2871,7 +2951,7 @@
       const ec = Number(tankData?.sensors?.ec?.current);
       const emptyThreshold = Number(tankData?.emptyThreshold) || 0;
       const tapBaseline = Number(tankData?.tapBaseline) || 0;
-      const autodoseConfig = tankData?.autodose || state.autodose || DEFAULT_AUTODOSE;
+      const autodoseConfig = tankData?.autodose || state.autodose[tankId] || DEFAULT_AUTODOSE;
       
       if (!Number.isFinite(ec)) {
         status.style.borderColor = 'rgba(59, 130, 246, 0.35)';
@@ -3045,10 +3125,10 @@
       }
     }
 
-    function populateSetpointForm() {
-      const form = document.getElementById('tank2SetpointForm');
-      if (!form) return;
-      const cfg = state.autodose || DEFAULT_AUTODOSE;
+    function populateSetpointForm(tankId = 'tank2') {
+      const form = document.getElementById(`${tankId}SetpointForm`);
+      if (!return;
+      const cfg = state.autodose[tankId] || DEFAULT_AUTODOSE;
       fillInputNumber(form.phTarget, cfg.phTarget, 2);
       fillInputNumber(form.phTolerance, cfg.phTolerance, 2);
       fillInputNumber(form.ecTarget, cfg.ecTarget, 0);
@@ -3061,10 +3141,10 @@
       }
     }
 
-    function renderAutodoseSummary() {
-      const summary = document.getElementById('tank2AutodoseSummary');
+    function renderAutodoseSummary(tankId = 'tank2') {
+      const summary = document.getElementById(`${tankId}AutodoseSummary`);
       if (!summary) return;
-      const cfg = state.autodose || DEFAULT_AUTODOSE;
+      const cfg = state.autodose[tankId] || DEFAULT_AUTODOSE;
       const lines = [];
       lines.push(`<span><strong>Status:</strong> ${cfg.autodoseEnabled ? 'Enabled' : 'Disabled'}</span>`);
       if (Number.isFinite(cfg.phTarget) && Number.isFinite(cfg.phTolerance)) {
@@ -3082,8 +3162,8 @@
       summary.innerHTML = lines.join('<br>');
     }
 
-    function updateSetpointStatus(message, variant = 'info') {
-      const status = document.getElementById('tank2SetpointStatus');
+    function updateSetpointStatus(message, variant = 'info', tankId = 'tank2') {
+      const status = document.getElementById(`${tankId}SetpointStatus`);
       if (!status) return;
       status.textContent = message;
       const colorMap = {
@@ -3094,7 +3174,7 @@
       status.style.color = colorMap[variant] || 'var(--neutral-300)';
     }
 
-    async function handleSetpointSubmit(event) {
+    async function handleSetpointSubmit(event, tankId = 'tank2') {
       event.preventDefault();
       const form = event.currentTarget;
       const submitButton = form.querySelector('button[type="submit"]');
@@ -3119,7 +3199,7 @@
           throw new Error('Provide valid pH and EC targets.');
         }
 
-        updateSetpointStatus('Dispatching setpoints…', 'info');
+        updateSetpointStatus('Dispatching setpoints…', 'info', tankId);
 
         const sanitized = {
           phTarget: clamp(payload.phTarget, 4.0, 7.5),
@@ -3149,7 +3229,7 @@
 
         const now = new Date();
 
-        state.autodose = {
+        state.autodose[tankId] = {
           autodoseEnabled: sanitized.autodoseEnabled,
           phTarget: sanitized.phTarget,
           phTolerance: sanitized.phTolerance,
@@ -3160,25 +3240,25 @@
           minDoseIntervalSec: sanitized.minDoseIntervalSec
         };
 
-        if (state.raw?.tanks?.tank2) {
-          const tank2 = state.raw.tanks.tank2;
-          tank2.phSetpoint = state.autodose.phTarget;
-          tank2.phTolerance = state.autodose.phTolerance;
-          tank2.ecSetpoint = state.autodose.ecTarget;
-          tank2.ecTolerance = state.autodose.ecTolerance;
-          tank2.autodose = { ...state.autodose };
+        if (state.raw?.tanks?.[tankId]) {
+          const tank = state.raw.tanks[tankId];
+          tank.phSetpoint = state.autodose[tankId].phTarget;
+          tank.phTolerance = state.autodose[tankId].phTolerance;
+          tank.ecSetpoint = state.autodose[tankId].ecTarget;
+          tank.ecTolerance = state.autodose[tankId].ecTolerance;
+          tank.autodose = { ...state.autodose[tankId] };
         }
 
-        populateSetpointForm();
-        renderAutodoseSummary();
-        renderSetpoints(state.raw, 'tank2');
-        updateDosingStatus(state.raw, 'tank2');
+        populateSetpointForm(tankId);
+        renderAutodoseSummary(tankId);
+        renderSetpoints(state.raw, tankId);
+        updateDosingStatus(state.raw, tankId);
 
-        updateSetpointStatus(`Setpoints pushed at ${now.toLocaleTimeString()}`, 'success');
+        updateSetpointStatus(`Setpoints pushed at ${now.toLocaleTimeString()}`, 'success', tankId);
         showToast('Setpoints pushed to doser', 'info');
       } catch (error) {
         console.error('[nutrient] setpoint push failed:', error);
-        updateSetpointStatus(error.message || 'Failed to push setpoints', 'error');
+        updateSetpointStatus(error.message || 'Failed to push setpoints', 'error', tankId);
         showToast(error.message || 'Failed to push setpoints', 'error');
       } finally {
         if (submitButton) {
@@ -3207,11 +3287,11 @@
       state.computed.tank2EC = tank2Targets.ec;
       state.computed.tank2PH = tank2Targets.ph;
 
-      if (Number.isFinite(state.autodose?.ecTarget)) {
-        state.computed.tank2EC = state.autodose.ecTarget / 1000;
+      if (Number.isFinite(state.autodose.tank2?.ecTarget)) {
+        state.computed.tank2EC = state.autodose.tank2.ecTarget / 1000;
       }
-      if (Number.isFinite(state.autodose?.phTarget)) {
-        state.computed.tank2PH = state.autodose.phTarget;
+      if (Number.isFinite(state.autodose.tank2?.phTarget)) {
+        state.computed.tank2PH = state.autodose.tank2.phTarget;
       }
     }
 
@@ -3501,6 +3581,10 @@
     document.getElementById('tank1CalibrationForm')?.addEventListener('submit', (e) => handleCalibration(e, 'tank1'));
     document.getElementById('tank2CalibrationForm')?.addEventListener('submit', (e) => handleCalibration(e, 'tank2'));
 
+    // Setpoint form handlers
+    document.getElementById('tank1SetpointForm')?.addEventListener('submit', (e) => handleSetpointSubmit(e, 'tank1'));
+    document.getElementById('tank2SetpointForm')?.addEventListener('submit', (e) => handleSetpointSubmit(e, 'tank2'));
+
     document.querySelectorAll('.wizard-launch').forEach((button) => {
       button.addEventListener('click', () => {
         const mode = button.dataset.mode;
@@ -3533,7 +3617,6 @@
       }
     });
 
-    document.getElementById('tank2SetpointForm')?.addEventListener('submit', handleSetpointSubmit);
     document.getElementById('systemConfigForm')?.addEventListener('submit', handleSystemConfigSave);
     document.getElementById('irrigationMode')?.addEventListener('change', updateIrrigationCycleVisibility);
     hydrate();

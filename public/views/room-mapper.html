@@ -510,7 +510,7 @@
         <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 0.875rem;">Visual layout of sensors, lights, and zones</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary" onclick="window.location.href='../LE-dashboard.html'">← Home</button>
+        <button class="btn btn-secondary" onclick="window.location.href='../LE-dashboard.html'">← Setup/Update</button>
         <button class="btn btn-success" onclick="saveMap()">Save Map</button>
         <button class="btn btn-primary" onclick="loadMap()">Load Map</button>
         <button class="btn btn-danger" onclick="clearMap()">Clear</button>
@@ -973,10 +973,8 @@
     async function fetchEquipmentMetadata() {
       let metadata = {};
       try {
-        let res = await fetch('/data/equipment-metadata');
-        if (!res.ok) {
-          res = await fetch('/data/equipment-metadata.json');
-        }
+        // Fetch .json directly to avoid 403 error from middleware
+        const res = await fetch('/data/equipment-metadata.json');
         if (res.ok) {
           metadata = await res.json();
         } else {
@@ -1283,6 +1281,8 @@
       
       // Place in center if not already placed
       const isPlaced = STATE.placedDevices.some(p => p.deviceId === equipment.id);
+      console.log('[Room Mapper] placeEquipmentFromList - Equipment:', equipment.id, 'Already placed:', isPlaced, 'Total placed:', STATE.placedDevices.length);
+      
       if (!isPlaced) {
         const centerX = Math.floor(STATE.gridSize / 2);
         const centerY = Math.floor((STATE.gridSize * 0.75) / 2);
@@ -1298,10 +1298,17 @@
           isEquipment: true // Flag to distinguish from sensors
         });
         
+        console.log('[Room Mapper] Equipment placed successfully at center:', centerX, centerY);
         renderEquipmentList();
         draw();
         updateStats();
         showDetails(STATE.placedDevices[STATE.placedDevices.length - 1]);
+      } else {
+        console.log('[Room Mapper] Equipment already placed, finding existing device...');
+        const existingDevice = STATE.placedDevices.find(p => p.deviceId === equipment.id);
+        if (existingDevice) {
+          showDetails(existingDevice);
+        }
       }
     }
 
@@ -1561,10 +1568,16 @@
         ctx.fillStyle = color;
         ctx.fillText(resolvedIcon, x, y);
         
-    // Draw device name below
+    // Draw device name below - handle both device and equipment formats
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#cbd5e1';
-    ctx.fillText(device.device.name || device.device.model || device.device.category || 'Unknown', x, y + labelOffset);
+    const deviceData = device.device || {};
+    const label = deviceData.name || 
+                  (deviceData.vendor && deviceData.model ? `${deviceData.vendor} ${deviceData.model}` : '') ||
+                  deviceData.model || 
+                  deviceData.category || 
+                  'Unknown';
+    ctx.fillText(label, x, y + labelOffset);
         
         // Draw zone indicator if assigned
         if (device.device.zone) {

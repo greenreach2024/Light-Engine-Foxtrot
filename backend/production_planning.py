@@ -239,8 +239,10 @@ async def get_demand_forecast(crop: Optional[str] = None, horizon: str = "monthl
             "crop": crop_name,
             "period": period,
             "forecasted_demand": round(forecast, 1),
+            "forecasted_quantity": round(forecast, 1),
             "unit": "kg",
             "daily_average": round(recent_avg, 1),
+            "current_avg_daily": round(recent_avg, 1),
             "growth_rate": round(growth_rate * 100, 1),
             "trend": "growing" if growth_rate > 0.02 else "stable" if growth_rate > -0.02 else "declining",
             "confidence": "high" if len(quantities) > 30 else "medium" if len(quantities) > 10 else "low"
@@ -383,6 +385,9 @@ async def get_capacity_analysis():
             "space_used": round(total_space_used, 0),
             "space_available": round(total_capacity - total_space_used, 0),
             "utilization_percent": round(utilization, 1),
+            "utilization_percentage": round(utilization, 1),
+            "cells_occupied": round(total_space_used, 0),
+            "upcoming_harvests_next_7_days": len(upcoming_harvests),
             "status": "optimal" if 60 <= utilization <= 85 else "low" if utilization < 60 else "high"
         },
         "production": {
@@ -433,12 +438,21 @@ async def create_production_plan(plan: CreatePlan):
 @router.get("/api/planning/plans/list")
 async def list_production_plans(status: Optional[str] = None):
     """List all production plans"""
-    plans = list(db.plans.values())
+    raw_plans = list(db.plans.values())
     
     if status:
-        plans = [p for p in plans if p["status"] == status]
+        raw_plans = [p for p in raw_plans if p["status"] == status]
     
-    plans.sort(key=lambda x: x["target_date"])
+    raw_plans.sort(key=lambda x: x["target_date"])
+
+    plans = []
+    for plan in raw_plans:
+        plans.append({
+            **plan,
+            "crop": plan.get("crop_name"),
+            "quantity": plan.get("target_quantity"),
+            "created_at": plan.get("created_date")
+        })
     
     return {
         "ok": True,
@@ -498,6 +512,10 @@ async def get_planting_recommendations():
             "seed_date": seed_date.strftime("%Y-%m-%d"),
             "harvest_date": harvest_date.strftime("%Y-%m-%d"),
             "expected_yield_kg": round(plants_for_week * crop_info["avg_yield_per_plant"] * crop_info["success_rate"], 1),
+            "recommended_seed_date": seed_date.strftime("%Y-%m-%d"),
+            "expected_harvest_date": harvest_date.strftime("%Y-%m-%d"),
+            "recommended_quantity": plants_for_week,
+            "expected_yield": round(plants_for_week * crop_info["avg_yield_per_plant"] * crop_info["success_rate"], 1),
             "meets_demand_for": "7 days",
             "reason": f"High demand ({daily_demand}kg/day) with {forecast['trend']} trend",
             "priority": "high" if forecast["trend"] == "growing" else "medium"

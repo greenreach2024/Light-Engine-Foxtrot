@@ -130,36 +130,35 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            padding: 0;
         }
 
         /* View Controls */
         .view-controls {
-            position: absolute;
-            top: 2rem;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 1rem;
+            position: static;
+            transform: none;
+            display: inline-flex;
+            gap: 0.75rem;
             z-index: 50;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            backdrop-filter: none;
         }
 
         .view-btn {
-            background: rgba(59, 130, 246, 0.3);
-            border: 2px solid rgba(59, 130, 246, 0.5);
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid rgba(59, 130, 246, 0.45);
             color: var(--text-secondary);
-            padding: 0.75rem 1.5rem;
-            font-size: 0.95rem;
+            padding: 0.6rem 1rem;
+            font-size: 0.9rem;
             font-weight: 600;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.3s ease;
-            min-width: 120px;
+            min-width: 110px;
             text-align: center;
+            height: 44px;
         }
 
         .view-btn:hover {
@@ -357,6 +356,169 @@
             padding: 2rem;
         }
 
+        /* ==================== PHASE 1: UI POLISH TRANSITIONS ==================== */
+        
+        /* Enhanced Button States - Smoother, more professional */
+        .nav-btn {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .nav-btn:active {
+            transform: translateY(0);
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav-btn:focus {
+            outline: 2px solid var(--accent-blue);
+            outline-offset: 2px;
+        }
+
+        /* View Button Enhanced States */
+        .view-btn {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .view-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+        }
+
+        .view-btn:active {
+            transform: scale(0.98);
+            transition: all 0.1s ease;
+        }
+
+        .view-btn.active {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+
+        .view-btn:focus {
+            outline: 2px solid var(--accent-blue);
+            outline-offset: 2px;
+        }
+
+        /* Freshness Dot Pulsing Animation */
+        .freshness-dot {
+            transition: all 0.3s ease;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .freshness-dot.fresh {
+            animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .freshness-dot.acceptable {
+            animation: pulse-yellow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .freshness-dot.stale {
+            animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-green {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            }
+            50% {
+                opacity: 0.9;
+                box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+            }
+        }
+
+        @keyframes pulse-yellow {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+            }
+            50% {
+                opacity: 0.9;
+                box-shadow: 0 0 0 4px rgba(245, 158, 11, 0);
+            }
+        }
+
+        @keyframes pulse-red {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            50% {
+                opacity: 0.9;
+                box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+
+        /* Score Number Smooth Transitions */
+        .status-bar .overall-score {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .status-bar .overall-score.updating {
+            transform: scale(1.1);
+            filter: brightness(1.3);
+        }
+
+        /* View Canvas Fade/Scale Transitions */
+        .view-canvas {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .view-canvas.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Settings Panel Smooth Slide */
+        .settings-panel {
+            transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .settings-panel.open {
+            box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Settings Input Focus States */
+        .setting-item input[type="number"]:focus,
+        .setting-item select:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        /* Loading Spinner Enhanced */
+        .loading .spinner {
+            animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+
+        /* Hover States for Interactive Elements */
+        .checkbox-item:hover {
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+
+        /* ==================== END PHASE 1 TRANSITIONS ==================== */
+
         /* Responsive */
         @media (max-width: 768px) {
             .page-header {
@@ -401,6 +563,17 @@
             <div class="subtitle">Real-time farm health visualization</div>
         </div>
         <div class="header-actions">
+            <div class="view-controls" id="viewControls">
+                <button class="view-btn active" data-view="rings" onclick="switchView('rings')">
+                    Rings
+                </button>
+                <button class="view-btn" data-view="heartbeat" onclick="switchView('heartbeat')">
+                    Heartbeat
+                </button>
+                <button class="view-btn" data-view="blobs" onclick="switchView('blobs')">
+                    Happy Blobs
+                </button>
+            </div>
             <a href="/index.charlie.html" class="nav-btn home">Home</a>
             <button class="nav-btn settings" onclick="toggleSettings()">Settings</button>
         </div>
@@ -408,19 +581,6 @@
 
     <!-- Main Container -->
     <div class="container">
-        <!-- View Controls -->
-        <div class="view-controls" id="viewControls">
-            <button class="view-btn active" data-view="rings" onclick="switchView('rings')">
-                Rings
-            </button>
-            <button class="view-btn" data-view="heartbeat" onclick="switchView('heartbeat')">
-                Heartbeat
-            </button>
-            <button class="view-btn" data-view="blobs" onclick="switchView('blobs')">
-                Happy Blobs
-            </button>
-        </div>
-
         <!-- View Container -->
         <div class="view-container" id="viewContainer">
             <!-- Loading State -->
@@ -437,7 +597,7 @@
             </div>
 
             <!-- Rings View -->
-            <canvas id="ringsCanvas" class="view-canvas" width="1400" height="900"></canvas>
+            <canvas id="ringsCanvas" class="view-canvas" width="1600" height="1000"></canvas>
 
             <!-- Heartbeat View -->
             <canvas id="heartbeatCanvas" class="view-canvas" width="1400" height="900"></canvas>
