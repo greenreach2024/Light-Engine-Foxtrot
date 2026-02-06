@@ -1151,7 +1151,7 @@
   <!-- Header -->
   <div class="header">
     <div>
-      <h1>Planting Scheduler</h1>
+      <h1 id="farmNameHeader">Planting Scheduler</h1>
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
@@ -1186,7 +1186,7 @@
           </button>
           <div class="dropdown-menu">
             <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
-            <a href="/" class="dropdown-item">Setup/Update</a>
+            <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
           </div>
         </div>
         <div class="nav-item">
@@ -3031,6 +3031,26 @@
       populateTrayDropdown();
     }
     */
+    
+    // Load farm name into header
+    (async function() {
+      try {
+        const response = await fetch('/data/farm.json');
+        if (response.ok) {
+          const farmData = await response.json();
+          const farmName = farmData.name || farmData.farmName;
+          if (farmName) {
+            const headerEl = document.getElementById('farmNameHeader');
+            if (headerEl) {
+              headerEl.textContent = `${farmName} - Planting Scheduler`;
+            }
+            document.title = `${farmName} - Planting Scheduler`;
+          }
+        }
+      } catch (error) {
+        console.log('[Planting Scheduler] Could not load farm name:', error.message);
+      }
+    })();
   </script>
   <script src="/js/farm-assistant.js"></script>
 </body>

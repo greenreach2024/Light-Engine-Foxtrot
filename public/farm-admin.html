@@ -66,7 +66,10 @@
             cursor: pointer;
             transition: all 0.3s ease;
             text-decoration: none;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 44px;
         }
 
         .nav-btn:hover {
@@ -922,11 +925,12 @@
     <!-- Page Header Navigation -->
     <header class="page-header">
         <div>
-            <h1>Farm Admin Dashboard</h1>
+            <h1 id="farmNameHeader">Farm Admin Dashboard</h1>
             <small id="headerFarmId" style="color: var(--text-muted); font-family: monospace; font-size: 12px; display: block; margin-top: 4px;"></small>
         </div>
         <div class="header-actions">
             <a href="/LE-dashboard.html" class="nav-btn">Dashboard</a>
+            <a href="/farm-vitality.html" class="nav-btn" style="background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #67e8f9;">Vitality</a>
             <a href="/views/farm-summary.html" class="nav-btn farm-summary">Farm Summary</a>
             <a href="/views/farm-inventory.html" class="nav-btn inventory">Farm Inventory</a>
             <a href="/views/nutrient-management.html" class="nav-btn nutrient">Nutrient Management</a>
@@ -4335,6 +4339,26 @@
     if (document.getElementById('farm-ssid')) {
       loadFarmConfiguration();
     }
+    
+    // Load farm name into header
+    (async function loadFarmNameIntoHeader() {
+      try {
+        const response = await fetch('/data/farm.json');
+        if (response.ok) {
+          const farmData = await response.json();
+          const farmName = farmData.name || farmData.farmName;
+          if (farmName) {
+            const headerEl = document.getElementById('farmNameHeader');
+            if (headerEl) {
+              headerEl.textContent = `${farmName} - Admin Dashboard`;
+            }
+            document.title = `${farmName} - Admin Dashboard`;
+          }
+        }
+      } catch (error) {
+        console.log('[Farm Admin] Could not load farm name:', error.message);
+      }
+    })();
   </script>
 </body>
 </html>

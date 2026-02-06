@@ -511,7 +511,7 @@
           </button>
           <div class="dropdown-menu">
             <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
-            <a href="/" class="dropdown-item">Setup/Update</a>
+            <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
           </div>
         </div>
         <div class="nav-item sales">
@@ -621,7 +621,7 @@
           ]);
         };
         
-        const [currentResp, forecastResp, groupsResp] = await Promise.all([
+        const [currentResp, forecastResp, groupsResp, roomsResp, farmResp] = await Promise.all([
           fetchWithTimeout(`${API_BASE}/api/inventory/current`).catch(err => {
             console.error('[loadInventory] Fetch error (current):', err.message || err);
             // Return mock response
@@ -634,13 +634,23 @@
           fetchWithTimeout(`${API_BASE}/data/groups.json`).catch(err => {
             console.error('[loadInventory] Fetch error (groups):', err.message || err);
             return { ok: false, status: 0, error: err.message };
+          }),
+          fetchWithTimeout(`${API_BASE}/data/rooms.json`).catch(err => {
+            console.error('[loadInventory] Fetch error (rooms):', err.message || err);
+            return { ok: false, status: 0, error: err.message };
+          }),
+          fetchWithTimeout(`${API_BASE}/data/farm.json`).catch(err => {
+            console.error('[loadInventory] Fetch error (farm):', err.message || err);
+            return { ok: false, status: 0, error: err.message };
           })
         ]);
 
         console.log('[loadInventory] Response status:', {
           current: currentResp.status,
           forecast: forecastResp.status,
-          groups: groupsResp.status
+          groups: groupsResp.status,
+          rooms: roomsResp.status,
+          farm: farmResp.status
         });
 
         // If all requests failed, show helpful error
@@ -660,12 +670,39 @@
         const forecastData = forecastResp.ok ? await forecastResp.json() : { forecast: [] };
         const groupsResponse = groupsResp.ok ? await groupsResp.json() : { groups: [] };
         const groupsData = groupsResponse.groups || [];
+        const roomsResponse = roomsResp.ok ? await roomsResp.json() : { rooms: [] };
+        const roomsData = roomsResponse.rooms || [];
+        const farmData = farmResp.ok ? await farmResp.json() : {};
 
         console.log('[loadInventory] Data loaded:', {
           currentData: !!currentData,
           forecastData: !!forecastData,
-          groupsCount: groupsData.length
+          groupsCount: groupsData.length,
+          roomsCount: roomsData.length,
+          farmData: !!farmData
         });
+
+        // Build room ID to name lookup map
+        const roomIdToName = {};
+        roomsData.forEach(room => {
+          if (room.id && room.name) {
+            roomIdToName[room.id] = room.name;
+          }
+        });
+
+        // Update header with farm name (for cross-page context)
+        const farmName = farmData.farmName || farmData.name || farmData.farmId || 'Farm';
+        const farmId = farmData.farmId || 'unknown';
+        localStorage.setItem('farmName', farmName);
+        localStorage.setItem('farmId', farmId);
+        
+        const headerH1 = document.querySelector('.header h1');
+        if (headerH1) {
+          headerH1.innerHTML = `
+            Farm Inventory Dashboard
+            <div style="font-size: 0.9rem; color: #94a3b8; font-weight: 400; margin-top: 0.25rem;">${farmName}</div>
+          `;
+        }
 
         // Calculate unique crops
         const uniqueCrops = new Set(groupsData.map(g => g.crop).filter(Boolean));
@@ -673,9 +710,9 @@
         console.log('[loadInventory] Rendering...');
         renderSummaryCards(currentData, uniqueCrops.size);
         renderForecast(forecastData);
-        renderInventoryByLocation(currentData, groupsData, forecastData);
+        renderInventoryByLocation(currentData, groupsData, forecastData, roomIdToName);
         renderInventoryByCrop(currentData, groupsData, forecastData);
-        renderInventoryByHarvest(currentData, groupsData, forecastData);
+        renderInventoryByHarvest(currentData, groupsData, forecastData, roomIdToName);
         console.log('[loadInventory] Rendering complete!');
       } catch (error) {
         console.error('[loadInventory] Error:', error);
@@ -701,6 +738,9 @@
       });
       document.getElementById(`${viewName}View`).classList.add('active');
     }
+
+    // Expose switchView to global scope for onclick handlers
+    window.switchView = switchView;
 
     function showLoading() {
       document.getElementById('summaryCards').innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading inventory...</p></div>';
@@ -789,11 +829,12 @@
       }).join('');
     }
 
-    function renderInventoryByLocation(currentData, groupsData, forecastData) {
+    function renderInventoryByLocation(currentData, groupsData, forecastData, roomIdToName = {}) {
       console.log('[renderInventoryByLocation] Called with:', {
         currentData,
         groupsDataLength: groupsData?.length,
-        forecastData: forecastData ? Object.keys(forecastData) : null
+        forecastData: forecastData ? Object.keys(forecastData) : null,
+        roomNamesAvailable: Object.keys(roomIdToName).length
       });
       
       // Create map of trays by group
@@ -1142,15 +1183,9 @@
       `;
     }
 
-    function renderInventoryByHarvest(currentData, groupsData, forecastData, roomsData = []) {
-      console.log('[renderInventoryByHarvest] Called');
-      
-      // Create room ID to name lookup
-      const roomIdToName = {};
-      roomsData.forEach(room => {
-        if (room.id && room.name) {
-          roomIdToName[room.id] = room.name;
-        }
+    function renderInventoryByHarvest(currentData, groupsData, forecastData, roomIdToName = {}) {
+      console.log('[renderInventoryByHarvest] Called with:', {
+        roomNamesAvailable: Object.keys(roomIdToName).length
       });
       
       // Create map of trays by group

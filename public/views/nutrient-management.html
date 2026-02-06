@@ -638,7 +638,7 @@
 <body class="le-theme">
   <header class="page-header">
     <div style="max-width: 420px;">
-      <h1>Nutrient Management</h1>
+      <h1 id="farmNameHeader">Nutrient Management</h1>
       <p>Monitor tank health, tune setpoints, and audit nutrient usage alongside calibration-ready dosing analytics.</p>
     </div>
     <div class="header-actions">
@@ -674,7 +674,7 @@
           </button>
           <div class="dropdown-menu">
             <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
-            <a href="/" class="dropdown-item">Setup/Update</a>
+            <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
           </div>
         </div>
         <div class="nav-item">
@@ -3548,6 +3548,26 @@
         showIntroCard('nutrient-management');
       }, 500);
     });
+    
+    // Load farm name into header
+    (async function() {
+      try {
+        const response = await fetch('/data/farm.json');
+        if (response.ok) {
+          const farmData = await response.json();
+          const farmName = farmData.name || farmData.farmName;
+          if (farmName) {
+            const headerEl = document.getElementById('farmNameHeader');
+            if (headerEl) {
+              headerEl.textContent = `${farmName} - Nutrient Management`;
+            }
+            document.title = `${farmName} - Nutrient Management`;
+          }
+        }
+      } catch (error) {
+        console.log('[Nutrient Management] Could not load farm name:', error.message);
+      }
+    })();
   </script>
   <script src="/js/farm-assistant.js"></script>
 </body>

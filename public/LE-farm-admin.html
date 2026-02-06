@@ -1096,7 +1096,10 @@
 <body>
     <!-- Page Header Navigation -->
     <header class="page-header">
-        <h1>Farm Admin Dashboard</h1>
+        <div>
+            <h1 id="farmNameHeader">Farm Admin Dashboard</h1>
+            <small id="headerFarmId" style="color: var(--text-muted); font-family: monospace; font-size: 12px; display: block; margin-top: 4px;"></small>
+        </div>
         <div class="header-actions">
             <nav class="nav-menu">
                 <!-- Dropdown 1: Inventory Management (Amber) -->
@@ -1135,7 +1138,7 @@
                     </button>
                     <div class="dropdown-menu">
                         <a href="/LE-farm-admin.html" class="dropdown-item active">Farm Admin</a>
-                        <a href="/LE-dashboard.html" class="dropdown-item">Dashboard Setup</a>
+                        <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
                     </div>
                 </div>
 
@@ -1170,7 +1173,7 @@
                     </a>
                     <a href="/LE-dashboard.html" class="nav-item" target="_blank">
                         <span class="nav-item-icon">⚙</span>
-                        Dashboard Setup
+                        Setup/Update
                     </a>
                     <a href="/views/tray-inventory.html" class="nav-item" target="_blank">
                         <span class="nav-item-icon">📱</span>

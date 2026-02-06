@@ -269,6 +269,12 @@ async function loadFarmData() {
                 farmNameEl.textContent = farmData.name || currentSession.farmName || 'Light Engine Farm';
             }
             
+            // Update header title with farm name
+            const farmNameHeaderEl = document.getElementById('farmNameHeader');
+            if (farmNameHeaderEl && farmData.name) {
+                farmNameHeaderEl.textContent = `${farmData.name} - Admin Dashboard`;
+            }
+            
             const farmIdEl = document.getElementById('farmId');
             if (farmIdEl) {
                 farmIdEl.textContent = farmData.farmId || currentSession.farmId;

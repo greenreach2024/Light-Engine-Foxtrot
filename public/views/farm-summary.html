@@ -1695,6 +1695,7 @@
           </button>
           <div class="dropdown-menu">
             <a href="farm-summary.html" class="dropdown-item active">Farm Summary</a>
+            <a href="/farm-vitality.html" class="dropdown-item">Farm Vitality Dashboard</a>
             <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
             <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
           </div>
@@ -1706,7 +1707,7 @@
           </button>
           <div class="dropdown-menu">
             <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
-            <a href="/" class="dropdown-item">Setup/Update</a>
+            <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
           </div>
         </div>
         <div class="nav-item sales">
@@ -4523,27 +4524,27 @@
           healthData.farm_score >= 80 ? '#93c5fd' :
           healthData.farm_score >= 70 ? '#fdba74' : '#fca5a5';
 
-        // Build zones grid
-        let zonesHTML = '<div class="health-zones-grid">';
-        healthData.zones.forEach(zone => {
-          const zoneScoreColor = 
-            zone.score >= 90 ? '#86efac' :
-            zone.score >= 80 ? '#93c5fd' :
-            zone.score >= 70 ? '#fdba74' : '#fca5a5';
-
-          const statusClass = 
-            zone.status === 'healthy' || zone.score >= 80 ? 'optimal' :
-            zone.status === 'warning' || zone.score >= 60 ? 'warning' : 'critical';
-
-          zonesHTML += `
-            <div class="health-zone-item">
-              <div class="health-zone-name">${zone.zone_name || zone.zone_id || zone.id || 'Unknown Zone'}</div>
-              <div class="health-zone-score" style="color: ${zoneScoreColor};">${zone.score || zone.overall || 0}<span style="font-size: 1rem; color: #64748b;">/100</span></div>
-              <span class="health-zone-status status ${statusClass}">${zone.grade || zone.status || 'N/A'}</span>
-            </div>
-          `;
-        });
-        zonesHTML += '</div>';
+        // Zone grid removed per user request - farm score already shows aggregate
+        // let zonesHTML = '<div class="health-zones-grid">';
+        // healthData.zones.forEach(zone => {
+        //   const zoneScoreColor = 
+        //     zone.score >= 90 ? '#86efac' :
+        //     zone.score >= 80 ? '#93c5fd' :
+        //     zone.score >= 70 ? '#fdba74' : '#fca5a5';
+        //
+        //   const statusClass = 
+        //     zone.status === 'healthy' || zone.score >= 80 ? 'optimal' :
+        //     zone.status === 'warning' || zone.score >= 60 ? 'warning' : 'critical';
+        //
+        //   zonesHTML += `
+        //     <div class="health-zone-item">
+        //       <div class="health-zone-name">${zone.zone_name || zone.zone_id || zone.id || 'Unknown Zone'}</div>
+        //       <div class="health-zone-score" style="color: ${zoneScoreColor};">${zone.score || zone.overall || 0}<span style="font-size: 1rem; color: #64748b;">/100</span></div>
+        //       <span class="health-zone-status status ${statusClass}">${zone.grade || zone.status || 'N/A'}</span>
+        //     </div>
+        //   `;
+        // });
+        // zonesHTML += '</div>';
 
         // Build insights
         let insightsHTML = '';
@@ -4589,7 +4590,6 @@
             </div>
           </div>
           
-          ${zonesHTML}
           ${insightsHTML}
         `;
       };

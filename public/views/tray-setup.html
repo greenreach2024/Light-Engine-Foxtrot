@@ -447,7 +447,7 @@
 <body class="le-theme">
   <div class="container">
     <div class="header">
-      <h1>Tray Setup</h1>
+      <h1 id="farmNameHeader">Tray Setup</h1>
       <div class="header-actions">
         <nav class="nav-menu">
           <div class="nav-item inventory">
@@ -481,7 +481,7 @@
             </button>
             <div class="dropdown-menu">
               <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
-              <a href="/" class="dropdown-item">Setup/Update</a>
+              <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
             </div>
           </div>
           <div class="nav-item sales">
@@ -988,6 +988,26 @@
 
     // Initialize
     loadFormats();
+    
+    // Load farm name into header
+    (async function() {
+      try {
+        const response = await fetch('/data/farm.json');
+        if (response.ok) {
+          const farmData = await response.json();
+          const farmName = farmData.name || farmData.farmName;
+          if (farmName) {
+            const headerEl = document.getElementById('farmNameHeader');
+            if (headerEl) {
+              headerEl.textContent = `${farmName} - Tray Setup`;
+            }
+            document.title = `${farmName} - Tray Setup`;
+          }
+        }
+      } catch (error) {
+        console.log('[Tray Setup] Could not load farm name:', error.message);
+      }
+    })();
   </script>
   <script src="/js/farm-assistant.js"></script>
 </body>

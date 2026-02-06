@@ -772,7 +772,7 @@
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <h1>Environmental Heat Map</h1>
+      <h1 id="farmNameHeader">Environmental Heat Map</h1>
       <div class="room-selector">
         <label>Room:</label>
         <select id="roomSelect">
@@ -813,7 +813,7 @@
           </button>
           <div class="dropdown-menu">
             <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
-            <a href="/" class="dropdown-item">Setup/Update</a>
+            <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
           </div>
         </div>
         <div class="nav-item">
@@ -2754,6 +2754,26 @@
         showIntroCard('environmental-heatmap');
       }, 500);
     });
+    
+    // Load farm name into header
+    (async function() {
+      try {
+        const response = await fetch('/data/farm.json');
+        if (response.ok) {
+          const farmData = await response.json();
+          const farmName = farmData.name || farmData.farmName;
+          if (farmName) {
+            const headerEl = document.getElementById('farmNameHeader');
+            if (headerEl) {
+              headerEl.textContent = `${farmName} - Heat Map`;
+            }
+            document.title = `${farmName} - Environmental Heat Map`;
+          }
+        }
+      } catch (error) {
+        console.log('[Heat Map] Could not load farm name:', error.message);
+      }
+    })();
   </script>
   <script src="/js/farm-assistant.js"></script>
 </body>
