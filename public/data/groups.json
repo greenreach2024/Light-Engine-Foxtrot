@@ -10,7 +10,7 @@
       "planConfig": {
         "anchor": {
           "mode": "seedDate",
-          "seedDate": null,
+          "seedDate": "2026-02-04T00:00:00.000Z",
           "dps": null,
           "holdDay": null
         },
@@ -96,7 +96,7 @@
           },
           "anchor": {
             "mode": "seedDate",
-            "seedDate": null,
+            "seedDate": "2026-02-04T00:00:00.000Z",
             "dps": null,
             "holdDay": null
           },
@@ -148,7 +148,7 @@
       "planConfig": {
         "anchor": {
           "mode": "seedDate",
-          "seedDate": null,
+          "seedDate": "2026-02-04T00:00:00.000Z",
           "dps": null,
           "holdDay": null
         },
@@ -234,7 +234,7 @@
           },
           "anchor": {
             "mode": "seedDate",
-            "seedDate": null,
+            "seedDate": "2026-02-04T00:00:00.000Z",
             "dps": null,
             "holdDay": null
           },
@@ -287,7 +287,7 @@
       "planConfig": {
         "anchor": {
           "mode": "seedDate",
-          "seedDate": null,
+          "seedDate": "2026-02-04T00:00:00.000Z",
           "dps": null,
           "holdDay": null
         },
@@ -373,7 +373,7 @@
           },
           "anchor": {
             "mode": "seedDate",
-            "seedDate": null,
+            "seedDate": "2026-02-04T00:00:00.000Z",
             "dps": null,
             "holdDay": null
           },
@@ -427,7 +427,7 @@
       "planConfig": {
         "anchor": {
           "mode": "seedDate",
-          "seedDate": null,
+          "seedDate": "2026-02-04T00:00:00.000Z",
           "dps": null,
           "holdDay": null
         },
@@ -513,7 +513,7 @@
           },
           "anchor": {
             "mode": "seedDate",
-            "seedDate": null,
+            "seedDate": "2026-02-04T00:00:00.000Z",
             "dps": null,
             "holdDay": null
           },
