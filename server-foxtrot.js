@@ -13487,41 +13487,16 @@ app.patch('/api/devicedatas/device/:id', requireEdgeForControl, pinGuard, expres
   }
 });
 
-// STRICT pass-through: client calls /api/* → controller receives /api/*
-// Express strips the mount "/api", so add it back via pathRewrite.
-app.use('/py', async (req, res) => {
-  try {
-    const targetUrl = 'http://127.0.0.1:8000' + req.originalUrl.replace(/^\/py/, '');
-    const method = req.method || 'GET';
-    let body;
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      const candidate = req.body;
-      if (candidate !== undefined && candidate !== null) {
-        if (typeof candidate === 'string' || candidate instanceof Buffer) {
-          body = candidate;
-        } else {
-          body = JSON.stringify(candidate);
-        }
-      }
-    }
-
-    const response = await fetch(targetUrl, {
-      method,
-      headers: {
-        'Content-Type': req.header('Content-Type') || 'application/json',
-      },
-      body,
-      signal: AbortSignal.timeout(5000),
-    });
-
-    const text = await response.text();
-    res
-      .status(response.status)
-      .type(response.headers.get('content-type') || 'application/json')
-      .send(text);
-  } catch (error) {
-    res.status(502).json({ error: 'proxy_error', target: 'fastapi', detail: String(error) });
-  }
+// DEPRECATED: Charlie backend (Python FastAPI) removed February 4, 2026
+// All AI/ML functionality migrated to Foxtrot server
+app.use('/py', (req, res) => {
+  console.log(`[Deprecated] /py${req.path} - Charlie backend no longer available`);
+  res.status(410).json({
+    error: 'endpoint_deprecated',
+    message: 'Charlie backend (Python FastAPI) was deprecated on February 4, 2026',
+    migration: 'AI predictions and health insights now available via /api/health/insights',
+    documentation: 'See CHARLIE_MIGRATION_COMPLETE.md for details'
+  });
 });
 
 // ===== GROW3 (CODE3) CONTROLLER PROXY =====
@@ -17954,6 +17929,40 @@ app.get('/api/bus-mappings', asyncHandler(async (req, res) => {
 // Proxy Middleware Setup
 // ============================================================================
 
+// DEPRECATED: Charlie backend farm/info endpoint
+app.get('/api/farm/info', (req, res) => {
+  console.log('[Deprecated] /api/farm/info - Charlie backend no longer available');
+  res.status(410).json({
+    error: 'endpoint_deprecated',
+    message: 'Charlie backend farm/info endpoint deprecated February 4, 2026',
+    migration: 'Use /data/farm.json for farm metadata',
+    alternative: '/api/groups for crop information'
+  });
+});
+
+// Production planning routes (proxy to FastAPI backend)
+const PLANNING_BACKEND_URL = process.env.PLANNING_BACKEND_URL
+  || process.env.PY_BACKEND_URL
+  || 'http://127.0.0.1:8000';
+
+app.use('/api/planning', proxyCorsMiddleware, createProxyMiddleware({
+  target: PLANNING_BACKEND_URL,
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 5000,
+  proxyTimeout: 5000,
+  pathRewrite: (path) => `/api/planning${path}`,
+  onProxyReq(proxyReq, req) {
+    console.log(`[→] ${req.method} ${req.originalUrl} -> ${PLANNING_BACKEND_URL}/api/planning${req.url}`);
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/planning] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'planning-backend', detail: String(err) }));
+  }
+}));
+
 // Circuit-breaker short-circuit when controller is unhealthy  
 app.use('/api', (req, res, next) => {
   console.log(`[API Middleware] path=${req.path}, originalUrl=${req.originalUrl}`);
@@ -17991,6 +18000,7 @@ if (!isControllerDisabled) {
       
       // Since proxy is mounted at /api, remove /api prefix for matching
       const excludePaths = [
+        '/planning',
         '/env',
         '/automation/',
         '/switchbot/',
@@ -18023,6 +18033,7 @@ if (!isControllerDisabled) {
         '/wholesale/',     // Wholesale inventory and catalog
         '/rooms',          // Rooms data for edge mode
         '/groups',         // Groups data for edge mode
+        '/farm/info',      // Farm metadata - legacy Charlie endpoint
         '/bus-mappings'    // Bus mapping configuration for edge mode
       ];
       
