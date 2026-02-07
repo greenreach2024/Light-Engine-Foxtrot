@@ -17927,10 +17927,11 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
 
 // Get list of rooms for edge mode
 app.get('/api/rooms', asyncHandler(async (req, res) => {
-  // When DB_ENABLED, read from PostgreSQL; otherwise fallback to rooms.json
-  if (DB_ENABLED && db) {
+  // When database is available, read from PostgreSQL; otherwise fallback to rooms.json
+  const dbPool = req.app.locals?.db;
+  if (dbPool) {
     try {
-      const result = await db.query(
+      const result = await dbPool.query(
         `SELECT room_id, farm_id, name, type, capacity, description, created_at
          FROM rooms
          ORDER BY created_at ASC`
