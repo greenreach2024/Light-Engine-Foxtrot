@@ -75,6 +75,8 @@ import validator from 'validator';
 import net from 'node:net';
 import mqtt from 'mqtt';
 import { exec } from 'child_process';
+import axios from 'axios';
+import SyncServiceClass from './services/sync-service.js';
 
 // =====================================================
 // Plan-Based Access Control Middleware
@@ -6719,7 +6721,6 @@ app.post('/api/setup/complete', asyncHandler(async (req, res) => {
     // If connected to GreenReach Central, sync certifications
     if (process.env.GREENREACH_CENTRAL_URL && process.env.GREENREACH_API_KEY) {
       try {
-        const axios = require('axios');
         await axios.patch(
           `${process.env.GREENREACH_CENTRAL_URL}/api/farms/${farmId}`,
           {
@@ -6835,7 +6836,6 @@ let syncServiceInstance = null;
 // Get sync service instance
 function getSyncService() {
   if (!syncServiceInstance) {
-    const SyncServiceClass = require('./services/sync-service.js').default;
     syncServiceInstance = new SyncServiceClass({
       centralUrl: process.env.GREENREACH_CENTRAL_URL,
       wsUrl: process.env.GREENREACH_WS_URL,
@@ -15641,8 +15641,6 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     
     // Load farm data from public/data/farm.json for edge mode
     try {
-      const fs = require('fs');
-      const path = require('path');
       const farmDataPath = path.join(__dirname, 'public', 'data', 'farm.json');
       let farmData;
       
