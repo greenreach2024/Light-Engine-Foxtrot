@@ -14574,6 +14574,14 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
     const adminEmail = email || process.env.ADMIN_EMAIL || `admin@${farmId}.local`;
     
+    console.log('[farm-auth] Comparing credentials:');
+    console.log('[farm-auth] - Request farmId:', farmId);
+    console.log('[farm-auth] - Expected edgeFarmId:', edgeFarmId);
+    console.log('[farm-auth] - Request password:', password ? `${password.substring(0, 3)}...` : 'none');
+    console.log('[farm-auth] - Expected adminPassword:', adminPassword ? `${adminPassword.substring(0, 3)}...` : 'none');
+    console.log('[farm-auth] - FarmId match:', farmId === edgeFarmId);
+    console.log('[farm-auth] - Password match:', password === adminPassword);
+    
     // Match on farmId + password
     if (farmId === edgeFarmId && password === adminPassword) {
       const edgeToken = crypto.randomBytes(32).toString('hex');
