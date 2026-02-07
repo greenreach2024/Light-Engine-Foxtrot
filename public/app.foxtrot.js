@@ -12387,7 +12387,7 @@ async function loadAllData() {
     });
     
     // Load static data files
-    const [groups, schedules, plans, environment, calibrations, spdLibrary, deviceMeta, deviceKB, equipmentKB, equipmentCatalog, deviceManufacturers, farm, rooms, switchbotDevices, storedIotDevices, equipmentMetadata] = await Promise.all([
+     const [groups, schedules, plans, environment, calibrations, spdLibrary, deviceMeta, deviceKB, equipmentKB, equipmentCatalog, deviceManufacturers, farm, rooms, switchbotDevices, storedIotDevices, equipmentMetadata] = await Promise.all([
       loadJSON('/data/groups.json', { groups: [] }),
       fetchSchedulesDocument(),
       fetchPlansDocument(),
@@ -12400,7 +12400,8 @@ async function loadAllData() {
       loadJSON('./data/equipment.catalog.json', { dehumidifiers: [] }),
       loadJSON('./data/device-manufacturers.json', { manufacturers: [] }),
       loadJSON('./data/farm.json', {}),
-      loadJSON('/data/rooms.json', { rooms: [] }),
+      // Use /api/rooms which reads from database when DB_ENABLED=true, otherwise falls back to rooms.json
+      loadJSON('/api/rooms', []).then(data => ({ rooms: Array.isArray(data) ? data : (data?.rooms || []) })),
       loadJSON('./data/switchbot-devices.json', { devices: [], summary: null }),
       loadJSON('/data/iot-devices.json', []),
       loadJSON('/data/equipment-metadata.json', {})

@@ -14617,7 +14617,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
     } else {
       return res.status(401).json({
         status: 'error',
-        message: 'Invalid email or password'
+        message: 'Invalid farm ID or password'
       });
     }
   }
@@ -14732,10 +14732,11 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
   }
   
   // PRODUCTION MODE: PostgreSQL-backed authentication
-  if (!farmId || !email || !password) {
+  // Email is optional - if not provided, use first admin user for farm
+  if (!farmId || !password) {
     return res.status(400).json({
       status: 'error',
-      message: 'Farm ID, email, and password are required'
+      message: 'Farm ID and password are required'
     });
   }
 
@@ -14768,18 +14769,31 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
       });
     }
 
-    const userResult = await pool.query(
-      `SELECT user_id, email, password_hash, role, is_active, email_verified, last_login
-       FROM users
-       WHERE farm_id = $1 AND lower(email) = lower($2)
-       LIMIT 1`,
-      [farmId, email]
-    );
+    // Query by email if provided, otherwise get first admin user for farm
+    let userResult;
+    if (email && email.trim()) {
+      userResult = await pool.query(
+        `SELECT user_id, email, password_hash, role, is_active, email_verified, last_login
+         FROM users
+         WHERE farm_id = $1 AND lower(email) = lower($2)
+         LIMIT 1`,
+        [farmId, email]
+      );
+    } else {
+      userResult = await pool.query(
+        `SELECT user_id, email, password_hash, role, is_active, email_verified, last_login
+         FROM users
+         WHERE farm_id = $1 AND role = 'admin'
+         ORDER BY user_id ASC
+         LIMIT 1`,
+        [farmId]
+      );
+    }
 
     if (userResult.rows.length === 0) {
       return res.status(401).json({
         status: 'error',
-        message: 'Invalid email or password'
+        message: 'Invalid farm ID or password'
       });
     }
 
@@ -14803,7 +14817,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
     if (!valid) {
       return res.status(401).json({
         status: 'error',
-        message: 'Invalid email or password'
+        message: 'Invalid farm ID or password'
       });
     }
 
@@ -17913,9 +17927,24 @@ app.get('/api/groups', asyncHandler(async (req, res) => {
 
 // Get list of rooms for edge mode
 app.get('/api/rooms', asyncHandler(async (req, res) => {
+  // When DB_ENABLED, read from PostgreSQL; otherwise fallback to rooms.json
+  if (DB_ENABLED && db) {
+    try {
+      const result = await db.query(
+        `SELECT room_id, farm_id, name, type, capacity, description, created_at
+         FROM rooms
+         ORDER BY created_at ASC`
+      );
+      return res.json(result.rows);
+    } catch (error) {
+      console.error('[API /rooms] Database query failed:', error.message);
+      // Fallback to JSON on database error
+    }
+  }
+  
+  // Fallback: read from rooms.json file
   const roomsData = readJSON('rooms.json', { rooms: [] });
   const rooms = roomsData?.rooms || [];
-  
   res.json(rooms);
 }));
 
