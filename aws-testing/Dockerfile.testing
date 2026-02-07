@@ -1,0 +1,82 @@
+# AWS Testing Environment - Multi-Stage Dockerfile
+# Combines Node.js + Python into single container for cost savings
+# Target: ECS Fargate (single task, ~$15/month)
+
+# Use Amazon ECR Public Gallery to avoid Docker Hub rate limits
+FROM public.ecr.aws/docker/library/node:20-slim as node-base
+
+# Install Python and supervisor
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
+    python3-venv \
+    curl \
+    supervisor \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY requirements.txt ./
+
+# Install Node.js dependencies (production only)
+RUN npm ci --only=production
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/public/uploads
+
+# Copy supervisor configuration for managing both processes
+RUN echo '[supervisord]\n\
+nodaemon=true\n\
+user=root\n\
+logfile=/dev/stdout\n\
+logfile_maxbytes=0\n\
+pidfile=/app/supervisord.pid\n\
+\n\
+[program:node]\n\
+command=node server-foxtrot.js\n\
+directory=/app\n\
+autostart=true\n\
+autorestart=true\n\
+stdout_logfile=/dev/stdout\n\
+stdout_logfile_maxbytes=0\n\
+stderr_logfile=/dev/stderr\n\
+stderr_logfile_maxbytes=0\n\
+environment=NODE_ENV=production,PORT=8091\n\
+\n\
+[program:python]\n\
+command=python3 -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --workers 1\n\
+directory=/app\n\
+autostart=true\n\
+autorestart=true\n\
+stdout_logfile=/dev/stdout\n\
+stdout_logfile_maxbytes=0\n\
+stderr_logfile=/dev/stderr\n\
+stderr_logfile_maxbytes=0\n\
+environment=PYTHONUNBUFFERED=1' > /etc/supervisor/conf.d/foxtrot.conf
+
+# Expose ports
+EXPOSE 8091 8000
+
+# Health check (check both services)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8091/health && curl -f http://localhost:8000/healthz || exit 1
+
+# Environment variables (overridden by ECS task definition)
+ENV NODE_ENV=production \
+    PORT=8091 \
+    PYTHON_PORT=8000 \
+    DB_ENABLED=false \
+    FARM_ID=FARM-TEST-WIZARD-001 \
+    ADMIN_PASSWORD=Grow123
+
+# Run supervisor to manage both Node and Python
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
