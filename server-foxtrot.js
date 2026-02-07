@@ -17955,6 +17955,30 @@ app.get('/api/rooms', asyncHandler(async (req, res) => {
   res.json(rooms);
 }));
 
+// Get list of zones for edge mode
+app.get('/api/zones', asyncHandler(async (req, res) => {
+  // When database is available, read from PostgreSQL; otherwise fallback to zones.json
+  const dbPool = req.app.locals?.db;
+  if (dbPool) {
+    try {
+      const result = await dbPool.query(
+        `SELECT zone_id, room_id, farm_id, name, capacity, description, created_at
+         FROM zones
+         ORDER BY created_at ASC`
+      );
+      return res.json(result.rows);
+    } catch (error) {
+      console.error('[API /zones] Database query failed:', error.message);
+      // Fallback to JSON on database error
+    }
+  }
+  
+  // Fallback: read from zones.json file
+  const zonesData = readJSON('zones.json', { zones: [] });
+  const zones = zonesData?.zones || [];
+  res.json(zones);
+}));
+
 // Get all bus mappings
 app.get('/api/bus-mappings', asyncHandler(async (req, res) => {
   const mappings = await readJSON('bus-mappings.json', []);
