@@ -393,7 +393,7 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
         || 'Farm Admin';
       const planType = metadata?.plan_type || metadata?.planType || 'edge'; // Default to edge device
       const apiKeyValue = req.apiKey; // From authenticateFarm middleware
-      const apiSecret = metadata?.api_secret || metadata?.apiSecret || 'auto-generated';
+      const apiSecret = metadata?.api_secret || metadata?.apiSecret || crypto.randomBytes(32).toString('hex');
       const jwtSecret = crypto.randomBytes(32).toString('hex'); // Generate secure JWT secret
       
       logger.info(`[Sync] UPSERT values: farmId=${farmId}, jwtSecret=${jwtSecret ? 'SET(' + jwtSecret.length + ')' : 'NULL'}`);
@@ -411,6 +411,8 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
            name = COALESCE(EXCLUDED.name, farms.name),
            contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
            plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type),
+           api_key = COALESCE(farms.api_key, EXCLUDED.api_key),
+           api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
            jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
            last_heartbeat = NOW(),
            metadata = EXCLUDED.metadata,
@@ -559,12 +561,14 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
         // Generate unique registration code
         const registrationCode = `REG-${farmId.split('-').pop()}-${Date.now().toString(36).toUpperCase()}`;
         const jwtSecret = crypto.randomBytes(32).toString('hex'); // Generate JWT secret for new farm
+        const apiKey = crypto.randomBytes(32).toString('hex');
+        const apiSecret = crypto.randomBytes(32).toString('hex');
         
         await query(
           `INSERT INTO farms (
-            farm_id, name, email, contact_name, plan_type, api_url, jwt_secret, status, metadata, registration_code,
+            farm_id, name, email, contact_name, plan_type, api_url, jwt_secret, api_key, api_secret, status, metadata, registration_code,
             last_heartbeat, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), NOW())`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), NOW())`,
           [
             farmId,
             farmData.name,
@@ -573,6 +577,8 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
             'edge', // Default to edge device
             farmData.api_url,
             jwtSecret,
+            apiKey,
+            apiSecret,
             'active',
             JSON.stringify(metadata),
             registrationCode

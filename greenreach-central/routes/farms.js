@@ -65,8 +65,10 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
       || metadata?.farm_name
       || farmId;
     
-    // Generate jwt_secret and extract plan_type
+    // Generate secrets for new farms
     const jwtSecret = crypto.randomBytes(32).toString('hex');
+    const apiKey = crypto.randomBytes(32).toString('hex');
+    const apiSecret = crypto.randomBytes(32).toString('hex');
     const planType = metadata?.plan_type || metadata?.planType || 'edge';
     
     // Persist to database (required for farm_data FK)
@@ -74,19 +76,21 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
     
     // Upsert farm
     await query(
-      `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, jwt_secret, plan_type, metadata, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, jwt_secret, api_key, api_secret, plan_type, metadata, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
        ON CONFLICT (farm_id) 
        DO UPDATE SET 
          status = $4,
          last_heartbeat = $5,
          jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
+         api_key = COALESCE(farms.api_key, EXCLUDED.api_key),
+         api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
          plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type, 'edge'),
          metadata = EXCLUDED.metadata,
          name = COALESCE(EXCLUDED.name, farms.name),
          contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
          updated_at = NOW()`,
-      [farmId, metadata?.name || farmId, contactName, 'online', now, jwtSecret, planType, JSON.stringify(metadata || {})]
+      [farmId, metadata?.name || farmId, contactName, 'online', now, jwtSecret, apiKey, apiSecret, planType, JSON.stringify(metadata || {})]
     );
     
     // Store heartbeat
@@ -156,15 +160,23 @@ router.post('/register', async (req, res, next) => {
       }
     };
 
+    // Generate required security fields for new farms
+    const jwtSecret = crypto.randomBytes(32).toString('hex');
+    const apiKey = crypto.randomBytes(32).toString('hex');
+    const apiSecret = crypto.randomBytes(32).toString('hex');
+
     // Persist to database
     await query(
-      `INSERT INTO farms (farm_id, name, status, last_heartbeat, metadata, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      `INSERT INTO farms (farm_id, name, status, last_heartbeat, jwt_secret, api_key, api_secret, plan_type, metadata, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
        ON CONFLICT (farm_id) DO UPDATE SET
          name = EXCLUDED.name,
          metadata = EXCLUDED.metadata,
+         jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
+         api_key = COALESCE(farms.api_key, EXCLUDED.api_key),
+         api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
          updated_at = NOW()`,
-      [resolvedFarmId, resolvedName, 'online', now, JSON.stringify(metadata)]
+      [resolvedFarmId, resolvedName, 'online', now, jwtSecret, apiKey, apiSecret, 'edge', JSON.stringify(metadata)]
     );
 
     // Also keep in-memory

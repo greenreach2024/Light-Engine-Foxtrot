@@ -84,6 +84,133 @@ function buildRoomsPayload(rooms, schemaVersion) {
   return payload;
 }
 
+function isMissingRelation(error, tableName) {
+  if (!error) return false;
+  if (error.code === '42P01') return true;
+  return typeof error.message === 'string' && error.message.includes(`relation "${tableName}" does not exist`);
+}
+
+function buildRoomDefaults(config = {}) {
+  return {
+    layout: config.layout || { type: '', rows: 0, racks: 0, levels: 0 },
+    zones: Array.isArray(config.zones) ? config.zones : [],
+    fixtures: Array.isArray(config.fixtures) ? config.fixtures : [],
+    controlMethod: config.controlMethod ?? null,
+    devices: Array.isArray(config.devices) ? config.devices : [],
+    sensors: config.sensors || { categories: [], placements: {} },
+    energy: config.energy || '',
+    energyHours: Number.isFinite(config.energyHours) ? config.energyHours : 0,
+    targetPpfd: Number.isFinite(config.targetPpfd) ? config.targetPpfd : 0,
+    photoperiod: Number.isFinite(config.photoperiod) ? config.photoperiod : 0,
+    connectivity: config.connectivity || { hasHub: null, hubType: '', hubIp: '', cloudTenant: 'Azure' },
+    roles: config.roles || { admin: [], operator: [], viewer: [] },
+    grouping: config.grouping || { groups: [], planId: '', scheduleId: '' },
+    category: config.category || {}
+  };
+}
+
+async function loadZonesByRoomId(pool, farmId) {
+  try {
+    const result = await pool.query(
+      'SELECT room_id, name FROM zones WHERE farm_id = $1 ORDER BY created_at ASC',
+      [farmId]
+    );
+    return result.rows.reduce((acc, row) => {
+      const key = String(row.room_id);
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row.name);
+      return acc;
+    }, {});
+  } catch (error) {
+    if (isMissingRelation(error, 'zones')) {
+      return {};
+    }
+    throw error;
+  }
+}
+
+async function loadRoomsFromRoomsTable(pool, farmId) {
+  let roomRows;
+  try {
+    const result = await pool.query(
+      `SELECT room_id, name, type, capacity, description, configuration
+       FROM rooms
+       WHERE farm_id = $1
+       ORDER BY created_at ASC`,
+      [farmId]
+    );
+    roomRows = result.rows;
+  } catch (error) {
+    if (isMissingRelation(error, 'rooms')) {
+      return { rooms: [], missingRoomsTable: true };
+    }
+    throw error;
+  }
+
+  if (!roomRows.length) {
+    return { rooms: [], missingRoomsTable: false };
+  }
+
+  const zonesByRoomId = await loadZonesByRoomId(pool, farmId);
+  const rooms = roomRows.map((row) => {
+    const config = row.configuration && typeof row.configuration === 'object' ? row.configuration : {};
+    const zoneList = Array.isArray(config.zones)
+      ? config.zones
+      : (zonesByRoomId[String(row.room_id)] || []);
+    const defaults = buildRoomDefaults({ ...config, zones: zoneList });
+    return {
+      id: String(row.room_id),
+      name: row.name || '',
+      type: row.type || '',
+      capacity: row.capacity ?? null,
+      description: row.description || '',
+      ...defaults
+    };
+  });
+
+  return { rooms, missingRoomsTable: false };
+}
+
+async function loadRoomsPayloadFromDb(pool, farmId) {
+  let farmRoomsMissing = false;
+  try {
+    const result = await pool.query(
+      `SELECT rooms_json
+       FROM farm_room_configs
+       WHERE farm_id = $1
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [farmId]
+    );
+
+    if (result.rows.length) {
+      const roomsPayload = result.rows[0].rooms_json || { rooms: [] };
+      return {
+        rooms: roomsPayload.rooms || [],
+        schemaVersion: roomsPayload.schemaVersion || null,
+        source: 'db'
+      };
+    }
+  } catch (error) {
+    if (isMissingRelation(error, 'farm_room_configs')) {
+      farmRoomsMissing = true;
+    } else {
+      throw error;
+    }
+  }
+
+  const roomsFallback = await loadRoomsFromRoomsTable(pool, farmId);
+  if (roomsFallback.missingRoomsTable && farmRoomsMissing) {
+    return { rooms: [], schemaVersion: null, source: 'missing_tables', missingTables: true };
+  }
+
+  return {
+    rooms: roomsFallback.rooms,
+    schemaVersion: null,
+    source: 'rooms_table'
+  };
+}
+
 function writeRoomsFile(payload) {
   const dir = path.dirname(ROOMS_PATH);
   fs.mkdirSync(dir, { recursive: true });
@@ -614,11 +741,46 @@ router.get('/data', async (req, res) => {
       });
     }
     
-    // Cloud device - read from PostgreSQL
-    // TODO: Query PostgreSQL for setup data when needed
-    return res.status(501).json({
-      success: false,
-      error: 'Cloud setup data not yet implemented'
+    const auth = getAuthContext(req);
+    if (auth?.error) {
+      return res.status(403).json({ success: false, error: auth.error });
+    }
+
+    if (!auth?.farmId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const farmResult = await pool.query(
+      `SELECT farm_id, name, email, contact_name, phone
+       FROM farms
+       WHERE farm_id = $1
+       LIMIT 1`,
+      [auth.farmId]
+    );
+
+    if (!farmResult.rows.length) {
+      return res.status(404).json({ success: false, error: 'Farm not found' });
+    }
+
+    const roomsPayload = await loadRoomsPayloadFromDb(pool, auth.farmId);
+    if (roomsPayload.missingTables) {
+      return res.status(500).json({
+        success: false,
+        error: 'Rooms tables are missing. Run migrations to create rooms data sources.'
+      });
+    }
+
+    const farmRow = farmResult.rows[0];
+    return res.json({
+      success: true,
+      setupCompleted: true,
+      config: {
+        farmName: farmRow.name || '',
+        ownerName: farmRow.contact_name || '',
+        contactEmail: farmRow.email || '',
+        contactPhone: farmRow.phone || '',
+        rooms: roomsPayload.rooms || []
+      }
     });
     
   } catch (error) {
@@ -648,25 +810,23 @@ router.get('/rooms', async (req, res) => {
         return res.status(401).json({ success: false, error: 'Authentication required' });
       }
 
-      const result = await pool.query(
-        `SELECT rooms_json
-         FROM farm_room_configs
-         WHERE farm_id = $1
-         ORDER BY updated_at DESC
-         LIMIT 1`,
-        [auth.farmId]
-      );
+      const roomsPayload = await loadRoomsPayloadFromDb(pool, auth.farmId);
+      if (roomsPayload.missingTables) {
+        return res.status(500).json({
+          success: false,
+          error: 'Rooms tables are missing. Run migrations to create rooms data sources.'
+        });
+      }
 
-      if (!result.rows.length) {
+      if (!roomsPayload.rooms.length) {
         return res.status(404).json({ success: false, error: 'No rooms configuration found' });
       }
 
-      const roomsPayload = result.rows[0].rooms_json || { rooms: [] };
       return res.json({
         success: true,
-        rooms: roomsPayload.rooms || [],
+        rooms: roomsPayload.rooms,
         schemaVersion: roomsPayload.schemaVersion || null,
-        source: 'db'
+        source: roomsPayload.source || 'db'
       });
     }
 

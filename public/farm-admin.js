@@ -32,8 +32,8 @@ function initLogin() {
     
     // Check if user is already logged in
     const session = getSession();
-    // Also verify token exists in localStorage to prevent redirect loop
-    const hasToken = localStorage.getItem('token');
+    // Also verify token exists in sessionStorage/localStorage to prevent redirect loop
+    const hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
     if (session && session.token && hasToken) {
         console.log(' Active session found, redirecting to dashboard...');
         // Track redirect to detect loops
@@ -45,6 +45,7 @@ function initLogin() {
         // Clear stale session that lacks corresponding token
         console.warn('⚠️ Clearing stale session without token');
         localStorage.removeItem(STORAGE_KEY_SESSION);
+        sessionStorage.removeItem(STORAGE_KEY_SESSION);
     }
     
     // Clear any redirect loop trackers
@@ -54,6 +55,8 @@ function initLogin() {
             console.warn('⚠️ Detected potential redirect loop, clearing all auth data');
             localStorage.removeItem(STORAGE_KEY_SESSION);
             localStorage.removeItem('token');
+            sessionStorage.removeItem(STORAGE_KEY_SESSION);
+            sessionStorage.removeItem('token');
             sessionStorage.removeItem('login_redirect_count');
         }
     }
@@ -91,26 +94,40 @@ async function initDashboard() {
     console.log(' Initializing farm admin dashboard...');
     
     // Check for existing JWT token from purchase/login
-    const existingToken = localStorage.getItem('token');
-    const existingFarmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId');
-    const existingEmail = localStorage.getItem('email');
+    const existingToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+    const existingFarmId =
+        sessionStorage.getItem('farm_id') ||
+        sessionStorage.getItem('farmId') ||
+        localStorage.getItem('farm_id') ||
+        localStorage.getItem('farmId');
+    const existingEmail = sessionStorage.getItem('email') || localStorage.getItem('email');
     
     if (existingToken && existingToken !== 'local-access' && existingFarmId && existingFarmId !== 'LOCAL-FARM') {
         // Use existing session from purchase/login
-        try {
-            const payload = JSON.parse(atob(existingToken.split('.')[1]));
+        if (existingToken.split('.').length === 3) {
+            try {
+                const payload = JSON.parse(atob(existingToken.split('.')[1]));
+                currentSession = {
+                    token: existingToken,
+                    farmId: payload.farm_id || payload.farmId || existingFarmId,
+                    userId: payload.user_id || payload.userId,
+                    farmName: localStorage.getItem('farm_name') || payload.name || payload.farmName || 'Light Engine Farm',
+                    email: payload.email || existingEmail || 'admin@farm.com',
+                    role: payload.role || 'admin'
+                };
+                console.log(' Using existing session:', currentSession.farmId, currentSession.email);
+            } catch (e) {
+                console.error(' Could not decode JWT token:', e);
+            }
+        } else {
             currentSession = {
                 token: existingToken,
-                farmId: payload.farm_id || payload.farmId || existingFarmId,
-                userId: payload.user_id || payload.userId,
-                farmName: localStorage.getItem('farm_name') || payload.name || payload.farmName || 'Light Engine Farm',
-                email: payload.email || existingEmail || 'admin@farm.com',
-                role: payload.role || 'admin'
+                farmId: existingFarmId,
+                farmName: sessionStorage.getItem('farm_name') || localStorage.getItem('farm_name') || 'Light Engine Farm',
+                email: existingEmail || 'admin@farm.com',
+                role: 'admin'
             };
-            console.log(' Using existing session:', currentSession.farmId, currentSession.email);
-        } catch (e) {
-            console.error(' Could not decode JWT token:', e);
-            // Fall through to local default
+            console.log(' Using existing session (non-JWT):', currentSession.farmId, currentSession.email);
         }
     }
     
@@ -139,12 +156,13 @@ async function initDashboard() {
         };
         
         // Store token in localStorage for wizard check
-        if (!localStorage.getItem('token')) {
+        if (!sessionStorage.getItem('token') && !localStorage.getItem('token')) {
+            sessionStorage.setItem('token', 'local-access');
+            sessionStorage.setItem('farm_id', 'LOCAL-FARM');
             localStorage.setItem('token', 'local-access');
             localStorage.setItem('farm_id', 'LOCAL-FARM');
             localStorage.removeItem('farmId');
             localStorage.removeItem('adminFarmId');
-            localStorage.setItem('farm_id', 'LOCAL-FARM');
         }
         console.log(' Using local default session');
     }
@@ -215,6 +233,10 @@ async function handleLogin(e) {
             };
             
             saveSession(session);
+            sessionStorage.setItem('token', data.token);
+            sessionStorage.setItem('farm_id', data.farmId || farmId);
+            if (data.farmName) sessionStorage.setItem('farm_name', data.farmName);
+            if (data.email || email) sessionStorage.setItem('email', data.email || email);
             
             // Save remember me
             if (remember) {
@@ -222,8 +244,16 @@ async function handleLogin(e) {
                     farmId,
                     email
                 }));
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('farm_id', data.farmId || farmId);
+                if (data.farmName) localStorage.setItem('farm_name', data.farmName);
+                if (data.email || email) localStorage.setItem('email', data.email || email);
             } else {
                 localStorage.removeItem(STORAGE_KEY_REMEMBER);
+                localStorage.removeItem('token');
+                localStorage.removeItem('farm_id');
+                localStorage.removeItem('farm_name');
+                localStorage.removeItem('email');
             }
             
             showAlert('success', 'Login successful! Redirecting...');
@@ -761,11 +791,22 @@ function logout() {
  * Session management
  */
 function saveSession(session) {
-    localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(session));
+    const payload = JSON.stringify(session);
+    try {
+        localStorage.setItem(STORAGE_KEY_SESSION, payload);
+    } catch (error) {
+        console.warn('Could not persist session to localStorage:', error);
+    }
+    try {
+        sessionStorage.setItem(STORAGE_KEY_SESSION, payload);
+    } catch (error) {
+        console.warn('Could not persist session to sessionStorage:', error);
+    }
 }
 
 function getSession() {
-    const sessionStr = localStorage.getItem(STORAGE_KEY_SESSION);
+    const sessionStr = sessionStorage.getItem(STORAGE_KEY_SESSION) ||
+        localStorage.getItem(STORAGE_KEY_SESSION);
     if (!sessionStr) return null;
     
     try {
@@ -775,6 +816,7 @@ function getSession() {
         if (session.expiresAt && session.expiresAt < Date.now()) {
             console.warn(' Session expired');
             localStorage.removeItem(STORAGE_KEY_SESSION);
+            sessionStorage.removeItem(STORAGE_KEY_SESSION);
             return null;
         }
         
@@ -782,6 +824,7 @@ function getSession() {
     } catch (error) {
         console.error(' Error parsing session:', error);
         localStorage.removeItem(STORAGE_KEY_SESSION);
+        sessionStorage.removeItem(STORAGE_KEY_SESSION);
         return null;
     }
 }

@@ -36,13 +36,13 @@
 
   // Check if user has valid token
   function hasValidToken() {
-    let token = localStorage.getItem('token');
+    let token = sessionStorage.getItem('token') || localStorage.getItem('token');
     // Also check legacy auth_token key
     if (!token) {
       token = localStorage.getItem('auth_token');
-      // Migrate to standard 'token' key
+      // Migrate to session storage to avoid local-only dependency
       if (token) {
-        localStorage.setItem('token', token);
+        sessionStorage.setItem('token', token);
         localStorage.removeItem('auth_token');
       }
     }
@@ -64,6 +64,7 @@
             console.log('[auth-guard] Token expired, clearing...');
             localStorage.removeItem('token');
             localStorage.removeItem('auth_token');
+            sessionStorage.removeItem('token');
             return false;
           }
         }
@@ -72,14 +73,41 @@
         console.log('[auth-guard] Invalid token format, clearing...');
         localStorage.removeItem('token');
         localStorage.removeItem('auth_token');
+        sessionStorage.removeItem('token');
         return false;
       }
       return true;
+    }
+
+    // Non-JWT session token: validate against stored session expiry if present
+    const sessionRaw = sessionStorage.getItem('farm_admin_session') ||
+      localStorage.getItem('farm_admin_session');
+    if (sessionRaw) {
+      try {
+        const session = JSON.parse(sessionRaw);
+        if (session.expiresAt && session.expiresAt < Date.now()) {
+          console.log('[auth-guard] Session expired, clearing...');
+          localStorage.removeItem('farm_admin_session');
+          sessionStorage.removeItem('farm_admin_session');
+          sessionStorage.removeItem('token');
+          localStorage.removeItem('token');
+          return false;
+        }
+        return true;
+      } catch (e) {
+        console.log('[auth-guard] Invalid session format, clearing...');
+        localStorage.removeItem('farm_admin_session');
+        sessionStorage.removeItem('farm_admin_session');
+        sessionStorage.removeItem('token');
+        localStorage.removeItem('token');
+        return false;
+      }
     }
     
     // If token format is invalid, remove it
     localStorage.removeItem('token');
     localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('token');
     return false;
   }
 
@@ -102,7 +130,7 @@
   // Also add token to API requests
   const originalFetch = window.fetch;
   window.fetch = function(url, options = {}) {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
     if (token && url.includes('/api/')) {
       options.headers = options.headers || {};
       options.headers['Authorization'] = `Bearer ${token}`;
