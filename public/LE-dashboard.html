@@ -257,6 +257,26 @@
                       title="Access farm administration portal">
                       Farm Admin
                     </a>
+                    
+                    <!-- Farm Inventory Button -->
+                    <a 
+                      href="/views/farm-inventory.html" 
+                      rel="noopener"
+                      class="btn btn--primary" 
+                      style="margin-top: 0.75rem; margin-right: 0.5rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
+                      title="View farm inventory">
+                      Farm Inventory
+                    </a>
+                    
+                    <!-- QR Generator Button -->
+                    <a 
+                      href="/LE-qr-generator.html" 
+                      rel="noopener"
+                      class="btn btn--secondary" 
+                      style="margin-top: 0.75rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
+                      title="Generate QR codes for trays">
+                      QR Generator
+                    </a>
                     </a>
                   </div>
                 </div>
@@ -409,6 +429,52 @@
                   <!-- Summary will be populated by JavaScript -->
                 </div>
                 <div id="lightSetupsList"></div>
+              </div>
+            </section>
+            
+        <!-- Farm Checklists Section -->
+        <section id="farmChecklistsPanel" class="card card--compact" data-panel="farm-checklists">
+              <header class="panel-header">
+                <div>
+                  <h2>Farm Checklists</h2>
+                  <span class="hint" tabindex="0" data-tip="Access daily, weekly, monthly, and quarterly farm maintenance checklists.">?</span>
+                </div>
+              </header>
+              <div class="panel-body">
+                <div class="row row--gap-sm row--wrap">
+                  <a 
+                    href="/checklists/daily" 
+                    rel="noopener"
+                    class="btn btn--primary" 
+                    style="font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
+                    title="View daily checklist">
+                    Daily
+                  </a>
+                  <a 
+                    href="/checklists/weekly" 
+                    rel="noopener"
+                    class="btn btn--primary" 
+                    style="font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
+                    title="View weekly checklist">
+                    Weekly
+                  </a>
+                  <a 
+                    href="/checklists/monthly" 
+                    rel="noopener"
+                    class="btn btn--primary" 
+                    style="font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
+                    title="View monthly checklist">
+                    Monthly
+                  </a>
+                  <a 
+                    href="/checklists/quarterly" 
+                    rel="noopener"
+                    class="btn btn--primary" 
+                    style="font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
+                    title="View quarterly checklist">
+                    Quarterly
+                  </a>
+                </div>
               </div>
             </section>
 

@@ -269,13 +269,13 @@
     <a href="/" class="back-link">← Back to Dashboard</a>
 
     <div class="header">
-      <h1>🏷️ QR Code Bulk Generator</h1>
+      <h1>QR Code Bulk Generator</h1>
       <p class="subtitle">Generate sequential QR codes for tray labeling</p>
     </div>
 
     <!-- Configuration Card -->
     <div class="card">
-      <h2>📋 Configuration</h2>
+      <h2>Configuration</h2>
 
       <div class="form-group">
         <label for="farmId">Farm ID *</label>
@@ -304,7 +304,7 @@
       </div>
 
       <button class="button button-secondary" onclick="loadAvailableRange()">
-        🔍 Check Available Range
+        Check Available Range
       </button>
 
       <div id="rangeInfo" style="display: none;"></div>
@@ -312,7 +312,7 @@
 
     <!-- Preview Card -->
     <div class="card">
-      <h2>👁️ Preview</h2>
+      <h2>Preview</h2>
 
       <div class="info-box">
         <div class="info-item">
@@ -330,7 +330,7 @@
       </div>
 
       <button class="button button-secondary" onclick="generatePreview()" id="previewBtn">
-        👁️ Generate Preview
+        Generate Preview
       </button>
 
       <div id="previewGrid" class="preview-grid" style="display: none;"></div>
@@ -338,15 +338,15 @@
 
     <!-- Generate Card -->
     <div class="card">
-      <h2>⚡ Generate & Download</h2>
+      <h2>Generate & Download</h2>
 
       <div class="info-box warning">
-        <strong>⚠️ Important:</strong> Generated codes will be pre-registered in your database.
+        <strong>Important:</strong> Generated codes will be pre-registered in your database.
         Make sure your configuration is correct before generating.
       </div>
 
       <button class="button button-primary" onclick="generatePDF()" id="generateBtn">
-        📥 Generate PDF Sheet
+        Generate PDF Sheet
       </button>
 
       <div id="statusMessage"></div>
@@ -401,7 +401,7 @@
 
         rangeInfo.innerHTML = `
           <div class="info-box success" style="margin-top: 1rem;">
-            <strong>✅ Suggested Range:</strong><br>
+            <strong>Suggested Range:</strong><br>
             ${data.suggestedRange}
             <div style="margin-top: 0.5rem; font-size: 0.9rem; color: #94a3b8;">
               Last used: ${data.lastNumber > 0 ? `${prefix}-${String(data.lastNumber).padStart(4, '0')}` : 'None'}
@@ -459,7 +459,7 @@
         showStatus(`Preview error: ${error.message}`, 'error');
       } finally {
         previewBtn.disabled = false;
-        previewBtn.innerHTML = '👁️ Generate Preview';
+        previewBtn.innerHTML = 'Generate Preview';
       }
     }
 
@@ -507,16 +507,16 @@
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
 
-        showStatus(`✅ Success! Generated ${count} QR codes. PDF downloaded.`, 'success');
+        showStatus(`Success! Generated ${count} QR codes. PDF downloaded.`, 'success');
 
         // Clear preview
         document.getElementById('previewGrid').style.display = 'none';
 
       } catch (error) {
-        showStatus(`❌ Error: ${error.message}`, 'error');
+        showStatus(`Error: ${error.message}`, 'error');
       } finally {
         generateBtn.disabled = false;
-        generateBtn.innerHTML = '📥 Generate PDF Sheet';
+        generateBtn.innerHTML = 'Generate PDF Sheet';
       }
     }
 
