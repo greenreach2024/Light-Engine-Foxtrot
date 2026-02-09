@@ -50,7 +50,7 @@ stdout_logfile=/dev/stdout\n\
 stdout_logfile_maxbytes=0\n\
 stderr_logfile=/dev/stderr\n\
 stderr_logfile_maxbytes=0\n\
-environment=NODE_ENV=production,PORT=8091\n\
+environment=NODE_ENV=production,PORT=8091,EDGE_MODE=false\n\
 \n\
 [program:python]\n\
 command=python3 -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --workers 1\n\
