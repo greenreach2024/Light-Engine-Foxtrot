@@ -24,6 +24,11 @@ COPY requirements.txt ./
 # Install Node.js dependencies (production only)
 RUN npm ci --only=production
 
+# Set environment variables for the entire container
+ENV NODE_ENV=production
+ENV PORT=8091
+ENV EDGE_MODE=false
+
 # Install Python dependencies
 RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
