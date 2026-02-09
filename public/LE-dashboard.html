@@ -138,6 +138,26 @@
     console.log('🔴 DEBUG BANNER: LE-dashboard.html loaded at', new Date().toISOString());
   </script>
   
+  <!-- PRIVATE MODE BANNER: Shows when localStorage is restricted -->
+  <div id="privateModeWarning" style="display: none; position: fixed; top: 30px; left: 0; right: 0; background: #8b5cf6; color: white; padding: 8px 16px; font-size: 13px; text-align: center; z-index: 99998; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+    🔒 <strong>Private Browsing Detected</strong> - Session will end when you close this tab. Authentication saved to sessionStorage only.
+  </div>
+  <script>
+    // Detect private browsing mode by checking if localStorage is restricted
+    (function detectPrivateMode() {
+      try {
+        localStorage.setItem('__test__', '1');
+        localStorage.removeItem('__test__');
+        console.log('✅ localStorage available (normal browsing mode)');
+      } catch (e) {
+        // localStorage is blocked - show warning
+        document.getElementById('privateModeWarning').style.display = 'block';
+        console.warn('⚠️ localStorage blocked - private browsing mode detected');
+        console.log('💡 Authentication will work via sessionStorage (this tab only)');
+      }
+    })();
+  </script>
+  
   <div class="dashboard-shell">
 
 <aside class="dashboard-sidebar" aria-label="Setup and management navigation">
@@ -2513,7 +2533,7 @@
           passwordChangeStatus.style.color = '#3b82f6';
           
           try {
-            const token = localStorage.getItem('token');
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
             const response = await fetch('/api/auth/change-password', {
               method: 'POST',
               headers: {
@@ -3006,13 +3026,22 @@
   <script>
     // Check if user has completed setup wizard
     async function checkSetupStatus() {
-      const token = localStorage.getItem('token');
+      // Check BOTH sessionStorage (works in private mode) AND localStorage
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       
       if (!token) {
-        console.log('[Dashboard] No token found, redirecting to login');
-        window.location.href = '/farm-admin-login.html';
+        console.error('[Dashboard] ❌ No token found in sessionStorage or localStorage');
+        console.log('[Dashboard] 📍 Private browsing mode? Token may not persist across pages');
+        console.log('[Dashboard] 📍 Please log in at: ' + window.location.origin + '/farm-admin-login.html');
+        console.log('[Dashboard] 🔄 Redirecting to login page in 2 seconds...');
+        
+        setTimeout(() => {
+          window.location.href = '/farm-admin-login.html';
+        }, 2000);
         return;
       }
+      
+      console.log('[Dashboard] ✅ Token found:', token.substring(0, 20) + '...');
       
       try {
         const response = await fetch('/api/setup-wizard/status', {
@@ -3020,7 +3049,8 @@
         });
         
         if (!response.ok) {
-          console.log('[Dashboard] Setup status check failed, may need re-auth');
+          console.warn('[Dashboard] ⚠️ Setup status check failed (HTTP ' + response.status + ')');
+          console.log('[Dashboard] Token may be invalid or expired - consider re-logging in');
           return; // Don't redirect on error, let normal auth flow handle it
         }
         

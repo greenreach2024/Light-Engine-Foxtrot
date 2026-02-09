@@ -233,27 +233,36 @@ async function handleLogin(e) {
             };
             
             saveSession(session);
+            
+            // ALWAYS save to sessionStorage (works in private mode within same tab)
             sessionStorage.setItem('token', data.token);
             sessionStorage.setItem('farm_id', data.farmId || farmId);
             if (data.farmName) sessionStorage.setItem('farm_name', data.farmName);
             if (data.email || email) sessionStorage.setItem('email', data.email || email);
             
-            // Save remember me
-            if (remember) {
-                localStorage.setItem(STORAGE_KEY_REMEMBER, JSON.stringify({
-                    farmId,
-                    email
-                }));
+            // ALWAYS save to localStorage as fallback (may be restricted in private mode)
+            // This helps with cross-tab access and normal mode persistence
+            try {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('farm_id', data.farmId || farmId);
                 if (data.farmName) localStorage.setItem('farm_name', data.farmName);
                 if (data.email || email) localStorage.setItem('email', data.email || email);
+            } catch (e) {
+                console.warn('[Login] localStorage blocked (private mode?), using sessionStorage only');
+            }
+            
+            // Save remember me preference
+            if (remember) {
+                try {
+                    localStorage.setItem(STORAGE_KEY_REMEMBER, JSON.stringify({
+                        farmId,
+                        email
+                    }));
+                } catch (e) {
+                    console.warn('[Login] Cannot save remember-me preference in private mode');
+                }
             } else {
                 localStorage.removeItem(STORAGE_KEY_REMEMBER);
-                localStorage.removeItem('token');
-                localStorage.removeItem('farm_id');
-                localStorage.removeItem('farm_name');
-                localStorage.removeItem('email');
             }
             
             showAlert('success', 'Login successful! Redirecting...');
@@ -779,12 +788,16 @@ async function refreshData() {
  */
 function logout() {
     console.log('🚪 Returning to home...');
+    console.log('🔍 DEBUG - Logout called from:', window.location.href);
+    console.log('🔍 DEBUG - Redirecting to: /LE-dashboard.html');
+    console.log('🔍 DEBUG - Current page version:', window.__PAGE_VERSION__);
     
     // Clear any stored session data
     localStorage.removeItem(STORAGE_KEY_SESSION);
     
-    // Redirect to home page (app selector with large buttons)
-    window.location.href = '/index.charlie.html';
+    // Redirect to updated dashboard with new UI
+    console.log('🔍 DEBUG - Executing redirect now...');
+    window.location.href = '/LE-dashboard.html';
 }
 
 /**

@@ -3,7 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- DEBUG: LE-farm-admin.html - Built 2026-02-08 14:45 - Commit fea5f47 -->
     <title>Farm Admin - Light Engine</title>
+    <script>
+      // DEBUG: Version tracking and authentication status
+      const PAGE_VERSION = {
+        file: 'LE-farm-admin.html',
+        loaded: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+        hasToken: !!(localStorage.getItem('token') || sessionStorage.getItem('token')),
+        tokenPreview: (localStorage.getItem('token') || sessionStorage.getItem('token') || '').substring(0, 20)
+      };
+      console.log('🔍 PAGE LOAD DEBUG:', PAGE_VERSION);
+      console.log('🔍 Cache headers:', document.lastModified);
+      if (!PAGE_VERSION.hasToken) {
+        console.warn('⚠️  NO AUTH TOKEN FOUND - You may need to log in at: ' + window.location.origin + '/farm-admin-login.html');
+      } else {
+        console.log('✅ Auth token present:', PAGE_VERSION.tokenPreview + '...');
+      }
+      window.__PAGE_VERSION__ = PAGE_VERSION;
+    </script>
     <script src="./js/console-guard.js"></script>
     <link rel="stylesheet" href="/styles/styles.charlie.css?v=2025-12-10-01">
     <link rel="stylesheet" href="/styles/nav-color-palette.css">
@@ -1097,6 +1117,35 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
+    <!-- DEBUG BANNER: Visible version indicator -->
+    <div style="position: fixed; top: 0; left: 0; background: #10b981; color: #000; padding: 4px 12px; font-size: 11px; font-family: monospace; z-index: 99999; border-bottom-right-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+      🔍 LE-farm-admin.html | v2026-02-08-1445 | Loaded: <span id="debugLoadTime"></span>
+    </div>
+    <script>
+      document.getElementById('debugLoadTime').textContent = new Date().toLocaleTimeString();
+      console.log('🟢 DEBUG BANNER: LE-farm-admin.html loaded at', new Date().toISOString());
+    </script>
+    
+    <!-- PRIVATE MODE BANNER: Shows when localStorage is restricted -->
+    <div id="privateModeWarning" style="display: none; position: fixed; top: 30px; left: 0; right: 0; background: #8b5cf6; color: white; padding: 8px 16px; font-size: 13px; text-align: center; z-index: 99998; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+      🔒 <strong>Private Browsing Detected</strong> - Session will end when you close this tab. Authentication saved to sessionStorage only.
+    </div>
+    <script>
+      // Detect private browsing mode by checking if localStorage is restricted
+      (function detectPrivateMode() {
+        try {
+          localStorage.setItem('__test__', '1');
+          localStorage.removeItem('__test__');
+          console.log('✅ localStorage available (normal browsing mode)');
+        } catch (e) {
+          // localStorage is blocked - show warning
+          document.getElementById('privateModeWarning').style.display = 'block';
+          console.warn('⚠️ localStorage blocked - private browsing mode detected');
+          console.log('💡 Authentication will work via sessionStorage (this tab only)');
+        }
+      })();
+    </script>
+    
     <!-- Page Header Navigation -->
     <header class="page-header">
         <div>
