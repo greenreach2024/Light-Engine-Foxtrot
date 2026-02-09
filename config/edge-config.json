@@ -1,14 +1,14 @@
 {
-  "mode": "edge",
+  "mode": "cloud",
   "farmId": "FARM-TEST-WIZARD-001",
   "farmName": "This is Your Farm",
   "apiKey": "demo-api-key-12345678901234567890123456789012",
-  "centralApiUrl": "http://localhost:3000",
+  "centralApiUrl": "https://greenreachgreens.com",
   "syncInterval": 300000,
   "heartbeatInterval": 30000,
-  "hardwareModel": "Development Laptop",
+  "hardwareModel": "AWS Cloud",
   "version": "1.0.0",
-  "offlineMode": true,
+  "offlineMode": false,
   "syncEnabled": false,
-  "registrationComplete": true
+  "registrationComplete": false
 }
