@@ -108,8 +108,23 @@ mkdir -p $TEMP_DIR
 # Copy only essential files
 cp -r lib $TEMP_DIR/ 2>/dev/null || true
 cp -r public $TEMP_DIR/ 2>/dev/null || true
+cp -r services $TEMP_DIR/
+if [ ! -d "$TEMP_DIR/services" ]; then
+    echo "❌ Failed to copy services directory!"
+    exit 1
+fi
+echo "  Services directory contents:"
+ls $TEMP_DIR/services | head -n 5
 cp -r scripts $TEMP_DIR/ 2>/dev/null || true
 cp -r backend $TEMP_DIR/ 2>/dev/null || true
+cp -r server $TEMP_DIR/
+# Verify server directory
+if [ ! -d "$TEMP_DIR/server" ]; then
+    echo "❌ Failed to copy server directory!"
+    exit 1
+fi
+echo "  Server directory contents:"
+ls $TEMP_DIR/server/middleware
 cp -r src $TEMP_DIR/ 2>/dev/null || true
 cp -r aws-testing $TEMP_DIR/
 cp package*.json $TEMP_DIR/
@@ -159,9 +174,15 @@ echo "  Logs: https://console.aws.amazon.com/codesuite/codebuild/projects/$BUILD
 
 # Wait for build to complete
 echo "  Waiting for build..."
-aws codebuild wait build-complete --ids $BUILD_ID --region $AWS_REGION
-
-BUILD_STATUS=$(aws codebuild batch-get-builds --ids $BUILD_ID --region $AWS_REGION --query 'builds[0].buildStatus' --output text)
+while true; do
+  BUILD_STATUS=$(aws codebuild batch-get-builds --ids $BUILD_ID --region $AWS_REGION --query 'builds[0].buildStatus' --output text)
+  if [[ "$BUILD_STATUS" == "SUCCEEDED" || "$BUILD_STATUS" == "FAILED" || "$BUILD_STATUS" == "STOPPED" || "$BUILD_STATUS" == "FAULT" || "$BUILD_STATUS" == "TIMED_OUT" ]]; then
+    break
+  fi
+  echo -n "."
+  sleep 10
+done
+echo ""
 
 if [[ "$BUILD_STATUS" != "SUCCEEDED" ]]; then
     echo "❌ Build failed: $BUILD_STATUS"
@@ -261,8 +282,11 @@ echo "  ✓ Roles configured"
 echo ""
 echo "6️⃣  Registering ECS task definition..."
 
+ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/foxtrot-test"
+
 TASK_DEF=$(cat <<EOF
 {
+
   "family": "foxtrot-test",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],

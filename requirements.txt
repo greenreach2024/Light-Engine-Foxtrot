@@ -16,6 +16,8 @@ psycopg2-binary==2.9.9
 bcrypt==4.1.2
 email-validator==2.1.0
 pyjwt==2.8.0
+passlib==1.7.4
+python-kasa==0.5.4
 
 # Email service (optional - choose one)
 # sendgrid==6.11.0  # Alternative to AWS SES
@@ -34,3 +36,4 @@ pillow>=10.0.0
 
 # AI Vision for plant health analysis
 openai>=1.10.0
+passlib==1.7.4

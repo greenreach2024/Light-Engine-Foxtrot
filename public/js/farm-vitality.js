@@ -32,6 +32,7 @@ class VitalityViewManager {
     
     // Set up blob click interaction
     this.setupBlobClickInteraction();
+    this.setupBlobHoverInteraction();
     
     // Apply settings
     this.applySettings();
@@ -726,59 +727,101 @@ class VitalityViewManager {
     const wobbleAmt = (1 - healthFactor) * 5 + 4 + (healthFactor * 3); 
     const wobblePoints = 28;
     
+    // Create the wobble path
     ctx.beginPath();
     for (let i = 0; i <= wobblePoints; i++) {
-      const angle = (i / wobblePoints) * Math.PI * 2;
-      const wobble = Math.sin(angle * 3 + this.time * 0.08 * speedMultiplier + index) * wobbleAmt;
-      const r = baseSize + wobble;
-      const px = r * Math.cos(angle);
-      const py = r * Math.sin(angle);
-      
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+        const angle = (i / wobblePoints) * Math.PI * 2;
+        // Dual-frequency wobble for more "jello" feel like B.O.B.
+        const wobble1 = Math.sin(angle * 3 + this.time * 0.05 * speedMultiplier + index);
+        const wobble2 = Math.sin(angle * 5 - this.time * 0.03 + index);
+        const r = baseSize + (wobble1 * wobbleAmt) + (wobble2 * wobbleAmt * 0.3);
+        const px = r * Math.cos(angle);
+        const py = r * Math.sin(angle);
+        
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
     }
     ctx.closePath();
     
-    // Fill blob with iridescent gradient
+    // 1. Base Gradient (Translucent Jelly)
     const shimmerColor = this.getIridescentShift(baseColor, index, this.time * 0.02);
-    const gradient = ctx.createRadialGradient(-baseSize * 0.15, -baseSize * 0.25, baseSize * 0.2, 0, 0, baseSize * 1.05);
-    gradient.addColorStop(0, baseColor + 'ff');
-    gradient.addColorStop(0.45, shimmerColor);
-    gradient.addColorStop(1, baseColor + '88');
-    ctx.shadowBlur = 32;
-    ctx.shadowColor = baseColor;
+    const gradient = ctx.createRadialGradient(-baseSize * 0.3, -baseSize * 0.4, 0, 0, 0, baseSize);
+    // B.O.B. is semi-transparent
+    gradient.addColorStop(0, this.hexToRgba(baseColor, 0.8));
+    gradient.addColorStop(0.6, this.hexToRgba(baseColor, 0.5));
+    gradient.addColorStop(1, this.hexToRgba(baseColor, 0.7)); // Darker rim
+    
     ctx.fillStyle = gradient;
+    ctx.shadowBlur = 40;
+    ctx.shadowColor = baseColor;
     ctx.fill();
 
-    // GLOSSY HIGHLIGHT (silky membrane)
-    const highlightSize = baseSize * 0.38;
+    // 2. Trapped Bubbles (Internal Volume)
+    // Deterministic random generator for bubbles based on index
+    const bubbleCount = 5;
+    for(let b=0; b<bubbleCount; b++) {
+        const seed = index * 100 + b;
+        const speed = 0.02 + ((seed % 5) / 100);
+        const bubbleR = baseSize * (0.1 + ((seed % 10)/50)); // 10-30% size
+        const angleOffset = seed;
+        const orbitR = baseSize * 0.5;
+        
+        // Bubbles float inside
+        const bx = Math.sin(this.time * speed + angleOffset) * orbitR * 0.8;
+        const by = Math.cos(this.time * speed * 0.7 + angleOffset) * orbitR * 0.6;
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.beginPath();
+        ctx.arc(bx, by, bubbleR, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Bubble highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.beginPath();
+        ctx.arc(bx - bubbleR*0.3, by - bubbleR*0.3, bubbleR*0.2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // 3. Highlight (Glossy Sheen)
+    const highlightSize = baseSize * 0.45;
     const highlightGradient = ctx.createRadialGradient(
-      -baseSize * 0.25, -baseSize * 0.35, 0,
-      -baseSize * 0.25, -baseSize * 0.35, highlightSize
+      -baseSize * 0.3, -baseSize * 0.4, 0,
+      -baseSize * 0.3, -baseSize * 0.4, highlightSize
     );
-    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
-    highlightGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    highlightGradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.4)');
     highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    
     ctx.shadowBlur = 0;
     ctx.fillStyle = highlightGradient;
     ctx.beginPath();
-    ctx.ellipse(-baseSize * 0.25, -baseSize * 0.35, highlightSize, highlightSize * 0.75, -0.35, 0, Math.PI * 2);
+    ctx.ellipse(-baseSize * 0.3, -baseSize * 0.4, highlightSize, highlightSize * 0.8, -0.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Silky membrane outline (soft)
-    ctx.strokeStyle = shimmerColor;
-    ctx.lineWidth = 4;
+    // 4. Rim Lighting (Fresnel Effect)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 3;
     ctx.stroke();
 
-    ctx.globalAlpha = 0.85;
-    ctx.strokeStyle = baseColor;
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    ctx.restore();
     
-    // Draw face based on emotion
+    // Draw face based on emotion (Now Cyclops!)
+    // Pass stretch/squash context or adjust Y to match body movement? 
+    // Actually drawBlobFace draws in local coords if we didn't restore context, 
+    // but we DID restore ctx. The previous code didn't transform the face.
+    // Let's re-save context for the face to follow the squash/stretch if we want attached features.
+    // But original code drew face AFTER restore, meaning face floats separate from body mesh?
+    // Let's keep it AFTER restore for stability, but we need to track the Y offset.
+    const faceY = blobY + floatOffset; // Correct Y position accounting for float
+    
+    // Wait, the original code drew face inside the restore block? 
+    // No, `drawBlobFace` call was inside the restore block in my READ.
+    
+    // Re-apply translation for face
+    ctx.save();
+    ctx.translate(x, blobY);
+    ctx.scale(stretch, squash);
     this.drawBlobFace(ctx, emotion, baseSize, freshness.stale);
-    
     ctx.restore();
     
     // Label below blob
@@ -804,40 +847,51 @@ class VitalityViewManager {
   }
   
   /**
+   * Helper: Hex to RGBA
+   */
+  hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  /**
    * Draw blob facial features based on emotion
    */
   drawBlobFace(ctx, emotion, size, isStale) {
-    const eyeY = -size * 0.2;
-    const eyeSpacing = size * 0.35; // Was 0.3, wider spacing
-    const eyeSize = size * 0.18; // Was 0.12, 50% BIGGER eyes for cute factor
+    // ONE BIG EYE (Cyclops style like B.O.B.)
+    const eyeY = -size * 0.25;
+    const eyeSize = size * 0.45; // Huge single eye
     
     // Eyes (glossy, iridescent)
     const irisLight = isStale ? '#9ca3af' : '#e0f2fe';
-    const irisDark = isStale ? '#6b7280' : '#a855f7';
+    const irisDark = isStale ? '#6b7280' : '#4f46e5'; // Deep blue/indigo
     const pupilColor = isStale ? '#4b5563' : '#0f172a';
-    const eyeWhite = isStale ? 'rgba(229, 231, 235, 0.6)' : 'rgba(255, 255, 255, 0.9)';
+    const eyeWhite = isStale ? 'rgba(229, 231, 235, 0.8)' : 'rgba(255, 255, 255, 0.95)';
 
     const drawEye = (ex, ey, mood) => {
       // Eyeball
       ctx.fillStyle = eyeWhite;
       ctx.beginPath();
-      ctx.ellipse(ex, ey, eyeSize * 0.95, eyeSize * 0.85, 0, 0, Math.PI * 2);
+      // Slightly oblate for cartoon feel
+      ctx.ellipse(ex, ey, eyeSize, eyeSize * 0.95, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Iris
+      // Iris (Large)
       const irisGradient = ctx.createRadialGradient(
-        ex - eyeSize * 0.25,
-        ey - eyeSize * 0.25,
+        ex - eyeSize * 0.1,
+        ey - eyeSize * 0.1,
         eyeSize * 0.1,
         ex,
         ey,
-        eyeSize * 0.7
+        eyeSize * 0.75
       );
       irisGradient.addColorStop(0, irisLight);
       irisGradient.addColorStop(1, irisDark);
       ctx.fillStyle = irisGradient;
       ctx.beginPath();
-      ctx.arc(ex, ey, eyeSize * 0.55, 0, Math.PI * 2);
+      ctx.arc(ex, ey, eyeSize * 0.6, 0, Math.PI * 2);
       ctx.fill();
 
       // Pupil
@@ -846,57 +900,61 @@ class VitalityViewManager {
       ctx.arc(ex, ey, eyeSize * 0.25, 0, Math.PI * 2);
       ctx.fill();
 
-      // Highlights
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      // Specular Highlights (Sharp)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.beginPath();
-      ctx.arc(ex - eyeSize * 0.2, ey - eyeSize * 0.2, eyeSize * 0.12, 0, Math.PI * 2);
+      ctx.arc(ex - eyeSize * 0.25, ey - eyeSize * 0.25, eyeSize * 0.15, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
       ctx.beginPath();
-      ctx.arc(ex + eyeSize * 0.12, ey + eyeSize * 0.1, eyeSize * 0.07, 0, Math.PI * 2);
+      ctx.arc(ex + eyeSize * 0.2, ey + eyeSize * 0.2, eyeSize * 0.08, 0, Math.PI * 2);
       ctx.fill();
 
-      // Mood eyelid accents
+      // Mood Eyelid (Cyclops)
       if (mood === 'sad') {
-        ctx.strokeStyle = isStale ? '#6b7280' : '#1a2332';
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
+        // Heavy lid
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; 
         ctx.beginPath();
-        ctx.moveTo(ex - eyeSize * 0.9, ey - eyeSize * 0.2);
-        ctx.quadraticCurveTo(ex, ey - eyeSize * 0.55, ex + eyeSize * 0.9, ey - eyeSize * 0.2);
+        ctx.rect(ex - eyeSize, ey - eyeSize, eyeSize*2, eyeSize*0.8);
+        ctx.fill();
+        
+        ctx.strokeStyle = isStale ? '#6b7280' : '#1e3a8a';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(ex, ey, eyeSize, 1.1 * Math.PI, 1.9 * Math.PI);
         ctx.stroke();
       } else if (mood === 'happy') {
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(ex - eyeSize * 0.85, ey + eyeSize * 0.35);
-        ctx.quadraticCurveTo(ex, ey + eyeSize * 0.55, ex + eyeSize * 0.85, ey + eyeSize * 0.35);
-        ctx.stroke();
+        // Cheek squash from bottom? Or just wide eye.
+        // Let's add a lower lid curve for happy squint
       }
     };
 
-    drawEye(-eyeSpacing, eyeY, emotion);
-    drawEye(eyeSpacing, eyeY, emotion);
+    drawEye(0, eyeY, emotion);
     
-    // Mouth - BIGGER and more expressive
-    const mouthY = size * 0.25;
-    const mouthWidth = size * 0.45; // Was 0.4, slightly wider
+    // Mouth
+    const mouthY = size * 0.35;
+    const mouthWidth = size * 0.35;
     
-    ctx.strokeStyle = isStale ? '#6b7280' : '#1a2332';
-    ctx.lineWidth = 5; // Was 4, thicker for cartoon style
+    ctx.strokeStyle = isStale ? '#6b7280' : '#1e3a8a'; // Dark blue ink for mouth
+    ctx.lineWidth = 6;
     ctx.lineCap = 'round';
     ctx.beginPath();
     
     if (emotion === 'sad') {
-      // Sad mouth (BIG frown)
-      ctx.arc(0, mouthY + 25, mouthWidth * 1.1, 0.2 * Math.PI, 0.8 * Math.PI);
+      ctx.arc(0, mouthY + size*0.1, mouthWidth, 1.2 * Math.PI, 1.8 * Math.PI);
     } else if (emotion === 'neutral') {
-      // Neutral mouth (straight line)
-      ctx.moveTo(-mouthWidth, mouthY);
-      ctx.lineTo(mouthWidth, mouthY);
+      ctx.moveTo(-mouthWidth*0.5, mouthY);
+      ctx.lineTo(mouthWidth*0.5, mouthY);
     } else {
-      // Happy mouth (BIG smile)
-      ctx.arc(0, mouthY - 15, mouthWidth * 1.2, 0.15 * Math.PI, 0.85 * Math.PI, true);
+      // Big toothless gummy smile
+      ctx.arc(0, mouthY - size*0.05, mouthWidth, 0.2 * Math.PI, 0.8 * Math.PI);
+      
+      // Add optional smile dimples
+      ctx.moveTo(-mouthWidth * 1.1, mouthY - size*0.05);
+      ctx.lineTo(-mouthWidth * 0.9, mouthY + size*0.05);
+      ctx.moveTo(mouthWidth * 1.1, mouthY - size*0.05);
+      ctx.lineTo(mouthWidth * 0.9, mouthY + size*0.05);
     }
     
     ctx.stroke();
@@ -968,6 +1026,53 @@ class VitalityViewManager {
           this.showBlobDetails(blob.component, e.clientX, e.clientY);
         }
       });
+    });
+  }
+
+  /**
+   * Set up blob hover interaction for Global Help
+   */
+  setupBlobHoverInteraction() {
+    const blobsCanvas = document.getElementById('blobsCanvas');
+    if (!blobsCanvas) return;
+    
+    blobsCanvas.addEventListener('mousemove', (e) => {
+      // Only active if Global Help is enabled
+      if (!window.LightEngineHelp || !window.LightEngineHelp.isActive()) return;
+      if (this.currentView !== 'blobs' || !this.vitalityData) return;
+      
+      const rect = blobsCanvas.getBoundingClientRect();
+      const scaleX = blobsCanvas.width / rect.width;
+      const scaleY = blobsCanvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+      
+      let hoveredBlob = null;
+      
+      // Check collision
+      this.blobPositions.forEach((blob) => {
+        const dx = x - blob.x;
+        const dy = y - blob.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < blob.size) {
+          hoveredBlob = blob;
+        }
+      });
+      
+      if (hoveredBlob) {
+        // Show Global Help
+        window.LightEngineHelp.show(
+            e.clientX, 
+            e.clientY, 
+            hoveredBlob.component.label,
+            `This blob represents the ${hoveredBlob.component.label} system. Current score: ${hoveredBlob.component.score}/100. Status: ${hoveredBlob.component.status}.`,
+            `AI Insight: The ${hoveredBlob.component.label} system is performing ` + (hoveredBlob.component.score > 80 ? 'optimally.' : 'below peak efficiency. Check diagnostic logs.')
+        );
+        blobsCanvas.style.cursor = 'help';
+      } else {
+        window.LightEngineHelp.hide();
+        blobsCanvas.style.cursor = 'default';
+      }
     });
   }
   

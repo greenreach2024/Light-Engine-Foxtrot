@@ -73,14 +73,14 @@ try:
     KASA_AVAILABLE = True
 except ImportError:
     KASA_AVAILABLE = False
-    LOGGER.warning("python-kasa not available. Device control disabled.")
+    logging.getLogger(__name__).warning("python-kasa not available. Device control disabled.")
 
 try:
     import paho.mqtt.client as mqtt  # type: ignore
     MQTT_AVAILABLE = True
 except ImportError:
     MQTT_AVAILABLE = False
-    LOGGER.warning("paho-mqtt not available. MQTT device control disabled.")
+    logging.getLogger(__name__).warning("paho-mqtt not available. MQTT device control disabled.")
 from backend.device_models import (
     Device,
     GroupSchedule,

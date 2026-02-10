@@ -152,4 +152,32 @@
     }, 3000);
   }
 
+  // Expose API for Canvas Elements
+  window.LightEngineHelp = {
+    show: (x, y, title, text, aiText) => {
+        if (!text && !aiText) return;
+        titleEl.textContent = title || 'Help';
+        textEl.textContent = text || '';
+        if (aiText) {
+          aiContainer.style.display = 'block';
+          aiContent.textContent = aiText;
+        } else {
+          aiContainer.style.display = 'none';
+        }
+        popup.style.display = 'block';
+        
+        // Manual positioning
+        const rect = popup.getBoundingClientRect();
+        let finalX = x + 15;
+        let finalY = y + 15;
+        if (finalX + rect.width > window.innerWidth) finalX = x - rect.width - 10;
+        if (finalY + rect.height > window.innerHeight) finalY = y - rect.height - 10;
+        
+        popup.style.left = `${finalX}px`;
+        popup.style.top = `${finalY}px`;
+    },
+    hide: hidePopup,
+    isActive: () => helpActive
+  };
+
 })();

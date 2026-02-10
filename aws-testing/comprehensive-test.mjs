@@ -6,7 +6,7 @@
 
 import { chromium } from 'playwright';
 
-const BASE_URL = process.env.LE_BASE_URL || 'http://52.90.57.85:8091';
+const BASE_URL = process.env.LE_BASE_URL || 'http://3.87.224.243:8091';
 const FARM_ID = process.env.LE_FARM_ID || 'FARM-TEST-WIZARD-001';
 const PASSWORD = process.env.LE_PASSWORD || 'Grow123';
 const EMAIL = process.env.LE_EMAIL || '';

@@ -1,0 +1,51 @@
+b/39488449927340730577067515873980573933151493185366261783/s	f/39488449944936018538708177538693041821568452233881190401/s
+EVENTS	1770723336133	           ^^^^^^^^^^^^^^^^^^^^^^^^^^	1770723335736
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/click/core.py", line 1406, in main	1770723335736
+EVENTS	1770723336133	    rv = self.invoke(ctx)	1770723335737
+EVENTS	1770723336133	         ^^^^^^^^^^^^^^^^	1770723335737
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/click/core.py", line 1269, in invoke	1770723335737
+EVENTS	1770723336133	    return ctx.invoke(self.callback, **ctx.params)	1770723335737
+EVENTS	1770723336133	           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^	1770723335737
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/click/core.py", line 824, in invoke	1770723335737
+EVENTS	1770723336133	    return callback(*args, **kwargs)	1770723335738
+EVENTS	1770723336133	           ^^^^^^^^^^^^^^^^^^^^^^^^^	1770723335738
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/uvicorn/main.py", line 416, in main	1770723335738
+EVENTS	1770723336133	    run(	1770723335738
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/uvicorn/main.py", line 587, in run	1770723335738
+EVENTS	1770723336133	    server.run()	1770723335738
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/uvicorn/server.py", line 61, in run	1770723335738
+EVENTS	1770723336133	    return asyncio.run(self.serve(sockets=sockets))	1770723335738
+EVENTS	1770723336133	           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^	1770723335738
+EVENTS	1770723336133	  File "/usr/lib/python3.11/asyncio/runners.py", line 190, in run	1770723335738
+EVENTS	1770723336133	    return runner.run(main)	1770723335739
+EVENTS	1770723336133	           ^^^^^^^^^^^^^^^^	1770723335739
+EVENTS	1770723336133	  File "/usr/lib/python3.11/asyncio/runners.py", line 118, in run	1770723335739
+EVENTS	1770723336133	    return self._loop.run_until_complete(task)	1770723335739
+EVENTS	1770723336133	           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^	1770723335739
+EVENTS	1770723336133	  File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete	1770723335739
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/uvicorn/server.py", line 68, in serve	1770723335739
+EVENTS	1770723336133	    config.load()	1770723335739
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/uvicorn/config.py", line 467, in load	1770723335739
+EVENTS	1770723336133	    self.loaded_app = import_from_string(self.app)	1770723335739
+EVENTS	1770723336133	                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^	1770723335740
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/uvicorn/importer.py", line 24, in import_from_string	1770723335740
+EVENTS	1770723336133	    raise exc from None	1770723335740
+EVENTS	1770723336133	  File "/usr/local/lib/python3.11/dist-packages/uvicorn/importer.py", line 21, in import_from_string	1770723335740
+EVENTS	1770723336133	    module = importlib.import_module(module_str)	1770723335740
+EVENTS	1770723336133	             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^	1770723335740
+EVENTS	1770723336133	  File "/usr/lib/python3.11/importlib/__init__.py", line 126, in import_module	1770723335740
+EVENTS	1770723336133	    return _bootstrap._gcd_import(name[level:], package, level)	1770723335740
+EVENTS	1770723336133	           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^	1770723335740
+EVENTS	1770723336133	  File "<frozen importlib._bootstrap>", line 1206, in _gcd_import	1770723335740
+EVENTS	1770723336133	  File "<frozen importlib._bootstrap>", line 1178, in _find_and_load	1770723335740
+EVENTS	1770723336133	  File "<frozen importlib._bootstrap>", line 1149, in _find_and_load_unlocked	1770723335740
+EVENTS	1770723336133	  File "<frozen importlib._bootstrap>", line 690, in _load_unlocked	1770723335740
+EVENTS	1770723336133	  File "<frozen importlib._bootstrap_external>", line 940, in exec_module	1770723335740
+EVENTS	1770723336133	  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed	1770723335740
+EVENTS	1770723336133	  File "/app/backend/server.py", line 56, in <module>	1770723335740
+EVENTS	1770723336133	    from backend.wholesale_auth import router as wholesale_auth_router	1770723335740
+EVENTS	1770723336133	  File "/app/backend/wholesale_auth.py", line 12, in <module>	1770723335741
+EVENTS	1770723336133	    from passlib.context import CryptContext	1770723335741
+EVENTS	1770723336133	ModuleNotFoundError: No module named 'passlib'	1770723335741
+EVENTS	1770723341130	2026-02-10 11:35:36,525 WARN stopped: python (exit status 1)	1770723336525
+EVENTS	1770723341130	2026-02-10 11:35:36,525 WARN stopped: python (exit status 1)	1770723336525

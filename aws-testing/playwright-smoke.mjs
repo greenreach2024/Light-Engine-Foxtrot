@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const baseUrl = process.env.LE_BASE_URL || 'http://52.90.57.85:8091';
+const baseUrl = process.env.LE_BASE_URL || 'http://3.87.224.243:8091';
 const farmId = process.env.LE_FARM_ID || '';
 const password = process.env.LE_PASSWORD || '';
 const email = process.env.LE_EMAIL || '';
