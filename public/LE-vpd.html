@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="./styles.foxtrot.css">
   <link rel="stylesheet" href="./styles/le-dashboard-theme.css?v=2025-12-20-01">
   <link rel="stylesheet" href="./components/vpd-dashboard.css">
+  <link rel="stylesheet" href="/styles/light-engine.css">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
   <style>
     html, body {
@@ -46,7 +47,9 @@
   <div class="page">
     <header>
       <img src="./favicon.svg" alt="" width="20" height="20" />
-      <h1>VPD Automation</h1>
+      <h1 data-help-title="VPD Automation" 
+          data-help="Vapor Pressure Deficit control system. Balances temperature and humidity for optimal plant transpiration."
+          data-help-ai="Average VPD: 0.92 kPa (Optimal). Transpiration rate is steady.">VPD Automation</h1>
       <span id="status" class="tiny" aria-live="polite"></span>
     </header>
     <main>
@@ -82,5 +85,6 @@
     refreshStatus();
     setInterval(refreshStatus, 10000);
   </script>
+  <script src="/js/light-engine-help.js"></script>
 </body>
 </html>

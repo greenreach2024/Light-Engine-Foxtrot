@@ -5,20 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wholesale Orders - Farm Dashboard</title>
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <link rel="stylesheet" href="/styles/light-engine.css">
   <style>
     :root {
-      --primary: #2d5016;
-      --primary-light: #3d6821;
-      --accent: #82c341;
-      --bg: #f5f7f3;
-      --surface: #ffffff;
-      --border: #d8e3cf;
-      --text: #1a1a1a;
-      --text-secondary: #5a5a5a;
-      --error: #c53030;
-      --success: #38a169;
-      --warning: #d69e2e;
-      --info: #3182ce;
+      /* Dark Theme Shim (Mapped to Light Engine Standard) */
+      --primary: var(--accent-green);      /* #10b981 */
+      --primary-light: #34d399;
+      --accent: var(--accent-blue);        /* #3b82f6 */
+      --bg: var(--bg-primary);             /* #0a0f1e */
+      --surface: var(--bg-card);           /* #1a2332 */
+      --border: var(--border);             /* #2d3748 */
+      --text: var(--text-primary);         /* #e5e7eb */
+      --text-secondary: var(--text-secondary); /* #9ca3af */
+      --error: var(--accent-red);          /* #ef4444 */
+      --success: var(--accent-green);      /* #10b981 */
+      --warning: var(--accent-yellow);     /* #f59e0b */
+      --info: var(--accent-blue);          /* #3b82f6 */
     }
 
     * {
@@ -47,7 +49,7 @@
     }
 
     header p {
-      color: rgba(255,255,255,0.9);
+      color: var(--text-secondary);
       font-size: 0.95rem;
     }
 
@@ -409,7 +411,7 @@
 </head>
 <body>
   <header>
-    <h1>Wholesale Orders Dashboard</h1>
+    <h1 data-help-title="Wholesale Orders" data-help="Manage incoming orders from restaurants and grocery partners." data-help-ai="Pending Orders: 3. Deadline approaching for 'Smoke Co'.">Wholesale Orders Dashboard</h1>
     <p>Review and respond to incoming wholesale orders</p>
   </header>
 
@@ -806,5 +808,6 @@
       app.init();
     });
   </script>
+  <script src="/js/light-engine-help.js"></script>
 </body>
 </html>

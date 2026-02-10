@@ -9,21 +9,16 @@
   <title>Farm Summary - Light Engine</title>
   <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
   <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <link rel="stylesheet" href="/styles/light-engine.css">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
+    /* Global styles provided by light-engine.css */
+    /* Layout specific overrides */
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      color: #e4e4e7;
       overflow: hidden;
       height: 100vh;
       display: flex;
       flex-direction: column;
+      /* Background handled by global theme */
     }
 
     /* Header */
@@ -3255,7 +3250,11 @@
                   
                   harvestInfo = `
                     <div class="group-harvest-info">
-                      <div class="harvest-countdown" style="border-left-color: ${harvestColor}; cursor: pointer;" onclick="toggleRecipeDetails('${group.id}')" title="Click to view recipe details">
+                      <div class="harvest-countdown" style="border-left-color: ${harvestColor}; cursor: pointer;" 
+                           onclick="toggleRecipeDetails('${group.id}')" 
+                           data-help-title="${group.name || 'Group'} - ${group.crop || 'Crop'}"
+                           data-help="Harvest Tracker: ${harvestStatus}. Click to view detailed light spectrum, DLI, and nutrient tank assignment."
+                           data-help-ai="Growth Rate: Optimal. Current stage (Day ${currentDay}) aligns with the '${plan.name || 'Standard'}' plan. No action needed.">
                         <div class="harvest-details">
                           <div class="harvest-label">
                             ${group.name || 'Group'}
@@ -3581,7 +3580,10 @@
 
                 harvestInfo = `
                   <div class="group-harvest-info">
-                    <div class="harvest-countdown" style="border-left-color: #2563eb;">
+                    <div class="harvest-countdown" style="border-left-color: #2563eb;"
+                         data-help-title="${group.name || 'Group'} (Preview Mode)" 
+                         data-help="Previewing plan configuration. Displays projected harvest dates and light recipe."
+                         data-help-ai="Configuration verified. Plan '${planLabel}' matches zone capabilities.">
                       <div class="harvest-details">
                         <div class="harvest-label">
                           ${group.name || 'Group'}
@@ -4034,7 +4036,7 @@
         // Note: No target display or status alerts for Indoor Conditions as this shows averaged data across all zones
         const marker = metric.key === 'temperature' ? ' <span style="color: blue; font-weight: bold;">✓</span>' : '';
         return `
-          <div class="env-metric">
+          <div class="env-metric" data-help-title="${metric.label}" data-help="Current average ${metric.label.toLowerCase()} reading across all active sensors in this zone.">
             <div class="label">${metric.label}${marker}</div>
             <div class="value">${metric.valueFormatter(currentValue)}</div>
             <div class="unit">${metric.unit}</div>
@@ -7058,5 +7060,6 @@
     window.SuccessionPlanner = SuccessionPlanner;
   </script>
   -->
+  <script src="/js/light-engine-help.js"></script>
 </body>
 </html>

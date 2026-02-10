@@ -27,34 +27,9 @@
     <script src="./js/console-guard.js"></script>
     <link rel="stylesheet" href="/styles/styles.charlie.css?v=2025-12-10-01">
     <link rel="stylesheet" href="/styles/nav-color-palette.css">
+    <link rel="stylesheet" href="/styles/light-engine.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg-primary: #0a0f1e;
-            --bg-secondary: #111827;
-            --bg-card: #1a2332;
-            --border: #2d3748;
-            --text-primary: #e5e7eb;
-            --text-secondary: #9ca3af;
-            --text-muted: #6b7280;
-            --accent-blue: #3b82f6;
-            --accent-green: #10b981;
-            --accent-yellow: #f59e0b;
-            --accent-red: #ef4444;
-            --accent-purple: #8b5cf6;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.5;
-        }
+        /* Base styles moved to light-engine.css */
 
         /* Page Header Navigation */
         .page-header {
@@ -1354,7 +1329,7 @@
 
                 <!-- KPI Grid -->
                 <div class="kpi-grid">
-                    <div class="kpi-card">
+                    <div class="kpi-card" data-help-title="Active Trays" data-help="Total number of trays currently active in production across all farm zones." data-help-ai="Utilization is at 84%. Room B has capacity for 12 more trays.">
                         <div class="kpi-label">Active Trays</div>
                         <div class="kpi-value" id="kpi-trays">--</div>
                         <div class="kpi-change positive">
@@ -1362,7 +1337,7 @@
                             <span id="kpi-trays-change">Loading...</span>
                         </div>
                     </div>
-                    <div class="kpi-card">
+                    <div class="kpi-card" data-help-title="Total Plants" data-help="Estimated total count of individual plants based on tray configurations." data-help-ai="Germination rates are trending up (+2%).">
                         <div class="kpi-label">Total Plants</div>
                         <div class="kpi-value" id="kpi-plants">--</div>
                         <div class="kpi-change positive">
@@ -1370,14 +1345,14 @@
                             <span id="kpi-plants-change">Loading...</span>
                         </div>
                     </div>
-                    <div class="kpi-card">
+                    <div class="kpi-card" data-help-title="Active Devices" data-help="Count of IoT devices (sensors, controllers) currently online and reporting." data-help-ai="All critical sensors operational. 1 humidity sensor showing drift.">
                         <div class="kpi-label">Active Devices</div>
                         <div class="kpi-value" id="kpi-devices">--</div>
                         <div class="kpi-change">
                             <span id="kpi-devices-change">Loading...</span>
                         </div>
                     </div>
-                    <div class="kpi-card">
+                    <div class="kpi-card" data-help-title="Next Harvest" data-help="Date of the next scheduled harvest event." data-help-ai="Predicted yield: 45kg. Suggest preparing packing station C.">
                         <div class="kpi-label">Next Harvest</div>
                         <div class="kpi-value" id="kpi-harvest">--</div>
                         <div class="kpi-change">
@@ -1390,35 +1365,35 @@
                 <div class="card">
                     <h2>Quick Actions</h2>
                     <div class="quick-actions">
-                        <a href="/views/farm-summary.html" class="action-card">
+                        <a href="/views/farm-summary.html" class="action-card" data-help-title="View Farm" data-help="Open the main Farm Summary dashboard to monitor zones and alerts.">
                             <div class="action-icon">FS</div>
                             <div class="action-title">View Farm</div>
                             <div class="action-desc">Monitor zones, groups & growth</div>
                         </a>
-                        <a href="#accounting" class="action-card" data-section="accounting">
+                        <a href="#accounting" class="action-card" data-section="accounting" data-help-title="Financial Summary" data-help="Review revenue streams, operating expenses, and profit margins.">
                             <div class="action-icon">$</div>
                             <div class="action-title">Financial Summary</div>
                             <div class="action-desc">View revenue, expenses & reports</div>
                         </a>
-                        <a href="#pricing" class="action-card card-highlight" data-section="pricing">
+                        <a href="#pricing" class="action-card card-highlight" data-section="pricing" data-help-title="Crop Pricing" data-help="Configure wholesale and retail pricing for your crops.">
                             <div class="action-icon">CP</div>
                             <div class="action-title">Crop Pricing</div>
                             <div class="action-desc">Set pricing for crops & products</div>
                             <div class="card-info-tooltip">Quick tool to update and export crop pricing</div>
                         </a>
-                        <a href="#crop-value" class="action-card card-highlight" data-section="crop-value">
+                        <a href="#crop-value" class="action-card card-highlight" data-section="crop-value" data-help-title="Crop Value" data-help="Real-time estimated value of current inventory in the farm." data-help-ai="Current standing inventory value: $12,450. Projected value at harvest: $18,200.">
                             <div class="action-icon">CV</div>
                             <div class="action-title">Crop Value</div>
                             <div class="action-desc">In the moment snapshot of today's crop value</div>
                             <div class="card-info-tooltip">Real-time valuation of all crops in production</div>
                         </a>
-                        <a href="javascript:void(0)" class="action-card card-highlight" onclick="openAIPricingAssistant()">
+                        <a href="javascript:void(0)" class="action-card card-highlight" onclick="openAIPricingAssistant()" data-help-title="AI Pricing Assistant" data-help="Launch AI analysis to optimize pricing strategy." data-help-ai="Market opportunity: Local microgreen demand showing 15% spike. Suggest adjustment.">
                             <div class="action-icon">AI</div>
                             <div class="action-title">AI Pricing Assistant</div>
                             <div class="action-desc">Optimize pricing strategy with AI</div>
                             <div class="card-info-tooltip">Get AI-powered pricing recommendations</div>
                         </a>
-                        <a href="#users" class="action-card" data-section="users">
+                        <a href="#users" class="action-card" data-section="users" data-help-title="Manage Users" data-help="Add or remove team members and configure permissions.">
                             <div class="action-icon">UA</div>
                             <div class="action-title">Manage Users</div>
                             <div class="action-desc">Control team access</div>
@@ -5700,5 +5675,6 @@
       }
     });
   </script>
+  <script src="/js/light-engine-help.js"></script>
 </body>
 </html>

@@ -5,58 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Farm Vitality Dashboard - Light Engine</title>
     <script src="/auth-guard.js"></script>
+    <link rel="stylesheet" href="/styles/light-engine.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        /* Base styles inherited from light-engine.css */
 
-        :root {
-            --bg-primary: #0a0f1e;
-            --bg-secondary: #111827;
-            --bg-card: #1a2332;
-            --border: #2d3748;
-            --text-primary: #e5e7eb;
-            --text-secondary: #9ca3af;
-            --text-muted: #6b7280;
-            --accent-blue: #3b82f6;
-            --accent-green: #10b981;
-            --accent-yellow: #f59e0b;
-            --accent-red: #ef4444;
-            --accent-purple: #8b5cf6;
-            --accent-cyan: #06b6d4;
-        }
-
+        /* Specific styles for Vitality View */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0a0f1e 0%, #1a2332 100%);
-            color: var(--text-primary);
-            line-height: 1.5;
-            overflow-x: hidden;
+             overflow-x: hidden;
+             background: linear-gradient(135deg, #0a0f1e 0%, #1a2332 100%);
         }
 
-        /* Page Header Navigation */
-        .page-header {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 1.5rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid var(--accent-blue);
-            backdrop-filter: blur(10px);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .page-header h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #60a5fa;
-            letter-spacing: -0.5px;
-        }
-
+        /* Page Header Navigation overridden by global styles where compatible */
+        
         .page-header .subtitle {
             font-size: 0.85rem;
             color: var(--text-secondary);
@@ -564,18 +524,23 @@
         </div>
         <div class="header-actions">
             <div class="view-controls" id="viewControls">
-                <button class="view-btn active" data-view="rings" onclick="switchView('rings')">
+                <button class="view-btn active" data-view="rings" onclick="switchView('rings')" 
+                        data-help-title="Rings View" data-help="Visualizes farm metrics as concentric rings: Efficiency, Balance, and Output.">
                     Rings
                 </button>
-                <button class="view-btn" data-view="heartbeat" onclick="switchView('heartbeat')">
+                <button class="view-btn" data-view="heartbeat" onclick="switchView('heartbeat')"
+                        data-help-title="Heartbeat View" data-help="Real-time EKG-style graph showing the 'pulse' of farm data over time." 
+                        data-help-ai="Heartbeat irregularities detected in Zone 3 (Temp fluctuation).">
                     Heartbeat
                 </button>
-                <button class="view-btn" data-view="blobs" onclick="switchView('blobs')">
+                <button class="view-btn" data-view="blobs" onclick="switchView('blobs')"
+                        data-help-title="Happy Blobs" data-help="Abstract representation of farm health. Larger, faster blobs equal higher vitality."
+                        data-help-ai="Blobs are aggregating near the 'Efficiency' sector. Good sign.">
                     Happy Blobs
                 </button>
             </div>
             <a href="/index.charlie.html" class="nav-btn home">Home</a>
-            <button class="nav-btn settings" onclick="toggleSettings()">Settings</button>
+            <button class="nav-btn settings" onclick="toggleSettings()" data-help="Configure health thresholds and display options.">Settings</button>
         </div>
     </div>
 
@@ -699,5 +664,6 @@
     </div>
 
     <script src="/js/farm-vitality.js"></script>
+    <script src="/js/light-engine-help.js"></script>
 </body>
 </html>

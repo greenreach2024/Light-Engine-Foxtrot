@@ -697,8 +697,9 @@ class VitalityViewManager {
     const emotion = score >= 85 ? 'happy' : score >= 50 ? 'neutral' : 'sad';
     const healthFactor = score / 100;
     
-    // Smooth floating with controlled motion
-    const floatPhase = (this.time * 0.035 + index * Math.PI / 2) % (Math.PI * 2);
+    // Smooth floating with controlled motion - faster for healthier blobs
+    const speedMultiplier = 0.5 + (healthFactor * 1.5); // 0.5x (dead) to 2.0x (thriving)
+    const floatPhase = (this.time * 0.035 * speedMultiplier + index * Math.PI / 2) % (Math.PI * 2);
     const easedFloat = this.easeInOutCubic(Math.sin(floatPhase) * 0.5 + 0.5);
     const floatOffset = (easedFloat - 0.5) * Math.min(28, maxRadius * 0.3);
     
@@ -710,7 +711,8 @@ class VitalityViewManager {
     const blobY = y + floatOffset;
     
     // Size based on health with smooth breathing animation
-    const breathScale = Math.sin(this.time * 0.04 + index) * 0.08 + 1;
+    // Healthier blobs breathe deeper and faster
+    const breathScale = Math.sin(this.time * 0.04 * speedMultiplier + index) * (0.05 + healthFactor * 0.05) + 1;
     const targetSize = (80 + healthFactor * 70) * breathScale;
     const baseSize = Math.min(targetSize, maxRadius);
     
@@ -720,13 +722,14 @@ class VitalityViewManager {
     ctx.scale(stretch, squash);
     
     // Smooth blob with organic wobble (more blob-like)
-    const wobbleAmt = (1 - healthFactor) * 10 + 4;
+    // Healthier blobs wobble more energetically
+    const wobbleAmt = (1 - healthFactor) * 5 + 4 + (healthFactor * 3); 
     const wobblePoints = 28;
     
     ctx.beginPath();
     for (let i = 0; i <= wobblePoints; i++) {
       const angle = (i / wobblePoints) * Math.PI * 2;
-      const wobble = Math.sin(angle * 3 + this.time * 0.08 + index) * wobbleAmt;
+      const wobble = Math.sin(angle * 3 + this.time * 0.08 * speedMultiplier + index) * wobbleAmt;
       const r = baseSize + wobble;
       const px = r * Math.cos(angle);
       const py = r * Math.sin(angle);

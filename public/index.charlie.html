@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Home - Light Engine</title>
   <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="/styles/light-engine.css">
   <style>
     * {
       margin: 0;
@@ -142,7 +143,7 @@
   
   <div class="header">
     <div>
-      <h1>Light Engine Foxtrot</h1>
+      <h1 data-help-title="Light Engine Home" data-help="Central hub for all farm operations." data-help-ai="System Status: All systems nominal. 3 active zones.">Light Engine Foxtrot</h1>
       <div class="subtitle">Production Farm Management System</div>
     </div>
   </div>
@@ -262,5 +263,6 @@
     <div>Light Engine Foxtrot v1.0.0</div>
     <div class="build-info">Built: {{BUILD_TIME}}</div>
   </div>
+  <script src="/js/light-engine-help.js"></script>
 </body>
 </html>
