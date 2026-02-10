@@ -1975,26 +1975,86 @@
     function mapCropNameToId(cropName) {
       if (!cropName) return 'lettuce-buttercrunch'; // default
       
+      const lowerName = cropName.toLowerCase();
+      
+      // Direct match in CROP_DATABASE
+      for (const [key, entry] of Object.entries(CROP_DATABASE)) {
+        if (key === lowerName || entry.name.toLowerCase() === lowerName) return key;
+      }
+      
+      // Partial/classification-based matching
       const mapping = {
-        'Butterhead Lettuce': 'lettuce-buttercrunch',
-        'Romaine Lettuce': 'lettuce-romaine',
-        'Oak Leaf Lettuce': 'lettuce-buttercrunch', // fallback to buttercrunch
-        'Red Leaf Lettuce': 'lettuce-buttercrunch',
-        'Mixed Lettuce': 'lettuce-buttercrunch',
-        'Genovese Basil': 'basil',
-        'Thai Basil': 'basil',
-        'Lemon Basil': 'basil',
-        'Purple Basil': 'basil',
-        'Holy Basil': 'basil',
-        'Baby Arugula': 'lettuce-buttercrunch', // use lettuce profile for similar growth
-        'Cultivated Arugula': 'lettuce-buttercrunch',
-        'Kale': 'kale',
-        'Spinach': 'kale', // similar growth profile
-        'Swiss Chard': 'kale',
-        'Collard Greens': 'kale'
+        'butterhead': 'lettuce-buttercrunch',
+        'bibb': 'lettuce-buttercrunch',
+        'buttercrunch': 'lettuce-buttercrunch',
+        'romaine': 'lettuce-romaine',
+        'cos': 'lettuce-romaine',
+        'oakleaf': 'lettuce-buttercrunch',
+        'oak leaf': 'lettuce-buttercrunch',
+        'red leaf': 'lettuce-buttercrunch',
+        'lettuce': 'lettuce-buttercrunch',
+        'basil': 'basil',
+        'genovese': 'basil',
+        'thai basil': 'basil',
+        'arugula': 'kale',
+        'kale': 'kale',
+        'lacinato': 'kale',
+        'red russian': 'kale',
+        'spinach': 'kale',
+        'chard': 'kale',
+        'swiss chard': 'kale',
+        'collard': 'kale',
+        'mizuna': 'kale',
+        'tatsoi': 'kale',
+        'pak choi': 'kale',
+        'mustard': 'kale',
+        'watercress': 'kale',
+        'komatsuna': 'kale',
+        'escarole': 'lettuce-buttercrunch',
+        'frisee': 'lettuce-buttercrunch',
+        'endive': 'lettuce-buttercrunch',
+        'sorrel': 'kale',
+        'tomato': 'tomato',
+        'san marzano': 'tomato',
+        'sun gold': 'tomato',
+        'brandywine': 'tomato',
+        'celebrity': 'tomato',
+        'better boy': 'tomato',
+        'heatmaster': 'tomato',
+        'strawberry': 'tomato', // similar fruiting profile
+        'albion': 'tomato',
+        'chandler': 'tomato',
+        'seascape': 'tomato',
+        'sequoia': 'tomato',
+        'ozark': 'tomato',
+        'monterey': 'tomato',
+        'tribute': 'tomato',
+        'tristar': 'tomato',
+        'jewel': 'tomato',
+        'eversweet': 'tomato',
+        'herb': 'basil',
+        'cilantro': 'basil',
+        'dill': 'basil',
+        'oregano': 'basil',
+        'thyme': 'basil',
+        'rosemary': 'basil',
+        'sage': 'basil',
+        'parsley': 'basil',
+        'tarragon': 'basil',
+        'mint': 'basil',
+        'spearmint': 'basil',
+        'chervil': 'basil',
+        'marjoram': 'basil',
+        'lovage': 'basil',
+        'lemon balm': 'basil'
       };
       
-      return mapping[cropName] || 'lettuce-buttercrunch';
+      // Try partial match
+      for (const [keyword, id] of Object.entries(mapping)) {
+        if (lowerName.includes(keyword)) return id;
+      }
+      
+      return 'lettuce-buttercrunch'; // safe default for unknown crops
     }
 
     function calculateSeedingTasks(trays) {

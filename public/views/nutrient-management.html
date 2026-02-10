@@ -2300,13 +2300,18 @@
     function determineGroupStage(group) {
       // Determine current day in plan
       if (!group?.plan?.days?.length) {
-        return { stage: 'unknown', day: 0, isFruiting: false, ecStage: 'vegetative' };
+        return { stage: 'unknown', day: 0, isFruiting: false, ecStage: 'vegetative', recipeEC: null, recipePH: null };
       }
       
       // Calculate current day: use DPS from planConfig if available, otherwise calculate from startDate
       let currentDay = 1;
       if (group.planConfig?.anchor?.dps) {
         currentDay = group.planConfig.anchor.dps;
+      } else if (group.planConfig?.anchor?.seedDate) {
+        const seedDate = new Date(group.planConfig.anchor.seedDate);
+        const today = new Date();
+        const daysSinceStart = Math.floor((today - seedDate) / (1000 * 60 * 60 * 24));
+        currentDay = Math.max(1, daysSinceStart + 1);
       } else if (group.plan.startDate) {
         const startDate = new Date(group.plan.startDate);
         const today = new Date();
@@ -2322,6 +2327,10 @@
         planDay = sortedDays.reverse().find(d => d.day <= currentDay);
       }
       const stageName = planDay?.stage || '';
+      
+      // Extract recipe-defined EC and pH values for current day
+      const recipeEC = Number.isFinite(planDay?.ec) ? planDay.ec : null;
+      const recipePH = Number.isFinite(planDay?.ph) ? planDay.ph : null;
       
       // Normalize stage name
       const stageNorm = (stageName || '').trim().toLowerCase();
@@ -2345,7 +2354,9 @@
         stage: stageName,
         ecStage: ecStage,
         day: currentDay,
-        isFruiting: isFruiting
+        isFruiting: isFruiting,
+        recipeEC: recipeEC,
+        recipePH: recipePH
       };
     }
 
@@ -2359,13 +2370,17 @@
       groups.forEach(group => {
         const stageInfo = determineGroupStage(group);
         if (!stageInfo.isFruiting) {
+          // Prefer recipe-defined EC/pH, fall back to hardcoded stage targets
+          const targetEC = stageInfo.recipeEC || EC_TARGETS[stageInfo.ecStage] || EC_TARGETS.vegetative;
+          const targetPH = stageInfo.recipePH || PH_TARGETS[stageInfo.ecStage] || PH_TARGETS.vegetative;
           vegGroups.push({
             name: group.name || group.label || 'Unknown',
             stage: stageInfo.stage,
             ecStage: stageInfo.ecStage,
             day: stageInfo.day,
-            targetEC: EC_TARGETS[stageInfo.ecStage] || EC_TARGETS.vegetative,
-            targetPH: PH_TARGETS[stageInfo.ecStage] || PH_TARGETS.vegetative
+            targetEC: targetEC,
+            targetPH: targetPH,
+            fromRecipe: !!(stageInfo.recipeEC || stageInfo.recipePH)
           });
         }
       });
@@ -2397,13 +2412,17 @@
         console.log(`[nutrient] Group "${group.name}": day ${stageInfo.day}, stage "${stageInfo.stage}", isFruiting=${stageInfo.isFruiting}`);
         
         if (stageInfo.isFruiting) {
+          // Prefer recipe-defined EC/pH, fall back to hardcoded stage targets
+          const targetEC = stageInfo.recipeEC || EC_TARGETS[stageInfo.ecStage] || EC_TARGETS.earlyFlowering;
+          const targetPH = stageInfo.recipePH || PH_TARGETS[stageInfo.ecStage] || PH_TARGETS.earlyFlowering;
           fruitingGroups.push({
             name: group.name || group.label || 'Unknown',
             stage: stageInfo.stage,
             ecStage: stageInfo.ecStage,
             day: stageInfo.day,
-            targetEC: EC_TARGETS[stageInfo.ecStage] || EC_TARGETS.earlyFlowering,
-            targetPH: PH_TARGETS[stageInfo.ecStage] || PH_TARGETS.earlyFlowering
+            targetEC: targetEC,
+            targetPH: targetPH,
+            fromRecipe: !!(stageInfo.recipeEC || stageInfo.recipePH)
           });
         }
       });
@@ -3127,7 +3146,7 @@
 
     function populateSetpointForm(tankId = 'tank2') {
       const form = document.getElementById(`${tankId}SetpointForm`);
-      if (!return;
+      if (!form) return;
       const cfg = state.autodose[tankId] || DEFAULT_AUTODOSE;
       fillInputNumber(form.phTarget, cfg.phTarget, 2);
       fillInputNumber(form.phTolerance, cfg.phTolerance, 2);
@@ -3456,8 +3475,10 @@
       
       // Populate calibration forms
       populateCalibrationForms(state.raw);
-      populateSetpointForm();
-      renderAutodoseSummary();
+      populateSetpointForm('tank1');
+      populateSetpointForm('tank2');
+      renderAutodoseSummary('tank1');
+      renderAutodoseSummary('tank2');
       renderSystemConfig();
     }
 
@@ -3620,6 +3641,12 @@
     document.getElementById('systemConfigForm')?.addEventListener('submit', handleSystemConfigSave);
     document.getElementById('irrigationMode')?.addEventListener('change', updateIrrigationCycleVisibility);
     hydrate();
+
+    // Auto-refresh every 5 minutes to pick up sensor / recipe changes
+    setInterval(() => {
+      console.log('[Nutrient] auto-refresh hydrate()');
+      hydrate();
+    }, 5 * 60 * 1000);
   </script>
 
   <!-- Intro Card Component -->

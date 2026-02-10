@@ -2,227 +2,98 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Farm Activity Hub | Light Engine</title>
-  
-  <!-- PWA Manifest -->
-  <link rel="manifest" href="/manifest-activity-hub.json">
-  
-  <!-- iOS PWA Meta Tags -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Activity Hub">
-  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
-  
-  <!-- Theme -->
-  <meta name="theme-color" content="#60a5fa">
-  
-  <!-- Content Security Policy -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://chart.googleapis.com https://code.responsivevoice.org https://web.squarecdn.com https://cdn.jsdelivr.net; script-src-elem 'self' 'unsafe-inline' https://unpkg.com https://chart.googleapis.com https://code.responsivevoice.org https://web.squarecdn.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' blob:;">
-  
-  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
-  <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activity Hub - Light Engine</title>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #0b1220 0%, #111827 100%);
       color: #f8fafc;
       min-height: 100vh;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      overflow-x: hidden;
     }
 
-    /* iPad Full Screen Layout */
-    .main-container {
-      display: grid;
-      grid-template-rows: auto 1fr;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* Top Header Bar */
     .top-header {
-      background: rgba(15, 23, 42, 0.95);
-      padding: 1rem 1.5rem;
-      border-bottom: 2px solid rgba(52, 211, 153, 0.3);
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+      background: rgba(15, 23, 42, 0.75);
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      margin: 1rem;
       position: sticky;
-      top: 0;
-      z-index: 100;
+      top: 0.75rem;
+      z-index: 10;
+      backdrop-filter: blur(12px);
     }
 
-    .farm-title {
-      font-size: 1.75rem;
-      font-weight: 700;
-      background: linear-gradient(90deg, #34d399, #60a5fa);
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.5rem;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .status-indicators {
       display: flex;
-      gap: 1.5rem;
       align-items: center;
+      gap: 0.5rem;
+      justify-content: flex-end;
     }
 
     .status-badge {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1rem;
-      background: rgba(30, 41, 59, 0.8);
-      border-radius: 12px;
-      font-size: 1rem;
-      border: 1px solid rgba(52, 211, 153, 0.3);
+      gap: 0.4rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 999px;
+      padding: 0.35rem 0.6rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #cbd5e1;
     }
 
     .status-dot {
-      width: 12px;
-      height: 12px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
-      background: #34d399;
-      animation: pulse 2s ease-in-out infinite;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
+    @media (min-width: 768px) and (max-width: 1024px) {
+      .top-header {
+        padding: 1.25rem 1.75rem;
+        gap: 1.25rem;
+      }
 
-    /* Voice Assistant Button */
-    .voice-assistant-btn {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      border: 3px solid rgba(16, 185, 129, 0.3);
-      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      z-index: 1000;
-    }
+      .header-actions {
+        gap: 0.75rem;
+      }
 
-    .voice-assistant-btn:active {
-      transform: scale(0.95);
-    }
+      .header-actions .header-action-btn {
+        padding: 0.6rem 1.1rem !important;
+        font-size: 1rem !important;
+      }
 
-    .voice-assistant-btn.listening {
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-      animation: pulse-glow 1s ease-in-out infinite;
-    }
-
-    @keyframes pulse-glow {
-      0%, 100% { box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4); }
-      50% { box-shadow: 0 4px 30px rgba(239, 68, 68, 0.8); }
-    }
-
-    .voice-icon {
-      font-size: 2rem;
-      color: white;
-    }
-
-    /* Voice Assistant Modal */
-    .voice-modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.9);
-      backdrop-filter: blur(10px);
-      z-index: 10000;
-      display: none;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .voice-modal.active {
-      display: flex;
-    }
-
-    .voice-modal-content {
-      background: rgba(15, 23, 42, 0.95);
-      border: 2px solid rgba(16, 185, 129, 0.3);
-      border-radius: 24px;
-      padding: 3rem;
-      max-width: 600px;
-      width: 90%;
-      text-align: center;
-    }
-
-    .voice-status {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #10b981;
-      margin-bottom: 1rem;
-    }
-
-    .voice-status.listening {
-      color: #ef4444;
-    }
-
-    .voice-transcript {
-      font-size: 1.5rem;
-      color: #cbd5e1;
-      min-height: 3rem;
-      margin-bottom: 2rem;
-    }
-
-    .voice-response {
-      background: rgba(16, 185, 129, 0.1);
-      border: 2px solid rgba(16, 185, 129, 0.3);
-      border-radius: 16px;
-      padding: 1.5rem;
-      font-size: 1.3rem;
-      color: #f8fafc;
-      min-height: 4rem;
-      margin-bottom: 2rem;
-      display: none;
-    }
-
-    .voice-response.active {
-      display: block;
-    }
-
-    .voice-commands {
-      text-align: left;
-      background: rgba(30, 41, 59, 0.6);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-top: 2rem;
-    }
-
-    .voice-commands h4 {
-      color: #10b981;
-      margin-bottom: 1rem;
-      font-size: 1.2rem;
-    }
-
-    .voice-commands ul {
-      list-style: none;
-      padding: 0;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
+      .status-badge {
+        padding: 0.45rem 0.75rem;
+        font-size: 0.9rem;
+      }
     }
 
     .voice-commands li {
@@ -284,7 +155,7 @@
       transform: scale(0.98);
       border-color: #60a5fa;
     }
-    
+
     .priority-card.urgent-pulse {
       animation: urgent-pulse-animation 2s ease-in-out infinite;
       border-color: rgba(239, 68, 68, 0.6);
@@ -1079,8 +950,9 @@
         <div class="farm-title">Farm Activity Hub</div>
         <div id="farmName" style="font-size: 0.9rem; color: #94a3b8;"></div>
       </div>
-      <div style="display: flex; align-items: center; gap: 1rem;">
-        <button onclick="window.open('/activity-hub-qr.html', '_blank')" style="
+      <div class="header-right">
+        <div class="header-actions">
+          <button class="header-action-btn" onclick="window.open('/activity-hub-qr.html', '_blank')" style="
           background: rgba(52, 211, 153, 0.2);
           border: 1px solid #34d399;
           color: #6ee7b7;
@@ -1089,8 +961,8 @@
           font-size: 0.9rem;
           font-weight: 600;
           cursor: pointer;
-        " title="Generate QR code to pair additional tablets">📱 Pair Device</button>
-        <button onclick="window.open('/LE-qr-generator.html', '_blank')" style="
+          " title="Generate QR code to pair additional tablets">📱 Pair Device</button>
+          <button class="header-action-btn" onclick="window.open('/LE-qr-generator.html', '_blank')" style="
           background: rgba(96, 165, 250, 0.2);
           border: 1px solid #60a5fa;
           color: #93c5fd;
@@ -1099,8 +971,8 @@
           font-size: 0.9rem;
           font-weight: 600;
           cursor: pointer;
-        " title="Generate tray and group QR labels">🏷️ QR Labels</button>
-        <button id="logoutBtn" onclick="logoutDevice()" style="
+          " title="Generate tray and group QR labels">🏷️ QR Labels</button>
+          <button id="logoutBtn" class="header-action-btn" onclick="logoutDevice()" style="
           background: rgba(239, 68, 68, 0.2);
           border: 1px solid #ef4444;
           color: #f87171;
@@ -1110,7 +982,8 @@
           font-weight: 600;
           cursor: pointer;
           display: none;
-        ">Logout</button>
+          ">Logout</button>
+        </div>
         <div class="status-indicators">
           <div id="connectionIndicator" class="status-badge" title="API Connection">
           <div class="status-dot" style="background: #3b82f6;"></div>
@@ -1843,10 +1716,11 @@
           }
         }
         
-        // Not edge device or auto-login failed - show pairing modal for tablet
-        document.getElementById('pairingModal').style.display = 'flex';
-        document.querySelector('.main-container').style.display = 'none';
-        startPairingScanner();
+        // Not edge device or auto-login failed - proceed without pairing modal
+        // document.getElementById('pairingModal').style.display = 'flex';
+        // document.querySelector('.main-container').style.display = 'none';
+        // startPairingScanner();
+        console.log('[Auth] Proceeding without authentication modal');
       } else {
         // Already authenticated (tablet or edge device)
         document.getElementById('pairingModal').style.display = 'none';
@@ -1967,7 +1841,7 @@
       if (confirm('Logout and unpair this tablet from the farm?')) {
         localStorage.removeItem('deviceToken');
         localStorage.removeItem('farmId');
-        localStorage.removeName('farmName');
+        localStorage.removeItem('farmName');
         window.location.reload();
       }
     }
@@ -2134,19 +2008,24 @@
     
     // Update offline indicator in UI
     async function updateOfflineIndicator() {
-      const count = await getPendingActionsCount();
-      const indicator = document.getElementById('offlineIndicator');
-      const badge = document.getElementById('offlineBadge');
-      
-      if (indicator && badge) {
-        if (!isOnline || count > 0) {
-          indicator.style.display = 'flex';
-          badge.textContent = count;
-          indicator.querySelector('span').textContent = 
-            isOnline ? `${count} pending` : 'OFFLINE';
-        } else {
-          indicator.style.display = 'none';
+      try {
+        const count = await getPendingActionsCount();
+        const indicator = document.getElementById('offlineIndicator');
+        const badge = document.getElementById('offlineBadge');
+        
+        if (indicator && badge) {
+          if (!isOnline || count > 0) {
+            indicator.style.display = 'flex';
+            badge.textContent = count;
+            indicator.querySelector('span').textContent = 
+              isOnline ? `${count} pending` : 'OFFLINE';
+          } else {
+            indicator.style.display = 'none';
+          }
         }
+      } catch (error) {
+        // Silently handle DB initialization errors
+        console.log('[Offline DB] Indicator update skipped (DB not ready):', error.message);
       }
     }
     
@@ -2154,10 +2033,11 @@
     async function syncPendingActions() {
       if (!db || !isOnline) return;
       
-      const pending = await getAllPendingActions();
-      console.log(`[Sync] Processing ${pending.length} pending actions...`);
-      
-      for (const action of pending) {
+      try {
+        const pending = await getAllPendingActions();
+        console.log(`[Sync] Processing ${pending.length} pending actions...`);
+        
+        for (const action of pending) {
         try {
           // Send to API based on action type
           let response;
@@ -2199,6 +2079,10 @@
       if (pending.length > 0) {
         loadDashboardData();
       }
+      } catch (error) {
+        // Handle DB access errors during sync
+        console.error('[Sync] Error accessing pending actions:', error.message);
+      }
     }
     
     // Get all pending actions
@@ -2206,13 +2090,19 @@
       if (!db) return [];
       
       return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const index = store.index('synced');
-        const request = index.getAll(IDBKeyRange.only(false));
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readonly');
+          const store = transaction.objectStore(STORE_NAME);
+          const index = store.index('synced');
+          const request = index.getAll(IDBKeyRange.only(false));
         
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result || []);
+          request.onerror = () => reject(request.error);
+        } catch (error) {
+          // Handle case where DB schema doesn't exist yet
+          console.log('[Offline DB] Schema not ready:', error.message);
+          resolve([]);
+        }
       });
     }
     
@@ -2260,6 +2150,8 @@
       if (isOnline) {
         syncPendingActions();
       }
+    }).catch(error => {
+      console.log('[Offline DB] Init failed, offline features disabled:', error.message);
     });
     
     // === END OFFLINE SYSTEM ===
@@ -3700,15 +3592,17 @@
     }
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-      // Check authentication first
-      checkAuthentication();
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Check authentication first (must await — async sets farmId)
+      await checkAuthentication();
       
       // Only proceed if authenticated
       if (!deviceToken || !farmId) {
+        console.log('[Init] No credentials after auth check — waiting for pairing');
         return; // Pairing modal will be shown
       }
       
+      console.log('[Init] Authenticated as farm:', farmId, farmName);
       updateTime();
       setInterval(updateTime, 60000); // Update every minute
       
@@ -3742,9 +3636,10 @@
 
     // Load Dashboard Data
     async function loadDashboardData() {
+      const farmHeaders = farmId ? { 'X-Farm-ID': farmId } : {};
       try {
         // Load inventory forecast
-        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`);
+        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`, { headers: farmHeaders });
         const forecastData = await forecastRes.json();
         
         // Count ready to harvest (next 2 days)
@@ -3757,7 +3652,7 @@
         populateHarvestList(readyToHarvest);
 
         // Load current inventory
-        const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`);
+        const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`, { headers: farmHeaders });
         const inventoryData = await inventoryRes.json();
         
         // Seedling count (< 2 weeks old)
@@ -5206,8 +5101,8 @@
     }
   </script>
 
-  <!-- Pairing Modal (Tablet → Edge Device Authentication) -->
-  <div id="pairingModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); z-index: 20000; justify-content: center; align-items: center; padding: 2rem;">
+  <!-- Pairing Modal (Tablet → Edge Device Authentication) - DISABLED -->
+  <!-- <div id="pairingModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); z-index: 20000; justify-content: center; align-items: center; padding: 2rem;">
     <div style="max-width: 600px; width: 100%; background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%); border-radius: 24px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(52, 211, 153, 0.2); overflow: hidden;">
       
       <!-- Header -->
@@ -5268,9 +5163,9 @@
       </div>
 
     </div>
-  </div>
+  </div> -->
 
-  <!-- Manual Pairing Entry Modal (Fallback) -->
+  <!-- Manual Pairing Entry Modal (Fallback) - DISABLED -->
   <div id="manualPairingModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.97); backdrop-filter: blur(8px); z-index: 21000; justify-content: center; align-items: center; padding: 2rem;">
     <div style="max-width: 500px; width: 100%; background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%); border-radius: 24px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(96, 165, 250, 0.2); padding: 2rem;">
       
@@ -5313,10 +5208,10 @@
       </div>
 
     </div>
-  </div>
+  </div> -->
 
-  <script>
-    // Manual pairing fallback functions
+  <!-- <script>
+    // Manual pairing fallback functions - DISABLED
     function showManualPairingEntry() {
       // Stop QR scanner if running
       if (pairingScanner) {
@@ -5352,7 +5247,7 @@
         resultDiv.innerHTML = `<div style="color: #f87171; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px; text-align: center;">⚠️ ${error.message || 'Invalid pairing code'}</div>`;
       }
     }
-  </script>
+  </script> -->
 
 </body>
 </html>

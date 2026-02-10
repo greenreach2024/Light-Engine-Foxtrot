@@ -1,0 +1,76 @@
+{
+  "rooms": [
+    {
+      "id": "room-3xxjln",
+      "name": "Your Grow Room",
+      "zones": [
+        {
+          "id": "zone-1",
+          "name": "Zone 1"
+        }
+      ],
+      "equipment": [
+        {
+          "id": "room-3xxjln-sensor-serial-0001",
+          "name": "ESP32 Sensor (ttyUSB1)",
+          "category": "controllers",
+          "vendor": "GreenReach",
+          "model": "ESP32 Environmental Sensor",
+          "control": null,
+          "roomId": "room-3xxjln",
+          "count": 1
+        },
+        {
+          "id": "room-3xxjln-fans-0",
+          "name": "Exhaust Fan 1",
+          "category": "fan",
+          "vendor": "",
+          "model": "",
+          "control": "Manual",
+          "roomId": "room-3xxjln",
+          "count": 1
+        },
+        {
+          "id": "room-3xxjln-fans-1",
+          "name": "Exhaust Fan 2",
+          "category": "fan",
+          "vendor": "",
+          "model": "",
+          "control": "Manual",
+          "roomId": "room-3xxjln",
+          "count": 1
+        },
+        {
+          "id": "room-3xxjln-fans-2",
+          "name": "Circulation Fan",
+          "category": "fan",
+          "vendor": "",
+          "model": "",
+          "control": "Manual",
+          "roomId": "room-3xxjln",
+          "count": 1
+        },
+        {
+          "id": "room-3xxjln-fans-3",
+          "name": "Intake Fan",
+          "category": "fan",
+          "vendor": "",
+          "model": "",
+          "control": "Manual",
+          "roomId": "room-3xxjln",
+          "count": 1
+        },
+        {
+          "id": "room-3xxjln-Quest-0",
+          "name": "Dehumidifier",
+          "category": "dehumidifier",
+          "vendor": "Quest",
+          "model": "",
+          "control": "Manual",
+          "roomId": "room-3xxjln",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

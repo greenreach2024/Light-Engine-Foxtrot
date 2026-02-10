@@ -4739,12 +4739,9 @@
       } catch (err) {
         console.error('Failed to load anomaly sparkline:', err);
         loading.style.display = 'none';
-        error.textContent = err.message;
+        error.textContent = 'No anomaly data available. Sensors need to be reporting for ML analysis.';
         error.style.display = 'block';
       }
-    }
-
-    async function loadEnergyForecast() {
       console.log('[Energy Forecast] Starting load...');
       const canvas = document.getElementById('energyForecastChart');
       const loading = document.getElementById('energyForecastLoading');
@@ -4861,12 +4858,9 @@
       } catch (err) {
         console.error('Failed to load energy forecast:', err);
         loading.style.display = 'none';
-        error.textContent = err.message;
+        error.textContent = 'Energy forecast unavailable. ML jobs need sensor data to generate predictions.';
         error.style.display = 'block';
       }
-    }
-
-    async function loadTempForecast() {
       console.log('[Temp Forecast] Starting load...');
       const canvas = document.getElementById('tempForecastChart');
       const loading = document.getElementById('tempForecastLoading');
@@ -5031,15 +5025,15 @@
         loading.style.display = 'none';
         
         // If ML features not available, hide the entire widget
-        if (err.message && err.message.includes('Feature not available')) {
+        if (err.message && (err.message.includes('Feature not available') || err.message.includes('ML jobs have not run'))) {
           console.log('[Temp Forecast] ML features not available, hiding widget');
           const widget = canvas.closest('.ml-widget');
           if (widget) {
             widget.style.display = 'none';
           }
         } else {
-          // Show error for other failures
-          error.textContent = err.message;
+          // Show friendly error for other failures
+          error.textContent = 'Temperature forecast unavailable. Outdoor sensor validation required for predictions.';
           error.style.display = 'block';
         }
       }

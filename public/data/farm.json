@@ -2,14 +2,7 @@
   "farmId": "FARM-TEST-WIZARD-001",
   "name": "This is Your Farm",
   "email": "Johndoe@thisisyourfarm.com",
-  "location": {
-    "lat": 44.2312,
-    "lng": -76.486,
-    "city": "Kingston",
-    "state": "ON",
-    "zip": "K7K",
-    "country": "CA"
-  },
+  "location": "Kingston, ON",
   "created": "2026-02-04T13:00:00Z",
   "mode": "edge",
   "farmName": "This is Your Farm",
@@ -43,10 +36,27 @@
     "reuseNetwork": true,
     "ssid": ""
   },
-  "rooms": [],
+  "rooms": [
+    {
+      "id": "room-3xxjln",
+      "name": "Your Grow Room"
+    }
+  ],
   "locations": [],
   "registered": "2026-02-04T13:42:02.654Z",
   "contactName": "John Doe",
   "phone": "",
-  "website": ""
+  "website": "",
+  "metadata": {
+    "location": {
+      "city": "Kingston",
+      "state": "ON",
+      "zip": "K7K",
+      "country": "CA",
+      "coordinates": {
+        "lat": 44.2312,
+        "lng": -76.486
+      }
+    }
+  }
 }
