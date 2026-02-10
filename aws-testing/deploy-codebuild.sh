@@ -288,7 +288,6 @@ ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/foxtrot-te
 
 TASK_DEF=$(cat <<EOF
 {
-
   "family": "foxtrot-test",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
