@@ -678,10 +678,24 @@
                     <label for="viewHeartbeatEnabled">Farm Heartbeat (Precision)</label>
                 </div>
                 <div class="checkbox-item">
-                    <input type="checkbox" id="viewBlobsEnabled" checked onchange="saveSettings()">
-                    <label for="viewBlobsEnabled">Happy Blobs (Kid-Friendly)</label>
+                    <input type="checkbox" id="viewFriendsEnabled" checked onchange="saveSettings()">
+                    <label for="viewFriendsEnabled">Farm Friends (Data Orbs)</label>
                 </div>
             </div>
+        </div>
+
+        <div class="settings-group">
+            <h3>Friends View Style</h3>
+            <div class="setting-item">
+                <label for="orbStyle">Animation style</label>
+                <select id="orbStyle" onchange="saveSettings()">
+                    <option value="professional" selected>Professional (Dashboard)</option>
+                    <option value="kids">Kid-Friendly (Bouncy Characters)</option>
+                </select>
+            </div>
+            <p style="color: #9ca3af; font-size: 0.85rem; margin-top: 0.5rem; line-height: 1.4;">
+                Choose between clean data orbs or fun animated characters with faces and stars.
+            </p>
         </div>
 
         <div class="settings-group">

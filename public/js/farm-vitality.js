@@ -20,6 +20,7 @@ class VitalityViewManager {
     this.blobPositions = []; // Track blob positions for click detection
     this.time = 0; // Master animation timer
     this.lottieAnimations = {}; // Store Lottie instances
+    this.orbStyle = this.settings.orbStyle || 'professional'; // 'professional' or 'kids'
     
     // Initialize
     this.init();
@@ -678,12 +679,14 @@ class VitalityViewManager {
       
       const centerX = col * cellWidth + cellWidth / 2;
       const centerY = row * cellHeight + cellHeight / 2;
-      // MAXIMIZE SIZE: Use 48% of the cell's half-dimension (96% diameter)
-      // This leaves a 4% margin so they don't touch even when breathing
-      const maxRadius = Math.min(cellWidth, cellHeight) * 0.48;
+      // MAXIMIZE SIZE: Use 49.5% of the cell's dimension (99% diameter)
+      // This leaves only 1% margin - orbs fill almost entire cell
+      const maxRadius = Math.min(cellWidth, cellHeight) * 0.495;
 
-      // Draw the Professional Data Orb (Lottie Style)
-      const size = this.drawProLottieOrb(ctx, component, centerX, centerY, index, maxRadius);
+      // Draw orb based on style setting
+      const size = this.settings.orbStyle === 'kids' 
+        ? this.drawKidsFriendlyOrb(ctx, component, centerX, centerY, index, maxRadius)
+        : this.drawProLottieOrb(ctx, component, centerX, centerY, index, maxRadius);
       
       // Store position
       this.blobPositions.push({
@@ -742,10 +745,10 @@ class VitalityViewManager {
     ctx.save();
     ctx.translate(x, y);
 
-    // Dimensions - MAXIMIZED
-    // Use 95% of the passed radius for the ring (leaving 5% for stroke width/glow)
-    const size = maxRadius * 0.95; 
-    const ringWidth = size * 0.08; // Slightly thinner relative stroke to look elegant at large size
+    // Dimensions - FULLY MAXIMIZED
+    // Use 98% of the passed radius for the ring (leaving only 2% for glow effects)
+    const size = maxRadius * 0.98; 
+    const ringWidth = size * 0.06; // Thinner stroke for maximum visible area
     
     // --- 1. Subtle Background Pulse (The "Shadow" of the data) ---
     // A faint ring that expands and contracts delicately
@@ -832,6 +835,136 @@ class VitalityViewManager {
 
     ctx.restore();
     return size + ringWidth;
+  }
+  
+  /**
+   * Draw Kid-Friendly Character Orb
+   * Bouncy, expressive, fun animations with faces
+   */
+  drawKidsFriendlyOrb(ctx, component, x, y, index, maxRadius) {
+    const score = component.score || 0;
+    const palette = ['#ff6b9d', '#4facfe', '#a8e063', '#feca57']; // Pink, Blue, Green, Yellow
+    const baseColor = palette[index % palette.length];
+    
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Use even more space for kids mode - make it POP!
+    const size = maxRadius * 0.99;
+    
+    // Bouncy animation amplitude based on health
+    const bounce = Math.abs(Math.sin(this.time * 0.05 + index)) * 0.08;
+    const squish = 1 + bounce * 0.3; // Squash and stretch
+    
+    // Main body - gradient blob
+    const bodyGradient = ctx.createRadialGradient(0, -size * 0.2, 0, 0, 0, size);
+    bodyGradient.addColorStop(0, this.hexToRgba(baseColor, 0.9));
+    bodyGradient.addColorStop(1, this.hexToRgba(baseColor, 0.6));
+    
+    ctx.fillStyle = bodyGradient;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size, size * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Glossy highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.25, -size * 0.3, size * 0.4, size * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Emotion based on score
+    const emotion = score > 80 ? 'happy' : score > 50 ? 'neutral' : 'worried';
+    
+    // BIG FRIENDLY EYES (reduced by 10%)
+    const eyeY = -size * 0.18;
+    const eyeSpacing = size * 0.315;
+    const eyeSize = size * 0.135;
+    
+    const drawEye = (ex, ey) => {
+      // White of eye
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(ex, ey, eyeSize, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Pupil (follows a circular path)
+      const pupilMove = Math.sin(this.time * 0.03 + index) * 0.2;
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.arc(ex + pupilMove * eyeSize, ey, eyeSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Sparkle
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.beginPath();
+      ctx.arc(ex + pupilMove * eyeSize - eyeSize * 0.2, ey - eyeSize * 0.2, eyeSize * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    
+    drawEye(-eyeSpacing, eyeY);
+    drawEye(eyeSpacing, eyeY);
+    
+    // MOUTH (reduced by 10%)
+    const mouthY = size * 0.225;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.lineWidth = size * 0.036;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    
+    if (emotion === 'happy') {
+      // Big smile
+      ctx.arc(0, mouthY - size * 0.135, size * 0.27, 0.2 * Math.PI, 0.8 * Math.PI);
+    } else if (emotion === 'neutral') {
+      // Straight line
+      ctx.moveTo(-size * 0.18, mouthY);
+      ctx.lineTo(size * 0.18, mouthY);
+    } else {
+      // Worried
+      ctx.arc(0, mouthY + size * 0.09, size * 0.225, 1.2 * Math.PI, 1.8 * Math.PI);
+    }
+    ctx.stroke();
+    
+    // SCORE display (like a speech bubble)
+    const bubbleY = size * 0.65;
+    const bubbleW = size * 0.5;
+    const bubbleH = size * 0.25;
+    
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.beginPath();
+    ctx.roundRect(-bubbleW/2, bubbleY - bubbleH/2, bubbleW, bubbleH, size * 0.1);
+    ctx.fill();
+    
+    // Score text
+    ctx.fillStyle = baseColor;
+    ctx.font = `bold ${size * 0.18}px 'Comic Sans MS', cursive, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(score, 0, bubbleY);
+    
+    // Label above
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.font = `600 ${size * 0.12}px system-ui, sans-serif`;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(component.label.toUpperCase(), 0, -size * 0.8);
+    ctx.shadowBlur = 0;
+    
+    // Floating stars if score > 90
+    if (score > 90) {
+      for (let i = 0; i < 3; i++) {
+        const starAngle = this.time * 0.02 + i * (Math.PI * 2 / 3);
+        const starDist = size * 0.85;
+        const sx = Math.cos(starAngle) * starDist;
+        const sy = Math.sin(starAngle) * starDist;
+        
+        ctx.fillStyle = '#ffd700';
+        ctx.font = `${size * 0.15}px sans-serif`;
+        ctx.fillText('★', sx, sy);
+      }
+    }
+    
+    ctx.restore();
+    return size;
   }
   
   /**
@@ -967,15 +1100,15 @@ class VitalityViewManager {
    * Set up blob click interaction
    */
   setupBlobClickInteraction() {
-    const blobsCanvas = document.getElementById('blobsCanvas');
-    if (!blobsCanvas) return;
+    const friendsCanvas = document.getElementById('friendsCanvas');
+    if (!friendsCanvas) return;
     
-    blobsCanvas.addEventListener('click', (e) => {
-      if (this.currentView !== 'blobs' || !this.vitalityData) return;
+    friendsCanvas.addEventListener('click', (e) => {
+      if (this.currentView !== 'friends' || !this.vitalityData) return;
       
-      const rect = blobsCanvas.getBoundingClientRect();
-      const scaleX = blobsCanvas.width / rect.width;
-      const scaleY = blobsCanvas.height / rect.height;
+      const rect = friendsCanvas.getBoundingClientRect();
+      const scaleX = friendsCanvas.width / rect.width;
+      const scaleY = friendsCanvas.height / rect.height;
       const x = (e.clientX - rect.left) * scaleX;
       const y = (e.clientY - rect.top) * scaleY;
       
@@ -996,17 +1129,17 @@ class VitalityViewManager {
    * Set up blob hover interaction for Global Help
    */
   setupBlobHoverInteraction() {
-    const blobsCanvas = document.getElementById('blobsCanvas');
-    if (!blobsCanvas) return;
+    const friendsCanvas = document.getElementById('friendsCanvas');
+    if (!friendsCanvas) return;
     
-    blobsCanvas.addEventListener('mousemove', (e) => {
+    friendsCanvas.addEventListener('mousemove', (e) => {
       // Only active if Global Help is enabled
       if (!window.LightEngineHelp || !window.LightEngineHelp.isActive()) return;
-      if (this.currentView !== 'blobs' || !this.vitalityData) return;
+      if (this.currentView !== 'friends' || !this.vitalityData) return;
       
-      const rect = blobsCanvas.getBoundingClientRect();
-      const scaleX = blobsCanvas.width / rect.width;
-      const scaleY = blobsCanvas.height / rect.height;
+      const rect = friendsCanvas.getBoundingClientRect();
+      const scaleX = friendsCanvas.width / rect.width;
+      const scaleY = friendsCanvas.height / rect.height;
       const x = (e.clientX - rect.left) * scaleX;
       const y = (e.clientY - rect.top) * scaleY;
       
@@ -1028,13 +1161,13 @@ class VitalityViewManager {
             e.clientX, 
             e.clientY, 
             hoveredBlob.component.label,
-            `This blob represents the ${hoveredBlob.component.label} system. Current score: ${hoveredBlob.component.score}/100. Status: ${hoveredBlob.component.status}.`,
+            `This orb represents the ${hoveredBlob.component.label} system. Current score: ${hoveredBlob.component.score}/100. Status: ${hoveredBlob.component.status}.`,
             `AI Insight: The ${hoveredBlob.component.label} system is performing ` + (hoveredBlob.component.score > 80 ? 'optimally.' : 'below peak efficiency. Check diagnostic logs.')
         );
-        blobsCanvas.style.cursor = 'help';
+        friendsCanvas.style.cursor = 'help';
       } else {
         window.LightEngineHelp.hide();
-        blobsCanvas.style.cursor = 'default';
+        friendsCanvas.style.cursor = 'default';
       }
     });
   }
@@ -1202,7 +1335,7 @@ class VitalityViewManager {
    * Rotate to next enabled view
    */
   rotateView() {
-    const views = ['rings', 'heartbeat', 'blobs'];
+    const views = ['rings', 'heartbeat', 'friends'];
     const enabledViews = views.filter(v => this.isViewEnabled(v));
     
     if (enabledViews.length === 0) return;
@@ -1224,10 +1357,11 @@ class VitalityViewManager {
       screensaverRotation: 30,
       viewRingsEnabled: true,
       viewHeartbeatEnabled: true,
-      viewBlobsEnabled: true,
+      viewFriendsEnabled: true,
       refreshInterval: 5,
       showStalenessWarnings: true,
-      targetFPS: 30
+      targetFPS: 30,
+      orbStyle: 'professional'
     };
     
     try {
@@ -1264,10 +1398,11 @@ class VitalityViewManager {
     document.getElementById('screensaverRotation').value = this.settings.screensaverRotation;
     document.getElementById('viewRingsEnabled').checked = this.settings.viewRingsEnabled;
     document.getElementById('viewHeartbeatEnabled').checked = this.settings.viewHeartbeatEnabled;
-    document.getElementById('viewBlobsEnabled').checked = this.settings.viewBlobsEnabled;
+    document.getElementById('viewFriendsEnabled').checked = this.settings.viewFriendsEnabled;
     document.getElementById('refreshInterval').value = this.settings.refreshInterval;
     document.getElementById('showStalenessWarnings').checked = this.settings.showStalenessWarnings;
     document.getElementById('targetFPS').value = this.settings.targetFPS;
+    document.getElementById('orbStyle').value = this.settings.orbStyle || 'professional';
   }
   
   /**
@@ -1321,10 +1456,11 @@ function saveSettings() {
     screensaverRotation: parseInt(document.getElementById('screensaverRotation').value),
     viewRingsEnabled: document.getElementById('viewRingsEnabled').checked,
     viewHeartbeatEnabled: document.getElementById('viewHeartbeatEnabled').checked,
-    viewBlobsEnabled: document.getElementById('viewBlobsEnabled').checked,
+    viewFriendsEnabled: document.getElementById('viewFriendsEnabled').checked,
     refreshInterval: parseInt(document.getElementById('refreshInterval').value),
     showStalenessWarnings: document.getElementById('showStalenessWarnings').checked,
-    targetFPS: parseInt(document.getElementById('targetFPS').value)
+    targetFPS: parseInt(document.getElementById('targetFPS').value),
+    orbStyle: document.getElementById('orbStyle').value
   };
   
   vitalityManager.saveSettings();
