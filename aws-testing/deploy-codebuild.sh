@@ -16,6 +16,10 @@ fi
 
 source aws-testing/config.env
 
+# ECS target
+ECS_CLUSTER="foxtrot-test"
+ECS_SERVICE="foxtrot-test-service"
+
 # Create CodeBuild project if it doesn't exist
 echo "1️⃣  Setting up CodeBuild project..."
 BUILD_PROJECT="foxtrot-test-build"
@@ -203,8 +207,8 @@ echo "  ✓ Build completed successfully"
 # Continue with ECS deployment (same as deploy-ecs.sh from step 4 onwards)
 echo ""
 echo "4️⃣  Creating ECS cluster..."
-if ! aws ecs describe-clusters --clusters foxtrot-test --region $AWS_REGION --query 'clusters[0].status' --output text 2>/dev/null | grep -q ACTIVE; then
-    aws ecs create-cluster --cluster-name foxtrot-test --region $AWS_REGION >/dev/null
+if ! aws ecs describe-clusters --clusters "$ECS_CLUSTER" --region $AWS_REGION --query 'clusters[0].status' --output text 2>/dev/null | grep -q ACTIVE; then
+    aws ecs create-cluster --cluster-name "$ECS_CLUSTER" --region $AWS_REGION >/dev/null
     echo "  ✓ Cluster created"
 else
     echo "  ✓ Cluster exists"
@@ -292,7 +296,8 @@ echo "6️⃣  Registering ECS task definition..."
 
 ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/foxtrot-test"
 
-TASK_DEF=$(cat <<EOF
+TASK_DEF_FILE="/tmp/foxtrot-task-def-${TIMESTAMP}.json"
+cat > "$TASK_DEF_FILE" <<EOF
 {
   "family": "foxtrot-test",
   "networkMode": "awsvpc",
@@ -348,10 +353,44 @@ TASK_DEF=$(cat <<EOF
   }]
 }
 EOF
-)
 
-TASK_DEF_ARN=$(echo "$TASK_DEF" | aws ecs register-task-definition \
-    --cli-input-json file:///dev/stdin \
+# Normalize and validate task definition JSON before registering
+if [[ ! -s "$TASK_DEF_FILE" ]]; then
+    echo "❌ Task definition JSON file is empty: $TASK_DEF_FILE"
+    exit 1
+fi
+
+sed -i '' -e 's/\r$//' "$TASK_DEF_FILE"
+
+if ! python3 -m json.tool "$TASK_DEF_FILE" >/dev/null; then
+    echo "❌ Task definition JSON is invalid. Preview:"
+    head -n 60 "$TASK_DEF_FILE"
+    exit 1
+fi
+
+# Normalize JSON to ensure AWS CLI reads clean UTF-8
+TASK_DEF_NORMALIZED="/tmp/foxtrot-task-def-${TIMESTAMP}-normalized.json"
+python3 - "$TASK_DEF_FILE" "$TASK_DEF_NORMALIZED" <<'PY'
+import json
+import sys
+
+src = sys.argv[1]
+dst = sys.argv[2]
+
+with open(src, 'r', encoding='utf-8') as f:
+    data = json.load(f)
+
+with open(dst, 'w', encoding='utf-8') as f:
+    json.dump(data, f, separators=(',', ':'))
+PY
+
+if [[ ! -s "$TASK_DEF_NORMALIZED" ]]; then
+    echo "❌ Normalized task definition JSON file is empty: $TASK_DEF_NORMALIZED"
+    exit 1
+fi
+
+TASK_DEF_ARN=$(aws ecs register-task-definition \
+    --cli-input-json file://"$TASK_DEF_NORMALIZED" \
     --region $AWS_REGION \
     --query 'taskDefinition.taskDefinitionArn' \
     --output text)
@@ -362,19 +401,19 @@ echo "  ✓ Task definition registered"
 echo ""
 echo "7️⃣  Deploying ECS service..."
 
-if aws ecs describe-services --cluster foxtrot-test --services foxtrot --region $AWS_REGION --query 'services[0].status' --output text 2>/dev/null | grep -q ACTIVE; then
+if aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --region $AWS_REGION --query 'services[0].status' --output text 2>/dev/null | grep -q ACTIVE; then
     echo "  Updating existing service..."
     aws ecs update-service \
-        --cluster foxtrot-test \
-        --service foxtrot \
+        --cluster "$ECS_CLUSTER" \
+        --service "$ECS_SERVICE" \
         --task-definition $TASK_DEF_ARN \
         --force-new-deployment \
         --region $AWS_REGION >/dev/null
 else
     echo "  Creating new service..."
     aws ecs create-service \
-        --cluster foxtrot-test \
-        --service-name foxtrot \
+        --cluster "$ECS_CLUSTER" \
+        --service-name "$ECS_SERVICE" \
         --task-definition $TASK_DEF_ARN \
         --desired-count 1 \
         --launch-type FARGATE \
@@ -388,22 +427,22 @@ echo "  ✓ Service deployed"
 echo ""
 echo "8️⃣  Waiting for service to stabilize (2-3 minutes)..."
 aws ecs wait services-stable \
-    --cluster foxtrot-test \
-    --services foxtrot \
+    --cluster "$ECS_CLUSTER" \
+    --services "$ECS_SERVICE" \
     --region $AWS_REGION
 
 # Get public IP
 echo ""
 echo "9️⃣  Retrieving public IP..."
 TASK_ARN=$(aws ecs list-tasks \
-    --cluster foxtrot-test \
-    --service-name foxtrot \
+    --cluster "$ECS_CLUSTER" \
+    --service-name "$ECS_SERVICE" \
     --region $AWS_REGION \
     --query 'taskArns[0]' \
     --output text)
 
 ENI_ID=$(aws ecs describe-tasks \
-    --cluster foxtrot-test \
+    --cluster "$ECS_CLUSTER" \
     --tasks $TASK_ARN \
     --region $AWS_REGION \
     --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \

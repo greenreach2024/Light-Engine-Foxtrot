@@ -213,6 +213,7 @@ import qualityControlRouter from './routes/quality-control.js';
 import aiVisionRouter from './routes/ai-vision.js';
 import { router as migrationRouter, initDb as initMigrationDb } from './routes/migration.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
+import procurementRouter from './routes/procurement.js';
 import edgeRouter from './routes/edge.js';
 import setupRouter from './routes/setup.js';
 import auditLogger, { auditMiddleware, createAuditRoutes } from './lib/wholesale/audit-logger.js';
@@ -10299,6 +10300,29 @@ app.use('/api/audit', createAuditRoutes());
 app.use('/api/wholesale', auditMiddleware);
 
 console.log(' Audit logging initialized - capturing all wholesale operations');
+
+/**
+ * ===========================================
+ * PROCUREMENT PORTAL - Farm Supply Ordering
+ * ===========================================
+ * Drop-shipping e-procurement system allowing farms to:
+ * - Browse curated supply catalog (nutrients, seeds, media, equipment)
+ * - Place purchase orders routed to approved suppliers
+ * - Track order status and receive inventory
+ * - View supply inventory levels
+ * Routes:
+ * - GET /api/procurement/catalog      - Browse products
+ * - GET /api/procurement/categories    - List categories
+ * - GET /api/procurement/suppliers     - List suppliers
+ * - GET/PUT /api/procurement/cart      - Manage cart
+ * - POST /api/procurement/orders       - Place order
+ * - GET /api/procurement/orders        - Order history
+ * - POST /api/procurement/orders/:id/receive - Mark received
+ * - GET /api/procurement/inventory     - Supply inventory
+ * - GET /api/procurement/commission-report - Admin reporting
+ */
+app.use('/api/procurement', procurementRouter);
+console.log(' Procurement portal initialized');
 
 /**
  * ===========================================
