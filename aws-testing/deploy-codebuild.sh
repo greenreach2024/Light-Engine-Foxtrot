@@ -120,6 +120,11 @@ cp -r backend $TEMP_DIR/ 2>/dev/null || true
 cp -r automation $TEMP_DIR/ 2>/dev/null || true
 cp -r routes $TEMP_DIR/ 2>/dev/null || true
 cp -r controller $TEMP_DIR/ 2>/dev/null || true
+cp -r config $TEMP_DIR/ 2>/dev/null || true
+cp -r middleware $TEMP_DIR/ 2>/dev/null || true
+cp -r data $TEMP_DIR/ 2>/dev/null || true
+cp -r db $TEMP_DIR/ 2>/dev/null || true
+cp -r js $TEMP_DIR/ 2>/dev/null || true
 cp -r server $TEMP_DIR/
 # Verify server directory
 if [ ! -d "$TEMP_DIR/server" ]; then
