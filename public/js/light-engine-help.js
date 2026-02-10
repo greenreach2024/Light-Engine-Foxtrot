@@ -87,13 +87,20 @@
 
   function showPopup(target, event) {
     const title = target.getAttribute('data-help-title') || 'Help';
-    const text = target.getAttribute('data-help') || target.getAttribute('data-help-text'); // fallback
-    const aiText = target.getAttribute('data-help-ai');
+    const text = target.getAttribute('data-help') || target.getAttribute('data-help-text') || ''; // fallback
+    const aiText = target.getAttribute('data-help-ai') || '';
 
     if (!text && !aiText) return;
 
     titleEl.textContent = title;
-    textEl.textContent = text;
+    
+    // Show/hide text element based on content
+    if (text) {
+      textEl.textContent = text;
+      textEl.style.display = 'block';
+    } else {
+      textEl.style.display = 'none';
+    }
 
     if (aiText) {
       aiContainer.style.display = 'block';
@@ -157,7 +164,15 @@
     show: (x, y, title, text, aiText) => {
         if (!text && !aiText) return;
         titleEl.textContent = title || 'Help';
-        textEl.textContent = text || '';
+        
+        // Show/hide text element based on content
+        if (text) {
+          textEl.textContent = text;
+          textEl.style.display = 'block';
+        } else {
+          textEl.style.display = 'none';
+        }
+        
         if (aiText) {
           aiContainer.style.display = 'block';
           aiContent.textContent = aiText;

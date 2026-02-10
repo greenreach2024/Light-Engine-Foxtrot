@@ -528,6 +528,36 @@
     }
 
     // Initialize
+    // Pre-seed Farm ID from URL params, localStorage, or farm.json
+    (async function preseedFarmId() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const farmIdParam = urlParams.get('farmId') || localStorage.getItem('farmId') || localStorage.getItem('farm_id') || '';
+      const farmNameParam = urlParams.get('farmName') ? decodeURIComponent(urlParams.get('farmName')) : '';
+      
+      if (farmIdParam) {
+        document.getElementById('farmId').value = farmIdParam;
+      } else {
+        // Try loading from farm.json
+        try {
+          const res = await fetch('/data/farm.json');
+          if (res.ok) {
+            const farm = await res.json();
+            if (farm.farmId) {
+              document.getElementById('farmId').value = farm.farmId;
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
+      
+      // Update prefix with farm ID if available
+      const farmIdVal = document.getElementById('farmId').value;
+      if (farmIdVal) {
+        const prefix = document.getElementById('prefix');
+        if (prefix.value === 'FARM-TRAY') {
+          prefix.value = `${farmIdVal}-TRAY`;
+        }
+      }
+    })();
     updatePreviewInfo();
   </script>
 </body>

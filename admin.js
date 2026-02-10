@@ -3,7 +3,7 @@
  * Central management for Light Engine platform
  */
 
-const API_BASE = window.location.origin.replace(':8091', ':8000');
+const API_BASE = window.location.origin;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {

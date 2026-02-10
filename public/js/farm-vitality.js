@@ -19,6 +19,7 @@ class VitalityViewManager {
     this.isAnimating = false;
     this.blobPositions = []; // Track blob positions for click detection
     this.time = 0; // Master animation timer
+    this.lottieAnimations = {}; // Store Lottie instances
     
     // Initialize
     this.init();
@@ -147,6 +148,11 @@ class VitalityViewManager {
     
     // Update freshness indicators
     this.updateFreshnessIndicators();
+
+    // If active view is Friends, update its state
+    if (this.currentView === 'friends') {
+        this.updateFriendsState();
+    }
   }
   
   /**
@@ -254,26 +260,41 @@ class VitalityViewManager {
       this.isAnimating = false;
     }
     
-    // Show current canvas
-    const canvas = document.getElementById(`${this.currentView}Canvas`);
-    if (canvas) {
-      canvas.classList.add('active');
-      
-      // Start animation for this view
-      this.isAnimating = true;
-      
-      // Render based on view type
-      switch (this.currentView) {
-        case 'rings':
-          this.animateRingsView(canvas);
-          break;
-        case 'heartbeat':
-          this.animateHeartbeatView(canvas);
-          break;
-        case 'blobs':
-          this.renderBlobsView(canvas);
-          break;
+    // Show current view container
+    let containerForView = null;
+    
+    if (this.currentView === 'friends') {
+      containerForView = document.getElementById('friendsContainer');
+      if (containerForView) {
+        containerForView.style.display = 'grid'; // Grid layout for friends
+        containerForView.classList.add('active');
+        this.renderFriendsView();
       }
+    } else {
+      // Canvas views
+      containerForView = document.getElementById(`${this.currentView}Canvas`);
+      if (containerForView) {
+        containerForView.classList.add('active');
+        this.isAnimating = true;
+        
+        switch (this.currentView) {
+          case 'rings':
+            this.animateRingsView(containerForView);
+            break;
+          case 'heartbeat':
+            this.animateHeartbeatView(containerForView);
+            break;
+        }
+      }
+    }
+
+    // Hide others
+    if (this.currentView !== 'friends') {
+        const friendsContainer = document.getElementById('friendsContainer');
+        if (friendsContainer) {
+            friendsContainer.style.display = 'none';
+            friendsContainer.classList.remove('active');
+        }
     }
   }
   
@@ -618,71 +639,113 @@ class VitalityViewManager {
   }
   
   /**
-   * Render Happy Blobs View (Phase 4A - Implementation)
+   * Render Farm Friends View (Lottie)
    */
-  renderBlobsView(canvas) {
-    if (!this.isAnimating || this.currentView !== 'blobs') return;
-    
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-    
-    ctx.fillStyle = '#0a0f1e';
-    ctx.fillRect(0, 0, width, height);
-    
-    if (!this.vitalityData) {
-      this.drawLoadingMessage(ctx, width, height);
-      this.animationFrame = requestAnimationFrame(() => this.renderBlobsView(canvas));
-      return;
+  renderFriendsView() {
+    if (!this.vitalityData) return;
+
+    // Initialize Lottie if not already done
+    if (Object.keys(this.lottieAnimations).length === 0) {
+      this.initLottieAnimations();
     }
-    
-    // Update animation time
-    this.time += 1;
-    this.rotationAngle += 0.015;
-    
-    // Clear blob positions for click detection
-    this.blobPositions = [];
-    
-    const components = [
-      { key: 'environment', label: 'Environment', ...this.vitalityData.components.environment },
-      { key: 'crop_readiness', label: 'Crop Readiness', ...this.vitalityData.components.crop_readiness },
-      { key: 'nutrient_health', label: 'Nutrient Health', ...this.vitalityData.components.nutrient_health },
-      { key: 'operations', label: 'Systems', ...this.vitalityData.components.operations }
-    ];
-    
-    // Grid layout: 2x2
-    const cols = 2;
-    const rows = 2;
-    const cellWidth = width / cols;
-    const cellHeight = (height - 100) / rows;
-    
-    components.forEach((component, index) => {
-      const col = index % cols;
-      const row = Math.floor(index / cols);
-      const centerX = cellWidth * col + cellWidth / 2;
-      const centerY = 100 + cellHeight * row + cellHeight / 2;
-      
-      // Draw blob and store position
-      const maxRadius = Math.min(cellWidth, cellHeight) * 0.34;
-      const blobSize = this.drawBlob(ctx, component, centerX, centerY, index, maxRadius);
-      
-      // Store blob position for click detection
-      this.blobPositions.push({
-        x: centerX,
-        y: centerY,
-        size: blobSize,
-        component: component
-      });
-    });
-    
-    // Overall status
-    ctx.fillStyle = '#c4b5fd';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`Farm Health: ${this.vitalityData.overall_score}/100`, width / 2, height - 30);
-    
-    // Continue animation
-    this.animationFrame = requestAnimationFrame(() => this.renderBlobsView(canvas));
+
+    // Update Scores & Animation States
+    this.updateFriendsState();
+  }
+
+  /**
+   * Initialize Lottie players
+   */
+  initLottieAnimations() {
+    const config = {
+      environment: { 
+        id: 'lottie-env', 
+        path: 'https://assets9.lottiefiles.com/packages/lf20_5tfk3vaq.json' // Sun
+      },
+      crop_readiness: { 
+        id: 'lottie-crop', 
+        path: 'https://assets2.lottiefiles.com/packages/lf20_yd8fbnml.json' // Plant
+      },
+      nutrient_health: { 
+        id: 'lottie-nutrient', 
+        path: 'https://assets5.lottiefiles.com/packages/lf20_kcsvm32c.json' // Water
+      },
+      operations: { 
+        id: 'lottie-ops', 
+        path: 'https://assets1.lottiefiles.com/packages/lf20_sfgpbkis.json' // Gears
+      }
+    };
+
+    // Components mapping from data to ID
+    const componentMap = {
+      'environment': config.environment,
+      'crop_readiness': config.crop_readiness,
+      'nutrient_health': config.nutrient_health,
+      'operations': config.operations
+    };
+
+    for (const [key, cfg] of Object.entries(componentMap)) {
+      const container = document.getElementById(cfg.id);
+      if (container) {
+        try {
+          this.lottieAnimations[key] = lottie.loadAnimation({
+            container: container,
+            renderer: 'svg',
+            loop: true,
+            autoplay: true,
+            path: cfg.path
+          });
+          // Set initial speed based on no data
+          this.lottieAnimations[key].setSpeed(0.5);
+        } catch (e) {
+          console.error(`Failed to load Lottie for ${key}`, e);
+          container.innerHTML = '<div style="color:red">Animation Error</div>';
+        }
+      }
+    }
+  }
+
+  /**
+   * Update Friends View based on data
+   */
+  updateFriendsState() {
+     if (!this.vitalityData) return;
+
+     const components = {
+      'environment': { el: 'score-env', data: this.vitalityData.components.environment },
+      'crop_readiness': { el: 'score-crop', data: this.vitalityData.components.crop_readiness },
+      'nutrient_health': { el: 'score-nutrient', data: this.vitalityData.components.nutrient_health },
+      'operations': { el: 'score-ops', data: this.vitalityData.components.operations }
+    };
+
+    for (const [key, comp] of Object.entries(components)) {
+        // Update Score Text
+        const scoreEl = document.getElementById(comp.el);
+        if (scoreEl) {
+            scoreEl.textContent = comp.data.score;
+            scoreEl.style.color = this.getScoreColor(comp.data.score);
+        }
+
+        // Update Animation Speed/Expression based on health
+        if (this.lottieAnimations[key]) {
+            const score = comp.data.score;
+            let speed = 1;
+            
+            if (score >= 90) speed = 1.5; // Super happy/fast
+            else if (score >= 70) speed = 1.0; // Normal
+            else if (score >= 50) speed = 0.5; // Slow/Sluggish
+            else speed = 0.2; // Barely moving
+
+            this.lottieAnimations[key].setSpeed(speed);
+        }
+    }
+  }
+
+  /**
+   * Render Happy Blobs View (Deprecated - Removed)
+   */
+  renderBlobsView_DEPRECATED(canvas) {
+    // ... removed ...
   }
   
   /**
@@ -932,32 +995,7 @@ class VitalityViewManager {
 
     drawEye(0, eyeY, emotion);
     
-    // Mouth
-    const mouthY = size * 0.35;
-    const mouthWidth = size * 0.35;
-    
-    ctx.strokeStyle = isStale ? '#6b7280' : '#1e3a8a'; // Dark blue ink for mouth
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    
-    if (emotion === 'sad') {
-      ctx.arc(0, mouthY + size*0.1, mouthWidth, 1.2 * Math.PI, 1.8 * Math.PI);
-    } else if (emotion === 'neutral') {
-      ctx.moveTo(-mouthWidth*0.5, mouthY);
-      ctx.lineTo(mouthWidth*0.5, mouthY);
-    } else {
-      // Big toothless gummy smile
-      ctx.arc(0, mouthY - size*0.05, mouthWidth, 0.2 * Math.PI, 0.8 * Math.PI);
-      
-      // Add optional smile dimples
-      ctx.moveTo(-mouthWidth * 1.1, mouthY - size*0.05);
-      ctx.lineTo(-mouthWidth * 0.9, mouthY + size*0.05);
-      ctx.moveTo(mouthWidth * 1.1, mouthY - size*0.05);
-      ctx.lineTo(mouthWidth * 0.9, mouthY + size*0.05);
-    }
-    
-    ctx.stroke();
+    // Facial features removed per user request - keeping only Cyclops eye
   }
   
   /**

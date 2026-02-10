@@ -16362,6 +16362,20 @@ app.get('/api/demo/intro-cards', (req, res) => {
  * @param {string} planId - Plan ID like "crop-bibb-butterhead"
  * @returns {number} - Total grow days, or 45 as fallback
  */
+/**
+ * Extract a human-readable crop name from a plan ID
+ * e.g. "crop-bibb-butterhead" → "Bibb Butterhead"
+ *      "crop-mei-qing-pak-choi" → "Mei Qing Pak Choi"
+ */
+function extractCropDisplayName(planId) {
+  if (!planId || typeof planId !== 'string') return null;
+  const cleanId = planId.replace(/^crop-/, '');
+  return cleanId
+    .split('-')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
 function getCropHarvestDays(planId) {
   if (!planId) return 45;
   
@@ -16444,20 +16458,25 @@ app.get('/api/inventory/current', (req, res) => {
       // Get actual harvest days from lighting recipe
       const harvestDays = getCropHarvestDays(group.plan);
       
+      // Derive crop name from plan if crop field is missing
+      const cropName = group.crop || extractCropDisplayName(group.plan) || 'Unknown';
+      const groupRoomId = group.roomId || group.room || 'Room-1';
+      const groupZoneId = group.zoneId || group.zone || 'Zone-1';
+
       // Create individual tray records
       for (let i = 0; i < trayCount; i++) {
         allTrays.push({
           trayId: `${group.id}-T${i + 1}`,
           groupId: group.id,
-          roomId: group.roomId,
-          zoneId: group.zoneId,
-          crop: group.crop,
+          roomId: groupRoomId,
+          zoneId: groupZoneId,
+          crop: cropName,
           plantCount: plantsPerTray,
           seedingDate: seedingDate.toISOString(),
           daysOld: daysOld,
           harvestIn: Math.max(0, harvestDays - daysOld), // Use actual recipe duration
           health: group.health || 'healthy',
-          recipe: group.recipe
+          recipe: cropName
         });
         trayCounter++;
       }
@@ -16542,8 +16561,13 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
         daysOld = Math.floor((now - seedDate) / (1000 * 60 * 60 * 24));
       }
 
-      // Use real crop grow times
-      const actualGrowDays = VARIETY_GROW_DAYS[group.crop] || 35;
+      // Derive crop name from plan if crop field is missing
+      const cropName = group.crop || extractCropDisplayName(group.plan) || 'Unknown';
+      const groupRoomId = group.roomId || group.room || 'Room-1';
+      const groupZoneId = group.zoneId || group.zone || 'Zone-1';
+
+      // Use real crop grow times (try by display name first, then by recipe harvest days)
+      const actualGrowDays = VARIETY_GROW_DAYS[cropName] || getCropHarvestDays(group.plan) || 35;
       
       const harvestDate = new Date(seedDate);
       harvestDate.setDate(seedDate.getDate() + actualGrowDays);
@@ -16556,10 +16580,10 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
           trayId: `${group.id}-T${trayNum}`,
           groupId: group.id,
           groupName: group.name,
-          recipe: group.crop,  // Real crop name
+          recipe: cropName,
           plantCount: plantsPerTray,
           estimatedHarvestDate: harvestDate.toISOString().split('T')[0],
-          location: `${group.roomId || 'Room-1'} - ${group.zone || 'Zone-1'}`,
+          location: `${groupRoomId} - ${groupZoneId}`,
           daysToHarvest: daysToHarvest,
           currentDay: daysOld + 1
         };
@@ -16615,6 +16639,82 @@ const suppliesInventory = [];
 function generateId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
+
+// ===== ADMIN INVENTORY ENDPOINTS (compatibility with farm-admin pages) =====
+
+// GET /api/inventory/dashboard - Summary dashboard for admin
+app.get('/api/inventory/dashboard', (req, res) => {
+  try {
+    const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
+    const groupsData = fs.existsSync(groupsPath) ? JSON.parse(fs.readFileSync(groupsPath, 'utf8')) : { groups: [] };
+    const groups = groupsData.groups || [];
+    const totalTrays = groups.reduce((sum, g) => sum + (g.trays || 4), 0);
+    const totalPlants = groups.reduce((sum, g) => sum + (g.plants || 48), 0);
+    
+    res.json({
+      ok: true,
+      totalSeeds: seedsInventory.length,
+      totalPackaging: packagingInventory.length,
+      totalNutrients: nutrientsInventory.length,
+      totalEquipment: equipmentInventory.length,
+      totalSupplies: suppliesInventory.length,
+      activeGroups: groups.length,
+      activeTrays: totalTrays,
+      totalPlants: totalPlants
+    });
+  } catch (error) {
+    res.json({ ok: true, totalSeeds: 0, totalPackaging: 0, totalNutrients: 0, totalEquipment: 0, totalSupplies: 0, activeGroups: 0, activeTrays: 0, totalPlants: 0 });
+  }
+});
+
+// GET /api/inventory/reorder-alerts - Items needing reorder
+app.get('/api/inventory/reorder-alerts', (req, res) => {
+  const alerts = [];
+  // Check seeds with low quantity
+  seedsInventory.filter(s => (s.quantity || 0) < (s.reorderPoint || 10)).forEach(s => {
+    alerts.push({ id: s.id, type: 'seeds', name: s.name, currentQty: s.quantity || 0, reorderPoint: s.reorderPoint || 10 });
+  });
+  // Check nutrients with low quantity
+  nutrientsInventory.filter(n => (n.quantity || 0) < (n.reorderPoint || 5)).forEach(n => {
+    alerts.push({ id: n.id, type: 'nutrients', name: n.name, currentQty: n.quantity || 0, reorderPoint: n.reorderPoint || 5 });
+  });
+  res.json({ ok: true, alerts });
+});
+
+// GET /api/inventory/seeds/list - List all seeds (alias)
+app.get('/api/inventory/seeds/list', (req, res) => {
+  res.json({ ok: true, seeds: seedsInventory });
+});
+
+// GET /api/inventory/packaging/list - List all packaging (alias)
+app.get('/api/inventory/packaging/list', (req, res) => {
+  res.json({ ok: true, packaging: packagingInventory });
+});
+
+// GET /api/inventory/nutrients/list - List all nutrients (alias)
+app.get('/api/inventory/nutrients/list', (req, res) => {
+  res.json({ ok: true, nutrients: nutrientsInventory });
+});
+
+// GET /api/inventory/equipment/list - List all equipment (alias)
+app.get('/api/inventory/equipment/list', (req, res) => {
+  res.json({ ok: true, equipment: equipmentInventory });
+});
+
+// GET /api/inventory/supplies/list - List all supplies (alias)
+app.get('/api/inventory/supplies/list', (req, res) => {
+  res.json({ ok: true, supplies: suppliesInventory });
+});
+
+// GET /api/inventory/usage/weekly-summary - Weekly usage summary
+app.get('/api/inventory/usage/weekly-summary', (req, res) => {
+  res.json({
+    ok: true,
+    period: { days: parseInt(req.query.days) || 7, start: new Date(Date.now() - 7 * 86400000).toISOString(), end: new Date().toISOString() },
+    summary: { seedsUsed: 0, nutrientsUsed: 0, packagingUsed: 0, waterUsed: 0 },
+    dailyBreakdown: []
+  });
+});
 
 // ===== SEEDS ENDPOINTS =====
 
@@ -17096,8 +17196,10 @@ app.get('/api/tray-formats', async (req, res) => {
           name: '10x20 Microgreens Tray',
           plantSiteCount: 200,
           systemType: 'NFT',
-          isWeightBased: false,
-          weightUnit: 'heads',
+          isWeightBased: true,
+          weightUnit: 'oz',
+          targetWeightPerSite: 0.5,
+          description: 'Standard 10x20 microgreens flat',
           isCustom: false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -17109,6 +17211,80 @@ app.get('/api/tray-formats', async (req, res) => {
           systemType: 'DWC',
           isWeightBased: false,
           weightUnit: 'heads',
+          description: 'Deep water culture lettuce raft',
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          trayFormatId: 'seedling-72',
+          name: '72-Cell Seedling Tray',
+          plantSiteCount: 72,
+          systemType: 'Plug',
+          isWeightBased: false,
+          weightUnit: 'heads',
+          description: 'Standard 72-cell plug tray for seedling starts',
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          trayFormatId: 'seedling-128',
+          name: '128-Cell Seedling Tray',
+          plantSiteCount: 128,
+          systemType: 'Plug',
+          isWeightBased: false,
+          weightUnit: 'heads',
+          description: 'High-density 128-cell plug tray',
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          trayFormatId: 'nft-channel-36',
+          name: 'NFT Channel (36 sites)',
+          plantSiteCount: 36,
+          systemType: 'NFT',
+          isWeightBased: false,
+          weightUnit: 'heads',
+          description: '6-channel NFT system with 6 sites per channel',
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          trayFormatId: 'tower-garden-28',
+          name: 'Vertical Tower (28 sites)',
+          plantSiteCount: 28,
+          systemType: 'Aeroponic',
+          isWeightBased: false,
+          weightUnit: 'heads',
+          description: 'Aeroponic tower garden with 28 planting sites',
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          trayFormatId: 'dwc-raft-48',
+          name: 'DWC Raft (48 sites)',
+          plantSiteCount: 48,
+          systemType: 'DWC',
+          isWeightBased: false,
+          weightUnit: 'heads',
+          description: 'Standard 2x4 floating raft with 48 net cups',
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          trayFormatId: 'herb-12',
+          name: 'Herb Tray (12 pots)',
+          plantSiteCount: 12,
+          systemType: 'DWC',
+          isWeightBased: true,
+          weightUnit: 'oz',
+          targetWeightPerSite: 2,
+          description: '12-pot herb growing tray',
           isCustom: false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -17129,7 +17305,23 @@ app.get('/api/tray-formats', async (req, res) => {
       return res.json(defaults);
     }
     
-    res.json(formats);
+    // Normalize formats from NeDB (handle snake_case from test-farm-wizard)
+    const normalized = formats.map(f => ({
+      trayFormatId: f.trayFormatId || f.tray_format_id || f._id,
+      name: f.name || 'Unnamed Format',
+      plantSiteCount: f.plantSiteCount || f.cells || (f.rows && f.columns ? f.rows * f.columns : 0),
+      systemType: f.systemType || f.system_type || '',
+      isWeightBased: f.isWeightBased || f.is_weight_based || false,
+      weightUnit: f.weightUnit || f.weight_unit || 'heads',
+      targetWeightPerSite: f.targetWeightPerSite || f.target_weight_per_site || 0,
+      description: f.description || '',
+      isCustom: f.isCustom !== undefined ? f.isCustom : (f.is_custom !== undefined ? f.is_custom : true),
+      rows: f.rows || 0,
+      columns: f.columns || 0,
+      createdAt: f.createdAt || f.created_at || new Date().toISOString(),
+      updatedAt: f.updatedAt || f.updated_at || new Date().toISOString()
+    }));
+    res.json(normalized);
   } catch (error) {
     console.error('[tray-formats] Failed to load formats:', error);
     res.status(500).json({ 

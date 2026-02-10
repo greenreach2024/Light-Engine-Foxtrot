@@ -1789,7 +1789,7 @@
       if (!zoneId) return null;
       
       // Handle different zone ID formats (see getLiveSensorData)
-      let zoneId = sensor.zone;
+      zoneId = sensor.zone;
       if (typeof sensor.zone === 'number' || /^\d+$/.test(sensor.zone)) {
         zoneId = `zone-${sensor.zone}`;
       }

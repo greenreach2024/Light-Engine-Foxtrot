@@ -706,8 +706,8 @@
           `;
         }
 
-        // Calculate unique crops
-        const uniqueCrops = new Set(groupsData.map(g => g.crop).filter(Boolean));
+        // Calculate unique crops (support both 'crop' field and 'plan' field)
+        const uniqueCrops = new Set(groupsData.map(g => g.crop || extractCropDisplayName(g.plan)).filter(Boolean));
 
         console.log('[loadInventory] Rendering...');
         renderSummaryCards(currentData, uniqueCrops.size);

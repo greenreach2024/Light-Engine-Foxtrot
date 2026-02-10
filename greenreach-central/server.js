@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import fs from 'fs';
 import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { WebSocketServer } from 'ws';
@@ -96,6 +97,62 @@ app.use(helmet({
 app.use(express.static(path.join(__dirname, 'public')));
 // Fallback to root public directory for shared assets
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// =====================================================
+// FARM DATA SYNC: Periodically pull live data from edge farms
+// =====================================================
+const FARM_DATA_DIR = path.join(__dirname, 'public', 'data');
+const FARM_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const SYNC_DATA_FILES = ['groups.json', 'rooms.json', 'farm.json', 'iot-devices.json', 'room-map.json'];
+
+async function syncFarmData() {
+  try {
+    // Read farm.json to get edge device URL
+    const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+    if (!fs.existsSync(farmJsonPath)) return;
+    
+    const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+    const edgeUrl = farmData.url;
+    if (!edgeUrl) return;
+    
+    logger.info(`[FarmSync] Syncing data from edge device: ${edgeUrl}`);
+    
+    for (const file of SYNC_DATA_FILES) {
+      if (file === 'farm.json') continue; // Don't overwrite farm.json with edge version
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const response = await fetch(`${edgeUrl}/data/${file}`, { signal: controller.signal });
+        clearTimeout(timeout);
+        
+        if (response.ok) {
+          const data = await response.text();
+          const localPath = path.join(FARM_DATA_DIR, file);
+          fs.writeFileSync(localPath, data, 'utf8');
+          logger.info(`[FarmSync] Updated ${file} from edge device`);
+        }
+      } catch (err) {
+        logger.warn(`[FarmSync] Could not fetch ${file} from ${edgeUrl}: ${err.message}`);
+      }
+    }
+  } catch (error) {
+    logger.error('[FarmSync] Sync error:', error.message);
+  }
+}
+
+// Run initial sync after 10 seconds, then every 5 minutes
+setTimeout(syncFarmData, 10000);
+setInterval(syncFarmData, FARM_SYNC_INTERVAL);
+
+// Manual sync endpoint
+app.post('/api/sync/pull-farm-data', async (req, res) => {
+  try {
+    await syncFarmData();
+    res.json({ ok: true, message: 'Farm data sync complete', timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
 
 // CORS configuration - Allow same-origin requests and configured origins
 const corsOptions = {
