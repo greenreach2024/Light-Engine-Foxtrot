@@ -20,7 +20,9 @@ class VitalityViewManager {
     this.blobPositions = []; // Track blob positions for click detection
     this.time = 0; // Master animation timer
     this.lottieAnimations = {}; // Store Lottie instances
-    this.orbStyle = this.settings.orbStyle || 'professional'; // 'professional' or 'kids'
+    this.orbStyle = this.settings.orbStyle || 'professional'; // 'professional', 'kids', or 'ai'
+    this.characterRenderer = null; // AI character renderer
+    this.aiCharacters = {}; // Cache for AI-generated characters
     
     // Initialize
     this.init();
@@ -684,9 +686,14 @@ class VitalityViewManager {
       const maxRadius = Math.min(cellWidth, cellHeight) * 0.495;
 
       // Draw orb based on style setting
-      const size = this.settings.orbStyle === 'kids' 
-        ? this.drawKidsFriendlyOrb(ctx, component, centerX, centerY, index, maxRadius)
-        : this.drawProLottieOrb(ctx, component, centerX, centerY, index, maxRadius);
+      let size;
+      if (this.settings.orbStyle === 'ai') {
+        size = await this.drawAICharacter(ctx, component, centerX, centerY, index, maxRadius);
+      } else if (this.settings.orbStyle === 'kids') {
+        size = this.drawKidsFriendlyOrb(ctx, component, centerX, centerY, index, maxRadius);
+      } else {
+        size = this.drawProLottieOrb(ctx, component, centerX, centerY, index, maxRadius);
+      }
       
       // Store position
       this.blobPositions.push({
@@ -965,6 +972,67 @@ class VitalityViewManager {
     
     ctx.restore();
     return size;
+  }
+  
+  /**
+   * Draw AI-Generated Character
+   * Fetches and renders procedurally generated characters
+   */
+  async drawAICharacter(ctx, component, x, y, index, maxRadius) {
+    // Initialize character renderer if needed
+    if (!this.characterRenderer && typeof CharacterRenderer !== 'undefined') {
+      this.characterRenderer = new CharacterRenderer(ctx);
+    }
+    
+    if (!this.characterRenderer) {
+      // Fallback to professional if renderer not loaded
+      return this.drawProLottieOrb(ctx, component, x, y, index, maxRadius);
+    }
+    
+    const score = component.score || 0;
+    const emotion = score > 80 ? 'happy' : score > 50 ? 'neutral' : score > 30 ? 'worried' : 'critical';
+    const cacheKey = `${component.key}_${Math.floor(score / 10)}_${emotion}`;
+    
+    // Check cache
+    if (!this.aiCharacters[cacheKey]) {
+      try {
+        // Fetch character definition from API
+        const response = await fetch(`/api/health/ai-character?componentType=${component.key}&score=${score}&emotion=${emotion}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ok && data.character) {
+            this.aiCharacters[cacheKey] = data.character;
+          }
+        }
+      } catch (error) {
+        console.log('[Farm Vitality] Failed to fetch AI character:', error.message);
+      }
+    }
+    
+    // Render character if available
+    if (this.aiCharacters[cacheKey]) {
+      const character = this.aiCharacters[cacheKey];
+      const size = maxRadius * 0.98;
+      this.characterRenderer.render(character, x, y, size, this.time);
+      
+      // Draw score label below character
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.font = `600 ${size * 0.12}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(component.label.toUpperCase(), 0, size * 0.85);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      
+      return size;
+    }
+    
+    // Fallback to professional if character not loaded yet
+    return this.drawProLottieOrb(ctx, component, x, y, index, maxRadius);
   }
   
   /**

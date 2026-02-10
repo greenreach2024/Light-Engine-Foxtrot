@@ -698,4 +698,65 @@ function getVitalityStatus(score) {
   return 'critical';
 }
 
+/**
+ * GET /api/health/ai-character
+ * Generate AI character definition for dashboard visualization
+ * Query params:
+ *   - componentType: environment, crops, nutrients, systems
+ *   - score: 0-100
+ *   - emotion: happy, neutral, worried, critical (optional, derived from score if not provided)
+ */
+router.get('/ai-character', async (req, res) => {
+  try {
+    const { componentType, score, emotion } = req.query;
+    
+    if (!componentType) {
+      return res.status(400).json({
+        ok: false,
+        error: 'componentType query parameter is required'
+      });
+    }
+    
+    const scoreNum = parseInt(score) || 75;
+    let emotionStr = emotion;
+    
+    // Derive emotion from score if not provided
+    if (!emotionStr) {
+      if (scoreNum >= 80) emotionStr = 'happy';
+      else if (scoreNum >= 50) emotionStr = 'neutral';
+      else if (scoreNum >= 30) emotionStr = 'worried';
+      else emotionStr = 'critical';
+    }
+    
+    // Import AI character generator
+    const { default: aiCharacterGenerator } = await import('../lib/ai-character-generator.js');
+    
+    // Generate character
+    const character = aiCharacterGenerator.generateCharacter(
+      componentType,
+      scoreNum,
+      emotionStr
+    );
+    
+    res.json({
+      ok: true,
+      character,
+      meta: {
+        componentType,
+        score: scoreNum,
+        emotion: emotionStr,
+        generated_at: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('[Health API] AI character generation error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to generate character',
+      message: error.message
+    });
+  }
+});
+
 export default router;

@@ -8,6 +8,8 @@
     <!-- Lottie Script Removed (Switched to B.O.B. Blobs) -->
     <link rel="stylesheet" href="/styles/light-engine.css?v=2">
     <script src="/js/light-engine-help.js" defer></script>
+    <script src="/js/character-renderer.js"></script>
+    <script src="/js/farm-vitality.js"></script>
     <style>
         /* Vitality View Specific Overrides */
         /* Use standard vars where possible */
@@ -691,10 +693,13 @@
                 <select id="orbStyle" onchange="saveSettings()">
                     <option value="professional" selected>Professional (Dashboard)</option>
                     <option value="kids">Kid-Friendly (Bouncy Characters)</option>
+                    <option value="ai">AI-Generated (Unique Creatures)</option>
                 </select>
             </div>
             <p style="color: #9ca3af; font-size: 0.85rem; margin-top: 0.5rem; line-height: 1.4;">
-                Choose between clean data orbs or fun animated characters with faces and stars.
+                <strong>Professional:</strong> Clean data orbs with rings and particles<br>
+                <strong>Kid-Friendly:</strong> Animated faces with bouncing motion<br>
+                <strong>AI-Generated:</strong> Unique procedural creatures (Cloud Spirit, Plant Creature, Droplet Being, Gear Bot)
             </p>
         </div>
 
