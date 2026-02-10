@@ -3,7 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- DEBUG: index.charlie.html - OLD CHARLIE SYSTEM - Last modified 2026-02-06 -->
   <title>Light Engine Foxtrot - Production System</title>
+  <script>
+    // DEBUG: Track OLD page loads
+    console.error('⚠️⚠️⚠️ WARNING: index.charlie.html (OLD PAGE) LOADED!');
+    console.error('🔍 This is the deprecated Charlie app selector');
+    console.error('🔍 You should be on LE-dashboard.html instead');
+    console.error('🔍 Loaded at:', new Date().toISOString());
+    window.__PAGE_VERSION__ = {
+      file: 'index.charlie.html',
+      system: 'OLD_CHARLIE',
+      loaded: new Date().toISOString(),
+      shouldBe: 'LE-dashboard.html'
+    };
+  </script>
   <script src="/auth-guard.js"></script>
   <style>
     * {
@@ -139,6 +153,18 @@
   </style>
 </head>
 <body>
+  <!-- ⚠️ DEBUG BANNER: OLD CHARLIE SYSTEM WARNING ⚠️ -->
+  <div style="position: fixed; top: 0; left: 0; right: 0; background: #ef4444; color: #fff; padding: 8px 16px; font-size: 13px; font-family: monospace; z-index: 99999; text-align: center; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+    ⚠️⚠️⚠️ OLD CHARLIE SYSTEM - index.charlie.html | Last Modified: 2026-02-06 | You should be on LE-dashboard.html ⚠️⚠️⚠️
+  </div>
+  <script>
+    console.error('🔴🔴🔴 OLD PAGE ALERT 🔴🔴🔴');
+    console.error('File: index.charlie.html');
+    console.error('This is the DEPRECATED Charlie app selector from Feb 6');
+    console.error('Loaded at:', new Date().toISOString());
+    alert('⚠️ WARNING: You loaded index.charlie.html (OLD SYSTEM)\\n\\nYou should be on LE-dashboard.html instead!\\n\\nCheck your navigation links.');
+  </script>
+  
   <div class="header">
     <div>
       <h1>Light Engine Foxtrot</h1>
@@ -159,13 +185,18 @@
           <div class="app-title">Farm Summary</div>
           <div class="app-description">Overview of farm operations, inventory, and key metrics</div>
         </a>
+
+        <a href="http://3.236.43.25:8091/farm-vitality.html" class="app-card">
+          <div class="app-title">Farm Vitality</div>
+          <div class="app-description">Live vitality signals and performance indicators</div>
+        </a>
         
         <a href="/LE-dashboard.html" class="app-card">
           <div class="app-title">Setup/Update</div>
           <div class="app-description">Configure rooms, zones, groups, and automation schedules</div>
         </a>
         
-        <a href="/views/tray-inventory.html" class="app-card">
+        <a href="http://3.236.43.25:8091/views/tray-inventory.html" class="app-card">
           <div class="app-title">Activity Hub</div>
           <div class="app-description">Track and manage farm activities with QR-based workflows</div>
         </a>
@@ -176,14 +207,50 @@
         </a>
       </div>
     </div>
+
+    <!-- Farm Checklists -->
+    <div class="category-section">
+      <div class="category-header">Farm Checklists</div>
+      <div class="apps-grid">
+        <a href="http://3.236.43.25:8091/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Daily</div>
+          <div class="app-description">Open the daily checklist in Activity Hub</div>
+        </a>
+
+        <a href="http://3.236.43.25:8091/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Weekly</div>
+          <div class="app-description">Open the weekly checklist in Activity Hub</div>
+        </a>
+
+        <a href="http://3.236.43.25:8091/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Monthly</div>
+          <div class="app-description">Open the monthly checklist in Activity Hub</div>
+        </a>
+
+        <a href="http://3.236.43.25:8091/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Quarterly</div>
+          <div class="app-description">Open the quarterly checklist in Activity Hub</div>
+        </a>
+      </div>
+    </div>
     
     <!-- Inventory Management -->
     <div class="category-section">
       <div class="category-header">Inventory Management</div>
       <div class="apps-grid">
-        <a href="/LE-dashboard.html?view=inventory" class="app-card">
+        <a href="http://3.236.43.25:8091/views/farm-inventory.html" class="app-card">
           <div class="app-title">Farm Inventory</div>
           <div class="app-description">Track plants, trays, and harvest inventory</div>
+        </a>
+
+        <a href="http://3.236.43.25:8091/views/planting-scheduler.html" class="app-card">
+          <div class="app-title">Planting Scheduler</div>
+          <div class="app-description">Plan seedings and predict harvest windows</div>
+        </a>
+
+        <a href="http://3.236.43.25:8091/LE-wholesale-orders.html" class="app-card">
+          <div class="app-title">Wholesale Orders</div>
+          <div class="app-description">Review inbound wholesale orders and fulfillment</div>
         </a>
       </div>
     </div>
