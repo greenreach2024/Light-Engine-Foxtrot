@@ -668,6 +668,18 @@ function setupNavigation() {
             
             // Show section
             document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
+            
+            // Handle iframe-view sections (external pages loaded in iframe)
+            if (section === 'iframe-view' && item.dataset.url) {
+                const iframeSection = document.getElementById('section-iframe-view');
+                const iframe = document.getElementById('admin-iframe');
+                if (iframeSection && iframe) {
+                    iframe.src = item.dataset.url;
+                    iframeSection.style.display = 'block';
+                }
+                return;
+            }
+            
             const sectionEl = document.getElementById(`section-${section}`);
             if (sectionEl) {
                 sectionEl.style.display = 'block';
@@ -705,6 +717,15 @@ function setupNavigation() {
     
     // Handle header dropdown menus
     setupHeaderDropdowns();
+    
+    // Handle initial hash navigation (e.g. LE-farm-admin.html#traceability)
+    const urlHash = window.location.hash.replace('#', '');
+    if (urlHash && urlHash !== 'dashboard') {
+        const navItem = document.querySelector(`.nav-item[data-section="${urlHash}"]`);
+        if (navItem) {
+            setTimeout(() => navItem.click(), 200);
+        }
+    }
 }
 
 /**

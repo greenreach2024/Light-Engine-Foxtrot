@@ -362,6 +362,13 @@
             overflow-x: hidden;
         }
 
+        #section-iframe-view {
+            padding: 0 !important;
+            margin: -25px -35px;
+            width: calc(100% + 70px);
+            height: 100vh;
+        }
+
         .header {
             display: flex;
             justify-content: space-between;
@@ -1177,7 +1184,7 @@
                     </button>
                     <div class="dropdown-menu">
                         <a href="/views/farm-summary.html" class="dropdown-item">Farm Summary</a>
-                        <a href="http://44.203.140.240:8091/farm-vitality.html" class="dropdown-item">Farm Vitality Dashboard</a>
+                        <a href="/farm-vitality.html" class="dropdown-item">Farm Vitality Dashboard</a>
                         <a href="/views/nutrient-management.html" class="dropdown-item">Nutrient Management</a>
                         <a href="/views/room-heatmap.html" class="dropdown-item">Room Heat Map</a>
                     </div>
@@ -1224,19 +1231,19 @@
                         <span class="nav-item-icon">■</span>
                         Dashboard
                     </a>
-                    <a href="/LE-dashboard.html" class="nav-item" target="_blank">
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/LE-dashboard.html">
                         <span class="nav-item-icon">⚙</span>
                         Setup/Update
                     </a>
-                    <a href="/views/tray-inventory.html" class="nav-item" target="_blank">
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/tray-inventory.html">
                         <span class="nav-item-icon">📱</span>
                         Activity Hub
                     </a>
-                    <a href="/views/farm-summary.html" class="nav-item">
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/farm-summary.html">
                         <span class="nav-item-icon">■</span>
                         Farm Summary
                     </a>
-                    <a href="/views/farm-inventory.html" class="nav-item">
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/farm-inventory.html">
                         <span class="nav-item-icon">■</span>
                         Inventory
                     </a>
@@ -1324,6 +1331,10 @@
 
         <!-- Main Content -->
         <div class="main-content">
+            <!-- Iframe Section (for embedded pages) -->
+            <div id="section-iframe-view" class="content-section" style="display: none; padding: 0; height: 100%;">
+                <iframe id="admin-iframe" src="about:blank" style="width: 100%; height: 100%; border: none; display: block;"></iframe>
+            </div>
             <!-- Dashboard Section -->
             <div id="section-dashboard" class="content-section">
                 <div class="header">

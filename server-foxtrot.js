@@ -257,7 +257,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://code.responsivevoice.org", "https://web.squarecdn.com", "https://cdn.jsdelivr.net"], // Note: unsafe-inline/eval needed for dynamic UI
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://code.responsivevoice.org", "https://web.squarecdn.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
@@ -1004,6 +1004,8 @@ function loadPlansDocument() {
         day: Number(row.day),
         stage: String(row.stage || ''),
         ppfd: Number(row.ppfd),
+        ec: row.ec != null ? Number(row.ec) : undefined,
+        ph: row.ph != null ? Number(row.ph) : undefined,
         mix: {
           cw: 0, // Will be calculated from R/B/G
           ww: 0,
@@ -7801,8 +7803,13 @@ app.get('/health', asyncHandler(async (req, res) => {
     }
   };
 
-  // Database connectivity check
-  const dbHealth = await checkDatabaseHealth();
+  // Database connectivity check (with timeout to avoid blocking health check)
+  const DB_HEALTH_TIMEOUT_MS = 3000;
+  const dbHealthPromise = checkDatabaseHealth();
+  const dbTimeoutPromise = new Promise(resolve =>
+    setTimeout(() => resolve({ enabled: true, connected: false, error: 'Health check timeout (DB slow to connect)', mode: 'postgresql' }), DB_HEALTH_TIMEOUT_MS)
+  );
+  const dbHealth = await Promise.race([dbHealthPromise, dbTimeoutPromise]);
   health.checks.database = {
     status: dbHealth.connected ? (dbHealth.latencyMs > 100 ? 'degraded' : 'healthy') : (dbHealth.enabled ? 'unhealthy' : 'disabled'),
     mode: dbHealth.mode,
@@ -7812,7 +7819,8 @@ app.get('/health', asyncHandler(async (req, res) => {
   };
   
   if (dbHealth.enabled && !dbHealth.connected) {
-    health.status = 'unhealthy';
+    // DB not connected is degraded, not unhealthy — app is still alive
+    health.status = 'degraded';
     health.checks.database.error = dbHealth.error;
   } else if (dbHealth.enabled && dbHealth.latencyMs > 100) {
     health.status = 'degraded';
@@ -7855,8 +7863,9 @@ app.get('/health', asyncHandler(async (req, res) => {
   health.responseTimeMs = Date.now() - started;
   
   // Return appropriate status code
-  const statusCode = health.status === 'healthy' ? 200 : 
-                     health.status === 'degraded' ? 200 : 503;
+  // 200 for healthy/degraded (app alive, ECS health check passes)
+  // 503 only for memory-critical (true app failure)
+  const statusCode = health.checks.memory?.status === 'unhealthy' ? 503 : 200;
   
   res.status(statusCode).json(health);
 }));
@@ -18234,8 +18243,15 @@ app.get('/tmp/live.app.charlie.js', (req, res) => {
   res.type('text').sendFile(path.join(__dirname, 'public', 'app.charlie.js'));
 });
 
-// Static files
-app.get(['/', '/index.charlie.html'], (req, res, next) => {
+// Static files - serve NEW dashboard as homepage
+app.get('/', (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(302, `/LE-dashboard.html${queryString}`);
+});
+
+// Keep old Charlie menu accessible but not as default
+app.get('/index.charlie.html', (req, res, next) => {
   const html = loadIndexCharlieHtml();
   if (!html) return next();
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -18966,7 +18982,9 @@ app.use('/light-engine/public', express.static(LIGHT_ENGINE_DIR, {
 
 // Serve static files from public/ (AFTER demo middleware so demo data takes precedence)
 // Add cache control headers to force fresh content
+// Disable index.html auto-serving so we control root URL routing
 app.use(express.static(PUBLIC_DIR, {
+  index: false,  // Don't automatically serve index.html at root - let our route handlers decide
   setHeaders: (res, path) => {
     // Force no-cache for HTML files to ensure latest UI
     if (path.endsWith('.html')) {

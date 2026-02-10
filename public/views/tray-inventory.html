@@ -948,7 +948,7 @@
     <div class="top-header">
       <div style="display: flex; flex-direction: column; gap: 0.25rem;">
         <div class="farm-title">Farm Activity Hub</div>
-        <div id="farmName" style="font-size: 0.9rem; color: #94a3b8;"></div>
+        <div id="farmName" style="font-size: 0.85rem; color: #6ee7b7; background: rgba(16, 185, 129, 0.15); padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.3); display: inline-block;"></div>
       </div>
       <div class="header-right">
         <div class="header-actions">
@@ -3593,8 +3593,29 @@
 
     // Initialize
     document.addEventListener('DOMContentLoaded', async () => {
+      // Always start the clock regardless of auth state
+      updateTime();
+      setInterval(updateTime, 60000);
+      
       // Check authentication first (must await — async sets farmId)
       await checkAuthentication();
+      
+      // Show farm indicator regardless of full auth
+      const farmNameEl = document.getElementById('farmName');
+      if (farmNameEl && !farmNameEl.textContent) {
+        // Fallback: try loading farm name from farm.json
+        try {
+          const farmRes = await fetch('/data/farm.json');
+          if (farmRes.ok) {
+            const farmData = await farmRes.json();
+            farmNameEl.textContent = farmData.farmName || farmData.name || 'Farm';
+            if (!farmId && farmData.farmId) {
+              farmId = farmData.farmId;
+              localStorage.setItem('farmId', farmId);
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
       
       // Only proceed if authenticated
       if (!deviceToken || !farmId) {
@@ -3603,8 +3624,6 @@
       }
       
       console.log('[Init] Authenticated as farm:', farmId, farmName);
-      updateTime();
-      setInterval(updateTime, 60000); // Update every minute
       
       loadDashboardData();
       loadChecklists();
@@ -3642,27 +3661,36 @@
         const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`, { headers: farmHeaders });
         const forecastData = await forecastRes.json();
         
-        // Count ready to harvest (next 2 days)
-        const twoDaysFromNow = Date.now() + (2 * 24 * 60 * 60 * 1000);
-        const readyToHarvest = forecastData.forecast?.filter(item => 
-          new Date(item.harvest_date).getTime() <= twoDaysFromNow
+        // Count ready to harvest (next 7 days bucket)
+        const readyToHarvest = forecastData.next7Days?.trays || forecastData.forecast?.filter(item => 
+          new Date(item.harvest_date || item.estimatedHarvestDate).getTime() <= Date.now() + (2 * 24 * 60 * 60 * 1000)
         ) || [];
         
         document.getElementById('harvestCount').textContent = readyToHarvest.length;
-        populateHarvestList(readyToHarvest);
+        // Normalize harvest items for display
+        const normalizedHarvest = readyToHarvest.map(item => ({
+          tray_id: item.trayId || item.tray_id,
+          crop_name: item.recipe || item.crop_name || item.groupName || 'Unknown Crop',
+          recipe_name: item.recipe || item.recipe_name || '',
+          harvest_date: item.estimatedHarvestDate || item.harvest_date || ''
+        }));
+        populateHarvestList(normalizedHarvest);
 
         // Load current inventory
         const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`, { headers: farmHeaders });
         const inventoryData = await inventoryRes.json();
         
+        // Support both API shapes: { inventory: [...] } and { activeTrays, byFarm: [{ trays }] }
+        const trays = inventoryData.inventory || inventoryData.byFarm?.[0]?.trays || [];
+        
         // Seedling count (< 2 weeks old)
-        const seedlingCount = inventoryData.inventory?.filter(item => 
-          item.days_since_seed < 14
+        const seedlingCount = trays.filter(item => 
+          (item.days_since_seed || item.daysOld || 0) < 14
         ).length || 0;
         document.getElementById('seedlingCount').textContent = seedlingCount;
         
         // Active trays
-        const activeTrays = inventoryData.inventory?.length || 0;
+        const activeTrays = inventoryData.activeTrays || trays.length || 0;
         document.getElementById('activeTrays').textContent = activeTrays;
         
         // Update checklist count

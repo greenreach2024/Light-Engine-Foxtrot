@@ -9,6 +9,6 @@
   "hardwareModel": "AWS Cloud",
   "version": "1.0.0",
   "offlineMode": false,
-  "syncEnabled": false,
-  "registrationComplete": false
+  "syncEnabled": true,
+  "registrationComplete": true
 }
