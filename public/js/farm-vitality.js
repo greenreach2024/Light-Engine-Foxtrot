@@ -264,11 +264,12 @@ class VitalityViewManager {
     let containerForView = null;
     
     if (this.currentView === 'friends') {
-      containerForView = document.getElementById('friendsContainer');
+      // Canvas view for Friends (Blobs)
+      containerForView = document.getElementById('friendsCanvas');
       if (containerForView) {
-        containerForView.style.display = 'grid'; // Grid layout for friends
         containerForView.classList.add('active');
-        this.renderFriendsView();
+        this.isAnimating = true;
+        this.animateFriendsView(containerForView);
       }
     } else {
       // Canvas views
@@ -288,14 +289,7 @@ class VitalityViewManager {
       }
     }
 
-    // Hide others
-    if (this.currentView !== 'friends') {
-        const friendsContainer = document.getElementById('friendsContainer');
-        if (friendsContainer) {
-            friendsContainer.style.display = 'none';
-            friendsContainer.classList.remove('active');
-        }
-    }
+    // Hide others (removed friendsContainer support)
   }
   
   /**
@@ -639,106 +633,90 @@ class VitalityViewManager {
   }
   
   /**
-   * Render Farm Friends View (Lottie)
+   * Render Farm Friends View (Blobs) using Canvas
+   */
+  animateFriendsView(canvas) {
+    if (!this.isAnimating || this.currentView !== 'friends') return;
+
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Clear canvas
+    ctx.fillStyle = '#0a0f1e';
+    ctx.fillRect(0, 0, width, height);
+
+    if (!this.vitalityData) {
+      this.drawLoadingMessage(ctx, width, height);
+      this.animationFrame = requestAnimationFrame(() => this.animateFriendsView(canvas));
+      return;
+    }
+
+    // Update time
+    this.time += 1;
+
+    // Define 4 blobs in a grid
+    const components = [
+      { key: 'environment', label: 'Environment', ...this.vitalityData.components.environment },
+      { key: 'crop_readiness', label: 'Crops', ...this.vitalityData.components.crop_readiness },
+      { key: 'nutrient_health', label: 'Nutrients', ...this.vitalityData.components.nutrient_health },
+      { key: 'operations', label: 'Systems', ...this.vitalityData.components.operations }
+    ];
+
+    // Grid layout
+    const cols = 2;
+    const rows = 2;
+    const cellWidth = width / cols;
+    const cellHeight = height / rows;
+    
+    // Store blob positions for interaction
+    this.blobPositions = [];
+
+    components.forEach((component, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      
+      const centerX = col * cellWidth + cellWidth / 2;
+      const centerY = row * cellHeight + cellHeight / 2;
+      // MAXIMIZE SIZE: Use 48% of the cell's half-dimension (96% diameter)
+      // This leaves a 4% margin so they don't touch even when breathing
+      const maxRadius = Math.min(cellWidth, cellHeight) * 0.48;
+
+      // Draw the Professional Data Orb (Lottie Style)
+      const size = this.drawProLottieOrb(ctx, component, centerX, centerY, index, maxRadius);
+      
+      // Store position
+      this.blobPositions.push({
+        x: centerX,
+        y: centerY, 
+        size: size,
+        component: component
+      });
+    });
+
+    // Continue animation
+    this.animationFrame = requestAnimationFrame(() => this.animateFriendsView(canvas));
+  }
+
+  /**
+   * Render Friends View (Legacy Lottie Wrapper - Removed)
    */
   renderFriendsView() {
-    if (!this.vitalityData) return;
-
-    // Initialize Lottie if not already done
-    if (Object.keys(this.lottieAnimations).length === 0) {
-      this.initLottieAnimations();
-    }
-
-    // Update Scores & Animation States
-    this.updateFriendsState();
+    // Replaced by animateFriendsView canvas implementation
   }
 
   /**
-   * Initialize Lottie players
+   * Initialize Lottie players (Removed)
    */
-  initLottieAnimations() {
-    const config = {
-      environment: { 
-        id: 'lottie-env', 
-        path: 'https://assets9.lottiefiles.com/packages/lf20_5tfk3vaq.json' // Sun
-      },
-      crop_readiness: { 
-        id: 'lottie-crop', 
-        path: 'https://assets2.lottiefiles.com/packages/lf20_yd8fbnml.json' // Plant
-      },
-      nutrient_health: { 
-        id: 'lottie-nutrient', 
-        path: 'https://assets5.lottiefiles.com/packages/lf20_kcsvm32c.json' // Water
-      },
-      operations: { 
-        id: 'lottie-ops', 
-        path: 'https://assets1.lottiefiles.com/packages/lf20_sfgpbkis.json' // Gears
-      }
-    };
-
-    // Components mapping from data to ID
-    const componentMap = {
-      'environment': config.environment,
-      'crop_readiness': config.crop_readiness,
-      'nutrient_health': config.nutrient_health,
-      'operations': config.operations
-    };
-
-    for (const [key, cfg] of Object.entries(componentMap)) {
-      const container = document.getElementById(cfg.id);
-      if (container) {
-        try {
-          this.lottieAnimations[key] = lottie.loadAnimation({
-            container: container,
-            renderer: 'svg',
-            loop: true,
-            autoplay: true,
-            path: cfg.path
-          });
-          // Set initial speed based on no data
-          this.lottieAnimations[key].setSpeed(0.5);
-        } catch (e) {
-          console.error(`Failed to load Lottie for ${key}`, e);
-          container.innerHTML = '<div style="color:red">Animation Error</div>';
-        }
-      }
-    }
+  initLottieAnimations() { 
+      // Lottie removed
   }
 
   /**
-   * Update Friends View based on data
+   * Update Friends View based on data (Removed)
    */
   updateFriendsState() {
-     if (!this.vitalityData) return;
-
-     const components = {
-      'environment': { el: 'score-env', data: this.vitalityData.components.environment },
-      'crop_readiness': { el: 'score-crop', data: this.vitalityData.components.crop_readiness },
-      'nutrient_health': { el: 'score-nutrient', data: this.vitalityData.components.nutrient_health },
-      'operations': { el: 'score-ops', data: this.vitalityData.components.operations }
-    };
-
-    for (const [key, comp] of Object.entries(components)) {
-        // Update Score Text
-        const scoreEl = document.getElementById(comp.el);
-        if (scoreEl) {
-            scoreEl.textContent = comp.data.score;
-            scoreEl.style.color = this.getScoreColor(comp.data.score);
-        }
-
-        // Update Animation Speed/Expression based on health
-        if (this.lottieAnimations[key]) {
-            const score = comp.data.score;
-            let speed = 1;
-            
-            if (score >= 90) speed = 1.5; // Super happy/fast
-            else if (score >= 70) speed = 1.0; // Normal
-            else if (score >= 50) speed = 0.5; // Slow/Sluggish
-            else speed = 0.2; // Barely moving
-
-            this.lottieAnimations[key].setSpeed(speed);
-        }
-    }
+      // Lottie removed
   }
 
   /**
@@ -749,164 +727,111 @@ class VitalityViewManager {
   }
   
   /**
-   * Draw individual blob creature
+   * Draw Professional Data Orb (Lottie-like Aesthetics)
+   * Inspired by high-end dashboard components (clean, layered, animated)
    */
-  drawBlob(ctx, component, x, y, index, maxRadius) {
+  drawProLottieOrb(ctx, component, x, y, index, maxRadius) {
     const score = component.score || 0;
-    const palette = ['#3b82f6', '#10b981', '#8b5cf6', '#06b6d4'];
+    const palette = ['#4f46e5', '#10b981', '#8b5cf6', '#06b6d4']; // Indigo, Emerald, Violet, Cyan
     const baseColor = palette[index % palette.length];
-    const freshness = component.data_freshness || { status: 'no_data' };
     
-    // Determine emotion based on score
-    const emotion = score >= 85 ? 'happy' : score >= 50 ? 'neutral' : 'sad';
+    // Smooth Animation Inputs
     const healthFactor = score / 100;
     
-    // Smooth floating with controlled motion - faster for healthier blobs
-    const speedMultiplier = 0.5 + (healthFactor * 1.5); // 0.5x (dead) to 2.0x (thriving)
-    const floatPhase = (this.time * 0.035 * speedMultiplier + index * Math.PI / 2) % (Math.PI * 2);
-    const easedFloat = this.easeInOutCubic(Math.sin(floatPhase) * 0.5 + 0.5);
-    const floatOffset = (easedFloat - 0.5) * Math.min(28, maxRadius * 0.3);
-    
-    // Subtle squash and stretch for a rounder feel
-    const velocity = Math.cos(floatPhase) * 0.2;
-    const squash = 1 - Math.abs(velocity) * 0.25;
-    const stretch = 1 + Math.abs(velocity) * 0.2;
-    
-    const blobY = y + floatOffset;
-    
-    // Size based on health with smooth breathing animation
-    // Healthier blobs breathe deeper and faster
-    const breathScale = Math.sin(this.time * 0.04 * speedMultiplier + index) * (0.05 + healthFactor * 0.05) + 1;
-    const targetSize = (80 + healthFactor * 70) * breathScale;
-    const baseSize = Math.min(targetSize, maxRadius);
-    
-    // Draw blob body with squash/stretch
+    // Setup Context
     ctx.save();
-    ctx.translate(x, blobY);
-    ctx.scale(stretch, squash);
+    ctx.translate(x, y);
+
+    // Dimensions - MAXIMIZED
+    // Use 95% of the passed radius for the ring (leaving 5% for stroke width/glow)
+    const size = maxRadius * 0.95; 
+    const ringWidth = size * 0.08; // Slightly thinner relative stroke to look elegant at large size
     
-    // Smooth blob with organic wobble (more blob-like)
-    // Healthier blobs wobble more energetically
-    const wobbleAmt = (1 - healthFactor) * 5 + 4 + (healthFactor * 3); 
-    const wobblePoints = 28;
-    
-    // Create the wobble path
+    // --- 1. Subtle Background Pulse (The "Shadow" of the data) ---
+    // A faint ring that expands and contracts delicately
+    const breathe = Math.sin(this.time * 0.03 + index) * 0.02 + 1; // +/- 2% max
     ctx.beginPath();
-    for (let i = 0; i <= wobblePoints; i++) {
-        const angle = (i / wobblePoints) * Math.PI * 2;
-        // Dual-frequency wobble for more "jello" feel like B.O.B.
-        const wobble1 = Math.sin(angle * 3 + this.time * 0.05 * speedMultiplier + index);
-        const wobble2 = Math.sin(angle * 5 - this.time * 0.03 + index);
-        const r = baseSize + (wobble1 * wobbleAmt) + (wobble2 * wobbleAmt * 0.3);
-        const px = r * Math.cos(angle);
-        const py = r * Math.sin(angle);
-        
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    
-    // 1. Base Gradient (Translucent Jelly)
-    const shimmerColor = this.getIridescentShift(baseColor, index, this.time * 0.02);
-    const gradient = ctx.createRadialGradient(-baseSize * 0.3, -baseSize * 0.4, 0, 0, 0, baseSize);
-    // B.O.B. is semi-transparent
-    gradient.addColorStop(0, this.hexToRgba(baseColor, 0.8));
-    gradient.addColorStop(0.6, this.hexToRgba(baseColor, 0.5));
-    gradient.addColorStop(1, this.hexToRgba(baseColor, 0.7)); // Darker rim
-    
-    ctx.fillStyle = gradient;
-    ctx.shadowBlur = 40;
-    ctx.shadowColor = baseColor;
+    ctx.arc(0, 0, size * breathe, 0, Math.PI * 2);
+    ctx.fillStyle = this.hexToRgba(baseColor, 0.05);
     ctx.fill();
-
-    // 2. Trapped Bubbles (Internal Volume)
-    // Deterministic random generator for bubbles based on index
-    const bubbleCount = 5;
-    for(let b=0; b<bubbleCount; b++) {
-        const seed = index * 100 + b;
-        const speed = 0.02 + ((seed % 5) / 100);
-        const bubbleR = baseSize * (0.1 + ((seed % 10)/50)); // 10-30% size
-        const angleOffset = seed;
-        const orbitR = baseSize * 0.5;
-        
-        // Bubbles float inside
-        const bx = Math.sin(this.time * speed + angleOffset) * orbitR * 0.8;
-        const by = Math.cos(this.time * speed * 0.7 + angleOffset) * orbitR * 0.6;
-        
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-        ctx.beginPath();
-        ctx.arc(bx, by, bubbleR, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Bubble highlight
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.beginPath();
-        ctx.arc(bx - bubbleR*0.3, by - bubbleR*0.3, bubbleR*0.2, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // 3. Highlight (Glossy Sheen)
-    const highlightSize = baseSize * 0.45;
-    const highlightGradient = ctx.createRadialGradient(
-      -baseSize * 0.3, -baseSize * 0.4, 0,
-      -baseSize * 0.3, -baseSize * 0.4, highlightSize
-    );
-    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-    highlightGradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.4)');
-    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = highlightGradient;
+    // --- 2. Track Ring (The container) ---
     ctx.beginPath();
-    ctx.ellipse(-baseSize * 0.3, -baseSize * 0.4, highlightSize, highlightSize * 0.8, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 4. Rim Lighting (Fresnel Effect)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = 3;
+    ctx.arc(0, 0, size, 0, Math.PI * 2);
+    ctx.strokeStyle = '#1f2937'; // gray-800
+    ctx.lineWidth = ringWidth;
+    ctx.lineCap = 'round';
     ctx.stroke();
 
-    ctx.restore();
-    
-    // Draw face based on emotion (Now Cyclops!)
-    // Pass stretch/squash context or adjust Y to match body movement? 
-    // Actually drawBlobFace draws in local coords if we didn't restore context, 
-    // but we DID restore ctx. The previous code didn't transform the face.
-    // Let's re-save context for the face to follow the squash/stretch if we want attached features.
-    // But original code drew face AFTER restore, meaning face floats separate from body mesh?
-    // Let's keep it AFTER restore for stability, but we need to track the Y offset.
-    const faceY = blobY + floatOffset; // Correct Y position accounting for float
-    
-    // Wait, the original code drew face inside the restore block? 
-    // No, `drawBlobFace` call was inside the restore block in my READ.
-    
-    // Re-apply translation for face
+    // --- 3. Progress Ring (The Hero) ---
+    // Conic gradient for a sophisticated "tail" effect
+    const startAngle = -Math.PI / 2;
+    const angleRange = (Math.PI * 2) * (score / 100);
+    const endAngle = startAngle + angleRange;
+
+    // Mask the ring for the stroke
     ctx.save();
-    ctx.translate(x, blobY);
-    ctx.scale(stretch, squash);
-    this.drawBlobFace(ctx, emotion, baseSize, freshness.stale);
+    ctx.beginPath();
+    ctx.arc(0, 0, size, startAngle, endAngle);
+    ctx.strokeStyle = baseColor;
+    ctx.lineWidth = ringWidth;
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = baseColor;
+    ctx.stroke();
+    // Highlight tip (Comet head)
+    ctx.shadowBlur = 20;
+    ctx.stroke();
     ctx.restore();
-    
-    // Label below blob
-    ctx.fillStyle = '#e5e7eb';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(component.label, x, blobY + baseSize + 30);
-    
-    // Score
-    ctx.fillStyle = baseColor;
-    ctx.font = 'bold 24px sans-serif';
-    ctx.fillText(score, x, blobY + baseSize + 55);
-    
-    // Freshness indicator
-    if (freshness.stale) {
-      ctx.fillStyle = '#f59e0b';
-      ctx.font = '12px sans-serif';
-      ctx.fillText('⚠️ stale', x, blobY + baseSize + 75);
+
+    // --- 4. Inner Orbiting Particles (Complexity) ---
+    // Small dots orbiting the center, creating depth
+    const particleCount = 2;
+    for(let i=0; i<particleCount; i++) {
+        const pSpeed = 0.02 * (i%2===0 ? 1 : -0.7);
+        const pRadius = size * (0.6 + i*0.15);
+        const pAngle = this.time * pSpeed + (index + i*2);
+        
+        ctx.fillStyle = this.hexToRgba(baseColor, 0.4);
+        ctx.beginPath();
+        const px = Math.cos(pAngle) * pRadius;
+        const py = Math.sin(pAngle) * pRadius;
+        ctx.arc(px, py, size * 0.04, 0, Math.PI * 2);
+        ctx.fill();
     }
+
+    // --- 5. Center Typography ---
+    // Text
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     
-    // Return blob size for click detection
-    return baseSize;
+    // Score - INCREASED SIZE
+    ctx.fillStyle = '#f3f4f6'; // gray-100
+    ctx.font = `bold ${size * 0.55}px system-ui, -apple-system, sans-serif`; // 55% of radius
+    ctx.shadowBlur = 0;
+    ctx.fillText(score, 0, size * 0.05);
+    
+    // Label (Inside, below score)
+    ctx.fillStyle = '#9ca3af'; // gray-400
+    ctx.font = `600 ${size * 0.16}px system-ui, -apple-system, sans-serif`;
+    ctx.fillText(component.label.toUpperCase(), 0, size * 0.5); // Push down slightly
+
+    // --- 6. Interaction Hint / Status Dot ---
+    const freshness = component.data_freshness || {};
+    if (freshness.stale) {
+        // Warning Icon
+        const warnY = -size * 0.5;
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(0, warnY, size * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.font = `bold ${size*0.2}px sans-serif`;
+        ctx.fillText('!', 0, warnY + size*0.02);
+    } 
+
+    ctx.restore();
+    return size + ringWidth;
   }
   
   /**

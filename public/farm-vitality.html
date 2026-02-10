@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Farm Vitality Dashboard - Light Engine</title>
     <script src="/auth-guard.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+    <!-- Lottie Script Removed (Switched to B.O.B. Blobs) -->
     <link rel="stylesheet" href="/styles/light-engine.css?v=2">
     <script src="/js/light-engine-help.js" defer></script>
     <style>
@@ -616,30 +616,9 @@
             <!-- Heartbeat View -->
             <canvas id="heartbeatCanvas" class="view-canvas" width="1400" height="900"></canvas>
 
-            <!-- Farm Friends View (Lottie) -->
-            <div id="friendsContainer" class="view-canvas friends-grid">
-                <!-- Characters will be injected here by JS -->
-                <div class="friend-cell">
-                    <div id="lottie-env" class="lottie-player"></div>
-                    <div class="friend-label">Environment</div>
-                    <div class="friend-score" id="score-env">--</div>
-                </div>
-                <div class="friend-cell">
-                    <div id="lottie-crop" class="lottie-player"></div>
-                    <div class="friend-label">Crops</div>
-                    <div class="friend-score" id="score-crop">--</div>
-                </div>
-                <div class="friend-cell">
-                    <div id="lottie-nutrient" class="lottie-player"></div>
-                    <div class="friend-label">Nutrients</div>
-                    <div class="friend-score" id="score-nutrient">--</div>
-                </div>
-                <div class="friend-cell">
-                    <div id="lottie-ops" class="lottie-player"></div>
-                    <div class="friend-label">Systems</div>
-                    <div class="friend-score" id="score-ops">--</div>
-                </div>
-            </div>
+            <!-- Farm Friends View (Blobs) -->
+            <canvas id="friendsCanvas" class="view-canvas" width="1600" height="1000"></canvas>
+            <!-- Deprecated Lottie Container Removed -->
         </div>
 
         <!-- Status Bar -->
