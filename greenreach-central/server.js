@@ -29,6 +29,7 @@ import aiInsightsRoutes from './routes/ai-insights.js';
 import envProxyRoutes from './routes/env-proxy.js';
 import mlForecastRoutes from './routes/ml-forecast.js';
 import billingRoutes from './routes/billing.js';
+import procurementAdminRoutes from './routes/procurement-admin.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -292,6 +293,7 @@ app.use('/api/ai-insights', aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/env', envProxyRoutes); // Environmental data proxy to farm devices
 app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge feature)
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
+app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
 
 // Root route - redirect to main landing page
 app.get('/', (req, res) => {

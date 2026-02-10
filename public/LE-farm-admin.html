@@ -1147,6 +1147,7 @@
                         <a href="/views/tray-setup.html" class="dropdown-item">Tray Setup</a>
                         <a href="/views/farm-inventory.html" class="dropdown-item">Farm Inventory</a>
                         <a href="/views/tray-inventory.html" class="dropdown-item">Activity Hub</a>
+                        <a href="/views/procurement-portal.html" class="dropdown-item">Procurement Portal</a>
                         <a href="/LE-qr-generator.html" class="dropdown-item" target="_blank">QR Label Generator</a>
                     </div>
                 </div>
@@ -1229,6 +1230,10 @@
                     <a href="#inventory-mgmt" class="nav-item" data-section="inventory-mgmt" data-help-title="Farm Supplies" data-help="Manage seeds, nutrients, packaging materials, equipment, and lab supplies. Track inventory levels, log usage, and schedule equipment maintenance.">
                         <span class="nav-item-icon">■</span>
                         Farm Supplies & Operations
+                    </a>
+                    <a href="/views/procurement-portal.html" class="nav-item" data-help-title="Procurement" data-help="Order supplies from approved suppliers. Browse catalog, place purchase orders, track deliveries, and manage supply inventory.">
+                        <span class="nav-item-icon">■</span>
+                        Procurement Portal
                     </a>
                     <a href="#sustainability" class="nav-item" data-section="sustainability" data-help-title="Sustainability & ESG" data-help="Track Environmental, Social, and Governance metrics including energy usage, water consumption, carbon footprint, and waste reduction. Generate ESG reports for stakeholders.">
                         <span class="nav-item-icon">■</span>
@@ -2376,6 +2381,11 @@
                         <div style="font-size: 32px; font-weight: bold; color: var(--accent-red);" id="total-expenses">$0.00</div>
                         <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="expenses-breakdown">--</div>
                     </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%); border-left: 4px solid #f59e0b;">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Procurement Spending</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #f59e0b;" id="procurement-spending">$0.00</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="procurement-order-count">0 orders</div>
+                    </div>
                 </div>
 
                 <!-- Operations Summary -->
@@ -2452,6 +2462,11 @@
                                     <td>Payment Processing</td>
                                     <td id="processing-fee-desc">Square transaction fees</td>
                                     <td id="processing-fees">$0.00</td>
+                                </tr>
+                                <tr>
+                                    <td>Farm Supply Procurement</td>
+                                    <td id="procurement-fee-desc">Seeds, nutrients, packaging, equipment</td>
+                                    <td id="procurement-supply-costs">$0.00</td>
                                 </tr>
                                 <tr style="font-weight: bold; background: rgba(239, 68, 68, 0.1);">
                                     <td>Total Expenses</td>

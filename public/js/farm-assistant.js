@@ -12,105 +12,8 @@ class FarmAssistant {
     this.recognition = null;
     this.isSpeaking = false;
     this.voiceEnabled = true;
-    this.jokes = [
-      {
-        type: 'joke',
-        question: 'Why did the tomato turn red?',
-        answer: 'Because it saw the salad dressing!'
-      },
-      {
-        type: 'joke',
-        question: 'What do you get when you cross a snowman and a dog?',
-        answer: 'Frostbite!'
-      },
-      {
-        type: 'joke',
-        question: "Why don't eggs tell jokes?",
-        answer: "They'd crack each other up."
-      },
-      {
-        type: 'joke',
-        question: "What do you call cheese that isn't yours?",
-        answer: 'Nacho cheese!'
-      },
-      {
-        type: 'joke',
-        question: 'Why did the banana go to the doctor?',
-        answer: "Because it wasn't peeling well."
-      },
-      {
-        type: 'joke',
-        question: 'What do you call a bear with no teeth?',
-        answer: 'A gummy bear.'
-      },
-      {
-        type: 'joke',
-        question: 'Why did the bicycle fall over?',
-        answer: 'Because it was two-tired.'
-      },
-      {
-        type: 'joke',
-        question: "What do you call a dinosaur that's sleeping?",
-        answer: 'A dino-snore.'
-      },
-      {
-        type: 'riddle',
-        question: "I'm full of holes but I can still hold water. What am I?",
-        answer: 'A sponge.'
-      },
-      {
-        type: 'riddle',
-        question: 'The more you take, the more you leave behind. What are they?',
-        answer: 'Footsteps.'
-      },
-      {
-        type: 'riddle',
-        question: 'I can fly without wings. I can cry without eyes. Wherever I go, darkness follows me. What am I?',
-        answer: 'A cloud.'
-      },
-      {
-        type: 'riddle',
-        question: 'I have a face and two hands, but no arms or legs. What am I?',
-        answer: 'A clock.'
-      },
-      {
-        type: 'riddle',
-        question: 'What has to be broken before you can use it?',
-        answer: 'An egg.'
-      }
-    ];
-    this.funFacts = [
-      {
-        fact: "Want to be an astronaut—would you try a 'space salad'? Astronauts have grown leafy greens in NASA's Veggie system on the International Space Station—and they've even eaten space-grown lettuce!",
-        question: 'If you could grow one food in space, what would you pick?',
-        icon: '🚀'
-      },
-      {
-        fact: "What if your plants had a robot babysitter—would that be cool? NASA's Advanced Plant Habitat is like a super-smart space greenhouse with 180+ sensors watching things like humidity, oxygen, and moisture.",
-        question: 'If you could add ONE "plant sensor power," what would it measure?',
-        icon: '🤖'
-      },
-      {
-        fact: "Want to live on the Moon—how would you get fresh food? That's one reason NASA studies plant-growing systems in space: learning how to grow food when you can't just run to a grocery store.",
-        question: 'What do you think would be the hardest part—light, water, or space?',
-        icon: '🌙'
-      },
-      {
-        fact: 'Would you garden in the coldest place on Earth? In Antarctica, the EDEN ISS greenhouse has grown lots of fresh foods (like lettuce, cucumbers, tomatoes, herbs—and more).',
-        question: 'If you had an Antarctic greenhouse, what would you name it?',
-        icon: '❄️'
-      },
-      {
-        fact: 'Would you eat greens grown in a tunnel under a city? In London, an underground hydroponic farm grows plants without sunlight, using LED lights in old tunnels.',
-        question: 'If you found a secret farm underground, what would you hope they\'re growing?',
-        icon: '🚇'
-      },
-      {
-        fact: "Could fog help grow lettuce in a desert—like magic? In Chile's Atacama Desert, people have used fog-catching nets to collect water and grow crops (including lettuce) using hydroponics.",
-        question: 'If you could "catch" water from the air, where would you put your fog net?',
-        icon: '🌫️'
-      }
-    ];
+    this.jokes = [];
+    this.funFacts = [];
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
@@ -253,7 +156,7 @@ class FarmAssistant {
         <div class="assistant-header">
           <div class="header-content">
             <div class="header-text">
-              <strong>Farm Assistant</strong>
+              <strong>Farm System</strong>
               <small>${this.currentContext.page}</small>
             </div>
           </div>
@@ -264,20 +167,10 @@ class FarmAssistant {
         
         <div class="assistant-body">
           <div class="chat-messages" id="chatMessages">
-            <div class="mascot-welcome">
+            <div class="system-welcome">
               <div class="welcome-text">
-                <strong>Hi I'm Cheo, your farm Assistant!</strong>
-                <strong class="love-to-help">I love to help!</strong>
-                <div class="example-queries">
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What\\'s ready to harvest?')">What's ready to harvest?</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show me the temperature')">Show me the temperature</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Where is the lettuce?')">Where is the lettuce?</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Fun fact!')">Fun Fact!</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Tell me a joke')">Tell me a joke</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Blink lights for basil')">Blink lights for basil</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show planting schedule')">Show planting schedule</button>
-                </div>
-                <strong>Or type your own question below!</strong>
+                <strong>Farm System Assistant</strong>
+                <span style="color:#94a3b8;font-size:0.85rem;">Type a question below to get started.</span>
               </div>
             </div>
           </div>

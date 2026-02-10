@@ -962,6 +962,10 @@
                         <span class="nav-item-icon">■</span>
                         Farm Supplies & Operations
                     </a>
+                    <a href="/views/procurement-portal.html" class="nav-item">
+                        <span class="nav-item-icon">■</span>
+                        Procurement Portal
+                    </a>
                     <a href="#sustainability" class="nav-item" data-section="sustainability">
                         <span class="nav-item-icon">■</span>
                         Sustainability & ESG
@@ -1811,6 +1815,16 @@
                         <div style="font-size: 32px; font-weight: bold; color: var(--accent-red);" id="total-expenses">$0.00</div>
                         <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="expenses-breakdown">--</div>
                     </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%); border-left: 4px solid #f59e0b;">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Procurement Spending</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #f59e0b;" id="procurement-spending">$0.00</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="procurement-order-count">0 orders</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%); border-left: 4px solid #f59e0b;">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Procurement Supplies</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #f59e0b;" id="procurement-expenses">$0.00</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="procurement-orders-count">0 orders</div>
+                    </div>
                 </div>
 
                 <!-- Operations Summary -->
@@ -1888,6 +1902,11 @@
                                     <td id="processing-fee-desc">Square transaction fees</td>
                                     <td id="processing-fees">$0.00</td>
                                 </tr>
+                                <tr>
+                                    <td>Farm Supply Procurement</td>
+                                    <td id="procurement-fee-desc">Seeds, nutrients, packaging, equipment</td>
+                                    <td id="procurement-supply-costs">$0.00</td>
+                                </tr>
                                 <tr style="font-weight: bold; background: rgba(239, 68, 68, 0.1);">
                                     <td>Total Expenses</td>
                                     <td></td>
@@ -1946,6 +1965,32 @@
                         <div style="padding: 15px; background: rgba(245, 158, 11, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-yellow);">
                             <strong>Sync Status:</strong> <span id="qb-sync-status">Ready</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Farm Supply Providers -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2>Farm Supply Providers</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">Suppliers providing seeds, nutrients, packaging, and equipment through GreenReach Procurement.</p>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Supplier</th>
+                                    <th>Products</th>
+                                    <th>Orders</th>
+                                    <th>Total Spent</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="supply-providers-tbody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                                        Loading supply providers...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

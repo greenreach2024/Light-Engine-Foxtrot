@@ -2597,9 +2597,74 @@ async function loadAccountingData() {
         // Load revenue breakdown table
         await loadRevenueBreakdown(ordersData.orders || []);
         
+        // Load procurement spending data
+        await loadProcurementFinancials();
+        
     } catch (error) {
         console.error(' Error loading accounting data:', error);
         showToast('Failed to load financial data', 'error');
+    }
+}
+
+/**
+ * Load procurement spending data for the financial summary
+ */
+async function loadProcurementFinancials() {
+    try {
+        // Fetch procurement orders data
+        const resp = await fetch(`${API_BASE}/api/procurement/orders`);
+        if (!resp.ok) {
+            console.log('[Procurement] No orders endpoint available, skipping');
+            return;
+        }
+        const data = await resp.json();
+        const orders = data.orders || [];
+
+        let totalSpending = 0;
+        const supplierSpending = {};
+
+        for (const order of orders) {
+            for (const so of (order.supplierOrders || [])) {
+                totalSpending += so.subtotal || 0;
+                const sid = so.supplierId || 'unknown';
+                if (!supplierSpending[sid]) {
+                    supplierSpending[sid] = { name: so.supplierName || sid, total: 0, orderCount: 0 };
+                }
+                supplierSpending[sid].total += so.subtotal || 0;
+                supplierSpending[sid].orderCount++;
+            }
+        }
+
+        // Update procurement spending card
+        const spendingEl = document.getElementById('procurement-spending');
+        if (spendingEl) spendingEl.textContent = `$${totalSpending.toFixed(2)}`;
+        const orderCountEl = document.getElementById('procurement-order-count');
+        if (orderCountEl) orderCountEl.textContent = `${orders.length} orders`;
+
+        // Update procurement supply costs in expense table
+        const costEl = document.getElementById('procurement-supply-costs');
+        if (costEl) costEl.textContent = `$${totalSpending.toFixed(2)}`;
+
+        // Populate farm supply providers table
+        const tbody = document.getElementById('supply-providers-tbody');
+        if (tbody) {
+            const suppliers = Object.entries(supplierSpending);
+            if (suppliers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">No procurement orders yet. <a href="/views/procurement-portal.html" style="color: var(--accent-blue);">Order supplies</a></td></tr>';
+            } else {
+                tbody.innerHTML = suppliers.map(([id, s]) => `
+                    <tr>
+                        <td>${s.name}</td>
+                        <td>--</td>
+                        <td>${s.orderCount}</td>
+                        <td>$${s.total.toFixed(2)}</td>
+                        <td><span style="color: var(--accent-green);">Active</span></td>
+                    </tr>
+                `).join('');
+            }
+        }
+    } catch (err) {
+        console.log('[Procurement] Financial data not available:', err.message);
     }
 }
 

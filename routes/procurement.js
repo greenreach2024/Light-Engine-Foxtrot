@@ -1024,4 +1024,443 @@ router.put('/suppliers/:supplierId', (req, res) => {
 });
 
 
+// ═══════════════════════════════════════════════════════
+// SUPPLY USAGE TRACKING (AUTO-DEPLETION)
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Supply category → procurement catalog mapping
+ * Maps farm activities to the supplies they consume
+ */
+const SUPPLY_LINKAGE = {
+  seeding: {
+    depletionCategories: ['seeds', 'growing-media'],
+    description: 'Seeding a tray depletes seeds and grow media'
+  },
+  nutrient_dosing: {
+    depletionCategories: ['nutrients', 'ph-calibration'],
+    description: 'Nutrient dosing depletes nutrient solutions and pH adjusters'
+  },
+  packaging: {
+    depletionCategories: ['packaging'],
+    description: 'Harvest packaging depletes clamshells, bags, labels'
+  },
+  labeling: {
+    depletionCategories: ['packaging'],
+    description: 'Labeling depletes label stock'
+  },
+  testing: {
+    depletionCategories: ['testing'],
+    description: 'Quality testing depletes test kits and reagents'
+  },
+  maintenance: {
+    depletionCategories: ['safety'],
+    description: 'Equipment maintenance depletes safety and cleaning supplies'
+  }
+};
+
+/**
+ * POST /inventory/deplete
+ * Auto-deplete supplies when farm activities occur
+ * Body: {
+ *   activity: 'seeding' | 'nutrient_dosing' | 'packaging' | 'labeling' | 'testing' | 'maintenance',
+ *   items: [{ sku, quantity, reason? }],
+ *   source: { type: 'tray_seeding' | 'doser' | 'harvest' | 'manual', refId? }
+ * }
+ */
+router.post('/inventory/deplete', (req, res) => {
+  try {
+    const { activity, items, source } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ ok: false, error: 'items_required' });
+    }
+
+    const inventory = readJSON(SUPPLY_INVENTORY_FILE) || { lastUpdated: null, supplies: [] };
+    const depletionLog = [];
+    const alerts = [];
+
+    for (const item of items) {
+      const supply = inventory.supplies.find(s => s.sku === item.sku);
+      if (!supply) {
+        depletionLog.push({
+          sku: item.sku,
+          status: 'not_found',
+          message: 'Supply not in inventory'
+        });
+        continue;
+      }
+
+      const depletionQty = item.quantity || 1;
+      const prevQty = supply.qtyOnHand;
+      supply.qtyOnHand = Math.max(0, supply.qtyOnHand - depletionQty);
+
+      if (!supply.history) supply.history = [];
+      supply.history.push({
+        type: 'depleted',
+        qty: -depletionQty,
+        activity: activity || 'manual',
+        source: source || { type: 'manual' },
+        reason: item.reason || activity,
+        at: new Date().toISOString()
+      });
+      if (supply.history.length > 50) supply.history = supply.history.slice(-50);
+
+      // Track total usage
+      if (!supply.totalUsed) supply.totalUsed = 0;
+      supply.totalUsed += depletionQty;
+
+      depletionLog.push({
+        sku: item.sku,
+        name: supply.name,
+        status: 'depleted',
+        previousQty: prevQty,
+        newQty: supply.qtyOnHand,
+        depleted: depletionQty
+      });
+
+      // Generate low-stock alert
+      if (supply.minStockLevel > 0 && supply.qtyOnHand <= supply.minStockLevel) {
+        alerts.push({
+          type: 'low_stock',
+          sku: supply.sku,
+          name: supply.name,
+          qtyOnHand: supply.qtyOnHand,
+          minStockLevel: supply.minStockLevel,
+          category: supply.category,
+          message: `${supply.name} is below minimum stock level (${supply.qtyOnHand} / ${supply.minStockLevel} ${supply.standardUnit})`
+        });
+      }
+
+      // Generate out-of-stock alert
+      if (supply.qtyOnHand === 0) {
+        alerts.push({
+          type: 'out_of_stock',
+          sku: supply.sku,
+          name: supply.name,
+          category: supply.category,
+          message: `${supply.name} is out of stock`
+        });
+      }
+    }
+
+    inventory.lastUpdated = new Date().toISOString();
+    writeJSON(SUPPLY_INVENTORY_FILE, inventory);
+
+    console.log(`[Procurement] Supply depletion: activity=${activity || 'manual'}, items=${depletionLog.length}, alerts=${alerts.length}`);
+
+    res.json({
+      ok: true,
+      activity: activity || 'manual',
+      depleted: depletionLog,
+      alerts,
+      timestamp: inventory.lastUpdated
+    });
+  } catch (error) {
+    console.error('[Procurement] Depletion error:', error);
+    res.status(500).json({ ok: false, error: 'depletion_error' });
+  }
+});
+
+/**
+ * POST /inventory/record-dosing
+ * Record nutrient dosing event from the doser system
+ * Auto-depletes nutrient and pH adjuster supplies
+ * Body: {
+ *   nutrientType: 'flora_grow' | 'flora_micro' | 'flora_bloom' | 'masterblend' | 'ph_down' | 'ph_up',
+ *   volumeMl: number,
+ *   roomId?: string,
+ *   doserId?: string
+ * }
+ */
+router.post('/inventory/record-dosing', (req, res) => {
+  try {
+    const { nutrientType, volumeMl, roomId, doserId } = req.body;
+    if (!nutrientType || !volumeMl) {
+      return res.status(400).json({ ok: false, error: 'nutrientType_and_volumeMl_required' });
+    }
+
+    // Map nutrient types to catalog SKUs
+    const NUTRIENT_SKU_MAP = {
+      'flora_grow': 'PROC-NUT-FLORA-GROW',
+      'flora_micro': 'PROC-NUT-FLORA-MICRO',
+      'flora_bloom': 'PROC-NUT-FLORA-BLOOM',
+      'masterblend': 'PROC-NUT-MASTERBLEND',
+      'ph_down': 'PROC-NUT-PH-DOWN',
+      'ph_up': 'PROC-NUT-PH-UP',
+      'calmag': 'PROC-NUT-CALMAG'
+    };
+
+    const sku = NUTRIENT_SKU_MAP[nutrientType];
+    if (!sku) {
+      return res.status(400).json({ ok: false, error: 'unknown_nutrient_type', validTypes: Object.keys(NUTRIENT_SKU_MAP) });
+    }
+
+    const inventory = readJSON(SUPPLY_INVENTORY_FILE) || { lastUpdated: null, supplies: [] };
+    const supply = inventory.supplies.find(s => s.sku === sku);
+
+    const depletionResult = {
+      nutrientType,
+      sku,
+      volumeMl,
+      roomId: roomId || 'unknown',
+      doserId: doserId || 'unknown',
+      timestamp: new Date().toISOString()
+    };
+
+    if (supply) {
+      const prevQty = supply.qtyOnHand;
+      supply.qtyOnHand = Math.max(0, supply.qtyOnHand - volumeMl);
+      if (!supply.totalUsed) supply.totalUsed = 0;
+      supply.totalUsed += volumeMl;
+
+      if (!supply.history) supply.history = [];
+      supply.history.push({
+        type: 'dosing',
+        qty: -volumeMl,
+        activity: 'nutrient_dosing',
+        source: { type: 'doser', doserId, roomId },
+        at: depletionResult.timestamp
+      });
+      if (supply.history.length > 50) supply.history = supply.history.slice(-50);
+
+      depletionResult.previousQty = prevQty;
+      depletionResult.newQty = supply.qtyOnHand;
+      depletionResult.status = 'recorded';
+    } else {
+      depletionResult.status = 'not_in_inventory';
+      depletionResult.message = 'Nutrient not yet in supply inventory. Order via procurement.';
+    }
+
+    inventory.lastUpdated = new Date().toISOString();
+    writeJSON(SUPPLY_INVENTORY_FILE, inventory);
+
+    console.log(`[Procurement] Dosing recorded: ${nutrientType} ${volumeMl}mL room=${roomId}`);
+    res.json({ ok: true, dosing: depletionResult });
+  } catch (error) {
+    console.error('[Procurement] Dosing record error:', error);
+    res.status(500).json({ ok: false, error: 'dosing_record_error' });
+  }
+});
+
+/**
+ * POST /inventory/record-seeding
+ * Record seeding event that depletes seeds and grow media
+ * Body: {
+ *   cropName: string,
+ *   seedSku?: string,
+ *   mediaSku?: string,
+ *   trayCount: number,
+ *   seedsPerTray?: number,
+ *   mediaVolumePerTray?: number (liters),
+ *   roomId?: string,
+ *   groupId?: string,
+ *   trayIds?: string[]
+ * }
+ */
+router.post('/inventory/record-seeding', (req, res) => {
+  try {
+    const { cropName, seedSku, mediaSku, trayCount = 1, seedsPerTray, mediaVolumePerTray, roomId, groupId, trayIds } = req.body;
+    if (!cropName) {
+      return res.status(400).json({ ok: false, error: 'cropName_required' });
+    }
+
+    const inventory = readJSON(SUPPLY_INVENTORY_FILE) || { lastUpdated: null, supplies: [] };
+    const results = [];
+    const timestamp = new Date().toISOString();
+
+    // Deplete seeds
+    if (seedSku) {
+      const seedSupply = inventory.supplies.find(s => s.sku === seedSku);
+      if (seedSupply) {
+        const totalSeeds = (seedsPerTray || 1) * trayCount;
+        const prev = seedSupply.qtyOnHand;
+        seedSupply.qtyOnHand = Math.max(0, seedSupply.qtyOnHand - totalSeeds);
+        if (!seedSupply.totalUsed) seedSupply.totalUsed = 0;
+        seedSupply.totalUsed += totalSeeds;
+        if (!seedSupply.history) seedSupply.history = [];
+        seedSupply.history.push({
+          type: 'seeding',
+          qty: -totalSeeds,
+          activity: 'seeding',
+          crop: cropName,
+          trayCount,
+          source: { type: 'tray_seeding', roomId, groupId },
+          at: timestamp
+        });
+        if (seedSupply.history.length > 50) seedSupply.history = seedSupply.history.slice(-50);
+        results.push({ type: 'seeds', sku: seedSku, depleted: totalSeeds, previousQty: prev, newQty: seedSupply.qtyOnHand });
+      }
+    }
+
+    // Deplete grow media
+    if (mediaSku) {
+      const mediaSupply = inventory.supplies.find(s => s.sku === mediaSku);
+      if (mediaSupply) {
+        const totalMedia = (mediaVolumePerTray || 1) * trayCount;
+        const prev = mediaSupply.qtyOnHand;
+        mediaSupply.qtyOnHand = Math.max(0, mediaSupply.qtyOnHand - totalMedia);
+        if (!mediaSupply.totalUsed) mediaSupply.totalUsed = 0;
+        mediaSupply.totalUsed += totalMedia;
+        if (!mediaSupply.history) mediaSupply.history = [];
+        mediaSupply.history.push({
+          type: 'seeding',
+          qty: -totalMedia,
+          activity: 'seeding',
+          crop: cropName,
+          trayCount,
+          source: { type: 'tray_seeding', roomId, groupId },
+          at: timestamp
+        });
+        if (mediaSupply.history.length > 50) mediaSupply.history = mediaSupply.history.slice(-50);
+        results.push({ type: 'grow_media', sku: mediaSku, depleted: totalMedia, previousQty: prev, newQty: mediaSupply.qtyOnHand });
+      }
+    }
+
+    inventory.lastUpdated = timestamp;
+    writeJSON(SUPPLY_INVENTORY_FILE, inventory);
+
+    console.log(`[Procurement] Seeding recorded: ${cropName} x${trayCount} trays, ${results.length} supplies depleted`);
+    res.json({ ok: true, crop: cropName, trayCount, depletions: results });
+  } catch (error) {
+    console.error('[Procurement] Seeding record error:', error);
+    res.status(500).json({ ok: false, error: 'seeding_record_error' });
+  }
+});
+
+/**
+ * POST /inventory/record-packaging
+ * Record packaging event that depletes clamshells, bags, labels
+ * Body: {
+ *   items: [{ sku, quantity, reason? }],
+ *   harvestId?: string,
+ *   cropName?: string
+ * }
+ */
+router.post('/inventory/record-packaging', (req, res) => {
+  try {
+    const { items, harvestId, cropName } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ ok: false, error: 'items_required' });
+    }
+
+    const inventory = readJSON(SUPPLY_INVENTORY_FILE) || { lastUpdated: null, supplies: [] };
+    const results = [];
+    const timestamp = new Date().toISOString();
+
+    for (const item of items) {
+      const supply = inventory.supplies.find(s => s.sku === item.sku);
+      if (!supply) {
+        results.push({ sku: item.sku, status: 'not_found' });
+        continue;
+      }
+
+      const qty = item.quantity || 1;
+      const prev = supply.qtyOnHand;
+      supply.qtyOnHand = Math.max(0, supply.qtyOnHand - qty);
+      if (!supply.totalUsed) supply.totalUsed = 0;
+      supply.totalUsed += qty;
+
+      if (!supply.history) supply.history = [];
+      supply.history.push({
+        type: 'packaging',
+        qty: -qty,
+        activity: 'packaging',
+        crop: cropName,
+        harvestId,
+        source: { type: 'harvest', harvestId },
+        at: timestamp
+      });
+      if (supply.history.length > 50) supply.history = supply.history.slice(-50);
+
+      results.push({ sku: item.sku, name: supply.name, depleted: qty, previousQty: prev, newQty: supply.qtyOnHand });
+    }
+
+    inventory.lastUpdated = timestamp;
+    writeJSON(SUPPLY_INVENTORY_FILE, inventory);
+
+    console.log(`[Procurement] Packaging recorded: ${cropName || 'unknown'} harvest, ${results.length} supplies depleted`);
+    res.json({ ok: true, crop: cropName, harvestId, depletions: results });
+  } catch (error) {
+    console.error('[Procurement] Packaging record error:', error);
+    res.status(500).json({ ok: false, error: 'packaging_record_error' });
+  }
+});
+
+/**
+ * GET /inventory/usage-summary
+ * Get supply usage summary (consumption rates, projection)
+ * Query: ?period=7d|30d|90d
+ */
+router.get('/inventory/usage-summary', (req, res) => {
+  try {
+    const inventory = readJSON(SUPPLY_INVENTORY_FILE) || { lastUpdated: null, supplies: [] };
+    const period = req.query.period || '30d';
+    const daysBack = parseInt(period) || 30;
+    const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+
+    const summary = inventory.supplies.map(supply => {
+      const recentHistory = (supply.history || []).filter(h => h.at >= cutoff && h.qty < 0);
+      const totalUsed = recentHistory.reduce((sum, h) => sum + Math.abs(h.qty), 0);
+      const dailyRate = totalUsed / daysBack;
+      const daysRemaining = dailyRate > 0 ? Math.round(supply.qtyOnHand / dailyRate) : null;
+
+      return {
+        sku: supply.sku,
+        name: supply.name,
+        category: supply.category,
+        qtyOnHand: supply.qtyOnHand,
+        standardUnit: supply.standardUnit,
+        totalUsedInPeriod: totalUsed,
+        dailyUsageRate: Math.round(dailyRate * 100) / 100,
+        daysRemaining,
+        minStockLevel: supply.minStockLevel,
+        needsReorder: supply.minStockLevel > 0 && supply.qtyOnHand <= supply.minStockLevel,
+        isOutOfStock: supply.qtyOnHand === 0
+      };
+    });
+
+    res.json({
+      ok: true,
+      period: `${daysBack}d`,
+      total: summary.length,
+      needsReorder: summary.filter(s => s.needsReorder).length,
+      outOfStock: summary.filter(s => s.isOutOfStock).length,
+      supplies: summary
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'usage_summary_error' });
+  }
+});
+
+/**
+ * PUT /inventory/:sku/min-stock
+ * Set minimum stock level for auto-reorder alerts
+ * Body: { minStockLevel: number }
+ */
+router.put('/inventory/:sku/min-stock', (req, res) => {
+  try {
+    const inventory = readJSON(SUPPLY_INVENTORY_FILE) || { lastUpdated: null, supplies: [] };
+    const supply = inventory.supplies.find(s => s.sku === req.params.sku);
+    if (!supply) return res.status(404).json({ ok: false, error: 'supply_not_found' });
+
+    supply.minStockLevel = req.body.minStockLevel || 0;
+    inventory.lastUpdated = new Date().toISOString();
+    writeJSON(SUPPLY_INVENTORY_FILE, inventory);
+
+    res.json({ ok: true, sku: supply.sku, name: supply.name, minStockLevel: supply.minStockLevel });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'min_stock_error' });
+  }
+});
+
+/**
+ * GET /inventory/linkage-map
+ * Returns the supply linkage map showing which activities deplete which supply categories
+ * Used by other systems to know which supplies to auto-deplete
+ */
+router.get('/inventory/linkage-map', (req, res) => {
+  res.json({ ok: true, linkages: SUPPLY_LINKAGE });
+});
+
+
 export default router;

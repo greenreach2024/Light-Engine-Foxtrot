@@ -2,8 +2,10 @@
 
 #farm-assistant {
   position: fixed !important;
-  bottom: 20px !important;
+  top: 50% !important;
+  bottom: auto !important;
   right: 20px !important;
+  transform: translateY(-50%) !important;
   z-index: 100000 !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
@@ -18,7 +20,7 @@
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
-  transform-origin: top right;
+  transform-origin: center right;
   overflow: hidden;
 }
 
@@ -154,53 +156,16 @@
   background: rgba(96, 165, 250, 0.5);
 }
 
-/* Mascot welcome section */
-.mascot-welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/* System welcome section */
+.system-welcome {
   padding: 1.5rem;
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  border-radius: 12px;
-  margin-bottom: 1rem;
   text-align: center;
 }
-
-.welcome-text {
-  color: #f8fafc;
-}
-
-.welcome-text strong {
+.system-welcome .welcome-text strong {
   display: block;
-  font-size: 1.125rem;
-  margin-bottom: 0.75rem;
-  color: #60a5fa;
-}
-
-.welcome-text .love-to-help {
-  color: #10b981;
   font-size: 1rem;
-  margin-top: -0.5rem;
-}
-
-.welcome-text ul {
-  list-style: none;
-  padding: 0;
-  margin: 0.75rem 0;
-  text-align: left;
-  display: inline-block;
-}
-
-.welcome-text li {
-  padding: 0.25rem 0;
-  color: #cbd5e1;
-  font-size: 0.875rem;
-}
-
-.welcome-text li::before {
-  content: "→ ";
   color: #60a5fa;
-  font-weight: bold;
+  margin-bottom: 0.5rem;
 }
 
 .message {
@@ -404,9 +369,11 @@
 /* Mobile optimizations */
 @media (max-width: 768px) {
   #farm-assistant {
+    top: auto;
     bottom: 10px;
     right: 10px;
     left: 10px;
+    transform: none;
   }
 
   .assistant-container {
@@ -683,38 +650,7 @@
   line-height: 1.3;
 }
 
-/* Example Query Buttons */
-.example-queries {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 16px 0;
-}
 
-.example-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 16px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-}
-
-.example-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-}
-
-.example-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
-}
 
 /* Large Popup Overlay for Jokes, Riddles, and Fun Facts */
 .assistant-popup-overlay {

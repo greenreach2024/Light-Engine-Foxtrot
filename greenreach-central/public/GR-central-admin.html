@@ -3196,6 +3196,216 @@
                 </div>
             </div>
 
+            <!-- Procurement Catalog Management View -->
+            <div id="procurement-catalog-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Procurement</span>
+                    <span>/</span>
+                    <span>Catalog Management</span>
+                </div>
+
+                <div class="header">
+                    <h1>Procurement Catalog</h1>
+                    <button class="btn-primary" onclick="openAddProductModal()">+ Add Product</button>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Products</div>
+                        <div class="kpi-value" id="catalog-total-products">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">In Stock</div>
+                        <div class="kpi-value" id="catalog-in-stock">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Out of Stock</div>
+                        <div class="kpi-value" id="catalog-out-of-stock">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Categories</div>
+                        <div class="kpi-value" id="catalog-categories">--</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Product Catalog</div>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="catalog-category-filter" onchange="loadProcurementCatalog()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                                <option value="">All Categories</option>
+                            </select>
+                            <input type="text" id="catalog-search" placeholder="Search products..." onkeyup="loadProcurementCatalog()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); min-width: 250px;">
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Product Name</th>
+                                    <th>Category</th>
+                                    <th>Supplier</th>
+                                    <th>Unit Price</th>
+                                    <th>Unit</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="catalog-products-tbody">
+                                <tr><td colspan="8" style="text-align: center; padding: 20px;">Loading catalog...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Procurement Suppliers Management View -->
+            <div id="procurement-suppliers-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Procurement</span>
+                    <span>/</span>
+                    <span>Supplier Management</span>
+                </div>
+
+                <div class="header">
+                    <h1>Supplier Management</h1>
+                    <button class="btn-primary" onclick="openAddSupplierModal()">+ Add Supplier</button>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Suppliers</div>
+                        <div class="kpi-value" id="suppliers-total">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active</div>
+                        <div class="kpi-value" id="suppliers-active">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Product Coverage</div>
+                        <div class="kpi-value" id="suppliers-product-count">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Commission</div>
+                        <div class="kpi-value" id="suppliers-avg-commission">--</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Suppliers</div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Supplier ID</th>
+                                    <th>Name</th>
+                                    <th>Contact</th>
+                                    <th>Products</th>
+                                    <th>Commission</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="suppliers-list-tbody">
+                                <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading suppliers...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Procurement Revenue View -->
+            <div id="procurement-revenue-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Procurement</span>
+                    <span>/</span>
+                    <span>Revenue</span>
+                </div>
+
+                <div class="header">
+                    <h1>Procurement Revenue</h1>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label style="color: var(--text-secondary);">Period:</label>
+                        <input type="date" id="revenue-from" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                        <span style="color: var(--text-secondary);">to</span>
+                        <input type="date" id="revenue-to" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                        <button class="btn-primary" onclick="loadProcurementRevenue()">Apply</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Revenue</div>
+                        <div class="kpi-value" id="revenue-total">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">GreenReach Commission</div>
+                        <div class="kpi-value" id="revenue-commission">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Orders</div>
+                        <div class="kpi-value" id="revenue-orders">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Order Value</div>
+                        <div class="kpi-value" id="revenue-avg-order">--</div>
+                    </div>
+                </div>
+
+                <!-- Revenue by Supplier -->
+                <div class="card" style="margin-bottom: 20px;">
+                    <div class="card-header">
+                        <div class="card-title">Revenue by Supplier</div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Supplier</th>
+                                    <th>Orders</th>
+                                    <th>Revenue</th>
+                                    <th>Commission</th>
+                                </tr>
+                            </thead>
+                            <tbody id="revenue-by-supplier-tbody">
+                                <tr><td colspan="4" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Revenue by Month -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Monthly Revenue</div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Month</th>
+                                    <th>Orders</th>
+                                    <th>Revenue</th>
+                                    <th>Commission</th>
+                                </tr>
+                            </thead>
+                            <tbody id="revenue-by-month-tbody">
+                                <tr><td colspan="4" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Recipes Management View -->
             <div id="recipes-view" class="view" style="display: none;">
                 <div class="header">

@@ -2885,9 +2885,48 @@ async function loadAccountingData() {
         // Load revenue breakdown table
         await loadRevenueBreakdown(ordersData.orders || []);
         
+        // Load procurement spending data
+        await loadProcurementFinancials();
+        
     } catch (error) {
         console.error(' Error loading accounting data:', error);
         showToast('Failed to load financial data', 'error');
+    }
+}
+
+/**
+ * Load procurement spending data for the financial summary
+ */
+async function loadProcurementFinancials() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/orders`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const orders = data.orders || [];
+
+        let totalSpending = 0;
+        const supplierSpending = {};
+
+        for (const order of orders) {
+            for (const so of (order.supplierOrders || [])) {
+                totalSpending += so.subtotal || 0;
+                const sid = so.supplierId || 'unknown';
+                if (!supplierSpending[sid]) {
+                    supplierSpending[sid] = { name: so.supplierName || sid, total: 0, orderCount: 0 };
+                }
+                supplierSpending[sid].total += so.subtotal || 0;
+                supplierSpending[sid].orderCount++;
+            }
+        }
+
+        const spendingEl = document.getElementById('procurement-spending');
+        if (spendingEl) spendingEl.textContent = `$${totalSpending.toFixed(2)}`;
+        const orderCountEl = document.getElementById('procurement-order-count');
+        if (orderCountEl) orderCountEl.textContent = `${orders.length} orders`;
+        const costEl = document.getElementById('procurement-supply-costs');
+        if (costEl) costEl.textContent = `$${totalSpending.toFixed(2)}`;
+    } catch (err) {
+        console.log('[Procurement] Financial data not available:', err.message);
     }
 }
 

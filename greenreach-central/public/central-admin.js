@@ -1151,6 +1151,14 @@ function renderContextualSidebar() {
                     ]
                 },
                 {
+                    title: 'Procurement',
+                    items: [
+                        { label: 'Catalog Management', view: 'procurement-catalog' },
+                        { label: 'Supplier Management', view: 'procurement-suppliers' },
+                        { label: 'Procurement Revenue', view: 'procurement-revenue' }
+                    ]
+                },
+                {
                     title: 'Analytics',
                     items: [
                         { label: 'AI Insights', view: 'analytics' },
@@ -4756,6 +4764,19 @@ async function navigate(view, element) {
         case 'support':
             document.getElementById('overview-view').style.display = 'block';
             break;
+
+        case 'procurement-catalog':
+            document.getElementById('procurement-catalog-view').style.display = 'block';
+            await loadProcurementCatalog();
+            break;
+        case 'procurement-suppliers':
+            document.getElementById('procurement-suppliers-view').style.display = 'block';
+            await loadProcurementSuppliers();
+            break;
+        case 'procurement-revenue':
+            document.getElementById('procurement-revenue-view').style.display = 'block';
+            await loadProcurementRevenue();
+            break;
             
         default:
             console.log(`Navigate to: ${view} (not implemented)`);
@@ -5474,6 +5495,403 @@ function showToast(message, type = 'info') {
 }
 
 // ============================================================================
+// ============================================================================
+// PROCUREMENT MANAGEMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * Load Procurement Catalog view
+ */
+async function loadProcurementCatalog() {
+    console.log('[Procurement] Loading catalog...');
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/catalog`);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+
+        // Update KPIs
+        document.getElementById('catalog-total-products').textContent = data.total || 0;
+        document.getElementById('catalog-in-stock').textContent = data.inStock || 0;
+        document.getElementById('catalog-out-of-stock').textContent = data.outOfStock || 0;
+        document.getElementById('catalog-categories').textContent = (data.categories || []).length;
+
+        // Populate category filter
+        const filter = document.getElementById('catalog-category-filter');
+        const currentVal = filter.value;
+        filter.innerHTML = '<option value="">All Categories</option>';
+        (data.categories || []).forEach(c => {
+            filter.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+        filter.value = currentVal;
+
+        // Filter products
+        let products = data.products || [];
+        const searchTerm = (document.getElementById('catalog-search')?.value || '').toLowerCase();
+        const catFilter = filter.value;
+        if (catFilter) products = products.filter(p => p.category === catFilter);
+        if (searchTerm) products = products.filter(p =>
+            (p.name || '').toLowerCase().includes(searchTerm) ||
+            (p.sku || '').toLowerCase().includes(searchTerm)
+        );
+
+        // Render table
+        const tbody = document.getElementById('catalog-products-tbody');
+        if (products.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">No products found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = products.map(p => `
+            <tr>
+                <td><code style="font-size: 0.85em;">${p.sku || '--'}</code></td>
+                <td>${p.name || '--'}</td>
+                <td>${p.category || '--'}</td>
+                <td>${p.supplierName || p.supplierId || '--'}</td>
+                <td>$${(p.unitPrice || 0).toFixed(2)}</td>
+                <td>${p.unit || '--'}</td>
+                <td><span class="status-badge ${p.inStock ? 'status-active' : 'status-inactive'}">${p.inStock ? 'In Stock' : 'Out of Stock'}</span></td>
+                <td>
+                    <button class="btn-sm" onclick="editCatalogProduct('${p.sku}')">Edit</button>
+                    <button class="btn-sm btn-danger" onclick="deleteCatalogProduct('${p.sku}')">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+
+    } catch (err) {
+        console.error('[Procurement] Catalog load error:', err);
+        showToast('Failed to load catalog', 'error');
+    }
+}
+
+/**
+ * Load Procurement Suppliers view
+ */
+async function loadProcurementSuppliers() {
+    console.log('[Procurement] Loading suppliers...');
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/suppliers`);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+
+        const suppliers = data.suppliers || [];
+        const active = suppliers.filter(s => s.status === 'active').length;
+        const totalProducts = suppliers.reduce((sum, s) => sum + (s.productCount || 0), 0);
+        const avgCommission = suppliers.length > 0
+            ? suppliers.reduce((sum, s) => sum + (s.commissionRate || 0), 0) / suppliers.length
+            : 0;
+
+        document.getElementById('suppliers-total').textContent = suppliers.length;
+        document.getElementById('suppliers-active').textContent = active;
+        document.getElementById('suppliers-product-count').textContent = totalProducts;
+        document.getElementById('suppliers-avg-commission').textContent = (avgCommission * 100).toFixed(1) + '%';
+
+        const tbody = document.getElementById('suppliers-list-tbody');
+        if (suppliers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">No suppliers found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = suppliers.map(s => `
+            <tr>
+                <td><code style="font-size: 0.85em;">${s.id || '--'}</code></td>
+                <td>${s.name || '--'}</td>
+                <td>${s.contactEmail || s.contact || '--'}</td>
+                <td>${s.productCount || 0}</td>
+                <td>${((s.commissionRate || 0) * 100).toFixed(1)}%</td>
+                <td><span class="status-badge ${s.status === 'active' ? 'status-active' : 'status-inactive'}">${s.status || 'unknown'}</span></td>
+                <td>
+                    <button class="btn-sm" onclick="editSupplier('${s.id}')">Edit</button>
+                </td>
+            </tr>
+        `).join('');
+
+    } catch (err) {
+        console.error('[Procurement] Suppliers load error:', err);
+        showToast('Failed to load suppliers', 'error');
+    }
+}
+
+/**
+ * Load Procurement Revenue view
+ */
+async function loadProcurementRevenue() {
+    console.log('[Procurement] Loading revenue...');
+    try {
+        const fromDate = document.getElementById('revenue-from')?.value || '';
+        const toDate = document.getElementById('revenue-to')?.value || '';
+        let url = `${API_BASE}/api/procurement/revenue`;
+        const params = [];
+        if (fromDate) params.push(`from=${fromDate}`);
+        if (toDate) params.push(`to=${toDate}`);
+        if (params.length) url += '?' + params.join('&');
+
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+
+        const summary = data.summary || {};
+        document.getElementById('revenue-total').textContent = '$' + (summary.totalRevenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('revenue-commission').textContent = '$' + (summary.totalCommission || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('revenue-orders').textContent = summary.totalOrders || 0;
+        document.getElementById('revenue-avg-order').textContent = '$' + (summary.avgOrderValue || 0).toFixed(2);
+
+        // Revenue by supplier
+        const suppTbody = document.getElementById('revenue-by-supplier-tbody');
+        const bySupplier = data.bySupplier || [];
+        if (bySupplier.length === 0) {
+            suppTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No revenue data</td></tr>';
+        } else {
+            suppTbody.innerHTML = bySupplier.map(s => `
+                <tr>
+                    <td>${s.name || s.supplierId}</td>
+                    <td>${s.orderCount}</td>
+                    <td>$${s.revenue.toFixed(2)}</td>
+                    <td>$${s.commission.toFixed(2)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Revenue by month
+        const monthTbody = document.getElementById('revenue-by-month-tbody');
+        const byMonth = data.byMonth || [];
+        if (byMonth.length === 0) {
+            monthTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No monthly data</td></tr>';
+        } else {
+            monthTbody.innerHTML = byMonth.map(m => `
+                <tr>
+                    <td>${m.month}</td>
+                    <td>${m.orderCount}</td>
+                    <td>$${m.revenue.toFixed(2)}</td>
+                    <td>$${m.commission.toFixed(2)}</td>
+                </tr>
+            `).join('');
+        }
+
+    } catch (err) {
+        console.error('[Procurement] Revenue load error:', err);
+        showToast('Failed to load revenue data', 'error');
+    }
+}
+
+/**
+ * Open modal to add a new product to the catalog
+ */
+function openAddProductModal() {
+    const html = `
+        <div style="display: grid; gap: 12px;">
+            <input type="text" id="new-product-sku" placeholder="SKU (e.g. PROC-NUT-FLORA-GROW)" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="text" id="new-product-name" placeholder="Product Name" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <select id="new-product-category" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <option value="">Select Category</option>
+                <option value="Seeds & Growing Media">Seeds & Growing Media</option>
+                <option value="Nutrients & Supplements">Nutrients & Supplements</option>
+                <option value="Packaging & Labels">Packaging & Labels</option>
+                <option value="Equipment & Parts">Equipment & Parts</option>
+                <option value="Lab & Testing">Lab & Testing</option>
+            </select>
+            <input type="number" id="new-product-price" placeholder="Unit Price" step="0.01" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="text" id="new-product-unit" placeholder="Unit (e.g. gallon, case, bag)" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveCatalogProduct()">Save Product</button>
+            </div>
+        </div>
+    `;
+    openModal('Add Product to Catalog', html);
+}
+
+/**
+ * Save a new catalog product
+ */
+async function saveCatalogProduct() {
+    const product = {
+        sku: document.getElementById('new-product-sku').value.trim(),
+        name: document.getElementById('new-product-name').value.trim(),
+        category: document.getElementById('new-product-category').value,
+        unitPrice: parseFloat(document.getElementById('new-product-price').value) || 0,
+        unit: document.getElementById('new-product-unit').value.trim(),
+        inStock: true
+    };
+    if (!product.sku || !product.name) {
+        showToast('SKU and Name are required', 'warning');
+        return;
+    }
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/catalog/product`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product })
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+        closeModal();
+        showToast(`Product ${data.action}: ${product.name}`, 'success');
+        await loadProcurementCatalog();
+    } catch (err) {
+        showToast('Failed to save product: ' + err.message, 'error');
+    }
+}
+
+/**
+ * Edit an existing catalog product
+ */
+async function editCatalogProduct(sku) {
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/catalog`);
+        const data = await resp.json();
+        const product = (data.products || []).find(p => p.sku === sku);
+        if (!product) { showToast('Product not found', 'error'); return; }
+
+        const html = `
+            <div style="display: grid; gap: 12px;">
+                <input type="text" id="new-product-sku" value="${product.sku}" disabled style="padding: 10px; border-radius: 4px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">
+                <input type="text" id="new-product-name" value="${product.name || ''}" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <select id="new-product-category" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <option value="">Select Category</option>
+                    <option value="Seeds & Growing Media" ${product.category === 'Seeds & Growing Media' ? 'selected' : ''}>Seeds & Growing Media</option>
+                    <option value="Nutrients & Supplements" ${product.category === 'Nutrients & Supplements' ? 'selected' : ''}>Nutrients & Supplements</option>
+                    <option value="Packaging & Labels" ${product.category === 'Packaging & Labels' ? 'selected' : ''}>Packaging & Labels</option>
+                    <option value="Equipment & Parts" ${product.category === 'Equipment & Parts' ? 'selected' : ''}>Equipment & Parts</option>
+                    <option value="Lab & Testing" ${product.category === 'Lab & Testing' ? 'selected' : ''}>Lab & Testing</option>
+                </select>
+                <input type="number" id="new-product-price" value="${product.unitPrice || ''}" step="0.01" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <input type="text" id="new-product-unit" value="${product.unit || ''}" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <label style="display: flex; align-items: center; gap: 8px; color: var(--text-primary);">
+                    <input type="checkbox" id="new-product-instock" ${product.inStock ? 'checked' : ''}> In Stock
+                </label>
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                    <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveCatalogProduct()">Update Product</button>
+                </div>
+            </div>
+        `;
+        openModal('Edit Product', html);
+    } catch (err) {
+        showToast('Failed to load product', 'error');
+    }
+}
+
+/**
+ * Delete a catalog product
+ */
+async function deleteCatalogProduct(sku) {
+    if (!confirm(`Delete product ${sku}?`)) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/catalog/product/${sku}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+        showToast(`Product ${sku} deleted`, 'success');
+        await loadProcurementCatalog();
+    } catch (err) {
+        showToast('Failed to delete product: ' + err.message, 'error');
+    }
+}
+
+/**
+ * Open modal to add a new supplier
+ */
+function openAddSupplierModal() {
+    const html = `
+        <div style="display: grid; gap: 12px;">
+            <input type="text" id="new-supplier-name" placeholder="Supplier Name" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="email" id="new-supplier-email" placeholder="Contact Email" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="text" id="new-supplier-phone" placeholder="Phone" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="number" id="new-supplier-commission" placeholder="Commission Rate (e.g. 0.12)" step="0.01" min="0" max="1" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveNewSupplier()">Add Supplier</button>
+            </div>
+        </div>
+    `;
+    openModal('Add Supplier', html);
+}
+
+/**
+ * Save a new supplier
+ */
+async function saveNewSupplier() {
+    const supplier = {
+        name: document.getElementById('new-supplier-name').value.trim(),
+        contactEmail: document.getElementById('new-supplier-email').value.trim(),
+        phone: document.getElementById('new-supplier-phone').value.trim(),
+        commissionRate: parseFloat(document.getElementById('new-supplier-commission').value) || 0
+    };
+    if (!supplier.name) { showToast('Supplier name is required', 'warning'); return; }
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/suppliers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(supplier)
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+        closeModal();
+        showToast(`Supplier added: ${supplier.name}`, 'success');
+        await loadProcurementSuppliers();
+    } catch (err) {
+        showToast('Failed to add supplier: ' + err.message, 'error');
+    }
+}
+
+/**
+ * Edit an existing supplier
+ */
+async function editSupplier(supplierId) {
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/suppliers`);
+        const data = await resp.json();
+        const supplier = (data.suppliers || []).find(s => s.id === supplierId);
+        if (!supplier) { showToast('Supplier not found', 'error'); return; }
+
+        const html = `
+            <div style="display: grid; gap: 12px;">
+                <input type="text" value="${supplier.id}" disabled style="padding: 10px; border-radius: 4px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">
+                <input type="text" id="edit-supplier-name" value="${supplier.name || ''}" placeholder="Supplier Name" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <input type="email" id="edit-supplier-email" value="${supplier.contactEmail || ''}" placeholder="Contact Email" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <input type="text" id="edit-supplier-phone" value="${supplier.phone || ''}" placeholder="Phone" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <input type="number" id="edit-supplier-commission" value="${supplier.commissionRate || ''}" placeholder="Commission Rate" step="0.01" min="0" max="1" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <select id="edit-supplier-status" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <option value="active" ${supplier.status === 'active' ? 'selected' : ''}>Active</option>
+                    <option value="inactive" ${supplier.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                    <option value="pending" ${supplier.status === 'pending' ? 'selected' : ''}>Pending</option>
+                </select>
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                    <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button class="btn-primary" onclick="updateSupplier('${supplierId}')">Update</button>
+                </div>
+            </div>
+        `;
+        openModal('Edit Supplier', html);
+    } catch (err) {
+        showToast('Failed to load supplier', 'error');
+    }
+}
+
+/**
+ * Update an existing supplier
+ */
+async function updateSupplier(supplierId) {
+    const updates = {
+        name: document.getElementById('edit-supplier-name').value.trim(),
+        contactEmail: document.getElementById('edit-supplier-email').value.trim(),
+        phone: document.getElementById('edit-supplier-phone').value.trim(),
+        commissionRate: parseFloat(document.getElementById('edit-supplier-commission').value) || 0,
+        status: document.getElementById('edit-supplier-status').value
+    };
+    try {
+        const resp = await fetch(`${API_BASE}/api/procurement/suppliers/${supplierId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+        closeModal();
+        showToast('Supplier updated', 'success');
+        await loadProcurementSuppliers();
+    } catch (err) {
+        showToast('Failed to update supplier: ' + err.message, 'error');
+    }
+}
+
 // VIEW DATA LOADING FUNCTIONS
 // ============================================================================
 
