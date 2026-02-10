@@ -118,6 +118,7 @@ ls $TEMP_DIR/services | head -n 5
 cp -r scripts $TEMP_DIR/ 2>/dev/null || true
 cp -r backend $TEMP_DIR/ 2>/dev/null || true
 cp -r automation $TEMP_DIR/ 2>/dev/null || true
+cp -r routes $TEMP_DIR/ 2>/dev/null || true
 cp -r server $TEMP_DIR/
 # Verify server directory
 if [ ! -d "$TEMP_DIR/server" ]; then
