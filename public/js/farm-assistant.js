@@ -252,7 +252,6 @@ class FarmAssistant {
       <div class="assistant-container minimized">
         <div class="assistant-header">
           <div class="header-content">
-            <img src="/images/cheo-mascot.svg" alt="Cheo" class="assistant-mascot-thumb" />
             <div class="header-text">
               <strong>Farm Assistant</strong>
               <small>${this.currentContext.page}</small>
@@ -266,7 +265,6 @@ class FarmAssistant {
         <div class="assistant-body">
           <div class="chat-messages" id="chatMessages">
             <div class="mascot-welcome">
-              <img src="/images/cheo-mascot.svg" alt="Cheo the Farm Assistant" class="mascot-image" />
               <div class="welcome-text">
                 <strong>Hi I'm Cheo, your farm Assistant!</strong>
                 <strong class="love-to-help">I love to help!</strong>
@@ -286,12 +284,12 @@ class FarmAssistant {
           
           <div class="chat-input-container">
             <button id="voiceBtn" class="voice-btn" title="Voice command">
-              <span class="voice-icon">🎤</span>
+              <span class="voice-icon">♪</span>
             </button>
             <input 
               type="text" 
               id="assistantInput" 
-              placeholder="Ask me anything or click 🎤..."
+              placeholder="Ask me anything or use voice..."
               autocomplete="off"
             />
             <button id="sendBtn" class="send-btn">

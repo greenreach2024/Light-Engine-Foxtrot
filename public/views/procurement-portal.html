@@ -397,13 +397,13 @@
   <!-- Header -->
   <div class="portal-header">
     <div>
-      <h1>📦 Procurement Portal</h1>
+      <h1>Procurement Portal</h1>
       <div class="farm-name" id="farmNameDisplay">Loading...</div>
     </div>
     <div class="header-actions">
       <button class="btn btn-outline btn-sm" onclick="window.location.href='/views/farm-summary.html'">← Farm Summary</button>
       <button class="cart-badge" onclick="toggleCart()">
-        🛒 Cart <span class="cart-count" id="cartCount">0</span>
+        Cart <span class="cart-count" id="cartCount">0</span>
       </button>
     </div>
   </div>
@@ -479,7 +479,7 @@
   <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
   <div class="cart-sidebar" id="cartSidebar">
     <div class="cart-header">
-      <h2>🛒 Shopping Cart</h2>
+      <h2>Shopping Cart</h2>
       <button class="cart-close" onclick="toggleCart()">✕</button>
     </div>
     <div class="cart-items" id="cartItems">
@@ -498,7 +498,7 @@
   <!-- Checkout Modal -->
   <div class="modal-overlay" id="checkoutModal">
     <div class="modal">
-      <h2>📋 Checkout</h2>
+      <h2>Checkout</h2>
       <div id="checkoutSummary"></div>
       <div class="form-group">
         <label>Shipping Address</label>
@@ -616,7 +616,7 @@ function filterCatalog() {
 function renderProducts(products) {
   const grid = document.getElementById('productGrid');
   if (!products.length) {
-    grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div>No products found</div>';
+    grid.innerHTML = '<div class="empty-state">No products found</div>';
     return;
   }
   const catMap = {};
@@ -636,7 +636,6 @@ function renderProducts(products) {
     return `
       <div class="product-card ${p.featured ? 'featured' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <span class="product-category-icon">${cat.icon || '📦'}</span>
           ${stockBadge}
         </div>
         <div class="product-name">${p.name}</div>
@@ -740,7 +739,7 @@ function updateCartUI() {
   const checkoutBtn = document.getElementById('checkoutBtn');
 
   if (!cart.length) {
-    cartItemsEl.innerHTML = '<div class="cart-empty"><div class="cart-empty-icon">🛒</div><div>Your cart is empty</div></div>';
+    cartItemsEl.innerHTML = '<div class="cart-empty"><div>Your cart is empty</div></div>';
     cartTotalsEl.innerHTML = '';
     checkoutBtn.disabled = true;
     return;
@@ -899,7 +898,7 @@ async function loadOrders() {
     const data = await r.json();
 
     if (!data.ok || !data.orders.length) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div>No orders yet<div style="font-size:0.85rem;margin-top:0.25rem;">Place your first order from the catalog</div></div>';
+      container.innerHTML = '<div class="empty-state">No orders yet<div style="font-size:0.85rem;margin-top:0.25rem;">Place your first order from the catalog</div></div>';
       return;
     }
 
@@ -993,7 +992,7 @@ async function viewOrder(orderId) {
               <div style="flex:1;">
                 <div style="font-weight:500;color:#e2e8f0;">${item.name}</div>
                 <div style="font-size:0.8rem;color:#64748b;">${item.sku} · ${item.quantity} × $${item.unitPrice.toFixed(2)} / ${item.saleUnit}</div>
-                ${item.trackingNumber ? `<div style="font-size:0.75rem;color:#c084fc;margin-top:2px;">📦 Tracking: ${item.trackingNumber} (${item.carrier || ''})</div>` : ''}
+                ${item.trackingNumber ? `<div style="font-size:0.75rem;color:#c084fc;margin-top:2px;">Tracking: ${item.trackingNumber} (${item.carrier || ''})</div>` : ''}
               </div>
               <div style="text-align:right;">
                 <div style="font-weight:600;color:#4ade80;">$${item.lineTotal.toFixed(2)}</div>
@@ -1045,7 +1044,7 @@ async function loadSupplyInventory() {
     const r = await fetch(`${API}/inventory`);
     const data = await r.json();
     if (!data.ok || !data.supplies.length) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div>No supply inventory yet<div style="font-size:0.85rem;margin-top:0.25rem;">Supplies will appear here once orders are received</div></div>';
+      container.innerHTML = '<div class="empty-state">No supply inventory yet<div style="font-size:0.85rem;margin-top:0.25rem;">Supplies will appear here once orders are received</div></div>';
       return;
     }
 
