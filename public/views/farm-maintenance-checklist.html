@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farm Maintenance Checklist | Light Engine</title>
+  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    .header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #22c55e;
+      backdrop-filter: blur(10px);
+      margin: -1rem -1rem 2rem -1rem;
+      position: sticky;
+      top: 0;
+      z-index: 1001;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #4ade80;
+      letter-spacing: -0.5px;
+    }
+
+    .header-sub {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      font-weight: 400;
+      margin-top: 0.25rem;
+    }
+
+    .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #22c55e;
+      color: #0f172a;
+    }
+    .btn-primary:hover { background: #16a34a; }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #e2e8f0;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+
+    .btn-active {
+      background: #22c55e !important;
+      color: #0f172a !important;
+      border-color: #22c55e !important;
+    }
+
+    /* Tab navigation */
+    .tab-nav {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.05);
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+    .tab-btn.active {
+      background: #22c55e;
+      color: #0f172a;
+      border-color: #22c55e;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Checklist cards */
+    .section-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin: 1.5rem 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .section-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .checklist-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      transition: all 0.2s;
+    }
+    .checklist-card:hover {
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.12);
+    }
+
+    .checklist-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-critical { background: #dc2626; color: #fff; }
+    .badge-important { background: #f59e0b; color: #0f172a; }
+    .badge-routine { background: #3b82f6; color: #fff; }
+    .badge-best-practice { background: #8b5cf6; color: #fff; }
+
+    .checklist-items { list-style: none; padding: 0; }
+
+    .checklist-items li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.9rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .checklist-items li:last-child { border-bottom: none; }
+
+    .checklist-items li input[type="checkbox"] {
+      margin-top: 4px;
+      width: 18px;
+      height: 18px;
+      accent-color: #22c55e;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .checklist-items li.checked {
+      color: #64748b;
+      text-decoration: line-through;
+    }
+
+    .item-detail {
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-top: 2px;
+      font-style: italic;
+    }
+
+    .progress-bar {
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      height: 8px;
+      margin: 1rem 0;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #4ade80);
+      border-radius: 10px;
+      transition: width 0.4s ease;
+    }
+
+    .progress-text {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      text-align: right;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .summary-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .summary-card .stat {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #4ade80;
+    }
+    .summary-card .label {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-top: 0.25rem;
+    }
+
+    .note-box {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.85rem;
+      color: #93c5fd;
+      line-height: 1.6;
+      margin: 1rem 0;
+    }
+    .note-box.warning {
+      background: rgba(245, 158, 11, 0.1);
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #fcd34d;
+    }
+    .note-box strong { color: #e2e8f0; }
+
+    @media (max-width: 768px) {
+      .header h1 { font-size: 1.3rem; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media print {
+      body { background: #fff; color: #000; }
+      .header { position: static; background: #fff; border-bottom: 2px solid #000; }
+      .header h1 { color: #000; }
+      .checklist-card { border: 1px solid #ccc; break-inside: avoid; }
+      .checklist-items li { color: #333; }
+      .section-title { color: #000; }
+      .btn, .tab-nav { display: none; }
+      .tab-content { display: block !important; page-break-before: always; }
+      .tab-content:first-of-type { page-break-before: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>🌱 Farm Maintenance Checklist</h1>
+        <div class="header-sub">Aeroponic Vertical Farm — Standard Operating Procedures</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="resetAll()" title="Uncheck all items">↺ Reset</button>
+        <button class="btn btn-secondary" onclick="window.print()" title="Print checklist">🖨 Print</button>
+        <button class="btn btn-primary" onclick="window.location.href='/views/farm-summary.html'">← Farm Summary</button>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-grid" id="summaryGrid">
+      <div class="summary-card">
+        <div class="stat" id="dailyProgress">0%</div>
+        <div class="label">Daily Tasks</div>
+      </div>
+      <div class="summary-card">
+        <div class="stat" id="weeklyProgress">0%</div>
+        <div class="label">Weekly Tasks</div>
+      </div>
+      <div class="summary-card">
+        <div class="stat" id="monthlyProgress">0%</div>
+        <div class="label">Monthly Tasks</div>
+      </div>
+      <div class="summary-card">
+        <div class="stat" id="quarterlyProgress">0%</div>
+        <div class="label">Quarterly Tasks</div>
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('daily', this)">Daily</button>
+      <button class="tab-btn" onclick="switchTab('weekly', this)">Weekly</button>
+      <button class="tab-btn" onclick="switchTab('monthly', this)">Monthly</button>
+      <button class="tab-btn" onclick="switchTab('quarterly', this)">Quarterly</button>
+      <button class="tab-btn" onclick="switchTab('bestpractices', this)">Best Practices</button>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- DAILY CHECKLIST -->
+    <!-- ================================================================ -->
+    <div class="tab-content active" id="tab-daily">
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">💧</span>
+        Nutrient System & Water Quality
+      </div>
+      <div class="checklist-card">
+        <h3>Reservoir & Dosing <span class="card-badge badge-critical">Critical</span></h3>
+        <ul class="checklist-items" data-group="daily">
+          <li><input type="checkbox"><div>Check reservoir water level — refill with RO/filtered water if below operating minimum<div class="item-detail">Target: maintain 75–100% capacity to prevent pump cavitation</div></div></li>
+          <li><input type="checkbox"><div>Measure and record pH — target range 5.5–6.2 for most leafy greens<div class="item-detail">pH drift >0.5 from last reading warrants investigation</div></div></li>
+          <li><input type="checkbox"><div>Measure and record EC/TDS — target EC 1.2–2.4 mS/cm depending on crop stage<div class="item-detail">Seedlings: 0.8–1.2 | Vegetative: 1.4–2.0 | Mature: 1.8–2.4</div></div></li>
+          <li><input type="checkbox"><div>Check water temperature — target 65–72°F (18–22°C)<div class="item-detail">Above 75°F risks Pythium; below 60°F slows nutrient uptake</div></div></li>
+          <li><input type="checkbox"><div>Verify auto-doser operation — confirm pumps are cycling, no air locks<div class="item-detail">Check acid, base, and nutrient concentrate reservoirs are above min levels</div></div></li>
+          <li><input type="checkbox"><div>Inspect misting nozzles for clogs — check spray pattern on 3–5 random nozzles<div class="item-detail">Clogged nozzles = dry roots = crop loss within hours in aeroponics</div></div></li>
+          <li><input type="checkbox"><div>Check misting cycle timer — verify on/off intervals match crop prescription<div class="item-detail">Typical: 5 sec on / 3–5 min off (high-pressure); 30 sec on / 2 min off (low-pressure)</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">🌡️</span>
+        Environment & Climate
+      </div>
+      <div class="checklist-card">
+        <h3>Environmental Readings <span class="card-badge badge-critical">Critical</span></h3>
+        <ul class="checklist-items" data-group="daily">
+          <li><input type="checkbox"><div>Record ambient temperature per zone — target 68–77°F (20–25°C) day / 60–68°F (16–20°C) night<div class="item-detail">Temperature differential (DIF) of 5–10°F promotes strong stem growth</div></div></li>
+          <li><input type="checkbox"><div>Record relative humidity per zone — target 50–70% RH<div class="item-detail">Above 80% RH increases powdery mildew & botrytis risk; below 40% causes tip burn</div></div></li>
+          <li><input type="checkbox"><div>Calculate and record VPD — target 0.8–1.2 kPa for vegetative, 1.0–1.4 kPa for fruiting<div class="item-detail">VPD outside range = stomatal stress → reduced transpiration and growth</div></div></li>
+          <li><input type="checkbox"><div>Check CO₂ levels if supplementing — target 800–1200 ppm during lights-on<div class="item-detail">Ambient ~420 ppm; supplement only when lights are on and ventilation is reduced</div></div></li>
+          <li><input type="checkbox"><div>Verify HVAC and dehumidifier operation — listen for unusual sounds, check drain lines<div class="item-detail">Condensate drain blockages cause overflow and humidity control failure</div></div></li>
+          <li><input type="checkbox"><div>Check air circulation fans — confirm all oscillating fans operational, no dead zones<div class="item-detail">Stagnant air pockets = localized high humidity = disease hotspots</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">💡</span>
+        Lighting
+      </div>
+      <div class="checklist-card">
+        <h3>Light System Check <span class="card-badge badge-important">Important</span></h3>
+        <ul class="checklist-items" data-group="daily">
+          <li><input type="checkbox"><div>Verify all LED fixtures are on during scheduled photoperiod<div class="item-detail">A single failed fixture creates uneven canopy and wasted grow slots</div></div></li>
+          <li><input type="checkbox"><div>Check light spectrum & intensity settings match current growth stage<div class="item-detail">PPFD targets: seedling 150–250 | vegetative 250–400 | finishing 400–600 µmol/m²/s</div></div></li>
+          <li><input type="checkbox"><div>Confirm photoperiod schedule — verify timer/controller on-off times<div class="item-detail">Typical leafy greens: 16h on / 8h off; microgreens: 12–16h; herbs: 14–18h</div></div></li>
+          <li><input type="checkbox"><div>Spot-check canopy distance — adjust fixture height if plants growing into lights<div class="item-detail">Maintain 6–12" clearance depending on fixture type and crop</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">🌿</span>
+        Crop Health & Production
+      </div>
+      <div class="checklist-card">
+        <h3>Visual Crop Inspection <span class="card-badge badge-critical">Critical</span></h3>
+        <ul class="checklist-items" data-group="daily">
+          <li><input type="checkbox"><div>Walk each zone — inspect canopy for wilting, discoloration, pest damage, or tip burn<div class="item-detail">Catch problems within 24h: early intervention saves entire batches</div></div></li>
+          <li><input type="checkbox"><div>Check root health on 5–10 random plants — roots should be white, firm, abundant<div class="item-detail">Brown/slimy roots = root rot (Pythium). Isolate and treat immediately.</div></div></li>
+          <li><input type="checkbox"><div>Monitor for pests — inspect undersides of leaves (aphids, thrips, whitefly, fungus gnats)<div class="item-detail">Use sticky traps as early-warning indicators; check traps daily</div></div></li>
+          <li><input type="checkbox"><div>Remove dead/diseased plant material — do not leave debris in grow area<div class="item-detail">Dead material = pathogen reservoir. Bag and remove from growing environment.</div></div></li>
+          <li><input type="checkbox"><div>Record germination rates for newly seeded trays (within 3 days of sowing)<div class="item-detail">Target >90% germination; below 80% indicates seed quality or environment issue</div></div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>Seeding & Harvesting <span class="card-badge badge-routine">Routine</span></h3>
+        <ul class="checklist-items" data-group="daily">
+          <li><input type="checkbox"><div>Seed scheduled trays per production plan — record variety, lot #, cell count, date<div class="item-detail">Pre-soak seeds if required by variety (basil, cilantro benefit from 4–8h soak)</div></div></li>
+          <li><input type="checkbox"><div>Transplant seedlings at proper stage — typically 2–3 true leaves or 7–14 days<div class="item-detail">Minimize root disturbance during transplant; handle by plug, not stem</div></div></li>
+          <li><input type="checkbox"><div>Harvest mature crops per schedule — harvest in early morning or with lights recently on<div class="item-detail">Harvest to cold storage within 15 min; target 34–38°F post-harvest temp</div></div></li>
+          <li><input type="checkbox"><div>Weigh and record harvest yields — log by variety, zone, tray, and days to harvest<div class="item-detail">Track yield trends to identify declining performance zones</div></div></li>
+          <li><input type="checkbox"><div>Clean and sanitize harvested tray positions — prep for next planting<div class="item-detail">Use food-safe sanitizer (e.g., hydrogen peroxide 3%, or StarSan)</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">📋</span>
+        Operations & Safety
+      </div>
+      <div class="checklist-card">
+        <h3>Facility Check <span class="card-badge badge-routine">Routine</span></h3>
+        <ul class="checklist-items" data-group="daily">
+          <li><input type="checkbox"><div>Check for water leaks — inspect floor drains, fittings, reservoir overflow<div class="item-detail">Even small leaks cause humidity spikes and slip hazards</div></div></li>
+          <li><input type="checkbox"><div>Verify backup systems — confirm UPS/generator ready, backup pump accessible<div class="item-detail">Aeroponic roots dry out in 20–30 min without misting; backup is critical</div></div></li>
+          <li><input type="checkbox"><div>Review sensor dashboard alerts — acknowledge or resolve any IoT alarms<div class="item-detail">Check Light Engine dashboard for anomaly flags and sensor offline alerts</div></div></li>
+          <li><input type="checkbox"><div>Update daily log — summarize observations, actions taken, and any issues noted<div class="item-detail">Best practice: timestamped digital log accessible to all team members</div></div></li>
+        </ul>
+      </div>
+
+      <div class="progress-bar"><div class="progress-bar-fill" id="dailyBar" style="width:0%"></div></div>
+      <div class="progress-text" id="dailyText">0 / 0 completed</div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- WEEKLY CHECKLIST -->
+    <!-- ================================================================ -->
+    <div class="tab-content" id="tab-weekly">
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">💧</span>
+        Water System Maintenance
+      </div>
+      <div class="checklist-card">
+        <h3>Filtration & Plumbing <span class="card-badge badge-critical">Critical</span></h3>
+        <ul class="checklist-items" data-group="weekly">
+          <li><input type="checkbox"><div>Rinse inline sediment filters (50–100 micron pre-filters)<div class="item-detail">Rinse under clean water until flow is clear; replace if media is degraded</div></div></li>
+          <li><input type="checkbox"><div>Clean misting nozzle screens — soak in vinegar or citric acid solution (15 min)<div class="item-detail">For high-pressure aeroponics: disassemble, soak, and reassemble 5–10 nozzles per week on rotation</div></div></li>
+          <li><input type="checkbox"><div>Inspect high-pressure pump — check pressure gauge, listen for cavitation noise<div class="item-detail">Target operating pressure: 80–100 PSI (high-pressure aero). Log readings.</div></div></li>
+          <li><input type="checkbox"><div>Check accumulator/pressure tank pre-charge (if equipped)<div class="item-detail">Pre-charge should be ~10 PSI below cut-in pressure</div></div></li>
+          <li><input type="checkbox"><div>Flush nutrient lines — run clean water through manifolds for 5 min<div class="item-detail">Prevents salt buildup inside supply lines and manifolds</div></div></li>
+          <li><input type="checkbox"><div>Inspect all tubing connections and clamps for drips or mineral deposits</div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">🧪</span>
+        Water Quality Testing
+      </div>
+      <div class="checklist-card">
+        <h3>Lab & In-House Testing <span class="card-badge badge-important">Important</span></h3>
+        <ul class="checklist-items" data-group="weekly">
+          <li><input type="checkbox"><div>Full nutrient solution analysis — test N, P, K, Ca, Mg, S, Fe, Mn, Zn, B, Cu, Mo<div class="item-detail">Use an in-house multi-ion meter or send to lab. Compare against target recipe.</div></div></li>
+          <li><input type="checkbox"><div>Test source water quality — pH, EC, alkalinity, hardness<div class="item-detail">Source water changes seasonally; high alkalinity buffers pH adjustment</div></div></li>
+          <li><input type="checkbox"><div>Dissolved oxygen check — target >6 mg/L in nutrient solution<div class="item-detail">Low DO in warm water promotes root pathogens. Consider adding air stones or chillers.</div></div></li>
+          <li><input type="checkbox"><div>Check for biofilm in reservoir — visually inspect walls and bottom for slime<div class="item-detail">Biofilm harbors pathogens. Clean and treat with H₂O₂ if present.</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">🔧</span>
+        Equipment & Environment
+      </div>
+      <div class="checklist-card">
+        <h3>HVAC & Air Quality <span class="card-badge badge-important">Important</span></h3>
+        <ul class="checklist-items" data-group="weekly">
+          <li><input type="checkbox"><div>Inspect and rinse HVAC return air pre-filters<div class="item-detail">Dust-loaded pre-filters reduce airflow 20–40% and strain compressors</div></div></li>
+          <li><input type="checkbox"><div>Check dehumidifier drain pans and condensate pumps<div class="item-detail">Standing water in drain pans grows mold and bacteria</div></div></li>
+          <li><input type="checkbox"><div>Verify exhaust fan operation and intake damper position<div class="item-detail">Negative pressure prevents contaminants from entering; check with smoke pencil</div></div></li>
+          <li><input type="checkbox"><div>Wipe down LED fixture lenses with damp microfiber — dust reduces PAR output<div class="item-detail">Even thin dust layers can reduce light transmission 10–15%</div></div></li>
+          <li><input type="checkbox"><div>Inspect cable management and electrical connections — check for moisture intrusion<div class="item-detail">High-humidity grows corrode terminals; spray with dielectric grease if needed</div></div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>IPM & Sanitation <span class="card-badge badge-important">Important</span></h3>
+        <ul class="checklist-items" data-group="weekly">
+          <li><input type="checkbox"><div>Replace sticky traps — count and log captures by pest type<div class="item-detail">Tracking trends: spikes in counts = emerging infestation. Act before visual symptoms.</div></div></li>
+          <li><input type="checkbox"><div>Apply preventive biological controls if part of IPM program<div class="item-detail">Beneficial insects (e.g., Stratiolaelaps for fungus gnats, Amblyseius for thrips)</div></div></li>
+          <li><input type="checkbox"><div>Sanitize walkways, work surfaces, and harvesting tools<div class="item-detail">Quaternary ammonium or dilute bleach (200 ppm). Let air dry.</div></div></li>
+          <li><input type="checkbox"><div>Launder or replace grow room shoe covers / dedicated footwear<div class="item-detail">Footwear is the #1 vector for introducing pathogens and pests</div></div></li>
+          <li><input type="checkbox"><div>Inspect door seals and pest exclusion screens on intake vents</div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>Production Planning <span class="card-badge badge-routine">Routine</span></h3>
+        <ul class="checklist-items" data-group="weekly">
+          <li><input type="checkbox"><div>Review production schedule — confirm seedling pipeline matches demand forecast<div class="item-detail">Adjust seed quantities based on germination rates and order book</div></div></li>
+          <li><input type="checkbox"><div>Inventory consumables — seeds, grow media, nutrients, packaging, labels<div class="item-detail">Reorder anything below 2-week supply threshold</div></div></li>
+          <li><input type="checkbox"><div>Review yield data and compare to targets — identify underperforming zones or crops<div class="item-detail">Use Light Engine farm inventory dashboard for trend analysis</div></div></li>
+          <li><input type="checkbox"><div>Back up farm data — sensor logs, recipes, group configurations<div class="item-detail">Verify GreenReach Central sync is current; check edge device backup status</div></div></li>
+        </ul>
+      </div>
+
+      <div class="progress-bar"><div class="progress-bar-fill" id="weeklyBar" style="width:0%"></div></div>
+      <div class="progress-text" id="weeklyText">0 / 0 completed</div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- MONTHLY CHECKLIST -->
+    <!-- ================================================================ -->
+    <div class="tab-content" id="tab-monthly">
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">💧</span>
+        Deep Water System Service
+      </div>
+      <div class="checklist-card">
+        <h3>Reservoir & Line Cleaning <span class="card-badge badge-critical">Critical</span></h3>
+        <ul class="checklist-items" data-group="monthly">
+          <li><input type="checkbox"><div>Full reservoir drain, scrub, and sanitize — use H₂O₂ (35% diluted to 3%) or hypochlorous acid<div class="item-detail">Drain completely, scrub walls/bottom, rinse twice, refill with fresh solution</div></div></li>
+          <li><input type="checkbox"><div>Replace inline sediment filters (50–100 micron)<div class="item-detail">Even if rinsed weekly, media degrades. Replace monthly for consistent flow.</div></div></li>
+          <li><input type="checkbox"><div>Clean or replace UV sterilizer sleeve (if equipped)<div class="item-detail">Mineral deposits on quartz sleeve reduce UV-C transmission to ineffective levels</div></div></li>
+          <li><input type="checkbox"><div>Inspect and clean float valves and level sensors<div class="item-detail">Mineral scale on float valves causes stuck-open or stuck-closed failures</div></div></li>
+          <li><input type="checkbox"><div>Flush the entire aeroponic manifold system with enzyme cleaner or H₂O₂ solution<div class="item-detail">Run cleaning solution through all misting lines for 15 min, then flush with clean water</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">📏</span>
+        Probe Calibration & Sensors
+      </div>
+      <div class="checklist-card">
+        <h3>Calibration Schedule <span class="card-badge badge-critical">Critical</span></h3>
+        <ul class="checklist-items" data-group="monthly">
+          <li><input type="checkbox"><div>Calibrate pH probe — 2-point calibration with pH 4.0 and 7.0 buffers<div class="item-detail">Rinse probe with distilled water between buffers. Replace probe if slope <80% or offset >±30mV.</div></div></li>
+          <li><input type="checkbox"><div>Calibrate EC/TDS probe — use certified 1.413 mS/cm standard<div class="item-detail">Rinse probe thoroughly before and after. Check cell constant if readings drift.</div></div></li>
+          <li><input type="checkbox"><div>Verify temperature sensor accuracy — cross-check against a NIST-traceable reference thermometer<div class="item-detail">±0.5°C tolerance acceptable; recalibrate or replace if >1°C deviation</div></div></li>
+          <li><input type="checkbox"><div>Test dissolved oxygen sensor (if equipped) — calibrate in air-saturated water<div class="item-detail">Replace membrane cap if response time >60 sec or readings drift >0.5 mg/L</div></div></li>
+          <li><input type="checkbox"><div>Verify humidity sensor accuracy — compare against sling psychrometer or reference<div class="item-detail">RH sensors drift over time; ±3% RH acceptable. Replace if >5% deviation.</div></div></li>
+          <li><input type="checkbox"><div>Check and calibrate auto-doser peristaltic pump flow rates<div class="item-detail">Run cal routine: pump 100mL, compare actual vs. expected. Adjust if >5% off.</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">🔧</span>
+        Equipment Deep Service
+      </div>
+      <div class="checklist-card">
+        <h3>Mechanical Systems <span class="card-badge badge-important">Important</span></h3>
+        <ul class="checklist-items" data-group="monthly">
+          <li><input type="checkbox"><div>Inspect high-pressure pump seals and diaphragm — check for leaks or pressure drop<div class="item-detail">Replace seals preventively every 6–12 months depending on run hours</div></div></li>
+          <li><input type="checkbox"><div>Clean or replace HVAC coil filters<div class="item-detail">Dirty coils reduce efficiency 15–25% and can freeze up in cooling mode</div></div></li>
+          <li><input type="checkbox"><div>Deep-clean dehumidifier coils with coil cleaner and rinse<div class="item-detail">Scale and biofilm on coils reduces dehumidification capacity</div></div></li>
+          <li><input type="checkbox"><div>Inspect wiring and connections on all grow room controllers<div class="item-detail">Look for corrosion, loose terminals, and damaged insulation</div></div></li>
+          <li><input type="checkbox"><div>Lubricate fan motors and bearings as specified by manufacturer<div class="item-detail">Use recommended lubricant type; over-lubrication attracts dust</div></div></li>
+          <li><input type="checkbox"><div>Test emergency shutoff and alarm systems<div class="item-detail">Simulate failure conditions: power loss, high-temp, flood sensor, smoke detector</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">🧬</span>
+        Plant Science & QA
+      </div>
+      <div class="checklist-card">
+        <h3>Tissue Sampling & Analysis <span class="card-badge badge-best-practice">Best Practice</span></h3>
+        <ul class="checklist-items" data-group="monthly">
+          <li><input type="checkbox"><div>Collect tissue samples from 2–3 representative crop varieties<div class="item-detail">Sample recently mature leaves (3rd–5th from growing tip). Minimum 50g fresh weight per sample.</div></div></li>
+          <li><input type="checkbox"><div>Send tissue samples to certified lab for macro & micronutrient analysis<div class="item-detail">Compare results against published sufficiency ranges for each crop species</div></div></li>
+          <li><input type="checkbox"><div>Review lab results and adjust nutrient formula if needed<div class="item-detail">Common findings: Ca or Mg deficiency in fast-growing crops; Fe or Mn lockout at high pH</div></div></li>
+          <li><input type="checkbox"><div>Conduct food safety swab test on harvest surfaces and packaging area<div class="item-detail">Test for total plate count, coliforms, E.coli, Listeria. Required for GAP certification.</div></div></li>
+          <li><input type="checkbox"><div>Review pest pressure trends — adjust IPM strategy based on trap counts and scouting<div class="item-detail">If biological controls are insufficient, evaluate targeted organic-approved treatments</div></div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>Business & Records <span class="card-badge badge-routine">Routine</span></h3>
+        <ul class="checklist-items" data-group="monthly">
+          <li><input type="checkbox"><div>Review yield per square foot by crop — compare to benchmarks<div class="item-detail">Leafy greens: 1–3 lbs/sq ft/month; microgreens: 2–5 lbs/sq ft/month</div></div></li>
+          <li><input type="checkbox"><div>Calculate cost per unit (seed-to-harvest) — track against revenue per unit<div class="item-detail">Include: seed, nutrients, energy, labor, packaging, delivery</div></div></li>
+          <li><input type="checkbox"><div>Update crop pricing based on cost analysis and market conditions<div class="item-detail">Use Light Engine Crop Pricing page; ensure all 50 recipe crops have current pricing</div></div></li>
+          <li><input type="checkbox"><div>Review energy consumption — compare kWh to production output<div class="item-detail">Target: <50 kWh/kg for leafy greens with LED; optimize DLI to reduce waste</div></div></li>
+        </ul>
+      </div>
+
+      <div class="progress-bar"><div class="progress-bar-fill" id="monthlyBar" style="width:0%"></div></div>
+      <div class="progress-text" id="monthlyText">0 / 0 completed</div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- QUARTERLY CHECKLIST -->
+    <!-- ================================================================ -->
+    <div class="tab-content" id="tab-quarterly">
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">💧</span>
+        Major Water System Overhaul
+      </div>
+      <div class="checklist-card">
+        <h3>Deep System Service <span class="card-badge badge-critical">Critical</span></h3>
+        <ul class="checklist-items" data-group="quarterly">
+          <li><input type="checkbox"><div>Replace all misting nozzles (or at minimum 50% on rotation)<div class="item-detail">Nozzle orifices wear over time, changing droplet size and coverage pattern</div></div></li>
+          <li><input type="checkbox"><div>Replace peristaltic pump tubing on all dosers<div class="item-detail">Tubing fatigues and loses elasticity, causing inaccurate dosing (±20% drift)</div></div></li>
+          <li><input type="checkbox"><div>Replace RO membrane pre-filters and carbon block (if using RO system)<div class="item-detail">Replace sediment pre-filter every 3 months; carbon block every 6–12 months</div></div></li>
+          <li><input type="checkbox"><div>Test RO membrane rejection rate — should be >95% TDS rejection<div class="item-detail">If rejection <90%, membrane needs replacement ($100–300 depending on size)</div></div></li>
+          <li><input type="checkbox"><div>Deep-clean all grow channels, towers, or aeroponic chambers<div class="item-detail">Disassemble accessible sections. Soak in enzyme cleaner → scrub → H₂O₂ rinse → reassemble</div></div></li>
+          <li><input type="checkbox"><div>Pressure test all plumbing lines — check for slow leaks at joints<div class="item-detail">Cap discharge end, pressurize to 120% operating pressure, hold 15 min, check gauge</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">📏</span>
+        Sensor & Probe Replacement
+      </div>
+      <div class="checklist-card">
+        <h3>Probe Lifecycle Management <span class="card-badge badge-important">Important</span></h3>
+        <ul class="checklist-items" data-group="quarterly">
+          <li><input type="checkbox"><div>Evaluate pH probe lifespan — replace if >12 months old or calibration slope <75%<div class="item-detail">Budget 2–4 pH probes/year for continuous immersion applications</div></div></li>
+          <li><input type="checkbox"><div>Evaluate EC probe — replace if readings are unstable after calibration<div class="item-detail">EC probes last longer than pH but platinized electrodes degrade with use</div></div></li>
+          <li><input type="checkbox"><div>Replace PAR/PPFD sensor batteries and verify calibration<div class="item-detail">Photodiode sensors drift 2–5% per year; factory recalibration recommended annually</div></div></li>
+          <li><input type="checkbox"><div>Verify IoT sensor firmware is up to date — apply updates if available<div class="item-detail">Check SwitchBot, environmental sensor, and controller firmware versions</div></div></li>
+        </ul>
+      </div>
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">🏗️</span>
+        Facility & Infrastructure
+      </div>
+      <div class="checklist-card">
+        <h3>HEPA Filters & Air Handling <span class="card-badge badge-critical">Critical</span></h3>
+        <ul class="checklist-items" data-group="quarterly">
+          <li><input type="checkbox"><div>Replace HEPA filters on intake air handlers<div class="item-detail">HEPA filters (H13/H14) should be replaced every 3–6 months in dusty environments</div></div></li>
+          <li><input type="checkbox"><div>Replace carbon/activated charcoal filters (if used for odor control)<div class="item-detail">Carbon exhausts after 3–6 months depending on load; replace when breakthrough detected</div></div></li>
+          <li><input type="checkbox"><div>Professional HVAC service — refrigerant check, coil cleaning, electrical inspection<div class="item-detail">Schedule with HVAC contractor; verify refrigerant charge and compressor amps</div></div></li>
+          <li><input type="checkbox"><div>Inspect and clean all ductwork — check for mold, dust buildup, or condensation<div class="item-detail">Ductwork mold = airborne spore distribution throughout grow. Critical to remediate.</div></div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>Structural & Safety <span class="card-badge badge-important">Important</span></h3>
+        <ul class="checklist-items" data-group="quarterly">
+          <li><input type="checkbox"><div>Inspect grow rack structural integrity — check for rust, loose bolts, bent members<div class="item-detail">Water and nutrient exposure accelerates corrosion on steel racks</div></div></li>
+          <li><input type="checkbox"><div>Test all GFI/GFCI outlets — press test button, verify trip, reset<div class="item-detail">Water + electricity = critical safety concern. Replace any non-functioning GFCIs immediately.</div></div></li>
+          <li><input type="checkbox"><div>Inspect fire suppression system — check extinguisher dates, smoke detectors, sprinklers<div class="item-detail">Many jurisdictions require annual professional inspection</div></div></li>
+          <li><input type="checkbox"><div>Review and update SOPs — incorporate lessons learned from past quarter<div class="item-detail">New crop recipes, pest encounters, equipment failures should update procedures</div></div></li>
+          <li><input type="checkbox"><div>Conduct full inventory audit — reconcile physical stock vs. system records<div class="item-detail">Seeds, nutrients, packaging, spare parts. Update Light Engine inventory counts.</div></div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>Water Quality Lab Panel <span class="card-badge badge-best-practice">Best Practice</span></h3>
+        <ul class="checklist-items" data-group="quarterly">
+          <li><input type="checkbox"><div>Send comprehensive water sample to accredited lab — full mineral panel + microbiology<div class="item-detail">Test for: heavy metals (Pb, Cd, As, Hg), total coliforms, Legionella, algae counts</div></div></li>
+          <li><input type="checkbox"><div>Test source water for chloramine/chlorine residual if on municipal supply<div class="item-detail">Chloramine is not removed by standard carbon filters; requires catalytic carbon or UV</div></div></li>
+          <li><input type="checkbox"><div>Compare lab results against historical baseline — flag any trending contaminants<div class="item-detail">Keep a running spreadsheet of all quarterly lab results for trend analysis</div></div></li>
+        </ul>
+      </div>
+
+      <div class="progress-bar"><div class="progress-bar-fill" id="quarterlyBar" style="width:0%"></div></div>
+      <div class="progress-text" id="quarterlyText">0 / 0 completed</div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- BEST PRACTICES -->
+    <!-- ================================================================ -->
+    <div class="tab-content" id="tab-bestpractices">
+
+      <div class="section-title">
+        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">📖</span>
+        Aeroponic System Best Practices
+      </div>
+
+      <div class="note-box">
+        <strong>Aeroponics Key Principle:</strong> Roots are suspended in air and misted with nutrient solution. There is zero buffer — if the misting system fails, roots desiccate within 20–30 minutes. Redundancy and monitoring are not optional, they are essential.
+      </div>
+
+      <div class="checklist-card">
+        <h3>Water & Nutrient Management</h3>
+        <ul class="checklist-items" data-group="bestpractices">
+          <li><input type="checkbox"><div><strong>Maintain sterile reservoir conditions.</strong> Use beneficial microbes (Bacillus subtilis) OR chemical sterilization (H₂O₂, hypochlorous acid) — never both simultaneously. Choose one strategy.</div></li>
+          <li><input type="checkbox"><div><strong>Change nutrient solution fully every 1–2 weeks.</strong> Top-offs cause mineral ratio drift. EC may read correct while Ca:Mg or N:K ratios are skewed. Full change resets ratios.</div></li>
+          <li><input type="checkbox"><div><strong>Use RO or distilled water as your base.</strong> Starting from near-zero EC gives full control over nutrient composition. Tap water adds unknown variables (chlorine, carbonates, sodium).</div></li>
+          <li><input type="checkbox"><div><strong>Monitor root zone temperature separately from air temp.</strong> In aeroponics, mist temp = root temp. Chill nutrient solution to 65–68°F in warm environments.</div></li>
+          <li><input type="checkbox"><div><strong>Target droplet size of 20–50 microns for true high-pressure aeroponics.</strong> Larger droplets (>100µm) behave more like NFT and reduce oxygen exposure to roots. Use quality solenoids and nozzles rated for the target micron range.</div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>Crop Management</h3>
+        <ul class="checklist-items" data-group="bestpractices">
+          <li><input type="checkbox"><div><strong>Succession planting is mandatory.</strong> Stagger seeding so you never have all trays at the same growth stage. Aim for daily or every-other-day seeding to ensure continuous harvest.</div></li>
+          <li><input type="checkbox"><div><strong>Track Days to Harvest (DTH) per variety per zone.</strong> DTH varies with light, temperature, and nutrient programs. Use Light Engine grow plans to dial in optimal schedules per crop.</div></li>
+          <li><input type="checkbox"><div><strong>Tissue analysis is the gold standard for nutrition.</strong> Visual symptoms appear when deficiency is already severe. Monthly tissue samples catch sub-clinical issues 2–3 weeks before visible damage.</div></li>
+          <li><input type="checkbox"><div><strong>Implement FIFO (First In, First Out) for all harvested product.</strong> Label every container with harvest date, variety, and zone. Cold chain must hold 34–38°F from harvest to customer.</div></li>
+          <li><input type="checkbox"><div><strong>Keep detailed seed lot records.</strong> Track germination rates per seed lot. If germination drops below 85%, contact supplier or switch lots. Poor germination wastes tray slots and disrupts production planning.</div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>IPM (Integrated Pest Management)</h3>
+        <ul class="checklist-items" data-group="bestpractices">
+          <li><input type="checkbox"><div><strong>Prevention > Treatment.</strong> Sealed grow rooms, HEPA-filtered intake, positive/negative pressure, foot baths at entry, and dedicated grow room clothing prevent 90% of pest introductions.</div></li>
+          <li><input type="checkbox"><div><strong>Yellow sticky traps at every door and air intake.</strong> Check daily. They are early-warning systems, not control measures. 1 trap per 100 sq ft minimum.</div></li>
+          <li><input type="checkbox"><div><strong>Quarantine all new plant material for 7 days.</strong> Never introduce outside plants or cuttings directly into the grow room. Inspect under magnification before integration.</div></li>
+          <li><input type="checkbox"><div><strong>Maintain beneficial insect populations preventively.</strong> Sachets of predatory mites (Amblyseius cucumeris, A. swirskii) provide ongoing protection without chemical residue.</div></li>
+          <li><input type="checkbox"><div><strong>If treating, rotate chemical classes.</strong> Never use the same mode of action twice in a row. Resistance develops rapidly in controlled environments where populations are dense.</div></div></li>
+        </ul>
+      </div>
+
+      <div class="checklist-card">
+        <h3>Facility & Energy</h3>
+        <ul class="checklist-items" data-group="bestpractices">
+          <li><input type="checkbox"><div><strong>Optimize DLI (Daily Light Integral) not just PPFD.</strong> A shorter photoperiod at higher intensity can achieve the same DLI as a longer one at lower intensity, but energy cost differs. Calculate: DLI = PPFD × hours × 0.0036.</div></li>
+          <li><input type="checkbox"><div><strong>Insulate grow rooms from exterior walls.</strong> Thermal bridging causes condensation → mold. R-13 minimum insulation on exterior walls and ceiling.</div></li>
+          <li><input type="checkbox"><div><strong>Maintain slight negative pressure in grow rooms.</strong> This prevents unfiltered air (and pests) from entering through cracks and doors. Verify with differential pressure gauge or smoke test.</div></li>
+          <li><input type="checkbox"><div><strong>Install leak detection sensors at floor level.</strong> Water damage is the #1 facility insurance claim for indoor farms. $20 sensors can prevent $20,000 in damage.</div></li>
+          <li><input type="checkbox"><div><strong>Document everything.</strong> Environmental data, nutrient recipes, pest observations, maintenance actions, and yield data should all be logged digitally. Use Light Engine's dashboard, not notebooks, for searchable, trend-able records.</div></li>
+        </ul>
+      </div>
+
+      <div class="note-box warning">
+        <strong>⚠️ Critical Spares to Keep On-Hand:</strong><br>
+        • 2× high-pressure pump (or rebuild kit) • 20× misting nozzles • 2× pH probe • 1× EC probe<br>
+        • Peristaltic pump tubing (2 sets) • Inline filters (4×) • Solenoid valve (1 spare per zone)<br>
+        • pH buffer solutions (4.0, 7.0) • EC calibration standard (1.413 mS/cm)<br>
+        • H₂O₂ (35% food grade) • Backup timer/controller • Fuses and GFCIs
+      </div>
+    </div>
+
+  </div><!-- /container -->
+
+  <script>
+    // ========================================
+    // Checklist persistence & progress tracking
+    // ========================================
+    const STORAGE_KEY = 'farm-maintenance-checklist';
+
+    function getStorageData() {
+      try {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        // Reset daily items if last check was a different day
+        const today = new Date().toDateString();
+        if (data.lastDaily !== today) {
+          data.daily = {};
+          data.lastDaily = today;
+        }
+        // Reset weekly items if new week (Monday)
+        const now = new Date();
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - now.getDay() + 1);
+        const weekKey = weekStart.toDateString();
+        if (data.lastWeekly !== weekKey) {
+          data.weekly = {};
+          data.lastWeekly = weekKey;
+        }
+        // Reset monthly items if new month
+        const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
+        if (data.lastMonthly !== monthKey) {
+          data.monthly = {};
+          data.lastMonthly = monthKey;
+        }
+        // Reset quarterly items every 3 months
+        const quarterKey = `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3)}`;
+        if (data.lastQuarterly !== quarterKey) {
+          data.quarterly = {};
+          data.lastQuarterly = quarterKey;
+        }
+        return data;
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveStorageData(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    // Initialize checkboxes from storage
+    function initCheckboxes() {
+      const data = getStorageData();
+      document.querySelectorAll('.checklist-items').forEach(list => {
+        const group = list.dataset.group;
+        const groupData = data[group] || {};
+        list.querySelectorAll('li').forEach((li, idx) => {
+          const cb = li.querySelector('input[type="checkbox"]');
+          const key = `${group}-${Array.from(list.parentElement.querySelectorAll('h3')).map(h => h.textContent.trim()).join('')}-${idx}`;
+          if (groupData[key]) {
+            cb.checked = true;
+            li.classList.add('checked');
+          }
+          cb.addEventListener('change', () => {
+            const d = getStorageData();
+            if (!d[group]) d[group] = {};
+            d[group][key] = cb.checked;
+            li.classList.toggle('checked', cb.checked);
+            saveStorageData(d);
+            updateProgress();
+          });
+        });
+      });
+      updateProgress();
+    }
+
+    function updateProgress() {
+      ['daily', 'weekly', 'monthly', 'quarterly'].forEach(group => {
+        const items = document.querySelectorAll(`[data-group="${group}"] input[type="checkbox"]`);
+        const checked = Array.from(items).filter(cb => cb.checked).length;
+        const total = items.length;
+        const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+        const bar = document.getElementById(`${group}Bar`);
+        const text = document.getElementById(`${group}Text`);
+        const stat = document.getElementById(`${group}Progress`);
+
+        if (bar) bar.style.width = `${pct}%`;
+        if (text) text.textContent = `${checked} / ${total} completed`;
+        if (stat) stat.textContent = `${pct}%`;
+      });
+    }
+
+    function switchTab(tabName, btn) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    function resetAll() {
+      if (!confirm('Reset all checklist items? This will uncheck everything for the current period.')) return;
+      localStorage.removeItem(STORAGE_KEY);
+      document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+        cb.closest('li')?.classList.remove('checked');
+      });
+      updateProgress();
+    }
+
+    // Load farm name into header
+    async function loadFarmName() {
+      try {
+        const res = await fetch('/data/farm.json');
+        if (res.ok) {
+          const farm = await res.json();
+          const sub = document.querySelector('.header-sub');
+          if (sub && farm.name) {
+            sub.textContent = `${farm.name} — Aeroponic Vertical Farm SOPs`;
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initCheckboxes();
+      loadFarmName();
+    });
+  </script>
+</body>
+</html>
