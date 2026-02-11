@@ -3682,11 +3682,19 @@
         // Support both API shapes: { inventory: [...] } and { activeTrays, byFarm: [{ trays }] }
         const trays = inventoryData.inventory || inventoryData.byFarm?.[0]?.trays || [];
         
-        // Seedling count (< 2 weeks old)
-        const seedlingCount = trays.filter(item => 
-          (item.days_since_seed || item.daysOld || 0) < 14
-        ).length || 0;
-        document.getElementById('seedlingCount').textContent = seedlingCount;
+        // Seedling count: total plants in trays whose grow recipe stage is still 'Seedling'
+        // Uses recipe-based stage from server; falls back to summing plants in young trays
+        let seedlingPlantCount = 0;
+        if (inventoryData.seedlingPlants !== undefined) {
+          // Server already computed it from grow recipe stages
+          seedlingPlantCount = inventoryData.seedlingPlants;
+        } else {
+          // Fallback: sum plantCount for trays still in Seedling stage (or < 14 days if no stage)
+          seedlingPlantCount = trays
+            .filter(item => item.stage ? item.stage === 'Seedling' : (item.days_since_seed || item.daysOld || 0) < 14)
+            .reduce((sum, item) => sum + (item.plantCount || item.plant_count || 12), 0);
+        }
+        document.getElementById('seedlingCount').textContent = seedlingPlantCount;
         
         // Active trays
         const activeTrays = inventoryData.activeTrays || trays.length || 0;

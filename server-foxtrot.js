@@ -16546,6 +16546,45 @@ function getCropHarvestDays(planId) {
 }
 
 /**
+ * Look up the grow stage for a crop at a given day from its recipe schedule.
+ * Returns the stage name (e.g. 'Seedling', 'Vegetative', 'Flowering', 'Fruiting').
+ */
+function getCropStageAtDay(planId, daysOld) {
+  if (!planId || daysOld <= 0) return 'Seedling'; // default for newly planted
+  
+  try {
+    const recipesPath = path.join(PUBLIC_DIR, 'data/lighting-recipes.json');
+    if (!fs.existsSync(recipesPath)) return 'Seedling';
+    
+    const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+    if (!recipesData.crops) return 'Seedling';
+    
+    const cropSlug = planId.replace(/^crop-/, '');
+    const cropEntry = Object.entries(recipesData.crops).find(([cropName]) => {
+      const normalizedName = cropName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      return normalizedName === cropSlug || cropSlug.includes(normalizedName);
+    });
+    
+    if (cropEntry && Array.isArray(cropEntry[1]) && cropEntry[1].length > 0) {
+      const schedule = cropEntry[1];
+      // Find the last schedule entry whose day <= daysOld (or the first if daysOld < day 1)
+      let stage = schedule[0].stage || 'Seedling';
+      for (const entry of schedule) {
+        if (entry.day <= daysOld) {
+          stage = entry.stage || stage;
+        } else {
+          break;
+        }
+      }
+      return stage;
+    }
+  } catch (err) {
+    console.error('[getCropStageAtDay] Error:', err.message);
+  }
+  return 'Seedling';
+}
+
+/**
  * GET /api/inventory/current
  * Returns current inventory summary with detailed tray data
  */
@@ -16594,6 +16633,9 @@ app.get('/api/inventory/current', (req, res) => {
       const groupRoomId = group.roomId || group.room || 'Room-1';
       const groupZoneId = group.zoneId || group.zone || 'Zone-1';
 
+      // Determine growth stage from recipe schedule
+      const stage = getCropStageAtDay(group.plan, daysOld);
+
       // Create individual tray records
       for (let i = 0; i < trayCount; i++) {
         allTrays.push({
@@ -16607,7 +16649,8 @@ app.get('/api/inventory/current', (req, res) => {
           daysOld: daysOld,
           harvestIn: Math.max(0, harvestDays - daysOld), // Use actual recipe duration
           health: group.health || 'healthy',
-          recipe: cropName
+          recipe: cropName,
+          stage: stage
         });
         trayCounter++;
       }
@@ -16616,9 +16659,15 @@ app.get('/api/inventory/current', (req, res) => {
       totalPlants += plantsPerTray * trayCount; // Use calculated plants, not missing field
     });
 
+    // Count seedling plants: sum plantCount where stage is 'Seedling'
+    const seedlingPlants = allTrays
+      .filter(t => t.stage === 'Seedling')
+      .reduce((sum, t) => sum + t.plantCount, 0);
+
     res.json({
       activeTrays: totalTrays,
       totalPlants: totalPlants,
+      seedlingPlants: seedlingPlants,
       farmCount: 1,
       byFarm: [
         {
