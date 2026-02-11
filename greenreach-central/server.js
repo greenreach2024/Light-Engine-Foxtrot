@@ -46,6 +46,7 @@ import { seedDemoFarm } from './services/seedDemoFarm.js';
 import { startAIPusher } from './services/ai-recommendations-pusher.js';
 // import deadlineMonitor from '../services/deadline-monitor.js'; // Not available in standalone deployment
 import logger from './utils/logger.js';
+import { upsertNetworkFarm } from './services/networkFarmsStore.js';
 
 // Load environment variables
 dotenv.config();
@@ -178,6 +179,31 @@ async function syncFarmData(options = {}) {
     syncStatus.errorCount += errors;
     syncStatus.filesUpdated += updated;
     if (isDaily) syncStatus.lastDailySync = new Date().toISOString();
+    
+    // Also register this edge farm in the wholesale network store
+    // so the aggregator can fetch its inventory
+    if (updated > 0) {
+      try {
+        const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+        if (fs.existsSync(farmJsonPath)) {
+          const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+          const farmId = farmData.farmId;
+          if (farmId && edgeUrl) {
+            await upsertNetworkFarm(farmId, {
+              name: farmData.name || farmId,
+              api_url: edgeUrl,
+              url: edgeUrl,
+              status: 'active',
+              contact: farmData.contact || {},
+              location: { region: farmData.region, city: farmData.location }
+            });
+            logger.info(`[${syncLabel}] Registered farm ${farmId} in wholesale network (${edgeUrl})`);
+          }
+        }
+      } catch (regErr) {
+        logger.warn(`[${syncLabel}] Failed to register farm in network store:`, regErr.message);
+      }
+    }
     
     return { ok: true, updated, errors, timestamp: syncStatus.lastSync };
   } catch (error) {

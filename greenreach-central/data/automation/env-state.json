@@ -1,0 +1,43 @@
+{
+  "scopes": {},
+  "targets": {},
+  "rooms": {
+    "room-3xxjln": {
+      "roomId": "room-3xxjln",
+      "name": "Your Grow Room",
+      "targets": {
+        "temp": 21,
+        "rh": 62,
+        "rhBand": 5,
+        "minBlue": 0.5,
+        "minMaster": 0.6
+      },
+      "control": {
+        "enable": false,
+        "mode": "advisory",
+        "step": 0.05,
+        "dwell": 180
+      },
+      "sensors": {
+        "temp": "object-object",
+        "rh": "object-object"
+      },
+      "actuators": {
+        "lights": [],
+        "fans": [],
+        "dehu": []
+      },
+      "meta": {
+        "seededFrom": "rooms.json",
+        "zoneId": "object-object",
+        "zoneLabel": {
+          "id": "room-3xxjln-z1",
+          "name": "Zone 1",
+          "zone": 1
+        }
+      },
+      "updatedAt": "2026-02-11T04:06:42.883Z"
+    }
+  },
+  "updatedAt": "2026-02-11T04:06:42.883Z"
+}

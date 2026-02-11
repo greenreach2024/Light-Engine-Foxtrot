@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import logger from '../utils/logger.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { getInMemoryGroups } from './sync.js';
+import { upsertNetworkFarm } from '../services/networkFarmsStore.js';
 
 const router = express.Router();
 
@@ -74,10 +75,13 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
     // Persist to database (required for farm_data FK)
     const { query } = await import('../config/database.js');
     
-    // Upsert farm
+    // Extract api_url if present in metadata
+    const heartbeatApiUrl = metadata?.api_url || metadata?.url || metadata?.edge_url || null;
+    
+    // Upsert farm (include api_url if provided)
     await query(
-      `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, jwt_secret, api_key, api_secret, plan_type, metadata, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+      `INSERT INTO farms (farm_id, name, contact_name, status, last_heartbeat, jwt_secret, api_key, api_secret, plan_type, api_url, metadata, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
        ON CONFLICT (farm_id) 
        DO UPDATE SET 
          status = $4,
@@ -86,11 +90,12 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
          api_key = COALESCE(farms.api_key, EXCLUDED.api_key),
          api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
          plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type, 'edge'),
+         api_url = COALESCE(EXCLUDED.api_url, farms.api_url),
          metadata = EXCLUDED.metadata,
          name = COALESCE(EXCLUDED.name, farms.name),
          contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
          updated_at = NOW()`,
-      [farmId, metadata?.name || farmId, contactName, 'online', now, jwtSecret, apiKey, apiSecret, planType, JSON.stringify(metadata || {})]
+      [farmId, metadata?.name || farmId, contactName, 'online', now, jwtSecret, apiKey, apiSecret, planType, heartbeatApiUrl, JSON.stringify(metadata || {})]
     );
     
     // Store heartbeat
@@ -109,6 +114,42 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
       metadata: metadata || {},
       updated_at: now
     });
+    
+    // Auto-register this farm in the wholesale network store
+    // so the aggregator can fetch its inventory
+    try {
+      // Try to get api_url from: metadata, DB column, or construct from request IP
+      let apiUrl = metadata?.api_url || metadata?.url || metadata?.edge_url || null;
+      if (!apiUrl) {
+        // Check DB for stored api_url
+        const farmRow = await query('SELECT api_url FROM farms WHERE farm_id = $1', [farmId]);
+        if (farmRow.rows[0]?.api_url) {
+          apiUrl = farmRow.rows[0].api_url;
+        }
+      }
+      if (!apiUrl) {
+        // Construct from request source IP (works when farm sends directly)
+        const sourceIp = req.ip?.replace('::ffff:', '') || req.connection?.remoteAddress?.replace('::ffff:', '');
+        if (sourceIp && sourceIp !== '127.0.0.1' && sourceIp !== '::1') {
+          apiUrl = `http://${sourceIp}:8091`;
+        }
+      }
+      
+      if (apiUrl) {
+        await upsertNetworkFarm(farmId, {
+          name: metadata?.name || farmId,
+          api_url: apiUrl,
+          url: apiUrl,
+          status: 'online',
+          contact: metadata?.contact || {},
+          location: metadata?.location || {}
+        });
+        logger.info(`[Heartbeat] Farm ${farmId} registered in wholesale network (${apiUrl})`);
+      }
+    } catch (networkErr) {
+      // Non-fatal — don't break heartbeat flow
+      logger.warn(`[Heartbeat] Failed to register farm ${farmId} in network store:`, networkErr.message);
+    }
     
     logger.info(`Heartbeat received from ${farmId}: CPU=${cpu_usage}%, MEM=${memory_usage}%, DISK=${disk_usage}%`);
     

@@ -1,0 +1,6 @@
+{
+  "lastUpdated": "2026-02-11T12:36:40.335Z",
+  "version": "1.0",
+  "source": "cloud_restore",
+  "note": "Extracted from rooms.json to maintain additional metadata without modifying canonical rooms schema. Consumers should reference this file if needed."
+}
