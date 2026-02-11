@@ -18,7 +18,7 @@ async function seedFromDatabase() {
   try {
     if (!(await isDatabaseAvailable())) return;
     const result = await query(
-      `SELECT farm_id, name, api_url, metadata, status FROM farms WHERE status IN ('active','online') ORDER BY last_heartbeat DESC NULLS LAST`
+      `SELECT farm_id, name, api_url, metadata, status FROM farms WHERE status IN ('active') ORDER BY last_heartbeat DESC NULLS LAST`
     );
     for (const row of result.rows) {
       const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
