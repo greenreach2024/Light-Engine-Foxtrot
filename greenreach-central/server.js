@@ -197,6 +197,15 @@ async function syncFarmData(options = {}) {
               contact: farmData.contact || {},
               location: { region: farmData.region, city: farmData.location }
             });
+            // Also persist api_url to DB so heartbeats can rediscover it after restart
+            try {
+              const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
+              if (await isDatabaseAvailable()) {
+                await dbQuery('UPDATE farms SET api_url = $1 WHERE farm_id = $2 AND (api_url IS NULL OR api_url != $1)', [edgeUrl, farmId]);
+              }
+            } catch (dbErr) {
+              logger.warn(`[${syncLabel}] Failed to persist api_url to DB:`, dbErr.message);
+            }
             logger.info(`[${syncLabel}] Registered farm ${farmId} in wholesale network (${edgeUrl})`);
           }
         }
