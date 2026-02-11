@@ -79,10 +79,11 @@ import axios from 'axios';
 import SyncServiceClass from './services/sync-service.js';
 
 // =====================================================
-// Plan-Based Access Control Middleware
+// Controller Restriction Middleware
 // =====================================================
-// Cloud customers get read-only monitoring access to prevent control issues
-// when their computer is offline. Edge customers (on-site hardware) get full control.
+// Restricts remote/laptop users from issuing farm-critical device commands
+// (lights, HVAC, plugs) to prevent failures when the controlling device
+// is not on-site or not running 24/7. Local/on-site access gets full control.
 
 function requireEdgeForControl(req, res, next) {
   // Extract JWT token from Authorization header or query param
@@ -101,19 +102,18 @@ function requireEdgeForControl(req, res, next) {
     const decoded = jwt.verify(token, jwtSecret);
     const planType = (decoded.planType || '').toLowerCase();
     
-    // Cloud users are restricted to read-only monitoring
+    // Remote users are restricted from device control commands
     if (planType === 'cloud') {
       return res.status(403).json({
         ok: false,
         error: 'control_restricted',
-        message: 'Cloud plan does not allow direct device control. Use Edge hardware for reliable 24/7 automation.',
-        help: 'Cloud customers can monitor sensors but cannot send control commands. This prevents farm failures when your computer is offline.',
-        planType: 'cloud',
-        upgradeUrl: '/purchase.html?plan=edge'
+        message: 'Remote access does not allow direct device control. Device commands require on-site or dedicated hardware for reliable 24/7 automation.',
+        help: 'Remote users can monitor sensors and view dashboards but cannot send control commands. This prevents farm equipment failures when the controlling device is offline.',
+        planType: 'cloud'
       });
     }
     
-    // Edge users and demo mode get full control access
+    // On-site users and demo mode get full control access
     next();
   } catch (error) {
     // Invalid token - let other middleware handle auth

@@ -30,7 +30,7 @@ This framework defines:
 **NO production deployments without explicit user approval.**
 
 Agents MUST receive **"APPROVED FOR DEPLOYMENT"** message from user before executing:
-- `scp` commands to edge device (100.65.187.59)
+- `scp` commands to production server
 - `ssh` commands that modify production files
 - `pm2 restart` or server restart commands
 - AWS deployment commands (Elastic Beanstalk, S3, etc.)
