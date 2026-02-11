@@ -148,7 +148,7 @@ class FarmAssistant {
   }
 
   createWidget() {
-    console.log('[Farm Assistant] Initializing widget...');
+    console.debug('[Farm Assistant] Initializing widget...');
     const widget = document.createElement('div');
     widget.id = 'farm-assistant';
     widget.innerHTML = `
@@ -206,7 +206,7 @@ class FarmAssistant {
     `;
     
     document.body.appendChild(widget);
-    console.log('[Farm Assistant] Widget appended to body. Element:', widget);
+    console.debug('[Farm Assistant] Widget appended to body. Element:', widget);
   }
 
   createInfoPopup(title, content) {
@@ -376,12 +376,12 @@ class FarmAssistant {
     this.recognition.onstart = () => {
       this.isListening = true;
       this.updateVoiceButton();
-      console.log('🎤 Voice recognition started');
+      console.debug('🎤 Voice recognition started');
     };
 
     this.recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      console.log('🎤 Heard:', transcript);
+      console.debug('🎤 Heard:', transcript);
       
       const input = document.getElementById('assistantInput');
       input.value = transcript;
@@ -1345,13 +1345,13 @@ class FarmAssistant {
 }
 
 // Auto-initialize when DOM is ready
-console.log('[Farm Assistant] Script loaded. DOM state:', document.readyState);
+console.debug('[Farm Assistant] Script loaded. DOM state:', document.readyState);
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[Farm Assistant] DOM loaded, creating instance...');
+    console.debug('[Farm Assistant] DOM loaded, creating instance...');
     window.farmAssistant = new FarmAssistant();
   });
 } else {
-  console.log('[Farm Assistant] DOM already loaded, creating instance immediately...');
+  console.debug('[Farm Assistant] DOM already loaded, creating instance immediately...');
   window.farmAssistant = new FarmAssistant();
 }

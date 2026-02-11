@@ -14,6 +14,19 @@ const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API
   }
 })();
 
+// Silence console.debug in production unless enabled
+(function() {
+  try {
+    const origDebug = console.debug.bind(console);
+    console.debug = function(...args) {
+      const enabled = localStorage.getItem('gr.debug') === 'true' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (enabled) origDebug(...args);
+    };
+  } catch (e) {
+    // ignore
+  }
+})();
+
 // Billing management helper
 function manageBilling() {
   window.location.href = '/LE-billing.html';
@@ -4001,7 +4014,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     if (added > 0) {
-      console.log(`[GROW3] Added ${added} GROW3 Pro 640 fixtures to STATE.lights on page load`);
+      console.debug(`[GROW3] Added ${added} GROW3 Pro 640 fixtures to STATE.lights on page load`);
       document.dispatchEvent(new Event('lights-updated'));
     }
   } catch(e) { 
@@ -6879,7 +6892,7 @@ class FarmWizard {
   }
   
   editWifiNetwork() {
-    console.log('[FarmWizard] Edit WiFi network requested');
+    console.debug('[FarmWizard] Edit WiFi network requested');
     
     // Reset WiFi configuration
     this.data.connection.wifi.ssid = '';
@@ -6920,7 +6933,7 @@ class FarmWizard {
     this.hasScannedWifi = true;
     
     if (SKIP_AUTO_SCAN) {
-      console.log('[FarmWizard] Auto-scan disabled, showing manual entry immediately');
+      console.debug('[FarmWizard] Auto-scan disabled, showing manual entry immediately');
       if (status) status.textContent = 'Manual entry mode';
       
       // Skip scan, go straight to manual entry
@@ -6996,25 +7009,25 @@ class FarmWizard {
       this.renderWifiNetworks();
     } catch (error) {
       console.error('[FarmWizard] WiFi scan error:', error);
-      console.log('[FarmWizard] Error details:', error.details);
+      console.debug('[FarmWizard] Error details:', error.details);
       if (status) status.textContent = 'Scan failed - manual entry available';
       
       // LIVE MODE: No demo fallback - show real error with option to enter manually
       this.wifiNetworks = [];
       
-      console.log('[FarmWizard] Hiding scanners, showing manual entry UI');
+      console.debug('[FarmWizard] Hiding scanners, showing manual entry UI');
       if (step2Scanner) step2Scanner.style.display = 'none';
       if (scanningIndicator) scanningIndicator.style.display = 'none';
       
       if (networkList) {
-        console.log('[FarmWizard] Setting networkList display to flex (keep original chip-grid layout)');
+        console.debug('[FarmWizard] Setting networkList display to flex (keep original chip-grid layout)');
         networkList.style.display = 'flex';
         networkList.style.flexDirection = 'column';
         
         // Build technical details from backend error info
         let technicalDetails = error.message || 'Unknown error';
         if (error.details) {
-          console.log('[FarmWizard] Building technical details from error.details');
+          console.debug('[FarmWizard] Building technical details from error.details');
           technicalDetails += '<br><br>';
           if (error.details.details && error.details.details.length > 0) {
             technicalDetails += '<strong>Details:</strong><br>' + error.details.details.map(d => `• ${d}`).join('<br>');
@@ -7030,7 +7043,7 @@ class FarmWizard {
           }
         }
         
-        console.log('[FarmWizard] Setting networkList innerHTML with manual entry UI');
+        console.debug('[FarmWizard] Setting networkList innerHTML with manual entry UI');
         // Add manual entry option with highly visible styling
         networkList.innerHTML = `
           <div style="width: 100%; padding: 20px; background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
@@ -7055,29 +7068,29 @@ class FarmWizard {
           </div>
         `;
         
-        console.log('[FarmWizard] Manual entry UI HTML set, networkList.innerHTML length:', networkList.innerHTML.length);
-        console.log('[FarmWizard] networkList display:', networkList.style.display, 'visibility:', networkList.style.visibility || 'visible');
-        console.log('[FarmWizard] networkList offsetHeight:', networkList.offsetHeight, 'offsetWidth:', networkList.offsetWidth);
+        console.debug('[FarmWizard] Manual entry UI HTML set, networkList.innerHTML length:', networkList.innerHTML.length);
+        console.debug('[FarmWizard] networkList display:', networkList.style.display, 'visibility:', networkList.style.visibility || 'visible');
+        console.debug('[FarmWizard] networkList offsetHeight:', networkList.offsetHeight, 'offsetWidth:', networkList.offsetWidth);
         
         // Wire up manual entry button
         const manualBtn = document.getElementById('btnManualWifiContinue');
         const manualInput = document.getElementById('manualWifiSsid');
-        console.log('[FarmWizard] Manual entry button found:', !!manualBtn, 'Input found:', !!manualInput);
+        console.debug('[FarmWizard] Manual entry button found:', !!manualBtn, 'Input found:', !!manualInput);
         if (manualBtn && manualInput) {
-          console.log('[FarmWizard] Button element:', manualBtn);
-          console.log('[FarmWizard] Input element:', manualInput);
+          console.debug('[FarmWizard] Button element:', manualBtn);
+          console.debug('[FarmWizard] Input element:', manualInput);
           manualBtn.onclick = () => {
-            console.log('[FarmWizard] Manual entry button CLICKED!');
+            console.debug('[FarmWizard] Manual entry button CLICKED!');
             const ssid = manualInput.value.trim();
             if (!ssid) {
               showToast({ title: 'WiFi Setup', msg: 'Please enter a network name', kind: 'error', icon: '' });
               return;
             }
-            console.log('[FarmWizard] Proceeding with manual SSID:', ssid);
+            console.debug('[FarmWizard] Proceeding with manual SSID:', ssid);
             this.data.connection.ssid = ssid;
             this.nextStep();
           };
-          console.log('[FarmWizard] Manual entry button click handler wired up');
+          console.debug('[FarmWizard] Manual entry button click handler wired up');
         } else {
           console.error('[FarmWizard] Failed to find manual entry elements after setting innerHTML');
         }
@@ -7141,7 +7154,7 @@ class FarmWizard {
     const testButton = $('#btnTestWifi');
     
     if (SKIP_WIFI_TEST) {
-      console.log('[FarmWizard] WiFi test skipped, marking as successful');
+      console.debug('[FarmWizard] WiFi test skipped, marking as successful');
       
       // Mark as tested with mock success
       this.data.connection.wifi.tested = true;

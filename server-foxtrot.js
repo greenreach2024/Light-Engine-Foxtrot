@@ -7871,6 +7871,89 @@ app.get('/health', asyncHandler(async (req, res) => {
   res.status(statusCode).json(health);
 }));
 
+// =====================================================
+// DIAGNOSTICS + LOGS (for remote support from Central)
+// =====================================================
+
+// System diagnostics endpoint — detailed machine info
+app.get('/api/diagnostics', (req, res) => {
+  const memUsage = process.memoryUsage();
+  const cpus = os.cpus();
+  
+  res.json({
+    ok: true,
+    system: {
+      hostname: os.hostname(),
+      platform: os.platform(),
+      arch: os.arch(),
+      release: os.release(),
+      uptime_hours: Math.round(os.uptime() / 3600 * 10) / 10,
+      cpus: cpus.length,
+      cpu_model: cpus[0]?.model || 'unknown',
+      total_memory_mb: Math.round(os.totalmem() / 1024 / 1024),
+      free_memory_mb: Math.round(os.freemem() / 1024 / 1024),
+      load_avg: os.loadavg()
+    },
+    process: {
+      node_version: process.version,
+      pid: process.pid,
+      uptime_hours: Math.round(process.uptime() / 3600 * 10) / 10,
+      heap_used_mb: Math.round(memUsage.heapUsed / 1024 / 1024),
+      heap_total_mb: Math.round(memUsage.heapTotal / 1024 / 1024),
+      rss_mb: Math.round(memUsage.rss / 1024 / 1024),
+      external_mb: Math.round((memUsage.external || 0) / 1024 / 1024)
+    },
+    app: {
+      version: APP_VERSION,
+      port: PORT,
+      env: process.env.NODE_ENV || 'development',
+      edge_mode: process.env.EDGE_MODE || 'false'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Recent logs endpoint — returns last N console log entries
+// Uses a circular buffer to capture logs
+const LOG_BUFFER_SIZE = 500;
+const logBuffer = [];
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+
+function captureLog(level, args) {
+  const entry = {
+    ts: new Date().toISOString(),
+    level,
+    msg: args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')
+  };
+  logBuffer.push(entry);
+  if (logBuffer.length > LOG_BUFFER_SIZE) logBuffer.shift();
+}
+
+console.log = function (...args) { captureLog('info', args); originalConsoleLog.apply(console, args); };
+console.error = function (...args) { captureLog('error', args); originalConsoleError.apply(console, args); };
+console.warn = function (...args) { captureLog('warn', args); originalConsoleWarn.apply(console, args); };
+
+app.get('/api/logs', (req, res) => {
+  const lines = Math.min(parseInt(req.query.lines) || 100, LOG_BUFFER_SIZE);
+  const level = req.query.level; // optional filter: info, warn, error
+  
+  let entries = logBuffer.slice(-lines);
+  if (level) {
+    entries = entries.filter(e => e.level === level);
+  }
+  
+  res.json({
+    ok: true,
+    count: entries.length,
+    buffer_size: LOG_BUFFER_SIZE,
+    total_captured: logBuffer.length,
+    entries,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Metrics endpoint for Prometheus/monitoring tools
 app.get('/metrics', (req, res) => {
   const uptime = process.uptime();

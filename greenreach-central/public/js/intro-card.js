@@ -16,12 +16,12 @@
     return;
     
     try {
-      console.log('[IntroCard] showIntroCard called for page:', pageId, 'container:', containerId);
+      console.debug('[IntroCard] showIntroCard called for page:', pageId, 'container:', containerId);
       
       // Remove any existing modals from other pages first
       const existingModals = document.querySelectorAll('.intro-modal-overlay');
       if (existingModals.length > 0) {
-        console.log('[IntroCard] Removing', existingModals.length, 'existing modal(s)');
+        console.debug('[IntroCard] Removing', existingModals.length, 'existing modal(s)');
         existingModals.forEach(modal => modal.remove());
       }
       
@@ -34,11 +34,11 @@
       }
 
       const data = await response.json();
-      console.log('[IntroCard] API response:', { ok: data.ok, demo: data.demo, hasCard: !!data.card });
+      console.debug('[IntroCard] API response:', { ok: data.ok, demo: data.demo, hasCard: !!data.card });
       
       // Only show in demo mode
       if (!data.demo || !data.card) {
-        console.log('[IntroCard] Not in demo mode or no card data available');
+        console.debug('[IntroCard] Not in demo mode or no card data available');
         return;
       }
 
@@ -51,7 +51,7 @@
       
       // Check if dismissed in this session (don't check localStorage in demo mode)
       if (sessionStorage.getItem(sessionDismissedKey) === 'true') {
-        console.log('[IntroCard] User has dismissed this card in current session');
+        console.debug('[IntroCard] User has dismissed this card in current session');
         return;
       }
 
@@ -280,7 +280,7 @@
       if (modalElement) {
         // Append to body for full-screen overlay
         document.body.appendChild(modalElement);
-        console.log('[IntroCard] Intro modal displayed successfully for page:', pageId);
+        console.debug('[IntroCard] Intro modal displayed successfully for page:', pageId);
       } else {
         console.error('[IntroCard] Failed to create modal element from HTML');
       }
@@ -327,14 +327,14 @@
     const sessionDismissedKey = `introCard_session_dismissed_${pageId}`;
     sessionStorage.setItem(sessionDismissedKey, 'true');
     
-    console.log('[IntroCard] Intro modal dismissed for this session');
+    console.debug('[IntroCard] Intro modal dismissed for this session');
   };
 
   /**
    * Lock the current page by disabling all interactive elements
    */
   function lockCurrentPage() {
-    console.log('[IntroCard] Locking current page');
+    console.debug('[IntroCard] Locking current page');
     
     // Create overlay to block interactions
     const lockOverlay = document.createElement('div');

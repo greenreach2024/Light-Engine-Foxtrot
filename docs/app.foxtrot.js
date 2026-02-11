@@ -3971,7 +3971,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     if (added > 0) {
-      console.log(`[GROW3] Added ${added} GROW3 Pro 640 fixtures to STATE.lights on page load`);
+      console.debug(`[GROW3] Added ${added} GROW3 Pro 640 fixtures to STATE.lights on page load`);
       document.dispatchEvent(new Event('lights-updated'));
     }
   } catch(e) { 

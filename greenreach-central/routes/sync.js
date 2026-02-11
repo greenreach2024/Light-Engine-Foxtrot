@@ -228,6 +228,57 @@ router.post('/schedules', authenticateFarm, async (req, res) => {
 });
 
 /**
+ * POST /api/sync/config
+ * Sync farm config/settings from edge to cloud (backup)
+ */
+router.post('/config', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req;
+    const { config } = req.body;
+    
+    if (!config || typeof config !== 'object') {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Config must be an object' 
+      });
+    }
+    
+    logger.info(`[Sync] Syncing config for farm ${farmId}`);
+    
+    if (await isDatabaseAvailable()) {
+      await query(
+        `INSERT INTO farm_backups (farm_id, config, last_synced)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (farm_id) 
+         DO UPDATE SET config = $2, last_synced = NOW()`,
+        [farmId, JSON.stringify(config)]
+      );
+      
+      logger.info(`[Sync] Saved config to farm_backups for farm ${farmId}`);
+    } else {
+      if (!inMemoryStore.config) inMemoryStore.config = new Map();
+      inMemoryStore.config.set(farmId, config);
+      logger.info(`[Sync] Saved config to memory for farm ${farmId}`);
+    }
+    
+    res.json({ 
+      success: true,
+      message: 'Config synced',
+      farmId,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error syncing config:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to sync config',
+      message: error.message 
+    });
+  }
+});
+
+/**
  * POST /api/sync/inventory
  * Sync inventory/product data from edge to cloud
  */

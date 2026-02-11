@@ -196,7 +196,7 @@ class FarmAssistant {
   }
 
   createWidget() {
-    console.log('[Farm Assistant] Initializing widget...');
+    console.debug('[Farm Assistant] Initializing widget...');
     const widget = document.createElement('div');
     widget.id = 'farm-assistant';
     widget.innerHTML = `
@@ -254,7 +254,7 @@ class FarmAssistant {
     `;
     
     document.body.appendChild(widget);
-    console.log('[Farm Assistant] Widget appended to body. Element:', widget);
+    console.debug('[Farm Assistant] Widget appended to body. Element:', widget);
   }
 
   createInfoPopup(title, content) {
@@ -424,12 +424,12 @@ class FarmAssistant {
     this.recognition.onstart = () => {
       this.isListening = true;
       this.updateVoiceButton();
-      console.log('🎤 Voice recognition started');
+      console.debug('🎤 Voice recognition started');
     };
 
     this.recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      console.log('🎤 Heard:', transcript);
+      console.debug('🎤 Heard:', transcript);
       
       const input = document.getElementById('assistantInput');
       input.value = transcript;
@@ -453,7 +453,7 @@ class FarmAssistant {
     this.recognition.onend = () => {
       this.isListening = false;
       this.updateVoiceButton();
-      console.log('🎤 Voice recognition ended');
+      console.debug('🎤 Voice recognition ended');
     };
   }
 
@@ -461,23 +461,23 @@ class FarmAssistant {
     // ResponsiveVoice will be loaded via script tag in HTML
     // Check if either ResponsiveVoice or browser speech synthesis is available
     if (window.responsiveVoice) {
-      console.log('🔊 ResponsiveVoice detected - using high-quality voices');
+      console.debug('🔊 ResponsiveVoice detected - using high-quality voices');
       this.voiceEnabled = true;
       
       // Log available ResponsiveVoice voices
       if (window.responsiveVoice.getVoices) {
         const voices = window.responsiveVoice.getVoices();
-        console.log('🔊 ResponsiveVoice voices:', voices.map(v => v.name).join(', '));
+        console.debug('🔊 ResponsiveVoice voices:', voices.map(v => v.name).join(', '));
       }
     } else if (window.speechSynthesis) {
-      console.log('🔊 Using browser Web Speech API (fallback)');
+      console.debug('🔊 Using browser Web Speech API (fallback)');
       this.voiceEnabled = true;
       this.voices = [];
       
       // Load voices for fallback
       const loadVoices = () => {
         this.voices = window.speechSynthesis.getVoices();
-        console.log('🔊 Browser voices loaded:', this.voices.length);
+        console.debug('🔊 Browser voices loaded:', this.voices.length);
       };
       
       loadVoices();
@@ -490,11 +490,11 @@ class FarmAssistant {
       this.voiceEnabled = false;
     }
     
-    console.log('🔊 Text-to-speech initialized, voiceEnabled:', this.voiceEnabled);
+    console.debug('🔊 Text-to-speech initialized, voiceEnabled:', this.voiceEnabled);
   }
 
   speak(text) {
-    console.log('🔊 speak() called with:', text.substring(0, 50) + '...');
+    console.debug('🔊 speak() called with:', text.substring(0, 50) + '...');
     
     if (!this.voiceEnabled) {
       console.warn('🔊 Voice disabled');
@@ -1392,13 +1392,13 @@ class FarmAssistant {
 }
 
 // Auto-initialize when DOM is ready
-console.log('[Farm Assistant] Script loaded. DOM state:', document.readyState);
+console.debug('[Farm Assistant] Script loaded. DOM state:', document.readyState);
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[Farm Assistant] DOM loaded, creating instance...');
+    console.debug('[Farm Assistant] DOM loaded, creating instance...');
     window.farmAssistant = new FarmAssistant();
   });
 } else {
-  console.log('[Farm Assistant] DOM already loaded, creating instance immediately...');
+  console.debug('[Farm Assistant] DOM already loaded, creating instance immediately...');
   window.farmAssistant = new FarmAssistant();
 }

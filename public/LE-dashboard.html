@@ -130,14 +130,7 @@
   <link rel="stylesheet" href="/styles/farm-assistant.css">
 </head>
 <body>
-  <!-- DEBUG BANNER: Visible version indicator -->
-  <div style="position: fixed; top: 0; left: 0; background: #f59e0b; color: #000; padding: 4px 12px; font-size: 11px; font-family: monospace; z-index: 99999; border-bottom-right-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-    🔍 LE-dashboard.html | v2026-02-08-1459 | Loaded: <span id="debugLoadTime"></span>
-  </div>
-  <script>
-    document.getElementById('debugLoadTime').textContent = new Date().toLocaleTimeString();
-    console.debug('🔴 DEBUG BANNER: LE-dashboard.html loaded at', new Date().toISOString());
-  </script>
+  <!-- DEBUG BANNER REMOVED: Developer debug banner removed to reduce visible banners in production. Re-enable in dev with localStorage.setItem('gr.debug','true') -->
   
   <!-- PRIVATE MODE BANNER: Shows when localStorage is restricted -->
   <div id="privateModeWarning" style="display: none; position: fixed; top: 30px; left: 0; right: 0; background: #8b5cf6; color: white; padding: 8px 16px; font-size: 13px; text-align: center; z-index: 99998; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">

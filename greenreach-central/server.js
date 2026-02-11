@@ -30,6 +30,7 @@ import envProxyRoutes from './routes/env-proxy.js';
 import mlForecastRoutes from './routes/ml-forecast.js';
 import billingRoutes from './routes/billing.js';
 import procurementAdminRoutes from './routes/procurement-admin.js';
+import remoteSupportRoutes from './routes/remote-support.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -101,28 +102,59 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // =====================================================
 // FARM DATA SYNC: Periodically pull live data from edge farms
+// Configurable via env vars:
+//   FARM_SYNC_INTERVAL_MS  – polling interval (default 300000 = 5 min)
+//   FARM_EDGE_URL          – override edge device URL (bypasses farm.json url field)
+//   FARM_DAILY_SYNC_HOUR   – hour (0-23) for daily full sync (default 2 = 2 AM)
 // =====================================================
 const FARM_DATA_DIR = path.join(__dirname, 'public', 'data');
-const FARM_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const FARM_SYNC_INTERVAL = parseInt(process.env.FARM_SYNC_INTERVAL_MS) || 5 * 60 * 1000;
+const DAILY_SYNC_HOUR = parseInt(process.env.FARM_DAILY_SYNC_HOUR) || 2; // 2 AM default
 const SYNC_DATA_FILES = ['groups.json', 'rooms.json', 'farm.json', 'iot-devices.json', 'room-map.json'];
 
-async function syncFarmData() {
+// Sync status tracking
+const syncStatus = {
+  lastSync: null,
+  lastSyncResult: null,
+  lastDailySync: null,
+  syncCount: 0,
+  errorCount: 0,
+  filesUpdated: 0
+};
+
+function resolveEdgeUrl() {
+  // Env var override takes priority (works around broken Tailscale IPs in farm.json)
+  if (process.env.FARM_EDGE_URL) return process.env.FARM_EDGE_URL;
+  
+  const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+  if (!fs.existsSync(farmJsonPath)) return null;
+  
   try {
-    // Read farm.json to get edge device URL
-    const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
-    if (!fs.existsSync(farmJsonPath)) return;
-    
     const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
-    const edgeUrl = farmData.url;
-    if (!edgeUrl) return;
+    return farmData.url || null;
+  } catch { return null; }
+}
+
+async function syncFarmData(options = {}) {
+  const { isDaily = false, manual = false } = options;
+  const syncLabel = isDaily ? 'DailySync' : manual ? 'ManualSync' : 'FarmSync';
+  
+  try {
+    const edgeUrl = resolveEdgeUrl();
+    if (!edgeUrl) {
+      logger.warn(`[${syncLabel}] No edge URL configured (set FARM_EDGE_URL env var or farm.json url)`);
+      return { ok: false, reason: 'no_edge_url' };
+    }
     
-    logger.info(`[FarmSync] Syncing data from edge device: ${edgeUrl}`);
+    logger.info(`[${syncLabel}] Syncing data from edge device: ${edgeUrl}`);
+    let updated = 0;
+    let errors = 0;
     
     for (const file of SYNC_DATA_FILES) {
       if (file === 'farm.json') continue; // Don't overwrite farm.json with edge version
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
+        const timeout = setTimeout(() => controller.abort(), 10000);
         const response = await fetch(`${edgeUrl}/data/${file}`, { signal: controller.signal });
         clearTimeout(timeout);
         
@@ -130,29 +162,77 @@ async function syncFarmData() {
           const data = await response.text();
           const localPath = path.join(FARM_DATA_DIR, file);
           fs.writeFileSync(localPath, data, 'utf8');
-          logger.info(`[FarmSync] Updated ${file} from edge device`);
+          logger.info(`[${syncLabel}] Updated ${file} from edge device`);
+          updated++;
         }
       } catch (err) {
-        logger.warn(`[FarmSync] Could not fetch ${file} from ${edgeUrl}: ${err.message}`);
+        errors++;
+        logger.warn(`[${syncLabel}] Could not fetch ${file} from ${edgeUrl}: ${err.message}`);
       }
     }
+    
+    // Update sync status
+    syncStatus.lastSync = new Date().toISOString();
+    syncStatus.lastSyncResult = errors === 0 ? 'success' : `partial (${errors} errors)`;
+    syncStatus.syncCount++;
+    syncStatus.errorCount += errors;
+    syncStatus.filesUpdated += updated;
+    if (isDaily) syncStatus.lastDailySync = new Date().toISOString();
+    
+    return { ok: true, updated, errors, timestamp: syncStatus.lastSync };
   } catch (error) {
-    logger.error('[FarmSync] Sync error:', error.message);
+    syncStatus.errorCount++;
+    syncStatus.lastSyncResult = `error: ${error.message}`;
+    logger.error(`[${syncLabel}] Sync error:`, error.message);
+    return { ok: false, error: error.message };
   }
 }
 
-// Run initial sync after 10 seconds, then every 5 minutes
-setTimeout(syncFarmData, 10000);
-setInterval(syncFarmData, FARM_SYNC_INTERVAL);
+// Daily sync scheduler — runs once at the configured hour
+function scheduleDailySync() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(DAILY_SYNC_HOUR, 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  
+  const msUntilNext = next - now;
+  logger.info(`[DailySync] Next daily sync scheduled for ${next.toISOString()} (in ${Math.round(msUntilNext / 60000)} min)`);
+  
+  setTimeout(() => {
+    syncFarmData({ isDaily: true });
+    // Reschedule for next day
+    setInterval(() => syncFarmData({ isDaily: true }), 24 * 60 * 60 * 1000);
+  }, msUntilNext);
+}
+
+// Run initial sync after 10 seconds, then at configured interval + daily schedule
+setTimeout(() => syncFarmData(), 10000);
+setInterval(() => syncFarmData(), FARM_SYNC_INTERVAL);
+scheduleDailySync();
+
+logger.info(`[FarmSync] Sync interval: ${FARM_SYNC_INTERVAL / 1000}s, Daily sync hour: ${DAILY_SYNC_HOUR}:00`);
 
 // Manual sync endpoint
 app.post('/api/sync/pull-farm-data', async (req, res) => {
   try {
-    await syncFarmData();
-    res.json({ ok: true, message: 'Farm data sync complete', timestamp: new Date().toISOString() });
+    const result = await syncFarmData({ manual: true });
+    res.json({ ok: true, message: 'Farm data sync complete', ...result });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
+});
+
+// Sync status endpoint
+app.get('/api/sync/status', (req, res) => {
+  res.json({
+    ok: true,
+    config: {
+      intervalMs: FARM_SYNC_INTERVAL,
+      dailySyncHour: DAILY_SYNC_HOUR,
+      edgeUrl: resolveEdgeUrl() || 'not configured'
+    },
+    status: syncStatus
+  });
 });
 
 // CORS configuration - Allow same-origin requests and configured origins
@@ -294,6 +374,7 @@ app.use('/api/env', envProxyRoutes); // Environmental data proxy to farm devices
 app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge feature)
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
+app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
 
 // Root route - redirect to main landing page
 app.get('/', (req, res) => {

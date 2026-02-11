@@ -7,6 +7,10 @@ const API_BASE = window.location.origin;
 const STORAGE_KEY_SESSION = 'farm_admin_session';
 const STORAGE_KEY_REMEMBER = 'farm_admin_remember';
 
+// Debug logger: enable with localStorage.setItem('gr.debug','true') or when running on localhost
+const GR_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+function grLog(...args) { if (GR_DEBUG) console.debug(...args); }
+
 // Session state
 let currentSession = null;
 let farmData = null;
@@ -28,14 +32,14 @@ document.addEventListener('DOMContentLoaded', () => {
  * Initialize login page
  */
 function initLogin() {
-    console.log('🔐 Initializing farm admin login...');
+    grLog('🔐 Initializing farm admin login...');
     
     // Check if user is already logged in
     const session = getSession();
     // Also verify token exists in sessionStorage/localStorage to prevent redirect loop
     const hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
     if (session && session.token && hasToken) {
-        console.log(' Active session found, redirecting to dashboard...');
+        grLog(' Active session found, redirecting to dashboard...');
         // Track redirect to detect loops
         const redirectCount = parseInt(sessionStorage.getItem('login_redirect_count') || '0');
         sessionStorage.setItem('login_redirect_count', String(redirectCount + 1));
@@ -91,7 +95,7 @@ function initLogin() {
  * Initialize dashboard
  */
 async function initDashboard() {
-    console.log(' Initializing farm admin dashboard...');
+    grLog(' Initializing farm admin dashboard...');
     
     // Check for existing JWT token from purchase/login
     const existingToken = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -115,7 +119,7 @@ async function initDashboard() {
                     email: payload.email || existingEmail || 'admin@farm.com',
                     role: payload.role || 'admin'
                 };
-                console.log(' Using existing session:', currentSession.farmId, currentSession.email);
+                grLog(' Using existing session:', currentSession.farmId, currentSession.email);
             } catch (e) {
                 console.error(' Could not decode JWT token:', e);
             }
@@ -127,7 +131,7 @@ async function initDashboard() {
                 email: existingEmail || 'admin@farm.com',
                 role: 'admin'
             };
-            console.log(' Using existing session (non-JWT):', currentSession.farmId, currentSession.email);
+            grLog(' Using existing session (non-JWT):', currentSession.farmId, currentSession.email);
         }
     }
     
@@ -164,7 +168,7 @@ async function initDashboard() {
             localStorage.removeItem('farmId');
             localStorage.removeItem('adminFarmId');
         }
-        console.log(' Using local default session');
+        grLog(' Using local default session');
     }
     
     // Setup navigation
@@ -800,7 +804,7 @@ function setupHeaderDropdowns() {
  * Refresh data
  */
 async function refreshData() {
-    console.log(' Refreshing dashboard data...');
+    grLog(' Refreshing dashboard data...');
     await loadDashboardData();
 }
 
@@ -808,7 +812,7 @@ async function refreshData() {
  * Logout
  */
 function logout() {
-    console.log('🚪 Returning to home...');
+    grLog('🚪 Returning to home...');
     console.log('🔍 DEBUG - Logout called from:', window.location.href);
     console.log('🔍 DEBUG - Redirecting to: /LE-dashboard.html');
     console.log('🔍 DEBUG - Current page version:', window.__PAGE_VERSION__);
