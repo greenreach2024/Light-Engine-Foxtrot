@@ -209,31 +209,88 @@ async function syncFarmData(options = {}) {
               logger.info(`[${syncLabel}] Stored telemetry (${envData.zones.length} zones) in DB for ${farmId}`);
             }
 
-            // Store rooms
-            const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
-            if (fs.existsSync(roomsPath)) {
-              const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
-              await dbQuery(
-                `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
-                 VALUES ($1, 'rooms', $2, NOW())
-                 ON CONFLICT (farm_id, data_type)
-                 DO UPDATE SET data = $2, updated_at = NOW()`,
-                [farmId, JSON.stringify(roomsData)]
-              );
-            }
-
-            // Store groups
+            // Store groups (always store as flat array so consumers get Array.isArray() = true)
             const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
+            let groupsList = [];
             if (fs.existsSync(groupsPath)) {
-              const groupsData = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+              const groupsRaw = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+              groupsList = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
               await dbQuery(
                 `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
                  VALUES ($1, 'groups', $2, NOW())
                  ON CONFLICT (farm_id, data_type)
                  DO UPDATE SET data = $2, updated_at = NOW()`,
-                [farmId, JSON.stringify(groupsData)]
+                [farmId, JSON.stringify(groupsList)]
               );
+              logger.info(`[${syncLabel}] Stored groups (${groupsList.length}) for ${farmId}`);
             }
+
+            // Store rooms — prefer farm.json rooms (authoritative, never overwritten by edge sync)
+            // enriched with zone/tray/plant counts from groups
+            let roomsToStore;
+            if (Array.isArray(farmData.rooms) && farmData.rooms.length > 0) {
+              roomsToStore = farmData.rooms.map(room => {
+                const roomGroups = groupsList.filter(g => g.room === room.name);
+                const zoneNumbers = [...new Set(roomGroups.map(g => g.zone).filter(Boolean))];
+                return {
+                  id: room.id,
+                  name: room.name,
+                  type: 'vertical',
+                  zones: zoneNumbers.map(z => ({
+                    id: `${room.id}-z${z}`,
+                    name: `Zone ${z}`,
+                    zone: z
+                  })),
+                  groups: roomGroups.length,
+                  trays: roomGroups.reduce((s, g) => s + (g.trays || 0), 0),
+                  plants: roomGroups.reduce((s, g) => s + (g.plants || 0), 0)
+                };
+              });
+            } else {
+              // Fallback to rooms.json file
+              const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
+              if (fs.existsSync(roomsPath)) {
+                const roomsRaw = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+                roomsToStore = Array.isArray(roomsRaw) ? roomsRaw : (roomsRaw.rooms || [roomsRaw]);
+              }
+            }
+            if (roomsToStore) {
+              await dbQuery(
+                `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+                 VALUES ($1, 'rooms', $2, NOW())
+                 ON CONFLICT (farm_id, data_type)
+                 DO UPDATE SET data = $2, updated_at = NOW()`,
+                [farmId, JSON.stringify(roomsToStore)]
+              );
+              logger.info(`[${syncLabel}] Stored rooms (${roomsToStore.length}) for ${farmId}`);
+            }
+
+            // Update farms table with name, email, contact, location from farm.json
+            // Merge into existing metadata so heartbeat data isn't overwritten
+            const farmMeta = {
+              contact: farmData.contact || {},
+              location: farmData.location || '',
+              address: farmData.address || '',
+              city: farmData.city || '',
+              state: farmData.state || '',
+              postalCode: farmData.postalCode || '',
+              region: farmData.region || '',
+              coordinates: farmData.coordinates || {},
+              website: farmData.contact?.website || farmData.website || '',
+              phone: farmData.contact?.phone || farmData.phone || '',
+              contactName: farmData.contact?.name || farmData.contactName || '',
+              roomsList: farmData.rooms || []
+            };
+            await dbQuery(
+              `UPDATE farms SET
+                name = COALESCE(NULLIF($1, ''), name),
+                email = COALESCE(NULLIF($2, ''), email),
+                metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
+                updated_at = NOW()
+              WHERE farm_id = $4`,
+              [farmData.name || '', farmData.contact?.email || farmData.email || '', JSON.stringify(farmMeta), farmId]
+            );
+            logger.info(`[${syncLabel}] Updated farm metadata for ${farmId}: name="${farmData.name}"`);
           }
         }
       }

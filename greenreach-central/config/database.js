@@ -118,6 +118,15 @@ async function runMigrations(client) {
     logger.warn('Could not add api_url column (may already exist):', err.message);
   }
 
+  try {
+    await client.query(`
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255);
+    `);
+    logger.info('Added contact_name column to farms table');
+  } catch (err) {
+    logger.warn('Could not add contact_name column (may already exist):', err.message);
+  }
+
   // Create farm_backups table for Edge device recovery (Phase 2)
   await client.query(`
     CREATE TABLE IF NOT EXISTS farm_backups (

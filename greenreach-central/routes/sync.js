@@ -696,7 +696,9 @@ router.get('/:farmId/rooms', async (req, res) => {
       );
       
       if (result.rows.length > 0) {
-        rooms = result.rows[0].data;
+        const raw = result.rows[0].data;
+        // Handle both flat array and {rooms:[...]} wrapper formats
+        rooms = Array.isArray(raw) ? raw : (raw?.rooms || []);
       }
       
       logger.info(`[Sync] Retrieved ${rooms.length} rooms from database for farm ${farmId}`);
@@ -744,7 +746,9 @@ router.get('/:farmId/groups', async (req, res) => {
       );
       
       if (result.rows.length > 0) {
-        groups = result.rows[0].data;
+        const raw = result.rows[0].data;
+        // Handle both flat array and {groups:[...]} wrapper formats
+        groups = Array.isArray(raw) ? raw : (raw?.groups || []);
       }
       
       logger.info(`[Sync] Retrieved ${groups.length} groups from database for farm ${farmId}`);
