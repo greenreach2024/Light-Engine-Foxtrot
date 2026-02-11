@@ -61,6 +61,13 @@
     }
     .cart-count.empty { display: none; }
 
+    .cart-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 0.75rem 2rem 0.25rem;
+    }
+
     /* ─── Navigation Tabs ──────────────── */
     .nav-tabs {
       display: flex;
@@ -386,10 +393,13 @@
     @media (max-width: 768px) {
       .portal-header { padding: 0.75rem 1rem; }
       .portal-header h1 { font-size: 1.2rem; }
+      .cart-toolbar { padding: 0.5rem 1rem 0.25rem; }
       .container { padding: 1rem; }
       .product-grid { grid-template-columns: 1fr; }
       .form-row, .form-row-3 { grid-template-columns: 1fr; }
     }
+
+    #farm-assistant { display: none !important; }
   </style>
 </head>
 <body>
@@ -444,10 +454,13 @@
           </div>
         </div>
       </nav>
-      <button class="cart-badge" onclick="toggleCart()">
-        Cart <span class="cart-count" id="cartCount">0</span>
-      </button>
     </div>
+  </div>
+
+  <div class="cart-toolbar">
+    <button class="cart-badge" onclick="toggleCart()">
+      Cart <span class="cart-count" id="cartCount">0</span>
+    </button>
   </div>
 
   <!-- Navigation -->
@@ -1238,6 +1251,5 @@ document.addEventListener('click', () => {
 });
 </script>
 
-<script src="/js/farm-assistant.js"></script>
 </body>
 </html>
