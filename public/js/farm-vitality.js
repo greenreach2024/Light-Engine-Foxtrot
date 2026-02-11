@@ -817,20 +817,7 @@ class VitalityViewManager {
     }
 
     // --- 5. Center Typography ---
-    // Text
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Score - INCREASED SIZE
-    ctx.fillStyle = '#f3f4f6'; // gray-100
-    ctx.font = `bold ${size * 0.55}px system-ui, -apple-system, sans-serif`; // 55% of radius
-    ctx.shadowBlur = 0;
-    ctx.fillText(score, 0, size * 0.05);
-    
-    // Label (Inside, below score)
-    ctx.fillStyle = '#9ca3af'; // gray-400
-    ctx.font = `600 ${size * 0.16}px system-ui, -apple-system, sans-serif`;
-    ctx.fillText(component.label.toUpperCase(), 0, size * 0.5); // Push down slightly
+    // (Removed: show labels/scores on hover only)
 
     // --- 6. Interaction Hint / Status Dot ---
     const freshness = component.data_freshness || {};
@@ -937,29 +924,7 @@ class VitalityViewManager {
     }
     ctx.stroke();
     
-    // SCORE display (like a speech bubble)
-    const bubbleY = size * 0.65;
-    const bubbleW = size * 0.5;
-    const bubbleH = size * 0.25;
-    
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.beginPath();
-    ctx.roundRect(-bubbleW/2, bubbleY - bubbleH/2, bubbleW, bubbleH, size * 0.1);
-    ctx.fill();
-    
-    // Score text
-    ctx.fillStyle = baseColor;
-    ctx.font = `bold ${size * 0.18}px 'Comic Sans MS', cursive, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(score, 0, bubbleY);
-    
-    // Label above
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.font = `600 ${size * 0.12}px system-ui, sans-serif`;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-    ctx.shadowBlur = 4;
-    ctx.fillText(component.label.toUpperCase(), 0, -size * 0.8);
+    // (Removed: show labels/scores on hover only)
     ctx.shadowBlur = 0;
     
     // Floating stars if score > 90
@@ -1026,18 +991,7 @@ class VitalityViewManager {
       this.characterRenderer.ctx = ctx;
       this.characterRenderer.render(character, x, y, scale, this.time);
       
-      // Draw score label below character
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.font = `600 ${size * 0.12}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-      ctx.shadowBlur = 4;
-      ctx.fillText(component.label.toUpperCase(), 0, size * 0.85);
-      ctx.shadowBlur = 0;
-      ctx.restore();
+      // (Removed: show labels/scores on hover only)
       
       return size;
     }

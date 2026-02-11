@@ -13267,6 +13267,23 @@ app.get('/data/nutrient-dashboard', async (req, res) => {
   }
 });
 
+// Persist nutrient dashboard data (for UI saves)
+app.post('/data/nutrient-dashboard', async (req, res) => {
+  try {
+    setCors(req, res);
+    const payload = req.body;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return res.status(400).json({ ok: false, error: 'invalid-payload' });
+    }
+
+    schedulePersistNutrientDashboard(payload);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[Nutrient API] Error saving dashboard data:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Get available nutrient scopes
 app.get('/api/nutrients/scopes', async (req, res) => {
   try {
