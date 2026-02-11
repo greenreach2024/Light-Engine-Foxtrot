@@ -2014,10 +2014,10 @@
       }
     }
     
-    // === EDGE/CLOUD SYNC DETECTION ===
+    // === FARM SERVER / CENTRAL SYNC DETECTION ===
     
     // API Endpoint Configuration
-    const EDGE_API = 'http://localhost:8091';  // Local edge device
+    const EDGE_API = 'http://localhost:8091';  // Local farm server
     const CLOUD_API = window.location.origin;   // Cloud platform
     const IS_LOCAL_HOST = window.location.hostname === 'localhost' ||
                 window.location.hostname === '127.0.0.1' ||
@@ -2030,7 +2030,7 @@
     let lastEdgeCheck = 0;
     const EDGE_CHECK_INTERVAL = 30000;  // Check every 30 seconds
     
-    // Check if edge device is available
+    // Check if farm server is available
     async function checkEdgeAvailability() {
       if (!deviceToken) return false;  // Skip check if not authenticated
       if (!IS_LOCAL_HOST) {
@@ -2056,7 +2056,7 @@
         
         if (response.ok) {
           if (!isEdgeAvailable) {
-            console.log('🟢 Edge device detected:', EDGE_API);
+            console.log('Farm server detected:', EDGE_API);
             isEdgeAvailable = true;
             currentAPI = EDGE_API;
             updateConnectionIndicator();
@@ -2065,7 +2065,7 @@
         }
       } catch (error) {
         if (isEdgeAvailable) {
-          console.log('🔴 Edge device unavailable, falling back to cloud');
+          console.log('Farm server unavailable, falling back to central');
           isEdgeAvailable = false;
           currentAPI = CLOUD_API;
           updateConnectionIndicator();
@@ -2084,7 +2084,7 @@
         if (isEdgeAvailable) {
           badge.textContent = 'EDGE';
           badge.style.background = '#10b981';
-          indicator.title = `Connected to local edge device (${EDGE_API})`;
+          indicator.title = `Connected to local farm server (${EDGE_API})`;
         } else {
           badge.textContent = 'CLOUD';
           badge.style.background = '#3b82f6';
@@ -2093,7 +2093,7 @@
       }
     }
     
-    // Periodic edge device check
+    // Periodic farm server check
     setInterval(async () => {
       const now = Date.now();
       if (now - lastEdgeCheck > EDGE_CHECK_INTERVAL) {
@@ -5319,7 +5319,7 @@
     }
   </script>
 
-  <!-- Pairing Modal (Tablet → Edge Device Authentication) - DISABLED -->
+  <!-- Pairing Modal (Tablet to Farm Server Authentication) - DISABLED -->
   <!-- <div id="pairingModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); z-index: 20000; justify-content: center; align-items: center; padding: 2rem;">
     <div style="max-width: 600px; width: 100%; background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%); border-radius: 24px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(52, 211, 153, 0.2); overflow: hidden;">
       
@@ -5373,7 +5373,7 @@
             <div>
               <div style="color: #fbbf24; font-weight: 700; margin-bottom: 0.25rem; font-size: 0.95rem;">Need Help?</div>
               <div style="color: #cbd5e1; font-size: 0.9rem; line-height: 1.5;">
-                Contact your farm administrator to get the pairing QR code. This one-time setup connects your tablet to the farm's edge device.
+                Contact your farm administrator to get the pairing QR code. This one-time setup connects your tablet to the farm server.
               </div>
             </div>
           </div>

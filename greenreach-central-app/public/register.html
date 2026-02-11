@@ -244,7 +244,7 @@
         <label for="deploymentMode">Deployment Mode *</label>
         <select id="deploymentMode" required>
           <option value="cloud" selected>Cloud Hosted</option>
-          <option value="edge">Edge Device (On-Premises)</option>
+          <option value="edge">Farm Server (On-Premises)</option>
           <option value="desktop">Desktop Application</option>
         </select>
         <div class="help-text">Where the farm will be deployed</div>
@@ -345,7 +345,7 @@
             ${farm.deploymentMode === 'cloud' ? 
               `Visit <a href="${urls.cloud}" class="link" target="_blank">${urls.cloud}</a> and use the activation code to complete setup.` :
               farm.deploymentMode === 'edge' ?
-              `Run this command on the edge device:<br><code style="display: block; margin-top: 0.5rem; padding: 0.5rem; background: white; border-radius: 4px; font-size: 0.75rem;">${urls.edgeInstall}</code>` :
+              `Run this command on the farm server:<br><code style="display: block; margin-top: 0.5rem; padding: 0.5rem; background: white; border-radius: 4px; font-size: 0.75rem;">${urls.edgeInstall}</code>` :
               `Download the desktop app and enter the activation code during first launch.`
             }
           </p>

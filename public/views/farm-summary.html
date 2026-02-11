@@ -2088,7 +2088,7 @@
       // Load farm name and update header
       await loadFarmNameIntoHeader();
       
-      // Detect cloud mode (no sensor data available)
+      // Detect management-only mode (no sensor data available)
       try {
         const testResponse = await fetch('/env?hours=1');
         if (testResponse.status === 403 || testResponse.status === 404) {
@@ -2203,7 +2203,7 @@
     });
     
     /**
-     * Show cloud mode notice - this farm is cloud-only (no sensors)
+     * Show management-only mode notice - this farm has no sensors
      */
     function showCloudModeNotice() {
       const mainContent = document.querySelector('.main-content');
@@ -2221,7 +2221,7 @@
       `;
       notice.innerHTML = `
         <div style="font-size: 2rem; margin-bottom: 0.5rem;">☁️</div>
-        <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">Cloud Mode - Sales & Management System</div>
+        <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">Management Mode - Sales & Administration</div>
         <div style="font-size: 0.95rem; opacity: 0.9;">
           This farm instance is configured for sales, inventory, and administration only.
           <br>Sensor data, environmental controls, and automation features are not available.
@@ -2231,7 +2231,7 @@
     }
     
     /**
-     * Hide ML/sensor widgets in cloud mode
+     * Hide ML/sensor widgets in management-only mode
      */
     function hideMLWidgets() {
       // Hide sensor-dependent widgets
@@ -2259,20 +2259,20 @@
     }
     
     /**
-     * Load cloud mode data (sales, inventory, admin - no sensors)
+     * Load management-only mode data (sales, inventory, admin - no sensors)
      */
     async function loadCloudModeData() {
-      console.log('[Farm Summary] Loading cloud mode data (sales/inventory only)...');
+      console.log('[Farm Summary] Loading management mode data (sales/inventory only)...');
       
       // Load sales/inventory data from farm sales API
       try {
         const response = await fetch('/api/farm-sales/inventory');
         if (response.ok) {
           const data = await response.json();
-          console.debug('[Farm Summary] Cloud inventory loaded:', data.inventory?.length, 'products');
+          console.debug('[Farm Summary] Management inventory loaded:', data.inventory?.length, 'products');
         }
       } catch (e) {
-        console.log('[Farm Summary] Cloud inventory not available:', e.message);
+        console.log('[Farm Summary] Management inventory not available:', e.message);
       }
       
       // Hide sensor-related UI elements

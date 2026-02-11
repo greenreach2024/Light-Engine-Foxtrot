@@ -374,9 +374,9 @@
                 
                 console.log('[Login] Stored planType:', data.planType);
                 
-                // Edge mode: Skip setup wizard check - go directly to redirect
+                // Farm server mode: Skip setup wizard check - go directly to redirect
                 if (data.edgeMode || data.planType === 'edge') {
-                    console.log('[Login] Edge mode detected - skipping setup wizard check');
+                    console.log('[Login] Farm server mode detected - skipping setup wizard check');
                     
                     // Show success message
                     alertDiv.className = 'alert success';
