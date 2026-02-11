@@ -2974,7 +2974,7 @@
     // Add event listeners to wizard buttons in sidebar
     function setupWizardHandlers() {
       const wizardButtons = document.querySelectorAll('[data-wizard]');
-      console.log('Setting up wizard handlers for', wizardButtons.length, 'buttons');
+      grLog('Setting up wizard handlers for', wizardButtons.length, 'buttons');
       
       wizardButtons.forEach(button => {
         button.addEventListener('click', (e) => {
@@ -2990,10 +2990,10 @@
           }
         });
       });
-    }console.log('Initializing sidebar...');
+    }grLog('Initializing sidebar...');
       setupSidebarGroups();
       setupWizardHandlers();
-      console.log('Sidebar initialized successfully');
+      grLog('Sidebar initialized successfully');
       
       // Make functions globally accessible for testing
       window.testPaymentWizard = openPaymentWizard;
@@ -3023,10 +3023,11 @@
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       
       if (!token) {
-        console.error('[Dashboard] ❌ No token found in sessionStorage or localStorage');
-        console.log('[Dashboard] 📍 Private browsing mode? Token may not persist across pages');
-        console.log('[Dashboard] 📍 Please log in at: ' + window.location.origin + '/farm-admin-login.html');
-        console.log('[Dashboard] 🔄 Redirecting to login page in 2 seconds...');
+        // Not an exceptional error in many contexts (e.g., public pages or private browsing)
+        grLog('[Dashboard] ❌ No token found in sessionStorage or localStorage');
+        grLog('[Dashboard] 📍 Private browsing mode? Token may not persist across pages');
+        grLog('[Dashboard] 📍 Please log in at: ' + window.location.origin + '/farm-admin-login.html');
+        grLog('[Dashboard] 🔄 Redirecting to login page in 2 seconds...');
         
         setTimeout(() => {
           window.location.href = '/farm-admin-login.html';

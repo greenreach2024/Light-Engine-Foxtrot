@@ -2563,7 +2563,7 @@
           return;
         }
         
-        console.log('[Weather] Using coordinates:', coords.lat, coords.lng);
+        grLog('[Weather] Using coordinates:', coords.lat, coords.lng);
         
         const weatherDiv = document.getElementById('weatherDisplay');
         const weatherContent = document.getElementById('weatherContent');
@@ -2573,11 +2573,24 @@
         weatherContent.innerHTML = '<span style="color: #94a3b8; font-size: 0.9rem;">Loading weather...</span>';
         weatherDiv.style.display = 'block';
         
-        const response = await fetch(`/api/weather?lat=${coords.lat}&lng=${coords.lng}`);
-        const data = await response.json();
-        
-        if (!data.ok) {
-          throw new Error(data.error || 'Weather fetch failed');
+        let data;
+        try {
+          const response = await fetch(`/api/weather?lat=${coords.lat}&lng=${coords.lng}`);
+          if (!response.ok) {
+            console.warn('[Weather] Weather service returned status', response.status);
+            weatherContent.innerHTML = '<span style="color:#f59e0b">Weather unavailable</span>';
+            return;
+          }
+          data = await response.json().catch(() => ({ ok: false, error: 'Invalid JSON' }));
+          if (!data.ok) {
+            console.warn('[Weather] Weather fetch failed:', data.error || 'unknown');
+            weatherContent.innerHTML = '<span style="color:#f59e0b">Weather unavailable</span>';
+            return;
+          }
+        } catch (err) {
+          console.warn('[Weather] Failed to fetch weather:', err?.message || err);
+          weatherContent.innerHTML = '<span style="color:#f59e0b">Weather unavailable</span>';
+          return;
         }
         
         const weather = data.current;
