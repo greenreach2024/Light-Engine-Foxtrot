@@ -279,6 +279,13 @@
       .btn, .tab-nav { display: none; }
       .tab-content { display: block !important; page-break-before: always; }
       .tab-content:first-of-type { page-break-before: auto; }
+      body.print-mode .tab-content { display: none !important; }
+      body.print-mode .tab-content.active { display: block !important; }
+    }
+
+    .print-mode .tab-nav,
+    .print-mode .header-actions {
+      display: none;
     }
   </style>
 </head>
@@ -288,13 +295,14 @@
     <!-- Header -->
     <div class="header">
       <div>
-        <h1>🌱 Farm Maintenance Checklist</h1>
+        <h1>Farm Maintenance Checklist</h1>
         <div class="header-sub">Aeroponic Vertical Farm — Standard Operating Procedures</div>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary" onclick="resetAll()" title="Uncheck all items">↺ Reset</button>
-        <button class="btn btn-secondary" onclick="window.print()" title="Print checklist">🖨 Print</button>
-        <button class="btn btn-primary" onclick="window.location.href='/views/farm-summary.html'">← Farm Summary</button>
+        <button class="btn btn-secondary" onclick="resetAll()" title="Uncheck all items">Reset</button>
+        <button class="btn btn-secondary" onclick="window.print()" title="Print checklist">Print</button>
+        <button class="btn btn-secondary" onclick="exportChecklist()" title="Export checklist">Export</button>
+        <button class="btn btn-primary" onclick="window.location.href='/views/farm-summary.html'">Back to Farm Summary</button>
       </div>
     </div>
 
@@ -333,7 +341,7 @@
     <div class="tab-content active" id="tab-daily">
 
       <div class="section-title">
-        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">💧</span>
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">N</span>
         Nutrient System & Water Quality
       </div>
       <div class="checklist-card">
@@ -350,7 +358,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">🌡️</span>
+        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">C</span>
         Environment & Climate
       </div>
       <div class="checklist-card">
@@ -366,7 +374,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">💡</span>
+        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">L</span>
         Lighting
       </div>
       <div class="checklist-card">
@@ -380,7 +388,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">🌿</span>
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">P</span>
         Crop Health & Production
       </div>
       <div class="checklist-card">
@@ -406,7 +414,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">📋</span>
+        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">O</span>
         Operations & Safety
       </div>
       <div class="checklist-card">
@@ -429,7 +437,7 @@
     <div class="tab-content" id="tab-weekly">
 
       <div class="section-title">
-        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">💧</span>
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">W</span>
         Water System Maintenance
       </div>
       <div class="checklist-card">
@@ -445,7 +453,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">🧪</span>
+        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">T</span>
         Water Quality Testing
       </div>
       <div class="checklist-card">
@@ -459,7 +467,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">🔧</span>
+        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">E</span>
         Equipment & Environment
       </div>
       <div class="checklist-card">
@@ -504,7 +512,7 @@
     <div class="tab-content" id="tab-monthly">
 
       <div class="section-title">
-        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">💧</span>
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">W</span>
         Deep Water System Service
       </div>
       <div class="checklist-card">
@@ -519,7 +527,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">📏</span>
+        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">C</span>
         Probe Calibration & Sensors
       </div>
       <div class="checklist-card">
@@ -535,7 +543,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">🔧</span>
+        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">E</span>
         Equipment Deep Service
       </div>
       <div class="checklist-card">
@@ -551,7 +559,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">🧬</span>
+        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">Q</span>
         Plant Science & QA
       </div>
       <div class="checklist-card">
@@ -585,7 +593,7 @@
     <div class="tab-content" id="tab-quarterly">
 
       <div class="section-title">
-        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">💧</span>
+        <span class="section-icon" style="background: #22c55e22; color: #4ade80;">W</span>
         Major Water System Overhaul
       </div>
       <div class="checklist-card">
@@ -601,7 +609,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">📏</span>
+        <span class="section-icon" style="background: #f59e0b22; color: #fbbf24;">S</span>
         Sensor & Probe Replacement
       </div>
       <div class="checklist-card">
@@ -615,7 +623,7 @@
       </div>
 
       <div class="section-title">
-        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">🏗️</span>
+        <span class="section-icon" style="background: #3b82f622; color: #60a5fa;">F</span>
         Facility & Infrastructure
       </div>
       <div class="checklist-card">
@@ -658,7 +666,7 @@
     <div class="tab-content" id="tab-bestpractices">
 
       <div class="section-title">
-        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">📖</span>
+        <span class="section-icon" style="background: #8b5cf622; color: #a78bfa;">B</span>
         Aeroponic System Best Practices
       </div>
 
@@ -711,11 +719,11 @@
       </div>
 
       <div class="note-box warning">
-        <strong>⚠️ Critical Spares to Keep On-Hand:</strong><br>
-        • 2× high-pressure pump (or rebuild kit) • 20× misting nozzles • 2× pH probe • 1× EC probe<br>
-        • Peristaltic pump tubing (2 sets) • Inline filters (4×) • Solenoid valve (1 spare per zone)<br>
-        • pH buffer solutions (4.0, 7.0) • EC calibration standard (1.413 mS/cm)<br>
-        • H₂O₂ (35% food grade) • Backup timer/controller • Fuses and GFCIs
+        <strong>Critical Spares to Keep On-Hand:</strong><br>
+        - 2x high-pressure pump (or rebuild kit) - 20x misting nozzles - 2x pH probe - 1x EC probe<br>
+        - Peristaltic pump tubing (2 sets) - Inline filters (4x) - Solenoid valve (1 spare per zone)<br>
+        - pH buffer solutions (4.0, 7.0) - EC calibration standard (1.413 mS/cm)<br>
+        - H2O2 (35% food grade) - Backup timer/controller - Fuses and GFCIs
       </div>
     </div>
 
@@ -810,11 +818,50 @@
       });
     }
 
+    let activeTab = 'daily';
+
     function switchTab(tabName, btn) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(`tab-${tabName}`).classList.add('active');
       btn.classList.add('active');
+      activeTab = tabName;
+    }
+
+    function exportChecklist() {
+      const tabId = `tab-${activeTab}`;
+      const tab = document.getElementById(tabId);
+      if (!tab) return;
+
+      const title = `Farm Maintenance Checklist - ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`;
+      const lines = [title, ''];
+
+      tab.querySelectorAll('.section-title').forEach(section => {
+        const sectionTitle = section.textContent.trim();
+        if (sectionTitle) {
+          lines.push(sectionTitle);
+        }
+        const card = section.nextElementSibling;
+        if (card && card.classList.contains('checklist-card')) {
+          const cardTitle = card.querySelector('h3')?.textContent?.trim();
+          if (cardTitle) lines.push(`- ${cardTitle}`);
+          card.querySelectorAll('li').forEach(li => {
+            const text = li.textContent.replace(/\s+/g, ' ').trim();
+            if (text) lines.push(`  [ ] ${text}`);
+          });
+        }
+        lines.push('');
+      });
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `farm-checklist-${activeTab}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     function resetAll() {
@@ -844,6 +891,20 @@
     document.addEventListener('DOMContentLoaded', () => {
       initCheckboxes();
       loadFarmName();
+
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab) {
+        const btn = document.querySelector(`.tab-btn[onclick="switchTab('${tab}', this)"]`);
+        if (btn) {
+          switchTab(tab, btn);
+        }
+      }
+
+      if (params.get('print') === '1') {
+        document.body.classList.add('print-mode');
+        setTimeout(() => window.print(), 400);
+      }
     });
   </script>
 </body>
