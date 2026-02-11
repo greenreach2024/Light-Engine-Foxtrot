@@ -1,5 +1,5 @@
 // Groups V2 Script Loading
-console.log('[Groups V2] 📄 Script loading...');
+g2debug('[Groups V2] 📄 Script loading...');
 
 // Helper: safely escape HTML to prevent XSS
 function escapeHtml(text) {
@@ -194,6 +194,24 @@ function g2debug() {
   }
 }
 
+// Quiet noisy console.log for this module unless researchMode enabled
+(function () {
+  try {
+    const _origConsoleLog = console.log.bind(console);
+    console.log = function(...args) {
+      const gr = window.gr || {};
+      const enabled = gr.researchMode === true || localStorage.getItem('gr.researchMode') === 'true';
+      if (enabled) {
+        _origConsoleLog(...args);
+      } else {
+        // suppressed in normal mode to avoid console spam
+      }
+    };
+  } catch (e) {
+    // ignore
+  }
+})();
+
 let groupsV2DomReady = false;
 const groupsV2PendingRefresh = {
   loadGroup: false,
@@ -245,7 +263,7 @@ async function initializeGroupsV2State() {
     let source = '';
 
     try {
-      console.log('[Groups V2] Loading groups from /data/groups.json...');
+      g2debug('[Groups V2] Loading groups from /data/groups.json...');
       const response = await fetch('/data/groups.json', { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
@@ -260,7 +278,7 @@ async function initializeGroupsV2State() {
     }
 
     if (!groups.length) {
-      console.log('[Groups V2] Falling back to /api/groups...');
+      g2debug('[Groups V2] Falling back to /api/groups...');
       const response = await fetch('/api/groups');
       if (!response.ok) {
         console.warn('[Groups V2] Failed to load groups from /api/groups:', response.status);
@@ -270,7 +288,7 @@ async function initializeGroupsV2State() {
       source = '/api/groups';
     }
 
-    console.log('[Groups V2] Loaded', groups.length, 'groups from', source);
+    g2debug('[Groups V2] Loaded', groups.length, 'groups from', source);
 
     // Initialize STATE if needed
     if (!window.STATE) window.STATE = {};
@@ -354,7 +372,7 @@ if (typeof window.derivePlanRuntime !== 'function') {
       
       // DEBUG: Log raw values before creating mix
       if (day <= 3) {
-        console.log(`[derivePlanRuntime] Day ${day} RAW:`, {
+        g2debug(`[derivePlanRuntime] Day ${day} RAW:`, {
           rawCw: mixRow?.cw,
           rawWw: mixRow?.ww,
           rawBl: mixRow?.bl,
@@ -375,7 +393,7 @@ if (typeof window.derivePlanRuntime !== 'function') {
       
       // DEBUG: Log created mix
       if (day <= 3) {
-        console.log(`[derivePlanRuntime] Day ${day} CREATED MIX:`, mix);
+        g2debug(`[derivePlanRuntime] Day ${day} CREATED MIX:`, mix);
       }
       
       return { day, ppfd, dli, stage, photoperiod, mix };
@@ -570,7 +588,7 @@ async function loadZonesFromRoomMapper() {
       zoneSelect.appendChild(opt);
     });
 
-    console.log(`[Groups V2] Loaded ${zones.length} zones from room mapper`);
+    g2debug(`[Groups V2] Loaded ${zones.length} zones from room mapper`);
   } catch (error) {
     console.error('[Groups V2] Failed to load zones from room mapper:', error);
     populateDefaultZones(zoneSelect);
@@ -942,7 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
               // Test Grow3 by querying status via proxy endpoint
               const controllerId = light.controllerId || light.deviceId;
               
-              console.log(`[Groups V2 Test] Testing GROW3 light: ${lightName}, controllerId: ${controllerId}, lightId: ${lightId}`);
+              g2debug(`[Groups V2 Test] Testing GROW3 light: ${lightName}, controllerId: ${controllerId}, lightId: ${lightId}`);
               
               // Check controller health by querying devices endpoint
               // Note: Grow3 controller doesn't have /healthz, so we use /api/devicedatas as health check
@@ -959,7 +977,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (deviceExists) {
                   // Device found - make it blink!
                   try {
-                    console.log(`[Groups V2 Test] Starting blink sequence for ${lightName} (controllerId: ${controllerId})`);
+                    g2debug(`[Groups V2 Test] Starting blink sequence for ${lightName} (controllerId: ${controllerId})`);
                     
                     // Blink sequence: Off → On → Off → On
                     // Turn off
@@ -1232,7 +1250,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Log detailed results
-        console.log('[Groups V2 Test] Results:', results);
+        g2debug('[Groups V2 Test] Results:', results);
 
         // Show result toast
         if (typeof showToast === 'function') {
@@ -1295,7 +1313,7 @@ document.addEventListener('DOMContentLoaded', () => {
         runGroupBtn.textContent = '⏳ Saving & Running...';
 
         // FIRST: Save all current settings as deployed
-        console.log('[Groups V2] Run clicked - saving all settings first...');
+        g2debug('[Groups V2] Run clicked - saving all settings first...');
         const savedGroup = await saveGroupsV2Group('deployed');
         
         if (!savedGroup) {
@@ -1311,7 +1329,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        console.log('[Groups V2] Group saved successfully, now executing...');
+        g2debug('[Groups V2] Group saved successfully, now executing...');
 
         // Get the saved group (refreshed from STATE)
         const group = getGroupsV2ActiveGroup();
@@ -1836,14 +1854,14 @@ function updateGroupsV2StatusBadge(group) {
 
 // Save or update a group (handles both new and existing groups)
 async function saveGroupsV2Group(status = 'draft') {
-  console.log('[groups-v2] saveGroupsV2Group called with status:', status);
+  g2debug('[groups-v2] saveGroupsV2Group called with status:', status);
   
   const nameInput = document.getElementById('groupsV2ZoneName');
   const zoneSelect = document.getElementById('groupsV2ZoneSelect');
   const roomSelect = document.getElementById('groupsV2RoomSelect');
   const loadSelect = document.getElementById('groupsV2LoadGroup');
   
-  console.log('[groups-v2] Form elements found:', {
+  g2debug('[groups-v2] Form elements found:', {
     nameInput: !!nameInput,
     zoneSelect: !!zoneSelect,
     roomSelect: !!roomSelect,
@@ -1859,8 +1877,8 @@ async function saveGroupsV2Group(status = 'draft') {
   const zone = zoneSelect.value;
   const room = roomSelect.value;
   
-  console.log('[groups-v2] Form values:', { groupName, zone, room });
-  console.log('[groups-v2] Form validation:', { 
+  g2debug('[groups-v2] Form values:', { groupName, zone, room });
+  g2debug('[groups-v2] Form validation:', { 
     hasName: !!groupName, 
     hasZone: !!zone, 
     hasRoom: !!room,
@@ -1966,14 +1984,14 @@ async function saveGroupsV2Group(status = 'draft') {
   
   // Persist to server
   try {
-    console.log('[groups-v2] Saving groups to server...', window.STATE.groups.length, 'groups');
+    g2debug('[groups-v2] Saving groups to server...', window.STATE.groups.length, 'groups');
     const response = await fetch('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
     });
     
-    console.log('[groups-v2] Server response status:', response.status, response.statusText);
+    g2debug('[groups-v2] Server response status:', response.status, response.statusText);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -2054,7 +2072,7 @@ async function saveGroupsV2GroupObject(groupObject) {
   
   // Persist to server
   try {
-    console.log('[groups-v2] Saving group object to server:', groupObject.id);
+    g2debug('[groups-v2] Saving group object to server:', groupObject.id);
     const response = await fetch('/data/groups.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -3,6 +3,22 @@
  * Central management for Light Engine platform
  */
 
+// Suppress noisy console.log messages in production by default.
+// Enable via localStorage.setItem('gr.debug','true') or when running on localhost.
+(function () {
+  try {
+    const _origConsoleLog = console.log.bind(console);
+    console.log = function(...args) {
+      const enabled = localStorage.getItem('gr.debug') === 'true' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (enabled) {
+        _origConsoleLog(...args);
+      }
+    };
+  } catch (e) {
+    // ignore
+  }
+})();
+
 const API_BASE = window.location.origin;
 
 // Initialize on page load

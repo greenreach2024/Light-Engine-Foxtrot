@@ -4330,8 +4330,15 @@ window.checkGrow3Status = async function() {
       throw new Error(`HTTP ${response.status}`);
     }
   } catch (error) {
-    // Only log warning, don't show error toast (controller might just be offline)
-    console.warn('[Grow3] Health check failed:', error.message);
+    // Quietly handle Abort/timeout errors (very noisy when polled frequently)
+    const isAbort = error && (error.name === 'AbortError' || /aborted|timeout/i.test(error.message || ''));
+    if (!isAbort) {
+      console.warn('[Grow3] Health check failed:', error.message);
+    } else {
+      // Debug-level message only to reduce console spam
+      console.debug('[Grow3] Health check aborted/timeout:', error.message);
+    }
+
     statusEl.innerHTML = `
       <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span>
       <span>Offline</span>
@@ -9045,8 +9052,6 @@ class DeviceManagerWindow {
         </div>
         <div class="device-manager__badges">
           <span class="badge badge--protocol">${device.protocol.toUpperCase()}</span>
-          <span class="badge">RSSI ${signal}</span>
-          <span class="badge">Confidence ${confidencePct}%</span>
           ${statusBadge}
         </div>
       </header>
