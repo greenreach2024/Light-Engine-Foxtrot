@@ -334,56 +334,64 @@ No programming. No guesswork. No spreadsheets. Just select a crop, and Light Eng
 
 ---
 
-## 🏗️ System Architecture (Critical Understanding)
+## System Architecture (Critical Understanding)
 
-### Two-Tier Deployment Model
+### Unified Platform (Single Codebase)
+
+Light Engine is a SINGLE unified platform. There is NO separate "edge" vs "cloud"
+deployment. The codebase runs one server (server-foxtrot.js) that serves all farm
+functionality, with GreenReach Central (greenreach-central/server.js) providing
+the multi-farm marketplace and admin aggregation layer.
+
+All farm data flows to GreenReach Central. Controller restrictions prevent
+remote laptops from issuing farm-critical device commands (lights, HVAC, plugs)
+via the `requireEdgeForControl` middleware -- this is a safety feature, not a
+platform split.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    GREENREACH CENTRAL                        │
-│              (Cloud - greenreachgreens.com)                  │
-│                                                              │
-│  • PostgreSQL database (multi-tenant)                        │
-│  • Wholesale marketplace (multi-farm ordering)               │
-│  • Central admin dashboard (monitor all farms)               │
-│  • Buyer portal (restaurants, grocers)                       │
-│  • Payment processing (Stripe, Square)                       │
-│  • Automated farm provisioning                               │
-│                                                              │
-│  Syncs with Edge Devices every 5 minutes ↓                  │
-└─────────────────────────────────────────────────────────────┘
-                             ↕
-                    Secure mTLS Connection
-                             ↕
-┌─────────────────────────────────────────────────────────────┐
-│                      EDGE DEVICE                             │
-│        (reTerminal @ farm - 100.65.187.59)                   │
-│                                                              │
-│  • Light Engine Node.js (server-foxtrot.js)                  │
-│  • Local farm dashboard (farm-summary.html, etc.)            │
-│  • Real-time environmental control                           │
-│  • IoT device management (lights, sensors, HVAC)             │
-│  • Local inventory tracking                                  │
-│  • Offline-first operation (syncs when online)               │
-│                                                              │
-│  Controls Farm Equipment ↓                                   │
-└─────────────────────────────────────────────────────────────┘
-                             ↓
-              ┌──────────────────────────────┐
-              │  FARM DEVICES                │
-              │  • DMX512 Lighting           │
-              │  • Environmental Sensors     │
-              │  • HVAC Controls             │
-              │  • Smart Plugs               │
-              └──────────────────────────────┘
++-----------------------------------------------------------------+
+|                    GREENREACH CENTRAL                            |
+|              (greenreachgreens.com - AWS EB)                     |
+|                                                                  |
+|  - PostgreSQL database (multi-tenant)                            |
+|  - Wholesale marketplace (multi-farm ordering)                   |
+|  - Central admin dashboard (monitor all farms)                   |
+|  - Buyer portal (restaurants, grocers)                           |
+|  - Payment processing (Stripe, Square)                           |
+|  - Automated farm provisioning                                   |
+|  - Receives all farm data via sync                               |
++-----------------------------------------------------------------+
+                             |
+                    Farm data sync (API)
+                             |
++-----------------------------------------------------------------+
+|                 LIGHT ENGINE (Per-Farm)                          |
+|              (server-foxtrot.js - unified)                       |
+|                                                                  |
+|  - Farm dashboard (farm-admin.html, farm-summary.html)           |
+|  - Real-time environmental control                               |
+|  - IoT device management (lights, sensors, HVAC)                 |
+|  - Inventory tracking                                            |
+|  - Controller restrictions for non-local access                  |
+|  - All farm data pushed to GreenReach Central                    |
++-----------------------------------------------------------------+
+                             |
+              +------------------------------+
+              |  FARM DEVICES                |
+              |  - DMX512 Lighting           |
+              |  - Environmental Sensors     |
+              |  - HVAC Controls             |
+              |  - Smart Plugs               |
+              +------------------------------+
 ```
 
 **Agent Understanding Check:**
-- ✅ Edge devices run autonomously (offline-capable)
-- ✅ Central aggregates data from multiple farms
-- ✅ Wholesale marketplace connects buyers to multi-farm inventory
-- ✅ Sync is bidirectional but edge is source of truth for farm data
-- ✅ Authentication is multi-tenant (farm-based isolation)
+- There is ONE platform, not two. Do not refer to "edge" and "cloud" as separate systems.
+- GreenReach Central aggregates data from multiple farms.
+- Wholesale marketplace connects buyers to multi-farm inventory.
+- All farm data flows to GreenReach Central (Central is source of truth for aggregated data).
+- `requireEdgeForControl` is a controller restriction (safety), not a platform boundary.
+- Authentication is multi-tenant (farm-based isolation).
 
 ---
 
@@ -625,7 +633,8 @@ Time saved: 1.75 hours (would have rebuilt existing integration)
 
 ### GreenReach Central
 
-**Purpose**: Multi-tenant cloud platform connecting farms, buyers, and community organizations.
+**Purpose**: Multi-tenant platform connecting farms, buyers, and community organizations.
+All farm data flows to GreenReach Central.
 
 **Key Services:**
 1. **Wholesale Marketplace**: 
@@ -646,9 +655,9 @@ Time saved: 1.75 hours (would have rebuilt existing integration)
    - Demo data for evaluation
 
 **Agent Understanding:**
-- Central is NOT optional—it's the backbone of the ecosystem
-- Edge devices push inventory every 5 minutes (API: `/api/sync/inventory`)
-- Buyers never interact with edge devices directly (only Central)
+- Central is NOT optional -- it is the backbone of the ecosystem
+- Farm inventory syncs to Central (API: `/api/sync/inventory`)
+- Buyers interact only with Central, never with individual farm servers
 - Multi-tenant: Farms are isolated, buyers see aggregated catalog
 
 ### GreenReach Wholesale
@@ -762,9 +771,9 @@ See DATA_FORMAT_STANDARDS.md for details.
 **File Structure** (MUST RESPECT):
 ```
 Light-Engine-Foxtrot/
-├── server-foxtrot.js              # Edge device server (main entry point)
+├── server-foxtrot.js              # Farm server (main entry point)
 ├── greenreach-central/
-│   ├── server.js                  # Central cloud server
+│   ├── server.js                  # GreenReach Central server (multi-farm)
 │   ├── routes/                    # Central API routes
 │   └── public/                    # Central UI (admin, wholesale)
 ├── public/
@@ -785,9 +794,11 @@ Light-Engine-Foxtrot/
 ```
 
 **Agent Rule:**
-- **Edge code** (server-foxtrot.js, routes/) = farm-specific, offline-capable
-- **Central code** (greenreach-central/) = multi-tenant, always-online
-- **Shared libraries** (lib/) = used by both Edge and Central
+- **Farm code** (server-foxtrot.js, routes/) = per-farm functionality
+- **Central code** (greenreach-central/) = multi-tenant aggregation
+- **Shared libraries** (lib/) = used by both farm and Central
+- All farm data flows to GreenReach Central
+- Do NOT refer to "edge" and "cloud" as separate platforms
 
 ### Testing Requirements
 
@@ -802,8 +813,8 @@ npm run smoke
 # 3. Check for errors
 npm run test
 
-# 4. Edge device acceptance test (if available)
-npm run test:edge
+# 4. Farm server acceptance test (if available)
+npm run test:farm
 ```
 
 **Agent Checklist:**
@@ -1164,8 +1175,9 @@ B1{Scope Check}
 - [ ] Respects DATA_FORMAT_STANDARDS.md
 - [ ] Uses adapters (lib/data-adapters.js) for format variations
 - [ ] Validates with `npm run validate-schemas`
-- [ ] Offline-compatible (if edge device feature)
-- [ ] Multi-tenant safe (if central feature)
+- [ ] Controller restrictions respected (requireEdgeForControl)
+- [ ] Multi-tenant safe (if Central feature)
+- [ ] All farm data flows to GreenReach Central
 
 ### Code Quality
 - [ ] Follows existing file structure
@@ -1329,8 +1341,8 @@ APPROVED. Document forecast algorithm for future wholesale integration.
 **Evaluation Dimensions:**
 
 1. **Architectural Understanding** (30%)
-   - Grasps Edge/Central split
-   - Understands offline-first design
+   - Grasps unified platform with controller restrictions
+   - Understands data flow: all farm data to GreenReach Central
    - Knows multi-tenant implications
 
 2. **Domain Knowledge** (20%)
@@ -1394,7 +1406,7 @@ APPROVED. Document forecast algorithm for future wholesale integration.
    - Blame for debugging
 
 4. **Thunder Client** - API testing
-   - Test edge device APIs (localhost:8091)
+   - Test farm APIs (localhost:8091)
    - Test Central APIs (greenreachgreens.com)
 
 **Development:**
@@ -1602,8 +1614,8 @@ Fixes #142
 ## Testing
 - [ ] `npm run validate-schemas` passes
 - [ ] `npm run smoke` passes
-- [ ] Tested on edge device (if applicable)
-- [ ] Tested offline mode (if applicable)
+- [ ] Tested on farm server (if applicable)
+- [ ] Controller restrictions verified (if device control feature)
 
 ## Review Process
 - [ ] Implementation proposal reviewed
@@ -2007,10 +2019,10 @@ async function analyzeFarm(farm) {
 │  └────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────┘
                              ↓
-              ┌──────────────────────────────┐
-              │  EDGE DEVICES (All Farms)    │
-              │  Sync updated recipe v2      │
-              └──────────────────────────────┘
+              +------------------------------+
+              |  ALL FARMS                   |
+              |  Receive updated recipe v2   |
+              +------------------------------+
 ```
 
 #### Network Learning Queries
@@ -2244,7 +2256,7 @@ class DeviceAdapter {
 | Hardcoding crop parameters | No customization | Use database recipes | Review Agent blocks |
 | Entity-based UI design | Too technical for growers | Use workflow design | Architecture rejects |
 | Modifying groups.json format | Breaks 56 consumers | Use adapters | Review Agent blocks |
-| Ignoring offline mode | Edge device fails | Test with OFFLINE_MODE | Review Agent checks |
+| Ignoring controller restrictions | Device control fails remotely | Test with requireEdgeForControl | Review Agent checks |
 | Skipping multi-tenant check | Security vulnerability | Validate farm isolation | Review Agent verifies |
 | **Scope creep** | Wasted effort, tech debt | Stick to requested task | Review Agent rejects |
 | **Hallucinating APIs** | Broken code, false promises | grep_search before proposing | Review Agent demands evidence |
@@ -2339,7 +2351,7 @@ ESP32 Sensor (Physical)
   ↓ Serial USB
 Python Sensor Reader (scripts/esp32-sensor-reader.py)
   ↓ Write
-/public/data/env.json (Edge Device)
+/public/data/env.json (Farm Server)
   ↓ HTTP GET /api/env
 Dashboard UI (real-time display)
   ↓ Automation Loop
@@ -2571,7 +2583,7 @@ async function migrateRecipe(oldRecipe, newRecipe) {
 | Hardcoding crop parameters | No customization | Use database recipes |
 | Entity-based UI design | Too technical for growers | Use workflow design |
 | Modifying groups.json format | Breaks 56 consumers | Use adapters |
-| Ignoring offline mode | Edge device fails | Test with OFFLINE_MODE |
+| Ignoring controller restrictions | Device control fails remotely | Test with requireEdgeForControl |
 | Skipping multi-tenant check | Security vulnerability | Validate farm isolation |
 
 ### C. Agent Personality Fit

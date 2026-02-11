@@ -102,11 +102,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // =====================================================
-// FARM DATA SYNC: Periodically pull live data from edge farms
+// FARM DATA SYNC: Periodically pull live data from farm servers
+// All farm data flows to GreenReach Central.
 // Configurable via env vars:
-//   FARM_SYNC_INTERVAL_MS  – polling interval (default 300000 = 5 min)
-//   FARM_EDGE_URL          – override edge device URL (bypasses farm.json url field)
-//   FARM_DAILY_SYNC_HOUR   – hour (0-23) for daily full sync (default 2 = 2 AM)
+//   FARM_SYNC_INTERVAL_MS  - polling interval (default 300000 = 5 min)
+//   FARM_EDGE_URL          - farm server URL (overrides farm.json url field)
+//   FARM_DAILY_SYNC_HOUR   - hour (0-23) for daily full sync (default 2 = 2 AM)
 // =====================================================
 const FARM_DATA_DIR = path.join(__dirname, 'public', 'data');
 const FARM_SYNC_INTERVAL = parseInt(process.env.FARM_SYNC_INTERVAL_MS) || 5 * 60 * 1000;
