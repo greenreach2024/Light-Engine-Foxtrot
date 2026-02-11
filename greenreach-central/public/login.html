@@ -385,8 +385,8 @@
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    // Cloud users always use farm-admin.html (monitoring dashboard)
-                    // Edge users use LE-dashboard.html (full hardware control)
+                    // Management platform users always use farm-admin.html (monitoring dashboard)
+                    // Farm server users use LE-dashboard.html (full hardware control)
                     const planType = data.planType || localStorage.getItem('planType') || 'cloud';
                     
                     if (planType === 'cloud') {
