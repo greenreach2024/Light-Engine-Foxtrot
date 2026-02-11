@@ -2322,6 +2322,56 @@ async function viewRoomDetail(farmId, roomId) {
         console.error('[room-detail] Failed to fetch farm telemetry:', err);
     }
     
+    // Step 3: Fetch devices for this farm/room
+    try {
+        let devResponse;
+        try {
+            devResponse = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            if (!devResponse.ok) throw new Error('No public devices endpoint');
+        } catch (e) {
+            devResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
+        }
+        if (devResponse && devResponse.ok) {
+            const devData = await devResponse.json();
+            const allDevices = devData.devices || [];
+            // Filter to this room if devices have a room/location field, else show all
+            roomData.devices = allDevices.filter(d => {
+                const loc = d.room || d.room_id || d.roomId || d.location || '';
+                return !loc || loc === roomId || loc === roomData.name;
+            }).map(d => ({
+                deviceId: d.device_code || d.deviceId || d.device_id || d.id,
+                type: d.device_type || d.type || 'sensor',
+                zone: d.zone || d.zone_id || d.location || 'Unassigned',
+                status: d.status || 'online',
+                lastSeen: d.last_seen || d.lastSeen ? new Date(d.last_seen || d.lastSeen).toLocaleString() : 'Never'
+            }));
+            console.log('[room-detail] Loaded devices:', roomData.devices.length);
+        }
+    } catch (err) {
+        console.warn('[room-detail] Failed to fetch devices:', err);
+    }
+    
+    // Step 4: Fetch groups to count trays
+    try {
+        const grpRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (grpRes && grpRes.ok) {
+            const grpData = await grpRes.json();
+            const groups = grpData.groups || [];
+            // Sum trays from groups that belong to this room (or all if no room filter)
+            let totalTrays = 0;
+            groups.forEach(g => {
+                const grpRoom = g.room || g.room_id || g.roomId || '';
+                if (!grpRoom || grpRoom === roomId || grpRoom === roomData.name) {
+                    totalTrays += (g.trays || g.tray_count || g.trayCount || 0);
+                }
+            });
+            roomData.trays = totalTrays;
+            console.log('[room-detail] Counted trays from groups:', totalTrays);
+        }
+    } catch (err) {
+        console.warn('[room-detail] Failed to fetch groups for tray count:', err);
+    }
+    
     const zoneCount = Array.isArray(roomData.zones) ? roomData.zones.length : 0;
     const deviceCount = Array.isArray(roomData.devices) ? roomData.devices.length : 0;
     const trayCount = roomData.trays || 0;
@@ -2459,15 +2509,42 @@ async function loadRoomDevices(farmId, roomId, devicesData) {
     const countEl = document.getElementById('room-devices-count');
     let devices = [];
     
-    // Only show devices if we have actual data
+    // Use passed data if available
     if (Array.isArray(devicesData) && devicesData.length > 0 && devicesData[0].deviceId) {
         devices = devicesData.map(device => ({
             deviceId: device.deviceId,
             type: device.type,
             zone: device.zone,
             status: device.status || 'online',
-            lastSeen: device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Never'
+            lastSeen: device.lastSeen || 'Never'
         }));
+    } else {
+        // Fallback: fetch devices from API
+        try {
+            let response;
+            try {
+                response = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
+                if (!response.ok) throw new Error('No public devices endpoint');
+            } catch (e) {
+                response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
+            }
+            if (response && response.ok) {
+                const data = await response.json();
+                const allDevices = data.devices || [];
+                devices = allDevices.filter(d => {
+                    const loc = d.room || d.room_id || d.roomId || d.location || '';
+                    return !loc || loc === roomId;
+                }).map(d => ({
+                    deviceId: d.device_code || d.deviceId || d.device_id || d.id,
+                    type: d.device_type || d.type || 'sensor',
+                    zone: d.zone || d.zone_id || d.location || 'Unassigned',
+                    status: d.status || 'online',
+                    lastSeen: d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never'
+                }));
+            }
+        } catch (err) {
+            console.warn('[loadRoomDevices] Failed to fetch devices from API:', err);
+        }
     }
     
     countEl.textContent = `${devices.length} ${devices.length === 1 ? 'device' : 'devices'}`;
@@ -2494,26 +2571,86 @@ async function loadRoomTrays(farmId, roomId, totalTrays) {
     const tbody = document.getElementById('room-trays-tbody');
     const countEl = document.getElementById('room-trays-count');
     
-    // Trays are not synced yet, show empty state
     let trays = [];
     
-    // TODO: Fetch tray data from API when available
-    // For now, trays are managed locally on edge device only
+    // Derive tray data from groups (each group may have trays)
+    try {
+        const grpRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (grpRes && grpRes.ok) {
+            const grpData = await grpRes.json();
+            const groups = grpData.groups || [];
+            groups.forEach(g => {
+                const grpRoom = g.room || g.room_id || g.roomId || '';
+                if (!grpRoom || grpRoom === roomId) {
+                    const trayCount = g.trays || g.tray_count || g.trayCount || 0;
+                    const crop = g.crop || g.recipe || g.name || 'Unknown';
+                    const zone = g.zone || g.zone_id || g.zoneId || 'Unassigned';
+                    const groupId = g.id || g.group_id || g.groupId || 'unknown';
+                    for (let i = 1; i <= trayCount; i++) {
+                        trays.push({
+                            trayId: `${groupId}-T${i}`,
+                            group: g.name || groupId,
+                            zone: zone,
+                            crop: crop,
+                            stage: g.stage || g.growth_stage || 'Active',
+                            planted: g.planted_date || g.startDate || '-',
+                            status: g.status || 'active'
+                        });
+                    }
+                }
+            });
+        }
+    } catch (err) {
+        console.warn('[loadRoomTrays] Failed to fetch groups for tray data:', err);
+    }
     
     countEl.textContent = `${trays.length} ${trays.length === 1 ? 'tray' : 'trays'}`;
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">No tray data available. Trays are managed locally on the edge device.</td></tr>';
+    
+    if (trays.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No tray data available. Add groups with trays to see tray information.</td></tr>';
+    } else {
+        tbody.innerHTML = trays.map(tray => `
+            <tr>
+                <td><code>${tray.trayId}</code></td>
+                <td>${tray.group}</td>
+                <td>${tray.zone}</td>
+                <td>${tray.crop}</td>
+                <td>${tray.stage}</td>
+                <td>${tray.planted}</td>
+                <td><span class="badge badge-${tray.status === 'active' ? 'success' : 'warning'}">${tray.status}</span></td>
+            </tr>
+        `).join('');
+    }
 }
 
 /**
  * Load energy consumption data for a room
  */
 async function loadRoomEnergy(farmId, roomId, today, week) {
-    const avgPerDay = (week / 7).toFixed(1);
+    // Handle null/undefined energy values gracefully
+    if (today == null && week == null) {
+        document.getElementById('room-energy-today').textContent = 'No data';
+        document.getElementById('room-energy-week').textContent = 'No data';
+        document.getElementById('room-energy-avg').textContent = 'No data';
+        const trendEl = document.getElementById('room-energy-trend');
+        trendEl.textContent = 'N/A';
+        trendEl.style.color = '#94a3b8';
+        
+        const chartEl = document.getElementById('room-energy-chart');
+        if (chartEl) {
+            chartEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:2rem;">No energy data available</div>';
+        }
+        return;
+    }
+    
+    const todayVal = today || 0;
+    const weekVal = week || 0;
+    const avgPerDay = weekVal > 0 ? (weekVal / 7).toFixed(1) : '0.0';
     const trend = Math.random() > 0.5 ? 'down' : 'up';
     const trendPercent = (Math.random() * 10 + 3).toFixed(1);
     
-    document.getElementById('room-energy-today').textContent = `${today} kWh`;
-    document.getElementById('room-energy-week').textContent = `${week} kWh`;
+    document.getElementById('room-energy-today').textContent = `${todayVal} kWh`;
+    document.getElementById('room-energy-week').textContent = `${weekVal} kWh`;
     document.getElementById('room-energy-avg').textContent = `${avgPerDay} kWh`;
     
     const trendEl = document.getElementById('room-energy-trend');
