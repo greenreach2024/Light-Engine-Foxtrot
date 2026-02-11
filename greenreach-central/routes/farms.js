@@ -95,7 +95,7 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
          name = COALESCE(EXCLUDED.name, farms.name),
          contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
          updated_at = NOW()`,
-      [farmId, metadata?.name || farmId, contactName, 'online', now, jwtSecret, apiKey, apiSecret, planType, heartbeatApiUrl, JSON.stringify(metadata || {})]
+      [farmId, metadata?.name || farmId, contactName, 'active', now, jwtSecret, apiKey, apiSecret, planType, heartbeatApiUrl, JSON.stringify(metadata || {})]
     );
     
     // Store heartbeat
@@ -109,7 +109,7 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
     inMemoryFarms.set(farmId, {
       farm_id: farmId,
       name: metadata?.name || farmId,
-      status: 'online',
+      status: 'active',
       last_heartbeat: now,
       metadata: metadata || {},
       updated_at: now
@@ -140,7 +140,7 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
           name: metadata?.name || farmId,
           api_url: apiUrl,
           url: apiUrl,
-          status: 'online',
+          status: 'active',
           contact: metadata?.contact || {},
           location: metadata?.location || {}
         });
@@ -217,14 +217,14 @@ router.post('/register', async (req, res, next) => {
          api_key = COALESCE(farms.api_key, EXCLUDED.api_key),
          api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
          updated_at = NOW()`,
-      [resolvedFarmId, resolvedName, 'online', now, jwtSecret, apiKey, apiSecret, 'edge', JSON.stringify(metadata)]
+      [resolvedFarmId, resolvedName, 'active', now, jwtSecret, apiKey, apiSecret, 'edge', JSON.stringify(metadata)]
     );
 
     // Also keep in-memory
     inMemoryFarms.set(resolvedFarmId, {
       farm_id: resolvedFarmId,
       name: resolvedName,
-      status: 'online',
+      status: 'active',
       last_heartbeat: now,
       metadata,
       created_at: now,
