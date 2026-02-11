@@ -155,8 +155,9 @@ class FarmAssistant {
       <div class="assistant-container minimized">
         <div class="assistant-header">
           <div class="header-content">
+            <img src="/images/cheo-mascot.svg" alt="Cheo" class="assistant-mascot-thumb" />
             <div class="header-text">
-              <strong>Farm System</strong>
+              <strong>Farm Assistant</strong>
               <small>${this.currentContext.page}</small>
             </div>
           </div>
@@ -167,10 +168,21 @@ class FarmAssistant {
         
         <div class="assistant-body">
           <div class="chat-messages" id="chatMessages">
-            <div class="system-welcome">
+            <div class="mascot-welcome">
+              <img src="/images/cheo-mascot.svg" alt="Cheo the Farm Assistant" class="mascot-image" />
               <div class="welcome-text">
-                <strong>Farm System Assistant</strong>
-                <span style="color:#94a3b8;font-size:0.85rem;">Type a question below to get started.</span>
+                <strong>Hi I'm Cheo, your farm Assistant!</strong>
+                <strong class="love-to-help">I love to help!</strong>
+                <div class="example-queries">
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What\'s ready to harvest?')">What's ready to harvest?</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show me the temperature')">Show me the temperature</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Where is the lettuce?')">Where is the lettuce?</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Fun fact!')">Fun Fact!</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Tell me a joke')">Tell me a joke</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Blink lights for basil')">Blink lights for basil</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show planting schedule')">Show planting schedule</button>
+                </div>
+                <strong>Or type your own question below!</strong>
               </div>
             </div>
           </div>

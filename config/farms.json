@@ -1,19 +1,19 @@
 {
   "farms": [
     {
-      "farmId": "GR-00001",
-      "name": "Sandbox Test Farm",
-      "url": "http://192.168.2.80:8091",
-      "region": "west",
+      "farmId": "FARM-TEST-WIZARD-001",
+      "name": "This is Your Farm",
+      "url": "http://localhost:8091",
+      "region": "east",
       "enabled": true,
-      "description": "Local development farm",
+      "description": "Primary test farm - Kingston, Ontario",
       "contact": {
-        "email": "admin@sandbox.greenreach.local",
+        "email": "Johndoe@thisisyourfarm.com",
         "phone": ""
       },
       "coordinates": {
-        "lat": 37.7749,
-        "lng": -122.4194
+        "lat": 44.2312,
+        "lng": -76.486
       }
     },
     {

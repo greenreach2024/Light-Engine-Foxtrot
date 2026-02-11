@@ -1,17 +1,24 @@
 {
   "schemaVersion": "1.0.0",
-  "farmId": "FARM-MKLOMAT3-A9D8",
-  "name": "Big Green Farm",
+  "farmId": "FARM-TEST-WIZARD-001",
+  "name": "This is Your Farm",
   "status": "online",
   "region": "Ontario, Canada",
   "url": "http://100.65.187.59:8091",
   "contact": {
-    "name": "Shelby Gilbert",
-    "email": "shelbygilbert@rogers.com",
-    "phone": "+1 (555) 436-7324"
+    "name": "John Doe",
+    "email": "Johndoe@thisisyourfarm.com",
+    "phone": ""
   },
   "coordinates": {
-    "lat": 47.6062,
-    "lng": -122.3321
-  }
+    "lat": 44.2312,
+    "lng": -76.486
+  },
+  "location": "Kingston, ON",
+  "rooms": [
+    {
+      "id": "room-3xxjln",
+      "name": "Your Grow Room"
+    }
+  ]
 }

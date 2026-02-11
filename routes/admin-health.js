@@ -15,11 +15,11 @@ const router = express.Router();
  */
 const REGISTERED_FARMS = [
   {
-    farmId: 'demo-farm-1',
-    name: 'Light Engine Demo Farm',
-    url: 'http://light-engine-demo-env.eba-smmuh8fc.us-east-1.elasticbeanstalk.com',
-    location: 'AWS us-east-1',
-    size: 'Demo Environment',
+    farmId: 'FARM-TEST-WIZARD-001',
+    name: 'This is Your Farm',
+    url: 'http://100.65.187.59:8091',
+    location: 'Kingston, ON',
+    size: '1 Room, 4 Groups',
     plan: 'Enterprise'
   }
   // Additional farms will be added here as they deploy Light Engine

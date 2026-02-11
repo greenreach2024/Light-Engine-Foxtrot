@@ -13907,17 +13907,24 @@ app.get('/api/admin/farms', adminAuthMiddleware, asyncHandler(async (req, res) =
       const rooms = zones.length;
       const deviceCount = devices.length;
       
-      // Count trays from inventory if available
+      // Count trays from groups data
       let trays = 0;
       try {
-        const invData = await fetchFarmData(`${farmConfig.url}/data/inventory.json`, 2000);
-        trays = invData?.trays?.length || 0;
+        const groupsData = await fetchFarmData(`${farmConfig.url}/data/groups.json`, 2000);
+        const groups = groupsData?.groups || [];
+        trays = groups.reduce((sum, g) => sum + (g.trays || 0), 0);
       } catch (e) {
-        // Inventory optional
+        // Groups data optional, try inventory fallback
+        try {
+          const invData = await fetchFarmData(`${farmConfig.url}/data/inventory.json`, 2000);
+          trays = invData?.trays?.length || 0;
+        } catch (e2) {
+          // Inventory also optional
+        }
       }
       
-      // Calculate energy (placeholder - would come from energy endpoint)
-      const energy = Math.floor(Math.random() * 200) + 50;
+      // Energy from environment data (kWh estimate based on active devices)
+      const energy = deviceCount > 0 ? Math.round(deviceCount * 0.64 * 12) : 0;
       
       // Determine status
       const farmStatus = 'online';

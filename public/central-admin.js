@@ -2349,22 +2349,46 @@ async function loadGroupTrays(farmId, roomId, zoneId, groupId, count) {
 async function loadFarmRooms(farmId, count) {
     roomsData = [];
     
-    for (let i = 1; i <= count; i++) {
-        const temp = (Math.random() * 4 + 22).toFixed(1);
-        const humidity = (Math.random() * 20 + 60).toFixed(0);
-        const co2 = Math.floor(Math.random() * 400 + 800);
-        const zones = Math.floor(Math.random() * 4) + 2;
-        const devices = zones * (Math.floor(Math.random() * 4) + 3);
+    try {
+        // Fetch real rooms data
+        const roomsRes = await fetch('/data/rooms.json');
+        const roomsJson = await roomsRes.json();
+        const roomsList = roomsJson.rooms || [];
         
-        roomsData.push({
-            name: `Room ${String.fromCharCode(64 + i)}`,
-            status: Math.random() > 0.9 ? 'warning' : 'online',
-            zones,
-            devices,
-            temp,
-            humidity,
-            co2
+        // Fetch live environment data
+        let envData = { zones: [] };
+        try {
+            const envRes = await fetch('/env');
+            envData = await envRes.json();
+        } catch(e) { /* optional */ }
+        
+        // Fetch groups for device counts
+        let groupsList = [];
+        try {
+            const groupsRes = await fetch('/data/groups.json');
+            const groupsJson = await groupsRes.json();
+            groupsList = groupsJson.groups || [];
+        } catch(e) { /* optional */ }
+        
+        roomsList.forEach(room => {
+            const zones = envData.zones || [];
+            const zone = zones[0] || {};
+            const sensors = zone.sensors || {};
+            const roomGroups = groupsList.filter(g => g.room === room.name || g.roomId === room.id);
+            const deviceCount = roomGroups.reduce((sum, g) => sum + (g.deviceCount || g.lights?.length || 0), 0);
+            
+            roomsData.push({
+                name: room.name,
+                status: zone.status || 'online',
+                zones: room.zones?.length || 1,
+                devices: deviceCount,
+                temp: sensors.tempC?.current != null ? sensors.tempC.current.toFixed(1) : '--',
+                humidity: sensors.rh?.current != null ? sensors.rh.current.toFixed(0) : '--',
+                co2: sensors.co2?.current != null ? sensors.co2.current.toFixed(0) : '--'
+            });
         });
+    } catch(e) {
+        console.error('[loadFarmRooms] Failed:', e);
     }
     
     renderRoomsTable();
@@ -3097,42 +3121,76 @@ async function loadRoomsView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading room data...</td></tr>';
     
     try {
-        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
-        const farmsData = await farmsRes.json();
+        // Fetch real rooms data
+        const roomsRes = await fetch('/data/rooms.json');
+        const roomsJson = await roomsRes.json();
+        const roomsList = roomsJson.rooms || [];
         
-        let rooms = [];
-        for (const farm of farmsData.farms || []) {
-            // Mock room data - in production, fetch from farm details
-            const roomCount = farm.rooms || Math.floor(Math.random() * 5) + 1;
-            for (let i = 1; i <= roomCount; i++) {
-                rooms.push({
-                    name: `Room ${String.fromCharCode(64 + i)}`,
-                    farmName: farm.name,
-                    temperature: (70 + Math.random() * 10).toFixed(1),
-                    humidity: (55 + Math.random() * 15).toFixed(0),
-                    co2: (800 + Math.random() * 400).toFixed(0),
-                    vpd: (0.7 + Math.random() * 0.4).toFixed(2),
-                    zones: Math.floor(Math.random() * 4) + 2,
-                    devices: Math.floor(Math.random() * 20) + 10,
-                    status: Math.random() > 0.8 ? 'warning' : 'optimal'
-                });
-            }
-        }
+        // Fetch live environment data for sensor readings
+        let envData = { zones: [] };
+        try {
+            const envRes = await fetch('/env');
+            envData = await envRes.json();
+        } catch(e) { /* env data optional */ }
         
-        if (rooms.length === 0) {
+        // Fetch groups for device/tray counts
+        let groupsList = [];
+        try {
+            const groupsRes = await fetch('/data/groups.json');
+            const groupsJson = await groupsRes.json();
+            groupsList = groupsJson.groups || [];
+        } catch(e) { /* groups optional */ }
+        
+        // Get farm name
+        let farmName = 'This Farm';
+        try {
+            const farmRes = await fetch('/data/farm.json');
+            const farmJson = await farmRes.json();
+            farmName = farmJson.name || farmJson.farmName || 'This Farm';
+        } catch(e) { /* farm optional */ }
+        
+        if (roomsList.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="empty">No rooms found</td></tr>';
             return;
         }
+        
+        const rooms = roomsList.map(room => {
+            // Find matching env zone data for live sensor readings
+            const zones = envData.zones || [];
+            const zone = zones[0] || {};
+            const sensors = zone.sensors || {};
+            
+            // Count groups and devices for this room
+            const roomGroups = groupsList.filter(g => g.room === room.name || g.roomId === room.id);
+            const deviceCount = roomGroups.reduce((sum, g) => sum + (g.deviceCount || g.lights?.length || 0), 0);
+            const zoneCount = room.zones?.length || 1;
+            
+            const tempC = sensors.tempC?.current;
+            const rh = sensors.rh?.current;
+            const co2 = sensors.co2?.current;
+            const vpd = sensors.vpd?.current;
+            
+            return {
+                name: room.name,
+                farmName: farmName,
+                temperature: tempC != null ? (tempC * 9/5 + 32).toFixed(1) : '--',
+                humidity: rh != null ? rh.toFixed(0) : '--',
+                co2: co2 != null ? co2.toFixed(0) : '--',
+                vpd: vpd != null ? vpd.toFixed(2) : '--',
+                zones: zoneCount,
+                devices: deviceCount,
+                status: zone.status || 'optimal'
+            };
+        });
         
         const html = rooms.map(room => `
             <tr>
                 <td>${room.name}</td>
                 <td>${room.farmName}</td>
-                <td>${room.temperature}°F</td>
-                <td>${room.humidity}%</td>
-                <td>${room.co2} ppm</td>
-                <td>${room.vpd} kPa</td>
+                <td>${room.temperature}${room.temperature !== '--' ? '\u00B0F' : ''}</td>
+                <td>${room.humidity}${room.humidity !== '--' ? '%' : ''}</td>
+                <td>${room.co2}${room.co2 !== '--' ? ' ppm' : ''}</td>
+                <td>${room.vpd}${room.vpd !== '--' ? ' kPa' : ''}</td>
                 <td>${room.zones}</td>
                 <td>${room.devices}</td>
                 <td><span class="status-badge status-${room.status}">${room.status}</span></td>
@@ -3156,46 +3214,74 @@ async function loadZonesView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading zone data...</td></tr>';
     
     try {
-        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
-        const farmsData = await farmsRes.json();
+        // Fetch real room-map data for zone definitions
+        const roomMapRes = await fetch('/data/room-map.json');
+        const roomMap = await roomMapRes.json();
+        const mapZones = roomMap.zones || [];
+        const roomName = roomMap.name || 'Your Grow Room';
         
-        let zones = [];
-        for (const farm of farmsData.farms || []) {
-            const roomCount = farm.rooms || 2;
-            for (let r = 1; r <= roomCount; r++) {
-                const zoneCount = Math.floor(Math.random() * 3) + 2;
-                for (let z = 1; z <= zoneCount; z++) {
-                    zones.push({
-                        name: `Zone ${z}`,
-                        farmName: farm.name,
-                        roomName: `Room ${String.fromCharCode(64 + r)}`,
-                        temperature: (70 + Math.random() * 10).toFixed(1),
-                        humidity: (55 + Math.random() * 15).toFixed(0),
-                        co2: (800 + Math.random() * 400).toFixed(0),
-                        ppfd: (400 + Math.random() * 200).toFixed(0),
-                        vpd: (0.7 + Math.random() * 0.4).toFixed(2),
-                        groups: Math.floor(Math.random() * 3) + 1
-                    });
-                }
-            }
-        }
+        // Get farm name
+        let farmName = 'This Farm';
+        try {
+            const farmRes = await fetch('/data/farm.json');
+            const farmJson = await farmRes.json();
+            farmName = farmJson.name || farmJson.farmName || 'This Farm';
+        } catch(e) { /* optional */ }
         
-        if (zones.length === 0) {
+        // Fetch live environment data
+        let envData = { zones: [] };
+        try {
+            const envRes = await fetch('/env');
+            envData = await envRes.json();
+        } catch(e) { /* optional */ }
+        
+        // Fetch groups for zone counts
+        let groupsList = [];
+        try {
+            const groupsRes = await fetch('/data/groups.json');
+            const groupsJson = await groupsRes.json();
+            groupsList = groupsJson.groups || [];
+        } catch(e) { /* optional */ }
+        
+        if (mapZones.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="empty">No zones found</td></tr>';
             return;
         }
         
-        const html = zones.slice(0, 100).map(zone => `
+        const zones = mapZones.map(z => {
+            const envZone = (envData.zones || []).find(ez => String(ez.id) === String(z.zone) || ez.name === z.name) || {};
+            const sensors = envZone.sensors || {};
+            const zoneGroups = groupsList.filter(g => String(g.zone) === String(z.zone));
+            
+            const tempC = sensors.tempC?.current;
+            const rh = sensors.rh?.current;
+            const co2 = sensors.co2?.current;
+            const ppfd = sensors.ppfd?.current;
+            const vpd = sensors.vpd?.current;
+            
+            return {
+                name: z.name || `Zone ${z.zone}`,
+                farmName: farmName,
+                roomName: roomName,
+                temperature: tempC != null ? (tempC * 9/5 + 32).toFixed(1) : '--',
+                humidity: rh != null ? rh.toFixed(0) : '--',
+                co2: co2 != null ? co2.toFixed(0) : '--',
+                ppfd: ppfd != null ? ppfd.toFixed(0) : '--',
+                vpd: vpd != null ? vpd.toFixed(2) : '--',
+                groups: zoneGroups.length
+            };
+        });
+        
+        const html = zones.map(zone => `
             <tr>
                 <td>${zone.name}</td>
                 <td>${zone.farmName}</td>
                 <td>${zone.roomName}</td>
-                <td>${zone.temperature}°F</td>
-                <td>${zone.humidity}%</td>
-                <td>${zone.co2} ppm</td>
-                <td>${zone.ppfd} μmol/m²/s</td>
-                <td>${zone.vpd} kPa</td>
+                <td>${zone.temperature}${zone.temperature !== '--' ? '\u00B0F' : ''}</td>
+                <td>${zone.humidity}${zone.humidity !== '--' ? '%' : ''}</td>
+                <td>${zone.co2}${zone.co2 !== '--' ? ' ppm' : ''}</td>
+                <td>${zone.ppfd}${zone.ppfd !== '--' ? ' \u03BCmol/m\u00B2/s' : ''}</td>
+                <td>${zone.vpd}${zone.vpd !== '--' ? ' kPa' : ''}</td>
                 <td>${zone.groups}</td>
                 <td><button class="btn-small">Configure</button></td>
             </tr>
@@ -3217,28 +3303,53 @@ async function loadAllDevicesView() {
     tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading device inventory...</td></tr>';
     
     try {
-        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
-        if (!farmsRes || !farmsRes.ok) throw new Error('Failed to load farms');
-        const farmsData = await farmsRes.json();
-        
+        // Fetch real IoT devices and groups data
         let allDevices = [];
-        for (const farm of farmsData.farms || []) {
-            const deviceCount = farm.devices || Math.floor(Math.random() * 30) + 20;
-            const types = ['light', 'sensor', 'hvac', 'irrigation'];
-            for (let i = 1; i <= deviceCount; i++) {
-                const type = types[Math.floor(Math.random() * types.length)];
-                allDevices.push({
-                    deviceId: `${type.toUpperCase()}-${String(i).padStart(4, '0')}`,
-                    name: `${type.charAt(0).toUpperCase() + type.slice(1)} Device ${i}`,
-                    type,
-                    farmName: farm.name,
-                    location: `Room ${String.fromCharCode(65 + Math.floor(i / 10))} / Zone ${(i % 5) + 1}`,
-                    status: Math.random() > 0.9 ? 'offline' : 'online',
-                    firmware: `v${Math.floor(Math.random() * 3) + 1}.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 20)}`,
-                    lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString()
+        let farmName = 'This Farm';
+        
+        try {
+            const farmRes = await fetch('/data/farm.json');
+            const farmJson = await farmRes.json();
+            farmName = farmJson.name || farmJson.farmName || 'This Farm';
+        } catch(e) { /* optional */ }
+        
+        // Fetch IoT devices
+        try {
+            const devicesRes = await fetch('/data/iot-devices.json');
+            const devicesJson = await devicesRes.json();
+            const devices = Array.isArray(devicesJson) ? devicesJson : [];
+            allDevices = devices.map(d => ({
+                deviceId: d.id || d.deviceId || 'Unknown',
+                name: d.name || d.deviceName || 'Unnamed Device',
+                type: d.type || d.category || 'unknown',
+                farmName: farmName,
+                location: `${d.room || d.location || 'Unknown'} / Zone ${d.zone || '1'}`,
+                status: d.status || 'online',
+                firmware: d.firmware || d.firmwareVersion || '--',
+                lastSeen: d.lastSeen || new Date().toISOString()
+            }));
+        } catch(e) { /* iot-devices optional */ }
+        
+        // Also include lights from groups
+        try {
+            const groupsRes = await fetch('/data/groups.json');
+            const groupsJson = await groupsRes.json();
+            const groups = groupsJson.groups || [];
+            groups.forEach(g => {
+                (g.lights || []).forEach(light => {
+                    allDevices.push({
+                        deviceId: light.id || light.deviceId,
+                        name: light.name || light.deviceName || `Light ${light.id}`,
+                        type: 'light',
+                        farmName: farmName,
+                        location: `${g.room || 'Unknown'} / Zone ${g.zone || '1'}`,
+                        status: 'online',
+                        firmware: light.protocol || '--',
+                        lastSeen: g.lastModified || new Date().toISOString()
+                    });
                 });
-            }
-        }
+            });
+        } catch(e) { /* groups optional */ }
         
         if (allDevices.length === 0) {
             tbody.innerHTML = '<tr><td colspan="9" class="empty">No devices found</td></tr>';

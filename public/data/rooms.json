@@ -3,74 +3,29 @@
     {
       "id": "room-3xxjln",
       "name": "Your Grow Room",
+      "type": "vertical",
+      "capacity": 100,
       "zones": [
         {
-          "id": "zone-1",
-          "name": "Zone 1"
+          "id": "room-3xxjln-z1",
+          "name": "Zone 1",
+          "zone": 1
         }
       ],
-      "equipment": [
+      "fixtures": [
         {
-          "id": "room-3xxjln-sensor-serial-0001",
-          "name": "ESP32 Sensor (ttyUSB1)",
-          "category": "controllers",
-          "vendor": "GreenReach",
-          "model": "ESP32 Environmental Sensor",
-          "control": null,
-          "roomId": "room-3xxjln",
-          "count": 1
-        },
-        {
-          "id": "room-3xxjln-fans-0",
-          "name": "Exhaust Fan 1",
-          "category": "fan",
-          "vendor": "",
-          "model": "",
-          "control": "Manual",
-          "roomId": "room-3xxjln",
-          "count": 1
-        },
-        {
-          "id": "room-3xxjln-fans-1",
-          "name": "Exhaust Fan 2",
-          "category": "fan",
-          "vendor": "",
-          "model": "",
-          "control": "Manual",
-          "roomId": "room-3xxjln",
-          "count": 1
-        },
-        {
-          "id": "room-3xxjln-fans-2",
-          "name": "Circulation Fan",
-          "category": "fan",
-          "vendor": "",
-          "model": "",
-          "control": "Manual",
-          "roomId": "room-3xxjln",
-          "count": 1
-        },
-        {
-          "id": "room-3xxjln-fans-3",
-          "name": "Intake Fan",
-          "category": "fan",
-          "vendor": "",
-          "model": "",
-          "control": "Manual",
-          "roomId": "room-3xxjln",
-          "count": 1
-        },
-        {
-          "id": "room-3xxjln-Quest-0",
-          "name": "Dehumidifier",
-          "category": "dehumidifier",
-          "vendor": "Quest",
-          "model": "",
-          "control": "Manual",
-          "roomId": "room-3xxjln",
-          "count": 1
+          "name": "GROW3 Pro 640",
+          "vendor": "Light Engine",
+          "model": "GROW3 Pro 640",
+          "spectrum": "dynamic",
+          "count": 4
         }
       ]
     }
-  ]
+  ],
+  "metadata": {
+    "lastUpdated": "2026-02-10T12:00:00.000Z",
+    "version": "1.0",
+    "source": "local"
+  }
 }
