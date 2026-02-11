@@ -963,10 +963,13 @@ router.get('/farms/:farmId', async (req, res) => {
             console.warn('[Admin API] Database unavailable for farm detail:', farmId);
         }
 
-        const roomsCount = Array.isArray(roomsData) ? roomsData.length : 0;
+        // Normalize rooms/groups: support both flat arrays and {rooms:[...]}/{groups:[...]} wrappers
+        const roomsList = Array.isArray(roomsData) ? roomsData : (roomsData?.rooms || []);
+        const groupsList = Array.isArray(groupsData) ? groupsData : (groupsData?.groups || []);
+        const roomsCount = roomsList.length;
         const zonesFromTelemetry = Array.isArray(telemetryData?.zones) ? telemetryData.zones : [];
-        const zonesCount = zonesFromTelemetry.length || (Array.isArray(groupsData) ? groupsData.length : 0);
-        const groupsCount = Array.isArray(groupsData) ? groupsData.length : 0;
+        const zonesCount = zonesFromTelemetry.length || groupsList.length;
+        const groupsCount = groupsList.length;
         console.log('[Admin API] Farm data counts:', {
             farmId,
             roomsCount,
@@ -981,7 +984,13 @@ router.get('/farms/:farmId', async (req, res) => {
             avgVpd: averageNumber(zonesFromTelemetry.map(z => z.sensors?.vpd?.current ?? z.vpd ?? null))
         } : null;
 
-        // Format farm data - only include fields that exist in DB
+        // Parse metadata safely
+        let parsedMeta = farmRow.metadata || {};
+        if (typeof parsedMeta === 'string') {
+            try { parsedMeta = JSON.parse(parsedMeta); } catch (e) { parsedMeta = {}; }
+        }
+
+        // Format farm data — expose camelCase fields for frontend + raw DB row
         const farm = {
             farmId: farmRow.farm_id,
             name: farmRow.name || 'Unknown Farm',
@@ -989,9 +998,22 @@ router.get('/farms/:farmId', async (req, res) => {
             lastHeartbeat: farmRow.last_heartbeat || null,
             createdAt: farmRow.created_at || null,
             updatedAt: farmRow.updated_at || null,
+            email: farmRow.email || parsedMeta.contact?.email || null,
+            contactName: farmRow.contact_name || parsedMeta.contactName || parsedMeta.contact?.name || null,
+            phone: parsedMeta.phone || parsedMeta.contact?.phone || null,
+            website: parsedMeta.website || parsedMeta.contact?.website || null,
+            address: parsedMeta.address || null,
+            city: parsedMeta.city || null,
+            state: parsedMeta.state || null,
+            postalCode: parsedMeta.postalCode || null,
+            location: parsedMeta.location || null,
+            coordinates: parsedMeta.coordinates || null,
+            apiUrl: farmRow.api_url || null,
             rooms: roomsCount,
             zones: zonesCount,
             groups: groupsCount,
+            roomsData: roomsList,
+            groupsData: groupsList,
             environmental: {
                 zones: zonesFromTelemetry,
                 summary: envSummary
@@ -1035,13 +1057,15 @@ router.get('/farms/:farmId/rooms', async (req, res) => {
             `SELECT data, updated_at FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
             [farmId, 'rooms']
         );
-        const rooms = result.rows[0]?.data || [];
+        const roomsRaw = result.rows[0]?.data || [];
+        // Handle both flat array and {rooms:[...]} wrapper formats
+        const rooms = Array.isArray(roomsRaw) ? roomsRaw : (roomsRaw.rooms || []);
         const updatedAt = result.rows[0]?.updated_at || null;
 
         res.json({
             success: true,
             rooms,
-            count: Array.isArray(rooms) ? rooms.length : 0,
+            count: rooms.length,
             farmId,
             updatedAt
         });
@@ -1098,8 +1122,9 @@ router.get('/farms/:farmId/groups', async (req, res) => {
             `SELECT data, updated_at FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
             [farmId, 'groups']
         );
-        const groupsData = groupsResult.rows[0]?.data || [];
-        const groups = Array.isArray(groupsData) ? groupsData : [];
+        const groupsRaw = groupsResult.rows[0]?.data || [];
+        // Handle both flat array and {groups:[...]} wrapper formats
+        const groups = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
         const updatedAt = groupsResult.rows[0]?.updated_at || null;
 
         res.json({
@@ -1881,6 +1906,12 @@ router.get('/farms/:farmId/config', async (req, res) => {
         }
         
         const farm = farmResult.rows[0];
+
+        // Parse metadata safely
+        let farmMeta = farm.metadata || {};
+        if (typeof farmMeta === 'string') {
+            try { farmMeta = JSON.parse(farmMeta); } catch (e) { farmMeta = {}; }
+        }
         
         // Get API keys count (don't expose actual keys)
         let apiKeyCount = 0;
@@ -1909,12 +1940,21 @@ router.get('/farms/:farmId/config', async (req, res) => {
         const config = {
             farmId: farm.farm_id,
             farmName: farm.name,
-            contactEmail: farm.email,
+            contactEmail: farm.email || farmMeta.contact?.email || null,
+            contactName: farm.contact_name || farmMeta.contactName || farmMeta.contact?.name || null,
+            phone: farmMeta.phone || farmMeta.contact?.phone || null,
+            website: farmMeta.website || farmMeta.contact?.website || null,
+            address: farmMeta.address || null,
+            city: farmMeta.city || null,
+            state: farmMeta.state || null,
+            postalCode: farmMeta.postalCode || null,
+            location: farmMeta.location || null,
+            coordinates: farmMeta.coordinates || null,
             apiUrl: farm.api_url || null,
             network: {
-                localIP: farm.metadata?.network?.local_ip || null,
-                publicIP: farm.metadata?.network?.public_ip || null,
-                hostname: farm.metadata?.network?.hostname || null
+                localIP: farmMeta.network?.local_ip || null,
+                publicIP: farmMeta.network?.public_ip || null,
+                hostname: farmMeta.network?.hostname || null
             },
             apiKeys: {
                 count: apiKeyCount,
@@ -1922,7 +1962,7 @@ router.get('/farms/:farmId/config', async (req, res) => {
             },
             devices: {
                 count: deviceCount,
-                types: farm.metadata?.devices?.types || []
+                types: farmMeta.devices?.types || []
             },
             integrations: {
                 square: farm.settings?.square?.connected || false,
@@ -1940,7 +1980,7 @@ router.get('/farms/:farmId/config', async (req, res) => {
                 }
             },
             settings: farm.settings || {},
-            metadata: farm.metadata || {},
+            metadata: farmMeta,
             createdAt: farm.created_at,
             updatedAt: farm.updated_at
         };

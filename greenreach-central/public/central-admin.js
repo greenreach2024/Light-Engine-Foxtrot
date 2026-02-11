@@ -1963,6 +1963,8 @@ function normalizeDeviceList(payload) {
 
 async function resolveFarmGroups(farmId, farm) {
     if (Array.isArray(farm.groups)) return farm.groups;
+    // Use groupsData array from enriched farm detail response
+    if (Array.isArray(farm.groupsData) && farm.groupsData.length > 0) return farm.groupsData;
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
         if (!response || !response.ok) return [];

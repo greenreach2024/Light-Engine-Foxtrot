@@ -30,13 +30,21 @@ router.get('/', async (req, res, next) => {
        ORDER BY created_at DESC`
     );
     
-    const farms = result.rows.map(farm => ({
-      farmId: farm.farm_id,
-      name: farm.name,
-      status: farm.status,
-      lastHeartbeat: farm.last_heartbeat,
-      metadata: farm.metadata || {}
-    }));
+    const farms = result.rows.map(farm => {
+      let parsedMeta = farm.metadata || {};
+      if (typeof parsedMeta === 'string') {
+        try { parsedMeta = JSON.parse(parsedMeta); } catch (e) { parsedMeta = {}; }
+      }
+      return {
+        farmId: farm.farm_id,
+        name: farm.name,
+        status: farm.status,
+        lastHeartbeat: farm.last_heartbeat,
+        email: farm.email || parsedMeta.contact?.email || null,
+        contactName: farm.contact_name || parsedMeta.contactName || parsedMeta.contact?.name || null,
+        metadata: parsedMeta
+      };
+    });
     
     res.json({ farms });
   } catch (error) {
@@ -378,7 +386,9 @@ router.get('/:farmId/groups', async (req, res) => {
       );
 
       if (result.rows.length > 0) {
-        groups = result.rows[0].data;
+        const raw = result.rows[0].data;
+        // Handle both flat array and {groups:[...]} wrapper formats
+        groups = Array.isArray(raw) ? raw : (raw?.groups || []);
       }
 
       logger.info(`[Farms] Retrieved ${groups.length} groups from database for farm ${farmId}`);
@@ -426,12 +436,24 @@ router.get('/:farmId', async (req, res, next) => {
     }
 
     const farm = result.rows[0];
+    
+    // Parse metadata safely
+    let parsedMeta = farm.metadata || {};
+    if (typeof parsedMeta === 'string') {
+      try { parsedMeta = JSON.parse(parsedMeta); } catch (e) { parsedMeta = {}; }
+    }
+    
     res.json({
       farmId: farm.farm_id,
       name: farm.name,
       status: farm.status,
       lastHeartbeat: farm.last_heartbeat,
-      metadata: farm.metadata || {}
+      email: farm.email || parsedMeta.contact?.email || null,
+      contactName: farm.contact_name || parsedMeta.contactName || parsedMeta.contact?.name || null,
+      phone: parsedMeta.phone || parsedMeta.contact?.phone || null,
+      website: parsedMeta.website || parsedMeta.contact?.website || null,
+      apiUrl: farm.api_url || null,
+      metadata: parsedMeta
     });
   } catch (error) {
     logger.error('Error fetching farm:', error);
