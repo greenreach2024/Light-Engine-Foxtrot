@@ -1674,59 +1674,44 @@
       
       // Check if THIS TABLET has been paired
       if (!deviceToken || !farmId) {
-        // NEW: Check if accessing from edge device itself (localhost/LAN)
-        const isEdgeDeviceAccess = window.location.hostname === 'localhost' ||
-                                   window.location.hostname === '127.0.0.1' ||
-                                   window.location.hostname.startsWith('192.168.') ||
-                                   window.location.hostname.startsWith('10.') ||
-                                   window.location.hostname.startsWith('100.65.') ||
-                                   window.location.hostname.startsWith('172.');
-        
-        if (isEdgeDeviceAccess) {
-          // Auto-authenticate for edge device browser access
-          try {
-            // Fetch farm info from wholesale inventory (always available on edge device)
-            const inventoryResponse = await fetch('/api/wholesale/inventory');
-            if (inventoryResponse.ok) {
-              const inventoryData = await inventoryResponse.json();
-              const edgeFarmId = inventoryData.farm_id;
-              const edgeFarmName = inventoryData.farm_name || 'Edge Farm';
+        // Auto-authenticate from /api/wholesale/inventory (works on edge, cloud, and LAN)
+        try {
+          const inventoryResponse = await fetch('/api/wholesale/inventory');
+          if (inventoryResponse.ok) {
+            const inventoryData = await inventoryResponse.json();
+            const edgeFarmId = inventoryData.farm_id;
+            const edgeFarmName = inventoryData.farm_name || 'Farm';
+            
+            if (edgeFarmId) {
+              console.log('[Auto-Auth] Authenticated from inventory:', edgeFarmId);
+              localStorage.setItem('farmId', edgeFarmId);
+              localStorage.setItem('farmName', edgeFarmName);
+              localStorage.setItem('deviceToken', 'EDGE_DEVICE_LOCAL_ACCESS');
               
-              if (edgeFarmId) {
-                console.log('[Edge Device] Auto-authenticating:', edgeFarmId);
-                localStorage.setItem('farmId', edgeFarmId);
-                localStorage.setItem('farmName', edgeFarmName);
-                localStorage.setItem('deviceToken', 'EDGE_DEVICE_LOCAL_ACCESS');
-                
-                // Apply credentials immediately
-                deviceToken = 'EDGE_DEVICE_LOCAL_ACCESS';
-                farmId = edgeFarmId;
-                farmName = edgeFarmName;
-                
-                // Show authenticated UI
-                document.getElementById('pairingModal').style.display = 'none';
-                document.querySelector('.main-container').style.display = 'grid';
-                document.getElementById('farmName').textContent = farmName;
-                document.getElementById('logoutBtn').style.display = 'block';
-                return;
-              }
+              deviceToken = 'EDGE_DEVICE_LOCAL_ACCESS';
+              farmId = edgeFarmId;
+              farmName = edgeFarmName;
             }
-          } catch (error) {
-            console.error('Edge device auto-login failed:', error);
           }
+        } catch (error) {
+          console.error('[Auto-Auth] Failed:', error);
         }
         
-        // Not edge device or auto-login failed - proceed without pairing modal
-        // document.getElementById('pairingModal').style.display = 'flex';
-        // document.querySelector('.main-container').style.display = 'none';
-        // startPairingScanner();
-        console.log('[Auth] Proceeding without authentication modal');
-      } else {
-        // Already authenticated (tablet or edge device)
-        document.getElementById('pairingModal').style.display = 'none';
-        document.querySelector('.main-container').style.display = 'grid';
-        document.getElementById('farmName').textContent = farmName || `Farm ${farmId}`;
-        document.getElementById('logoutBtn').style.display = 'block';
+        if (!deviceToken || !farmId) {
+          console.log('[Auth] No credentials available — waiting for pairing');
+        }
+      }
+      
+      // Show authenticated UI (safe null checks)
+      if (deviceToken && farmId) {
+        const pairingModal = document.getElementById('pairingModal');
+        if (pairingModal) pairingModal.style.display = 'none';
+        const mainContainer = document.querySelector('.main-container');
+        if (mainContainer) mainContainer.style.display = 'grid';
+        const farmNameEl = document.getElementById('farmName');
+        if (farmNameEl) farmNameEl.textContent = farmName || `Farm ${farmId}`;
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) logoutBtn.style.display = 'block';
       }
     }
     

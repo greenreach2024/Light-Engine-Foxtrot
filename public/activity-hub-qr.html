@@ -247,7 +247,7 @@
 
     <div class="actions">
       <button class="btn" onclick="window.print()">🖨️ Print This Page</button>
-      <a href="/farm-admin.html" class="btn btn-secondary">← Back to Dashboard</a>
+      <a href="/LE-farm-admin.html" class="btn btn-secondary">← Back to Dashboard</a>
       <button class="btn btn-secondary" onclick="regenerateQR()">🔄 Regenerate QR</button>
     </div>
 
@@ -255,10 +255,10 @@
   </div>
 
   <script>
-    // Get farm credentials from localStorage
-    const farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id');
-    const farmName = localStorage.getItem('farmName') || localStorage.getItem('farm_name');
-    const token = localStorage.getItem('deviceToken') || localStorage.getItem('token') || localStorage.getItem('auth_token');
+    // Get farm credentials from localStorage (or fetch from server)
+    let farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id');
+    let farmName = localStorage.getItem('farmName') || localStorage.getItem('farm_name');
+    let token = localStorage.getItem('deviceToken') || localStorage.getItem('token') || localStorage.getItem('auth_token');
 
     console.log('[ActivityHub QR] Credentials loaded:', { 
       farmId: farmId ? `${farmId.substring(0, 15)}...` : 'null', 
@@ -266,9 +266,33 @@
       hasToken: !!token 
     });
 
+    // Auto-fetch credentials from server if localStorage is empty
+    async function ensureCredentials() {
+      if (farmId && token) return true;
+      try {
+        const res = await fetch('/api/wholesale/inventory');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.farm_id) {
+            farmId = data.farm_id;
+            farmName = data.farm_name || 'My Farm';
+            token = 'EDGE_DEVICE_LOCAL_ACCESS';
+            localStorage.setItem('farmId', farmId);
+            localStorage.setItem('farmName', farmName);
+            localStorage.setItem('deviceToken', token);
+            console.log('[ActivityHub QR] Auto-fetched credentials:', farmId);
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error('[ActivityHub QR] Failed to fetch credentials:', e);
+      }
+      return false;
+    }
+
     // Update farm info display
-    document.getElementById('farm-name').textContent = farmName || 'Unknown Farm';
-    document.getElementById('farm-id').textContent = farmId || 'Unknown';
+    document.getElementById('farm-name').textContent = farmName || 'Loading...';
+    document.getElementById('farm-id').textContent = farmId || 'Loading...';
 
     // Function to generate QR code
     function generateQRCode() {
@@ -289,9 +313,10 @@
       qrContainer.innerHTML = '';
       errorMessage.style.display = 'none';
 
-      // Construct pairing URL using WiFi AP address (tablets connect to edge device WiFi)
-      // Edge device runs WiFi access point on 10.42.0.1
-      const pairingUrl = `http://10.42.0.1:8091/views/tray-inventory.html?pair=${encodeURIComponent(token)}|${encodeURIComponent(farmId)}|${encodeURIComponent(farmName || 'My Farm')}`;
+      // Use current hostname for the pairing URL so it works on cloud, LAN, and edge
+      const host = window.location.host || '10.42.0.1:8091';
+      const protocol = window.location.protocol || 'http:';
+      const pairingUrl = `${protocol}//${host}/views/tray-inventory.html?pair=${encodeURIComponent(token)}|${encodeURIComponent(farmId)}|${encodeURIComponent(farmName || 'My Farm')}`;
       
       console.log('[ActivityHub QR] Generating pairing QR code...');
       console.log('[ActivityHub QR] Pairing URL:', pairingUrl);
@@ -353,8 +378,12 @@
       }, 2000);
     }
 
-    // Generate QR code on page load
-    window.addEventListener('DOMContentLoaded', () => {
+    // Generate QR code on page load (after ensuring credentials)
+    window.addEventListener('DOMContentLoaded', async () => {
+      await ensureCredentials();
+      // Update display with fetched credentials
+      document.getElementById('farm-name').textContent = farmName || 'Unknown Farm';
+      document.getElementById('farm-id').textContent = farmId || 'Unknown';
       generateQRCode();
     });
 
