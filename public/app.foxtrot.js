@@ -19,13 +19,17 @@ const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API
   try {
     const origDebug = console.debug.bind(console);
     console.debug = function(...args) {
-      const enabled = localStorage.getItem('gr.debug') === 'true' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const enabled = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       if (enabled) origDebug(...args);
     };
   } catch (e) {
     // ignore
   }
 })();
+
+// Global debug flag and helper (use localStorage.setItem('gr.debug','true') to enable)
+window.GR_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+window.grLog = function(...args) { if (window.GR_DEBUG && console && typeof console.debug === 'function') console.debug(...args); };
 
 // Billing management helper
 function manageBilling() {

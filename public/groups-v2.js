@@ -5818,9 +5818,10 @@ function populateGroupsV2LoadGroupDropdown() {
     console.log('[Groups V2] Load dropdown - First group:', groups[0]);
     console.log('[Groups V2] Load dropdown - All groups:', groups.map(g => `${g.name} (${g.id})`));
   } else {
-    console.error('[Groups V2] Load dropdown - ⚠️ NO GROUPS IN STATE!');
-    console.error('[Groups V2] window.STATE:', window.STATE);
-    console.error('[Groups V2] window.STATE.groups:', window.STATE?.groups);
+    // Not necessarily an error in empty setups — mark as warning and capture state for debug
+    console.warn('[Groups V2] Load dropdown - ⚠️ NO GROUPS IN STATE!');
+    grLog('[Groups V2] window.STATE:', window.STATE);
+    grLog('[Groups V2] window.STATE.groups:', window.STATE?.groups);
   }
   
   // Filter groups by selected room and zone
