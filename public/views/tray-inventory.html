@@ -1624,18 +1624,18 @@
       const pairParam = urlParams.get('pair');
       
       if (pairParam) {
-        console.log('[QR Pairing] Parameter detected:', pairParam.substring(0, 20) + '... (length: ' + pairParam.length + ')');
-        console.log('[QR Pairing] Full URL:', window.location.href);
+        console.debug('[QR Pairing] Parameter detected:', pairParam.substring(0, 20) + '... (length: ' + pairParam.length + ')');
+        console.debug('[QR Pairing] Full URL:', window.location.href);
         try {
           const parts = pairParam.split('|');
-          console.log('[QR Pairing] Split into', parts.length, 'parts');
+          console.debug('[QR Pairing] Split into', parts.length, 'parts');
           
           if (parts.length >= 2) {
             const token = parts[0];
             const farmIdFromQR = parts[1];
             const farmNameFromQR = parts[2] || `Farm ${farmIdFromQR}`;
             
-            console.log('[QR Pairing] Parsed credentials:', { 
+            console.debug('[QR Pairing] Parsed credentials:', { 
               tokenLength: token.length, 
               farmId: farmIdFromQR, 
               farmName: farmNameFromQR 
@@ -1645,13 +1645,13 @@
             localStorage.setItem('deviceToken', token);
             localStorage.setItem('farmId', farmIdFromQR);
             localStorage.setItem('farmName', farmNameFromQR);
-            console.log('[QR Pairing] Credentials stored to localStorage');
+            console.debug('[QR Pairing] Credentials stored to localStorage');
             
             // Apply to current session
             deviceToken = token;
             farmId = farmIdFromQR;
             farmName = farmNameFromQR;
-            console.log('[QR Pairing] Session variables set');
+            console.debug('[QR Pairing] Session variables set');
             
             // Clean URL (remove ?pair parameter)
             window.history.replaceState({}, document.title, window.location.pathname);

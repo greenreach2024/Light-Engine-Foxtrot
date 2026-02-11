@@ -1991,7 +1991,7 @@
   <script src="/lib/chart.umd.js?v=20260203"></script>
 
   <script>
-    console.log('🔄 FARM SUMMARY - CODE VERSION 2.3 LOADED - Dec 22, 2025 - Local Chart.js');
+    console.debug('🔄 FARM SUMMARY - CODE VERSION 2.3 LOADED - Dec 22, 2025 - Local Chart.js');
     console.log('🔄 If you see this message, the updated file is being served!');
     
     const queryParams = new URLSearchParams(window.location.search);
@@ -2079,7 +2079,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
-      console.log('[Farm Summary] DOMContentLoaded fired');
+      console.debug('[Farm Summary] DOMContentLoaded fired');
       console.log('[Farm Summary] Chart.js available:', typeof Chart !== 'undefined');
       console.log('[Farm Summary] loadAnomalySparkline defined:', typeof loadAnomalySparkline === 'function');
       console.log('[Farm Summary] loadEnergyForecast defined:', typeof loadEnergyForecast === 'function');
@@ -2269,7 +2269,7 @@
         const response = await fetch('/api/farm-sales/inventory');
         if (response.ok) {
           const data = await response.json();
-          console.log('[Farm Summary] Cloud inventory loaded:', data.inventory?.length, 'products');
+          console.debug('[Farm Summary] Cloud inventory loaded:', data.inventory?.length, 'products');
         }
       } catch (e) {
         console.log('[Farm Summary] Cloud inventory not available:', e.message);

@@ -1351,15 +1351,15 @@
 
     // Initialize
     window.addEventListener('DOMContentLoaded', async () => {
-      console.log('[Heat Map] DOMContentLoaded event fired');
+      console.debug('[Heat Map] DOMContentLoaded event fired');
       STATE.canvas = document.getElementById('heatmapCanvas');
       STATE.ctx = STATE.canvas.getContext('2d');
       
       setupEventListeners();
       
-      console.log('[Heat Map] Starting loadData...');
+      console.debug('[Heat Map] Starting loadData...');
       await loadData();
-      console.log('[Heat Map] loadData complete, STATE.rooms:', STATE.rooms?.length);
+      console.debug('[Heat Map] loadData complete, STATE.rooms:', STATE.rooms?.length);
       
       renderHeatMap();
       updateStatusBar();
@@ -1433,17 +1433,17 @@
 
     async function loadData() {
       try {
-        console.log('[Heat Map] Loading data files...');
+        console.debug('[Heat Map] Loading data files...');
         
         // Load rooms list
-        console.log('[Heat Map] Fetching /data/rooms.json...');
+        console.debug('[Heat Map] Fetching /data/rooms.json...');
         const roomsResponse = await fetch('/data/rooms.json');
-        console.log('[Heat Map] Rooms response status:', roomsResponse.status, roomsResponse.ok);
+        console.debug('[Heat Map] Rooms response status:', roomsResponse.status, roomsResponse.ok);
         if (!roomsResponse.ok) throw new Error(`Failed to load rooms.json: ${roomsResponse.status}`);
         const roomsData = await roomsResponse.json();
-        console.log('[Heat Map] Rooms data parsed:', roomsData);
+        console.debug('[Heat Map] Rooms data parsed:', roomsData);
         STATE.rooms = roomsData.rooms || [];
-        console.log('[Heat Map] Loaded rooms:', STATE.rooms.length, 'rooms', STATE.rooms);
+        console.debug('[Heat Map] Loaded rooms:', STATE.rooms.length, 'rooms', STATE.rooms);
 
         // Populate room dropdown early so it's available even if later fetches fail
         populateRoomDropdown();

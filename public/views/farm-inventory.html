@@ -594,7 +594,7 @@
                              window.location.hostname.includes('greenreach.farm');
 
     async function loadInventory() {
-      console.log('[loadInventory] Starting...');
+      console.debug('[loadInventory] Starting...');
       console.log('[loadInventory] API_BASE:', API_BASE);
       console.log('[loadInventory] isCentralServer:', isCentralServer);
       console.log('[loadInventory] window.location:', window.location.href);
@@ -608,7 +608,7 @@
           return;
         }
 
-        console.log('[loadInventory] Fetching data from:', API_BASE);
+        console.debug('[loadInventory] Fetching data from:', API_BASE);
         console.log('[loadInventory] Endpoint 1:', `${API_BASE}/api/inventory/current`);
         console.log('[loadInventory] Endpoint 2:', `${API_BASE}/api/inventory/forecast`);
         console.log('[loadInventory] Endpoint 3:', `${API_BASE}/data/groups.json`);
@@ -647,7 +647,7 @@
           })
         ]);
 
-        console.log('[loadInventory] Response status:', {
+        console.debug('[loadInventory] Response status:', {
           current: currentResp.status,
           forecast: forecastResp.status,
           groups: groupsResp.status,
@@ -676,7 +676,7 @@
         const roomsData = roomsResponse.rooms || [];
         const farmData = farmResp.ok ? await farmResp.json() : {};
 
-        console.log('[loadInventory] Data loaded:', {
+        console.debug('[loadInventory] Data loaded:', {
           currentData: !!currentData,
           forecastData: !!forecastData,
           groupsCount: groupsData.length,
