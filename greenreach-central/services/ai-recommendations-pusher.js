@@ -1,7 +1,7 @@
 /**
  * AI Recommendations Pusher Service
  * 
- * Periodically analyzes all farms using GPT-4 and pushes recommendations to edge devices
+ * Periodically analyzes all farms using GPT-4 and pushes recommendations to farm servers
  */
 
 import OpenAI from 'openai';
@@ -20,7 +20,7 @@ try {
   console.error('[AI Pusher] Failed to initialize OpenAI:', error.message);
 }
 
-// API key for authenticating with edge devices
+// API key for authenticating with farm servers
 const EDGE_API_KEY = process.env.GREENREACH_API_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 /**
@@ -126,7 +126,7 @@ async function analyzeFarm(farm) {
 }
 
 /**
- * Push recommendations to farm's edge device
+ * Push recommendations to farm server
  */
 async function pushToFarm(farm, recommendations) {
   if (!farm.url) {

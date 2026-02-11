@@ -1,7 +1,7 @@
 /**
- * Edge Configuration Routes
+ * Farm Configuration Routes
  * 
- * API endpoints for managing edge device configuration and status
+ * API endpoints for managing farm server configuration and status
  */
 
 import express from 'express';
@@ -12,7 +12,7 @@ const router = express.Router();
 
 /**
  * GET /api/edge/status
- * Get current edge mode status
+ * Get current farm server mode status
  */
 router.get('/status', (req, res) => {
   try {
@@ -38,14 +38,14 @@ router.get('/status', (req, res) => {
       config: safeConfig
     });
   } catch (error) {
-    console.error('Error getting edge status:', error);
-    res.status(500).json({ error: 'Failed to get edge status' });
+    console.error('Error getting farm status:', error);
+    res.status(500).json({ error: 'Failed to get farm status' });
   }
 });
 
 /**
  * GET /api/edge/config
- * Get edge configuration
+ * Get farm configuration
  */
 router.get('/config', (req, res) => {
   try {
@@ -59,14 +59,14 @@ router.get('/config', (req, res) => {
 
     res.json({ config: safeConfig });
   } catch (error) {
-    console.error('Error getting edge config:', error);
-    res.status(500).json({ error: 'Failed to get edge config' });
+    console.error('Error getting farm config:', error);
+    res.status(500).json({ error: 'Failed to get farm config' });
   }
 });
 
 /**
  * PUT /api/edge/config
- * Update edge configuration
+ * Update farm configuration
  */
 router.put('/config', (req, res) => {
   try {
@@ -93,8 +93,8 @@ router.put('/config', (req, res) => {
       config: edgeConfig.getAll()
     });
   } catch (error) {
-    console.error('Error updating edge config:', error);
-    res.status(500).json({ error: 'Failed to update edge config' });
+    console.error('Error updating farm config:', error);
+    res.status(500).json({ error: 'Failed to update farm config' });
   }
 });
 
@@ -150,7 +150,7 @@ router.post('/register', async (req, res) => {
 
 /**
  * POST /api/edge/mode
- * Switch between edge and cloud mode
+ * Switch between farm server and hosted mode
  */
 router.post('/mode', (req, res) => {
   try {

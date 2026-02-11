@@ -1,7 +1,7 @@
 /**
  * Certificate Manager Service
  * 
- * Manages TLS certificates for mutual authentication between edge devices and GreenReach Central.
+ * Manages TLS certificates for mutual authentication between farm servers and GreenReach Central.
  * Handles certificate provisioning, storage, rotation, and renewal.
  */
 

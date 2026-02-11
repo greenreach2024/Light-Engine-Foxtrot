@@ -1,7 +1,7 @@
 /**
- * Cloud-to-Edge Migration Routes
+ * Deployment Migration Routes
  * 
- * Provides APIs for migrating from cloud-only deployment to edge deployment
+ * Provides APIs for migrating from hosted deployment to farm server deployment
  * with full hardware support while preserving all data.
  */
 
@@ -242,7 +242,7 @@ router.get('/download/:exportId', async (req, res) => {
 });
 
 /**
- * Import data into edge deployment
+ * Import data into farm server deployment
  * 
  * Validates and imports previously exported data from cloud deployment.
  * Performs integrity checks and creates rollback point.

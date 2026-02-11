@@ -122,11 +122,11 @@ router.post('/login', async (req, res) => {
     // Log request for debugging rate limit issues
     console.log(`[Auth] Login request from ${req.ip} - farm_id: ${farm_id}, email: ${email}, user-agent: ${req.get('user-agent')?.substring(0, 50)}`);
 
-    // Edge device mode: Accept login with farm_id + password (email optional)
+    // Farm server mode: Accept login with farm_id + password (email optional)
     const isEdgeDevice = process.env.EDGE_MODE === 'true';
     
     if (isEdgeDevice) {
-      // Edge mode: Only password is required
+      // Farm server mode: Only password is required
       if (!password) {
         return res.status(400).json({ error: 'password is required' });
       }
@@ -144,9 +144,9 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ error: 'Invalid password' });
       }
       
-      console.log(`[Auth] Edge login for ${email || 'no-email'}`);
+      console.log(`[Auth] Farm server login for ${email || 'no-email'}`);
       
-      // Generate JWT token for edge device login
+      // Generate JWT token for farm server login
       // Use provided email or generate default
       const userEmail = email || `admin@${edgeFarmId}.local`;
       
@@ -169,7 +169,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Cloud mode: email and password required
+    // Hosted mode: email and password required
     if (!email || !password) {
       return res.status(400).json({ error: 'email and password are required' });
     }
@@ -287,7 +287,7 @@ router.post('/login', async (req, res) => {
 
 /**
  * GET /api/ping
- * Health check endpoint for edge device availability
+ * Health check endpoint for farm server availability
  * Returns 200 OK if service is running
  */
 router.get('/ping', (req, res) => {

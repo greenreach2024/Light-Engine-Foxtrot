@@ -1,7 +1,7 @@
 /**
  * GreenReach Data Synchronization Service
  * 
- * Synchronizes farm data between edge devices and GreenReach Central.
+ * Synchronizes farm data between farm servers and GreenReach Central.
  * Handles inventory, health metrics, alerts, and configuration updates.
  * 
  * Sync Intervals:
