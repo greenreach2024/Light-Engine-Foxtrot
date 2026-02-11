@@ -925,10 +925,10 @@
             <small id="headerFarmId" style="color: var(--text-muted); font-family: monospace; font-size: 12px; display: block; margin-top: 4px;"></small>
         </div>
         <div class="header-actions">
-            <a href="/farm-admin.html" class="nav-btn">Dashboard</a>
-            <a href="/views/farm-summary.html" class="nav-btn farm-summary">Farm Summary</a>
-            <a href="/views/farm-inventory.html" class="nav-btn inventory">Farm Inventory</a>
-            <a href="/views/nutrient-management.html" class="nav-btn nutrient">Nutrient Management</a>
+            <a href="#dashboard" class="nav-btn" data-section="dashboard">Dashboard</a>
+            <a href="#farm-summary" class="nav-btn farm-summary" data-section="iframe-view" data-url="/views/farm-summary.html">Farm Summary</a>
+            <a href="#inventory" class="nav-btn inventory" data-section="iframe-view" data-url="/views/farm-inventory.html">Farm Inventory</a>
+            <a href="#nutrient" class="nav-btn nutrient" data-section="iframe-view" data-url="/views/nutrient-management.html">Nutrient Management</a>
         </div>
     </header>
 
@@ -946,11 +946,11 @@
                         <span class="nav-item-icon">■</span>
                         Dashboard
                     </a>
-                    <a href="/views/farm-summary.html" class="nav-item" target="_blank">
+                    <a href="#farm-summary" class="nav-item" data-section="iframe-view" data-url="/views/farm-summary.html">
                         <span class="nav-item-icon">■</span>
                         Farm Summary
                     </a>
-                    <a href="/views/farm-inventory.html" class="nav-item" target="_blank">
+                    <a href="#inventory" class="nav-item" data-section="iframe-view" data-url="/views/farm-inventory.html">
                         <span class="nav-item-icon">■</span>
                         Inventory
                     </a>
@@ -958,11 +958,11 @@
 
                 <div class="nav-section">
                     <div class="nav-section-title">Enterprise ERP</div>
-                    <a href="#farm-supplies" class="nav-item" data-section="farm-supplies">
+                    <a href="#farm-supplies" class="nav-item" data-section="inventory-mgmt">
                         <span class="nav-item-icon">■</span>
                         Farm Supplies & Operations
                     </a>
-                    <a href="/views/procurement-portal.html" class="nav-item">
+                    <a href="#procurement" class="nav-item" data-section="iframe-view" data-url="/views/procurement-portal.html">
                         <span class="nav-item-icon">■</span>
                         Procurement Portal
                     </a>
@@ -1093,7 +1093,7 @@
                 <div class="card">
                     <h2>Quick Actions</h2>
                     <div class="quick-actions">
-                        <a href="/views/farm-summary.html" class="action-card" target="_blank">
+                        <a href="#farm-summary" class="action-card" data-section="iframe-view" data-url="/views/farm-summary.html">
                             <div class="action-icon">FS</div>
                             <div class="action-title">View Farm</div>
                             <div class="action-desc">Monitor zones, groups & growth</div>
@@ -2897,6 +2897,11 @@
                     <h1>Help & Documentation</h1>
                 </div>
                 <p>Documentation coming soon...</p>
+            </div>
+
+            <!-- Iframe section for loading external pages in-frame -->
+            <div id="section-iframe-view" class="content-section" style="display: none;">
+                <iframe id="admin-iframe" src="about:blank" style="width: 100%; height: calc(100vh - 60px); border: none; border-radius: 8px;"></iframe>
             </div>
         </div>
     </div>
