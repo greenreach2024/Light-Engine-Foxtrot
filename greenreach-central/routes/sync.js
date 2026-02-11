@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import logger from '../utils/logger.js';
 import { evaluateAndGenerateAlerts, autoResolveAlerts } from '../services/alert-manager.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { upsertNetworkFarm } from '../services/networkFarmsStore.js';
 
 const router = express.Router();
 
@@ -640,6 +641,23 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
       }
     }
     
+    // Also register in wholesale network store so aggregator can reach this farm
+    if (farmData.api_url) {
+      try {
+        await upsertNetworkFarm(farmId, {
+          name: farmData.name,
+          api_url: farmData.api_url,
+          url: farmData.api_url,
+          status: 'active',
+          contact: farmData.contact || {},
+          location: { region: farmData.region, city: farmData.location }
+        });
+        logger.info(`[Sync] Farm ${farmId} registered in wholesale network (${farmData.api_url})`);
+      } catch (netErr) {
+        logger.warn(`[Sync] Failed to register farm ${farmId} in network store:`, netErr.message);
+      }
+    }
+    
     res.json({
       success: true,
       message: 'Farm registration successful',
@@ -867,6 +885,56 @@ router.post('/telemetry', authenticateFarm, async (req, res) => {
       success: false,
       error: 'Failed to sync telemetry',
       message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/sync/:farmId/devices
+ * Retrieve IoT device list for a farm
+ */
+router.get('/:farmId/devices', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    let devices = [];
+
+    if (await isDatabaseAvailable()) {
+      const result = await query(
+        `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'devices'`,
+        [farmId]
+      );
+      if (result.rows.length > 0 && result.rows[0].data) {
+        const raw = result.rows[0].data;
+        devices = Array.isArray(raw) ? raw : (raw.devices || []);
+      }
+    }
+
+    // Fall back to synced iot-devices.json file
+    if (devices.length === 0) {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const devicesPath = path.default.join(process.cwd(), 'public', 'data', 'iot-devices.json');
+        if (fs.default.existsSync(devicesPath)) {
+          const raw = JSON.parse(fs.default.readFileSync(devicesPath, 'utf8'));
+          devices = Array.isArray(raw) ? raw : (raw.devices || []);
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    res.json({
+      success: true,
+      farmId,
+      devices,
+      count: devices.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('[Sync] Error retrieving devices:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve devices',
+      message: error.message
     });
   }
 });
