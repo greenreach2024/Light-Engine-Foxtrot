@@ -1851,6 +1851,12 @@
     // API Endpoint Configuration
     const EDGE_API = 'http://localhost:8091';  // Local edge device
     const CLOUD_API = window.location.origin;   // Cloud platform
+    const IS_LOCAL_HOST = window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1' ||
+                window.location.hostname.startsWith('192.168.') ||
+                window.location.hostname.startsWith('10.') ||
+                window.location.hostname.startsWith('100.65.') ||
+                window.location.hostname.startsWith('172.');
     let currentAPI = CLOUD_API;  // Default to cloud
     let isEdgeAvailable = false;
     let lastEdgeCheck = 0;
@@ -1859,6 +1865,14 @@
     // Check if edge device is available
     async function checkEdgeAvailability() {
       if (!deviceToken) return false;  // Skip check if not authenticated
+      if (!IS_LOCAL_HOST) {
+        if (isEdgeAvailable) {
+          isEdgeAvailable = false;
+          currentAPI = CLOUD_API;
+          updateConnectionIndicator();
+        }
+        return false;
+      }
       
       try {
         const controller = new AbortController();
