@@ -1,5 +1,5 @@
 /**
- * Farm Settings Sync Client (Edge Device)
+ * Farm Settings Sync Client (Farm Server)
  * 
  * Polls GreenReach Central every 30 seconds for configuration changes
  * Applies changes to local farm.json and notifies Central of completion

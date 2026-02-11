@@ -1,7 +1,7 @@
 /**
  * Wholesale Integration Service
  * 
- * Integrates edge device inventory with GreenReach Central wholesale catalog.
+ * Integrates farm server inventory with GreenReach Central wholesale catalog.
  * Handles automatic catalog updates, order webhooks, and fulfillment notifications.
  * 
  * Features:

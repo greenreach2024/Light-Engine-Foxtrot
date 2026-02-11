@@ -26,7 +26,7 @@ const FEATURE_DEFINITIONS = {
   'climate_control': { tiers: ['full', 'edge', 'enterprise'], name: 'Climate Control' },
   'sensors': { tiers: ['full', 'edge', 'enterprise'], name: 'Sensor Monitoring' },
   
-  // Advanced features (edge devices and full deployments)
+  // Advanced features (farm servers and full deployments)
   'analytics': { tiers: ['full', 'edge', 'enterprise'], name: 'Advanced Analytics' },
   'ml': { tiers: ['full', 'edge', 'enterprise'], name: 'Machine Learning' },
   'api_access': { tiers: ['full', 'edge', 'enterprise'], name: 'API Access' },
@@ -83,9 +83,9 @@ async function getDeploymentMode() {
     return envMode;
   }
   
-  // Edge devices get full ML/AI capabilities
+  // Farm servers get full ML/AI capabilities
   if (process.env.EDGE_MODE === 'true' || process.env.EDGE_MODE === true) {
-    console.log('[FeatureFlags] Edge device detected - enabling edge tier features (ML, AI, analytics)');
+    console.log('[FeatureFlags] Farm server detected - enabling edge tier features (ML, AI, analytics)');
     return 'edge';
   }
   
@@ -189,7 +189,7 @@ export function autoEnforceFeatures() {
     }
     
     // Cloud plan users: Check JWT token for authentication (no license file needed)
-    // License files are only for edge devices with hardware control
+    // License files are only for farm servers with hardware control
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       // Cloud plan user with JWT - allow all monitoring/readonly endpoints
@@ -214,7 +214,7 @@ export function autoEnforceFeatures() {
       return next();
     }
     
-    // Check feature access (for edge devices with license files)
+    // Check feature access (for farm servers with license files)
     try {
       const enabled = await hasFeature(requiredFeature);
       

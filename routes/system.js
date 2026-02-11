@@ -1,7 +1,7 @@
 /**
  * System Management API Routes
  * 
- * Remote management endpoints for edge devices
+ * Remote management endpoints for farm servers
  * Enables headless operation without SSH access
  * 
  * Authentication: Requires SYSTEM_TOKEN environment variable

@@ -1,8 +1,8 @@
 /**
- * Light Engine: Wholesale Network Routes (Edge Farm)
+ * Light Engine: Wholesale Network Routes (Farm Server)
  * Returns local farm data for wholesale admin dashboard
  * 
- * For edge farms, the "network" is just this single farm
+ * For standalone farms, the "network" is just this single farm
  */
 
 import express from 'express';
@@ -72,7 +72,7 @@ router.get('/farms', async (req, res) => {
  */
 router.get('/snapshots', async (req, res) => {
   try {
-    // For edge farms, return current inventory as a snapshot
+    // For standalone farms, return current inventory as a snapshot
     res.json({
       status: 'ok',
       data: {
@@ -90,7 +90,7 @@ router.get('/snapshots', async (req, res) => {
 
 /**
  * GET /api/wholesale/network/aggregate
- * Returns aggregated catalog (just local farm for edge deployment)
+ * Returns aggregated catalog (just local farm for standalone deployment)
  */
 router.get('/aggregate', async (req, res) => {
   try {

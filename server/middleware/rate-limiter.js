@@ -107,7 +107,7 @@ export function clearAllRateLimits() {
 // Strict rate limiter for authentication endpoints
 export const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // 1000 login attempts per 15 minutes (increased for development/edge devices)
+  max: 1000, // 1000 login attempts per 15 minutes (increased for development/farm servers)
   message: 'Too many login attempts, please try again later.',
   keyGenerator: (req) => {
     // Key by IP + user agent to allow multiple devices from same network

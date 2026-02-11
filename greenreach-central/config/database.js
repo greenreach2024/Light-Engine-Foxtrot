@@ -127,7 +127,7 @@ async function runMigrations(client) {
     logger.warn('Could not add contact_name column (may already exist):', err.message);
   }
 
-  // Create farm_backups table for Edge device recovery (Phase 2)
+  // Create farm_backups table for farm server recovery (Phase 2)
   await client.query(`
     CREATE TABLE IF NOT EXISTS farm_backups (
       farm_id VARCHAR(255) PRIMARY KEY,
@@ -143,7 +143,7 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_farm_backups_synced ON farm_backups(last_synced);
     CREATE INDEX IF NOT EXISTS idx_farm_backups_farm_id ON farm_backups(farm_id);
   `);
-  logger.info('farm_backups table ready for Edge device recovery');
+  logger.info('farm_backups table ready for farm server recovery');
 
   try {
     await client.query(`
@@ -181,7 +181,7 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_heartbeats_timestamp ON farm_heartbeats(timestamp);
   `);
 
-  // Create farm_data table for synced edge data (rooms, groups, schedules)
+  // Create farm_data table for synced farm data (rooms, groups, schedules)
   await client.query(`
     CREATE TABLE IF NOT EXISTS farm_data (
       id SERIAL PRIMARY KEY,

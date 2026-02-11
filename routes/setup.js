@@ -1,6 +1,6 @@
 /**
  * Setup Activation API Routes
- * Handles edge device activation, license provisioning, and initial configuration
+ * Handles farm server activation, license provisioning, and initial configuration
  */
 
 import express from 'express';
@@ -302,7 +302,7 @@ function signLicense(licenseData, privateKeyPath) {
 
 /**
  * POST /api/setup/activate
- * Activate edge device with activation code
+ * Activate farm server with activation code
  */
 router.post('/activate', async (req, res) => {
   try {
@@ -573,7 +573,7 @@ function generateQRCodeUrl(farmId) {
 
 /**
  * POST /api/setup/complete
- * Completes edge device setup by saving credentials to /config/farm-credentials.json
+ * Completes farm server setup by saving credentials to /config/farm-credentials.json
  * Called by setup wizard after successful registration with GreenReach Central
  */
 router.post('/complete', async (req, res) => {
@@ -614,7 +614,7 @@ router.post('/complete', async (req, res) => {
             const existingFarmId = getFarmId();
             return res.status(409).json({
                 success: false,
-                message: 'Edge device already registered',
+                message: 'Farm server already registered',
                 farm_id: existingFarmId
             });
         }
@@ -663,7 +663,7 @@ router.post('/complete', async (req, res) => {
 
 /**
  * GET /api/setup/status
- * Check if edge device has been registered with GreenReach Central
+ * Check if farm server has been registered with GreenReach Central
  */
 router.get('/status', async (req, res) => {
     try {
@@ -676,12 +676,12 @@ router.get('/status', async (req, res) => {
                 registered: true,
                 farm_id: farmId,
                 farm_name: farmName,
-                message: 'Edge device registered'
+                message: 'Farm server registered'
             });
         } else {
             res.json({
                 registered: false,
-                message: 'Edge device not registered - run setup wizard',
+                message: 'Farm server not registered - run setup wizard',
                 setup_url: '/LE-farm-admin.html#settings'
             });
         }
@@ -703,11 +703,11 @@ router.get('/status', async (req, res) => {
  */
 router.get('/data', async (req, res) => {
   try {
-    // Check if using NeDB (edge device)
+    // Check if using NeDB (farm server)
     const pool = req.app.locals?.db;
     
     if (!pool) {
-      // Edge device - read from NeDB
+      // Farm server - read from NeDB
       const wizardStatesDB = req.app.locals?.wizardStatesDB;
       
       if (!wizardStatesDB) {
@@ -794,7 +794,7 @@ router.get('/data', async (req, res) => {
 
 /**
  * GET /api/setup/rooms
- * Returns persisted rooms data (DB in cloud, rooms.json/NeDB on edge)
+ * Returns persisted rooms data (DB in hosted mode, rooms.json/NeDB on farm server)
  */
 router.get('/rooms', async (req, res) => {
   try {
@@ -862,7 +862,7 @@ router.get('/rooms', async (req, res) => {
 
 /**
  * POST /api/setup/save-rooms
- * Save rooms data to edge device setup configuration
+ * Save rooms data to farm server setup configuration
  */
 router.post('/save-rooms', async (req, res) => {
   try {

@@ -1,13 +1,13 @@
 /**
- * Edge Wholesale Order Webhook Receiver
+ * Farm Wholesale Order Webhook Receiver
  * 
  * Receives wholesale orders from GreenReach Central and processes them locally.
  * Orders are routed to specific farms based on inventory allocation.
  * 
  * Webhook Flow:
  * 1. GreenReach checkout creates order (multi-farm aggregation)
- * 2. GreenReach sends webhook to each farm's edge device
- * 3. Edge device validates inventory, creates local order record
+ * 2. GreenReach sends webhook to each farm server
+ * 3. Farm server validates inventory, creates local order record
  * 4. Farm fulfills order, sends status updates back to Central
  * 5. Central tracks overall order progress across farms
  */

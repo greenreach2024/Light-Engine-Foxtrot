@@ -48,7 +48,7 @@ function generateApiKey(prefix) {
 /**
  * POST /api/farms/register
  * 
- * Farm edge device calls this during first-time setup wizard.
+ * Farm server calls this during first-time setup wizard.
  * Validates registration code and provisions the farm with credentials.
  * 
  * Body: {
@@ -158,7 +158,7 @@ router.post('/register', async (req, res) => {
     console.log(`   Registration code: ${registration_code}`);
     console.log(`   Contact: ${contact_email || 'not provided'}`);
 
-    // Return credentials to edge device
+    // Return credentials to farm server
     res.json({
       success: true,
       farm_id: farmId,
