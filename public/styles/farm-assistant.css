@@ -41,7 +41,7 @@
 }
 
 .assistant-container.minimized .header-text {
-  display: flex;
+  display: none;
 }
 
 .assistant-container.minimized .header-text small {
@@ -51,6 +51,24 @@
 .assistant-container.minimized .minimize-btn {
   width: 28px;
   height: 28px;
+}
+
+.assistant-mascot-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.assistant-container.minimized .assistant-mascot-thumb {
+  display: block;
+}
+
+.assistant-container:not(.minimized) .assistant-mascot-thumb {
+  display: none;
 }
 
 .assistant-header {
