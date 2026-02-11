@@ -23,6 +23,7 @@ class VitalityViewManager {
     this.orbStyle = this.settings.orbStyle || 'professional'; // 'professional', 'kids', or 'ai'
     this.characterRenderer = null; // AI character renderer
     this.aiCharacters = {}; // Cache for AI-generated characters
+    this.aiCharacterRequests = new Set(); // In-flight AI character requests
     
     // Initialize
     this.init();
@@ -638,74 +639,79 @@ class VitalityViewManager {
   /**
    * Render Farm Friends View (Blobs) using Canvas
    */
-  async animateFriendsView(canvas) {
+  animateFriendsView(canvas) {
     if (!this.isAnimating || this.currentView !== 'friends') return;
 
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
+    try {
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
 
-    // Clear canvas
-    ctx.fillStyle = '#0a0f1e';
-    ctx.fillRect(0, 0, width, height);
+      // Clear canvas
+      ctx.fillStyle = '#0a0f1e';
+      ctx.fillRect(0, 0, width, height);
 
-    if (!this.vitalityData) {
-      this.drawLoadingMessage(ctx, width, height);
-      this.animationFrame = requestAnimationFrame(() => this.animateFriendsView(canvas));
-      return;
-    }
-
-    // Update time
-    this.time += 1;
-
-    // Define 4 blobs in a grid
-    const components = [
-      { key: 'environment', label: 'Environment', ...this.vitalityData.components.environment },
-      { key: 'crop_readiness', label: 'Crops', ...this.vitalityData.components.crop_readiness },
-      { key: 'nutrient_health', label: 'Nutrients', ...this.vitalityData.components.nutrient_health },
-      { key: 'operations', label: 'Systems', ...this.vitalityData.components.operations }
-    ];
-
-    // Grid layout
-    const cols = 2;
-    const rows = 2;
-    const cellWidth = width / cols;
-    const cellHeight = height / rows;
-    
-    // Store blob positions for interaction
-    this.blobPositions = [];
-
-    for (const [index, component] of components.entries()) {
-      const col = index % cols;
-      const row = Math.floor(index / cols);
-      
-      const centerX = col * cellWidth + cellWidth / 2;
-      const centerY = row * cellHeight + cellHeight / 2;
-      // MAXIMIZE SIZE: Use 49.5% of the cell's dimension (99% diameter)
-      // This leaves only 1% margin - orbs fill almost entire cell
-      const maxRadius = Math.min(cellWidth, cellHeight) * 0.495;
-
-      // Draw orb based on style setting
-      let size;
-      if (this.settings.orbStyle === 'ai') {
-        size = await this.drawAICharacter(ctx, component, centerX, centerY, index, maxRadius);
-      } else if (this.settings.orbStyle === 'kids') {
-        size = this.drawKidsFriendlyOrb(ctx, component, centerX, centerY, index, maxRadius);
-      } else {
-        size = this.drawProLottieOrb(ctx, component, centerX, centerY, index, maxRadius);
+      if (!this.vitalityData) {
+        this.drawLoadingMessage(ctx, width, height);
+        this.animationFrame = requestAnimationFrame(() => this.animateFriendsView(canvas));
+        return;
       }
-      
-      // Store position
-      this.blobPositions.push({
-        x: centerX,
-        y: centerY, 
-        size: size,
-        component: component
-      });
-    }
 
-    // Continue animation
-    this.animationFrame = requestAnimationFrame(() => this.animateFriendsView(canvas));
+      // Update time
+      this.time += 1;
+
+      // Define 4 blobs in a grid
+      const components = [
+        { key: 'environment', label: 'Environment', ...this.vitalityData.components.environment },
+        { key: 'crop_readiness', label: 'Crops', ...this.vitalityData.components.crop_readiness },
+        { key: 'nutrient_health', label: 'Nutrients', ...this.vitalityData.components.nutrient_health },
+        { key: 'operations', label: 'Systems', ...this.vitalityData.components.operations }
+      ];
+
+      // Grid layout
+      const cols = 2;
+      const rows = 2;
+      const cellWidth = width / cols;
+      const cellHeight = height / rows;
+      
+      // Store blob positions for interaction
+      this.blobPositions = [];
+
+      for (const [index, component] of components.entries()) {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        
+        const centerX = col * cellWidth + cellWidth / 2;
+        const centerY = row * cellHeight + cellHeight / 2;
+        // MAXIMIZE SIZE: Use 49.5% of the cell's dimension (99% diameter)
+        // This leaves only 1% margin - orbs fill almost entire cell
+        const maxRadius = Math.min(cellWidth, cellHeight) * 0.495;
+
+        // Draw orb based on style setting
+        let size;
+        if (this.settings.orbStyle === 'ai') {
+          size = this.drawAICharacter(ctx, component, centerX, centerY, index, maxRadius);
+        } else if (this.settings.orbStyle === 'kids') {
+          size = this.drawKidsFriendlyOrb(ctx, component, centerX, centerY, index, maxRadius);
+        } else {
+          size = this.drawProLottieOrb(ctx, component, centerX, centerY, index, maxRadius);
+        }
+        
+        // Store position
+        this.blobPositions.push({
+          x: centerX,
+          y: centerY, 
+          size: size,
+          component: component
+        });
+      }
+
+      // Continue animation
+      this.animationFrame = requestAnimationFrame(() => this.animateFriendsView(canvas));
+    } catch (error) {
+      console.log('[Farm Vitality] Friends render error:', error.message);
+      this.animationFrame = requestAnimationFrame(() => this.animateFriendsView(canvas));
+    }
   }
 
   /**
@@ -978,7 +984,7 @@ class VitalityViewManager {
    * Draw AI-Generated Character
    * Fetches and renders procedurally generated characters
    */
-  async drawAICharacter(ctx, component, x, y, index, maxRadius) {
+  drawAICharacter(ctx, component, x, y, index, maxRadius) {
     // Initialize character renderer if needed
     if (!this.characterRenderer && typeof CharacterRenderer !== 'undefined') {
       this.characterRenderer = new CharacterRenderer(ctx);
@@ -994,26 +1000,31 @@ class VitalityViewManager {
     const cacheKey = `${component.key}_${Math.floor(score / 10)}_${emotion}`;
     
     // Check cache
-    if (!this.aiCharacters[cacheKey]) {
-      try {
-        // Fetch character definition from API
-        const response = await fetch(`/api/health/ai-character?componentType=${component.key}&score=${score}&emotion=${emotion}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.ok && data.character) {
+    if (!this.aiCharacters[cacheKey] && !this.aiCharacterRequests.has(cacheKey)) {
+      this.aiCharacterRequests.add(cacheKey);
+      // Fire-and-forget fetch; rendering falls back until cached.
+      fetch(`/api/health/ai-character?componentType=${component.key}&score=${score}&emotion=${emotion}`)
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => {
+          if (data && data.ok && data.character) {
             this.aiCharacters[cacheKey] = data.character;
           }
-        }
-      } catch (error) {
-        console.log('[Farm Vitality] Failed to fetch AI character:', error.message);
-      }
+        })
+        .catch((error) => {
+          console.log('[Farm Vitality] Failed to fetch AI character:', error.message);
+        })
+        .finally(() => {
+          this.aiCharacterRequests.delete(cacheKey);
+        });
     }
     
     // Render character if available
     if (this.aiCharacters[cacheKey]) {
       const character = this.aiCharacters[cacheKey];
       const size = maxRadius * 0.98;
-      this.characterRenderer.render(character, x, y, size, this.time);
+      const scale = size / 100;
+      this.characterRenderer.ctx = ctx;
+      this.characterRenderer.render(character, x, y, scale, this.time);
       
       // Draw score label below character
       ctx.save();
