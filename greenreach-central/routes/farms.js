@@ -127,13 +127,8 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
           apiUrl = farmRow.rows[0].api_url;
         }
       }
-      if (!apiUrl) {
-        // Construct from request source IP (works when farm sends directly)
-        const sourceIp = req.ip?.replace('::ffff:', '') || req.connection?.remoteAddress?.replace('::ffff:', '');
-        if (sourceIp && sourceIp !== '127.0.0.1' && sourceIp !== '::1') {
-          apiUrl = `http://${sourceIp}:8091`;
-        }
-      }
+      // NOTE: Do NOT fall back to req.ip — behind NAT/load balancers it gives unreachable IPs
+
       
       if (apiUrl) {
         await upsertNetworkFarm(farmId, {
