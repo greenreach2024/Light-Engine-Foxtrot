@@ -111,7 +111,7 @@ router.get('/catalog', async (req, res, next) => {
         ? { latitude: Number(nearLat), longitude: Number(nearLng) }
         : null;
 
-      const catalog = buildAggregateCatalog({ buyerLocation });
+      const catalog = await buildAggregateCatalog({ buyerLocation });
       const farmId = req.query.farmId ? String(req.query.farmId) : null;
 
       let items = catalog.items || catalog.skus || [];
@@ -628,7 +628,7 @@ router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
 
     // Limited mode: allocate from network snapshots (proximity-aware)
     if (req.app?.locals?.databaseReady === false) {
-      const catalog = buildAggregateCatalog({ buyerLocation });
+      const catalog = await buildAggregateCatalog({ buyerLocation });
       const result = allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
       if (!result.allocation.farm_sub_orders?.length) {
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
@@ -681,7 +681,7 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
 
     // Limited mode: allocate from network snapshots (proximity-aware)
     if (req.app?.locals?.databaseReady === false) {
-      const catalog = buildAggregateCatalog({ buyerLocation });
+      const catalog = await buildAggregateCatalog({ buyerLocation });
       const result = allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
       if (!result.allocation.farm_sub_orders?.length) {
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
@@ -999,8 +999,8 @@ router.get('/network/snapshots', (req, res) => {
   return res.json({ status: 'ok', data: { snapshots: listNetworkSnapshots() } });
 });
 
-router.get('/network/aggregate', (req, res) => {
-  const agg = buildAggregateCatalog();
+router.get('/network/aggregate', async (req, res) => {
+  const agg = await buildAggregateCatalog();
   return res.json({ status: 'ok', data: { catalog: agg } });
 });
 
