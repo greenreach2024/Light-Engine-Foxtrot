@@ -1,6 +1,19 @@
 // API Base URL - uses window.API_BASE set in index.charlie.html
 const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : (typeof location !== 'undefined' ? location.origin : 'http://localhost:8091');
 
+// Global: silence common console.log noise in production unless explicitly enabled
+(function() {
+  try {
+    const origLog = console.log.bind(console);
+    console.log = function(...args) {
+      const enabled = localStorage.getItem('gr.debug') === 'true' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (enabled) origLog(...args);
+    };
+  } catch (e) {
+    // ignore
+  }
+})();
+
 // Billing management helper
 function manageBilling() {
   window.location.href = '/LE-billing.html';
