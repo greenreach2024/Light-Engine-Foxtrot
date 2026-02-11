@@ -2441,11 +2441,26 @@ async function loadRoomZones(farmId, roomId, zonesData) {
             const groups = groupsData.groups || [];
             console.log('[loadRoomZones] Groups data:', groups);
             
-            // Count groups per zone
+            // Count groups per zone - store under multiple keys for flexible matching
             groups.forEach(group => {
                 const zoneId = group.zone || group.zone_id || group.zoneId;
                 if (zoneId) {
+                    // Store under the original key
                     groupsByZone[zoneId] = (groupsByZone[zoneId] || 0) + 1;
+                    
+                    // Also store under normalized variations for matching
+                    // "1" → also key as "zone-1", "room-xxx:zone-1", "room-xxx-z1"
+                    const zoneNum = String(zoneId).replace(/[^0-9]/g, ''); // Extract just the number
+                    if (zoneNum && !isNaN(zoneNum)) {
+                        const altKeys = [
+                            `zone-${zoneNum}`,
+                            `${roomId}:zone-${zoneNum}`,
+                            `${roomId}-z${zoneNum}`
+                        ];
+                        altKeys.forEach(key => {
+                            groupsByZone[key] = (groupsByZone[key] || 0) + 1;
+                        });
+                    }
                 }
             });
             console.log('[loadRoomZones] Groups by zone:', groupsByZone);
@@ -2466,10 +2481,13 @@ async function loadRoomZones(farmId, roomId, zonesData) {
             const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
             const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
             
-            // Count groups assigned to this zone - use compound zone ID
-            const groupsCount = groupsByZone[zoneId] || groupsByZone[String(rawZoneId)] || 0;
+            // Count groups assigned to this zone - normalize zone ID matching
+            // Handle variations: "room-3xxjln:zone-1" vs "room-3xxjln-z1" vs "1"
+            const zoneNum = String(rawZoneId).replace(/^zone-/, ''); // Extract "1" from "zone-1"
+            const normalizedZoneId = zoneId.replace(':zone-', '-z'); // Convert "room:zone-1" to "room-z1"
+            const groupsCount = groupsByZone[zoneId] || groupsByZone[normalizedZoneId] || groupsByZone[String(rawZoneId)] || groupsByZone[zoneNum] || 0;
             
-            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, groupsCount, rawZone: zone });
+            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, groupsCount, normalizedZoneId, rawZone: zone });
             
             return {
                 zoneId,
