@@ -5,7 +5,7 @@
 
 (function() {
   function initHelp() {
-    console.log('💡 Light Engine Help System Initializing...');
+    console.log('Light Engine Help System Initializing...');
 
     // Create UI Elements
     function createHelpUI() {
@@ -46,7 +46,7 @@
         <h3 id="le-help-title"></h3>
         <p id="le-help-text"></p>
         <div id="le-help-ai" class="ai-insight" style="display:none">
-          <strong>🤖 AI Insight</strong>
+          <strong>AI Insight</strong>
           <span id="le-help-ai-content"></span>
         </div>
       `;
@@ -126,7 +126,7 @@
     function showPopup(target, event) {
     const title = target.getAttribute('data-help-title') || 'Help';
     const text = target.getAttribute('data-help') || target.getAttribute('data-help-text') || ''; // fallback
-    const aiText = target.getAttribute('data-help-ai') || '';
+    const aiText = buildLiveAiInsight(target);
 
     if (!text && !aiText) return;
 
@@ -205,6 +205,28 @@
   }
 
   // Expose API for Canvas Elements
+    function buildLiveAiInsight(target) {
+      const sourceSelector = target.getAttribute('data-help-ai-source');
+      if (sourceSelector) {
+        const sourceEl = document.querySelector(sourceSelector);
+        const value = sourceEl ? (sourceEl.textContent || '').trim() : '';
+        if (value) return `Current value: ${value}`;
+      }
+
+      const valueEl = target.querySelector(
+        '[data-kpi-value], .kpi-value, .stat-value, .value, .metric-value, .kpi-value-large'
+      );
+      if (valueEl) {
+        const value = (valueEl.textContent || '').trim();
+        if (value) return `Current value: ${value}`;
+      }
+
+      const dataValue = target.getAttribute('data-value');
+      if (dataValue) return `Current value: ${dataValue}`;
+
+      return '';
+    }
+
     window.LightEngineHelp = {
       toggle: toggleHelpMode,
       show: (x, y, title, text, aiText) => {
