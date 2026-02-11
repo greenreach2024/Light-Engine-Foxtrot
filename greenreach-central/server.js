@@ -111,7 +111,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 const FARM_DATA_DIR = path.join(__dirname, 'public', 'data');
 const FARM_SYNC_INTERVAL = parseInt(process.env.FARM_SYNC_INTERVAL_MS) || 5 * 60 * 1000;
 const DAILY_SYNC_HOUR = parseInt(process.env.FARM_DAILY_SYNC_HOUR) || 2; // 2 AM default
-const SYNC_DATA_FILES = ['groups.json', 'rooms.json', 'farm.json', 'iot-devices.json', 'room-map.json'];
+const SYNC_DATA_FILES = ['groups.json', 'rooms.json', 'farm.json', 'iot-devices.json', 'room-map.json', 'env.json'];
 
 // Sync status tracking
 const syncStatus = {
@@ -180,6 +180,67 @@ async function syncFarmData(options = {}) {
     syncStatus.filesUpdated += updated;
     if (isDaily) syncStatus.lastDailySync = new Date().toISOString();
     
+    // After syncing files, store env.json as telemetry in the farm_data DB table
+    // so the GET /api/sync/:farmId/telemetry endpoint can return it
+    try {
+      const envJsonPath = path.join(FARM_DATA_DIR, 'env.json');
+      const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+      if (fs.existsSync(envJsonPath) && fs.existsSync(farmJsonPath)) {
+        const envData = JSON.parse(fs.readFileSync(envJsonPath, 'utf8'));
+        const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+        const farmId = farmData.farmId;
+        if (farmId) {
+          const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
+          if (await isDatabaseAvailable()) {
+            // Store telemetry (env zones)
+            if (envData.zones) {
+              const telemetryData = {
+                zones: envData.zones || [],
+                sensors: {},
+                timestamp: envData.updatedAt || new Date().toISOString()
+              };
+              await dbQuery(
+                `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+                 VALUES ($1, $2, $3, NOW())
+                 ON CONFLICT (farm_id, data_type)
+                 DO UPDATE SET data = $3, updated_at = NOW()`,
+                [farmId, 'telemetry', JSON.stringify(telemetryData)]
+              );
+              logger.info(`[${syncLabel}] Stored telemetry (${envData.zones.length} zones) in DB for ${farmId}`);
+            }
+
+            // Store rooms
+            const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
+            if (fs.existsSync(roomsPath)) {
+              const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+              await dbQuery(
+                `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+                 VALUES ($1, 'rooms', $2, NOW())
+                 ON CONFLICT (farm_id, data_type)
+                 DO UPDATE SET data = $2, updated_at = NOW()`,
+                [farmId, JSON.stringify(roomsData)]
+              );
+            }
+
+            // Store groups
+            const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
+            if (fs.existsSync(groupsPath)) {
+              const groupsData = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+              await dbQuery(
+                `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+                 VALUES ($1, 'groups', $2, NOW())
+                 ON CONFLICT (farm_id, data_type)
+                 DO UPDATE SET data = $2, updated_at = NOW()`,
+                [farmId, JSON.stringify(groupsData)]
+              );
+            }
+          }
+        }
+      }
+    } catch (telErr) {
+      logger.warn(`[${syncLabel}] Failed to store synced data in DB:`, telErr.message);
+    }
+
     // Also register this edge farm in the wholesale network store
     // so the aggregator can fetch its inventory
     if (updated > 0) {
