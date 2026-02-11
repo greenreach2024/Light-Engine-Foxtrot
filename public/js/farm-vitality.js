@@ -638,7 +638,7 @@ class VitalityViewManager {
   /**
    * Render Farm Friends View (Blobs) using Canvas
    */
-  animateFriendsView(canvas) {
+  async animateFriendsView(canvas) {
     if (!this.isAnimating || this.currentView !== 'friends') return;
 
     const ctx = canvas.getContext('2d');
@@ -675,7 +675,7 @@ class VitalityViewManager {
     // Store blob positions for interaction
     this.blobPositions = [];
 
-    components.forEach((component, index) => {
+    for (const [index, component] of components.entries()) {
       const col = index % cols;
       const row = Math.floor(index / cols);
       
@@ -702,7 +702,7 @@ class VitalityViewManager {
         size: size,
         component: component
       });
-    });
+    }
 
     // Continue animation
     this.animationFrame = requestAnimationFrame(() => this.animateFriendsView(canvas));
