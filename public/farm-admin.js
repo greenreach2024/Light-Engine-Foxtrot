@@ -425,9 +425,25 @@ async function loadDashboardData() {
             document.getElementById('kpi-harvest-change').textContent = 'Start your first grow to see live data';
         }
 
-        // Devices not yet available via API
-        document.getElementById('kpi-devices').textContent = '--';
-        document.getElementById('kpi-devices-change').textContent = 'No device data yet';
+        // Fetch device count from API
+        try {
+            const devResp = await fetch(`${API_BASE}/api/admin/farms/${currentSession.farmId}/devices`, {
+                headers: { 'Authorization': `Bearer ${currentSession.token}` }
+            });
+            if (devResp.ok) {
+                const devData = await devResp.json();
+                const devCount = devData.count || (Array.isArray(devData.devices) ? devData.devices.length : 0);
+                document.getElementById('kpi-devices').textContent = devCount > 0 ? devCount : '0';
+                document.getElementById('kpi-devices-change').textContent = devCount > 0 ? 'Connected' : 'No devices registered';
+            } else {
+                document.getElementById('kpi-devices').textContent = '0';
+                document.getElementById('kpi-devices-change').textContent = 'No devices registered';
+            }
+        } catch (devErr) {
+            console.warn('Could not fetch device count:', devErr.message);
+            document.getElementById('kpi-devices').textContent = '0';
+            document.getElementById('kpi-devices-change').textContent = 'No devices registered';
+        }
         
         // Load subscription usage
         await loadSubscriptionUsage();
@@ -712,9 +728,60 @@ function setupNavigation() {
             e.preventDefault();
             
             const section = card.dataset.section;
+            const url = card.dataset.url;
+
+            // For iframe-view action cards, handle directly
+            if (section === 'iframe-view' && url) {
+                document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                const iframeSection = document.getElementById('section-iframe-view');
+                const iframe = document.getElementById('admin-iframe');
+                if (iframeSection && iframe) {
+                    iframe.src = url;
+                    iframeSection.style.display = 'block';
+                }
+                const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${url}"]`);
+                if (matchNav) matchNav.classList.add('active');
+                return;
+            }
+
             const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
             if (navItem) {
                 navItem.click();
+            }
+        });
+    });
+
+    // Handle header nav buttons (Farm Summary, Inventory, etc.)
+    document.querySelectorAll('.nav-btn[data-section]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const section = btn.dataset.section;
+            const url = btn.dataset.url;
+
+            // Hide all sections
+            document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
+
+            // Update sidebar active state
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+            if (section === 'iframe-view' && url) {
+                const iframeSection = document.getElementById('section-iframe-view');
+                const iframe = document.getElementById('admin-iframe');
+                if (iframeSection && iframe) {
+                    iframe.src = url;
+                    iframeSection.style.display = 'block';
+                }
+                // Highlight matching sidebar item if present
+                const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${url}"]`);
+                if (matchNav) matchNav.classList.add('active');
+            } else {
+                const sectionEl = document.getElementById(`section-${section}`);
+                if (sectionEl) {
+                    sectionEl.style.display = 'block';
+                }
+                const matchNav = document.querySelector(`.nav-item[data-section="${section}"]`);
+                if (matchNav) matchNav.classList.add('active');
             }
         });
     });
@@ -1481,8 +1548,11 @@ function openAIPricingAssistant() {
         if (daysSinceCheck < 30) {
             // Show cached recommendations
             displayCachedRecommendations();
+            return;
         }
     }
+    // No cached data — auto-run analysis
+    runAIPricingAnalysis();
 }
 
 /**
@@ -2964,8 +3034,19 @@ async function loadOperationsData(startDate) {
             });
         }
         
-        // AI updates count (placeholder - would come from AI service)
-        const aiUpdates = Math.floor(Math.random() * 50) + 10;
+        // AI updates count - check for actual AI service data
+        let aiUpdates = 0;
+        try {
+            const aiResp = await fetch(`${API_BASE}/api/ai/insights/count`, {
+                headers: { 'Authorization': `Bearer ${currentSession.token}` }
+            });
+            if (aiResp.ok) {
+                const aiData = await aiResp.json();
+                aiUpdates = aiData.count || 0;
+            }
+        } catch (e) {
+            // AI service not available, show 0
+        }
         
         // Calculate yield rate
         const yieldRate = plantsSeeded > 0 ? ((plantsHarvested / plantsSeeded) * 100).toFixed(1) : 0;
@@ -3409,38 +3490,39 @@ function reconnectSquare() {
 async function loadReceipts() {
     const tbody = document.getElementById('receipts-tbody');
     
-    // Mock receipt data (would come from billing API)
-    const receipts = [
-        {
-            date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-            type: 'wholesale',
-            description: 'GreenReach wholesale commission (15%)',
-            amount: 127.50,
-            status: 'paid'
-        },
-        {
-            date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-            type: 'processing',
-            description: 'Square payment processing fees',
-            amount: 45.23,
-            status: 'paid'
-        },
-        {
-            date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-            type: 'support',
-            description: 'Light Engine annual support (prorated)',
-            amount: 0.00,
-            status: 'paid'
+    // Fetch real receipt/invoice data from billing API
+    let receipts = [];
+    try {
+        const resp = await fetch(`${API_BASE}/api/billing/receipts`, {
+            headers: { 'Authorization': `Bearer ${currentSession.token}` }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            receipts = data.receipts || data || [];
         }
-    ];
+    } catch (e) {
+        console.warn('Receipts API not available:', e.message);
+    }
+
+    if (receipts.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🧾</div>
+                    <div>No receipts or invoices yet</div>
+                    <div style="font-size: 0.85rem; margin-top: 0.5rem;">Receipts will appear once billing transactions occur</div>
+                </td>
+            </tr>`;
+        return;
+    }
     
     tbody.innerHTML = receipts.map(receipt => `
         <tr>
             <td>${new Date(receipt.date).toLocaleDateString()}</td>
             <td>${receipt.type === 'wholesale' ? 'Wholesale Fee' : receipt.type === 'support' ? 'Support' : 'Processing'}</td>
             <td>${receipt.description}</td>
-            <td>$${receipt.amount.toFixed(2)}</td>
-            <td><span style="padding: 4px 8px; background: var(--accent-green); border-radius: 4px; font-size: 12px;">${receipt.status.toUpperCase()}</span></td>
+            <td>$${(receipt.amount || 0).toFixed(2)}</td>
+            <td><span style="padding: 4px 8px; background: var(--accent-green); border-radius: 4px; font-size: 12px;">${(receipt.status || 'paid').toUpperCase()}</span></td>
             <td>
                 <button class="btn" onclick="downloadReceipt('${receipt.date}')" style="padding: 6px 12px; font-size: 12px;">
                     Download
@@ -5116,33 +5198,31 @@ async function useCurrentLocation() {
  */
 async function loadUsers() {
     try {
-        // Demo data - in production would fetch from API
-        const users = [
-            {
-                id: 1,
-                name: 'Green Admin',
-                email: 'info@greereachfarms.com',
-                role: 'admin',
-                status: 'active',
-                lastLogin: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-            },
-            {
-                id: 2,
-                name: 'Farm Manager',
-                email: 'manager@greereachfarms.com',
-                role: 'manager',
-                status: 'active',
-                lastLogin: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
-            },
-            {
-                id: 3,
-                name: 'Operator User',
-                email: 'operator@greereachfarms.com',
-                role: 'operator',
-                status: 'active',
-                lastLogin: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        // Fetch real users from API
+        let users = [];
+        try {
+            const resp = await fetch(`${API_BASE}/api/admin/farms/${currentSession.farmId}/users`, {
+                headers: { 'Authorization': `Bearer ${currentSession.token}` }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                users = data.users || data || [];
             }
-        ];
+        } catch (e) {
+            console.warn('Users API not available:', e.message);
+        }
+
+        // If no API data, show the logged-in user from session
+        if (users.length === 0 && currentSession) {
+            users = [{
+                id: 1,
+                name: currentSession.name || currentSession.email || 'Admin',
+                email: currentSession.email || '',
+                role: currentSession.role || 'admin',
+                status: 'active',
+                lastLogin: new Date().toISOString()
+            }];
+        }
 
         // Store for filtering
         window.allUsers = users;
@@ -5441,20 +5521,45 @@ function cancelInvitation(email) {
 /**
  * Load access activity log
  */
-function loadAccessLog() {
+async function loadAccessLog() {
     const tbody = document.querySelector('#access-log-table tbody');
     
-    // Demo data
-    const activities = [
-        { time: Date.now() - 15 * 60 * 1000, user: 'info@greereachfarms.com', action: 'Login', ip: '192.168.1.100', status: 'success' },
-        { time: Date.now() - 45 * 60 * 1000, user: 'manager@greereachfarms.com', action: 'Updated pricing', ip: '192.168.1.101', status: 'success' },
-        { time: Date.now() - 2 * 60 * 60 * 1000, user: 'operator@greereachfarms.com', action: 'Login', ip: '192.168.1.102', status: 'success' },
-        { time: Date.now() - 3 * 60 * 60 * 1000, user: 'unknown@example.com', action: 'Login attempt', ip: '203.0.113.42', status: 'failed' },
-        { time: Date.now() - 5 * 60 * 60 * 1000, user: 'info@greereachfarms.com', action: 'Changed user role', ip: '192.168.1.100', status: 'success' }
-    ];
+    // Fetch real audit log from API
+    let activities = [];
+    try {
+        const resp = await fetch(`${API_BASE}/api/farm/activity/${currentSession.farmId}`, {
+            headers: { 'Authorization': `Bearer ${currentSession.token}` }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.activity && data.activity.length > 0) {
+                activities = data.activity.slice(0, 10).map(event => ({
+                    time: new Date(event.timestamp).getTime(),
+                    user: event.user || 'System',
+                    action: event.description || 'Activity event',
+                    ip: '—',
+                    status: event.status || 'active'
+                }));
+            }
+        }
+    } catch (e) {
+        console.warn('Access log API not available:', e.message);
+    }
+
+    if (activities.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔒</div>
+                    <div>No access activity recorded yet</div>
+                    <div style="font-size: 0.85rem; margin-top: 0.5rem;">Activity will appear as users log in and perform actions</div>
+                </td>
+            </tr>`;
+        return;
+    }
     
     tbody.innerHTML = activities.map(activity => {
-        const statusColor = activity.status === 'success' ? 'var(--accent-green)' : 'var(--accent-red)';
+        const statusColor = activity.status === 'failed' ? 'var(--accent-red)' : 'var(--accent-green)';
         
         return `
             <tr>
@@ -5509,112 +5614,24 @@ document.addEventListener('DOMContentLoaded', () => {
 // Quality Control System
 // ============================================
 
-// Mock quality test data
-let qualityTests = [
-    {
-        id: 'QT-2026-001',
-        date: '2026-01-15T08:30:00',
-        batchId: 'BATCH-2026-045',
-        crop: 'Lettuce',
-        category: 'visual',
-        tester: 'Sarah Johnson',
-        result: 'pass',
-        notes: 'Color score: 9/10, No defects detected, Excellent condition'
-    },
-    {
-        id: 'QT-2026-002',
-        date: '2026-01-15T10:15:00',
-        batchId: 'BATCH-2026-043',
-        crop: 'Spinach',
-        category: 'microbial',
-        tester: 'Mike Chen',
-        result: 'pass',
-        notes: 'TPC: 2,500 CFU/g, No pathogens detected'
-    },
-    {
-        id: 'QT-2026-003',
-        date: '2026-01-15T11:45:00',
-        batchId: 'BATCH-2026-044',
-        crop: 'Kale',
-        category: 'nutrient',
-        tester: 'Emily Rodriguez',
-        result: 'pass',
-        notes: 'Nitrate: 2,800 ppm, Vitamin C: 120 mg/100g, Excellent profile'
-    },
-    {
-        id: 'QT-2026-004',
-        date: '2026-01-15T13:20:00',
-        batchId: 'BATCH-2026-042',
-        crop: 'Arugula',
-        category: 'physical',
-        tester: 'David Lee',
-        result: 'fail',
-        notes: 'Average weight: 18g (below 20g threshold), Size variation too high'
-    },
-    {
-        id: 'QT-2026-005',
-        date: '2026-01-15T14:00:00',
-        batchId: 'BATCH-2026-046',
-        crop: 'Basil',
-        category: 'visual',
-        tester: 'Sarah Johnson',
-        result: 'pending',
-        notes: 'Some minor discoloration observed, awaiting supervisor review'
-    },
-    {
-        id: 'QT-2026-006',
-        date: '2026-01-14T16:30:00',
-        batchId: 'BATCH-2026-041',
-        crop: 'Microgreens',
-        category: 'microbial',
-        tester: 'Mike Chen',
-        result: 'pass',
-        notes: 'TPC: 1,200 CFU/g, Well within acceptable limits'
-    },
-    {
-        id: 'QT-2026-007',
-        date: '2026-01-14T09:00:00',
-        batchId: 'BATCH-2026-040',
-        crop: 'Lettuce',
-        category: 'physical',
-        tester: 'Emily Rodriguez',
-        result: 'pass',
-        notes: 'Average weight: 25g, Moisture content: 94.2%'
-    },
-    {
-        id: 'QT-2026-008',
-        date: '2026-01-14T11:30:00',
-        batchId: 'BATCH-2026-039',
-        crop: 'Spinach',
-        category: 'visual',
-        tester: 'David Lee',
-        result: 'fail',
-        notes: 'Defect rate: 7.2% (exceeds 5% threshold), minor pest damage'
-    },
-    {
-        id: 'QT-2026-009',
-        date: '2026-01-13T15:45:00',
-        batchId: 'BATCH-2026-038',
-        crop: 'Kale',
-        category: 'nutrient',
-        tester: 'Sarah Johnson',
-        result: 'pass',
-        notes: 'Comprehensive nutrient profile meets all standards'
-    },
-    {
-        id: 'QT-2026-010',
-        date: '2026-01-13T10:20:00',
-        batchId: 'BATCH-2026-037',
-        crop: 'Arugula',
-        category: 'microbial',
-        tester: 'Mike Chen',
-        result: 'pending',
-        notes: 'Lab results expected within 24 hours'
-    }
-];
+// Quality test data - loaded from API
+let qualityTests = [];
 
-function loadQualityControl() {
+async function loadQualityControl() {
     console.log('Loading Quality Control section...');
+    
+    // Fetch quality tests from API
+    try {
+        const resp = await fetch(`${API_BASE}/api/quality/tests/${currentSession.farmId}`, {
+            headers: { 'Authorization': `Bearer ${currentSession.token}` }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            qualityTests = data.tests || data || [];
+        }
+    } catch (e) {
+        console.warn('Quality tests API not available:', e.message);
+    }
     
     // Update metrics
     updateQualityMetrics();
