@@ -1,0 +1,114 @@
+{
+  "roomId": "room-3xxjln",
+  "name": "Your Grow Room",
+  "gridSize": 30,
+  "cellSize": 40,
+  "version": 2,
+  "devices": [
+    {
+      "deviceId": "serial-0001",
+      "x": 16,
+      "y": 9,
+      "snapshot": {
+        "name": "ESP32 Sensor (ttyUSB1)",
+        "type": "environmental_sensor",
+        "protocol": "usb-serial",
+        "category": "sensor",
+        "zone": 1,
+        "room": "Your Grow Room",
+        "icon": "◈"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-3",
+      "x": 1,
+      "y": 16,
+      "snapshot": {
+        "name": null,
+        "type": null,
+        "protocol": null,
+        "category": "fans",
+        "zone": 1,
+        "room": "Your Grow Room",
+        "icon": "◈"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-0",
+      "x": 28,
+      "y": 16,
+      "snapshot": {
+        "name": null,
+        "type": null,
+        "protocol": null,
+        "category": "fans",
+        "zone": 1,
+        "room": "Your Grow Room",
+        "icon": "◈"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-1",
+      "x": 28,
+      "y": 0,
+      "snapshot": {
+        "name": null,
+        "type": null,
+        "protocol": null,
+        "category": "fans",
+        "zone": 1,
+        "room": "Your Grow Room",
+        "icon": "◈"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-Quest-0",
+      "x": 2,
+      "y": 1,
+      "snapshot": {
+        "name": null,
+        "type": null,
+        "protocol": null,
+        "category": "dehumidifier",
+        "zone": 1,
+        "room": "Your Grow Room",
+        "icon": "◈"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-2",
+      "x": 16,
+      "y": 4,
+      "snapshot": {
+        "name": null,
+        "type": null,
+        "protocol": null,
+        "category": "fans",
+        "zone": 1,
+        "room": "Your Grow Room",
+        "icon": "◈"
+      }
+    }
+  ],
+  "zones": [
+    {
+      "zone": 1,
+      "name": "Zone 1",
+      "color": "#3b82f6",
+      "x1": 0,
+      "y1": 0,
+      "x2": 29,
+      "y2": 17,
+      "tempSetpoint": {
+        "min": 20,
+        "max": 24
+      },
+      "rhSetpoint": {
+        "min": 58,
+        "max": 65
+      },
+      "rhDelta": 5
+    }
+  ],
+  "lastUpdated": "2026-02-04T16:43:12.585Z"
+}

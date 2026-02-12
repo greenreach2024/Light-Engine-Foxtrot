@@ -1,133 +1,592 @@
 {
-  "schemaVersion": "1.0.0",
   "groups": [
     {
       "id": "Your Grow Room:1:Your First Group",
-      "name": "Your First Group",
-      "zone": "1",
-      "zoneId": "room-3xxjln-z1",
-      "roomId": "room-3xxjln",
       "crop": "Bibb Butterhead",
+      "name": "Your First Group",
       "plan": "crop-bibb-butterhead",
-      "planId": "crop-bibb-butterhead",
-      "recipe": "Bibb Butterhead",
+      "room": "Your Grow Room",
+      "zone": "1",
       "trays": 4,
-      "plants": 48,
+      "active": true,
       "health": "healthy",
-      "devices": [
-        "F00001"
+      "lights": [
+        {
+          "id": "F00001",
+          "ppf": 1792,
+          "name": "GROW3 Pro 640 - F00001",
+          "room": "GreenReach",
+          "zone": "",
+          "roomId": "GreenReach",
+          "vendor": "Light Engine",
+          "control": "managed-by-le",
+          "tunable": true,
+          "deviceId": "F00001",
+          "protocol": "grow3",
+          "roomName": "GreenReach",
+          "spectrum": {
+            "bl": 25,
+            "cw": 25,
+            "rd": 25,
+            "ww": 25
+          },
+          "transport": "LAN",
+          "deviceName": "GROW3 Pro 640 - F00001",
+          "controllerId": 2,
+          "controllerIp": "192.168.2.80",
+          "spectrumMode": "dynamic",
+          "controllerPort": 3000,
+          "dynamicSpectrum": true
+        }
       ],
-      "deviceCount": 1,
-      "intensity": 25,
-      "spectrum": "CW/WW + BL + RD",
+      "plants": 48,
+      "recipe": "crop-bibb-butterhead",
+      "roomId": "room-3xxjln",
+      "status": "deployed",
+      "zoneId": "room-3xxjln-z1",
+      "schedule": "group:Your Grow Room:1:Your First Group",
       "planConfig": {
         "anchor": {
+          "dps": null,
           "mode": "seedDate",
+          "holdDay": null,
           "seedDate": "2026-02-04T00:00:00.000Z"
         },
-        "schedule": {
+        "preview": {
+          "day": null,
+          "dli": 0,
+          "env": {
+            "tempC": 20
+          },
+          "ppfd": 0,
+          "stage": "Seedling",
+          "anchor": {
+            "dps": null,
+            "mode": "seedDate",
+            "holdDay": null,
+            "seedDate": "2026-02-04T00:00:00.000Z"
+          },
+          "planId": "crop-bibb-butterhead",
+          "basePpfd": 0,
+          "schedule": {
+            "mode": "one",
+            "cycleA": {
+              "start": "08:00",
+              "onHours": 12,
+              "rampUpMin": 10,
+              "rampDownMin": 10
+            },
+            "cycleB": null,
+            "cycles": [
+              {
+                "on": "08:00",
+                "off": "20:00",
+                "hours": 12
+              }
+            ],
+            "period": "photoperiod",
+            "timezone": "America/Toronto",
+            "rampUpMin": 10,
+            "startTime": "08:00",
+            "rampDownMin": 10,
+            "totalOnHours": 12,
+            "durationHours": 12,
+            "totalOffHours": 12,
+            "cyclesSelected": 1,
+            "photoperiodHours": 12
+          },
+          "gradients": {
+            "rh": 0,
+            "blue": 0,
+            "ppfd": 0,
+            "tempC": 0
+          },
+          "targetDli": 0,
+          "updatedAt": "2026-02-04T17:20:18.722Z",
+          "aiSuggestion": "",
+          "basePhotoperiod": 12,
           "photoperiodHours": 12,
-          "totalOnHours": 12
-        }
+          "ppfdAdjustedForDli": true
+        },
+        "schedule": {
+          "mode": "one",
+          "cycleA": {
+            "start": "08:00",
+            "onHours": 12,
+            "rampUpMin": 10,
+            "rampDownMin": 10
+          },
+          "cycleB": null,
+          "cycles": [
+            {
+              "on": "08:00",
+              "off": "20:00",
+              "hours": 12
+            }
+          ],
+          "period": "photoperiod",
+          "timezone": "America/Toronto",
+          "rampUpMin": 10,
+          "startTime": "08:00",
+          "rampDownMin": 10,
+          "totalOnHours": 12,
+          "durationHours": 12,
+          "totalOffHours": 12,
+          "cyclesSelected": 1,
+          "photoperiodHours": 12
+        },
+        "gradients": {
+          "rh": 0,
+          "blue": 0,
+          "ppfd": 0,
+          "tempC": 0
+        },
+        "updatedAt": "2026-02-04T17:20:18.722Z",
+        "targetHumidity": 0
       },
-      "status": "deployed",
-      "active": true
+      "deviceCount": 1,
+      "lastModified": "2026-02-04T17:20:18.722Z"
     },
     {
       "id": "Your Grow Room:1:Your 2nd Group",
-      "name": "Your 2nd Group",
-      "zone": "1",
-      "zoneId": "room-3xxjln-z1",
-      "roomId": "room-3xxjln",
       "crop": "Buttercrunch Lettuce",
+      "name": "Your 2nd Group",
       "plan": "crop-buttercrunch-lettuce",
-      "planId": "crop-buttercrunch-lettuce",
-      "recipe": "Buttercrunch Lettuce",
+      "room": "Your Grow Room",
+      "zone": "1",
       "trays": 4,
-      "plants": 48,
+      "active": true,
       "health": "healthy",
-      "devices": [
-        "F00002"
+      "lights": [
+        {
+          "id": "F00002",
+          "ppf": 1792,
+          "name": "GROW3 Pro 640 - F00002",
+          "room": "GreenReach",
+          "zone": "",
+          "roomId": "GreenReach",
+          "vendor": "Light Engine",
+          "control": "managed-by-le",
+          "tunable": true,
+          "deviceId": "F00002",
+          "protocol": "grow3",
+          "roomName": "GreenReach",
+          "spectrum": {
+            "bl": 25,
+            "cw": 25,
+            "rd": 25,
+            "ww": 25
+          },
+          "transport": "LAN",
+          "deviceName": "GROW3 Pro 640 - F00002",
+          "controllerId": 3,
+          "controllerIp": "192.168.2.80",
+          "spectrumMode": "dynamic",
+          "controllerPort": 3000,
+          "dynamicSpectrum": true
+        }
       ],
-      "deviceCount": 1,
-      "intensity": 25,
-      "spectrum": "CW/WW + BL + RD",
+      "plants": 48,
+      "recipe": "crop-buttercrunch-lettuce",
+      "roomId": "room-3xxjln",
+      "status": "deployed",
+      "zoneId": "room-3xxjln-z1",
+      "schedule": "group:Your Grow Room:1:Your 2nd Group",
       "planConfig": {
         "anchor": {
+          "dps": null,
           "mode": "seedDate",
+          "holdDay": null,
           "seedDate": "2026-02-04T00:00:00.000Z"
         },
-        "schedule": {
+        "preview": {
+          "day": null,
+          "dli": 0,
+          "env": {
+            "tempC": 20
+          },
+          "ppfd": 0,
+          "stage": "Seedling",
+          "anchor": {
+            "dps": null,
+            "mode": "seedDate",
+            "holdDay": null,
+            "seedDate": "2026-02-04T00:00:00.000Z"
+          },
+          "planId": "crop-buttercrunch-lettuce",
+          "basePpfd": 0,
+          "schedule": {
+            "mode": "one",
+            "cycleA": {
+              "start": "08:00",
+              "onHours": 12,
+              "rampUpMin": 10,
+              "rampDownMin": 10
+            },
+            "cycleB": null,
+            "cycles": [
+              {
+                "on": "08:00",
+                "off": "20:00",
+                "hours": 12
+              }
+            ],
+            "period": "photoperiod",
+            "timezone": "America/Toronto",
+            "rampUpMin": 10,
+            "startTime": "08:00",
+            "rampDownMin": 10,
+            "totalOnHours": 12,
+            "durationHours": 12,
+            "totalOffHours": 12,
+            "cyclesSelected": 1,
+            "photoperiodHours": 12
+          },
+          "gradients": {
+            "rh": 0,
+            "blue": 0,
+            "ppfd": 0,
+            "tempC": 0
+          },
+          "targetDli": 0,
+          "updatedAt": "2026-02-04T17:21:23.755Z",
+          "aiSuggestion": "",
+          "basePhotoperiod": 12,
           "photoperiodHours": 12,
-          "totalOnHours": 12
-        }
+          "ppfdAdjustedForDli": true
+        },
+        "schedule": {
+          "mode": "one",
+          "cycleA": {
+            "start": "08:00",
+            "onHours": 12,
+            "rampUpMin": 10,
+            "rampDownMin": 10
+          },
+          "cycleB": null,
+          "cycles": [
+            {
+              "on": "08:00",
+              "off": "20:00",
+              "hours": 12
+            }
+          ],
+          "period": "photoperiod",
+          "timezone": "America/Toronto",
+          "rampUpMin": 10,
+          "startTime": "08:00",
+          "rampDownMin": 10,
+          "totalOnHours": 12,
+          "durationHours": 12,
+          "totalOffHours": 12,
+          "cyclesSelected": 1,
+          "photoperiodHours": 12
+        },
+        "gradients": {
+          "rh": 0,
+          "blue": 0,
+          "ppfd": 0,
+          "tempC": 0
+        },
+        "updatedAt": "2026-02-04T17:21:23.755Z",
+        "targetHumidity": 0
       },
-      "status": "deployed",
-      "active": true
+      "deviceCount": 1,
+      "lastModified": "2026-02-04T17:21:23.755Z"
     },
     {
       "id": "Your Grow Room:1:Your 3nd Group",
-      "name": "Your 3nd Group",
-      "zone": "1",
-      "zoneId": "room-3xxjln-z1",
-      "roomId": "room-3xxjln",
       "crop": "Salad Bowl Oakleaf",
+      "name": "Your 3nd Group",
       "plan": "crop-salad-bowl-oakleaf",
-      "planId": "crop-salad-bowl-oakleaf",
-      "recipe": "Salad Bowl Oakleaf",
+      "room": "Your Grow Room",
+      "zone": "1",
       "trays": 4,
-      "plants": 48,
+      "active": true,
       "health": "healthy",
-      "devices": [
-        "F00003"
+      "lights": [
+        {
+          "id": "F00003",
+          "ppf": 1792,
+          "name": "GROW3 Pro 640 - F00003",
+          "room": "GreenReach",
+          "zone": "",
+          "roomId": "GreenReach",
+          "vendor": "Light Engine",
+          "control": "managed-by-le",
+          "tunable": true,
+          "deviceId": "F00003",
+          "protocol": "grow3",
+          "roomName": "GreenReach",
+          "spectrum": {
+            "bl": 25,
+            "cw": 25,
+            "rd": 25,
+            "ww": 25
+          },
+          "transport": "LAN",
+          "deviceName": "GROW3 Pro 640 - F00003",
+          "controllerId": 4,
+          "controllerIp": "192.168.2.80",
+          "spectrumMode": "dynamic",
+          "controllerPort": 3000,
+          "dynamicSpectrum": true
+        }
       ],
-      "deviceCount": 1,
-      "intensity": 25,
-      "spectrum": "CW/WW + BL + RD",
+      "plants": 48,
+      "recipe": "crop-salad-bowl-oakleaf",
+      "roomId": "room-3xxjln",
+      "status": "deployed",
+      "zoneId": "room-3xxjln-z1",
+      "schedule": "group:Your Grow Room:1:Your 3nd Group",
       "planConfig": {
         "anchor": {
+          "dps": null,
           "mode": "seedDate",
+          "holdDay": null,
           "seedDate": "2026-02-04T00:00:00.000Z"
         },
-        "schedule": {
+        "preview": {
+          "day": null,
+          "dli": 0,
+          "env": {
+            "tempC": 20
+          },
+          "ppfd": 0,
+          "stage": "Seedling",
+          "anchor": {
+            "dps": null,
+            "mode": "seedDate",
+            "holdDay": null,
+            "seedDate": "2026-02-04T00:00:00.000Z"
+          },
+          "planId": "crop-salad-bowl-oakleaf",
+          "basePpfd": 0,
+          "schedule": {
+            "mode": "one",
+            "cycleA": {
+              "start": "08:00",
+              "onHours": 12,
+              "rampUpMin": 10,
+              "rampDownMin": 10
+            },
+            "cycleB": null,
+            "cycles": [
+              {
+                "on": "08:00",
+                "off": "20:00",
+                "hours": 12
+              }
+            ],
+            "period": "photoperiod",
+            "timezone": "America/Toronto",
+            "rampUpMin": 10,
+            "startTime": "08:00",
+            "rampDownMin": 10,
+            "totalOnHours": 12,
+            "durationHours": 12,
+            "totalOffHours": 12,
+            "cyclesSelected": 1,
+            "photoperiodHours": 12
+          },
+          "gradients": {
+            "rh": 0,
+            "blue": 0,
+            "ppfd": 0,
+            "tempC": 0
+          },
+          "targetDli": 0,
+          "updatedAt": "2026-02-04T17:22:24.278Z",
+          "aiSuggestion": "",
+          "basePhotoperiod": 12,
           "photoperiodHours": 12,
-          "totalOnHours": 12
-        }
+          "ppfdAdjustedForDli": true
+        },
+        "schedule": {
+          "mode": "one",
+          "cycleA": {
+            "start": "08:00",
+            "onHours": 12,
+            "rampUpMin": 10,
+            "rampDownMin": 10
+          },
+          "cycleB": null,
+          "cycles": [
+            {
+              "on": "08:00",
+              "off": "20:00",
+              "hours": 12
+            }
+          ],
+          "period": "photoperiod",
+          "timezone": "America/Toronto",
+          "rampUpMin": 10,
+          "startTime": "08:00",
+          "rampDownMin": 10,
+          "totalOnHours": 12,
+          "durationHours": 12,
+          "totalOffHours": 12,
+          "cyclesSelected": 1,
+          "photoperiodHours": 12
+        },
+        "gradients": {
+          "rh": 0,
+          "blue": 0,
+          "ppfd": 0,
+          "tempC": 0
+        },
+        "updatedAt": "2026-02-04T17:22:24.278Z",
+        "targetHumidity": 0
       },
-      "status": "deployed",
-      "active": true
+      "deviceCount": 1,
+      "lastModified": "2026-02-04T17:22:24.278Z"
     },
     {
       "id": "Your Grow Room:1:Your 4th Room",
-      "name": "Your 4th Room",
-      "zone": "1",
-      "zoneId": "room-3xxjln-z1",
-      "roomId": "room-3xxjln",
       "crop": "Astro Arugula",
+      "name": "Your 4th Room",
       "plan": "crop-astro-arugula",
-      "planId": "crop-astro-arugula",
-      "recipe": "Astro Arugula",
+      "room": "Your Grow Room",
+      "zone": "1",
       "trays": 4,
-      "plants": 48,
+      "active": true,
       "health": "healthy",
-      "devices": [
-        "F00004"
+      "lights": [
+        {
+          "id": "F00004",
+          "ppf": 1792,
+          "name": "GROW3 Pro 640 - F00004",
+          "vendor": "Light Engine",
+          "control": "managed-by-le",
+          "tunable": true,
+          "deviceId": "F00004",
+          "protocol": "grow3",
+          "spectrum": {
+            "bl": 25,
+            "cw": 25,
+            "rd": 25,
+            "ww": 25
+          },
+          "transport": "LAN",
+          "controllerId": 6,
+          "controllerIp": "192.168.2.80",
+          "spectrumMode": "dynamic",
+          "controllerPort": 3000,
+          "dynamicSpectrum": true
+        }
       ],
-      "deviceCount": 1,
-      "intensity": 25,
-      "spectrum": "CW/WW + BL + RD",
+      "plants": 48,
+      "recipe": "crop-astro-arugula",
+      "roomId": "room-3xxjln",
+      "status": "deployed",
+      "zoneId": "room-3xxjln-z1",
+      "schedule": "group:Your Grow Room:1:Your 4th Room",
       "planConfig": {
         "anchor": {
+          "dps": null,
           "mode": "seedDate",
+          "holdDay": null,
           "seedDate": "2026-02-04T00:00:00.000Z"
         },
-        "schedule": {
+        "preview": {
+          "day": null,
+          "dli": 0,
+          "env": {
+            "tempC": 19
+          },
+          "ppfd": 0,
+          "stage": "Seedling",
+          "anchor": {
+            "dps": null,
+            "mode": "seedDate",
+            "holdDay": null,
+            "seedDate": "2026-02-04T00:00:00.000Z"
+          },
+          "planId": "crop-astro-arugula",
+          "basePpfd": 0,
+          "schedule": {
+            "mode": "one",
+            "cycleA": {
+              "start": "08:00",
+              "onHours": 12,
+              "rampUpMin": 10,
+              "rampDownMin": 10
+            },
+            "cycleB": null,
+            "cycles": [
+              {
+                "on": "08:00",
+                "off": "20:00",
+                "hours": 12
+              }
+            ],
+            "period": "photoperiod",
+            "timezone": "America/Toronto",
+            "rampUpMin": 10,
+            "startTime": "08:00",
+            "rampDownMin": 10,
+            "totalOnHours": 12,
+            "durationHours": 12,
+            "totalOffHours": 12,
+            "cyclesSelected": 1,
+            "photoperiodHours": 12
+          },
+          "gradients": {
+            "rh": 0,
+            "blue": 0,
+            "ppfd": 0,
+            "tempC": 0
+          },
+          "targetDli": 0,
+          "updatedAt": "2026-02-04T20:33:19.516Z",
+          "aiSuggestion": "",
+          "basePhotoperiod": 12,
           "photoperiodHours": 12,
-          "totalOnHours": 12
-        }
+          "ppfdAdjustedForDli": true
+        },
+        "schedule": {
+          "mode": "one",
+          "cycleA": {
+            "start": "08:00",
+            "onHours": 12,
+            "rampUpMin": 10,
+            "rampDownMin": 10
+          },
+          "cycleB": null,
+          "cycles": [
+            {
+              "on": "08:00",
+              "off": "20:00",
+              "hours": 12
+            }
+          ],
+          "period": "photoperiod",
+          "timezone": "America/Toronto",
+          "rampUpMin": 10,
+          "startTime": "08:00",
+          "rampDownMin": 10,
+          "totalOnHours": 12,
+          "durationHours": 12,
+          "totalOffHours": 12,
+          "cyclesSelected": 1,
+          "photoperiodHours": 12
+        },
+        "gradients": {
+          "rh": 0,
+          "blue": 0,
+          "ppfd": 0,
+          "tempC": 0
+        },
+        "updatedAt": "2026-02-04T20:33:19.516Z",
+        "targetHumidity": 0
       },
-      "status": "deployed",
-      "active": true
+      "deviceCount": 1,
+      "lastModified": "2026-02-04T20:33:19.516Z"
     }
-  ]
+  ],
+  "metadata": {
+    "lastUpdated": "2026-02-11T17:33:15.868Z",
+    "version": "1.0",
+    "source": "cloud_restore"
+  }
 }

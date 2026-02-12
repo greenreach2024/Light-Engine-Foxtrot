@@ -22,31 +22,58 @@
       "sensors": {
         "ph": {
           "current": 6.1,
-          "history": [6.0, 6.05, 6.08, 6.1, 6.12, 6.1, 6.08, 6.1],
+          "history": [
+            6,
+            6.05,
+            6.08,
+            6.1,
+            6.12,
+            6.1,
+            6.08,
+            6.1
+          ],
           "updatedAt": "2025-12-09T22:00:00.000Z"
         },
         "ec": {
           "current": 1650,
-          "history": [1600, 1620, 1630, 1640, 1650, 1655, 1650, 1650],
+          "history": [
+            1600,
+            1620,
+            1630,
+            1640,
+            1650,
+            1655,
+            1650,
+            1650
+          ],
           "updatedAt": "2025-12-09T22:00:00.000Z"
         },
         "temperature": {
           "current": 20.5,
-          "history": [20.2, 20.3, 20.4, 20.5, 20.5, 20.6, 20.5, 20.5],
+          "history": [
+            20.2,
+            20.3,
+            20.4,
+            20.5,
+            20.5,
+            20.6,
+            20.5,
+            20.5
+          ],
           "updatedAt": "2025-12-09T22:00:00.000Z"
         }
       },
       "autodose": {
         "autodoseEnabled": true,
-        "phTarget": 6.0,
+        "phTarget": 6,
         "phTolerance": 0.15,
         "ecTarget": 1600,
         "ecTolerance": 50,
         "ecDoseSeconds": 2.5,
-        "phDownDoseSeconds": 1.0,
+        "phDownDoseSeconds": 1,
         "minDoseIntervalSec": 60
       },
-      "phSetpoint": 6.0,
+      "phSetpoint": 6,
       "phTolerance": 0.15,
       "ecSetpoint": 1600,
       "ecTolerance": 50,
@@ -63,7 +90,7 @@
             "timestamp": "2025-12-09T21:30:00.000Z",
             "pumpId": "ph_down",
             "action": "pH down",
-            "durationSeconds": 1.0,
+            "durationSeconds": 1,
             "reason": "pH above target (6.15)"
           },
           {
@@ -91,7 +118,7 @@
         "sensor": {
           "phCalibration": {
             "ph4": 4.01,
-            "ph7": 7.00,
+            "ph7": 7,
             "ph10": 9.99,
             "lastCalibratedAt": "2025-12-01T10:00:00.000Z"
           },
@@ -102,6 +129,32 @@
         }
       },
       "lastUpdated": "2025-12-09T22:00:00.000Z"
+    }
+  },
+  "system": {
+    "irrigation": {
+      "runtime": {
+        "enabled": true,
+        "mode": "always_on",
+        "plugId": null,
+        "decisionAt": "2026-02-01T15:12:11.477Z",
+        "reason": "timer",
+        "isDay": true,
+        "dayWindow": {
+          "start": "2026-02-01T11:00:00.000Z",
+          "end": "2026-02-02T03:00:00.000Z",
+          "hours": 16
+        },
+        "humidity": null,
+        "desiredState": "on",
+        "decisionReason": "always_on",
+        "nextToggleAt": null,
+        "cycleState": "on",
+        "onMinutes": 15,
+        "offMinutes": 15,
+        "status": "plug-unconfigured",
+        "updatedAt": "2026-02-01T15:12:11.477Z"
+      }
     }
   }
 }
