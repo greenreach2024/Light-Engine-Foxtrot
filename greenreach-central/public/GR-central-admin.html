@@ -1777,6 +1777,198 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Grant Summary View -->
+            <div id="grant-summary-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>Grant Summary</h1>
+                    <div class="header-actions">
+                        <button class="btn" onclick="loadGrantSummary()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Grant Users</div>
+                        <div class="kpi-value" id="grant-kpi-users">0</div>
+                        <div class="kpi-change neutral" id="grant-kpi-users-month">0 new this month</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Grants Supported</div>
+                        <div class="kpi-value" id="grant-kpi-total-grants">0</div>
+                        <div class="kpi-change neutral" id="grant-kpi-new-grants">0 new this month</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Average Wizard Completion</div>
+                        <div class="kpi-value" id="grant-kpi-avg-complete">0%</div>
+                        <div class="kpi-change neutral" id="grant-kpi-completed-users">0 users completed</div>
+                    </div>
+                </div>
+
+                <div class="grid-2col" style="margin-top: 24px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">New Users Per Month</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Month</th>
+                                            <th>New Users</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="grant-users-month-tbody">
+                                        <tr>
+                                            <td colspan="2" class="loading">Loading...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Wizard Pages by Time Spent</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Page</th>
+                                            <th>Total Time</th>
+                                            <th>Avg Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="grant-pages-time-tbody">
+                                        <tr>
+                                            <td colspan="3" class="loading">Loading...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <div class="card-title">Wizard Pages by Most Views</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Page</th>
+                                        <th>Views</th>
+                                        <th>Total Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grant-pages-views-tbody">
+                                    <tr>
+                                        <td colspan="3" class="loading">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grant Users View -->
+            <div id="grant-users-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>Grant Users</h1>
+                    <div class="header-actions" style="gap: 8px;">
+                        <input type="text" id="grant-user-search" placeholder="Search users..." class="btn" style="min-width: 260px; text-align: left;" onkeyup="filterGrantUsers()">
+                        <button class="btn" onclick="loadGrantUsers()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">All Grant Users</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>User ID</th>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Business</th>
+                                        <th>Province</th>
+                                        <th>Last Login</th>
+                                        <th>Last Active Tab</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grant-users-tbody">
+                                    <tr>
+                                        <td colspan="9" class="loading">Loading users...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Reference Sites View -->
+            <div id="ai-reference-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>AI Reference Sites</h1>
+                    <div class="header-actions">
+                        <button class="btn" onclick="loadAiReferenceSites()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-header">
+                        <div class="card-title">Add Reference Site</div>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1.2fr 1.2fr 0.8fr auto; gap: 12px;">
+                            <input id="ai-ref-title" class="btn" placeholder="Title" style="text-align:left;">
+                            <input id="ai-ref-url" class="btn" placeholder="URL" style="text-align:left;">
+                            <input id="ai-ref-category" class="btn" placeholder="Category" style="text-align:left;">
+                            <button class="btn btn-primary" onclick="addAiReferenceSite()">Add</button>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">Use this list to document AI policies, regulations, and reference material.</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Reference Library</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Category</th>
+                                        <th>URL</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ai-reference-tbody">
+                                    <tr>
+                                        <td colspan="4" class="loading">Loading reference sites...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
             <!-- Room Detail View -->
             <div id="room-detail-view" class="view" style="display: none;">
@@ -2841,6 +3033,26 @@
                     <div style="padding: 20px;">
                         <div id="farmDetailContent">
                             <!-- Farm detail content will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grant User Delete Modal -->
+            <div id="grantUserDeleteModal" class="modal">
+                <div class="modal-content" style="max-width: 520px; width: 100%;">
+                    <div class="modal-header">
+                        <h2>Delete Grant User</h2>
+                        <button class="modal-close" onclick="closeGrantUserDeleteModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger" style="margin-bottom: 16px;">
+                            <strong>Warning:</strong> This will soft-delete the user and remove their access. Their applications will be marked deleted.
+                        </div>
+                        <p id="grantUserDeleteText" style="color: var(--text-secondary); margin-bottom: 20px;">Are you sure you want to delete this user?</p>
+                        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                            <button class="btn" onclick="closeGrantUserDeleteModal()">Cancel</button>
+                            <button class="btn" style="background: #ef4444; border-color: #ef4444; color: white;" onclick="confirmDeleteGrantUser()">Delete User</button>
                         </div>
                     </div>
                 </div>

@@ -734,6 +734,60 @@ const INFO_CARDS = {
             }
         ]
     },
+    'ai-reference': {
+        title: 'AI Reference Sites',
+        subtitle: 'Curated policy, regulatory, and safety references',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Links to AI governance references and policy sources</li><li>Regulatory guidance for compliance and audit trails</li><li>Safety and risk management frameworks</li></ul>'
+            },
+            {
+                title: 'Why This Matters',
+                content: 'A shared reference library keeps GreenReach aligned with evolving AI regulations and best practices. It supports consistent policy updates and faster audits.'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Add new regulations as they emerge and remove outdated sources. Use this list when updating AI rules and staff training.'
+            }
+        ]
+    },
+    'grant-summary': {
+        title: 'Grant Summary',
+        subtitle: 'Portfolio-level analytics for the grant wizard program',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Total grant users and new users per month</li><li>Total grants supported and new grants this month</li><li>Average wizard completion and completion counts</li><li>Wizard pages ranked by time spent and view frequency</li></ul>'
+            },
+            {
+                title: 'Why We Monitor This',
+                content: 'These metrics help prioritize improvements in the grant wizard, identify drop-off points, and prove program impact to partners and funders.'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Refine steps with high drop-off, optimize guidance where time spent is highest, and report monthly adoption trends.'
+            }
+        ]
+    },
+    'grant-users': {
+        title: 'Grant Users',
+        subtitle: 'Manage profiles and support grant applicants',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Grant user profiles and business details</li><li>Last login and last active wizard tab</li><li>Email updates and account actions</li></ul>'
+            },
+            {
+                title: 'Why We Monitor This',
+                content: 'Grant applicants often need support. This view helps staff resolve login issues, update contact info, and track where users are in the process.'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Update email addresses, check last active tab for support calls, and soft-delete users upon request.'
+            }
+        ]
+    },
     'alerts': {
         title: 'Real-Time Alerts & Notifications',
         subtitle: 'Immediate notifications for critical farm events requiring attention',
@@ -1162,9 +1216,22 @@ function renderContextualSidebar() {
                     title: 'Analytics',
                     items: [
                         { label: 'AI Insights', view: 'analytics' },
-                        { label: 'AI Rules', view: 'ai-rules' },
                         { label: 'Energy', view: 'energy' },
                         { label: 'Harvest Forecast', view: 'harvest' }
+                    ]
+                },
+                {
+                    title: 'Grant Intelligence',
+                    items: [
+                        { label: 'Grant Summary', view: 'grant-summary' },
+                        { label: 'Grant Users', view: 'grant-users' }
+                    ]
+                },
+                {
+                    title: 'AI Governance',
+                    items: [
+                        { label: 'AI Rules', view: 'ai-rules' },
+                        { label: 'AI Reference Sites', view: 'ai-reference' }
                     ]
                 },
                 {
@@ -4813,6 +4880,30 @@ async function navigate(view, element) {
             await loadAiRules();
             if (INFO_CARDS['ai-rules']) {
                 showInfoCard(createInfoCard(INFO_CARDS['ai-rules'].title, INFO_CARDS['ai-rules'].subtitle, INFO_CARDS['ai-rules'].sections));
+            }
+            break;
+
+        case 'ai-reference':
+            document.getElementById('ai-reference-view').style.display = 'block';
+            await loadAiReferenceSites();
+            if (INFO_CARDS['ai-reference']) {
+                showInfoCard(createInfoCard(INFO_CARDS['ai-reference'].title, INFO_CARDS['ai-reference'].subtitle, INFO_CARDS['ai-reference'].sections));
+            }
+            break;
+
+        case 'grant-summary':
+            document.getElementById('grant-summary-view').style.display = 'block';
+            await loadGrantSummary();
+            if (INFO_CARDS['grant-summary']) {
+                showInfoCard(createInfoCard(INFO_CARDS['grant-summary'].title, INFO_CARDS['grant-summary'].subtitle, INFO_CARDS['grant-summary'].sections));
+            }
+            break;
+
+        case 'grant-users':
+            document.getElementById('grant-users-view').style.display = 'block';
+            await loadGrantUsers();
+            if (INFO_CARDS['grant-users']) {
+                showInfoCard(createInfoCard(INFO_CARDS['grant-users'].title, INFO_CARDS['grant-users'].subtitle, INFO_CARDS['grant-users'].sections));
             }
             break;
             
@@ -8892,6 +8983,306 @@ async function loadAiRules() {
 
 function refreshAiRules() {
     loadAiRules();
+}
+
+/**
+ * ============================================
+ * GRANT INTELLIGENCE FUNCTIONS
+ * ============================================
+ */
+
+let grantUsers = [];
+let pendingGrantDeleteId = null;
+
+const WIZARD_PAGE_LABELS = {
+    organization: 'Organization',
+    project: 'Project',
+    budget: 'Budget',
+    narrative: 'Need & Impact',
+    documents: 'Documents',
+    review: 'Review & Export'
+};
+
+function formatWizardPageLabel(pageId) {
+    return WIZARD_PAGE_LABELS[pageId] || pageId || '—';
+}
+
+function formatDateShort(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+}
+
+function formatDuration(ms) {
+    const total = Number(ms) || 0;
+    if (total <= 0) return '—';
+    const seconds = Math.floor(total / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const remMinutes = minutes % 60;
+    const remSeconds = seconds % 60;
+    if (hours > 0) return `${hours}h ${remMinutes}m`;
+    if (minutes > 0) return `${minutes}m ${remSeconds}s`;
+    return `${remSeconds}s`;
+}
+
+async function loadGrantUsers() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/users`);
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load grant users');
+
+        grantUsers = data.users || [];
+        renderGrantUsers(grantUsers);
+    } catch (error) {
+        console.error('Error loading grant users:', error);
+        const tbody = document.getElementById('grant-users-tbody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="9" class="loading">Failed to load users: ${error.message}</td></tr>`;
+        }
+    }
+}
+
+function renderGrantUsers(users) {
+    const tbody = document.getElementById('grant-users-tbody');
+    if (!tbody) return;
+
+    if (!users.length) {
+        tbody.innerHTML = `<tr><td colspan="9" class="loading">No grant users found.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = users.map(user => {
+        const name = user.contact_name || '—';
+        const emailId = `grant-email-${user.id}`;
+        return `
+            <tr>
+                <td>${user.id}</td>
+                <td>${name}</td>
+                <td>
+                    <input id="${emailId}" class="btn" value="${user.email || ''}" style="text-align:left; min-width: 220px;">
+                </td>
+                <td>${user.business_name || '—'}</td>
+                <td>${user.province || '—'}</td>
+                <td>${formatDateShort(user.last_login_at)}</td>
+                <td>${formatWizardPageLabel(user.last_active_tab)}</td>
+                <td>${formatDateShort(user.created_at)}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn btn-primary" onclick="updateGrantUserEmail(${user.id})" style="padding: 6px 10px;">Save</button>
+                    <button class="btn" onclick="openGrantUserDeleteModal(${user.id}, '${(name || '').replace(/'/g, "&#39;")}', '${(user.email || '').replace(/'/g, "&#39;")}')" style="padding: 6px 10px; background:#ef4444; border-color:#ef4444; color:white;">Delete</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterGrantUsers() {
+    const term = (document.getElementById('grant-user-search')?.value || '').toLowerCase();
+    const filtered = grantUsers.filter(user => {
+        return (user.contact_name || '').toLowerCase().includes(term) ||
+               (user.email || '').toLowerCase().includes(term) ||
+               (user.business_name || '').toLowerCase().includes(term) ||
+               (user.province || '').toLowerCase().includes(term);
+    });
+    renderGrantUsers(filtered);
+}
+
+async function updateGrantUserEmail(userId) {
+    const input = document.getElementById(`grant-email-${userId}`);
+    if (!input) return;
+    const email = input.value.trim();
+    if (!email || !email.includes('@')) {
+        showToast('Enter a valid email address.', 'error');
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Update failed');
+        showToast('Grant user email updated.', 'success');
+    } catch (error) {
+        console.error('Grant user update error:', error);
+        showToast('Failed to update grant user.', 'error');
+    }
+}
+
+function openGrantUserDeleteModal(userId, name, email) {
+    pendingGrantDeleteId = userId;
+    const modal = document.getElementById('grantUserDeleteModal');
+    const text = document.getElementById('grantUserDeleteText');
+    if (text) {
+        text.textContent = `Delete grant user ${name || ''} (${email || ''})? This is reversible only by database restore.`;
+    }
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeGrantUserDeleteModal() {
+    const modal = document.getElementById('grantUserDeleteModal');
+    if (modal) modal.style.display = 'none';
+    pendingGrantDeleteId = null;
+}
+
+async function confirmDeleteGrantUser() {
+    if (!pendingGrantDeleteId) return;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/users/${pendingGrantDeleteId}`, {
+            method: 'DELETE'
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Delete failed');
+        closeGrantUserDeleteModal();
+        await loadGrantUsers();
+        showToast('Grant user deleted.', 'success');
+    } catch (error) {
+        console.error('Grant user delete error:', error);
+        showToast('Failed to delete grant user.', 'error');
+    }
+}
+
+async function loadGrantSummary() {
+    try {
+        const summaryRes = await authenticatedFetch(`${API_BASE}/api/admin/grants/summary`);
+        const analyticsRes = await authenticatedFetch(`${API_BASE}/api/admin/grants/wizard-analytics`);
+        if (!summaryRes || !analyticsRes) return;
+
+        const summaryData = await summaryRes.json();
+        const analyticsData = await analyticsRes.json();
+        if (!summaryData.success) throw new Error(summaryData.error || 'Summary failed');
+
+        const summary = summaryData.data || {};
+        document.getElementById('grant-kpi-users').textContent = summary.totalUsers || 0;
+        document.getElementById('grant-kpi-users-month').textContent = `${(summary.newUsersMonthly || []).slice(-1)[0]?.count || 0} new this month`;
+        document.getElementById('grant-kpi-total-grants').textContent = summary.totalGrants || 0;
+        document.getElementById('grant-kpi-new-grants').textContent = `${summary.newGrantsThisMonth || 0} new this month`;
+        document.getElementById('grant-kpi-avg-complete').textContent = `${Math.round(summary.avgWizardCompletePercent || 0)}%`;
+        document.getElementById('grant-kpi-completed-users').textContent = `${summary.completedUsers || 0} users completed`;
+
+        const monthlyTbody = document.getElementById('grant-users-month-tbody');
+        if (monthlyTbody) {
+            const rows = (summary.newUsersMonthly || []).map(r => {
+                const monthLabel = r.month ? new Date(r.month).toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) : '—';
+                return `<tr><td>${monthLabel}</td><td>${r.count || 0}</td></tr>`;
+            });
+            monthlyTbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="2" class="loading">No data</td></tr>';
+        }
+
+        const byTime = analyticsData?.data?.byTime || [];
+        const byViews = analyticsData?.data?.byViews || [];
+
+        const timeTbody = document.getElementById('grant-pages-time-tbody');
+        if (timeTbody) {
+            timeTbody.innerHTML = byTime.length ? byTime.map(row => `
+                <tr>
+                    <td>${formatWizardPageLabel(row.page_id)}</td>
+                    <td>${formatDuration(row.total_duration_ms)}</td>
+                    <td>${formatDuration(row.avg_duration_ms)}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="3" class="loading">No data</td></tr>';
+        }
+
+        const viewsTbody = document.getElementById('grant-pages-views-tbody');
+        if (viewsTbody) {
+            viewsTbody.innerHTML = byViews.length ? byViews.map(row => `
+                <tr>
+                    <td>${formatWizardPageLabel(row.page_id)}</td>
+                    <td>${row.views || 0}</td>
+                    <td>${formatDuration(row.total_duration_ms)}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="3" class="loading">No data</td></tr>';
+        }
+    } catch (error) {
+        console.error('Grant summary load error:', error);
+        showToast('Failed to load grant summary.', 'error');
+    }
+}
+
+/**
+ * ============================================
+ * AI REFERENCE SITE FUNCTIONS
+ * ============================================
+ */
+
+async function loadAiReferenceSites() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-reference-sites`);
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load reference sites');
+
+        const tbody = document.getElementById('ai-reference-tbody');
+        if (!tbody) return;
+        const sites = data.sites || [];
+
+        tbody.innerHTML = sites.length ? sites.map(site => `
+            <tr>
+                <td>${site.title}</td>
+                <td>${site.category || '—'}</td>
+                <td><a href="${site.url}" target="_blank" rel="noopener" style="color: var(--accent-blue);">${site.url}</a></td>
+                <td>
+                    <button class="btn" onclick="deleteAiReferenceSite(${site.id})" style="padding: 6px 10px; background:#ef4444; border-color:#ef4444; color:white;">Delete</button>
+                </td>
+            </tr>
+        `).join('') : '<tr><td colspan="4" class="loading">No reference sites yet.</td></tr>';
+    } catch (error) {
+        console.error('AI reference load error:', error);
+        showToast('Failed to load AI reference sites.', 'error');
+    }
+}
+
+async function addAiReferenceSite() {
+    const title = document.getElementById('ai-ref-title')?.value.trim();
+    const url = document.getElementById('ai-ref-url')?.value.trim();
+    const category = document.getElementById('ai-ref-category')?.value.trim();
+
+    if (!title || !url) {
+        showToast('Title and URL are required.', 'error');
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-reference-sites`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, url, category })
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to add reference site');
+
+        document.getElementById('ai-ref-title').value = '';
+        document.getElementById('ai-ref-url').value = '';
+        document.getElementById('ai-ref-category').value = '';
+        await loadAiReferenceSites();
+        showToast('Reference site added.', 'success');
+    } catch (error) {
+        console.error('AI reference add error:', error);
+        showToast('Failed to add reference site.', 'error');
+    }
+}
+
+async function deleteAiReferenceSite(siteId) {
+    if (!confirm('Delete this reference site?')) return;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-reference-sites/${siteId}`, {
+            method: 'DELETE'
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to delete reference site');
+        await loadAiReferenceSites();
+        showToast('Reference site deleted.', 'success');
+    } catch (error) {
+        console.error('AI reference delete error:', error);
+        showToast('Failed to delete reference site.', 'error');
+    }
 }
 
 

@@ -453,6 +453,85 @@ router.post('/ai-rules', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/ai-reference-sites
+ * List AI reference sites
+ */
+router.get('/ai-reference-sites', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, sites: [] });
+        }
+
+        const result = await query(
+            `SELECT id, title, url, category, created_at, updated_at
+             FROM ai_reference_sites
+             ORDER BY created_at DESC`
+        );
+
+        return res.json({ success: true, sites: result.rows });
+    } catch (error) {
+        console.error('[Admin API] Error loading AI reference sites:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load AI reference sites' });
+    }
+});
+
+/**
+ * POST /api/admin/ai-reference-sites
+ * Add AI reference site
+ */
+router.post('/ai-reference-sites', requireAdminRole('admin', 'operations'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const { title, url, category } = req.body || {};
+        if (!title || !url) {
+            return res.status(400).json({ success: false, error: 'Title and URL are required' });
+        }
+
+        const result = await query(
+            `INSERT INTO ai_reference_sites (title, url, category)
+             VALUES ($1, $2, $3)
+             RETURNING id, title, url, category, created_at, updated_at`,
+            [String(title).trim(), String(url).trim(), category ? String(category).trim() : null]
+        );
+
+        return res.json({ success: true, site: result.rows[0] });
+    } catch (error) {
+        console.error('[Admin API] Error adding AI reference site:', error);
+        return res.status(500).json({ success: false, error: 'Failed to add AI reference site' });
+    }
+});
+
+/**
+ * DELETE /api/admin/ai-reference-sites/:id
+ * Remove AI reference site
+ */
+router.delete('/ai-reference-sites/:id', requireAdminRole('admin', 'operations'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const siteId = Number(req.params.id);
+        if (!Number.isFinite(siteId)) {
+            return res.status(400).json({ success: false, error: 'Invalid site id' });
+        }
+
+        const result = await query('DELETE FROM ai_reference_sites WHERE id = $1 RETURNING id', [siteId]);
+        if (!result.rows.length) {
+            return res.status(404).json({ success: false, error: 'Site not found' });
+        }
+
+        return res.json({ success: true, id: result.rows[0].id });
+    } catch (error) {
+        console.error('[Admin API] Error deleting AI reference site:', error);
+        return res.status(500).json({ success: false, error: 'Failed to delete AI reference site' });
+    }
+});
+
+/**
  * DELETE /api/admin/farms/:farmId
  * Delete a farm (requires admin password confirmation)
  * Restricted to: admin role only
@@ -823,6 +902,217 @@ router.post('/users/:userId/reset-password', requireAdminRole('admin', 'operatio
             error: 'Failed to reset password',
             message: error.message
         });
+    }
+});
+
+/**
+ * GET /api/admin/grants/users
+ * List grant wizard users
+ */
+router.get('/grants/users', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, users: [] });
+        }
+
+        const result = await query(
+            `SELECT u.id, u.email, u.contact_name, u.business_name, u.province,
+                    u.last_login_at, u.created_at,
+                    last_event.page_id AS last_active_tab,
+                    last_event.created_at AS last_active_at
+             FROM grant_users u
+             LEFT JOIN LATERAL (
+                 SELECT page_id, created_at
+                 FROM grant_wizard_events e
+                 WHERE e.user_id = u.id
+                 ORDER BY e.created_at DESC
+                 LIMIT 1
+             ) last_event ON true
+             WHERE u.deleted_at IS NULL
+             ORDER BY u.created_at DESC`
+        );
+
+        return res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('[Admin API] Error loading grant users:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load grant users' });
+    }
+});
+
+/**
+ * PUT /api/admin/grants/users/:id
+ * Update grant user email
+ */
+router.put('/grants/users/:id', requireAdminRole('admin', 'operations', 'support'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const userId = Number(req.params.id);
+        const { email } = req.body || {};
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({ success: false, error: 'Invalid user id' });
+        }
+        if (!email || !String(email).includes('@')) {
+            return res.status(400).json({ success: false, error: 'Valid email required' });
+        }
+
+        const result = await query(
+            `UPDATE grant_users
+             SET email = $1, updated_at = NOW()
+             WHERE id = $2 AND deleted_at IS NULL
+             RETURNING id, email, contact_name, business_name, province, last_login_at, created_at`,
+            [String(email).trim().toLowerCase(), userId]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        return res.json({ success: true, user: result.rows[0] });
+    } catch (error) {
+        console.error('[Admin API] Error updating grant user:', error);
+        return res.status(500).json({ success: false, error: 'Failed to update grant user' });
+    }
+});
+
+/**
+ * DELETE /api/admin/grants/users/:id
+ * Soft delete grant user
+ */
+router.delete('/grants/users/:id', requireAdminRole('admin', 'operations'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const userId = Number(req.params.id);
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({ success: false, error: 'Invalid user id' });
+        }
+
+        const result = await query(
+            `UPDATE grant_users
+             SET deleted_at = NOW(), updated_at = NOW()
+             WHERE id = $1 AND deleted_at IS NULL
+             RETURNING id`,
+            [userId]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        await query(
+            `UPDATE grant_applications
+             SET status = 'deleted', updated_at = NOW()
+             WHERE user_id = $1`,
+            [userId]
+        );
+
+        return res.json({ success: true, user_id: result.rows[0].id });
+    } catch (error) {
+        console.error('[Admin API] Error deleting grant user:', error);
+        return res.status(500).json({ success: false, error: 'Failed to delete grant user' });
+    }
+});
+
+/**
+ * GET /api/admin/grants/summary
+ * KPI summary for grant wizard
+ */
+router.get('/grants/summary', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, data: {} });
+        }
+
+        const totalUsersRes = await query('SELECT COUNT(*)::int AS count FROM grant_users WHERE deleted_at IS NULL');
+        const totalGrantsRes = await query("SELECT COUNT(*)::int AS count FROM grant_applications WHERE status IS NULL OR status <> 'deleted'");
+        const newGrantsRes = await query("SELECT COUNT(*)::int AS count FROM grant_applications WHERE created_at >= date_trunc('month', NOW()) AND (status IS NULL OR status <> 'deleted')");
+        const avgCompleteRes = await query("SELECT COALESCE(AVG(percent_complete), 0)::float AS avg_complete FROM grant_applications WHERE status IS NULL OR status <> 'deleted'");
+        const completedUsersRes = await query("SELECT COUNT(DISTINCT user_id)::int AS count FROM grant_applications WHERE percent_complete >= 100 AND (status IS NULL OR status <> 'deleted')");
+        const newUsersMonthlyRes = await query(
+            `SELECT date_trunc('month', created_at) AS month, COUNT(*)::int AS count
+             FROM grant_users
+             WHERE deleted_at IS NULL AND created_at >= date_trunc('month', NOW()) - interval '5 months'
+             GROUP BY 1
+             ORDER BY 1`
+        );
+
+        return res.json({
+            success: true,
+            data: {
+                totalUsers: totalUsersRes.rows[0]?.count || 0,
+                totalGrants: totalGrantsRes.rows[0]?.count || 0,
+                newGrantsThisMonth: newGrantsRes.rows[0]?.count || 0,
+                avgWizardCompletePercent: Number(avgCompleteRes.rows[0]?.avg_complete || 0),
+                completedUsers: completedUsersRes.rows[0]?.count || 0,
+                newUsersMonthly: newUsersMonthlyRes.rows.map(r => ({
+                    month: r.month,
+                    count: r.count
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('[Admin API] Error loading grant summary:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load grant summary' });
+    }
+});
+
+/**
+ * GET /api/admin/grants/wizard-analytics
+ * Wizard page ranking by time and views
+ */
+router.get('/grants/wizard-analytics', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, data: { byTime: [], byViews: [] } });
+        }
+
+        const timeRes = await query(
+            `SELECT page_id,
+                    COUNT(*)::int AS events,
+                    COALESCE(SUM(duration_ms), 0)::bigint AS total_duration_ms,
+                    COALESCE(AVG(duration_ms), 0)::int AS avg_duration_ms
+             FROM grant_wizard_events
+             WHERE event_type = 'page_time' AND page_id IS NOT NULL AND duration_ms IS NOT NULL
+             GROUP BY page_id
+             ORDER BY total_duration_ms DESC
+             LIMIT 12`
+        );
+
+        const viewsRes = await query(
+            `SELECT page_id,
+                    COUNT(*)::int AS views
+             FROM grant_wizard_events
+             WHERE event_type = 'page_view' AND page_id IS NOT NULL
+             GROUP BY page_id
+             ORDER BY views DESC
+             LIMIT 12`
+        );
+
+        const durationMap = new Map(timeRes.rows.map(r => [r.page_id, r]));
+        const byViews = viewsRes.rows.map(r => {
+            const duration = durationMap.get(r.page_id);
+            return {
+                page_id: r.page_id,
+                views: r.views,
+                total_duration_ms: duration?.total_duration_ms || 0
+            };
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                byTime: timeRes.rows,
+                byViews
+            }
+        });
+    } catch (error) {
+        console.error('[Admin API] Error loading wizard analytics:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load wizard analytics' });
     }
 });
 

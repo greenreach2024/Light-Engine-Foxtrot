@@ -444,6 +444,49 @@ async function runMigrations(client) {
     } catch (err) {
       logger.warn('Project discovery migration warning:', err.message);
     }
+
+    // Migration 013: Grant wizard analytics + AI reference sites
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS grant_wizard_events (
+          id              SERIAL PRIMARY KEY,
+          user_id         INTEGER NOT NULL REFERENCES grant_users(id),
+          application_id  INTEGER REFERENCES grant_applications(id),
+          event_type      VARCHAR(50) NOT NULL,
+          page_id         VARCHAR(100),
+          duration_ms     INTEGER,
+          created_at      TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_grant_wizard_events_user ON grant_wizard_events(user_id);
+        CREATE INDEX IF NOT EXISTS idx_grant_wizard_events_app ON grant_wizard_events(application_id);
+        CREATE INDEX IF NOT EXISTS idx_grant_wizard_events_page ON grant_wizard_events(page_id);
+        CREATE INDEX IF NOT EXISTS idx_grant_wizard_events_created ON grant_wizard_events(created_at);
+
+        CREATE TABLE IF NOT EXISTS ai_reference_sites (
+          id          SERIAL PRIMARY KEY,
+          title       TEXT NOT NULL,
+          url         TEXT NOT NULL,
+          category    TEXT,
+          created_at  TIMESTAMPTZ DEFAULT NOW(),
+          updated_at  TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        INSERT INTO ai_reference_sites (title, url, category)
+        SELECT * FROM (VALUES
+          ('OpenAI Usage Policies', 'https://openai.com/policies/usage-policies', 'Policy'),
+          ('OpenAI Safety Best Practices', 'https://openai.com/safety', 'Safety'),
+          ('Government of Canada: AI and data', 'https://www.canada.ca/en/government/system/digital-government/digital-government-innovations/responsible-use-ai.html', 'Regulatory'),
+          ('Treasury Board: Directive on Automated Decision-Making', 'https://www.tbs-sct.canada.ca/pol/doc-eng.aspx?id=32592', 'Regulatory'),
+          ('OECD AI Principles', 'https://oecd.ai/en/ai-principles', 'Framework'),
+          ('NIST AI Risk Management Framework', 'https://www.nist.gov/itl/ai-risk-management-framework', 'Framework')
+        ) AS seed(title, url, category)
+        WHERE NOT EXISTS (SELECT 1 FROM ai_reference_sites);
+      `);
+      logger.info('Grant analytics + AI reference tables ready (migration 013)');
+    } catch (err) {
+      logger.warn('Grant analytics migration warning:', err.message);
+    }
   }
 
   logger.info('Database migrations completed');
