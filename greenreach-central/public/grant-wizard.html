@@ -606,30 +606,21 @@
 
       <!-- Tab: Find Programs -->
       <div id="tab-find-programs" class="tab-content" style="display:none;">
-        <div class="filter-bar">
-          <input type="text" id="programSearch" placeholder="Search programs..." oninput="loadPrograms()">
-          <select id="programStatusFilter" onchange="loadPrograms()">
-            <option value="">All statuses</option>
-            <option value="open">Open</option>
-            <option value="closed">Closed</option>
-            <option value="upcoming">Upcoming</option>
-          </select>
-          <select id="programTypeFilter" onchange="loadPrograms()">
-            <option value="">All types</option>
-            <option value="grant">Grant</option>
-            <option value="contribution">Contribution</option>
-            <option value="loan">Loan</option>
-            <option value="tax_credit">Tax credit</option>
-          </select>
+        <div style="background:linear-gradient(135deg, #f0fdf4 0%, #f8fafc 100%); border:1px solid #bbf7d0; border-radius:16px; padding:28px 32px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+          <div>
+            <h3 style="font-size:17px; font-weight:700; color:var(--text); margin-bottom:4px;">Find your best-fit programs</h3>
+            <p style="font-size:14px; color:var(--text-light); margin:0;">Tell us your goals and we'll match you to the right funding — no searching required.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="startNewDiscovery()" style="white-space:nowrap;">Start Goal-Based Match →</button>
         </div>
-        <div class="search-pills" id="tabPills">
-          <button class="search-pill" onclick="togglePill(this,'tab')">Hiring</button>
-          <button class="search-pill" onclick="togglePill(this,'tab')">Equipment</button>
-          <button class="search-pill" onclick="togglePill(this,'tab')">Clean tech</button>
-          <button class="search-pill" onclick="togglePill(this,'tab')">Innovation</button>
-          <button class="search-pill" onclick="togglePill(this,'tab')">New farmers</button>
-          <button class="search-pill" onclick="togglePill(this,'tab')">Export</button>
-          <button class="search-pill" onclick="togglePill(this,'tab')">Risk management</button>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+          <h3 style="font-size:17px; font-weight:600; margin:0;">All Open Programs</h3>
+          <select id="programStatusFilter" onchange="loadPrograms()" style="padding:8px 14px; border:1px solid #d2d2d7; border-radius:10px; font-size:14px; font-family:inherit; background:var(--bg);">
+            <option value="open" selected>Open</option>
+            <option value="">All statuses</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="closed">Closed</option>
+          </select>
         </div>
         <div id="programsList" class="programs-grid"></div>
       </div>
@@ -714,22 +705,14 @@
         <h1>Funding Programs</h1>
         <p>Browse open programs and check your eligibility before applying.</p>
       </div>
-      <div class="filter-bar">
-        <input type="text" id="allProgramSearch" placeholder="Search programs..." oninput="loadAllPrograms()">
-        <select id="allProgramStatus" onchange="loadAllPrograms()">
-          <option value="">All statuses</option>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+        <button class="btn btn-primary btn-sm" onclick="startNewDiscovery()">Find My Best-Fit Programs →</button>
+        <select id="allProgramStatus" onchange="loadAllPrograms()" style="padding:8px 14px; border:1px solid #d2d2d7; border-radius:10px; font-size:14px; font-family:inherit; background:var(--bg);">
           <option value="open" selected>Open</option>
+          <option value="">All statuses</option>
+          <option value="upcoming">Upcoming</option>
           <option value="closed">Closed</option>
         </select>
-      </div>
-      <div class="search-pills" id="allPills">
-        <button class="search-pill" onclick="togglePill(this,'all')">Hiring</button>
-        <button class="search-pill" onclick="togglePill(this,'all')">Equipment</button>
-        <button class="search-pill" onclick="togglePill(this,'all')">Clean tech</button>
-        <button class="search-pill" onclick="togglePill(this,'all')">Innovation</button>
-        <button class="search-pill" onclick="togglePill(this,'all')">New farmers</button>
-        <button class="search-pill" onclick="togglePill(this,'all')">Export</button>
-        <button class="search-pill" onclick="togglePill(this,'all')">Risk management</button>
       </div>
       <div id="allProgramsList" class="programs-grid"></div>
       <div style="text-align: center; margin-top: 32px;">
@@ -945,6 +928,16 @@
         <div class="section-header" style="margin-bottom:24px;">
           <h1>Your Best-Fit Programs</h1>
           <p id="matchSummary">Programs ranked by relevance to your project goals.</p>
+        </div>
+
+        <!-- AI Recommendations Panel -->
+        <div id="aiRecommendPanel" style="display:none; margin-bottom:24px; background:linear-gradient(135deg, #f0fdf4 0%, #fefce8 100%); border:1px solid #bbf7d0; border-radius:16px; padding:24px;">
+          <div id="aiRecommendContent"></div>
+        </div>
+        <div style="margin-bottom:20px;">
+          <button id="aiRecommendBtn" class="btn btn-secondary btn-sm" onclick="getAiRecommendations()" style="font-size:14px;">
+            ✨ AI Strategy Advisor — Get personalized funding recommendations
+          </button>
         </div>
 
         <div id="matchFilters" style="display:flex; gap:12px; margin-bottom:24px; flex-wrap:wrap;">
@@ -1299,25 +1292,18 @@
     }
 
     async function loadPrograms() {
-      const text = document.getElementById('programSearch')?.value || '';
-      const pills = getActivePills('tabPills');
-      const search = [text, pills].filter(Boolean).join(' ');
-      const status = document.getElementById('programStatusFilter')?.value || '';
-      const type = document.getElementById('programTypeFilter')?.value || '';
+      const status = document.getElementById('programStatusFilter')?.value || 'open';
       try {
-        const res = await fetch(`${API}/programs?search=${encodeURIComponent(search)}&status=${status}&type=${type}`);
+        const res = await fetch(`${API}/programs?status=${status}&limit=50`);
         const data = await res.json();
         if (data.success) renderPrograms(data.data.programs, 'programsList', true);
       } catch (e) { console.error('Load programs error:', e); }
     }
 
     async function loadAllPrograms() {
-      const text = document.getElementById('allProgramSearch')?.value || '';
-      const pills = getActivePills('allPills');
-      const search = [text, pills].filter(Boolean).join(' ');
-      const status = document.getElementById('allProgramStatus')?.value || '';
+      const status = document.getElementById('allProgramStatus')?.value || 'open';
       try {
-        const res = await fetch(`${API}/programs?search=${encodeURIComponent(search)}&status=${status}&limit=50`);
+        const res = await fetch(`${API}/programs?status=${status}&limit=50`);
         const data = await res.json();
         if (data.success) renderPrograms(data.data.programs, 'allProgramsList', true);
       } catch (e) { console.error('Load all programs error:', e); }
@@ -1649,6 +1635,8 @@
       const org = currentApp.organization_profile || {};
       const proj = currentApp.project_profile || {};
       const budget = currentApp.budget || {};
+      const milestones = currentApp.milestones || [];
+      const supportLetters = currentApp.support_letters || [];
 
       let html = `<h2>${step.title}</h2><p class="step-subtitle">${step.subtitle}</p>`;
 
@@ -1740,26 +1728,49 @@
             </div>
             <div id="budgetItems">
               ${items.length ? items.map((item, i) => `
-                <div style="display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:end;">
-                  <div class="form-group" style="margin-bottom:0;">
-                    ${i === 0 ? '<label style="font-size:13px;">Description</label>' : ''}
-                    <input type="text" value="${escapeAttr(item.description || '')}" data-budget-idx="${i}" data-field="description" onchange="wizBudgetChange()" style="padding:10px;">
+                <div style="background:var(--bg); border-radius:12px; padding:14px; margin-bottom:10px; border:1px solid #e5e5ea;">
+                  <div style="display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; align-items:end;">
+                    <div class="form-group" style="margin-bottom:0;">
+                      ${i === 0 ? '<label style="font-size:13px;">Description</label>' : ''}
+                      <input type="text" value="${escapeAttr(item.description || '')}" data-budget-idx="${i}" data-field="description" onchange="wizBudgetChange()" style="padding:10px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      ${i === 0 ? '<label style="font-size:13px;">Amount ($)</label>' : ''}
+                      <input type="number" value="${item.amount || ''}" data-budget-idx="${i}" data-field="amount" onchange="wizBudgetChange()" style="padding:10px;" step="0.01">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      ${i === 0 ? '<label style="font-size:13px;">Category</label>' : ''}
+                      <select data-budget-idx="${i}" data-field="category" onchange="wizBudgetChange()" style="padding:10px;">
+                        <option value="equipment" ${item.category==='equipment'?'selected':''}>Equipment</option>
+                        <option value="supplies" ${item.category==='supplies'?'selected':''}>Supplies</option>
+                        <option value="labour" ${item.category==='labour'?'selected':''}>Labour</option>
+                        <option value="professional" ${item.category==='professional'?'selected':''}>Professional services</option>
+                        <option value="other" ${item.category==='other'?'selected':''}>Other</option>
+                      </select>
+                    </div>
+                    <button onclick="removeBudgetItem(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:20px;padding:10px;">×</button>
                   </div>
-                  <div class="form-group" style="margin-bottom:0;">
-                    ${i === 0 ? '<label style="font-size:13px;">Amount ($)</label>' : ''}
-                    <input type="number" value="${item.amount || ''}" data-budget-idx="${i}" data-field="amount" onchange="wizBudgetChange()" style="padding:10px;" step="0.01">
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;">
-                    ${i === 0 ? '<label style="font-size:13px;">Category</label>' : ''}
-                    <select data-budget-idx="${i}" data-field="category" onchange="wizBudgetChange()" style="padding:10px;">
-                      <option value="equipment" ${item.category==='equipment'?'selected':''}>Equipment</option>
-                      <option value="supplies" ${item.category==='supplies'?'selected':''}>Supplies</option>
-                      <option value="labour" ${item.category==='labour'?'selected':''}>Labour</option>
-                      <option value="professional" ${item.category==='professional'?'selected':''}>Professional services</option>
-                      <option value="other" ${item.category==='other'?'selected':''}>Other</option>
-                    </select>
-                  </div>
-                  <button onclick="removeBudgetItem(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:20px;padding:10px;">×</button>
+                  <details style="margin-top:8px;">
+                    <summary style="font-size:12px; color:var(--text-light); cursor:pointer; user-select:none;">Cost breakdown & justification</summary>
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:11px;">Units / Qty</label>
+                        <input type="text" value="${escapeAttr(item.units || '')}" data-budget-idx="${i}" data-field="units" onchange="wizBudgetChange()" placeholder="e.g., 10 panels" style="padding:8px; font-size:13px;">
+                      </div>
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:11px;">Unit cost ($)</label>
+                        <input type="number" value="${item.unitCost || ''}" data-budget-idx="${i}" data-field="unitCost" onchange="wizBudgetChange()" step="0.01" style="padding:8px; font-size:13px;">
+                      </div>
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:11px;">Supplier / Source</label>
+                        <input type="text" value="${escapeAttr(item.supplierName || '')}" data-budget-idx="${i}" data-field="supplierName" onchange="wizBudgetChange()" placeholder="e.g., GreenTech Inc." style="padding:8px; font-size:13px;">
+                      </div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px; margin-bottom:0;">
+                      <label style="font-size:11px;">Justification</label>
+                      <input type="text" value="${escapeAttr(item.justification || '')}" data-budget-idx="${i}" data-field="justification" onchange="wizBudgetChange()" placeholder="Why is this expense necessary for the project?" style="padding:8px; font-size:13px;">
+                    </div>
+                  </details>
                 </div>
               `).join('') : '<p style="color:var(--text-light);margin-bottom:16px;">No budget items yet. Add your first item below.</p>'}
             </div>
@@ -1768,6 +1779,58 @@
               <span style="font-weight:600;">Total Budget</span>
               <span style="font-weight:700; font-size:20px; color:var(--primary);" id="budgetTotal">$${(budget.totalAmount || 0).toLocaleString()}</span>
             </div>
+
+            <!-- Milestones Section -->
+            <div style="margin-top:32px; padding-top:24px; border-top:2px solid #e5e5ea;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <div>
+                  <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Project Milestones</h3>
+                  <p style="font-size:13px; color:var(--text-light); margin:0;">Break your project into phases. Nearly all funding programs require milestones tied to budget.</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="addMilestone()" style="white-space:nowrap;">+ Add Milestone</button>
+              </div>
+              <div id="milestonesList">
+                ${milestones.length ? milestones.map((ms, mi) => `
+                  <div style="background:var(--bg); border-radius:14px; padding:20px; margin-bottom:12px; border:1px solid #e5e5ea;">
+                    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
+                      <span style="font-size:12px; font-weight:700; color:var(--primary); text-transform:uppercase;">Milestone ${mi+1}</span>
+                      <button onclick="removeMilestone(${mi})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:16px;">×</button>
+                    </div>
+                    <div class="form-group" style="margin-bottom:10px;">
+                      <input type="text" value="${escapeAttr(ms.title || '')}" data-ms-idx="${mi}" data-ms-field="title" onchange="wizMilestoneChange()" placeholder="e.g., Planning & Permitting" style="padding:10px; font-weight:600;">
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px;">
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:12px;">Start date</label>
+                        <input type="date" value="${ms.startDate || ''}" data-ms-idx="${mi}" data-ms-field="startDate" onchange="wizMilestoneChange()" style="padding:8px;">
+                      </div>
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:12px;">End date</label>
+                        <input type="date" value="${ms.endDate || ''}" data-ms-idx="${mi}" data-ms-field="endDate" onchange="wizMilestoneChange()" style="padding:8px;">
+                      </div>
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:12px;">Budget ($)</label>
+                        <input type="number" value="${ms.budgetAmount || ''}" data-ms-idx="${mi}" data-ms-field="budgetAmount" onchange="wizMilestoneChange()" style="padding:8px;" step="0.01">
+                      </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:10px;">
+                      <label style="font-size:12px;">Key deliverables</label>
+                      <textarea data-ms-idx="${mi}" data-ms-field="deliverables" onchange="wizMilestoneChange()" placeholder="e.g., Site plan approved, building permit obtained" style="padding:10px; min-height:60px;">${escapeHtml(ms.deliverables || '')}</textarea>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label style="font-size:12px;">Completion criteria</label>
+                      <input type="text" value="${escapeAttr(ms.completionCriteria || '')}" data-ms-idx="${mi}" data-ms-field="completionCriteria" onchange="wizMilestoneChange()" placeholder="How will you know this milestone is complete?" style="padding:10px;">
+                    </div>
+                  </div>
+                `).join('') : `
+                  <div style="text-align:center; padding:24px; background:var(--bg); border-radius:14px; border:2px dashed #d2d2d7;">
+                    <p style="color:var(--text-light); margin-bottom:12px; font-size:14px;">No milestones yet. Strong applications break the project into 3-5 phases with clear deliverables.</p>
+                    <button class="btn btn-secondary btn-sm" onclick="addMilestone()">+ Add Your First Milestone</button>
+                  </div>
+                `}
+              </div>
+            </div>
+
             <div class="form-group" style="margin-top:16px;">
               <label>Other funding sources</label>
               <div class="why-asking">Programs often require "stacking" disclosure — list other grants or funding you've applied to or received.</div>
@@ -1812,12 +1875,53 @@
                 <div style="display:flex; flex-wrap:wrap; gap:6px;">
                   ${currentApp.priority_lexicon.map(k => `<span style="background:rgba(45,80,22,0.08); padding:4px 10px; border-radius:8px; font-size:13px; color:var(--primary);">${escapeHtml(k)}</span>`).join('')}
                 </div>
-              </div>` : ''}`;
+              </div>` : ''}
+
+            ${/* Program-specific questions from question_map */ ''}
+            ${(() => {
+              const qMap = currentApp.question_map || [];
+              if (!qMap.length) return '';
+              return `
+                <div style="margin-top:32px; padding-top:24px; border-top:2px solid #e5e5ea;">
+                  <div style="margin-bottom:16px;">
+                    <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Program-Specific Questions</h3>
+                    <p style="font-size:13px; color:var(--text-light); margin:0;">These questions are pulled from the actual ${escapeHtml(currentApp.program_name || 'program')} application.</p>
+                  </div>
+                  ${qMap.map((q, qi) => {
+                    const fieldKey = q.fieldKey || ('programQ_' + qi);
+                    const savedAnswer = answers[fieldKey] || '';
+                    const qType = q.questionType || 'textarea';
+                    const isRequired = q.required ? '<span style="color:var(--error);">*</span>' : '';
+                    let inputHtml = '';
+                    if (qType === 'select' && q.options?.length) {
+                      inputHtml = '<select id="wiz_pq_' + qi + '" data-pq-key="' + escapeAttr(fieldKey) + '" onchange="wizProgramQuestionChange()" style="padding:10px;">' +
+                        '<option value="">— Select —</option>' +
+                        q.options.map(opt => '<option value="' + escapeAttr(opt) + '"' + (savedAnswer === opt ? ' selected' : '') + '>' + escapeHtml(opt) + '</option>').join('') +
+                        '</select>';
+                    } else if (qType === 'number') {
+                      inputHtml = '<input type="number" id="wiz_pq_' + qi + '" data-pq-key="' + escapeAttr(fieldKey) + '" value="' + escapeAttr(savedAnswer) + '" onchange="wizProgramQuestionChange()" style="padding:10px;" placeholder="Enter a number">';
+                    } else if (qType === 'text') {
+                      inputHtml = '<input type="text" id="wiz_pq_' + qi + '" data-pq-key="' + escapeAttr(fieldKey) + '" value="' + escapeAttr(savedAnswer) + '" onchange="wizProgramQuestionChange()" style="padding:10px;">';
+                    } else {
+                      inputHtml = '<textarea id="wiz_pq_' + qi + '" data-pq-key="' + escapeAttr(fieldKey) + '" onchange="wizProgramQuestionChange()" placeholder="' + escapeAttr(q.helpText || '') + '" style="padding:10px; min-height:80px;">' + escapeHtml(savedAnswer) + '</textarea>' +
+                        '<button class="btn btn-secondary btn-sm" onclick="aiDraftPQ(' + qi + ')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>';
+                    }
+                    return '<div class="form-group" style="margin-bottom:20px;">' +
+                      '<label>' + escapeHtml(q.question) + ' ' + isRequired + '</label>' +
+                      (q.helpText ? '<div class="why-asking">' + escapeHtml(q.helpText) + '</div>' : '') +
+                      inputHtml +
+                      '</div>';
+                  }).join('')}
+                </div>`;
+            })()}`;
           break;
 
         case 'documents':
           const reqDocs = currentApp.required_documents || [];
           const checklist = currentApp.attachments_checklist || [];
+          const letters = currentApp.support_letters || [];
+          const org_doc = currentApp.organization_profile || {};
+          const proj_doc = currentApp.project_profile || {};
           html += `
             <div class="alert alert-info" style="margin-bottom:24px;">
               <span>📎</span>
@@ -1830,7 +1934,75 @@
                   <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleDoc(${i}, '${escapeAttr(doc)}')" style="width:18px;height:18px;accent-color:var(--primary);">
                   <span style="font-size:15px;">${escapeHtml(doc)}</span>
                 </div>`;
-            }).join('') : '<p style="color:var(--text-light);">No specific documents listed for this program. Check the official program page for requirements.</p>'}`;
+            }).join('') : '<p style="color:var(--text-light);">No specific documents listed for this program. Check the official program page for requirements.</p>'}
+
+            <!-- Letters of Support Section -->
+            <div style="margin-top:32px; padding-top:24px; border-top:2px solid #e5e5ea;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <div>
+                  <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Letters of Support</h3>
+                  <p style="font-size:13px; color:var(--text-light); margin:0;">Track and generate request emails for supporters. Many programs value community and partner endorsement.</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="addSupportLetter()" style="white-space:nowrap;">+ Add Supporter</button>
+              </div>
+              <div id="lettersList">
+                ${letters.length ? letters.map((lt, li) => `
+                  <div style="background:var(--bg); border-radius:14px; padding:20px; margin-bottom:12px; border:1px solid #e5e5ea;">
+                    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
+                      <span style="font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase;">Supporter ${li+1}</span>
+                      <div style="display:flex; gap:8px; align-items:center;">
+                        <span style="font-size:11px; padding:3px 8px; border-radius:6px; font-weight:600; background:${lt.status === 'received' ? '#d4edda; color:#155724' : lt.status === 'requested' ? '#fff3cd; color:#856404' : '#f8f9fa; color:#868e96'};">${lt.status === 'received' ? '✓ Received' : lt.status === 'requested' ? '⏳ Requested' : '○ Draft'}</span>
+                        <button onclick="removeSupportLetter(${li})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:16px;">×</button>
+                      </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:12px;">Contact name</label>
+                        <input type="text" value="${escapeAttr(lt.contactName || '')}" data-lt-idx="${li}" data-lt-field="contactName" onchange="wizLetterChange()" placeholder="e.g., Jane Smith" style="padding:10px;">
+                      </div>
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:12px;">Organization / Role</label>
+                        <input type="text" value="${escapeAttr(lt.organization || '')}" data-lt-idx="${li}" data-lt-field="organization" onchange="wizLetterChange()" placeholder="e.g., Mayor, Town of Shelburne" style="padding:10px;">
+                      </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:12px;">Email</label>
+                        <input type="email" value="${escapeAttr(lt.email || '')}" data-lt-idx="${li}" data-lt-field="email" onchange="wizLetterChange()" placeholder="jane@example.com" style="padding:10px;">
+                      </div>
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:12px;">Status</label>
+                        <select data-lt-idx="${li}" data-lt-field="status" onchange="wizLetterChange()" style="padding:10px;">
+                          <option value="draft" ${lt.status === 'draft' || !lt.status ? 'selected' : ''}>Draft</option>
+                          <option value="requested" ${lt.status === 'requested' ? 'selected' : ''}>Requested</option>
+                          <option value="received" ${lt.status === 'received' ? 'selected' : ''}>Received</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:10px;">
+                      <label style="font-size:12px;">Relationship to your project</label>
+                      <input type="text" value="${escapeAttr(lt.relationship || '')}" data-lt-idx="${li}" data-lt-field="relationship" onchange="wizLetterChange()" placeholder="e.g., Municipal partner, wholesale buyer, community member" style="padding:10px;">
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="generateLetterEmail(${li})" style="font-size:13px;">📧 Generate Request Email</button>
+                    ${lt._generatedEmail ? `
+                      <div style="margin-top:12px; background:#fff; border:1px solid #e5e5ea; border-radius:10px; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                          <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--text-light);">Email Template</span>
+                          <button class="btn btn-secondary btn-sm" onclick="copyLetterEmail(${li})" style="font-size:12px;">📋 Copy</button>
+                        </div>
+                        <div style="font-size:13px; margin-bottom:6px;"><strong>Subject:</strong> ${escapeHtml(lt._generatedEmail.subject || '')}</div>
+                        <pre style="white-space:pre-wrap; font-family:inherit; font-size:13px; line-height:1.5; margin:0; color:var(--text);">${escapeHtml(lt._generatedEmail.body || '')}</pre>
+                      </div>
+                    ` : ''}
+                  </div>
+                `).join('') : `
+                  <div style="text-align:center; padding:24px; background:var(--bg); border-radius:14px; border:2px dashed #d2d2d7;">
+                    <p style="color:var(--text-light); margin-bottom:12px; font-size:14px;">No supporters tracked yet. Letters of support from community partners, officials, or customers strengthen your application.</p>
+                    <button class="btn btn-secondary btn-sm" onclick="addSupportLetter()">+ Add Your First Supporter</button>
+                  </div>
+                `}
+              </div>
+            </div>`;
           break;
 
         case 'review':
@@ -1849,8 +2021,16 @@
               <p>Itemized budget with category totals and alignment to project activities.</p>
             </div>
             <div class="export-card">
+              <h4>📅 Milestones</h4>
+              <p>Project phases with timelines, deliverables, and per-milestone budgets.</p>
+            </div>
+            <div class="export-card">
               <h4>✅ Documents Checklist</h4>
               <p>Required attachments with status (ready / missing).</p>
+            </div>
+            <div class="export-card">
+              <h4>🤝 Letters of Support</h4>
+              <p>Supporter tracking with status and request email templates.</p>
             </div>
             <div class="export-card">
               <h4>📚 Source Citations</h4>
@@ -1949,14 +2129,29 @@
         case 'budget':
           // Budget items are saved via wizBudgetChange
           body.budget = { ...currentApp.budget, otherFunding: gv('wiz_otherFunding') };
+          body.milestones = currentApp.milestones || [];
           break;
         case 'narrative':
+          // Collect program-specific question answers
+          const pqAnswers = {};
+          document.querySelectorAll('[data-pq-key]').forEach(el => {
+            pqAnswers[el.dataset.pqKey] = el.value;
+          });
           body.answers = {
             ...currentApp.answers,
+            ...pqAnswers,
             outcomes: gv('wiz_outcomes'),
             risks: gv('wiz_risks'),
             alignment: gv('wiz_alignment')
           };
+          break;
+        case 'documents':
+          body.attachmentsChecklist = currentApp.attachments_checklist || [];
+          // Strip transient _generatedEmail from persisted data
+          body.supportLetters = (currentApp.support_letters || []).map(lt => {
+            const { _generatedEmail, ...rest } = lt;
+            return rest;
+          });
           break;
       }
 
@@ -1975,7 +2170,9 @@
           project_profile: body.projectProfile || currentApp.project_profile,
           facts_ledger: body.factsLedger || currentApp.facts_ledger,
           answers: body.answers || currentApp.answers,
-          budget: body.budget || currentApp.budget
+          budget: body.budget || currentApp.budget,
+          milestones: body.milestones || currentApp.milestones,
+          support_letters: body.supportLetters || currentApp.support_letters
         });
 
         // Show consistency warnings
@@ -2127,7 +2324,7 @@
     function addBudgetItem() {
       if (!currentApp.budget) currentApp.budget = {};
       if (!currentApp.budget.items) currentApp.budget.items = [];
-      currentApp.budget.items.push({ description: '', amount: 0, category: 'equipment' });
+      currentApp.budget.items.push({ description: '', amount: 0, category: 'equipment', units: '', unitCost: 0, supplierName: '', justification: '' });
       renderWizardStep();
     }
 
@@ -2146,7 +2343,7 @@
         const idx = parseInt(el.dataset.budgetIdx);
         const field = el.dataset.field;
         if (!currentApp.budget.items[idx]) currentApp.budget.items[idx] = {};
-        currentApp.budget.items[idx][field] = field === 'amount' ? parseFloat(el.value) || 0 : el.value;
+        currentApp.budget.items[idx][field] = (field === 'amount' || field === 'unitCost') ? parseFloat(el.value) || 0 : el.value;
       });
       
       updateBudgetTotal();
@@ -2160,6 +2357,32 @@
       if (el) el.textContent = '$' + total.toLocaleString(undefined, { minimumFractionDigits: 2 });
     }
 
+    // ============================================================
+    // Milestone helpers
+    // ============================================================
+    function addMilestone() {
+      if (!currentApp.milestones) currentApp.milestones = [];
+      currentApp.milestones.push({ title: '', startDate: '', endDate: '', budgetAmount: 0, deliverables: '', completionCriteria: '' });
+      renderWizardStep();
+    }
+
+    function removeMilestone(idx) {
+      currentApp.milestones.splice(idx, 1);
+      renderWizardStep();
+      wizAutoSave();
+    }
+
+    function wizMilestoneChange() {
+      if (!currentApp.milestones) currentApp.milestones = [];
+      document.querySelectorAll('[data-ms-idx]').forEach(el => {
+        const idx = parseInt(el.dataset.msIdx);
+        const field = el.dataset.msField;
+        if (!currentApp.milestones[idx]) currentApp.milestones[idx] = {};
+        currentApp.milestones[idx][field] = field === 'budgetAmount' ? parseFloat(el.value) || 0 : el.value;
+      });
+      wizAutoSave();
+    }
+
     function toggleDoc(idx, docType) {
       if (!currentApp.attachments_checklist) currentApp.attachments_checklist = [];
       const existing = currentApp.attachments_checklist.findIndex(c => c.docType === docType);
@@ -2169,6 +2392,86 @@
         currentApp.attachments_checklist.push({ docType, status: 'ready', timestamp: new Date().toISOString() });
       }
       wizAutoSave();
+    }
+
+    // ============================================================
+    // Letters of Support helpers
+    // ============================================================
+    function addSupportLetter() {
+      if (!currentApp.support_letters) currentApp.support_letters = [];
+      currentApp.support_letters.push({ contactName: '', organization: '', email: '', relationship: '', status: 'draft' });
+      renderWizardStep();
+    }
+
+    function removeSupportLetter(idx) {
+      currentApp.support_letters.splice(idx, 1);
+      renderWizardStep();
+      wizAutoSave();
+    }
+
+    function wizLetterChange() {
+      if (!currentApp.support_letters) currentApp.support_letters = [];
+      document.querySelectorAll('[data-lt-idx]').forEach(el => {
+        const idx = parseInt(el.dataset.ltIdx);
+        const field = el.dataset.ltField;
+        if (!currentApp.support_letters[idx]) currentApp.support_letters[idx] = {};
+        currentApp.support_letters[idx][field] = el.value;
+      });
+      wizAutoSave();
+    }
+
+    function generateLetterEmail(idx) {
+      const lt = currentApp.support_letters[idx];
+      if (!lt) return;
+      const org = currentApp.organization_profile || {};
+      const proj = currentApp.project_profile || {};
+      const programName = currentApp.program_name || 'a funding program';
+      const contactFirst = (lt.contactName || 'there').split(' ')[0];
+      const orgName = org.legalName || 'our organization';
+      const projTitle = proj.title || 'our project';
+
+      lt._generatedEmail = {
+        subject: `Request for Letter of Support — ${projTitle}`,
+        body: `Dear ${contactFirst},\n\nI hope this message finds you well. I'm writing on behalf of ${orgName} to request a letter of support for ${projTitle}.\n\nWe are applying to ${programName}${proj.description ? `, which will ${proj.description.substring(0, 150).toLowerCase()}` : ''}.\n\n${lt.relationship ? `As ${lt.relationship}, your endorsement would demonstrate the community backing and partnerships that reviewers look for.` : 'Your endorsement would demonstrate the community support that reviewers look for when evaluating applications.'}\n\nThe letter does not need to be long — a few paragraphs covering:\n• Your connection to our organization or project\n• Why this project matters to the community\n• Your confidence in our ability to deliver\n\nIf you're able to help, we would need the letter by [DATE]. I'm happy to provide any additional background you might need.\n\nThank you for considering this request.\n\nBest regards,\n${org.contactName || '[Your Name]'}\n${orgName}`
+      };
+
+      renderWizardStep();
+    }
+
+    function copyLetterEmail(idx) {
+      const lt = currentApp.support_letters[idx];
+      if (!lt?._generatedEmail) return;
+      const text = `Subject: ${lt._generatedEmail.subject}\n\n${lt._generatedEmail.body}`;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Email template copied to clipboard');
+      }).catch(() => {
+        // Fallback: select text
+        const pre = event.target.closest('div').querySelector('pre');
+        if (pre) {
+          const range = document.createRange();
+          range.selectNodeContents(pre);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        }
+      });
+    }
+
+    // ============================================================
+    // Program-specific question helpers
+    // ============================================================
+    function wizProgramQuestionChange() {
+      if (!currentApp.answers) currentApp.answers = {};
+      document.querySelectorAll('[data-pq-key]').forEach(el => {
+        const key = el.dataset.pqKey;
+        currentApp.answers[key] = el.value;
+      });
+      wizAutoSave();
+    }
+
+    function aiDraftPQ(qi) {
+      const qMap = currentApp.question_map || [];
+      if (!qMap[qi]) return;
+      aiDraft('wiz_pq_' + qi, qMap[qi].question);
     }
 
     // ============================================================
@@ -2661,6 +2964,88 @@
       document.querySelectorAll('#matchFilters .search-pill').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       renderMatchedPrograms(filter);
+    }
+
+    // ============================================================
+    // AI Funding Strategy Recommendations
+    // ============================================================
+    async function getAiRecommendations() {
+      if (!currentApp || !authToken) {
+        showToast('Sign in to get AI recommendations');
+        return;
+      }
+      const btn = document.getElementById('aiRecommendBtn');
+      const panel = document.getElementById('aiRecommendPanel');
+      const content = document.getElementById('aiRecommendContent');
+      btn.disabled = true;
+      btn.textContent = '⏳ Analyzing your project against all programs...';
+      panel.style.display = 'block';
+      content.innerHTML = '<p style="color:var(--text-light); text-align:center;">Generating strategic recommendations...</p>';
+
+      try {
+        const res = await fetch(`${API}/applications/${currentApp.id}/ai-recommend`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const rec = data.data.recommendations;
+        let html = '<h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">✨ AI Funding Strategy</h3>';
+
+        // Strategic advice
+        if (rec.strategicAdvice) {
+          html += `<div style="margin-bottom:20px; padding:16px; background:rgba(255,255,255,0.7); border-radius:12px;">
+            <h4 style="font-size:14px; font-weight:700; margin-bottom:8px; color:var(--primary);">Overall Strategy</h4>
+            <p style="font-size:14px; line-height:1.6; margin:0;">${escapeHtml(rec.strategicAdvice)}</p>
+          </div>`;
+        }
+
+        // Direct matches
+        if (rec.directMatches?.length) {
+          html += '<h4 style="font-size:15px; font-weight:700; margin-bottom:12px;">🎯 Top Recommendations</h4>';
+          rec.directMatches.forEach(m => {
+            const confColor = m.confidence === 'high' ? '#16a34a' : m.confidence === 'medium' ? '#ca8a04' : '#6b7280';
+            html += `<div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:10px; border-left:4px solid ${confColor};">
+              <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:6px;">
+                <strong style="font-size:15px;">${escapeHtml(m.programName)}</strong>
+                <span style="font-size:11px; padding:2px 8px; border-radius:6px; background:${confColor}20; color:${confColor}; font-weight:700; text-transform:uppercase;">${m.confidence}</span>
+              </div>
+              <p style="font-size:13px; color:var(--text); line-height:1.5; margin:0 0 6px 0;">${escapeHtml(m.rationale)}</p>
+              ${m.applicationTip ? `<p style="font-size:12px; color:var(--primary); margin:0;"><strong>Tip:</strong> ${escapeHtml(m.applicationTip)}</p>` : ''}
+            </div>`;
+          });
+        }
+
+        // Complementary matches
+        if (rec.complementaryMatches?.length) {
+          html += '<h4 style="font-size:15px; font-weight:700; margin:16px 0 12px;">🔗 Complementary Programs</h4>';
+          rec.complementaryMatches.forEach(m => {
+            html += `<div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:10px; border-left:4px solid #8b5cf6;">
+              <strong style="font-size:14px;">${escapeHtml(m.programName)}</strong>
+              <p style="font-size:13px; line-height:1.5; margin:4px 0;">${escapeHtml(m.rationale)}</p>
+              ${m.stackingNote ? `<p style="font-size:12px; color:#8b5cf6; margin:0;"><strong>Stacking:</strong> ${escapeHtml(m.stackingNote)}</p>` : ''}
+            </div>`;
+          });
+        }
+
+        // Funding stack suggestion
+        if (rec.fundingStackSuggestion) {
+          html += `<div style="margin-top:16px; padding:16px; background:rgba(139,92,246,0.06); border-radius:12px;">
+            <h4 style="font-size:14px; font-weight:700; margin-bottom:8px; color:#8b5cf6;">💡 Funding Stack Suggestion</h4>
+            <p style="font-size:13px; line-height:1.6; margin:0;">${escapeHtml(rec.fundingStackSuggestion)}</p>
+          </div>`;
+        }
+
+        content.innerHTML = html;
+        btn.textContent = '✨ Refresh AI Recommendations';
+        btn.disabled = false;
+
+      } catch (err) {
+        content.innerHTML = `<p style="color:var(--error);">Unable to generate recommendations: ${escapeHtml(err.message)}</p>`;
+        btn.textContent = '✨ Try Again';
+        btn.disabled = false;
+      }
     }
 
     function renderMatchedPrograms(filter) {
