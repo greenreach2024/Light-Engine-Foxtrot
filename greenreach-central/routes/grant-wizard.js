@@ -403,6 +403,38 @@ router.delete('/profile', authenticateGrantUser, async (req, res) => {
 });
 
 // ============================================================
+// POST /wizard-events - Log wizard analytics events
+// ============================================================
+router.post('/wizard-events', authenticateGrantUser, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    if (!pool) return res.status(500).json({ success: false, error: 'Database unavailable' });
+
+    const { applicationId, eventType, pageId, durationMs } = req.body || {};
+    if (!eventType) {
+      return res.status(400).json({ success: false, error: 'eventType is required' });
+    }
+
+    await pool.query(
+      `INSERT INTO grant_wizard_events (user_id, application_id, event_type, page_id, duration_ms)
+       VALUES ($1, $2, $3, $4, $5)` ,
+      [
+        req.grantUserId,
+        applicationId || null,
+        String(eventType),
+        pageId ? String(pageId) : null,
+        Number.isFinite(durationMs) ? Math.round(durationMs) : null
+      ]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('[grant-wizard] Wizard event error:', error);
+    res.status(500).json({ success: false, error: 'Failed to log event' });
+  }
+});
+
+// ============================================================
 // GET /programs - Browse funding programs
 // ============================================================
 router.get('/programs', async (req, res) => {
