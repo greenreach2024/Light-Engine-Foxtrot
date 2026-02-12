@@ -259,6 +259,165 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_wholesale_orders_created ON wholesale_orders(created_at);
   `);
 
+  // Grant wizard tables (migration 011)
+  if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS grant_users (
+          id              SERIAL PRIMARY KEY,
+          email           VARCHAR(255) NOT NULL UNIQUE,
+          password_hash   VARCHAR(255) NOT NULL,
+          contact_name    VARCHAR(255) NOT NULL,
+          business_name   VARCHAR(255),
+          phone           VARCHAR(50),
+          province        VARCHAR(50),
+          postal_code     VARCHAR(10),
+          organization_type VARCHAR(100),
+          cra_business_number VARCHAR(50),
+          incorporation_status VARCHAR(50),
+          employee_count  INTEGER,
+          ownership_demographics JSONB DEFAULT '{}',
+          farm_details    JSONB DEFAULT '{}',
+          consent_service_emails     BOOLEAN DEFAULT TRUE,
+          consent_marketing_emails   BOOLEAN DEFAULT FALSE,
+          consent_data_improvement   BOOLEAN DEFAULT FALSE,
+          consent_obtained_at        TIMESTAMPTZ,
+          consent_method             VARCHAR(50),
+          created_at      TIMESTAMPTZ DEFAULT NOW(),
+          updated_at      TIMESTAMPTZ DEFAULT NOW(),
+          last_login_at   TIMESTAMPTZ,
+          sign_in_count   INTEGER DEFAULT 0,
+          deleted_at      TIMESTAMPTZ
+        );
+
+        CREATE TABLE IF NOT EXISTS grant_programs (
+          id                  SERIAL PRIMARY KEY,
+          program_code        VARCHAR(100) UNIQUE NOT NULL,
+          program_name        VARCHAR(500) NOT NULL,
+          administering_agency VARCHAR(255),
+          source_url          TEXT,
+          agpal_url           TEXT,
+          intake_status       VARCHAR(50) DEFAULT 'unknown',
+          intake_deadline     DATE,
+          intake_opens        DATE,
+          description         TEXT,
+          objectives          TEXT,
+          priority_areas      TEXT[],
+          eligibility_summary TEXT,
+          eligibility_rules   JSONB DEFAULT '{}',
+          funding_type        VARCHAR(50),
+          min_funding         NUMERIC(12,2),
+          max_funding         NUMERIC(12,2),
+          cost_share_ratio    VARCHAR(50),
+          stacking_rules      TEXT,
+          reimbursement_model VARCHAR(50),
+          application_method  VARCHAR(50),
+          application_url     TEXT,
+          has_fillable_pdf    BOOLEAN DEFAULT FALSE,
+          pdf_template_url    TEXT,
+          required_documents  TEXT[],
+          budget_template_url TEXT,
+          question_map        JSONB DEFAULT '[]',
+          priority_lexicon    TEXT[],
+          evidence_snippets   JSONB DEFAULT '[]',
+          success_stories_url TEXT,
+          equity_enhanced     BOOLEAN DEFAULT FALSE,
+          equity_details      JSONB DEFAULT '{}',
+          last_checked_at     TIMESTAMPTZ,
+          last_changed_at     TIMESTAMPTZ,
+          change_log          JSONB DEFAULT '[]',
+          source_type         VARCHAR(50) DEFAULT 'manual',
+          active              BOOLEAN DEFAULT TRUE,
+          created_at          TIMESTAMPTZ DEFAULT NOW(),
+          updated_at          TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS grant_applications (
+          id                  SERIAL PRIMARY KEY,
+          user_id             INTEGER NOT NULL REFERENCES grant_users(id),
+          program_id          INTEGER REFERENCES grant_programs(id),
+          status              VARCHAR(50) DEFAULT 'draft',
+          wizard_step         INTEGER DEFAULT 1,
+          percent_complete    INTEGER DEFAULT 0,
+          organization_profile JSONB DEFAULT '{}',
+          project_profile      JSONB DEFAULT '{}',
+          budget               JSONB DEFAULT '{}',
+          contacts             JSONB DEFAULT '[]',
+          attachments_checklist JSONB DEFAULT '[]',
+          prior_funding        JSONB DEFAULT '[]',
+          answers              JSONB DEFAULT '{}',
+          facts_ledger         JSONB DEFAULT '{}',
+          answers_document     TEXT,
+          budget_workbook      JSONB,
+          disclosure_notes     TEXT,
+          procurement_items    JSONB DEFAULT '[]',
+          started_at           TIMESTAMPTZ DEFAULT NOW(),
+          last_saved_at        TIMESTAMPTZ DEFAULT NOW(),
+          submitted_at         TIMESTAMPTZ,
+          expires_at           TIMESTAMPTZ,
+          outcome              VARCHAR(50),
+          outcome_date         DATE,
+          outcome_amount       NUMERIC(12,2),
+          outcome_notes        TEXT,
+          created_at           TIMESTAMPTZ DEFAULT NOW(),
+          updated_at           TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS grant_export_packs (
+          id                  SERIAL PRIMARY KEY,
+          application_id      INTEGER NOT NULL REFERENCES grant_applications(id),
+          user_id             INTEGER NOT NULL REFERENCES grant_users(id),
+          pack_type           VARCHAR(50) DEFAULT 'daily',
+          contents            JSONB DEFAULT '{}',
+          emailed_at          TIMESTAMPTZ,
+          email_status        VARCHAR(50),
+          created_at          TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS grant_program_snapshots (
+          id                  SERIAL PRIMARY KEY,
+          program_id          INTEGER NOT NULL REFERENCES grant_programs(id),
+          snapshot_date       DATE DEFAULT CURRENT_DATE,
+          intake_status       VARCHAR(50),
+          intake_deadline     DATE,
+          eligibility_hash    VARCHAR(64),
+          content_hash        VARCHAR(64),
+          changes_detected    JSONB DEFAULT '[]',
+          created_at          TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS grant_outcome_analytics (
+          id                  SERIAL PRIMARY KEY,
+          program_id          INTEGER REFERENCES grant_programs(id),
+          program_type        VARCHAR(100),
+          project_type        VARCHAR(100),
+          budget_band         VARCHAR(50),
+          had_quotes          BOOLEAN,
+          had_budget_template BOOLEAN,
+          submission_timing   VARCHAR(50),
+          outcome             VARCHAR(50),
+          disclosure_recipient VARCHAR(255),
+          disclosure_amount    NUMERIC(12,2),
+          disclosure_description TEXT,
+          disclosure_source_url TEXT,
+          created_at           TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_grant_users_email ON grant_users(email);
+        CREATE INDEX IF NOT EXISTS idx_grant_programs_status ON grant_programs(intake_status);
+        CREATE INDEX IF NOT EXISTS idx_grant_programs_active ON grant_programs(active);
+        CREATE INDEX IF NOT EXISTS idx_grant_applications_user ON grant_applications(user_id);
+        CREATE INDEX IF NOT EXISTS idx_grant_applications_status ON grant_applications(status);
+        CREATE INDEX IF NOT EXISTS idx_grant_applications_expires ON grant_applications(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_grant_export_packs_app ON grant_export_packs(application_id);
+        CREATE INDEX IF NOT EXISTS idx_grant_snapshots_program ON grant_program_snapshots(program_id);
+      `);
+      logger.info('Grant wizard tables ready (migration 011)');
+    } catch (err) {
+      logger.warn('Grant wizard migration warning:', err.message);
+    }
+  }
+
   logger.info('Database migrations completed');
 }
 
