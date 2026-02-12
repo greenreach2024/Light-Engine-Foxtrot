@@ -130,6 +130,22 @@ function authenticateGrantUser(req, res, next) {
   }
 }
 
+// Optional auth — sets req.grantUserId if token present, continues either way
+function optionalAuth(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.type === 'grant_user') {
+        req.grantUserId = decoded.userId;
+        req.grantUserEmail = decoded.email;
+      }
+    } catch {}
+  }
+  next();
+}
+
 // ============================================================
 // Helper: get DB pool
 // ============================================================
@@ -665,7 +681,7 @@ router.get('/corporation-search', async (req, res) => {
 // ============================================================
 // POST /scrape-website - Scrape user's website for positioning intel
 // ============================================================
-router.post('/scrape-website', authenticateGrantUser, async (req, res) => {
+router.post('/scrape-website', optionalAuth, async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ success: false, error: 'URL required' });
@@ -894,13 +910,15 @@ router.post('/scrape-website', authenticateGrantUser, async (req, res) => {
       }
     }
 
-    // Save to user profile
-    const pool = getPool(req);
-    if (pool) {
-      await pool.query(
-        'UPDATE grant_users SET website_url = $2, updated_at = NOW() WHERE id = $1',
-        [req.grantUserId, parsedUrl.href]
-      );
+    // Save to user profile (only if authenticated)
+    if (req.grantUserId) {
+      const pool = getPool(req);
+      if (pool) {
+        await pool.query(
+          'UPDATE grant_users SET website_url = $2, updated_at = NOW() WHERE id = $1',
+          [req.grantUserId, parsedUrl.href]
+        );
+      }
     }
 
     res.json({ success: true, data: intelligence });
@@ -1100,6 +1118,133 @@ router.post('/applications/:id/match-programs', authenticateGrantUser, async (re
 
   } catch (error) {
     logger.error('[grant-wizard] Match programs error:', error);
+    res.status(500).json({ success: false, error: 'Program matching failed' });
+  }
+});
+
+// ============================================================
+// POST /match-programs-public - Smart matching WITHOUT auth
+// Accepts characterization + websiteIntelligence in body directly
+// ============================================================
+router.post('/match-programs-public', async (req, res) => {
+  try {
+    const { characterization, websiteIntelligence } = req.body;
+    const char = characterization || {};
+    const webIntel = websiteIntelligence || {};
+
+    const pool = getPool(req);
+    if (!pool) return res.status(500).json({ success: false, error: 'Database unavailable' });
+
+    const programsResult = await pool.query(`
+      SELECT id, program_code, program_name, administering_agency, description,
+             funding_type, min_funding, max_funding, cost_share_ratio,
+             intake_status, intake_deadline, priority_areas, eligibility_rules,
+             equity_enhanced, source_url, objectives
+      FROM grant_programs
+      WHERE active = TRUE
+      ORDER BY intake_status, program_name
+    `);
+
+    const programs = programsResult.rows;
+    const scored = programs.map(p => {
+      let score = 0;
+      const reasons = [];
+
+      const goals = char.projectGoals || [];
+      const priorities = (p.priority_areas || []).map(pa => pa.toLowerCase());
+      const desc = (p.description || '').toLowerCase();
+      const objectives = (p.objectives || '').toLowerCase();
+
+      const goalKeywordMap = {
+        'establish_vertical_farm': ['vertical farm', 'controlled environment', 'innovation', 'technology', 'greenhouse', 'indoor'],
+        'expand_operation': ['expansion', 'scale', 'growth', 'capacity', 'production'],
+        'equipment_purchase': ['equipment', 'machinery', 'capital', 'technology', 'automation'],
+        'export_market': ['export', 'trade', 'international', 'market access', 'market development'],
+        'workforce_training': ['training', 'workforce', 'hiring', 'employment', 'labour', 'skills', 'youth'],
+        'innovation_rd': ['innovation', 'research', 'development', 'r&d', 'technology', 'novel', 'pilot'],
+        'risk_management': ['risk', 'insurance', 'business risk', 'agri-stability', 'agri-insurance'],
+        'clean_tech': ['clean tech', 'sustainability', 'environment', 'renewable', 'energy efficiency', 'climate', 'emission'],
+        'community_food': ['food security', 'community', 'local food', 'food access', 'food sovereignty'],
+        'value_added': ['processing', 'value-added', 'value added', 'product development', 'packaging']
+      };
+
+      for (const goal of goals) {
+        const keywords = goalKeywordMap[goal] || [];
+        for (const kw of keywords) {
+          if (priorities.some(pa => pa.includes(kw)) || desc.includes(kw) || objectives.includes(kw)) {
+            score += 15;
+            reasons.push(`Matches your "${goal.replace(/_/g, ' ')}" goal`);
+            break;
+          }
+        }
+      }
+
+      const budget = char.budgetRange || null;
+      if (budget && p.max_funding) {
+        const maxFunding = parseFloat(p.max_funding);
+        const budgetRanges = {
+          'under_25k': [0, 25000], '25k_100k': [25000, 100000],
+          '100k_500k': [100000, 500000], '500k_1m': [500000, 1000000],
+          'over_1m': [1000000, Infinity]
+        };
+        const [lo] = budgetRanges[budget] || [0, Infinity];
+        if (maxFunding >= lo) {
+          score += 10;
+          reasons.push(`Budget range fits (up to $${maxFunding.toLocaleString()})`);
+        }
+      }
+
+      if (p.intake_status === 'open') { score += 20; reasons.push('Currently accepting applications'); }
+      else if (p.intake_status === 'continuous') { score += 15; reasons.push('Continuous intake'); }
+      else if (p.intake_status === 'upcoming') { score += 5; reasons.push('Opening soon'); }
+
+      const province = char.province;
+      if (province && p.eligibility_rules?.province) {
+        const provRule = p.eligibility_rules.province;
+        if (provRule.type === 'province_list' && provRule.provinces?.includes(province)) {
+          score += 10;
+          reasons.push(`Available in ${province}`);
+        }
+      }
+
+      const webKeywords = webIntel.keywords || [];
+      for (const kw of webKeywords) {
+        if (desc.includes(kw) || priorities.some(pa => pa.includes(kw))) {
+          score += 5; reasons.push(`Website mentions "${kw}"`);
+          break;
+        }
+      }
+
+      if (p.equity_enhanced) { score += 3; reasons.push('Enhanced cost-share available'); }
+
+      const employees = char.currentEmployees;
+      if (employees !== undefined && p.eligibility_rules?.employeeCount) {
+        const empRule = p.eligibility_rules.employeeCount;
+        if (empRule.type === 'max' && parseInt(employees) <= empRule.value) {
+          score += 5; reasons.push('Employee count qualifies');
+        }
+      }
+
+      return {
+        ...p,
+        matchScore: score,
+        matchReasons: [...new Set(reasons)].slice(0, 5),
+        matchPercentage: Math.min(100, Math.round((score / 80) * 100))
+      };
+    });
+
+    scored.sort((a, b) => b.matchScore - a.matchScore);
+
+    res.json({
+      success: true,
+      data: {
+        programs: scored,
+        totalPrograms: scored.length,
+        strongMatches: scored.filter(p => p.matchScore >= 30).length
+      }
+    });
+  } catch (error) {
+    logger.error('[grant-wizard] Public match error:', error);
     res.status(500).json({ success: false, error: 'Program matching failed' });
   }
 });
