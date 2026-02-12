@@ -21,7 +21,7 @@ let farmData = null;
 document.addEventListener('DOMContentLoaded', () => {
     const currentPage = window.location.pathname;
     
-    if (currentPage.includes('farm-admin-login')) {
+    if (currentPage.includes('farm-admin-login') || currentPage.includes('login.html')) {
         initLogin();
     } else if (currentPage.includes('farm-admin')) {
         initDashboard();
