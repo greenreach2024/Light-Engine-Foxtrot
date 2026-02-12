@@ -498,25 +498,6 @@ async function runMigrations(client) {
     } catch (err) {
       logger.warn('Milestones migration warning:', err.message);
     }
-
-    // Migration 015: Farm production models table (vertical farm calculator)
-    try {
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS farm_production_models (
-          id SERIAL PRIMARY KEY,
-          application_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
-          model_name TEXT DEFAULT 'default',
-          inputs JSONB NOT NULL,
-          outputs JSONB NOT NULL,
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        );
-        CREATE INDEX IF NOT EXISTS idx_fpm_application ON farm_production_models(application_id);
-      `);
-      logger.info('Farm production models table ready (migration 015)');
-    } catch (err) {
-      logger.warn('Farm production models migration warning:', err.message);
-    }
   }
 
   logger.info('Database migrations completed');
