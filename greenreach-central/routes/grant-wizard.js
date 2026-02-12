@@ -670,6 +670,448 @@ router.get('/corporation-search', async (req, res) => {
 });
 
 // ============================================================
+// POST /scrape-website - Scrape user's website for positioning intel
+// ============================================================
+router.post('/scrape-website', authenticateGrantUser, async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ success: false, error: 'URL required' });
+
+    // Validate URL
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url.startsWith('http') ? url : `https://${url}`);
+    } catch {
+      return res.status(400).json({ success: false, error: 'Invalid URL' });
+    }
+
+    const baseUrl = parsedUrl.origin;
+    const intelligence = {
+      url: parsedUrl.href,
+      scrapedAt: new Date().toISOString(),
+      companyDescription: null,
+      mission: null,
+      products: [],
+      achievements: [],      // awards, milestones
+      communityEvents: [],   // events, partnerships, community involvement
+      newsHighlights: [],    // recent news, press releases, developments
+      teamInfo: null,
+      socialProof: [],       // testimonials, partnerships, certifications
+      keywords: [],          // extracted keywords for program matching
+      rawSections: {}
+    };
+
+    // Scrape homepage
+    try {
+      const homePage = await axios.get(parsedUrl.href, {
+        timeout: 12000,
+        headers: { 'User-Agent': 'GreenReach-Grant-Wizard/1.0 (research assistant)', Accept: 'text/html' },
+        maxRedirects: 3
+      });
+      const $ = cheerio.load(homePage.data);
+
+      // Remove script/style noise
+      $('script, style, noscript, iframe').remove();
+
+      // Extract meta description
+      const metaDesc = $('meta[name="description"]').attr('content') || '';
+      const ogDesc = $('meta[property="og:description"]').attr('content') || '';
+      intelligence.companyDescription = metaDesc || ogDesc || '';
+
+      // Extract main headings and body text
+      const headings = [];
+      $('h1, h2, h3').each((_, el) => {
+        const txt = $(el).text().trim();
+        if (txt.length > 3 && txt.length < 200) headings.push(txt);
+      });
+      intelligence.rawSections.headings = headings.slice(0, 20);
+
+      // Look for mission / about content
+      const missionPatterns = /mission|about\s*us|our\s*story|who\s*we\s*are|our\s*vision|our\s*purpose/i;
+      $('section, div, article').each((_, el) => {
+        const heading = $(el).find('h1, h2, h3').first().text().trim();
+        if (missionPatterns.test(heading)) {
+          const text = $(el).find('p').map((_, p) => $(p).text().trim()).get().join(' ');
+          if (text.length > 30 && text.length < 2000) {
+            intelligence.mission = text.substring(0, 800);
+          }
+        }
+      });
+
+      // Look for awards, achievements, community involvement
+      const achievementPatterns = /award|certif|recogni|achievement|honour|honor|accredit|milestone/i;
+      const communityPatterns = /communit|event|partner|sponsor|volunt|outreach|donat|food\s*bank|school|local|workshop/i;
+      const newsPatterns = /news|press|announce|update|blog|what.s\s*new|latest|recent/i;
+
+      $('section, div, article, li, p').each((_, el) => {
+        const text = $(el).text().trim();
+        if (text.length < 15 || text.length > 500) return;
+
+        if (achievementPatterns.test(text) && intelligence.achievements.length < 8) {
+          intelligence.achievements.push(text.substring(0, 300));
+        }
+        if (communityPatterns.test(text) && intelligence.communityEvents.length < 8) {
+          intelligence.communityEvents.push(text.substring(0, 300));
+        }
+        if (newsPatterns.test(text) && intelligence.newsHighlights.length < 8) {
+          intelligence.newsHighlights.push(text.substring(0, 300));
+        }
+      });
+
+      // Extract product/service info
+      const productPatterns = /product|service|grow|offer|special|crop|produce|supply/i;
+      $('section, div, article').each((_, el) => {
+        const heading = $(el).find('h1, h2, h3').first().text().trim();
+        if (productPatterns.test(heading) && intelligence.products.length < 10) {
+          $(el).find('li, h4, h5').each((_, li) => {
+            const t = $(li).text().trim();
+            if (t.length > 3 && t.length < 150) intelligence.products.push(t);
+          });
+        }
+      });
+
+      // Social proof: testimonials, certifications, partner logos
+      const proofPatterns = /testimoni|review|partner|client|certif|organic|haccp|gap\s*certified|member/i;
+      $('section, div, blockquote').each((_, el) => {
+        const text = $(el).text().trim();
+        if (proofPatterns.test(text) && text.length > 20 && text.length < 400 && intelligence.socialProof.length < 6) {
+          intelligence.socialProof.push(text.substring(0, 300));
+        }
+      });
+
+      // Discover internal links for about/news/team pages
+      const subPages = [];
+      $('a[href]').each((_, a) => {
+        const href = $(a).attr('href') || '';
+        const linkText = $(a).text().trim().toLowerCase();
+        if (/about|team|story|news|blog|event|award|community/i.test(linkText) || 
+            /about|team|news|blog|event|award|community/i.test(href)) {
+          try {
+            const full = new URL(href, baseUrl);
+            if (full.origin === baseUrl && !subPages.includes(full.href)) {
+              subPages.push(full.href);
+            }
+          } catch {}
+        }
+      });
+
+      // Scrape up to 3 sub-pages for deeper intelligence
+      for (const subUrl of subPages.slice(0, 3)) {
+        try {
+          const subRes = await axios.get(subUrl, {
+            timeout: 8000,
+            headers: { 'User-Agent': 'GreenReach-Grant-Wizard/1.0', Accept: 'text/html' },
+            maxRedirects: 2
+          });
+          const $sub = cheerio.load(subRes.data);
+          $sub('script, style, noscript').remove();
+
+          // Extract paragraphs from sub-pages
+          $sub('p, li').each((_, el) => {
+            const text = $sub(el).text().trim();
+            if (text.length < 20 || text.length > 600) return;
+
+            if (achievementPatterns.test(text) && intelligence.achievements.length < 12) {
+              intelligence.achievements.push(text.substring(0, 300));
+            }
+            if (communityPatterns.test(text) && intelligence.communityEvents.length < 12) {
+              intelligence.communityEvents.push(text.substring(0, 300));
+            }
+            if (newsPatterns.test(text) && intelligence.newsHighlights.length < 12) {
+              intelligence.newsHighlights.push(text.substring(0, 300));
+            }
+          });
+
+          // Team info from about/team pages
+          if (/team|about|people/i.test(subUrl)) {
+            const teamText = $sub('main, article, .content, [role="main"]').first().text().trim();
+            if (teamText.length > 50) {
+              intelligence.teamInfo = teamText.substring(0, 600);
+            }
+          }
+        } catch { /* sub-page fetch failed, continue */ }
+      }
+
+    } catch (fetchErr) {
+      logger.warn('[grant-wizard] Website scrape fetch error:', fetchErr.message);
+      return res.json({
+        success: true,
+        data: {
+          ...intelligence,
+          error: 'Could not access website. Please check the URL and try again.'
+        }
+      });
+    }
+
+    // De-duplicate extracted items
+    intelligence.achievements = [...new Set(intelligence.achievements)].slice(0, 8);
+    intelligence.communityEvents = [...new Set(intelligence.communityEvents)].slice(0, 8);
+    intelligence.newsHighlights = [...new Set(intelligence.newsHighlights)].slice(0, 8);
+    intelligence.products = [...new Set(intelligence.products)].slice(0, 10);
+    intelligence.socialProof = [...new Set(intelligence.socialProof)].slice(0, 6);
+
+    // Extract keywords for program matching
+    const allText = [
+      intelligence.companyDescription,
+      intelligence.mission,
+      ...intelligence.products,
+      ...intelligence.achievements,
+      ...intelligence.communityEvents
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    const grantKeywords = [
+      'innovation', 'sustainable', 'organic', 'local food', 'food security',
+      'export', 'technology', 'automation', 'clean tech', 'renewable',
+      'community', 'indigenous', 'youth', 'training', 'workforce',
+      'vertical farm', 'greenhouse', 'controlled environment', 'hydroponic',
+      'equipment', 'expansion', 'processing', 'value-added', 'market access',
+      'climate', 'resilience', 'diversity', 'inclusion', 'research'
+    ];
+    intelligence.keywords = grantKeywords.filter(kw => allText.includes(kw));
+
+    // Use AI to generate a positioning summary if OpenAI is available
+    if (openai && (intelligence.companyDescription || intelligence.mission || intelligence.achievements.length > 0)) {
+      try {
+        const contextParts = [];
+        if (intelligence.companyDescription) contextParts.push(`Description: ${intelligence.companyDescription}`);
+        if (intelligence.mission) contextParts.push(`Mission: ${intelligence.mission}`);
+        if (intelligence.achievements.length) contextParts.push(`Achievements: ${intelligence.achievements.slice(0, 5).join('; ')}`);
+        if (intelligence.communityEvents.length) contextParts.push(`Community involvement: ${intelligence.communityEvents.slice(0, 5).join('; ')}`);
+        if (intelligence.products.length) contextParts.push(`Products/Services: ${intelligence.products.slice(0, 5).join(', ')}`);
+        if (intelligence.newsHighlights.length) contextParts.push(`Recent news: ${intelligence.newsHighlights.slice(0, 3).join('; ')}`);
+
+        const aiRes = await openai.chat.completions.create({
+          model: 'gpt-4',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a grant writing strategist. Given web-scraped data about a Canadian agricultural business, produce a concise 2-3 paragraph "positioning summary" that highlights the strongest angles for a funding application. Focus on: community impact, innovation, sustainability, job creation, food security, and any awards/recognition. Write in third person. Be factual — only reference what the data supports.'
+            },
+            {
+              role: 'user',
+              content: `Website data for grant positioning analysis:\n\n${contextParts.join('\n\n')}\n\nGenerate a positioning summary this applicant can use to strengthen their grant narrative.`
+            }
+          ],
+          temperature: 0.6,
+          max_tokens: 500
+        });
+        intelligence.positioningSummary = aiRes.choices[0].message.content;
+      } catch (aiErr) {
+        logger.warn('[grant-wizard] AI positioning summary failed:', aiErr.message);
+      }
+    }
+
+    // Save to user profile
+    const pool = getPool(req);
+    if (pool) {
+      await pool.query(
+        'UPDATE grant_users SET website_url = $2, updated_at = NOW() WHERE id = $1',
+        [req.grantUserId, parsedUrl.href]
+      );
+    }
+
+    res.json({ success: true, data: intelligence });
+
+  } catch (error) {
+    logger.error('[grant-wizard] Website scrape error:', error);
+    res.status(500).json({ success: false, error: 'Website analysis failed' });
+  }
+});
+
+// ============================================================
+// POST /applications/:id/characterize - Save project discovery data
+// ============================================================
+router.put('/applications/:id/characterize', authenticateGrantUser, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const { characterization, websiteIntelligence } = req.body;
+
+    const updates = ['updated_at = NOW()'];
+    const values = [req.params.id, req.grantUserId];
+    let idx = 3;
+
+    if (characterization) {
+      updates.push(`project_characterization = $${idx++}`);
+      values.push(JSON.stringify(characterization));
+    }
+    if (websiteIntelligence) {
+      updates.push(`website_intelligence = $${idx++}`);
+      values.push(JSON.stringify(websiteIntelligence));
+    }
+
+    await pool.query(
+      `UPDATE grant_applications SET ${updates.join(', ')} WHERE id = $1 AND user_id = $2`,
+      values
+    );
+
+    res.json({ success: true, message: 'Project discovery saved' });
+  } catch (error) {
+    logger.error('[grant-wizard] Characterize error:', error);
+    res.status(500).json({ success: false, error: 'Failed to save project discovery' });
+  }
+});
+
+// ============================================================
+// POST /applications/:id/match-programs - Smart program matching
+// ============================================================
+router.post('/applications/:id/match-programs', authenticateGrantUser, async (req, res) => {
+  try {
+    const pool = getPool(req);
+
+    // Get application characterization
+    const appResult = await pool.query(
+      'SELECT project_characterization, website_intelligence, organization_profile FROM grant_applications WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.grantUserId]
+    );
+    if (appResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Application not found' });
+    }
+
+    const app = appResult.rows[0];
+    const char = app.project_characterization || {};
+    const webIntel = app.website_intelligence || {};
+    const org = app.organization_profile || {};
+
+    // Get all active programs
+    const programsResult = await pool.query(`
+      SELECT id, program_code, program_name, administering_agency, description,
+             funding_type, min_funding, max_funding, cost_share_ratio,
+             intake_status, intake_deadline, priority_areas, eligibility_rules,
+             equity_enhanced, source_url, objectives
+      FROM grant_programs
+      WHERE active = TRUE
+      ORDER BY intake_status, program_name
+    `);
+
+    const programs = programsResult.rows;
+    const scored = programs.map(p => {
+      let score = 0;
+      const reasons = [];
+
+      // 1. Match project goals to priority areas
+      const goals = char.projectGoals || [];
+      const priorities = (p.priority_areas || []).map(pa => pa.toLowerCase());
+      const desc = (p.description || '').toLowerCase();
+      const objectives = (p.objectives || '').toLowerCase();
+
+      const goalKeywordMap = {
+        'establish_vertical_farm': ['vertical farm', 'controlled environment', 'innovation', 'technology', 'greenhouse', 'indoor'],
+        'expand_operation': ['expansion', 'scale', 'growth', 'capacity', 'production'],
+        'equipment_purchase': ['equipment', 'machinery', 'capital', 'technology', 'automation'],
+        'export_market': ['export', 'trade', 'international', 'market access', 'market development'],
+        'workforce_training': ['training', 'workforce', 'hiring', 'employment', 'labour', 'skills', 'youth'],
+        'innovation_rd': ['innovation', 'research', 'development', 'r&d', 'technology', 'novel', 'pilot'],
+        'risk_management': ['risk', 'insurance', 'business risk', 'agri-stability', 'agri-insurance'],
+        'clean_tech': ['clean tech', 'sustainability', 'environment', 'renewable', 'energy efficiency', 'climate', 'emission'],
+        'community_food': ['food security', 'community', 'local food', 'food access', 'food sovereignty'],
+        'value_added': ['processing', 'value-added', 'value added', 'product development', 'packaging']
+      };
+
+      for (const goal of goals) {
+        const keywords = goalKeywordMap[goal] || [];
+        for (const kw of keywords) {
+          if (priorities.some(pa => pa.includes(kw)) || desc.includes(kw) || objectives.includes(kw)) {
+            score += 15;
+            reasons.push(`Matches your "${goal.replace(/_/g, ' ')}" goal`);
+            break;
+          }
+        }
+      }
+
+      // 2. Budget range check
+      const budget = char.budgetRange || null;
+      if (budget && p.max_funding) {
+        const maxFunding = parseFloat(p.max_funding);
+        const budgetRanges = {
+          'under_25k': [0, 25000],
+          '25k_100k': [25000, 100000],
+          '100k_500k': [100000, 500000],
+          '500k_1m': [500000, 1000000],
+          'over_1m': [1000000, Infinity]
+        };
+        const [lo, hi] = budgetRanges[budget] || [0, Infinity];
+        if (maxFunding >= lo) {
+          score += 10;
+          reasons.push(`Budget range fits (up to $${maxFunding.toLocaleString()})`);
+        }
+      }
+
+      // 3. Status bonus — open programs rank higher
+      if (p.intake_status === 'open') {
+        score += 20;
+        reasons.push('Currently accepting applications');
+      } else if (p.intake_status === 'continuous') {
+        score += 15;
+        reasons.push('Continuous intake');
+      } else if (p.intake_status === 'upcoming') {
+        score += 5;
+        reasons.push('Opening soon');
+      }
+
+      // 4. Province match from eligibility rules
+      const province = org.province || char.province;
+      if (province && p.eligibility_rules?.province) {
+        const provRule = p.eligibility_rules.province;
+        if (provRule.type === 'province_list' && provRule.provinces?.includes(province)) {
+          score += 10;
+          reasons.push(`Available in ${province}`);
+        }
+      }
+
+      // 5. Website intelligence keyword match
+      const webKeywords = webIntel.keywords || [];
+      for (const kw of webKeywords) {
+        if (desc.includes(kw) || priorities.some(pa => pa.includes(kw))) {
+          score += 5;
+          reasons.push(`Website mentions "${kw}"`);
+          break; // Only count first match to avoid over-scoring
+        }
+      }
+
+      // 6. Equity enhancement bonus if applicable
+      if (p.equity_enhanced) {
+        score += 3;
+        reasons.push('Enhanced cost-share available');
+      }
+
+      // 7. Employee count match
+      const employees = char.currentEmployees || org.employeeCount;
+      if (employees !== undefined && p.eligibility_rules?.employeeCount) {
+        const empRule = p.eligibility_rules.employeeCount;
+        if (empRule.type === 'max' && parseInt(employees) <= empRule.value) {
+          score += 5;
+          reasons.push(`Employee count qualifies`);
+        }
+      }
+
+      return {
+        ...p,
+        matchScore: score,
+        matchReasons: [...new Set(reasons)].slice(0, 5),
+        matchPercentage: Math.min(100, Math.round((score / 80) * 100))
+      };
+    });
+
+    // Sort by score descending
+    scored.sort((a, b) => b.matchScore - a.matchScore);
+
+    res.json({
+      success: true,
+      data: {
+        programs: scored,
+        characterization: char,
+        totalPrograms: scored.length,
+        strongMatches: scored.filter(p => p.matchScore >= 30).length
+      }
+    });
+
+  } catch (error) {
+    logger.error('[grant-wizard] Match programs error:', error);
+    res.status(500).json({ success: false, error: 'Program matching failed' });
+  }
+});
+
+// ============================================================
 // POST /applications - Start a new application
 // ============================================================
 router.post('/applications', authenticateGrantUser, async (req, res) => {
@@ -789,7 +1231,7 @@ router.put('/applications/:id', authenticateGrantUser, async (req, res) => {
   try {
     const pool = getPool(req);
     const {
-      wizardStep, percentComplete, status,
+      wizardStep, percentComplete, status, programId,
       organizationProfile, projectProfile, budget, contacts,
       attachmentsChecklist, priorFunding, answers, factsLedger,
       procurementItems
@@ -831,6 +1273,7 @@ router.put('/applications/:id', authenticateGrantUser, async (req, res) => {
     addField('wizardStep', 'wizard_step', wizardStep);
     addField('percentComplete', 'percent_complete', percentComplete);
     addField('status', 'status', status);
+    addField('programId', 'program_id', programId);
     addField('organizationProfile', 'organization_profile', organizationProfile);
     addField('projectProfile', 'project_profile', projectProfile);
     addField('budget', 'budget', budget);
