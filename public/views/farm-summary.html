@@ -3042,14 +3042,15 @@
             console.log(`[Farm Summary] No sensors found in IoT devices for ${zone.name} (zone ${zone.zone}), trying envData...`);
             
             // Fallback to envData if no IoT sensors found
-            // Try matching by zone ID (e.g., "zone-1" matches zone 1)
+            // Try matching by zone ID — zone.zone can be number or string ("1" or 1)
+            const zoneNum = String(zone.zone).replace(/\D/g, '') || zone.zone;
             const envZone = envData?.zones?.find(z => {
-              // Match by zone-N pattern
-              if (z.id === `zone-${zone.zone}`) return true;
+              // Match by zone-N pattern (e.g., "zone-1")
+              if (z.id === `zone-${zoneNum}`) return true;
               // Match by name
               if (z.name === zone.name || z.location === zone.name) return true;
               // Match by numeric zone ID
-              if (z.id === String(zone.zone)) return true;
+              if (z.id === String(zoneNum)) return true;
               return false;
             });
 
@@ -3620,10 +3621,11 @@
           }
 
           // Check sensor health for this zone
+          const zn = String(zone.zone).replace(/\D/g, '') || zone.zone;
           const envZone = envData?.zones?.find(z => 
-            z.id === `zone-${zone.zone}` || 
+            z.id === `zone-${zn}` || 
             z.name === zone.name || 
-            z.id === String(zone.zone)
+            z.id === String(zn)
           );
           
           const isStale = envZone ? !isSensorDataFresh(envZone, 5 * 60 * 1000) : false;

@@ -499,12 +499,13 @@ async function calculateCropReadinessScore(groupsData, now) {
   let newestTimestamp = 0;
   
   for (const group of groupsData.groups) {
-    const capacity = group.plantCapacity || 0;
+    const capacity = group.plants || group.plantCapacity || 0;
     totalCapacity += capacity;
     
     // Check if ready within 48h (based on daysPostSeeding and harvest window)
     const daysPS = group.daysPostSeeding || 0;
-    const harvestStart = group.recipe?.harvestWindow?.start || 30;
+    const harvestStart = (typeof group.recipe === 'object' ? group.recipe?.harvestWindow?.start : null)
+      || group.planConfig?.harvestWindow?.start || 30;
     const daysUntilReady = harvestStart - daysPS;
     
     if (daysUntilReady >= 0 && daysUntilReady <= 2) {

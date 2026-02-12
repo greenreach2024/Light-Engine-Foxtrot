@@ -94,7 +94,7 @@ function buildRoomDefaults(config = {}) {
   return {
     layout: config.layout || { type: '', rows: 0, racks: 0, levels: 0 },
     zones: Array.isArray(config.zones) ? config.zones : [],
-    fixtures: Array.isArray(config.fixtures) ? config.fixtures : [],
+    fixtures: Array.isArray(config.fixtures) ? config.fixtures : (Array.isArray(config.equipment) ? config.equipment : []),
     controlMethod: config.controlMethod ?? null,
     devices: Array.isArray(config.devices) ? config.devices : [],
     sensors: config.sensors || { categories: [], placements: {} },
