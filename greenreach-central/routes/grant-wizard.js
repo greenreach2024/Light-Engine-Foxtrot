@@ -338,9 +338,22 @@ router.get('/programs', async (req, res) => {
       params.push(type);
     }
     if (search) {
-      where.push(`(program_name ILIKE $${paramIdx} OR description ILIKE $${paramIdx} OR administering_agency ILIKE $${paramIdx})`);
-      params.push(`%${search}%`);
-      paramIdx++;
+      // Split search into individual terms for OR matching across all fields
+      const terms = search.split(/\s+/).filter(Boolean);
+      if (terms.length === 1) {
+        where.push(`(program_name ILIKE $${paramIdx} OR description ILIKE $${paramIdx} OR administering_agency ILIKE $${paramIdx} OR objectives ILIKE $${paramIdx} OR priority_areas::text ILIKE $${paramIdx})`);
+        params.push(`%${terms[0]}%`);
+        paramIdx++;
+      } else {
+        // Multiple terms: match ANY term across any field
+        const termClauses = terms.map(term => {
+          const clause = `(program_name ILIKE $${paramIdx} OR description ILIKE $${paramIdx} OR administering_agency ILIKE $${paramIdx} OR objectives ILIKE $${paramIdx} OR priority_areas::text ILIKE $${paramIdx})`;
+          params.push(`%${term}%`);
+          paramIdx++;
+          return clause;
+        });
+        where.push(`(${termClauses.join(' OR ')})`);
+      }
     }
 
     params.push(parseInt(limit), parseInt(offset));
