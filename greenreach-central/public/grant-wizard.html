@@ -296,6 +296,44 @@
     @media (max-width: 768px) {
       .footer-content { grid-template-columns: 1fr 1fr; }
     }
+
+    /* Corporation search results */
+    .corp-search-loading {
+      padding: 12px; background: rgba(130, 195, 65, 0.05);
+      border-radius: 8px; font-size: 13px; color: var(--text-light);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .corp-search-results {
+      margin-top: 8px; border: 1px solid #d2d2d7; border-radius: 12px;
+      background: var(--surface); overflow: hidden;
+    }
+    .corp-search-result {
+      padding: 12px 16px; border-bottom: 1px solid #f5f5f7;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .corp-search-result:last-child { border-bottom: none; }
+    .corp-search-result:hover {
+      background: rgba(130, 195, 65, 0.05);
+    }
+    .corp-search-result.selected {
+      background: rgba(130, 195, 65, 0.1);
+      border-left: 3px solid var(--primary);
+    }
+    .corp-result-name {
+      font-size: 15px; font-weight: 600; color: var(--text);
+      margin-bottom: 4px;
+    }
+    .corp-result-meta {
+      font-size: 13px; color: var(--text-light);
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+    .corp-result-meta span {
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .corp-search-empty {
+      padding: 16px; text-align: center; color: var(--text-light);
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -1217,8 +1255,11 @@
           html += `
             <div class="form-group">
               <label>Legal business name</label>
-              <div class="why-asking">Exactly as registered with CRA — used on all official forms. <a href="https://ised-isde.canada.ca/cc/lgcy/fdrlCrpSrch.html" target="_blank" style="color:var(--primary);font-weight:600;text-decoration:underline;">Search federal corporations →</a></div>
-              <input type="text" id="wiz_legalName" value="${escapeAttr(org.legalName || '')}" onchange="wizAutoSave()">
+              <div class="why-asking">Start typing your business name. We'll search federal corporations for an exact match.</div>
+              <input type="text" id="wiz_legalName" value="${escapeAttr(org.legalName || '')}" 
+                     onblur="searchCorporation()" onchange="wizAutoSave()" 
+                     placeholder="Enter your legal business name...">
+              <div id="corpSearchResults" style="margin-top:8px;"></div>
             </div>
             <div class="form-row">
               <div class="form-group">
@@ -1233,8 +1274,18 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>CRA business number</label>
-                <input type="text" id="wiz_craBN" value="${escapeAttr(org.craBusinessNumber || '')}" onchange="wizAutoSave()">
+                <label>Corporation number</label>
+                <input type="text" id="wiz_corpNumber" value="${escapeAttr(org.corporationNumber || '')}" onchange="wizAutoSave()" placeholder="Auto-filled from search">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Incorporation date</label>
+                <input type="date" id="wiz_incorpDate" value="${org.incorporationDate || ''}" onchange="wizAutoSave()">
+              </div>
+              <div class="form-group">
+                <label>Number of employees</label>
+                <input type="number" id="wiz_employees" value="${org.employeeCount || ''}" min="0" onchange="wizAutoSave()">
               </div>
             </div>
             <div class="form-row">
@@ -1243,8 +1294,8 @@
                 <input type="text" id="wiz_province" value="${escapeAttr(org.province || '')}" onchange="wizAutoSave()">
               </div>
               <div class="form-group">
-                <label>Number of employees</label>
-                <input type="number" id="wiz_employees" value="${org.employeeCount || ''}" min="0" onchange="wizAutoSave()">
+                <label>CRA business number (if known)</label>
+                <input type="text" id="wiz_craBN" value="${escapeAttr(org.craBusinessNumber || '')}" onchange="wizAutoSave()" placeholder="Optional">
               </div>
             </div>`;
           break;
@@ -1450,6 +1501,8 @@
             ...currentApp.organization_profile,
             legalName: gv('wiz_legalName'),
             type: gv('wiz_orgType'),
+            corporationNumber: gv('wiz_corpNumber'),
+            incorporationDate: gv('wiz_incorpDate'),
             craBusinessNumber: gv('wiz_craBN'),
             province: gv('wiz_province'),
             employeeCount: gv('wiz_employees') ? parseInt(gv('wiz_employees')) : null
@@ -1457,6 +1510,7 @@
           body.factsLedger = {
             ...currentApp.facts_ledger,
             businessName: gv('wiz_legalName'),
+            corporationNumber: gv('wiz_corpNumber'),
             organizationType: gv('wiz_orgType'),
             craBusinessNumber: gv('wiz_craBN'),
             province: gv('wiz_province'),
@@ -1533,6 +1587,119 @@
     function gv(id) {
       const el = document.getElementById(id);
       return el ? el.value : '';
+    }
+
+    // ============================================================
+    // Corporation Search
+    // ============================================================
+    let searchTimeout;
+    async function searchCorporation() {
+      clearTimeout(searchTimeout);
+      const nameInput = document.getElementById('wiz_legalName');
+      const resultsDiv = document.getElementById('corpSearchResults');
+      
+      if (!nameInput || !resultsDiv) return;
+      
+      const name = nameInput.value.trim();
+      if (name.length < 3) {
+        resultsDiv.innerHTML = '';
+        return;
+      }
+
+      // Debounce search
+      searchTimeout = setTimeout(async () => {
+        resultsDiv.innerHTML = '<div class="corp-search-loading">🔍 Searching federal corporations registry...</div>';
+
+        try {
+          const res = await fetch(`${API}/corporation-search?name=${encodeURIComponent(name)}`);
+          const data = await res.json();
+
+          if (!data.success || !data.data.results || data.data.results.length === 0) {
+            resultsDiv.innerHTML = `
+              <div class="corp-search-empty">
+                No federal corporations found matching "${name}".<br>
+                If this is a provincial corporation or sole proprietorship, enter details manually below.
+              </div>
+            `;
+            return;
+          }
+
+          // Build results HTML
+          let html = '<div class="corp-search-results">';
+          data.data.results.forEach((corp, idx) => {
+            html += `
+              <div class="corp-search-result" onclick="selectCorporation(${idx})" data-corp-idx="${idx}">
+                <div class="corp-result-name">${escapeHtml(corp.name)}</div>
+                <div class="corp-result-meta">
+                  <span><strong>Corp #:</strong> ${escapeHtml(corp.corporationNumber)}</span>
+                  ${corp.status ? `<span><strong>Status:</strong> ${escapeHtml(corp.status)}</span>` : ''}
+                  ${corp.incorporationDate ? `<span><strong>Incorporated:</strong> ${corp.incorporationDate}</span>` : ''}
+                </div>
+              </div>
+            `;
+          });
+          html += '</div>';
+
+          // Store results for selection
+          window.corpSearchResults = data.data.results;
+          resultsDiv.innerHTML = html;
+
+        } catch (error) {
+          console.error('Corporation search error:', error);
+          resultsDiv.innerHTML = `
+            <div class="corp-search-empty">
+              Search temporarily unavailable. Please enter details manually.
+            </div>
+          `;
+        }
+      }, 800); // 800ms debounce
+    }
+
+    function selectCorporation(idx) {
+      const corp = window.corpSearchResults[idx];
+      if (!corp) return;
+
+      // Populate form fields
+      document.getElementById('wiz_legalName').value = corp.name;
+      document.getElementById('wiz_corpNumber').value = corp.corporationNumber || '';
+      
+      // Parse and set incorporation date if available
+      if (corp.incorporationDate) {
+        const dateMatch = corp.incorporationDate.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (dateMatch) {
+          document.getElementById('wiz_incorpDate').value = corp.incorporationDate;
+        }
+      }
+
+      // Auto-select corporation as org type
+      const orgTypeSelect = document.getElementById('wiz_orgType');
+      if (orgTypeSelect && !orgTypeSelect.value) {
+        orgTypeSelect.value = 'corporation';
+      }
+
+      // Update organization profile in current app
+      if (currentApp && currentApp.organization_profile) {
+        currentApp.organization_profile.legalName = corp.name;
+        currentApp.organization_profile.corporationNumber = corp.corporationNumber;
+        currentApp.organization_profile.incorporationDate = corp.incorporationDate;
+        currentApp.organization_profile.type = 'corporation';
+      }
+
+      // Mark as selected and clear results after brief confirmation
+      document.querySelectorAll('.corp-search-result').forEach(el => {
+        el.classList.remove('selected');
+      });
+      event.target.closest('.corp-search-result').classList.add('selected');
+
+      // Save and clear
+      wizAutoSave();
+      setTimeout(() => {
+        document.getElementById('corpSearchResults').innerHTML = `
+          <div style="padding:8px;background:rgba(130,195,65,0.1);border-radius:8px;font-size:13px;color:var(--primary);">
+            ✓ Corporation details loaded: ${corp.name}
+          </div>
+        `;
+      }, 500);
     }
 
     // ============================================================

@@ -4,11 +4,80 @@
  * Endpoints for the grant writing wizard:
  *   - User registration & auth (CASL-compliant)
  *   - Program discovery & matching
+ *   - Corporation search (federal registry integration)
  *   - Wizard step progression
  *   - Application CRUD with autosave
  *   - Export pack generation
  *   - Outcome tracking
  *   - Weekly program sync
+ *
+ * AUTOMATION OPPORTUNITIES (Future Enhancements):
+ * ================================================
+ * 
+ * 1. CRA Business Number Validation
+ *    - Auto-verify BN format and check-digit
+ *    - Optional: query CRA registry for business status
+ * 
+ * 2. Provincial Corporation Search
+ *    - Ontario: https://www.ontario.ca/page/search-business-name-database
+ *    - BC: https://www.bcregistry.ca/
+ *    - Auto-detect province and suggest relevant registry
+ * 
+ * 3. Address Validation & Auto-complete
+ *    - Canada Post API or Google Places
+ *    - Verify postal codes, auto-fill city/province
+ *    - Standardize address format for applications
+ * 
+ * 4. Document Intelligence
+ *    - Scan uploaded PDFs for key data (OCR)
+ *    - Auto-extract: financial statements, incorporation docs
+ *    - Mark checklist items complete based on uploads
+ *    - Flag missing required sections
+ * 
+ * 5. Financial Data Pre-fill
+ *    - Secure upload of past tax returns (T2, T4)
+ *    - Extract: revenue, expenses, employee count
+ *    - Calculate cost-share ratios automatically
+ * 
+ * 6. AI-Powered Expense Categorization
+ *    - User pastes expense list → AI categorizes by program rules
+ *    - Suggest eligible vs ineligible items
+ *    - Auto-calculate totals per category
+ * 
+ * 7. Project Cost Estimation
+ *    - Based on project type, AI suggests typical costs
+ *    - Historical data from similar approved applications
+ *    - Industry benchmarks for equipment, labour, materials
+ * 
+ * 8. Past Application Reuse
+ *    - If user applied to similar program → auto-populate common fields
+ *    - Version control for project descriptions
+ *    - "Copy from previous application" feature
+ * 
+ * 9. Eligibility Pre-screening
+ *    - Answer eligibility questions once in profile
+ *    - Auto-filter incompatible programs
+ *    - Suggest strongest fit programs
+ * 
+ * 10. Multi-Program Application
+ *     - Apply same project to multiple compatible programs
+ *     - Adjust budget/scope per program requirements
+ *     - Track submission status across programs
+ * 
+ * 11. Deadline Tracking & Reminders
+ *     - Email/SMS alerts for upcoming deadlines
+ *     - Calendar integration (iCal/Google Calendar)
+ *     - Flag intake closing dates
+ * 
+ * 12. Grant Officer Preview Mode
+ *     - Show application as grant officer will see it
+ *     - Flag common rejection reasons
+ *     - Completeness score before submission
+ * 
+ * IMPLEMENTATION PRIORITY:
+ * - High: Document intelligence (#4), Expense categorization (#6)
+ * - Medium: Address validation (#3), Past app reuse (#8)
+ * - Low: Multi-program (#10), Officer preview (#12)
  */
 
 import express from 'express';
@@ -17,6 +86,8 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import OpenAI from 'openai';
 import PDFDocument from 'pdfkit';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 import logger from '../utils/logger.js';
 import { getDatabase } from '../config/database.js';
 
@@ -489,6 +560,112 @@ router.post('/programs/:id/check-eligibility', async (req, res) => {
   } catch (error) {
     logger.error('[grant-wizard] Eligibility check error:', error);
     res.status(500).json({ success: false, error: 'Eligibility check failed' });
+  }
+});
+
+// ============================================================
+// GET /corporation-search?name=xyz - Search federal corporations registry
+// ============================================================
+router.get('/corporation-search', async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name || name.length < 3) {
+      return res.status(400).json({ success: false, error: 'Company name required (min 3 characters)' });
+    }
+
+    // Search ISED Corporations Canada database
+    const searchUrl = `https://ised-isde.canada.ca/cc/lgcy/fdrlCrpSrch.html`;
+    const searchParams = new URLSearchParams({
+      V_TOKEN: Math.random().toString(36).substring(7),
+      searchType: 'freetext',
+      freeTextSearch: name.trim(),
+      lang: 'eng'
+    });
+
+    try {
+      const response = await axios.get(`${searchUrl}?${searchParams.toString()}`, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'GreenReach-Grant-Wizard/1.0',
+          'Accept': 'text/html'
+        }
+      });
+
+      const $ = cheerio.load(response.data);
+      const results = [];
+
+      // Parse search results table
+      $('table.resultTable tr').each((i, row) => {
+        if (i === 0) return; // Skip header row
+        
+        const cells = $(row).find('td');
+        if (cells.length >= 4) {
+          const corpName = $(cells.eq(0)).text().trim();
+          const corpNumber = $(cells.eq(1)).text().trim();
+          const corpStatus = $(cells.eq(2)).text().trim();
+          const corpDate = $(cells.eq(3)).text().trim();
+
+          if (corpName && corpNumber) {
+            results.push({
+              name: corpName,
+              corporationNumber: corpNumber,
+              status: corpStatus || 'Active',
+              incorporationDate: corpDate || null,
+              source: 'federal',
+              confidence: corpName.toLowerCase().includes(name.toLowerCase()) ? 'high' : 'medium'
+            });
+          }
+        }
+      });
+
+      // If no results from table, try alternate parsing
+      if (results.length === 0) {
+        $('.corporationInfo').each((i, elem) => {
+          const text = $(elem).text();
+          const nameMatch = text.match(/Corporation Name:\s*([^\n]+)/i);
+          const numberMatch = text.match(/Corporation Number:\s*(\d+)/i);
+          
+          if (nameMatch && numberMatch) {
+            results.push({
+              name: nameMatch[1].trim(),
+              corporationNumber: numberMatch[1].trim(),
+              status: 'Active',
+              incorporationDate: null,
+              source: 'federal',
+              confidence: 'medium'
+            });
+          }
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          query: name,
+          results: results.slice(0, 10), // Limit to 10 results
+          total: results.length,
+          searchUrl: searchUrl
+        }
+      });
+
+    } catch (searchError) {
+      logger.warn('[grant-wizard] Corporation search fetch error:', searchError.message);
+      
+      // Return empty results rather than failing completely
+      res.json({
+        success: true,
+        data: {
+          query: name,
+          results: [],
+          total: 0,
+          error: 'Search service temporarily unavailable. You can manually search at: ' + searchUrl
+        }
+      });
+    }
+
+  } catch (error) {
+    logger.error('[grant-wizard] Corporation search error:', error);
+    res.status(500).json({ success: false, error: 'Corporation search failed' });
   }
 });
 
