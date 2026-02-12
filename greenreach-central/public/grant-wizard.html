@@ -419,7 +419,7 @@
         <li><a href="/grant-wizard.html" style="color: var(--accent); font-weight: 600;">Funding Support</a></li>
       </ul>
       <div id="navAuth">
-        <a href="#" class="nav-cta" onclick="showView('register')">Get Started Free</a>
+        <a href="#" class="nav-cta" onclick="startNewDiscovery()">Get Started Free</a>
       </div>
     </div>
   </nav>
@@ -434,9 +434,13 @@
         <p>Find funding you qualify for. Draft applications in plain language. Submit with confidence.</p>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 640px; margin: 0 auto 48px;">
-        <button class="btn btn-primary btn-block" onclick="showView('register')">Create Free Account</button>
-        <button class="btn btn-secondary btn-block" onclick="showView('login')">Sign In</button>
+      <div style="max-width: 480px; margin: 0 auto 24px;">
+        <button class="btn btn-primary btn-block" onclick="startNewDiscovery()" style="font-size:17px; padding:16px 32px;">Start Your Free Assessment →</button>
+        <p style="text-align:center; margin-top:12px; font-size:13px; color:var(--text-light);">No sign-up required. See your results first.</p>
+      </div>
+      <div style="text-align:center; margin-bottom:40px;">
+        <span style="font-size:14px; color:var(--text-light);">Already have an account?</span>
+        <a href="#" onclick="showView('login')" style="color:var(--primary); font-weight:600; font-size:14px; margin-left:6px;">Sign in</a>
       </div>
 
       <!-- Public program preview -->
@@ -924,7 +928,7 @@
 
         <!-- Actions -->
         <div style="display:flex; gap:16px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">← Back to Dashboard</button>
+          <button class="btn btn-secondary btn-sm" onclick="authToken ? showView('dashboard') : showView('landing')">← Back</button>
           <button class="btn btn-primary" id="discoveryNextBtn" onclick="submitDiscovery()">Find Matching Programs →</button>
         </div>
       </div>
@@ -947,6 +951,27 @@
         </div>
 
         <div id="matchedProgramsList" class="programs-grid"></div>
+
+        <!-- Auth gate — shown when unauthenticated user clicks a program -->
+        <div id="matchAuthGate" style="display:none; max-width:520px; margin:40px auto 0; text-align:center;">
+          <div style="background:linear-gradient(135deg, #f0fdf4 0%, #f8fafc 100%); border:1px solid #bbf7d0; border-radius:16px; padding:40px 32px;">
+            <div style="font-size:40px; margin-bottom:16px;">🌱</div>
+            <h2 style="font-size:22px; font-weight:700; margin-bottom:12px; color:var(--text);">Here's how we help</h2>
+            <p style="font-size:15px; color:var(--text); line-height:1.7; margin-bottom:8px;">
+              We match you to funding programs, draft your application in plain language, prepare budget templates, and generate a ready-to-submit package — all guided by program-specific requirements.
+            </p>
+            <p style="font-size:14px; color:var(--primary); font-weight:600; margin-bottom:24px;">
+              This is a free service, in support of food security for everyone.
+            </p>
+            <p style="font-size:13px; color:var(--text-light); margin-bottom:24px;">
+              Create a free account to save your results and start your application.
+            </p>
+            <button class="btn btn-primary btn-block" onclick="showView('register')" style="font-size:16px; padding:14px 32px; margin-bottom:12px;">Create Free Account</button>
+            <p style="font-size:14px; color:var(--text-light);">
+              Already have an account? <a href="#" onclick="showView('login')" style="color:var(--primary); font-weight:600;">Sign in</a>
+            </p>
+          </div>
+        </div>
 
         <div style="text-align:center; margin-top:32px; display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" onclick="showView('discovery')">← Refine Goals</button>
@@ -1128,7 +1153,7 @@
         currentUser = data.data.user;
         localStorage.setItem('grantToken', authToken);
         updateNavAuth();
-        showView('dashboard');
+        resumeAfterAuth();
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'flex';
@@ -1162,7 +1187,7 @@
         currentUser = data.data.user;
         localStorage.setItem('grantToken', authToken);
         updateNavAuth();
-        showView('dashboard');
+        resumeAfterAuth();
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'flex';
@@ -1170,6 +1195,45 @@
         btn.disabled = false;
         btn.textContent = 'Sign In';
       }
+    }
+
+    // Resume discovery flow after auth (login/register)
+    async function resumeAfterAuth() {
+      if (pendingProgramId && discoveryData.projectGoals.length > 0) {
+        // User was in discovery flow — save data and continue
+        try {
+          // Create application
+          const createRes = await fetch(`${API}/applications`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
+          const createData = await createRes.json();
+          if (createData.success) {
+            discoveryAppId = createData.data.id;
+
+            // Save characterization
+            await fetch(`${API}/applications/${discoveryAppId}/characterize`, {
+              method: 'PUT',
+              headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                characterization: discoveryData,
+                websiteIntelligence: websiteIntelligence || {}
+              })
+            });
+
+            // Select program and load wizard
+            await selectMatchedProgram(pendingProgramId);
+            pendingProgramId = null;
+            return;
+          }
+        } catch (e) {
+          console.error('Resume after auth error:', e);
+        }
+        pendingProgramId = null;
+      }
+      // Default: go to dashboard
+      showView('dashboard');
     }
 
     function logout() {
@@ -2358,9 +2422,11 @@
       resultsDiv.innerHTML = '<div class="corp-search-loading">🔍 Scanning your website for community events, awards, products, and company details...</div>';
 
       try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
         const res = await fetch(`${API}/scrape-website`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ url })
         });
         const data = await res.json();
@@ -2480,41 +2546,62 @@
       btn.textContent = 'Finding matches...';
 
       try {
-        // Create a new application (no program yet) to store characterization
-        const createRes = await fetch(`${API}/applications`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        });
-        const createData = await createRes.json();
-        if (!createData.success) throw new Error(createData.error || 'Failed to create application');
-        discoveryAppId = createData.data.id;
+        if (authToken) {
+          // Authenticated: save to DB then match
+          const createRes = await fetch(`${API}/applications`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
+          const createData = await createRes.json();
+          if (!createData.success) throw new Error(createData.error || 'Failed to create application');
+          discoveryAppId = createData.data.id;
 
-        // Save characterization + website intelligence
-        await fetch(`${API}/applications/${discoveryAppId}/characterize`, {
-          method: 'PUT',
-          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            characterization: discoveryData,
-            websiteIntelligence: websiteIntelligence || {}
-          })
-        });
+          await fetch(`${API}/applications/${discoveryAppId}/characterize`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              characterization: discoveryData,
+              websiteIntelligence: websiteIntelligence || {}
+            })
+          });
 
-        // Run smart matching
-        const matchRes = await fetch(`${API}/applications/${discoveryAppId}/match-programs`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
-        });
-        const matchData = await matchRes.json();
+          const matchRes = await fetch(`${API}/applications/${discoveryAppId}/match-programs`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
+          });
+          const matchData = await matchRes.json();
 
-        if (matchData.success) {
-          matchedPrograms = matchData.data.programs;
-          renderMatchedPrograms('all');
-          document.getElementById('matchSummary').textContent = 
-            `${matchData.data.strongMatches} strong match${matchData.data.strongMatches !== 1 ? 'es' : ''} out of ${matchData.data.totalPrograms} programs, ranked by relevance to your goals.`;
-          showView('matches');
+          if (matchData.success) {
+            matchedPrograms = matchData.data.programs;
+            renderMatchedPrograms('all');
+            document.getElementById('matchSummary').textContent = 
+              `${matchData.data.strongMatches} strong match${matchData.data.strongMatches !== 1 ? 'es' : ''} out of ${matchData.data.totalPrograms} programs, ranked by relevance to your goals.`;
+            showView('matches');
+          } else {
+            throw new Error(matchData.error);
+          }
         } else {
-          throw new Error(matchData.error);
+          // Not authenticated: use public matching endpoint (no DB saves)
+          const matchRes = await fetch(`${API}/match-programs-public`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              characterization: discoveryData,
+              websiteIntelligence: websiteIntelligence || {}
+            })
+          });
+          const matchData = await matchRes.json();
+
+          if (matchData.success) {
+            matchedPrograms = matchData.data.programs;
+            renderMatchedPrograms('all');
+            document.getElementById('matchSummary').textContent = 
+              `${matchData.data.strongMatches} strong match${matchData.data.strongMatches !== 1 ? 'es' : ''} out of ${matchData.data.totalPrograms} programs, ranked by relevance to your goals.`;
+            showView('matches');
+          } else {
+            throw new Error(matchData.error);
+          }
         }
 
       } catch (err) {
@@ -2565,8 +2652,19 @@
       }).join('');
     }
 
+    let pendingProgramId = null;  // Track program selection across auth flow
+
     async function selectMatchedProgram(programId) {
-      if (!authToken) { showView('register'); return; }
+      if (!authToken) {
+        // Not logged in — show auth gate and save intent
+        pendingProgramId = programId;
+        const gate = document.getElementById('matchAuthGate');
+        if (gate) {
+          gate.style.display = 'block';
+          gate.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
 
       // If we have a discovery app, update its program_id; otherwise create new
       if (discoveryAppId) {
