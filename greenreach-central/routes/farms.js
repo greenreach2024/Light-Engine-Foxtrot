@@ -294,7 +294,33 @@ router.get('/profile', async (req, res, next) => {
     }
 
     const farm = result.rows[0];
-    
+
+    // Pull real rooms/groups from farm_backups (where edge sync data lives)
+    let rooms = farm.metadata?.rooms || [];
+    let groups = farm.metadata?.groups || [];
+    try {
+      const backupResult = await query(
+        `SELECT rooms, groups, farm FROM farm_backups WHERE farm_id = $1`,
+        [farmId]
+      );
+      if (backupResult.rows.length > 0) {
+        const backup = backupResult.rows[0];
+        if (Array.isArray(backup.rooms) && backup.rooms.length > 0) rooms = backup.rooms;
+        if (Array.isArray(backup.groups) && backup.groups.length > 0) groups = backup.groups;
+        // Use farm name from backup if DB name is just the farm_id
+        if (backup.farm?.name && farm.name === farm.farm_id) {
+          farm.name = backup.farm.name;
+        }
+      }
+    } catch (backupErr) {
+      logger.warn('[Profile] farm_backups lookup failed:', backupErr.message);
+    }
+
+    // Use name from JWT token if DB still has raw farm_id as name
+    if (farm.name === farm.farm_id && decoded.name) {
+      farm.name = decoded.name;
+    }
+
     // Return farm profile in format expected by frontend
     res.json({
       status: 'success',
@@ -303,8 +329,8 @@ router.get('/profile', async (req, res, next) => {
         name: farm.name,
         status: farm.status,
         metadata: farm.metadata || {},
-        rooms: farm.metadata?.rooms || [],
-        groups: farm.metadata?.groups || [],
+        rooms,
+        groups,
         createdAt: farm.created_at
       }
     });
@@ -515,7 +541,7 @@ router.post('/auth/login', async (req, res) => {
 
     const token = jwt.sign(
       { farm_id: user.farmId, user_id: user.id, role: user.role, name: user.name },
-      JWT_SECRET, { expiresIn: '24h', issuer: 'greenreach-central' }
+      JWT_SECRET, { expiresIn: '24h', issuer: 'greenreach-central', audience: 'greenreach-farms' }
     );
 
     logger.info(`[Farm Auth] Login success: ${user.farmId}`);
