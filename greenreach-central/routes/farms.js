@@ -478,7 +478,7 @@ router.post('/auth/login', async (req, res) => {
     }
 
     const DEMO_FARMS = {
-      'FARM-TEST-WIZARD-001': { password: 'Grow123', farmName: 'Test Wizard Farm', role: 'admin', subscription: 'cloud' },
+      'FARM-TEST-WIZARD-001': { password: 'Grow123', farmName: 'This is Your Farm', role: 'admin', subscription: 'cloud' },
       'FARM-MKLOMAT3-A9D8': { password: 'ReTerminal2026!', farmName: 'GreenReach Demo Farm', role: 'admin', subscription: 'cloud' }
     };
 
