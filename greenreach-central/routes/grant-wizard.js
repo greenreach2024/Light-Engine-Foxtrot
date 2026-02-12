@@ -1174,6 +1174,158 @@ router.post('/applications/:id/match-programs', authenticateGrantUser, async (re
 });
 
 // ============================================================
+// POST /applications/:id/ai-recommend - AI-powered recommendations
+// Uses GPT-4 to analyze project profile vs programs and suggest
+// direct matches + complementary/strategic funding opportunities
+// ============================================================
+router.post('/applications/:id/ai-recommend', authenticateGrantUser, async (req, res) => {
+  if (!openai) {
+    return res.status(503).json({
+      success: false,
+      error: 'AI recommendation service not available (OpenAI API key not configured)'
+    });
+  }
+
+  try {
+    const pool = getPool(req);
+    if (!pool) return res.status(500).json({ success: false, error: 'Database unavailable' });
+
+    // Get application + characterization
+    const appResult = await pool.query(
+      `SELECT project_characterization, website_intelligence, organization_profile, project_profile, budget
+       FROM grant_applications WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.grantUserId]
+    );
+    if (appResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Application not found' });
+    }
+
+    const app = appResult.rows[0];
+    const char = app.project_characterization || {};
+    const webIntel = app.website_intelligence || {};
+    const org = app.organization_profile || {};
+    const proj = app.project_profile || {};
+    const budget = app.budget || {};
+
+    // Get all active programs
+    const programsResult = await pool.query(`
+      SELECT id, program_code, program_name, administering_agency, description,
+             funding_type, min_funding, max_funding, intake_status, priority_areas
+      FROM grant_programs
+      WHERE active = TRUE
+      ORDER BY program_name
+    `);
+
+    const programs = programsResult.rows;
+
+    // Build context for AI
+    const projectSummary = [
+      proj.title ? `Project: ${proj.title}` : '',
+      proj.description ? `Description: ${proj.description}` : '',
+      org.legalName ? `Organization: ${org.legalName}` : '',
+      org.type ? `Org Type: ${org.type}` : '',
+      org.province ? `Province: ${org.province}` : '',
+      char.projectGoals?.length ? `Goals: ${char.projectGoals.join(', ')}` : '',
+      char.budgetRange ? `Budget Range: ${char.budgetRange}` : '',
+      budget.totalAmount ? `Budget Total: $${budget.totalAmount}` : '',
+      webIntel.keywords?.length ? `Keywords from website: ${webIntel.keywords.join(', ')}` : ''
+    ].filter(Boolean).join('\n');
+
+    const programList = programs.map(p =>
+      `[${p.program_code || p.id}] ${p.program_name} — ${p.administering_agency || ''}. ` +
+      `${(p.description || '').substring(0, 200)}. ` +
+      `Funding: ${p.funding_type || 'N/A'}, Max: $${p.max_funding || '?'}. ` +
+      `Status: ${p.intake_status}. ` +
+      `Priorities: ${(p.priority_areas || []).join(', ')}`
+    ).join('\n\n');
+
+    const prompt = `You are a Canadian agricultural grant strategist. Analyze this project and the available funding programs, then provide strategic recommendations.
+
+PROJECT PROFILE:
+${projectSummary}
+
+AVAILABLE PROGRAMS:
+${programList}
+
+Respond in JSON with this exact structure:
+{
+  "directMatches": [
+    {
+      "programCode": "...",
+      "programName": "...",
+      "confidence": "high|medium|low",
+      "rationale": "2-sentence explanation of why this is a strong match",
+      "applicationTip": "1-sentence tactical advice for the application"
+    }
+  ],
+  "complementaryMatches": [
+    {
+      "programCode": "...",
+      "programName": "...",
+      "rationale": "Why this program is worth exploring even if not an obvious fit",
+      "stackingNote": "How to combine with other grants"
+    }
+  ],
+  "strategicAdvice": "2-3 sentence overall funding strategy recommendation",
+  "fundingStackSuggestion": "How to combine multiple programs for maximum funding"
+}
+
+Rules:
+- directMatches: max 5 programs from the list above, ranked by fit
+- complementaryMatches: max 3 programs that could supplement the direct matches
+- Only use programs from the provided list (reference by programCode)
+- Be specific about WHY each program fits this particular project
+- Return ONLY valid JSON, no markdown formatting`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert Canadian agricultural grant strategist. Respond only with valid JSON."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: 1500
+    });
+
+    let recommendations;
+    try {
+      const raw = completion.choices[0].message.content.trim();
+      // Strip markdown code fences if present
+      const cleaned = raw.replace(/^```json?\s*/i, '').replace(/```\s*$/i, '');
+      recommendations = JSON.parse(cleaned);
+    } catch (parseErr) {
+      logger.warn('[grant-wizard] AI recommend parse error, returning raw:', parseErr.message);
+      recommendations = {
+        directMatches: [],
+        complementaryMatches: [],
+        strategicAdvice: completion.choices[0].message.content,
+        fundingStackSuggestion: '',
+        _parseError: true
+      };
+    }
+
+    res.json({
+      success: true,
+      data: {
+        recommendations,
+        tokensUsed: completion.usage.total_tokens,
+        generatedAt: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    logger.error('[grant-wizard] AI recommend error:', error);
+    res.status(500).json({ success: false, error: 'AI recommendation failed', details: error.message });
+  }
+});
+
+// ============================================================
 // POST /match-programs-public - Smart matching WITHOUT auth
 // Accepts characterization + websiteIntelligence in body directly
 // ============================================================
@@ -1423,7 +1575,7 @@ router.put('/applications/:id', authenticateGrantUser, async (req, res) => {
       wizardStep, percentComplete, status, programId,
       organizationProfile, projectProfile, budget, contacts,
       attachmentsChecklist, priorFunding, answers, factsLedger,
-      procurementItems
+      procurementItems, milestones, supportLetters
     } = req.body;
 
     // Consistency check: compare incoming facts with stored facts
@@ -1472,6 +1624,8 @@ router.put('/applications/:id', authenticateGrantUser, async (req, res) => {
     addField('answers', 'answers', answers);
     addField('factsLedger', 'facts_ledger', factsLedger);
     addField('procurementItems', 'procurement_items', procurementItems);
+    addField('milestones', 'milestones', milestones);
+    addField('supportLetters', 'support_letters', supportLetters);
 
     await pool.query(
       `UPDATE grant_applications SET ${setClauses.join(', ')} WHERE id = $1 AND user_id = $2`,
@@ -1606,12 +1760,56 @@ router.post('/applications/:id/export', authenticateGrantUser, async (req, res) 
       url: e.url || null
     }));
 
+    // Milestone summary for export
+    const milestonesList = app.milestones || [];
+    const milestonesSummary = milestonesList.map((ms, i) => ({
+      number: i + 1,
+      title: ms.title || 'Untitled',
+      startDate: ms.startDate || null,
+      endDate: ms.endDate || null,
+      budgetAmount: parseFloat(ms.budgetAmount) || 0,
+      deliverables: ms.deliverables || '',
+      completionCriteria: ms.completionCriteria || ''
+    }));
+    const milestoneBudgetTotal = milestonesList.reduce((sum, ms) => sum + (parseFloat(ms.budgetAmount) || 0), 0);
+    const milestoneWarnings = [];
+    if (milestonesSummary.length === 0) milestoneWarnings.push('No milestones defined — most programs require 3-5 milestones');
+    if (milestonesSummary.length > 0 && !milestonesSummary.every(ms => ms.title && ms.title !== 'Untitled')) milestoneWarnings.push('Some milestones are missing titles');
+    if (milestonesSummary.length > 0 && Math.abs(budgetTotal - milestoneBudgetTotal) > 0.01) milestoneWarnings.push(`Milestone budgets ($${milestoneBudgetTotal.toFixed(2)}) don't match total project budget ($${budgetTotal.toFixed(2)})`);
+
     // Build pack
     const pack = {
       answersDocument: answersDoc,
       budget: budgetSummary,
+      milestones: {
+        items: milestonesSummary,
+        milestoneBudgetTotal,
+        crossCheck: {
+          count: milestonesSummary.length,
+          allHaveTitles: milestonesSummary.every(ms => ms.title && ms.title !== 'Untitled'),
+          allHaveDates: milestonesSummary.every(ms => ms.startDate && ms.endDate),
+          allHaveBudgets: milestonesSummary.every(ms => ms.budgetAmount > 0),
+          budgetDelta: budgetTotal - milestoneBudgetTotal,
+          warnings: milestoneWarnings
+        }
+      },
       checklist,
       missingDocuments: missingDocs,
+      supportLetters: {
+        items: (app.support_letters || []).map(lt => ({
+          contactName: lt.contactName || '',
+          organization: lt.organization || '',
+          email: lt.email || '',
+          relationship: lt.relationship || '',
+          status: lt.status || 'draft'
+        })),
+        summary: {
+          total: (app.support_letters || []).length,
+          received: (app.support_letters || []).filter(lt => lt.status === 'received').length,
+          requested: (app.support_letters || []).filter(lt => lt.status === 'requested').length,
+          draft: (app.support_letters || []).filter(lt => lt.status !== 'received' && lt.status !== 'requested').length
+        }
+      },
       citations,
       publicDisclosureWarning: 'Some programs publish project summaries or recipient details. ' +
         'Review the program\'s disclosure requirements before submitting. ' +
@@ -1782,10 +1980,25 @@ router.get('/applications/:id/export/pdf', authenticateGrantUser, async (req, re
         // Table rows
         doc.font('Helvetica');
         items.forEach(item => {
+          if (doc.y > 680) doc.addPage();
           const rowY = doc.y;
           doc.text(item.description || '—', 72, rowY, { width: 250 });
           doc.text(item.category || '—', 330, rowY, { width: 100 });
           doc.text('$' + (parseFloat(item.amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }), 440, rowY, { width: 100, align: 'right' });
+          doc.moveDown(0.3);
+          // Show breakdown details if present
+          const details = [];
+          if (item.units) details.push(`Qty: ${item.units}`);
+          if (item.unitCost) details.push(`@ $${parseFloat(item.unitCost).toFixed(2)}/unit`);
+          if (item.supplierName) details.push(`Supplier: ${item.supplierName}`);
+          if (details.length > 0) {
+            doc.fontSize(8).fillColor('#666666').text(`  ${details.join(' | ')}`, 72);
+            doc.fillColor('#000000').fontSize(10);
+          }
+          if (item.justification) {
+            doc.fontSize(8).fillColor('#666666').text(`  Justification: ${item.justification}`, 72, doc.y, { width: 468 });
+            doc.fillColor('#000000').fontSize(10);
+          }
           doc.moveDown(0.3);
         });
 
@@ -1804,6 +2017,69 @@ router.get('/applications/:id/export/pdf', authenticateGrantUser, async (req, re
         doc.font('Helvetica').text(budget.otherFunding);
       }
       doc.moveDown();
+    }
+
+    // Milestones
+    const milestones = app.milestones || [];
+    if (milestones.length > 0) {
+      doc.addPage();
+      doc.fontSize(16).font('Helvetica-Bold').text('Project Milestones');
+      doc.moveDown(1);
+
+      milestones.forEach((ms, i) => {
+        doc.fontSize(12).font('Helvetica-Bold').text(`Milestone ${i + 1}: ${ms.title || 'Untitled'}`);
+        doc.moveDown(0.3);
+        doc.fontSize(10).font('Helvetica');
+
+        if (ms.startDate || ms.endDate) {
+          doc.text(`Timeline: ${ms.startDate || '?'} — ${ms.endDate || '?'}`);
+        }
+        if (ms.budgetAmount) {
+          doc.text(`Budget: $${parseFloat(ms.budgetAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
+        }
+        if (ms.deliverables) {
+          doc.moveDown(0.3);
+          doc.font('Helvetica-Bold').text('Deliverables:');
+          doc.font('Helvetica').text(ms.deliverables);
+        }
+        if (ms.completionCriteria) {
+          doc.moveDown(0.3);
+          doc.font('Helvetica-Bold').text('Completion Criteria:');
+          doc.font('Helvetica').text(ms.completionCriteria);
+        }
+        doc.moveDown(1);
+      });
+
+      // Milestone budget subtotal
+      const msBudgetTotal = milestones.reduce((sum, ms) => sum + (parseFloat(ms.budgetAmount) || 0), 0);
+      doc.font('Helvetica-Bold');
+      doc.text(`Milestone Budget Subtotal: $${msBudgetTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
+      doc.moveDown();
+    }
+
+    // Letters of Support
+    const supportLetters = app.support_letters || [];
+    if (supportLetters.length > 0) {
+      doc.addPage();
+      doc.fontSize(16).font('Helvetica-Bold').fillColor('#000000').text('Letters of Support');
+      doc.moveDown(1);
+
+      // Summary row
+      const received = supportLetters.filter(l => l.status === 'received').length;
+      const requested = supportLetters.filter(l => l.status === 'requested').length;
+      doc.fontSize(10).font('Helvetica');
+      doc.text(`Total supporters: ${supportLetters.length}  |  Received: ${received}  |  Requested: ${requested}  |  Draft: ${supportLetters.length - received - requested}`);
+      doc.moveDown(1);
+
+      supportLetters.forEach((lt, i) => {
+        const statusLabel = lt.status === 'received' ? '✓ Received' : lt.status === 'requested' ? '⏳ Requested' : '○ Draft';
+        doc.fontSize(11).font('Helvetica-Bold').text(`${i + 1}. ${lt.contactName || 'Unnamed'}  [${statusLabel}]`);
+        doc.fontSize(10).font('Helvetica');
+        if (lt.organization) doc.text(`Organization/Role: ${lt.organization}`);
+        if (lt.email) doc.text(`Email: ${lt.email}`);
+        if (lt.relationship) doc.text(`Relationship: ${lt.relationship}`);
+        doc.moveDown(0.8);
+      });
     }
 
     // Footer on all pages
