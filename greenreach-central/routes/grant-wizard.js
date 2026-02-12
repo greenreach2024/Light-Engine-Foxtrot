@@ -575,68 +575,61 @@ router.get('/corporation-search', async (req, res) => {
 
     // Search ISED Corporations Canada database
     const searchUrl = `https://ised-isde.canada.ca/cc/lgcy/fdrlCrpSrch.html`;
-    const searchParams = new URLSearchParams({
-      V_TOKEN: Math.random().toString(36).substring(7),
-      searchType: 'freetext',
-      freeTextSearch: name.trim(),
-      lang: 'eng'
-    });
 
     try {
-      const response = await axios.get(`${searchUrl}?${searchParams.toString()}`, {
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'GreenReach-Grant-Wizard/1.0',
-          'Accept': 'text/html'
+      // ISED requires a POST with corpName field
+      const response = await axios.post(
+        `${searchUrl}?searchType=freetext&freeTextSearch=${encodeURIComponent(name.trim())}&lang=eng`,
+        `corpName=${encodeURIComponent(name.trim())}&buttonNext=Search`,
+        {
+          timeout: 12000,
+          headers: {
+            'User-Agent': 'GreenReach-Grant-Wizard/1.0',
+            'Accept': 'text/html',
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
         }
-      });
+      );
 
       const $ = cheerio.load(response.data);
       const results = [];
 
-      // Parse search results table
-      $('table.resultTable tr').each((i, row) => {
-        if (i === 0) return; // Skip header row
-        
-        const cells = $(row).find('td');
-        if (cells.length >= 4) {
-          const corpName = $(cells.eq(0)).text().trim();
-          const corpNumber = $(cells.eq(1)).text().trim();
-          const corpStatus = $(cells.eq(2)).text().trim();
-          const corpDate = $(cells.eq(3)).text().trim();
+      // Results are in <ol class="list-unstyled"> > <li> items
+      $('ol.list-unstyled > li').each((i, li) => {
+        const $li = $(li);
+        const text = $li.text();
 
-          if (corpName && corpNumber) {
-            results.push({
-              name: corpName,
-              corporationNumber: corpNumber,
-              status: corpStatus || 'Active',
-              incorporationDate: corpDate || null,
-              source: 'federal',
-              confidence: corpName.toLowerCase().includes(name.toLowerCase()) ? 'high' : 'medium'
-            });
-          }
-        }
-      });
+        // Corporation name is in the first <a> with an href containing fdrlCrpDtls
+        const nameLink = $li.find('a[href*="fdrlCrpDtls"]');
+        const corpName = nameLink.text().trim();
+        if (!corpName) return;
 
-      // If no results from table, try alternate parsing
-      if (results.length === 0) {
-        $('.corporationInfo').each((i, elem) => {
-          const text = $(elem).text();
-          const nameMatch = text.match(/Corporation Name:\s*([^\n]+)/i);
-          const numberMatch = text.match(/Corporation Number:\s*(\d+)/i);
-          
-          if (nameMatch && numberMatch) {
-            results.push({
-              name: nameMatch[1].trim(),
-              corporationNumber: numberMatch[1].trim(),
-              status: 'Active',
-              incorporationDate: null,
-              source: 'federal',
-              confidence: 'medium'
-            });
-          }
+        // Extract corporation number
+        const numberMatch = text.match(/Corporation\s+number:\s*([\d-]+)/i);
+        const corpNumber = numberMatch ? numberMatch[1].trim() : '';
+
+        // Extract status
+        const statusMatch = text.match(/Status:\s*(\w+)/i);
+        const corpStatus = statusMatch ? statusMatch[1].trim() : 'Unknown';
+
+        // Extract business number
+        const bnMatch = text.match(/Business\s+Number:\s*([\w]+)/i);
+        const businessNumber = bnMatch ? bnMatch[1].trim() : null;
+
+        // Extract corp ID from link for detail lookup
+        const hrefMatch = (nameLink.attr('href') || '').match(/corpId=(\d+)/);
+        const corpId = hrefMatch ? hrefMatch[1] : null;
+
+        results.push({
+          name: corpName,
+          corporationNumber: corpNumber,
+          status: corpStatus,
+          businessNumber: businessNumber,
+          corpId: corpId,
+          source: 'federal',
+          confidence: corpName.toLowerCase().includes(name.toLowerCase()) ? 'high' : 'medium'
         });
-      }
+      });
 
       res.json({
         success: true,
