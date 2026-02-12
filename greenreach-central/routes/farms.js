@@ -5,10 +5,14 @@
 
 import express from 'express';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import logger from '../utils/logger.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { getInMemoryGroups } from './sync.js';
 import { upsertNetworkFarm } from '../services/networkFarmsStore.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
 
 const router = express.Router();
 
@@ -458,6 +462,67 @@ router.get('/:farmId', async (req, res, next) => {
   } catch (error) {
     logger.error('Error fetching farm:', error);
     next(error);
+  }
+});
+
+
+/**
+ * POST /api/farm/auth/login
+ * Farm login with Farm ID + Password (no email required)
+ */
+router.post('/auth/login', async (req, res) => {
+  try {
+    const { farmId, password } = req.body;
+    if (!farmId || !password) {
+      return res.status(400).json({ status: 'error', message: 'Farm ID and password are required' });
+    }
+
+    const DEMO_FARMS = {
+      'FARM-TEST-WIZARD-001': { password: 'Grow123', farmName: 'Test Wizard Farm', role: 'admin', subscription: 'cloud' },
+      'FARM-MKLOMAT3-A9D8': { password: 'ReTerminal2026!', farmName: 'GreenReach Demo Farm', role: 'admin', subscription: 'cloud' }
+    };
+
+    let user = null;
+
+    if (req.db) {
+      try {
+        const { rows } = await req.db.query(
+          `SELECT fu.id, fu.farm_id, fu.email, fu.password_hash, fu.name, fu.role, f.name as farm_name
+           FROM farm_users fu JOIN farms f ON fu.farm_id = f.farm_id
+           WHERE fu.farm_id = $1 AND fu.active = true LIMIT 1`,
+          [farmId]
+        );
+        if (rows.length > 0) {
+          const dbUser = rows[0];
+          const match = await bcrypt.compare(password, dbUser.password_hash);
+          if (match) {
+            user = { id: dbUser.id, farmId: dbUser.farm_id, farmName: dbUser.farm_name, email: dbUser.email, name: dbUser.name, role: dbUser.role };
+          }
+        }
+      } catch (dbErr) {
+        logger.warn('[Farm Auth] DB lookup failed, trying fallback:', dbErr.message);
+      }
+    }
+
+    if (!user && DEMO_FARMS[farmId] && password === DEMO_FARMS[farmId].password) {
+      const demo = DEMO_FARMS[farmId];
+      user = { id: 'demo-user', farmId, farmName: demo.farmName, email: '', name: demo.farmName, role: demo.role, subscription: demo.subscription };
+    }
+
+    if (!user) {
+      return res.status(401).json({ status: 'error', message: 'Invalid Farm ID or password' });
+    }
+
+    const token = jwt.sign(
+      { farm_id: user.farmId, user_id: user.id, role: user.role, name: user.name },
+      JWT_SECRET, { expiresIn: '24h', issuer: 'greenreach-central' }
+    );
+
+    logger.info(`[Farm Auth] Login success: ${user.farmId}`);
+    res.json({ status: 'success', token, farmId: user.farmId, farmName: user.farmName, email: user.email || '', role: user.role, subscription: user.subscription || 'cloud', planType: 'cloud' });
+  } catch (error) {
+    logger.error('[Farm Auth] Login error:', error);
+    res.status(500).json({ status: 'error', message: 'Authentication service error' });
   }
 });
 
