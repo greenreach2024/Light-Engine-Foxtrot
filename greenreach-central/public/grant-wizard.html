@@ -695,8 +695,11 @@
           </form>
           <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #d2d2d7;">
             <h3 style="font-size: 17px; font-weight: 600; margin-bottom: 12px; color: var(--error);">Danger zone</h3>
+            <div style="font-size: 13px; color: var(--text-light); margin-bottom: 10px;">
+              Delete profile (names, addresses, business info). This removes access and clears draft applications.
+            </div>
             <button class="btn btn-sm" style="background: rgba(211,47,47,0.1); color: var(--error);" onclick="handleDeleteAccount()">
-              Delete account &amp; all data
+              Delete profile
             </button>
           </div>
         </div>
@@ -2388,15 +2391,18 @@
     }
 
     async function handleDeleteAccount() {
-      if (!confirm('This will permanently delete your account and all application data. This cannot be undone. Continue?')) return;
-      if (!confirm('Are you really sure? All drafts and saved progress will be deleted.')) return;
+      if (!confirm('This will delete your profile and clear your draft applications. Continue?')) return;
+      if (!confirm('Are you really sure? This cannot be undone.')) return;
+      const password = prompt('Please confirm your password to delete your profile.');
+      if (!password) return;
       try {
         await fetch(`${API}/profile`, {
           method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${authToken}` }
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
         });
         logout();
-        alert('Your account and data have been deleted.');
+        alert('Your profile has been deleted.');
       } catch (e) { console.error('Delete account error:', e); }
     }
 
