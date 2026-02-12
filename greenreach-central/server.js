@@ -93,11 +93,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://web.squarecdn.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://web.squarecdn.com", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
       scriptSrcAttr: ["'unsafe-inline'"],  // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https:", "https://connect.squareup.com", "https://pci-connect.squareup.com"],
+      connectSrc: ["'self'", "https:", "https://connect.squareup.com", "https://pci-connect.squareup.com", "https://www.google-analytics.com", "https://analytics.google.com"],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],

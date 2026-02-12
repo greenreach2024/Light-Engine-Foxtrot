@@ -581,7 +581,7 @@
     <div id="view-program-detail" class="view">
       <div id="programDetailContent"></div>
       <div style="text-align: center; margin-top: 32px;">
-        <button class="btn btn-secondary btn-sm" onclick="showView('programs')">← Back to Programs</button>
+        <button class="btn btn-secondary btn-sm" onclick="showView(authToken ? 'programs' : 'landing')">← Back to Programs</button>
       </div>
     </div>
 
@@ -855,7 +855,7 @@
         return;
       }
       container.innerHTML = programs.map(p => `
-        <div class="program-card" onclick="${showApply ? `showProgramDetail(${p.id})` : ''}">
+        <div class="program-card" style="cursor:pointer" onclick="showProgramDetail(${p.id})">
           <span class="status-badge status-${p.intake_status || 'unknown'}">${p.intake_status || 'Unknown'}</span>
           <h3>${escapeHtml(p.program_name)}</h3>
           <div class="agency">${escapeHtml(p.administering_agency || '')}</div>
