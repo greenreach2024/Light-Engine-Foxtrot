@@ -383,8 +383,16 @@ export async function seedGrantPrograms(pool) {
         )
         ON CONFLICT (program_code) DO UPDATE SET
           program_name = EXCLUDED.program_name,
+          administering_agency = EXCLUDED.administering_agency,
+          source_url = EXCLUDED.source_url,
           intake_status = EXCLUDED.intake_status,
           description = EXCLUDED.description,
+          objectives = EXCLUDED.objectives,
+          priority_areas = EXCLUDED.priority_areas,
+          eligibility_summary = EXCLUDED.eligibility_summary,
+          funding_type = EXCLUDED.funding_type,
+          max_funding = EXCLUDED.max_funding,
+          cost_share_ratio = EXCLUDED.cost_share_ratio,
           last_checked_at = NOW(),
           updated_at = NOW()
       `, [
