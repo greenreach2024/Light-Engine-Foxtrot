@@ -32,6 +32,17 @@ import billingRoutes from './routes/billing.js';
 import procurementAdminRoutes from './routes/procurement-admin.js';
 import remoteSupportRoutes from './routes/remote-support.js';
 
+// Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
+let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
+if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
+  const gwMod = await import('./routes/grant-wizard.js');
+  grantWizardRoutes = gwMod.default;
+  cleanupExpiredApplications = gwMod.cleanupExpiredApplications;
+  const regMod = await import('./services/grantProgramRegistry.js');
+  startGrantProgramSync = regMod.startGrantProgramSync;
+  seedGrantPrograms = regMod.seedGrantPrograms;
+}
+
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
@@ -529,6 +540,7 @@ app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge 
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
 app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
+if (grantWizardRoutes) app.use('/api/grant-wizard', grantWizardRoutes); // Grant wizard (env-gated)
 
 // Root route - redirect to main landing page
 app.get('/', (req, res) => {
@@ -638,6 +650,15 @@ async function startServer() {
       startHealthCheckService(app);
       startSyncMonitor(app);
       startAIPusher(); // AI recommendations pusher (GPT-4)
+
+      // Grant wizard (enabled by default)
+      if (seedGrantPrograms) {
+        const grantPool = getDatabase();
+        await seedGrantPrograms(grantPool).catch(e => logger.warn('Grant seed skipped', { error: e.message }));
+        startGrantProgramSync(grantPool);
+        setInterval(() => cleanupExpiredApplications(grantPool).catch(e => logger.warn('Grant cleanup error', { error: e.message })), 6 * 60 * 60 * 1000);
+        logger.info('Grant wizard enabled (AI drafting + PDF export available)');
+      }
       
       // Start deadline monitor for wholesale orders (disabled in standalone deployment)
       // logger.info('Starting deadline monitor service...');
