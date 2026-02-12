@@ -275,18 +275,6 @@
             </div>
             
             <div class="form-group">
-                <label for="email">Email</label>
-                <input 
-                    type="email" 
-                    id="email" 
-                    name="email" 
-                    placeholder="your@email.com" 
-                    required 
-                    autocomplete="email"
-                >
-            </div>
-            
-            <div class="form-group">
                 <label for="password">Password</label>
                 <input 
                     type="text" 
@@ -330,8 +318,15 @@
             const button = document.getElementById('loginButton');
             const alertDiv = document.getElementById('alertMessage');
             const farmId = document.getElementById('farmId').value.trim();
-            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
+            
+            // Validate required fields
+            if (!farmId || !password) {
+                alertDiv.className = 'alert error';
+                alertDiv.textContent = 'Farm ID and password are required';
+                alertDiv.style.display = 'block';
+                return;
+            }
             
             // Disable button
             button.disabled = true;
@@ -339,13 +334,13 @@
             alertDiv.style.display = 'none';
             
             try {
-                // Call backend authentication API
-                const response = await fetch('/api/auth/login', {
+                // Call backend authentication API (farm login endpoint)
+                const response = await fetch('/api/farm/auth/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ farm_id: farmId, email, password })
+                    body: JSON.stringify({ farmId: farmId, password })
                 });
                 
                 const data = await response.json();
@@ -368,9 +363,9 @@
                 
                 // Store token and farm info (standardized to 'token' and 'farm_id' keys)
                 localStorage.setItem('token', data.token);
-                localStorage.setItem('farm_id', data.farm_id || data.farmId); // Use farm_id consistently
-                localStorage.setItem('farm_name', data.farmName || '');
-                localStorage.setItem('email', email);
+                localStorage.setItem('farm_id', data.farm_id || data.farmId); // Server returns farm_id
+                localStorage.setItem('farm_name', data.farmName || data.farm_name || '');
+                localStorage.setItem('email', data.email || '');
                 localStorage.setItem('role', data.role || 'admin');
                 localStorage.setItem('planType', data.planType || 'cloud'); // Store plan type for wizard
                 // Clean up legacy keys
@@ -379,23 +374,30 @@
                 
                 console.log('[Login] Stored planType:', data.planType);
                 
+                // Edge mode: Skip setup wizard check - go directly to redirect
+                if (data.edgeMode || data.planType === 'edge') {
+                    console.log('[Login] Edge mode detected - skipping setup wizard check');
+                    
+                    // Show success message
+                    alertDiv.className = 'alert success';
+                    alertDiv.textContent = 'Login successful! Redirecting...';
+                    alertDiv.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/LE-dashboard.html';
+                    }, 1000);
+                    return;
+                }
+                
                 // Show success message
                 alertDiv.className = 'alert success';
                 alertDiv.textContent = 'Login successful! Redirecting...';
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    // Management platform users always use farm-admin.html (monitoring dashboard)
-                    // Farm server users use LE-dashboard.html (full hardware control)
-                    const planType = data.planType || localStorage.getItem('planType') || 'cloud';
-                    
-                    if (planType === 'cloud') {
-                        window.location.href = '/farm-admin.html';
-                    } else {
-                        window.location.href = '/LE-dashboard.html';
-                    }
+                    window.location.href = '/LE-dashboard.html'; // Use LE dashboard for cloud
                 }, 1000);
-                
+                                
             } catch (error) {
                 console.error('Login error:', error);
                 alertDiv.className = 'alert error';
