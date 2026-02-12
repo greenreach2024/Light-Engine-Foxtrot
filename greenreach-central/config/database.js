@@ -487,6 +487,17 @@ async function runMigrations(client) {
     } catch (err) {
       logger.warn('Grant analytics migration warning:', err.message);
     }
+
+    // Migration 014: Milestones + support letters JSONB columns
+    try {
+      await client.query(`
+        ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS milestones JSONB DEFAULT '[]';
+        ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS support_letters JSONB DEFAULT '[]';
+      `);
+      logger.info('Milestones & support letters columns ready (migration 014)');
+    } catch (err) {
+      logger.warn('Milestones migration warning:', err.message);
+    }
   }
 
   logger.info('Database migrations completed');
