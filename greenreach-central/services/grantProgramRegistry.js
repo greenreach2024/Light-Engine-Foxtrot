@@ -49,7 +49,7 @@ export const SEED_PROGRAMS = [
     intake_status: 'open',
     description: 'Funds pre-market innovation, including research, development, demonstration and commercialization activities.',
     objectives: 'Help develop and enable the pre-commercialization of clean technologies and processes to advance the agricultural sector towards a low-carbon economy.',
-    priority_areas: ['clean_technology', 'innovation', 'low_carbon_economy', 'GHG_reduction', 'precision_agriculture'],
+    priority_areas: ['clean_technology', 'innovation', 'low_carbon_economy', 'GHG_reduction', 'precision_agriculture', 'hiring', 'workforce'],
     eligibility_summary: 'For-profit and not-for-profit organizations, Indigenous communities, and academic institutions undertaking clean technology research for agriculture.',
     eligibility_rules: {
       organizationType: { type: 'includes', values: ['corporation','cooperative','non_profit','indigenous_organization','academic'], question: 'What type of organization are you?', failMessage: 'Must be an eligible entity type' }
@@ -125,7 +125,7 @@ export const SEED_PROGRAMS = [
     intake_status: 'open',
     description: 'Funds pre-commercial research and development projects that benefit the agriculture and agri-food sector and Canadians.',
     objectives: 'Support applied research addressing sector priorities and contributing to innovation in agriculture and agri-food.',
-    priority_areas: ['research', 'innovation', 'pre_commercial', 'sector_competitiveness'],
+    priority_areas: ['research', 'innovation', 'pre_commercial', 'sector_competitiveness', 'hiring', 'workforce'],
     eligibility_summary: 'Industry organizations, academic institutions, and for-profit entities proposing research projects aligned with SCAP priority areas.',
     funding_type: 'contribution',
     max_funding: 5000000,
@@ -206,7 +206,7 @@ export const SEED_PROGRAMS = [
     intake_deadline: '2025-10-30',
     description: 'Funds market validation ($30K) and product development ($50K-$150K) projects for Ontario-based agri-food organizations through the Ontario Agri-Food Research Initiative.',
     objectives: 'Conduct activities that enable and support the agriculture, agri-food, and agri-based products sector through market validation and product development.',
-    priority_areas: ['market_validation', 'product_development', 'commercialization', 'agri_food_innovation', 'clean_technology'],
+    priority_areas: ['market_validation', 'product_development', 'commercialization', 'agri_food_innovation', 'clean_technology', 'hiring'],
     eligibility_summary: 'Ontario-based for-profit, not-for-profit, universities, colleges, and research institutions. Projects must address Ontario agriculture research priority areas.',
     eligibility_rules: {
       province: { type: 'province_list', provinces: ['ON'], question: 'Is your organization located in Ontario?', failMessage: 'Must be located in Ontario' },
@@ -234,7 +234,7 @@ export const SEED_PROGRAMS = [
     intake_deadline: '2026-03-18',
     description: 'Non-repayable contributions of $40K-$100K for southern Ontario food and agri-food tech businesses to adopt clean technologies and sustainability enhancements.',
     objectives: 'Promote sustainability across value chains by de-risking adoption of clean technologies and integration of sustainable practices into operations.',
-    priority_areas: ['clean_technology', 'sustainability', 'decarbonization', 'food_processing', 'agri_food_tech'],
+    priority_areas: ['clean_technology', 'sustainability', 'decarbonization', 'food_processing', 'agri_food_tech', 'hiring'],
     eligibility_summary: 'For-profit or not-for-profit in southern Ontario, food/agri-food tech sector, $200K+ annual revenue, able to provide 60% match of project costs.',
     eligibility_rules: {
       province: { type: 'province_list', provinces: ['ON'], question: 'Is your business located in southern Ontario?', failMessage: 'Must be in southern Ontario' },
@@ -290,7 +290,7 @@ export const SEED_PROGRAMS = [
     intake_deadline: '2026-02-19',
     description: 'Non-repayable funding up to $100K (50% match) for early-stage companies to pilot and demonstrate innovative food technologies in southern Ontario.',
     objectives: 'Accelerate commercialization of innovative, IP-driven food technologies through in-market pilot projects across processing, foodservice, retail, and distribution.',
-    priority_areas: ['food_technology', 'pilot_projects', 'commercialization', 'food_manufacturing', 'food_safety', 'clean_technology'],
+    priority_areas: ['food_technology', 'pilot_projects', 'commercialization', 'food_manufacturing', 'food_safety', 'clean_technology', 'hiring'],
     eligibility_summary: 'Incorporated businesses in southern Ontario, <$5M annual revenue, food technology not yet commercialized, at TRL 6-7, CFIN member (free).',
     eligibility_rules: {
       province: { type: 'province_list', provinces: ['ON'], question: 'Is your business located in southern Ontario?', failMessage: 'Must be in southern Ontario' },
@@ -319,7 +319,7 @@ export const SEED_PROGRAMS = [
     intake_deadline: '2026-03-26',
     description: 'Up to $75K to support 12-month pilot collaborations between food tech innovators and leading Canadian food companies to test and validate solutions.',
     objectives: 'Directly address real-world business challenges identified by leading Canadian food companies through funded pilot projects with innovative SMEs.',
-    priority_areas: ['food_innovation', 'processing', 'preservation', 'smart_manufacturing', 'packaging', 'pilot_projects'],
+    priority_areas: ['food_innovation', 'processing', 'preservation', 'smart_manufacturing', 'packaging', 'pilot_projects', 'hiring'],
     eligibility_summary: 'Canadian SMEs with at least 1 year of incorporation, or academic researchers. Technology must be at TRL 3+ and align with call priorities.',
     eligibility_rules: {
       organizationType: { type: 'includes', values: ['corporation', 'cooperative', 'academic'], question: 'Are you an incorporated Canadian SME or academic?', failMessage: 'Must be Canadian SME (1+ year) or academic researcher' }
