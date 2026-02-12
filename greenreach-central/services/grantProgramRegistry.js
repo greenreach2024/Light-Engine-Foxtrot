@@ -194,6 +194,172 @@ export const SEED_PROGRAMS = [
     application_method: 'lender',
     required_documents: ['Proof of eligible agricultural product', 'Production records', 'Advance application through administrator'],
     priority_lexicon: ['cash advance', 'cash flow', 'market flexibility', 'interest-free']
+  },
+
+  // ---- Bioenterprise Canada programs ----
+  {
+    program_code: 'BIO-OAFRI-COMM',
+    program_name: 'OAFRI Commercialization Stream',
+    administering_agency: 'Bioenterprise Canada / Ontario Ministry of Agriculture',
+    source_url: 'https://bioenterprise.ca/programs/oafri/',
+    intake_status: 'closed',
+    intake_deadline: '2025-10-30',
+    description: 'Funds market validation ($30K) and product development ($50K-$150K) projects for Ontario-based agri-food organizations through the Ontario Agri-Food Research Initiative.',
+    objectives: 'Conduct activities that enable and support the agriculture, agri-food, and agri-based products sector through market validation and product development.',
+    priority_areas: ['market_validation', 'product_development', 'commercialization', 'agri_food_innovation', 'clean_technology'],
+    eligibility_summary: 'Ontario-based for-profit, not-for-profit, universities, colleges, and research institutions. Projects must address Ontario agriculture research priority areas.',
+    eligibility_rules: {
+      province: { type: 'province_list', provinces: ['ON'], question: 'Is your organization located in Ontario?', failMessage: 'Must be located in Ontario' },
+      organizationType: { type: 'includes', values: ['corporation', 'cooperative', 'non_profit', 'academic'], question: 'What type of organization?', failMessage: 'Must be an eligible entity' }
+    },
+    funding_type: 'contribution',
+    min_funding: 30000,
+    max_funding: 150000,
+    reimbursement_model: 'reimbursement',
+    application_method: 'portal',
+    application_url: 'https://agritechcentre.wufoo.com/forms/z1p1qgod1mp3dza/',
+    required_documents: ['Proposal Workbook', 'Budget Workbook', 'OAFRI Intake Form'],
+    priority_lexicon: ['market validation', 'product development', 'commercialization', 'agri-food innovation', 'Grow Ontario strategy', 'Sustainable CAP'],
+    evidence_snippets: [
+      { topic: 'Sustainable CAP funding', text: 'OAFRI is funded by the Governments of Canada and Ontario through the Sustainable Canadian Agricultural Partnership (Sustainable CAP), a five-year federal-provincial-territorial initiative.', source: 'Bioenterprise OAFRI page' }
+    ],
+    source_type: 'bioenterprise'
+  },
+  {
+    program_code: 'BIO-SGAP',
+    program_name: 'Sustainable Growth and Adoption Program (SGAP)',
+    administering_agency: 'Bioenterprise Canada / FedDev Ontario',
+    source_url: 'https://bioenterprise.ca/programs/sustainable-growth-and-adoption-program-sgap/',
+    intake_status: 'open',
+    intake_deadline: '2026-03-18',
+    description: 'Non-repayable contributions of $40K-$100K for southern Ontario food and agri-food tech businesses to adopt clean technologies and sustainability enhancements.',
+    objectives: 'Promote sustainability across value chains by de-risking adoption of clean technologies and integration of sustainable practices into operations.',
+    priority_areas: ['clean_technology', 'sustainability', 'decarbonization', 'food_processing', 'agri_food_tech'],
+    eligibility_summary: 'For-profit or not-for-profit in southern Ontario, food/agri-food tech sector, $200K+ annual revenue, able to provide 60% match of project costs.',
+    eligibility_rules: {
+      province: { type: 'province_list', provinces: ['ON'], question: 'Is your business located in southern Ontario?', failMessage: 'Must be in southern Ontario' },
+      organizationType: { type: 'includes', values: ['corporation', 'cooperative', 'non_profit'], question: 'Are you a for-profit or not-for-profit corporation?', failMessage: 'Must be an incorporated business' }
+    },
+    funding_type: 'contribution',
+    min_funding: 40000,
+    max_funding: 100000,
+    cost_share_ratio: '40:60',
+    reimbursement_model: 'reimbursement',
+    application_method: 'portal',
+    application_url: 'https://agritechcentre.wufoo.com/forms/z1rtd13818motvz/',
+    required_documents: ['Application Workbook', 'Budget Workbook', 'Sustainability Project Partner Statement of Work', 'Program Guide review'],
+    priority_lexicon: ['clean technology adoption', 'sustainability enhancement', 'decarbonization', 'net zero', 'clean growth', 'green operations'],
+    evidence_snippets: [
+      { topic: 'Federal investment', text: 'SGAP is supported by a $5.95-million Government of Canada investment through the Federal Economic Development Agency for Southern Ontario (FedDev Ontario).', source: 'Bioenterprise SGAP page' }
+    ],
+    source_type: 'bioenterprise'
+  },
+  {
+    program_code: 'BIO-GREENSHOOTS',
+    program_name: 'GreenShoots',
+    administering_agency: 'Bioenterprise Canada / Invest Nova Scotia',
+    source_url: 'https://bioenterprise.ca/programs/greenshoots/',
+    intake_status: 'closed',
+    intake_deadline: '2025-02-28',
+    description: 'Up to $40K in non-repayable, non-dilutive funding plus business guidance for high-potential, early-stage knowledge-based agri-tech companies in Nova Scotia.',
+    objectives: 'Find and support high-potential, early-stage knowledge-based Nova Scotia companies and encourage entrepreneurial activity in the province.',
+    priority_areas: ['early_stage', 'agri_tech', 'bioeconomy', 'clean_technology', 'startup_support'],
+    eligibility_summary: 'Nova Scotia registered company, TRL 4+, for-profit, agri-tech or bioeconomy, <$1M cumulative sales, majority owner works full-time.',
+    eligibility_rules: {
+      province: { type: 'province_list', provinces: ['NS'], question: 'Is your company registered in Nova Scotia?', failMessage: 'Must be registered in or have significant presence in Nova Scotia' }
+    },
+    funding_type: 'grant',
+    max_funding: 40000,
+    application_method: 'portal',
+    application_url: 'https://investns.formtitan.com/ftproject/greenshoots-application-2025',
+    required_documents: ['Application Form', 'Revenue and payroll information', 'Pitch presentation (Phase 2)'],
+    priority_lexicon: ['early-stage', 'knowledge-based', 'scale-up', 'export potential', 'rural economic impact', 'climate change'],
+    evidence_snippets: [
+      { topic: 'Multi-partner support', text: 'GreenShoots is a partnership between Invest Nova Scotia, the Greenspring Bioinnovation Hub, and Bioenterprise Canada to support early-stage agri-tech ventures.', source: 'Bioenterprise GreenShoots page' }
+    ],
+    source_type: 'bioenterprise'
+  },
+
+  // ---- CFIN (Canadian Food Innovation Network) programs ----
+  {
+    program_code: 'CFIN-OFTP',
+    program_name: 'Ontario Food Technology Pilot',
+    administering_agency: 'Canadian Food Innovation Network (CFIN) / FedDev Ontario',
+    source_url: 'https://www.cfin-rcia.ca/funding/ontario-food-technology-pilot',
+    intake_status: 'open',
+    intake_deadline: '2026-02-19',
+    description: 'Non-repayable funding up to $100K (50% match) for early-stage companies to pilot and demonstrate innovative food technologies in southern Ontario.',
+    objectives: 'Accelerate commercialization of innovative, IP-driven food technologies through in-market pilot projects across processing, foodservice, retail, and distribution.',
+    priority_areas: ['food_technology', 'pilot_projects', 'commercialization', 'food_manufacturing', 'food_safety', 'clean_technology'],
+    eligibility_summary: 'Incorporated businesses in southern Ontario, <$5M annual revenue, food technology not yet commercialized, at TRL 6-7, CFIN member (free).',
+    eligibility_rules: {
+      province: { type: 'province_list', provinces: ['ON'], question: 'Is your business located in southern Ontario?', failMessage: 'Must be in southern Ontario' },
+      organizationType: { type: 'includes', values: ['corporation'], question: 'Is your business incorporated?', failMessage: 'Must be an incorporated business' }
+    },
+    funding_type: 'contribution',
+    min_funding: 10000,
+    max_funding: 100000,
+    cost_share_ratio: '50:50',
+    reimbursement_model: 'reimbursement',
+    application_method: 'portal',
+    application_url: 'https://www.cfin-rcia.ca/funding/ontario-food-technology-pilot',
+    required_documents: ['CFIN membership (free)', 'Application form', 'IP strategy/plan', 'Project partner identified', 'Program Guide review'],
+    priority_lexicon: ['food technology pilot', 'food manufacturing', 'food waste', 'digital supply chain', 'food safety', 'traceability', 'NextGen ingredients', 'food packaging', 'cleantech'],
+    evidence_snippets: [
+      { topic: 'FedDev partnership', text: 'The Ontario Food Technology Pilot is delivered by CFIN and funded in part by the Government of Canada through the Federal Economic Development Agency for Southern Ontario (FedDev Ontario).', source: 'CFIN OFTP page' }
+    ],
+    source_type: 'cfin'
+  },
+  {
+    program_code: 'CFIN-ISF',
+    program_name: 'Innovation Scouting Fund',
+    administering_agency: 'Canadian Food Innovation Network (CFIN)',
+    source_url: 'https://www.cfin-rcia.ca/funding/innovation-scouting-fund',
+    intake_status: 'open',
+    intake_deadline: '2026-03-26',
+    description: 'Up to $75K to support 12-month pilot collaborations between food tech innovators and leading Canadian food companies to test and validate solutions.',
+    objectives: 'Directly address real-world business challenges identified by leading Canadian food companies through funded pilot projects with innovative SMEs.',
+    priority_areas: ['food_innovation', 'processing', 'preservation', 'smart_manufacturing', 'packaging', 'pilot_projects'],
+    eligibility_summary: 'Canadian SMEs with at least 1 year of incorporation, or academic researchers. Technology must be at TRL 3+ and align with call priorities.',
+    eligibility_rules: {
+      organizationType: { type: 'includes', values: ['corporation', 'cooperative', 'academic'], question: 'Are you an incorporated Canadian SME or academic?', failMessage: 'Must be Canadian SME (1+ year) or academic researcher' }
+    },
+    funding_type: 'contribution',
+    max_funding: 75000,
+    application_method: 'portal',
+    application_url: 'https://www.cfin-rcia.ca/funding/innovation-scouting-fund',
+    required_documents: ['CFIN membership (free)', 'Proposed solution outline', 'TRL evidence', 'Program Guide review', 'Call Details alignment'],
+    priority_lexicon: ['innovation scouting', 'pilot project', 'food processing', 'preservation', 'smart manufacturing', 'AI quality', 'active packaging'],
+    evidence_snippets: [
+      { topic: 'Industry-matched funding', text: 'Each Innovation Scouting Fund call is sponsored by a potential technology adopter (food manufacturer, distributor, retailer) who collaborates directly with the winning innovator.', source: 'CFIN ISF page' }
+    ],
+    source_type: 'cfin'
+  },
+  {
+    program_code: 'CFIN-UNPUZZLING',
+    program_name: 'Unpuzzling: Foodtech Ontario',
+    administering_agency: 'Canadian Food Innovation Network (CFIN) / FedDev Ontario',
+    source_url: 'https://www.cfin-rcia.ca/unpuzzling-foodtech-ontario',
+    intake_status: 'upcoming',
+    intake_opens: '2026-02-26',
+    intake_deadline: '2026-04-02',
+    description: '12-week mentorship and peer cohort ($750) for up to 12 early-stage foodtech entrepreneurs in southern Ontario — expert sessions, mentorship, investor connections, and IP consulting.',
+    objectives: 'Support early-stage foodtech entrepreneurs as they prepare to scale and commercialize their innovations through mentorship, peer learning, and industry connections.',
+    priority_areas: ['mentorship', 'commercialization', 'food_technology', 'startup_acceleration', 'IP_strategy'],
+    eligibility_summary: 'Incorporated Canadian businesses in southern Ontario, post-farmgate food innovation space, CFIN member (free). $750 program fee.',
+    eligibility_rules: {
+      province: { type: 'province_list', provinces: ['ON'], question: 'Is your business in southern Ontario?', failMessage: 'Must operate in southern Ontario' },
+      organizationType: { type: 'includes', values: ['corporation', 'cooperative'], question: 'Is your business incorporated?', failMessage: 'Must be an incorporated Canadian business' }
+    },
+    funding_type: 'grant',
+    application_method: 'portal',
+    application_url: 'https://www.surveymonkey.com/r/unpuzzling-foodtech-ontario',
+    required_documents: ['Application form', 'CFIN membership (free)'],
+    priority_lexicon: ['mentorship', 'peer cohort', 'IP strategy', 'investor readiness', 'food commercialization', 'startup scaling', 'market entry'],
+    evidence_snippets: [
+      { topic: 'FedDev partnership', text: 'Unpuzzling: Foodtech Ontario is a collaborative initiative led by CFIN and funded in part by the Government of Canada through FedDev Ontario, created to turn early-stage food innovation into market-ready solutions.', source: 'CFIN Unpuzzling page' }
+    ],
+    source_type: 'cfin'
   }
 ];
 
