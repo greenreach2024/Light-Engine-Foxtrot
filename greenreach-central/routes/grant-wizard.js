@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import OpenAI from 'openai';
 import PDFDocument from 'pdfkit';
 import logger from '../utils/logger.js';
+import { getDatabase } from '../config/database.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
@@ -62,7 +63,11 @@ function authenticateGrantUser(req, res, next) {
 // Helper: get DB pool
 // ============================================================
 function getPool(req) {
-  return req.app.locals?.db;
+  try {
+    return getDatabase();
+  } catch {
+    return null;
+  }
 }
 
 // ============================================================
