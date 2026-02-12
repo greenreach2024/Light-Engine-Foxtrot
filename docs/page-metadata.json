@@ -1,0 +1,845 @@
+{
+  "generatedAt": "2026-02-12T01:28:10.826Z",
+  "pages": [
+    {
+      "path": "public/about.html",
+      "section": "public",
+      "title": "About GreenReach - Research & Food Security Solutions",
+      "metaDesc": null,
+      "h1": "About GreenReach",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/activity-hub-qr.html",
+      "section": "public",
+      "title": "Activity Hub Setup - Light Engine",
+      "metaDesc": null,
+      "h1": "📱 Activity Hub Setup",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/ai-agent-test.html",
+      "section": "public",
+      "title": "AI Agent Test - Light Engine",
+      "metaDesc": null,
+      "h1": "🤖 AI Agent Test Interface",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": true
+    },
+    {
+      "path": "public/anomaly-diagnostics-demo.html",
+      "section": "public",
+      "title": "Anomaly Diagnostics | Light Engine Foxtrot",
+      "metaDesc": null,
+      "h1": "Anomaly Diagnostics",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/clear-cache.html",
+      "section": "public",
+      "title": "Clear Cache & Logout",
+      "metaDesc": null,
+      "h1": "🔄 Clear Cache & Logout",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/downloads.html",
+      "section": "public",
+      "title": "Redirecting to Downloads...",
+      "metaDesc": null,
+      "h1": "Redirecting...",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/farm-admin-login.html",
+      "section": "public",
+      "title": "Farm Admin Sign In - Light Engine",
+      "metaDesc": null,
+      "h1": "Sign In to Your Farm",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/farm-admin.html",
+      "section": "public",
+      "title": "Farm Admin - Light Engine",
+      "metaDesc": null,
+      "h1": "Farm Admin Dashboard",
+      "hasAuthGuard": true,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/farm-sales-landing.html",
+      "section": "public",
+      "title": null,
+      "metaDesc": "Shop fresh, locally grown produce directly from our farm. Sustainable farming practices, delivered to your door.",
+      "h1": "Farm Fresh.<br>Locally Grown.",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/farm-sales-pos.html",
+      "section": "public",
+      "title": "Farm Sales Terminal",
+      "metaDesc": null,
+      "h1": "Farm Sales Terminal",
+      "hasAuthGuard": true,
+      "hasSquare": true,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/farm-sales-shop.html",
+      "section": "public",
+      "title": "Farm Shop - Fresh Local Produce",
+      "metaDesc": null,
+      "h1": "Fresh Farm Produce",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/farm-sales-store.html",
+      "section": "public",
+      "title": "Farm Online Store",
+      "metaDesc": null,
+      "h1": "🌱 Farm Store",
+      "hasAuthGuard": false,
+      "hasSquare": true,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/farm-vitality.html",
+      "section": "public",
+      "title": "Farm Vitality Dashboard - Light Engine",
+      "metaDesc": null,
+      "h1": "Farm Vitality",
+      "hasAuthGuard": true,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/farm-wall-cad-renderer.html",
+      "section": "public",
+      "title": "Farm Wall CAD Renderer - Professional Layout Tool",
+      "metaDesc": null,
+      "h1": "🏗️ Farm Wall CAD Renderer",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-admin.html",
+      "section": "public",
+      "title": "GreenReach Wholesale Admin",
+      "metaDesc": null,
+      "h1": "GreenReach Wholesale Admin",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-central-admin-login.html",
+      "section": "public",
+      "title": "Admin Login - GreenReach Central",
+      "metaDesc": null,
+      "h1": "🔐 GreenReach Central",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-central-admin.html",
+      "section": "public",
+      "title": "GreenReach Central Operations",
+      "metaDesc": null,
+      "h1": "Operations Overview",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-farm-performance.html",
+      "section": "public",
+      "title": "Farm Performance Dashboard - Light Engine",
+      "metaDesc": null,
+      "h1": "Farm Performance Dashboard",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-wholesale-admin.html",
+      "section": "public",
+      "title": "Wholesale Admin - GreenReach",
+      "metaDesc": null,
+      "h1": "Wholesale Buyers Management",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-wholesale-farm-performance.html",
+      "section": "public",
+      "title": "Farm Performance Dashboard - Light Engine",
+      "metaDesc": null,
+      "h1": "Farm Performance Dashboard",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-wholesale-integrations.html",
+      "section": "public",
+      "title": "Farm Integrations - Light Engine",
+      "metaDesc": null,
+      "h1": "GreenReach Integrations",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-wholesale-legacy.html",
+      "section": "public",
+      "title": "GreenReach Wholesale | Order Fresh Produce",
+      "metaDesc": null,
+      "h1": "GreenReach Wholesale",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-wholesale-order-review.html",
+      "section": "public",
+      "title": "Review Order Modifications",
+      "metaDesc": null,
+      "h1": "Review Order Modifications",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/GR-wholesale.html",
+      "section": "public",
+      "title": "GreenReach Wholesale | Order Fresh Produce",
+      "metaDesc": null,
+      "h1": "GreenReach Wholesale",
+      "hasAuthGuard": false,
+      "hasSquare": true,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/greenreach-org.html",
+      "section": "public",
+      "title": "GreenReach | Building Canadian Food Sovereignty",
+      "metaDesc": "An agri research-and-development organization building practical tools to strengthen Canadian food sovereignty—by supporting local farms and scaling fresh produce production.",
+      "h1": "Building Canadian Food Sovereignty",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/grow-and-sell.html",
+      "section": "public",
+      "title": "Grow & Sell | GreenReach Wholesale Portal",
+      "metaDesc": "Built-in demand for your harvest. Wholesale portal and online sales terminal connecting farmers directly to buyers—better margins, local markets, complete control.",
+      "h1": "Built-in demand<br/>for every harvest",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/growing-made-easy.html",
+      "section": "public",
+      "title": "Growing Made Easy | Light Engine by GreenReach",
+      "metaDesc": "Light Engine - Fully automated grow management from seed to harvest. Click to plant, click to harvest. Light Engine looks after everything else.",
+      "h1": "Growing Made Easy",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/health-dashboard.html",
+      "section": "public",
+      "title": "System Health Dashboard",
+      "metaDesc": null,
+      "h1": "🔍 System Health Dashboard",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/index.charlie.html",
+      "section": "public",
+      "title": "Home - Light Engine",
+      "metaDesc": null,
+      "h1": "Light Engine Foxtrot",
+      "hasAuthGuard": true,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/index.html",
+      "section": "public",
+      "title": "Light Engine",
+      "metaDesc": null,
+      "h1": null,
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/landing-cloud.html",
+      "section": "public",
+      "title": "Light Engine Cloud - Farm Management Software | Inventory, POS & Online Sales",
+      "metaDesc": "Simple farm management with inventory tracking, point-of-sale, online store, and wholesale marketplace. Desktop, mobile, and cloud apps for small to medium farms.",
+      "h1": "Complete<br><span class=\"hero-highlight\">Seed-to-Sale Efficiency</span>",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/landing-downloads.html",
+      "section": "public",
+      "title": "Download Light Engine - Installers for All Platforms",
+      "metaDesc": null,
+      "h1": "Download Light Engine",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/landing-edge.html",
+      "section": "public",
+      "title": "Light Engine Edge - Complete Farm Automation | Professional Vertical Farm Control",
+      "metaDesc": "Enterprise-grade climate control, lighting automation, and ML-powered monitoring for commercial vertical farms. DMX512, Modbus RTU, and IoT sensor integration with touchscreen control.",
+      "h1": "Complete Farm<br>Automation",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/landing-home.html",
+      "section": "public",
+      "title": "Light Engine - Farm Management Solutions",
+      "metaDesc": null,
+      "h1": "The foundation for smarter farms.",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/landing-main.html",
+      "section": "public",
+      "title": "Light Engine - Farm Management Solutions",
+      "metaDesc": null,
+      "h1": "The foundation for smarter farms.",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/landing-purchase-success.html",
+      "section": "public",
+      "title": "Purchase Complete - Light Engine",
+      "metaDesc": null,
+      "h1": "Payment Successful!",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/landing-purchase.html",
+      "section": "public",
+      "title": "Purchase Light Engine - Farm Management Solutions",
+      "metaDesc": null,
+      "h1": "Choose Your Platform",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-admin-legacy.html",
+      "section": "public",
+      "title": "Farm Admin - Light Engine",
+      "metaDesc": null,
+      "h1": "GreenReach Multi-Farm Monitoring Platform",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-ai-agent-test.html",
+      "section": "public",
+      "title": "AI Agent Test - Light Engine",
+      "metaDesc": null,
+      "h1": "🤖 AI Agent Test Interface",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": true
+    },
+    {
+      "path": "public/LE-billing.html",
+      "section": "public",
+      "title": "Billing & Subscription - Light Engine",
+      "metaDesc": null,
+      "h1": "💳 Billing & Subscription",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-create-test-farm.html",
+      "section": "public",
+      "title": "Create Test Farm - AWS",
+      "metaDesc": null,
+      "h1": "Create Test Farm on AWS",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-dashboard.html",
+      "section": "public",
+      "title": "Setup/Update - Light Engine",
+      "metaDesc": null,
+      "h1": "",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-downloads.html",
+      "section": "public",
+      "title": "Downloads - Light Engine",
+      "metaDesc": null,
+      "h1": "Desktop Application Downloads",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-farm-admin.html",
+      "section": "public",
+      "title": "Farm Admin - Light Engine",
+      "metaDesc": null,
+      "h1": "Farm Admin Dashboard",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-migration-wizard.html",
+      "section": "public",
+      "title": "Cloud to Edge Migration - Light Engine",
+      "metaDesc": null,
+      "h1": "🌱 Cloud to Edge Migration",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-notification-settings.html",
+      "section": "public",
+      "title": "Notification Settings - Light Engine",
+      "metaDesc": null,
+      "h1": "Notification Settings",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-notifications.html",
+      "section": "public",
+      "title": "Notification Settings - Light Engine",
+      "metaDesc": null,
+      "h1": "Notification Settings",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-offline.html",
+      "section": "public",
+      "title": "Offline - Light Engine",
+      "metaDesc": null,
+      "h1": "You're Offline",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-qr-generator.html",
+      "section": "public",
+      "title": "QR Code Bulk Generator - Light Engine Foxtrot",
+      "metaDesc": null,
+      "h1": "QR Code Bulk Generator",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-setup-wizard-legacy.html",
+      "section": "public",
+      "title": "GreenReach Setup Wizard",
+      "metaDesc": null,
+      "h1": "Welcome to GreenReach!",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-switchbot.html",
+      "section": "public",
+      "title": "SwitchBot Device Manager - Light Engine Charlie",
+      "metaDesc": null,
+      "h1": "SwitchBot Device Manager",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-vpd.html",
+      "section": "public",
+      "title": "VPD Automation Dashboard",
+      "metaDesc": null,
+      "h1": "VPD Automation",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-wholesale-orders.html",
+      "section": "public",
+      "title": "Wholesale Orders - Farm Dashboard",
+      "metaDesc": null,
+      "h1": "Wholesale Orders Dashboard",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LE-wholesale-review.html",
+      "section": "public",
+      "title": "Review Order Modifications",
+      "metaDesc": null,
+      "h1": "Review Order Modifications",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/LEMarketing-downloads.html",
+      "section": "public",
+      "title": "Download Light Engine - Installers for All Platforms",
+      "metaDesc": null,
+      "h1": "Download Light Engine",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/login.html",
+      "section": "public",
+      "title": "Login - Light Engine",
+      "metaDesc": null,
+      "h1": "Welcome Back",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/purchase-success.html",
+      "section": "public",
+      "title": "Purchase Complete - Light Engine",
+      "metaDesc": null,
+      "h1": "Payment Successful!",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/purchase-test.html",
+      "section": "public",
+      "title": "Purchase Flow Test",
+      "metaDesc": null,
+      "h1": "🧪 Purchase Flow Diagnostic Tool",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/purchase.html",
+      "section": "public",
+      "title": "Purchase Light Engine - Farm Management Solutions",
+      "metaDesc": null,
+      "h1": "Choose Your Platform",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/schedule.html",
+      "section": "public",
+      "title": "Schedule a Call | GreenReach",
+      "metaDesc": "Book a consultation with the GreenReach team to discuss growing solutions, wholesale opportunities, or Light Engine technology.",
+      "h1": "Schedule a Call",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/setup-wizard-old.html",
+      "section": "public",
+      "title": "Setup Wizard - Light Engine",
+      "metaDesc": null,
+      "h1": "Welcome to Light Engine",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/setup-wizard.html",
+      "section": "public",
+      "title": "Light Engine Setup",
+      "metaDesc": null,
+      "h1": null,
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/test-LE-footer.html",
+      "section": "public",
+      "title": "Footer Test",
+      "metaDesc": null,
+      "h1": "Footer Grid Test",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/test-LE-matrix-solver.html",
+      "section": "public",
+      "title": "Matrix Solver Test",
+      "metaDesc": null,
+      "h1": "Matrix Solver Test Suite",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/test-scanner.html",
+      "section": "public",
+      "title": "Scanner Test",
+      "metaDesc": null,
+      "h1": "Device Scanner Test",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/test-wizard.html",
+      "section": "public",
+      "title": "Test Wizard - Light Engine",
+      "metaDesc": null,
+      "h1": "🧪 Wizard Test Page",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/wholesale-about.html",
+      "section": "public",
+      "title": "About GreenReach | Research-First Food Security Solutions",
+      "metaDesc": "GreenReach is a multidisciplinary organization focused on building validated tools and business models that advance food security and food sovereignty.",
+      "h1": "About GreenReach",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/wholesale-landing.html",
+      "section": "public",
+      "title": "GreenReach Wholesale | Farm-Fresh Produce, Simplified",
+      "metaDesc": "Connect with local boutique growers. Order fresh, sustainable produce with consistent fulfillment from multiple farms. Built for restaurants, retailers, and food service.",
+      "h1": "Fresh. Local. Simple.",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/wholesale-learn-more.html",
+      "section": "public",
+      "title": "GreenReach | Learn More",
+      "metaDesc": "Discover how GreenReach serves grocers, restaurants, food security organizations, and growers with reliable, traceable, local food systems.",
+      "h1": "Built for Everyone in the Local Food System",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/wholesale.html",
+      "section": "public",
+      "title": "GreenReach Wholesale | Order Fresh Produce",
+      "metaDesc": null,
+      "h1": "GreenReach Wholesale",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/fan-rotation-monitor.html",
+      "section": "public/views",
+      "title": "Fan Rotation Monitor - Light Engine Charlie",
+      "metaDesc": null,
+      "h1": "🌀 Fan Rotation Monitor",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/farm-inventory.html",
+      "section": "public/views",
+      "title": "Farm Inventory | Light Engine",
+      "metaDesc": null,
+      "h1": "Farm Inventory Dashboard",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/farm-maintenance-checklist.html",
+      "section": "public/views",
+      "title": "Farm Maintenance Checklist | Light Engine",
+      "metaDesc": null,
+      "h1": "Farm Maintenance Checklist",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/farm-summary.html",
+      "section": "public/views",
+      "title": "Farm Summary - Light Engine",
+      "metaDesc": null,
+      "h1": "Farm Room Summary",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/field-mapping.html",
+      "section": "public/views",
+      "title": "Field Mapping Matrix - Light Engine Charlie",
+      "metaDesc": null,
+      "h1": "Field Mapping Matrix",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/iot-manager.html",
+      "section": "public/views",
+      "title": null,
+      "metaDesc": null,
+      "h1": null,
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/nutrient-management.html",
+      "section": "public/views",
+      "title": "Nutrient Management - Light Engine",
+      "metaDesc": null,
+      "h1": "Nutrient Management",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/planting-scheduler.html",
+      "section": "public/views",
+      "title": "Planting Scheduler - Light Engine",
+      "metaDesc": null,
+      "h1": "Planting Scheduler",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/procurement-portal.html",
+      "section": "public/views",
+      "title": "Procurement Portal | Light Engine",
+      "metaDesc": null,
+      "h1": "Procurement Portal",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/room-heatmap.html",
+      "section": "public/views",
+      "title": "Heat Map - Light Engine",
+      "metaDesc": null,
+      "h1": "Environmental Heat Map",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/room-mapper.html",
+      "section": "public/views",
+      "title": "Room Mapper - Light Engine Charlie",
+      "metaDesc": null,
+      "h1": "Room Mapper <span style=\"font-size: 0.5em; color: #10b981;\">v7 EQUIP</span> <span id=\"vp\" style=\"font-size: 0.4em; color: #f59e0b;\"></span>",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/tray-inventory-old-backup.html",
+      "section": "public/views",
+      "title": "Tray Assignments | Light Engine",
+      "metaDesc": null,
+      "h1": "Tray Assignments",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/tray-inventory.html",
+      "section": "public/views",
+      "title": "Activity Hub - Light Engine",
+      "metaDesc": null,
+      "h1": "Activity Hub",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    },
+    {
+      "path": "public/views/tray-setup.html",
+      "section": "public/views",
+      "title": "Tray Setup - Light Engine",
+      "metaDesc": null,
+      "h1": "Tray Setup",
+      "hasAuthGuard": false,
+      "hasSquare": false,
+      "hasAiAgent": false
+    }
+  ]
+}

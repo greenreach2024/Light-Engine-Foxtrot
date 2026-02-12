@@ -4,28 +4,21 @@
       "id": "room-3xxjln",
       "name": "Your Grow Room",
       "type": "vertical",
-      "capacity": 100,
+      "trays": 16,
       "zones": [
         {
           "id": "room-3xxjln-z1",
           "name": "Zone 1",
-          "zone": 1
+          "zone": "1"
         }
       ],
-      "fixtures": [
-        {
-          "name": "GROW3 Pro 640",
-          "vendor": "Light Engine",
-          "model": "GROW3 Pro 640",
-          "spectrum": "dynamic",
-          "count": 4
-        }
-      ]
+      "groups": 4,
+      "plants": 192
     }
   ],
   "metadata": {
-    "lastUpdated": "2026-02-10T12:00:00.000Z",
+    "lastUpdated": "2026-02-11T17:33:15.802Z",
     "version": "1.0",
-    "source": "local"
+    "source": "cloud_restore"
   }
 }
