@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Production Calculator | GreenReach</title>
+  <meta name="description" content="Generate investor-grade financial projections for your vertical farm. CAPEX, OPEX, revenue forecasts, and sensitivity analysis.">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+      --error: #d32f2f;
+      --success: #2e7d32;
+      --warning: #f57c00;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.47; font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Nav */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(251,251,253,0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000; border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .nav-content {
+      max-width: 1000px; margin: 0 auto; padding: 0 22px; height: 44px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .nav-brand { font-size: 14px; font-weight: 700; color: var(--primary); text-decoration: none; }
+    .nav-link { font-size: 12px; color: var(--text-light); text-decoration: none; }
+    .nav-link:hover { color: var(--primary); }
+
+    /* Layout */
+    .container { max-width: 1000px; margin: 0 auto; padding: 66px 22px 40px; }
+    .page-title { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
+    .page-subtitle { font-size: 15px; color: var(--text-light); margin-bottom: 32px; }
+
+    /* Cards */
+    .card {
+      background: var(--surface); border-radius: 18px; padding: 28px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04); border: 1px solid #e5e5ea;
+      margin-bottom: 20px;
+    }
+    .card h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .card-desc { font-size: 13px; color: var(--text-light); margin-bottom: 20px; }
+
+    /* Form elements */
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+    input[type="number"], select {
+      width: 100%; padding: 10px 12px; border: 1px solid #d2d2d7; border-radius: 10px;
+      font-size: 15px; background: var(--surface); transition: border-color 0.2s;
+    }
+    input[type="number"]:focus, select:focus { outline: none; border-color: var(--accent); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .form-group { margin-bottom: 16px; }
+    .form-hint { font-size: 11px; color: var(--text-light); margin-top: 3px; }
+
+    /* Range slider */
+    input[type="range"] {
+      -webkit-appearance: none; width: 100%; height: 6px; border-radius: 3px;
+      background: #e5e5ea; outline: none; margin: 8px 0 4px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+      background: var(--primary); cursor: pointer; border: 3px solid white;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.2s;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: #1e3a0e; }
+    .btn-secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+    .btn-secondary:hover { background: rgba(45,80,22,0.06); }
+    .btn-success { background: var(--success); color: white; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Crop allocation */
+    .crop-row {
+      display: grid; grid-template-columns: 160px 1fr 60px 40px; gap: 10px;
+      align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0;
+    }
+    .crop-row:last-child { border-bottom: none; }
+    .crop-remove { background: none; border: none; color: var(--error); cursor: pointer; font-size: 18px; padding: 4px; }
+    .crop-add { font-size: 13px; margin-top: 8px; padding: 8px 16px; }
+
+    /* Results */
+    .results-section { display: none; }
+    .results-section.visible { display: block; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card {
+      background: var(--bg); border-radius: 12px; padding: 16px; text-align: center;
+      border: 1px solid #e5e5ea;
+    }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--primary); }
+    .stat-label { font-size: 11px; color: var(--text-light); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card.negative .stat-value { color: var(--error); }
+    .stat-card.positive .stat-value { color: var(--success); }
+
+    /* Tables */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+    .data-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e5e5ea; font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--text-light); }
+    .data-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table .total-row td { font-weight: 700; border-top: 2px solid var(--primary); padding-top: 12px; }
+    .data-table .amount { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Chart containers */
+    .chart-container { position: relative; height: 280px; margin: 16px 0; }
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 700px) { .chart-row { grid-template-columns: 1fr; } }
+
+    /* Sensitivity matrix */
+    .sensitivity-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; border: 1px solid #e5e5ea; border-radius: 12px; overflow: hidden; margin-top: 12px; }
+    .sens-header { background: var(--bg); padding: 10px; font-weight: 700; font-size: 12px; text-align: center; border-bottom: 1px solid #e5e5ea; }
+    .sens-cell { padding: 12px; text-align: center; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+    .sens-cell.positive { color: var(--success); font-weight: 600; }
+    .sens-cell.negative { color: var(--error); font-weight: 600; }
+    .sens-label { font-size: 11px; color: var(--text-light); }
+
+    /* Wizard link banner */
+    .wizard-banner {
+      background: linear-gradient(135deg, rgba(45,80,22,0.06) 0%, rgba(130,195,65,0.08) 100%);
+      border: 1px solid rgba(130,195,65,0.3); border-radius: 14px; padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px;
+    }
+    .wizard-banner p { font-size: 14px; color: var(--text); }
+
+    /* Loading */
+    .loading-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(251,251,253,0.85); z-index: 2000;
+      justify-content: center; align-items: center; flex-direction: column;
+    }
+    .loading-overlay.visible { display: flex; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #e5e5ea; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .form-row { grid-template-columns: 1fr; }
+      .stat-grid { grid-template-columns: 1fr 1fr; }
+      .crop-row { grid-template-columns: 120px 1fr 50px 30px; gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-content">
+    <a href="/grant-wizard.html" class="nav-brand">🌱 GreenReach</a>
+    <div style="display:flex; gap:16px; align-items:center;">
+      <a href="/grant-wizard.html" class="nav-link">← Back to Grant Wizard</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+  <h1 class="page-title">Production Calculator</h1>
+  <p class="page-subtitle">Generate investor-grade financial projections for your vertical farm</p>
+
+  <!-- ─── INPUT SECTION ─────────────────────────────────────────────── -->
+
+  <div class="card" id="inputSection">
+    <h2>Farm Configuration</h2>
+    <p class="card-desc">Set your production scale, crop mix, and location. We'll calculate everything else.</p>
+
+    <!-- Scale -->
+    <div class="form-group">
+      <label>Production Scale — <span id="trayDisplay">100</span> trays (<span id="plantDisplay">3,000</span> plants)</label>
+      <input type="range" id="numTrays" min="10" max="2000" value="100" step="10" oninput="updateTrayDisplay()">
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-light);">
+        <span>10 trays</span><span>500</span><span>1,000</span><span>2,000 trays</span>
+      </div>
+    </div>
+
+    <!-- Crop Mix -->
+    <div class="form-group" style="margin-top:24px;">
+      <label>Crop Allocation</label>
+      <p class="form-hint">Distribute your trays across crops. Total must equal <span id="trayTarget">100</span>.</p>
+      <div id="cropAllocation">
+        <!-- Populated by JS -->
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+        <button class="btn btn-secondary crop-add" onclick="addCrop()">+ Add Crop</button>
+        <span style="font-size:13px;" id="allocationStatus">✓ Allocated: 100 / 100</span>
+      </div>
+    </div>
+
+    <!-- Location & Facility -->
+    <div class="form-row" style="margin-top:24px;">
+      <div class="form-group">
+        <label>Province</label>
+        <select id="province">
+          <option value="ON">Ontario ($0.12/kWh)</option>
+          <option value="QC">Quebec ($0.07/kWh)</option>
+          <option value="BC">British Columbia ($0.09/kWh)</option>
+          <option value="AB">Alberta ($0.11/kWh)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Facility</label>
+        <select id="facilityType" onchange="toggleRent()">
+          <option value="owned">Owned (no rent)</option>
+          <option value="rented">Rented</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row" id="rentRow" style="display:none;">
+      <div class="form-group">
+        <label>Rent ($/sq ft/month)</label>
+        <input type="number" id="rentPerSqFt" value="1.50" step="0.25" min="0">
+      </div>
+      <div class="form-group">
+        <label>Facility Size (sq ft)</label>
+        <input type="number" id="facilitySize" value="800" min="100" step="100">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Automation Level</label>
+      <select id="automationTier">
+        <option value="basic">Basic ($3K — sensors + controller)</option>
+        <option value="advanced">Advanced ($8K + cameras)</option>
+      </select>
+    </div>
+
+    <div style="margin-top:24px; display:flex; gap:12px;">
+      <button class="btn btn-primary" onclick="runCalculation()" id="calcBtn">📊 Calculate Projections</button>
+    </div>
+  </div>
+
+  <!-- ─── RESULTS SECTION ───────────────────────────────────────────── -->
+
+  <div class="results-section" id="resultsSection">
+
+    <!-- Summary Stats -->
+    <div class="card">
+      <h2>Summary</h2>
+      <div class="stat-grid" id="summaryStats"></div>
+    </div>
+
+    <!-- CAPEX -->
+    <div class="card">
+      <h2>Capital Expenditure (CAPEX)</h2>
+      <p class="card-desc">One-time setup costs to build your vertical farm</p>
+      <div class="chart-row">
+        <div class="chart-container"><canvas id="capexChart"></canvas></div>
+        <div><table class="data-table" id="capexTable"></table></div>
+      </div>
+    </div>
+
+    <!-- OPEX -->
+    <div class="card">
+      <h2>Monthly Operating Costs (OPEX)</h2>
+      <p class="card-desc">Recurring monthly expenses at full capacity</p>
+      <div class="chart-row">
+        <div class="chart-container"><canvas id="opexChart"></canvas></div>
+        <div><table class="data-table" id="opexTable"></table></div>
+      </div>
+    </div>
+
+    <!-- Revenue -->
+    <div class="card">
+      <h2>Monthly Revenue</h2>
+      <p class="card-desc">Projected wholesale revenue by crop type</p>
+      <table class="data-table" id="revenueTable"></table>
+    </div>
+
+    <!-- 5-Year Projection -->
+    <div class="card">
+      <h2>5-Year Financial Projection</h2>
+      <p class="card-desc">Based on capacity ramp-up (50% → 75% → 90%) with inflation adjustments</p>
+      <div class="chart-container" style="height:320px;"><canvas id="projectionChart"></canvas></div>
+      <table class="data-table" id="projectionTable"></table>
+    </div>
+
+    <!-- Sensitivity -->
+    <div class="card">
+      <h2>Sensitivity Analysis</h2>
+      <p class="card-desc">How profits change if key assumptions shift</p>
+      <div id="sensitivityGrid"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card" id="actionsCard">
+      <h2>Use These Results</h2>
+      <div class="wizard-banner">
+        <div>
+          <p style="font-weight:600; margin-bottom:4px;">Apply to Grant Application</p>
+          <p style="font-size:13px; color:var(--text-light);">Auto-populate your budget, milestones, and project description in the grant wizard.</p>
+        </div>
+        <button class="btn btn-success" onclick="applyToWizard()" id="applyBtn" disabled>Apply to Wizard</button>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:12px;">
+        <button class="btn btn-secondary" onclick="downloadJSON()">⬇ Download JSON</button>
+        <button class="btn btn-secondary" onclick="window.print()">🖨 Print / PDF</button>
+        <button class="btn btn-secondary" onclick="recalculate()">↻ Recalculate</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <p style="margin-top:12px; font-size:14px; color:var(--text-light);">Crunching numbers...</p>
+</div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────────
+const API = window.location.origin + '/api/farm-calculator';
+let calcResults = null;
+let charts = {};
+
+const CROP_LABELS = {
+  lettuce: 'Butter Lettuce', pakchoi: 'Pak Choi', microgreens: 'Microgreens',
+  basil: 'Basil', kale: 'Baby Kale'
+};
+const PLANTS_PER_TRAY = {
+  lettuce: 30, pakchoi: 24, microgreens: 200, basil: 15, kale: 28
+};
+const CROP_COLORS = {
+  lettuce: '#82c341', pakchoi: '#2d5016', microgreens: '#f5a623',
+  basil: '#6b8e23', kale: '#3cb371'
+};
+
+let cropAllocations = [{ type: 'lettuce', trayAllocation: 100 }];
+
+// ─── URL Params ─────────────────────────────────────────────────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+const applicationId = urlParams.get('applicationId');
+const token = urlParams.get('token') || localStorage.getItem('grantToken');
+if (applicationId && token) {
+  document.getElementById('applyBtn').disabled = false;
+}
+
+// ─── Crop Allocation UI ────────────────────────────────────────────────────────
+function renderCrops() {
+  const container = document.getElementById('cropAllocation');
+  const usedTypes = cropAllocations.map(c => c.type);
+  const availableTypes = Object.keys(CROP_LABELS).filter(t => !usedTypes.includes(t));
+
+  container.innerHTML = cropAllocations.map((c, i) => `
+    <div class="crop-row">
+      <select onchange="changeCropType(${i}, this.value)" style="padding:8px; border-radius:8px; border:1px solid #d2d2d7; font-size:13px;">
+        <option value="${c.type}" selected>${CROP_LABELS[c.type]}</option>
+        ${availableTypes.map(t => `<option value="${t}">${CROP_LABELS[t]}</option>`).join('')}
+      </select>
+      <input type="range" min="0" max="${getNumTrays()}" value="${c.trayAllocation}" step="5"
+             oninput="updateCropAllocation(${i}, this.value)">
+      <span style="font-size:14px; font-weight:600; text-align:right;">${c.trayAllocation}</span>
+      ${cropAllocations.length > 1 ? `<button class="crop-remove" onclick="removeCrop(${i})">×</button>` : '<span></span>'}
+    </div>
+  `).join('');
+
+  updateAllocationStatus();
+}
+
+function getNumTrays() { return parseInt(document.getElementById('numTrays').value); }
+
+function updateTrayDisplay() {
+  const trays = getNumTrays();
+  document.getElementById('trayDisplay').textContent = trays;
+  document.getElementById('trayTarget').textContent = trays;
+  // Estimate plants using weighted avg
+  const totalPlants = cropAllocations.reduce((s, c) => s + c.trayAllocation * (PLANTS_PER_TRAY[c.type] || 30), 0);
+  document.getElementById('plantDisplay').textContent = totalPlants.toLocaleString();
+  updateAllocationStatus();
+}
+
+function updateCropAllocation(idx, val) {
+  cropAllocations[idx].trayAllocation = parseInt(val);
+  renderCrops();
+  updateTrayDisplay();
+}
+
+function changeCropType(idx, newType) {
+  cropAllocations[idx].type = newType;
+  renderCrops();
+}
+
+function addCrop() {
+  const used = cropAllocations.map(c => c.type);
+  const next = Object.keys(CROP_LABELS).find(t => !used.includes(t));
+  if (!next) return;
+  cropAllocations.push({ type: next, trayAllocation: 0 });
+  renderCrops();
+}
+
+function removeCrop(idx) {
+  cropAllocations.splice(idx, 1);
+  renderCrops();
+  updateTrayDisplay();
+}
+
+function updateAllocationStatus() {
+  const total = cropAllocations.reduce((s, c) => s + c.trayAllocation, 0);
+  const target = getNumTrays();
+  const el = document.getElementById('allocationStatus');
+  if (total === target) {
+    el.innerHTML = `<span style="color:var(--success)">✓ Allocated: ${total} / ${target}</span>`;
+  } else {
+    el.innerHTML = `<span style="color:var(--error)">⚠ Allocated: ${total} / ${target}</span>`;
+  }
+}
+
+function toggleRent() {
+  document.getElementById('rentRow').style.display =
+    document.getElementById('facilityType').value === 'rented' ? 'grid' : 'none';
+}
+
+// ─── Calculation ────────────────────────────────────────────────────────────────
+async function runCalculation() {
+  const numTrays = getNumTrays();
+  const totalAllocated = cropAllocations.reduce((s, c) => s + c.trayAllocation, 0);
+  if (totalAllocated !== numTrays) {
+    alert(`Crop allocations (${totalAllocated}) must equal total trays (${numTrays}). Adjust your crop mix.`);
+    return;
+  }
+
+  const body = {
+    numTrays,
+    crops: cropAllocations,
+    province: document.getElementById('province').value,
+    facilityType: document.getElementById('facilityType').value,
+    rentPerSqFt: parseFloat(document.getElementById('rentPerSqFt').value) || null,
+    facilitySize: parseInt(document.getElementById('facilitySize').value) || null,
+    automationTier: document.getElementById('automationTier').value,
+  };
+
+  document.getElementById('loadingOverlay').classList.add('visible');
+  document.getElementById('calcBtn').disabled = true;
+
+  try {
+    const resp = await fetch(API + '/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await resp.json();
+    if (!json.success) throw new Error(json.error || 'Calculation failed');
+    calcResults = json.data;
+    renderResults(calcResults);
+    document.getElementById('resultsSection').classList.add('visible');
+    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    alert('Calculation error: ' + err.message);
+  } finally {
+    document.getElementById('loadingOverlay').classList.remove('visible');
+    document.getElementById('calcBtn').disabled = false;
+  }
+}
+
+function recalculate() {
+  document.getElementById('resultsSection').classList.remove('visible');
+  document.getElementById('inputSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ─── Render Results ─────────────────────────────────────────────────────────────
+function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
+
+function renderResults(data) {
+  renderSummary(data);
+  renderCapex(data.capex);
+  renderOpex(data.opex);
+  renderRevenue(data.revenue);
+  renderProjection(data.projections);
+  renderSensitivity(data.sensitivity);
+}
+
+function renderSummary(data) {
+  const profit = data.profitability.monthlyProfit;
+  const profitClass = profit >= 0 ? 'positive' : 'negative';
+
+  document.getElementById('summaryStats').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${data.summary.plants.toLocaleString()}</div><div class="stat-label">Total Plants</div></div>
+    <div class="stat-card"><div class="stat-value">${fmt(data.capex.total)}</div><div class="stat-label">Total CAPEX</div></div>
+    <div class="stat-card"><div class="stat-value">${fmt(data.opex.total)}</div><div class="stat-label">Monthly OPEX</div></div>
+    <div class="stat-card"><div class="stat-value">${fmt(data.revenue.netRevenue)}</div><div class="stat-label">Monthly Net Revenue</div></div>
+    <div class="stat-card ${profitClass}"><div class="stat-value">${fmt(profit)}</div><div class="stat-label">Monthly Profit</div></div>
+    <div class="stat-card"><div class="stat-value">${data.profitability.paybackYears ? data.profitability.paybackYears + 'yr' : 'N/A'}</div><div class="stat-label">Payback Period</div></div>
+  `;
+}
+
+function renderCapex(capex) {
+  // Chart
+  if (charts.capex) charts.capex.destroy();
+  const labels = Object.keys(capex.subtotals).map(k => k.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()));
+  const values = Object.values(capex.subtotals);
+  const colors = ['#2d5016', '#82c341', '#f5a623', '#3cb371'];
+  charts.capex = new Chart(document.getElementById('capexChart'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } },
+  });
+
+  // Table
+  let rows = '';
+  for (const [cat, items] of Object.entries(capex.detail)) {
+    for (const [item, cost] of Object.entries(items)) {
+      if (cost > 0) {
+        rows += `<tr><td>${cat.replace(/_/g, ' ')}</td><td>${item.replace(/_/g, ' ')}</td><td class="amount">${fmt(cost)}</td></tr>`;
+      }
+    }
+  }
+  rows += `<tr class="total-row"><td colspan="2">Total CAPEX</td><td class="amount">${fmt(capex.total)}</td></tr>`;
+  document.getElementById('capexTable').innerHTML = `<thead><tr><th>Category</th><th>Item</th><th class="amount">Cost</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+function renderOpex(opex) {
+  if (charts.opex) charts.opex.destroy();
+  const items = [
+    { label: 'Labour', value: opex.labour.cost },
+    { label: 'Electricity', value: opex.electricity.total },
+    { label: 'Nutrients', value: opex.nutrients },
+    { label: 'Seeds', value: opex.seeds },
+    { label: 'Packaging', value: opex.packaging },
+    { label: 'Insurance', value: opex.insurance },
+    { label: 'Rent', value: opex.rent },
+    { label: 'Other', value: opex.water + opex.maintenance },
+  ].filter(i => i.value > 0);
+
+  const colors = ['#2d5016', '#f5a623', '#82c341', '#6b8e23', '#3cb371', '#e6a817', '#8b6914', '#86868b'];
+  charts.opex = new Chart(document.getElementById('opexChart'), {
+    type: 'bar',
+    data: { labels: items.map(i => i.label), datasets: [{ data: items.map(i => i.value), backgroundColor: colors.slice(0, items.length), borderWidth: 0, borderRadius: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { callback: v => '$' + (v / 1000).toFixed(1) + 'k' } } },
+    },
+  });
+
+  let rows = '';
+  rows += `<tr><td>Labour</td><td>${opex.labour.fte} FTE × $${opex.labour.hourlyWage}/hr</td><td class="amount">${fmt(opex.labour.cost)}</td></tr>`;
+  rows += `<tr><td>Electricity</td><td>${opex.electricity.total_kwh.toLocaleString()} kWh</td><td class="amount">${fmt(opex.electricity.total)}</td></tr>`;
+  rows += `<tr><td>Nutrients</td><td>${calcResults.summary.plants.toLocaleString()} plants × $0.15</td><td class="amount">${fmt(opex.nutrients)}</td></tr>`;
+  rows += `<tr><td>Seeds/Plugs</td><td>${calcResults.summary.plants.toLocaleString()} plants × $0.05</td><td class="amount">${fmt(opex.seeds)}</td></tr>`;
+  rows += `<tr><td>Packaging</td><td>15% of gross revenue</td><td class="amount">${fmt(opex.packaging)}</td></tr>`;
+  if (opex.insurance > 0) rows += `<tr><td>Insurance</td><td></td><td class="amount">${fmt(opex.insurance)}</td></tr>`;
+  if (opex.rent > 0) rows += `<tr><td>Rent</td><td></td><td class="amount">${fmt(opex.rent)}</td></tr>`;
+  rows += `<tr><td>Water + Maintenance</td><td></td><td class="amount">${fmt(opex.water + opex.maintenance)}</td></tr>`;
+  rows += `<tr class="total-row"><td colspan="2">Total Monthly OPEX</td><td class="amount">${fmt(opex.total)}</td></tr>`;
+  document.getElementById('opexTable').innerHTML = `<thead><tr><th>Item</th><th>Detail</th><th class="amount">$/month</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+function renderRevenue(rev) {
+  let rows = rev.byCrop.map(c =>
+    `<tr><td>${c.label}</td><td>${c.trays}</td><td>${c.kgPerMonth} kg</td><td class="amount">$${c.pricePerKg}/kg</td><td class="amount">${fmt(c.grossRevenue)}</td></tr>`
+  ).join('');
+  rows += `<tr><td colspan="4" style="text-align:right;">Packaging (15%)</td><td class="amount" style="color:var(--error);">-${fmt(rev.packagingCost)}</td></tr>`;
+  rows += `<tr class="total-row"><td colspan="4">Net Monthly Revenue</td><td class="amount">${fmt(rev.netRevenue)}</td></tr>`;
+  document.getElementById('revenueTable').innerHTML = `<thead><tr><th>Crop</th><th>Trays</th><th>Yield</th><th class="amount">Price</th><th class="amount">Revenue</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+function renderProjection(proj) {
+  if (charts.projection) charts.projection.destroy();
+  const years = proj.years;
+  charts.projection = new Chart(document.getElementById('projectionChart'), {
+    type: 'bar',
+    data: {
+      labels: years.map(y => `Year ${y.year}`),
+      datasets: [
+        { label: 'Revenue', data: years.map(y => y.revenue), backgroundColor: '#82c341', borderRadius: 6 },
+        { label: 'OPEX', data: years.map(y => -y.opex), backgroundColor: '#f5a623', borderRadius: 6 },
+        { type: 'line', label: 'Cumulative Cash Flow', data: years.map(y => y.cumulativeCashFlow), borderColor: '#2d5016', borderWidth: 2, pointRadius: 4, fill: false, yAxisID: 'y' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+      scales: { y: { ticks: { callback: v => '$' + (v / 1000).toFixed(0) + 'k' } } },
+    },
+  });
+
+  let rows = years.map(y => `
+    <tr>
+      <td>Year ${y.year}</td><td>${y.capacity}%</td>
+      <td class="amount">${fmt(y.revenue)}</td><td class="amount">${fmt(y.opex)}</td>
+      <td class="amount" style="color:${y.ebitda >= 0 ? 'var(--success)' : 'var(--error)'};">${fmt(y.ebitda)}</td>
+      <td class="amount">${fmt(y.capex)}</td>
+      <td class="amount" style="color:${y.cumulativeCashFlow >= 0 ? 'var(--success)' : 'var(--error)'};">${fmt(y.cumulativeCashFlow)}</td>
+    </tr>
+  `).join('');
+  if (proj.paybackYear) {
+    rows += `<tr class="total-row"><td colspan="6">Estimated Payback Period</td><td class="amount">${proj.paybackYear} years</td></tr>`;
+  }
+  document.getElementById('projectionTable').innerHTML = `
+    <thead><tr><th>Year</th><th>Capacity</th><th class="amount">Revenue</th><th class="amount">OPEX</th><th class="amount">EBITDA</th><th class="amount">CAPEX</th><th class="amount">Cumulative</th></tr></thead>
+    <tbody>${rows}</tbody>`;
+}
+
+function renderSensitivity(sens) {
+  const grid = document.getElementById('sensitivityGrid');
+  let html = `
+    <div class="sensitivity-grid">
+      <div class="sens-header">Scenario</div>
+      <div class="sens-header">Optimistic</div>
+      <div class="sens-header">Pessimistic</div>
+  `;
+  for (const s of Object.values(sens.scenarios)) {
+    const optClass = s.optimistic >= 0 ? 'positive' : 'negative';
+    const pesClass = s.pessimistic >= 0 ? 'positive' : 'negative';
+    html += `
+      <div class="sens-cell"><strong>${s.label}</strong><br><span class="sens-label">${s.variation}</span></div>
+      <div class="sens-cell ${optClass}">${fmt(s.optimistic)}/mo</div>
+      <div class="sens-cell ${pesClass}">${fmt(s.pessimistic)}/mo</div>
+    `;
+  }
+  html += '</div>';
+  html += `<p style="margin-top:12px; font-size:13px; color:var(--text-light);">Base monthly profit: <strong>${fmt(sens.baseMonthlyProfit)}</strong>. Break-even monthly revenue needed: <strong>${fmt(sens.breakEvenMonthlyRevenue)}</strong></p>`;
+  grid.innerHTML = html;
+}
+
+// ─── Actions ────────────────────────────────────────────────────────────────────
+async function applyToWizard() {
+  if (!calcResults || !applicationId || !token) {
+    alert('No calculation results or grant application ID. Run the calculator from the Grant Wizard.');
+    return;
+  }
+  try {
+    const resp = await fetch(API + '/apply-to-wizard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ applicationId, outputs: calcResults }),
+    });
+    const json = await resp.json();
+    if (!json.success) throw new Error(json.error);
+    alert(`Applied to grant wizard!\n• ${json.data.budgetItemsAdded} budget items added\n• ${json.data.milestonesAdded} milestones added\n• Total budget: ${fmt(json.data.totalBudget)}`);
+  } catch (err) {
+    alert('Error applying to wizard: ' + err.message);
+  }
+}
+
+function downloadJSON() {
+  if (!calcResults) return;
+  const blob = new Blob([JSON.stringify(calcResults, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `farm-projection-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+}
+
+// ─── Init ───────────────────────────────────────────────────────────────────────
+renderCrops();
+updateTrayDisplay();
+</script>
+</body>
+</html>

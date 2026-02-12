@@ -76,6 +76,7 @@ const APP_VERSION = (process.env.APP_VERSION
 
 // Import setup wizard route
 import setupWizardRoutes from './routes/setup-wizard.js';
+import farmCalculatorRoutes from './routes/farm-calculator.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -541,6 +542,7 @@ app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
 app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
 if (grantWizardRoutes) app.use('/api/grant-wizard', grantWizardRoutes); // Grant wizard (env-gated)
+app.use('/api/farm-calculator', farmCalculatorRoutes); // Vertical farm production calculator
 
 // Root route - redirect to main landing page
 app.get('/', (req, res) => {
