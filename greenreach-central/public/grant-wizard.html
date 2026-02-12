@@ -1,0 +1,1805 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-GBPD0VBEF2"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-GBPD0VBEF2');
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grant Funding Made Easy | GreenReach</title>
+  <meta name="description" content="Free AI-powered grant writing wizard for Canadian growers. Find programs, draft applications, build budgets — all in plain language.">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+      --error: #d32f2f;
+      --success: #2e7d32;
+      --warning: #f57c00;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .nav-content {
+      max-width: 1000px; margin: 0 auto; padding: 0 22px; height: 44px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .nav-logo { text-decoration: none; display: flex; align-items: center; }
+    .nav-logo img { height: 32px; width: auto; }
+    .nav-links { display: flex; gap: 32px; list-style: none; }
+    .nav-links a { color: var(--text); text-decoration: none; font-size: 12px; font-weight: 400; opacity: 0.8; transition: opacity 0.3s; }
+    .nav-links a:hover { opacity: 1; }
+    .nav-cta {
+      background: var(--primary); color: white; padding: 8px 16px;
+      border-radius: 980px; text-decoration: none; font-size: 12px; font-weight: 500; transition: background 0.3s;
+    }
+    .nav-cta:hover { background: var(--accent); color: var(--primary); }
+
+    /* Main Container */
+    .app-container { max-width: 960px; margin: 0 auto; padding: 80px 22px 40px; min-height: 100vh; }
+
+    /* Section headers */
+    .section-header { text-align: center; margin-bottom: 48px; }
+    .section-header h1 {
+      font-size: 48px; font-weight: 700; line-height: 1.05; letter-spacing: -0.015em;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      margin-bottom: 12px;
+    }
+    .section-header p { font-size: 21px; color: var(--text-light); max-width: 600px; margin: 0 auto; }
+
+    /* Views (show/hide) */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* Auth Forms */
+    .auth-card {
+      max-width: 480px; margin: 0 auto; background: var(--surface);
+      border-radius: 24px; padding: 48px; box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+    }
+    .auth-card h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .auth-card .subtitle { font-size: 15px; color: var(--text-light); margin-bottom: 32px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block; font-size: 14px; font-weight: 600; color: var(--text);
+      margin-bottom: 6px;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%; padding: 12px 16px; border: 1px solid #d2d2d7;
+      border-radius: 12px; font-size: 17px; font-family: inherit;
+      background: var(--bg); transition: border-color 0.3s;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(45,80,22,0.1);
+    }
+    .form-group textarea { resize: vertical; min-height: 100px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .checkbox-group { display: flex; align-items: start; gap: 10px; margin-bottom: 12px; }
+    .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary); }
+    .checkbox-group label { font-size: 14px; color: var(--text-light); font-weight: 400; cursor: pointer; }
+
+    /* Buttons */
+    .btn {
+      display: inline-block; padding: 14px 36px; border-radius: 980px;
+      font-size: 17px; font-weight: 600; border: none; cursor: pointer;
+      transition: all 0.3s ease; text-decoration: none; text-align: center;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--accent); color: var(--primary); transform: translateY(-1px); }
+    .btn-secondary { background: var(--bg); color: var(--primary); border: 2px solid var(--primary); }
+    .btn-secondary:hover { background: var(--primary); color: white; }
+    .btn-block { display: block; width: 100%; }
+    .btn-sm { padding: 8px 20px; font-size: 14px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Program Cards */
+    .programs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; margin-top: 32px; }
+    .program-card {
+      background: var(--surface); border-radius: 20px; padding: 32px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06); transition: transform 0.3s, box-shadow 0.3s;
+      cursor: pointer; position: relative;
+    }
+    .program-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+    .program-card .status-badge {
+      position: absolute; top: 16px; right: 16px; padding: 4px 12px;
+      border-radius: 980px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    }
+    .status-open { background: rgba(46,125,50,0.1); color: var(--success); }
+    .status-closed { background: rgba(211,47,47,0.1); color: var(--error); }
+    .status-upcoming { background: rgba(245,124,0,0.1); color: var(--warning); }
+    .program-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; padding-right: 80px; }
+    .program-card .agency { font-size: 13px; color: var(--accent); font-weight: 600; margin-bottom: 12px; }
+    .program-card .description { font-size: 15px; color: var(--text-light); line-height: 1.5; margin-bottom: 16px; }
+    .program-card .meta { display: flex; gap: 16px; flex-wrap: wrap; }
+    .program-card .meta-item { font-size: 13px; color: var(--text-light); }
+    .program-card .meta-item strong { color: var(--text); }
+
+    /* Search/Filter bar */
+    .filter-bar {
+      display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;
+      padding: 16px 20px; background: var(--surface); border-radius: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .filter-bar input, .filter-bar select {
+      padding: 10px 16px; border: 1px solid #d2d2d7; border-radius: 12px;
+      font-size: 15px; font-family: inherit; background: var(--bg); flex: 1; min-width: 200px;
+    }
+    .filter-bar input:focus, .filter-bar select:focus {
+      outline: none; border-color: var(--primary);
+    }
+
+    /* Wizard Steps */
+    .wizard-container { max-width: 720px; margin: 0 auto; }
+    .wizard-progress {
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 48px; gap: 4px;
+    }
+    .wizard-step-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #d2d2d7; transition: all 0.3s;
+    }
+    .wizard-step-dot.active { background: var(--primary); width: 32px; border-radius: 6px; }
+    .wizard-step-dot.completed { background: var(--accent); }
+    .wizard-step-connector { width: 24px; height: 2px; background: #d2d2d7; }
+    .wizard-step-connector.completed { background: var(--accent); }
+
+    .wizard-card {
+      background: var(--surface); border-radius: 24px; padding: 48px;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+    }
+    .wizard-card h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .wizard-card .step-subtitle { font-size: 15px; color: var(--text-light); margin-bottom: 32px; }
+    .wizard-card .why-asking {
+      font-size: 13px; color: var(--accent); margin-top: 4px; margin-bottom: 16px;
+      font-style: italic;
+    }
+    .wizard-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 32px; }
+    .autosave-indicator {
+      font-size: 13px; color: var(--text-light); display: flex; align-items: center; gap: 6px;
+    }
+    .autosave-indicator .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+    /* Eligibility results */
+    .eligibility-result {
+      padding: 16px 20px; border-radius: 12px; margin-bottom: 12px;
+      display: flex; align-items: start; gap: 12px;
+    }
+    .eligibility-result.eligible { background: rgba(46,125,50,0.08); }
+    .eligibility-result.ineligible { background: rgba(211,47,47,0.08); }
+    .eligibility-result.unknown { background: rgba(245,124,0,0.08); }
+    .eligibility-result .icon { font-size: 20px; flex-shrink: 0; }
+    .eligibility-result .message { font-size: 15px; }
+
+    /* Export pack */
+    .export-card {
+      background: var(--surface); border-radius: 16px; padding: 24px;
+      border: 1px solid rgba(130,195,65,0.3); margin-bottom: 16px;
+    }
+    .export-card h4 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+    .export-card p { font-size: 14px; color: var(--text-light); }
+
+    /* Alerts/Toasts */
+    .alert {
+      padding: 14px 20px; border-radius: 12px; margin-bottom: 16px;
+      font-size: 15px; display: flex; align-items: start; gap: 10px;
+    }
+    .alert-error { background: rgba(211,47,47,0.08); color: var(--error); }
+    .alert-success { background: rgba(46,125,50,0.08); color: var(--success); }
+    .alert-warning { background: rgba(245,124,0,0.08); color: var(--warning); }
+    .alert-info { background: rgba(45,80,22,0.08); color: var(--primary); }
+
+    /* Consistency warning */
+    .consistency-warning {
+      background: rgba(245,124,0,0.08); border: 1px solid rgba(245,124,0,0.2);
+      border-radius: 12px; padding: 16px 20px; margin-bottom: 16px;
+    }
+    .consistency-warning h4 { font-size: 15px; font-weight: 600; color: var(--warning); margin-bottom: 8px; }
+    .consistency-warning p { font-size: 14px; color: var(--text); }
+
+    /* User menu */
+    .user-menu { position: relative; }
+    .user-menu-btn {
+      background: var(--primary); color: white; border: none; padding: 6px 16px;
+      border-radius: 980px; font-size: 12px; font-weight: 500; cursor: pointer;
+    }
+    .user-dropdown {
+      display: none; position: absolute; top: 36px; right: 0;
+      background: var(--surface); border-radius: 12px; padding: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15); min-width: 180px; z-index: 100;
+    }
+    .user-dropdown.open { display: block; }
+    .user-dropdown a, .user-dropdown button {
+      display: block; width: 100%; text-align: left; padding: 10px 16px;
+      border: none; background: none; font-size: 14px; color: var(--text);
+      cursor: pointer; border-radius: 8px; text-decoration: none;
+    }
+    .user-dropdown a:hover, .user-dropdown button:hover { background: var(--bg); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 32px; background: var(--bg); border-radius: 12px; padding: 4px; }
+    .tab-btn {
+      flex: 1; padding: 10px 20px; border: none; background: none; font-size: 15px;
+      font-weight: 500; color: var(--text-light); cursor: pointer; border-radius: 10px;
+      transition: all 0.3s;
+    }
+    .tab-btn.active { background: var(--surface); color: var(--primary); font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .section-header h1 { font-size: 32px; }
+      .auth-card, .wizard-card { padding: 28px; }
+      .form-row { grid-template-columns: 1fr; }
+      .programs-grid { grid-template-columns: 1fr; }
+      .filter-bar { flex-direction: column; }
+      .nav-links { display: none; }
+    }
+
+    /* Footer - matching growing-made-easy */
+    footer {
+      background: var(--text); color: white; padding: 80px 22px 40px;
+    }
+    .footer-content {
+      max-width: 1200px; margin: 0 auto;
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px;
+    }
+    .footer-about h3 { font-size: 24px; margin-bottom: 16px; color: var(--accent); }
+    .footer-about p { font-size: 15px; line-height: 1.6; opacity: 0.8; }
+    .footer-links h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; color: var(--accent); }
+    .footer-links ul { list-style: none; }
+    .footer-links a { color: white; text-decoration: none; font-size: 14px; opacity: 0.7; transition: opacity 0.3s; display: block; margin-bottom: 12px; }
+    .footer-links a:hover { opacity: 1; }
+    .footer-bottom { text-align: center; padding-top: 40px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; opacity: 0.6; }
+    @media (max-width: 768px) {
+      .footer-content { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/greenreach-org.html" class="nav-logo"><img src="images/greenreach-clr.png" alt="GreenReach" /></a>
+      <ul class="nav-links">
+        <li><a href="/greenreach-org.html">Home</a></li>
+        <li><a href="/greenreach-grow.html">GROW</a></li>
+        <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+        <li><a href="/grow-and-sell.html">Wholesale</a></li>
+        <li><a href="/grant-wizard.html" style="color: var(--accent); font-weight: 600;">Funding Support</a></li>
+      </ul>
+      <div id="navAuth">
+        <a href="#" class="nav-cta" onclick="showView('register')">Get Started Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="app-container">
+    <!-- ====================================================== -->
+    <!-- VIEW: Landing (unauthenticated) -->
+    <!-- ====================================================== -->
+    <div id="view-landing" class="view active">
+      <div class="section-header" style="margin-top: 40px;">
+        <h1>Grant Funding Made Easy</h1>
+        <p>Find funding you qualify for. Draft applications in plain language. Submit with confidence.</p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 640px; margin: 0 auto 48px;">
+        <button class="btn btn-primary btn-block" onclick="showView('register')">Create Free Account</button>
+        <button class="btn btn-secondary btn-block" onclick="showView('login')">Sign In</button>
+      </div>
+
+      <!-- Public program preview -->
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="font-size: 28px; font-weight: 700;">Open Programs</h2>
+        <p style="font-size: 15px; color: var(--text-light);">Currently accepting applications</p>
+      </div>
+      <div id="publicPrograms" class="programs-grid">
+        <div style="text-align: center; padding: 40px; color: var(--text-light);">Loading programs...</div>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- VIEW: Register -->
+    <!-- ====================================================== -->
+    <div id="view-register" class="view">
+      <div class="auth-card">
+        <h2>Create your free account</h2>
+        <p class="subtitle">Start finding and applying for grants today. No credit card needed.</p>
+        <div id="registerError" class="alert alert-error" style="display:none;"></div>
+        <form id="registerForm" onsubmit="handleRegister(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="regName">Your name *</label>
+              <input type="text" id="regName" required placeholder="Jane Smith">
+            </div>
+            <div class="form-group">
+              <label for="regBusiness">Business name</label>
+              <input type="text" id="regBusiness" placeholder="My Farm Co.">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="regEmail">Email *</label>
+            <input type="email" id="regEmail" required placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="regPassword">Password * (min 8 characters)</label>
+            <input type="password" id="regPassword" required minlength="8" placeholder="••••••••">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="regProvince">Province/Territory</label>
+              <select id="regProvince">
+                <option value="">Select...</option>
+                <option value="AB">Alberta</option>
+                <option value="BC">British Columbia</option>
+                <option value="MB">Manitoba</option>
+                <option value="NB">New Brunswick</option>
+                <option value="NL">Newfoundland and Labrador</option>
+                <option value="NS">Nova Scotia</option>
+                <option value="NT">Northwest Territories</option>
+                <option value="NU">Nunavut</option>
+                <option value="ON">Ontario</option>
+                <option value="PE">Prince Edward Island</option>
+                <option value="QC">Quebec</option>
+                <option value="SK">Saskatchewan</option>
+                <option value="YT">Yukon</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="regPostal">Postal code</label>
+              <input type="text" id="regPostal" placeholder="A1A 1A1" maxlength="7">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="regOrgType">Organization type</label>
+            <select id="regOrgType">
+              <option value="">Select...</option>
+              <option value="sole_proprietor">Sole proprietor</option>
+              <option value="corporation">Corporation</option>
+              <option value="cooperative">Cooperative</option>
+              <option value="partnership">Partnership</option>
+              <option value="non_profit">Not-for-profit</option>
+              <option value="future_grower">Not yet started (future grower)</option>
+            </select>
+          </div>
+
+          <div style="margin: 24px 0 8px; font-size: 14px; font-weight: 600; color: var(--text);">Communication preferences</div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="regConsentService" checked disabled>
+            <label for="regConsentService">Service emails (application reminders, draft packs, deadline alerts) — required</label>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="regConsentMarketing">
+            <label for="regConsentMarketing">News &amp; tips from GreenReach and associates (you can unsubscribe anytime)</label>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="regConsentData">
+            <label for="regConsentData">Help improve our templates by allowing de-identified use of application data</label>
+          </div>
+
+          <div style="margin: 24px 0 16px; font-size: 13px; color: var(--text-light); line-height: 1.5;">
+            By creating an account you agree to GreenReach's <a href="#" style="color: var(--primary);">Terms of Service</a> and 
+            <a href="#" style="color: var(--primary);">Privacy Policy</a>. We handle your data in accordance with PIPEDA.
+            Drafts are retained for 6 months from your last sign-in. You can delete your account and data at any time.
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="registerBtn">Create Account</button>
+        </form>
+        <p style="text-align: center; margin-top: 20px; font-size: 14px; color: var(--text-light);">
+          Already have an account? <a href="#" onclick="showView('login')" style="color: var(--primary); font-weight: 600;">Sign in</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- VIEW: Login -->
+    <!-- ====================================================== -->
+    <div id="view-login" class="view">
+      <div class="auth-card">
+        <h2>Welcome back</h2>
+        <p class="subtitle">Sign in to continue your applications.</p>
+        <div id="loginError" class="alert alert-error" style="display:none;"></div>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" required placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="loginBtn">Sign In</button>
+        </form>
+        <p style="text-align: center; margin-top: 20px; font-size: 14px; color: var(--text-light);">
+          Don't have an account? <a href="#" onclick="showView('register')" style="color: var(--primary); font-weight: 600;">Create one free</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- VIEW: Dashboard (authenticated) -->
+    <!-- ====================================================== -->
+    <div id="view-dashboard" class="view">
+      <div class="section-header">
+        <h1>Your Grant Dashboard</h1>
+        <p>Track applications, find new programs, and manage your profile.</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('my-apps')">My Applications</button>
+        <button class="tab-btn" onclick="switchTab('find-programs')">Find Programs</button>
+        <button class="tab-btn" onclick="switchTab('my-profile')">Profile</button>
+      </div>
+
+      <!-- Tab: My Applications -->
+      <div id="tab-my-apps" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+          <h2 style="font-size: 24px; font-weight: 700;">Applications</h2>
+          <button class="btn btn-primary btn-sm" onclick="showView('programs')">+ New Application</button>
+        </div>
+        <div id="appsList"></div>
+      </div>
+
+      <!-- Tab: Find Programs -->
+      <div id="tab-find-programs" class="tab-content" style="display:none;">
+        <div class="filter-bar">
+          <input type="text" id="programSearch" placeholder="Search programs..." oninput="loadPrograms()">
+          <select id="programStatusFilter" onchange="loadPrograms()">
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+            <option value="upcoming">Upcoming</option>
+          </select>
+          <select id="programTypeFilter" onchange="loadPrograms()">
+            <option value="">All types</option>
+            <option value="grant">Grant</option>
+            <option value="contribution">Contribution</option>
+            <option value="loan">Loan</option>
+            <option value="tax_credit">Tax credit</option>
+          </select>
+        </div>
+        <div id="programsList" class="programs-grid"></div>
+      </div>
+
+      <!-- Tab: Profile -->
+      <div id="tab-my-profile" class="tab-content" style="display:none;">
+        <div class="auth-card" style="max-width: 600px;">
+          <h2 style="font-size: 24px;">Your Profile</h2>
+          <p class="subtitle">This information pre-fills your applications. Keep it current for best results.</p>
+          <form id="profileForm" onsubmit="handleProfileUpdate(event)">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Contact name</label>
+                <input type="text" id="profName">
+              </div>
+              <div class="form-group">
+                <label>Business name</label>
+                <input type="text" id="profBusiness">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Province</label>
+                <select id="profProvince">
+                  <option value="">Select...</option>
+                  <option value="AB">Alberta</option><option value="BC">British Columbia</option>
+                  <option value="MB">Manitoba</option><option value="NB">New Brunswick</option>
+                  <option value="NL">Newfoundland</option><option value="NS">Nova Scotia</option>
+                  <option value="NT">NWT</option><option value="NU">Nunavut</option>
+                  <option value="ON">Ontario</option><option value="PE">PEI</option>
+                  <option value="QC">Quebec</option><option value="SK">Saskatchewan</option>
+                  <option value="YT">Yukon</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Postal code</label>
+                <input type="text" id="profPostal" maxlength="7">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Organization type</label>
+                <select id="profOrgType">
+                  <option value="">Select...</option>
+                  <option value="sole_proprietor">Sole proprietor</option>
+                  <option value="corporation">Corporation</option>
+                  <option value="cooperative">Cooperative</option>
+                  <option value="partnership">Partnership</option>
+                  <option value="non_profit">Not-for-profit</option>
+                  <option value="future_grower">Future grower</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Employees</label>
+                <input type="number" id="profEmployees" min="0">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>CRA business number</label>
+              <input type="text" id="profCRA" placeholder="123456789RC0001">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top: 16px;">Save Profile</button>
+          </form>
+          <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #d2d2d7;">
+            <h3 style="font-size: 17px; font-weight: 600; margin-bottom: 12px; color: var(--error);">Danger zone</h3>
+            <button class="btn btn-sm" style="background: rgba(211,47,47,0.1); color: var(--error);" onclick="handleDeleteAccount()">
+              Delete account &amp; all data
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- VIEW: Programs (full list, authenticated) -->
+    <!-- ====================================================== -->
+    <div id="view-programs" class="view">
+      <div class="section-header">
+        <h1>Funding Programs</h1>
+        <p>Browse open programs and check your eligibility before applying.</p>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="allProgramSearch" placeholder="Search programs..." oninput="loadAllPrograms()">
+        <select id="allProgramStatus" onchange="loadAllPrograms()">
+          <option value="">All statuses</option>
+          <option value="open" selected>Open</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+      <div id="allProgramsList" class="programs-grid"></div>
+      <div style="text-align: center; margin-top: 32px;">
+        <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">← Back to Dashboard</button>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- VIEW: Program Detail + Eligibility Check -->
+    <!-- ====================================================== -->
+    <div id="view-program-detail" class="view">
+      <div id="programDetailContent"></div>
+      <div style="text-align: center; margin-top: 32px;">
+        <button class="btn btn-secondary btn-sm" onclick="showView('programs')">← Back to Programs</button>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- VIEW: Application Wizard -->
+    <!-- ====================================================== -->
+    <div id="view-wizard" class="view">
+      <div class="wizard-container">
+        <div class="wizard-progress" id="wizardProgress"></div>
+        <div class="wizard-card" id="wizardCard">
+          <!-- Dynamic wizard step content -->
+        </div>
+        <div class="wizard-nav" id="wizardNav">
+          <button class="btn btn-secondary btn-sm" id="wizPrev" onclick="wizardPrev()">← Previous</button>
+          <div class="autosave-indicator" id="autosaveIndicator">
+            <div class="dot"></div> Saved
+          </div>
+          <button class="btn btn-primary btn-sm" id="wizNext" onclick="wizardNext()">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- VIEW: Export Pack -->
+    <!-- ====================================================== -->
+    <div id="view-export" class="view">
+      <div class="section-header">
+        <h1>Your Draft Pack</h1>
+        <p>Review your complete application package before submitting through the official portal.</p>
+      </div>
+      <div id="exportContent" style="max-width: 720px; margin: 0 auto;"></div>
+      <div style="text-align: center; margin-top: 32px;">
+        <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">← Back to Dashboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-about">
+        <h3>GreenReach</h3>
+        <p>Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.</p>
+      </div>
+      <div class="footer-links">
+        <h4>Main Sites</h4>
+        <ul>
+          <li><a href="/greenreach-org.html">Home</a></li>
+          <li><a href="/greenreach-grow.html">GROW</a></li>
+          <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+          <li><a href="/grant-wizard.html">Funding Support</a></li>
+          <li><a href="/grow-and-sell.html">Wholesale</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Grant Wizard</h4>
+        <ul>
+          <li><a href="/grant-wizard.html">Find Programs</a></li>
+          <li><a href="/grant-wizard.html#register">Create Account</a></li>
+          <li><a href="mailto:info@greenreachfarms.com">Get Help</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Light Engine</h4>
+        <ul>
+          <li><a href="/purchase.html">Light Engine Home</a></li>
+          <li><a href="/landing-edge.html">Farm Server</a></li>
+          <li><a href="/landing-cloud.html">Management Platform</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="https://agriculture.canada.ca/en/programs" target="_blank">AAFC Programs</a></li>
+          <li><a href="https://agpal-apal.ca" target="_blank">AgPal Finder</a></li>
+          <li><a href="https://calendly.com/greenreachfarms" target="_blank">Schedule a Call</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
+    </div>
+  </footer>
+
+  <script>
+    // ============================================================
+    // State
+    // ============================================================
+    const API = '/api/grant-wizard';
+    let authToken = localStorage.getItem('grantToken');
+    let currentUser = null;
+    let currentApp = null;
+    let wizardStep = 0;
+    let autosaveTimer = null;
+
+    // ============================================================
+    // Views
+    // ============================================================
+    function showView(viewName) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      const view = document.getElementById(`view-${viewName}`);
+      if (view) view.classList.add('active');
+
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Load data for specific views
+      if (viewName === 'dashboard') loadDashboard();
+      if (viewName === 'programs') loadAllPrograms();
+      if (viewName === 'landing') loadPublicPrograms();
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      event.target.classList.add('active');
+      document.getElementById(`tab-${tabName}`).style.display = 'block';
+
+      if (tabName === 'find-programs') loadPrograms();
+      if (tabName === 'my-profile') loadProfile();
+      if (tabName === 'my-apps') loadApplications();
+    }
+
+    // ============================================================
+    // Auth
+    // ============================================================
+    async function handleRegister(e) {
+      e.preventDefault();
+      const btn = document.getElementById('registerBtn');
+      const errEl = document.getElementById('registerError');
+      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Creating account...';
+
+      try {
+        const res = await fetch(`${API}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('regEmail').value,
+            password: document.getElementById('regPassword').value,
+            contactName: document.getElementById('regName').value,
+            businessName: document.getElementById('regBusiness').value,
+            province: document.getElementById('regProvince').value,
+            postalCode: document.getElementById('regPostal').value,
+            organizationType: document.getElementById('regOrgType').value,
+            consentServiceEmails: true,
+            consentMarketingEmails: document.getElementById('regConsentMarketing').checked,
+            consentDataImprovement: document.getElementById('regConsentData').checked
+          })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        authToken = data.data.token;
+        currentUser = data.data.user;
+        localStorage.setItem('grantToken', authToken);
+        updateNavAuth();
+        showView('dashboard');
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'flex';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const errEl = document.getElementById('loginError');
+      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+
+      try {
+        const res = await fetch(`${API}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('loginEmail').value,
+            password: document.getElementById('loginPassword').value
+          })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        authToken = data.data.token;
+        currentUser = data.data.user;
+        localStorage.setItem('grantToken', authToken);
+        updateNavAuth();
+        showView('dashboard');
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'flex';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    }
+
+    function logout() {
+      authToken = null;
+      currentUser = null;
+      localStorage.removeItem('grantToken');
+      updateNavAuth();
+      showView('landing');
+    }
+
+    function updateNavAuth() {
+      const el = document.getElementById('navAuth');
+      if (authToken && currentUser) {
+        el.innerHTML = `
+          <div class="user-menu">
+            <button class="user-menu-btn" onclick="this.nextElementSibling.classList.toggle('open')">
+              ${currentUser.contactName || currentUser.email}
+            </button>
+            <div class="user-dropdown">
+              <a href="#" onclick="showView('dashboard'); this.parentElement.classList.remove('open');">Dashboard</a>
+              <button onclick="logout()">Sign out</button>
+            </div>
+          </div>`;
+      } else {
+        el.innerHTML = '<a href="#" class="nav-cta" onclick="showView(\'register\')">Get Started Free</a>';
+      }
+    }
+
+    // ============================================================
+    // Programs
+    // ============================================================
+    async function loadPublicPrograms() {
+      try {
+        const res = await fetch(`${API}/programs?status=open&limit=6`);
+        const data = await res.json();
+        if (!data.success) return;
+        renderPrograms(data.data.programs, 'publicPrograms', false);
+        // Update counter on growing-made-easy
+        const counter = document.getElementById('grantCountNum');
+        if (counter) counter.textContent = data.data.total + '+';
+      } catch (e) {
+        document.getElementById('publicPrograms').innerHTML = '<p style="color:var(--text-light);">Programs will appear once the server is running.</p>';
+      }
+    }
+
+    async function loadPrograms() {
+      const search = document.getElementById('programSearch')?.value || '';
+      const status = document.getElementById('programStatusFilter')?.value || '';
+      const type = document.getElementById('programTypeFilter')?.value || '';
+      try {
+        const res = await fetch(`${API}/programs?search=${encodeURIComponent(search)}&status=${status}&type=${type}`);
+        const data = await res.json();
+        if (data.success) renderPrograms(data.data.programs, 'programsList', true);
+      } catch (e) { console.error('Load programs error:', e); }
+    }
+
+    async function loadAllPrograms() {
+      const search = document.getElementById('allProgramSearch')?.value || '';
+      const status = document.getElementById('allProgramStatus')?.value || '';
+      try {
+        const res = await fetch(`${API}/programs?search=${encodeURIComponent(search)}&status=${status}&limit=50`);
+        const data = await res.json();
+        if (data.success) renderPrograms(data.data.programs, 'allProgramsList', true);
+      } catch (e) { console.error('Load all programs error:', e); }
+    }
+
+    function renderPrograms(programs, containerId, showApply) {
+      const container = document.getElementById(containerId);
+      if (!programs.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:40px;">No programs found matching your criteria.</p>';
+        return;
+      }
+      container.innerHTML = programs.map(p => `
+        <div class="program-card" onclick="${showApply ? `showProgramDetail(${p.id})` : ''}">
+          <span class="status-badge status-${p.intake_status || 'unknown'}">${p.intake_status || 'Unknown'}</span>
+          <h3>${escapeHtml(p.program_name)}</h3>
+          <div class="agency">${escapeHtml(p.administering_agency || '')}</div>
+          <div class="description">${escapeHtml((p.description || '').substring(0, 150))}${(p.description||'').length > 150 ? '...' : ''}</div>
+          <div class="meta">
+            ${p.funding_type ? `<span class="meta-item"><strong>Type:</strong> ${p.funding_type}</span>` : ''}
+            ${p.max_funding ? `<span class="meta-item"><strong>Up to:</strong> $${Number(p.max_funding).toLocaleString()}</span>` : ''}
+            ${p.cost_share_ratio ? `<span class="meta-item"><strong>Cost share:</strong> ${p.cost_share_ratio}</span>` : ''}
+            ${p.intake_deadline ? `<span class="meta-item"><strong>Deadline:</strong> ${p.intake_deadline}</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function showProgramDetail(programId) {
+      try {
+        const res = await fetch(`${API}/programs/${programId}`);
+        const { data: p } = await res.json();
+        
+        document.getElementById('programDetailContent').innerHTML = `
+          <div style="margin-bottom: 32px;">
+            <span class="status-badge status-${p.intake_status}" style="display:inline-block; margin-bottom:16px;">${p.intake_status}</span>
+            <h1 style="font-size:36px; font-weight:700; margin-bottom:8px;">${escapeHtml(p.program_name)}</h1>
+            <div style="font-size:15px; color:var(--accent); font-weight:600; margin-bottom:16px;">${escapeHtml(p.administering_agency || '')}</div>
+            <p style="font-size:19px; color:var(--text-light); line-height:1.5; margin-bottom:24px;">${escapeHtml(p.description || '')}</p>
+            ${p.source_url ? `<a href="${p.source_url}" target="_blank" style="color:var(--primary); font-weight:600;">View official program page →</a>` : ''}
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px;">
+            <div style="background:var(--bg); border-radius:16px; padding:24px;">
+              <h3 style="font-size:17px; margin-bottom:12px;">Funding Details</h3>
+              <p style="font-size:15px; color:var(--text-light); margin-bottom:8px;"><strong>Type:</strong> ${p.funding_type || 'N/A'}</p>
+              <p style="font-size:15px; color:var(--text-light); margin-bottom:8px;"><strong>Maximum:</strong> ${p.max_funding ? '$' + Number(p.max_funding).toLocaleString() : 'Varies'}</p>
+              <p style="font-size:15px; color:var(--text-light); margin-bottom:8px;"><strong>Cost share:</strong> ${p.cost_share_ratio || 'N/A'}</p>
+              <p style="font-size:15px; color:var(--text-light);"><strong>Model:</strong> ${p.reimbursement_model || 'Check program'}</p>
+              ${p.equity_enhanced ? '<div style="margin-top:12px;padding:8px 12px;background:rgba(130,195,65,0.1);border-radius:8px;font-size:13px;color:var(--primary);font-weight:600;">Enhanced cost-share available for underrepresented groups</div>' : ''}
+            </div>
+            <div style="background:var(--bg); border-radius:16px; padding:24px;">
+              <h3 style="font-size:17px; margin-bottom:12px;">Application</h3>
+              <p style="font-size:15px; color:var(--text-light); margin-bottom:8px;"><strong>Method:</strong> ${p.application_method || 'N/A'}</p>
+              <p style="font-size:15px; color:var(--text-light); margin-bottom:8px;"><strong>Deadline:</strong> ${p.intake_deadline || 'Open / Rolling'}</p>
+              <p style="font-size:15px; color:var(--text-light);"><strong>Fillable PDF:</strong> ${p.has_fillable_pdf ? 'Yes' : 'No'}</p>
+              ${p.required_documents?.length ? `
+                <h4 style="font-size:14px; margin-top:16px; margin-bottom:8px;">Required Documents</h4>
+                <ul style="font-size:13px; color:var(--text-light); padding-left:16px;">
+                  ${p.required_documents.map(d => `<li style="margin-bottom:4px;">${escapeHtml(d)}</li>`).join('')}
+                </ul>` : ''}
+            </div>
+          </div>
+
+          ${p.eligibility_summary ? `
+            <div style="background:var(--bg); border-radius:16px; padding:24px; margin-bottom:24px;">
+              <h3 style="font-size:17px; margin-bottom:12px;">Eligibility</h3>
+              <p style="font-size:15px; color:var(--text-light); line-height:1.5; margin-bottom:16px;">${escapeHtml(p.eligibility_summary)}</p>
+              <button class="btn btn-secondary btn-sm" onclick="showEligibilityCheck(${p.id})">Check My Eligibility →</button>
+              <div id="eligResult-${p.id}" style="margin-top:16px;"></div>
+            </div>` : ''}
+
+          ${p.reimbursement_model === 'reimbursement' ? `
+            <div class="alert alert-warning" style="margin-bottom:24px;">
+              <span>💰</span>
+              <span><strong>Cash-flow note:</strong> This program reimburses eligible expenses after they are incurred and paid. You may need upfront capital and the ability to manage claims and reporting before receiving funds.</span>
+            </div>` : ''}
+
+          ${p.equity_enhanced ? `
+            <div style="background:rgba(130,195,65,0.06); border:1px solid rgba(130,195,65,0.2); border-radius:16px; padding:20px; margin-bottom:24px;">
+              <h4 style="font-size:15px; margin-bottom:8px; color:var(--primary);">Enhanced Cost-Share Available</h4>
+              <p style="font-size:14px; color:var(--text-light); margin-bottom:8px;">This program offers enhanced cost-sharing for projects led by underrepresented groups.</p>
+              ${p.equity_details?.enhanced_ratio ? `<p style="font-size:14px;"><strong>Enhanced ratio:</strong> ${p.equity_details.enhanced_ratio}</p>` : ''}
+              ${p.equity_details?.groups?.length ? `<p style="font-size:13px; color:var(--text-light);">Categories: ${p.equity_details.groups.join(', ')}</p>` : ''}
+              <p style="font-size:12px; color:var(--text-light); margin-top:8px; font-style:italic;">Self-declaration via attestation. This is optional; your response is stored securely and can be deleted at any time.</p>
+            </div>` : ''}
+
+          <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            ${authToken ? `<button class="btn btn-primary" onclick="startApplication(${p.id})">Start Application</button>` : `<button class="btn btn-primary" onclick="showView('register')">Create Account to Apply</button>`}
+            ${p.source_url ? `<a href="${p.source_url}" target="_blank" class="btn btn-secondary">View Official Page</a>` : ''}
+          </div>
+        `;
+        showView('program-detail');
+      } catch (e) { console.error('Program detail error:', e); }
+    }
+
+    // ============================================================
+    // Eligibility Triage (conversational check)
+    // ============================================================
+    async function showEligibilityCheck(programId) {
+      const container = document.getElementById(`eligResult-${programId}`);
+      if (!container) return;
+
+      // Gather user context (from profile if logged in, or ask)
+      const userAnswers = {};
+      if (currentUser) {
+        try {
+          const res = await fetch(`${API}/profile`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+          const { data } = await res.json();
+          if (data) {
+            userAnswers.province = data.province;
+            userAnswers.organizationType = data.organization_type;
+            userAnswers.employeeCount = data.employee_count;
+          }
+        } catch (e) {}
+      }
+
+      // Show inline form for missing fields
+      container.innerHTML = `
+        <div style="background:var(--surface); border-radius:12px; padding:20px; border:1px solid rgba(45,80,22,0.1);">
+          <h4 style="font-size:15px; margin-bottom:12px;">Quick eligibility check</h4>
+          <p style="font-size:13px; color:var(--text-light); margin-bottom:16px;">Answer a few questions to see if you may qualify.</p>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:13px;">Province / Territory</label>
+              <select id="eligProvince" style="padding:8px;">
+                <option value="">Select...</option>
+                ${['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT'].map(p =>
+                  `<option value="${p}" ${userAnswers.province === p ? 'selected' : ''}>${p}</option>`
+                ).join('')}
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:13px;">Organization type</label>
+              <select id="eligOrgType" style="padding:8px;">
+                <option value="">Select...</option>
+                <option value="sole_proprietor" ${userAnswers.organizationType==='sole_proprietor'?'selected':''}>Sole proprietor</option>
+                <option value="corporation" ${userAnswers.organizationType==='corporation'?'selected':''}>Corporation</option>
+                <option value="cooperative" ${userAnswers.organizationType==='cooperative'?'selected':''}>Cooperative</option>
+                <option value="partnership" ${userAnswers.organizationType==='partnership'?'selected':''}>Partnership</option>
+                <option value="non_profit" ${userAnswers.organizationType==='non_profit'?'selected':''}>Not-for-profit</option>
+                <option value="indigenous_organization" ${userAnswers.organizationType==='indigenous_organization'?'selected':''}>Indigenous organization</option>
+                <option value="academic" ${userAnswers.organizationType==='academic'?'selected':''}>Academic institution</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="runEligibilityCheck(${programId})">Check Now</button>
+          <div id="eligOutput-${programId}" style="margin-top:16px;"></div>
+        </div>`;
+    }
+
+    async function runEligibilityCheck(programId) {
+      const answers = {
+        province: document.getElementById('eligProvince')?.value || undefined,
+        organizationType: document.getElementById('eligOrgType')?.value || undefined
+      };
+
+      const output = document.getElementById(`eligOutput-${programId}`);
+      output.innerHTML = '<p style="font-size:13px; color:var(--text-light);">Checking...</p>';
+
+      try {
+        const res = await fetch(`${API}/programs/${programId}/check-eligibility`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(answers)
+        });
+        const data = await res.json();
+        if (!data.success) { output.innerHTML = '<p style="color:var(--error);">Check failed.</p>'; return; }
+
+        const d = data.data;
+        const icon = d.eligible ? '✅' : d.maybeEligible ? '🟡' : '❌';
+        const label = d.eligible ? 'Likely eligible' : d.maybeEligible ? 'May be eligible (more info needed)' : 'May not be eligible';
+        const color = d.eligible ? 'var(--primary)' : d.maybeEligible ? 'var(--warning)' : 'var(--error)';
+
+        output.innerHTML = `
+          <div style="padding:12px; background:var(--bg); border-radius:8px;">
+            <p style="font-size:15px; font-weight:600; color:${color}; margin-bottom:8px;">${icon} ${label}</p>
+            ${d.results.map(r => `
+              <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-light); padding:4px 0;">
+                <span>${r.status === 'eligible' ? '✓' : r.status === 'ineligible' ? '✗' : '?'}</span>
+                <span>${escapeHtml(r.message)}</span>
+              </div>
+            `).join('')}
+            ${d.equityEnhanced ? `<p style="font-size:12px; margin-top:8px; color:var(--accent);">This program offers enhanced cost-share for eligible underrepresented groups.</p>` : ''}
+            <p style="font-size:11px; color:var(--text-light); margin-top:8px; font-style:italic;">This is an indicative check only. Official eligibility is determined by the administering agency.</p>
+          </div>`;
+      } catch (e) {
+        output.innerHTML = '<p style="color:var(--error); font-size:13px;">Eligibility check failed. Please try again.</p>';
+        console.error('Eligibility check error:', e);
+      }
+    }
+
+    // ============================================================
+    // Applications
+    // ============================================================
+    async function loadDashboard() {
+      await loadApplications();
+    }
+
+    async function loadApplications() {
+      if (!authToken) return;
+      try {
+        const res = await fetch(`${API}/applications`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        const el = document.getElementById('appsList');
+
+        if (!data.success || !data.data.length) {
+          el.innerHTML = `
+            <div style="text-align:center; padding:60px 20px; background:var(--surface); border-radius:20px;">
+              <div style="font-size:48px; margin-bottom:16px;">📝</div>
+              <h3 style="font-size:20px; margin-bottom:8px;">No applications yet</h3>
+              <p style="color:var(--text-light); margin-bottom:24px;">Browse funding programs to start your first application.</p>
+              <button class="btn btn-primary btn-sm" onclick="showView('programs')">Browse Programs</button>
+            </div>`;
+          return;
+        }
+
+        el.innerHTML = data.data.map(app => {
+          const daysLeft = app.expires_at ? Math.max(0, Math.ceil((new Date(app.expires_at) - Date.now()) / 86400000)) : '–';
+          return `
+            <div style="background:var(--surface); border-radius:16px; padding:24px; margin-bottom:16px; cursor:pointer; box-shadow:0 1px 6px rgba(0,0,0,0.04);"
+                 onclick="loadWizard(${app.id})">
+              <div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:12px;">
+                <div>
+                  <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">${escapeHtml(app.program_name || 'General Application')}</h3>
+                  <p style="font-size:13px; color:var(--text-light);">${escapeHtml(app.administering_agency || '')} ${app.program_code ? `· ${app.program_code}` : ''}</p>
+                </div>
+                <span class="status-badge status-${app.status === 'draft' || app.status === 'in_progress' ? 'upcoming' : app.status === 'awarded' ? 'open' : 'closed'}">${app.status}</span>
+              </div>
+              <div style="display:flex; gap:24px; margin-top:12px; font-size:13px; color:var(--text-light);">
+                <span><strong>Progress:</strong> ${app.percent_complete || 0}%</span>
+                <span><strong>Step:</strong> ${app.wizard_step || 1}</span>
+                <span><strong>Days left:</strong> ${daysLeft}</span>
+                <span><strong>Last saved:</strong> ${app.last_saved_at ? new Date(app.last_saved_at).toLocaleDateString('en-CA') : '–'}</span>
+              </div>
+              <div style="margin-top:12px; height:4px; background:var(--bg); border-radius:2px; overflow:hidden;">
+                <div style="height:100%; width:${app.percent_complete || 0}%; background:var(--accent); border-radius:2px; transition:width 0.5s;"></div>
+              </div>
+            </div>`;
+        }).join('');
+      } catch (e) { console.error('Load apps error:', e); }
+    }
+
+    async function startApplication(programId) {
+      if (!authToken) { showView('register'); return; }
+      try {
+        const res = await fetch(`${API}/applications`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ programId })
+        });
+        const data = await res.json();
+        if (data.success) loadWizard(data.data.id);
+      } catch (e) { console.error('Start app error:', e); }
+    }
+
+    // ============================================================
+    // Wizard
+    // ============================================================
+    const WIZARD_STEPS = [
+      { key: 'organization', title: 'About Your Organization', subtitle: 'Basic facts that identify you as an applicant.' },
+      { key: 'project', title: 'Your Project', subtitle: 'What do you want to do, and why does it matter?' },
+      { key: 'budget', title: 'Budget & Resources', subtitle: 'What will it cost and how will you fund it?' },
+      { key: 'narrative', title: 'Need & Impact', subtitle: 'Why this project matters and what success looks like.' },
+      { key: 'documents', title: 'Documents & Attachments', subtitle: 'Everything the program requires alongside your application.' },
+      { key: 'review', title: 'Review & Export', subtitle: 'Check everything, then generate your submission pack.' }
+    ];
+
+    async function loadWizard(appId) {
+      try {
+        const res = await fetch(`${API}/applications/${appId}`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (!data.success) return;
+        currentApp = data.data;
+        wizardStep = (currentApp.wizard_step || 1) - 1;
+        renderWizardStep();
+        showView('wizard');
+      } catch (e) { console.error('Load wizard error:', e); }
+    }
+
+    function renderWizardProgress() {
+      const el = document.getElementById('wizardProgress');
+      el.innerHTML = WIZARD_STEPS.map((s, i) => `
+        <div class="wizard-step-dot ${i === wizardStep ? 'active' : i < wizardStep ? 'completed' : ''}"></div>
+        ${i < WIZARD_STEPS.length - 1 ? `<div class="wizard-step-connector ${i < wizardStep ? 'completed' : ''}"></div>` : ''}
+      `).join('');
+    }
+
+    function renderWizardStep() {
+      renderWizardProgress();
+      const step = WIZARD_STEPS[wizardStep];
+      const card = document.getElementById('wizardCard');
+      const answers = currentApp.answers || {};
+      const org = currentApp.organization_profile || {};
+      const proj = currentApp.project_profile || {};
+      const budget = currentApp.budget || {};
+
+      let html = `<h2>${step.title}</h2><p class="step-subtitle">${step.subtitle}</p>`;
+
+      switch (step.key) {
+        case 'organization':
+          html += `
+            <div class="form-group">
+              <label>Legal business name</label>
+              <div class="why-asking">Exactly as registered with CRA — used on all official forms.</div>
+              <input type="text" id="wiz_legalName" value="${escapeAttr(org.legalName || '')}" onchange="wizAutoSave()">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Organization type</label>
+                <select id="wiz_orgType" onchange="wizAutoSave()">
+                  <option value="">Select...</option>
+                  <option value="sole_proprietor" ${org.type==='sole_proprietor'?'selected':''}>Sole proprietor</option>
+                  <option value="corporation" ${org.type==='corporation'?'selected':''}>Corporation</option>
+                  <option value="cooperative" ${org.type==='cooperative'?'selected':''}>Cooperative</option>
+                  <option value="partnership" ${org.type==='partnership'?'selected':''}>Partnership</option>
+                  <option value="non_profit" ${org.type==='non_profit'?'selected':''}>Not-for-profit</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>CRA business number</label>
+                <input type="text" id="wiz_craBN" value="${escapeAttr(org.craBusinessNumber || '')}" onchange="wizAutoSave()">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Province / Territory</label>
+                <input type="text" id="wiz_province" value="${escapeAttr(org.province || '')}" onchange="wizAutoSave()">
+              </div>
+              <div class="form-group">
+                <label>Number of employees</label>
+                <input type="number" id="wiz_employees" value="${org.employeeCount || ''}" min="0" onchange="wizAutoSave()">
+              </div>
+            </div>`;
+          break;
+
+        case 'project':
+          html += `
+            <div class="form-group">
+              <label>Project title</label>
+              <div class="why-asking">A clear, descriptive title for your project (appears on the application).</div>
+              <input type="text" id="wiz_projTitle" value="${escapeAttr(proj.title || '')}" onchange="wizAutoSave()" placeholder="e.g., Automated Indoor Leafy Greens Production Facility">
+            </div>
+            <div class="form-group">
+              <label>In plain language, what do you want to do?</label>
+              <div class="why-asking">We'll help turn this into a project description that aligns with program objectives.</div>
+              <textarea id="wiz_projDesc" onchange="wizAutoSave()" placeholder="Describe your project in your own words — what you're building, growing, or changing, and what you hope to accomplish.">${escapeHtml(proj.description || '')}</textarea>
+            </div>
+            <div class="form-group">
+              <label>Why is this project needed? What problem does it solve?</label>
+              <div class="why-asking">Programs want to see that the project addresses a real need. Think about what happens if you don't do this.</div>
+              <textarea id="wiz_projNeed" onchange="wizAutoSave()" placeholder="e.g., Our community lacks year-round access to fresh greens. Current supply is trucked 400km...">${escapeHtml(proj.needStatement || '')}</textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Project start date</label>
+                <input type="date" id="wiz_projStart" value="${proj.startDate || ''}" onchange="wizAutoSave()">
+              </div>
+              <div class="form-group">
+                <label>Project end date</label>
+                <input type="date" id="wiz_projEnd" value="${proj.endDate || ''}" onchange="wizAutoSave()">
+              </div>
+            </div>`;
+          break;
+
+        case 'budget':
+          const items = budget.items || [];
+          html += `
+            <div class="alert alert-info" style="margin-bottom:24px;">
+              <span>💡</span>
+              <span>Budget lines should match your project activities. Where possible, link items to supplier quotes or our procurement catalogue.</span>
+            </div>
+            <div id="budgetItems">
+              ${items.length ? items.map((item, i) => `
+                <div style="display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:end;">
+                  <div class="form-group" style="margin-bottom:0;">
+                    ${i === 0 ? '<label style="font-size:13px;">Description</label>' : ''}
+                    <input type="text" value="${escapeAttr(item.description || '')}" data-budget-idx="${i}" data-field="description" onchange="wizBudgetChange()" style="padding:10px;">
+                  </div>
+                  <div class="form-group" style="margin-bottom:0;">
+                    ${i === 0 ? '<label style="font-size:13px;">Amount ($)</label>' : ''}
+                    <input type="number" value="${item.amount || ''}" data-budget-idx="${i}" data-field="amount" onchange="wizBudgetChange()" style="padding:10px;" step="0.01">
+                  </div>
+                  <div class="form-group" style="margin-bottom:0;">
+                    ${i === 0 ? '<label style="font-size:13px;">Category</label>' : ''}
+                    <select data-budget-idx="${i}" data-field="category" onchange="wizBudgetChange()" style="padding:10px;">
+                      <option value="equipment" ${item.category==='equipment'?'selected':''}>Equipment</option>
+                      <option value="supplies" ${item.category==='supplies'?'selected':''}>Supplies</option>
+                      <option value="labour" ${item.category==='labour'?'selected':''}>Labour</option>
+                      <option value="professional" ${item.category==='professional'?'selected':''}>Professional services</option>
+                      <option value="other" ${item.category==='other'?'selected':''}>Other</option>
+                    </select>
+                  </div>
+                  <button onclick="removeBudgetItem(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:20px;padding:10px;">×</button>
+                </div>
+              `).join('') : '<p style="color:var(--text-light);margin-bottom:16px;">No budget items yet. Add your first item below.</p>'}
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="addBudgetItem()" style="margin-top:8px;">+ Add Budget Item</button>
+            <div style="margin-top:24px; padding:16px; background:var(--bg); border-radius:12px; display:flex; justify-content:space-between;">
+              <span style="font-weight:600;">Total Budget</span>
+              <span style="font-weight:700; font-size:20px; color:var(--primary);" id="budgetTotal">$${(budget.totalAmount || 0).toLocaleString()}</span>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+              <label>Other funding sources</label>
+              <div class="why-asking">Programs often require "stacking" disclosure — list other grants or funding you've applied to or received.</div>
+              <textarea id="wiz_otherFunding" onchange="wizAutoSave()" placeholder="e.g., Ontario CEF grant (pending), personal investment $50,000...">${escapeHtml(budget.otherFunding || '')}</textarea>
+            </div>`;
+          break;
+
+        case 'narrative':
+          html += `
+            <div class="form-group">
+              <label>What outcomes will your project achieve?</label>
+              <div class="why-asking">Programs score applications on measurable outcomes. Think specific numbers: "produce X kg/year," "reduce emissions by Y%."</div>
+              <textarea id="wiz_outcomes" onchange="wizAutoSave()" placeholder="e.g., Produce 5,000 kg of leafy greens annually for local restaurants and food banks...">${escapeHtml(answers.outcomes || '')}</textarea>
+              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_outcomes','project outcomes')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>
+            </div>
+            <div class="form-group">
+              <label>What risks could affect your project, and how will you mitigate them?</label>
+              <div class="why-asking">Strong applications demonstrate you've thought about what could go wrong and have a plan.</div>
+              <textarea id="wiz_risks" onchange="wizAutoSave()" placeholder="e.g., Supply chain delays → order equipment 8 weeks early; crop failure → maintain backup seed stock...">${escapeHtml(answers.risks || '')}</textarea>
+              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_risks','risk mitigation plan')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>
+            </div>
+            <div class="form-group">
+              <label>How does your project align with program priorities?</label>
+              <div class="why-asking">Use keywords from the program: innovation, sustainability, food security, market diversification, Indigenous food systems, etc.</div>
+              <textarea id="wiz_alignment" onchange="wizAutoSave()" placeholder="e.g., This project directly supports climate resilience and local food security by reducing long-distance supply chain dependence...">${escapeHtml(answers.alignment || '')}</textarea>
+              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_alignment','program alignment statement')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>
+            </div>
+            ${currentApp.priority_lexicon?.length ? `
+              <div style="background:rgba(130,195,65,0.06); border-radius:12px; padding:16px; margin-top:16px;">
+                <h4 style="font-size:14px; margin-bottom:8px;">Suggested program keywords</h4>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                  ${currentApp.priority_lexicon.map(k => `<span style="background:rgba(45,80,22,0.08); padding:4px 10px; border-radius:8px; font-size:13px; color:var(--primary);">${escapeHtml(k)}</span>`).join('')}
+                </div>
+              </div>` : ''}`;
+          break;
+
+        case 'documents':
+          const reqDocs = currentApp.required_documents || [];
+          const checklist = currentApp.attachments_checklist || [];
+          html += `
+            <div class="alert alert-info" style="margin-bottom:24px;">
+              <span>📎</span>
+              <span>Check off each document as you prepare it. You'll upload files when submitting through the official portal.</span>
+            </div>
+            ${reqDocs.length ? reqDocs.map((doc, i) => {
+              const done = checklist.find(c => c.docType === doc);
+              return `
+                <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--bg); border-radius:10px; margin-bottom:8px;">
+                  <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleDoc(${i}, '${escapeAttr(doc)}')" style="width:18px;height:18px;accent-color:var(--primary);">
+                  <span style="font-size:15px;">${escapeHtml(doc)}</span>
+                </div>`;
+            }).join('') : '<p style="color:var(--text-light);">No specific documents listed for this program. Check the official program page for requirements.</p>'}`;
+          break;
+
+        case 'review':
+          html += `
+            <div class="alert alert-warning" style="margin-bottom:24px;">
+              <span>⚠️</span>
+              <span><strong>Draft only.</strong> All content must be reviewed by you and submitted through the official program portal.</span>
+            </div>
+            <h3 style="font-size:20px; margin-bottom:16px;">Your application summary</h3>
+            <div class="export-card">
+              <h4>📄 Answers Document</h4>
+              <p>Your responses formatted in program question order, ready for copy/paste into the official portal.</p>
+            </div>
+            <div class="export-card">
+              <h4>💰 Budget Summary</h4>
+              <p>Itemized budget with category totals and alignment to project activities.</p>
+            </div>
+            <div class="export-card">
+              <h4>✅ Documents Checklist</h4>
+              <p>Required attachments with status (ready / missing).</p>
+            </div>
+            <div class="export-card">
+              <h4>📚 Source Citations</h4>
+              <p>References and evidence snippets included in your narrative, with source links.</p>
+            </div>
+            <div style="margin-top:24px; display:flex; gap:16px; flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="generateExport()">Generate Draft Pack</button>
+              <button class="btn btn-secondary" onclick="downloadPdf()">📥 Download PDF</button>
+              <button class="btn btn-secondary" onclick="recordOutcome()">Record Outcome</button>
+            </div>`;
+          break;
+      }
+
+      card.innerHTML = html;
+
+      // Update nav buttons
+      document.getElementById('wizPrev').style.display = wizardStep > 0 ? 'inline-block' : 'none';
+      document.getElementById('wizNext').textContent = wizardStep === WIZARD_STEPS.length - 1 ? 'Finish' : 'Next →';
+    }
+
+    function wizardNext() {
+      wizSave();
+      if (wizardStep < WIZARD_STEPS.length - 1) {
+        wizardStep++;
+        renderWizardStep();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    function wizardPrev() {
+      wizSave();
+      if (wizardStep > 0) {
+        wizardStep--;
+        renderWizardStep();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    // ============================================================
+    // Autosave
+    // ============================================================
+    function wizAutoSave() {
+      clearTimeout(autosaveTimer);
+      const indicator = document.getElementById('autosaveIndicator');
+      if (indicator) indicator.innerHTML = '<div class="dot" style="background:var(--warning);"></div> Saving...';
+      autosaveTimer = setTimeout(() => wizSave(), 1500);
+    }
+
+    async function wizSave() {
+      if (!currentApp || !authToken) return;
+      const step = WIZARD_STEPS[wizardStep];
+      const body = {
+        wizardStep: wizardStep + 1,
+        percentComplete: Math.round(((wizardStep + 1) / WIZARD_STEPS.length) * 100)
+      };
+
+      // Collect current step data
+      switch (step.key) {
+        case 'organization':
+          body.organizationProfile = {
+            ...currentApp.organization_profile,
+            legalName: gv('wiz_legalName'),
+            type: gv('wiz_orgType'),
+            craBusinessNumber: gv('wiz_craBN'),
+            province: gv('wiz_province'),
+            employeeCount: gv('wiz_employees') ? parseInt(gv('wiz_employees')) : null
+          };
+          body.factsLedger = {
+            ...currentApp.facts_ledger,
+            businessName: gv('wiz_legalName'),
+            organizationType: gv('wiz_orgType'),
+            craBusinessNumber: gv('wiz_craBN'),
+            province: gv('wiz_province'),
+            employeeCount: gv('wiz_employees') ? parseInt(gv('wiz_employees')) : null
+          };
+          break;
+        case 'project':
+          body.projectProfile = {
+            ...currentApp.project_profile,
+            title: gv('wiz_projTitle'),
+            description: gv('wiz_projDesc'),
+            needStatement: gv('wiz_projNeed'),
+            startDate: gv('wiz_projStart'),
+            endDate: gv('wiz_projEnd')
+          };
+          break;
+        case 'budget':
+          // Budget items are saved via wizBudgetChange
+          body.budget = { ...currentApp.budget, otherFunding: gv('wiz_otherFunding') };
+          break;
+        case 'narrative':
+          body.answers = {
+            ...currentApp.answers,
+            outcomes: gv('wiz_outcomes'),
+            risks: gv('wiz_risks'),
+            alignment: gv('wiz_alignment')
+          };
+          break;
+      }
+
+      try {
+        const res = await fetch(`${API}/applications/${currentApp.id}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        
+        // Merge saved data back
+        Object.assign(currentApp, {
+          ...body,
+          organization_profile: body.organizationProfile || currentApp.organization_profile,
+          project_profile: body.projectProfile || currentApp.project_profile,
+          facts_ledger: body.factsLedger || currentApp.facts_ledger,
+          answers: body.answers || currentApp.answers,
+          budget: body.budget || currentApp.budget
+        });
+
+        // Show consistency warnings
+        if (data.consistencyWarnings && data.consistencyWarnings.length > 0) {
+          const msgs = data.consistencyWarnings.map(w =>
+            `• ${w.field}: "${w.oldValue}" → "${w.newValue}"`
+          ).join('\n');
+          const update = confirm(
+            `Some facts changed from your earlier answers:\n\n${msgs}\n\nUpdate this field everywhere in your application?`
+          );
+          if (update) {
+            // User confirmed — facts ledger was already sent with new values
+            console.log('Consistency: user confirmed cascading update');
+          } else {
+            console.log('Consistency: user declined update — values kept as-is');
+          }
+        }
+
+        const indicator = document.getElementById('autosaveIndicator');
+        if (indicator) indicator.innerHTML = '<div class="dot"></div> Saved';
+      } catch (e) {
+        console.error('Save error:', e);
+        const indicator = document.getElementById('autosaveIndicator');
+        if (indicator) indicator.innerHTML = '<div class="dot" style="background:var(--error);"></div> Save failed';
+      }
+    }
+
+    function gv(id) {
+      const el = document.getElementById(id);
+      return el ? el.value : '';
+    }
+
+    // ============================================================
+    // Budget helpers
+    // ============================================================
+    function addBudgetItem() {
+      if (!currentApp.budget) currentApp.budget = {};
+      if (!currentApp.budget.items) currentApp.budget.items = [];
+      currentApp.budget.items.push({ description: '', amount: 0, category: 'equipment' });
+      renderWizardStep();
+    }
+
+    function removeBudgetItem(idx) {
+      currentApp.budget.items.splice(idx, 1);
+      updateBudgetTotal();
+      renderWizardStep();
+      wizAutoSave();
+    }
+
+    function wizBudgetChange() {
+      if (!currentApp.budget) currentApp.budget = {};
+      if (!currentApp.budget.items) currentApp.budget.items = [];
+      
+      document.querySelectorAll('[data-budget-idx]').forEach(el => {
+        const idx = parseInt(el.dataset.budgetIdx);
+        const field = el.dataset.field;
+        if (!currentApp.budget.items[idx]) currentApp.budget.items[idx] = {};
+        currentApp.budget.items[idx][field] = field === 'amount' ? parseFloat(el.value) || 0 : el.value;
+      });
+      
+      updateBudgetTotal();
+      wizAutoSave();
+    }
+
+    function updateBudgetTotal() {
+      const total = (currentApp.budget?.items || []).reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+      currentApp.budget.totalAmount = total;
+      const el = document.getElementById('budgetTotal');
+      if (el) el.textContent = '$' + total.toLocaleString(undefined, { minimumFractionDigits: 2 });
+    }
+
+    function toggleDoc(idx, docType) {
+      if (!currentApp.attachments_checklist) currentApp.attachments_checklist = [];
+      const existing = currentApp.attachments_checklist.findIndex(c => c.docType === docType);
+      if (existing >= 0) {
+        currentApp.attachments_checklist.splice(existing, 1);
+      } else {
+        currentApp.attachments_checklist.push({ docType, status: 'ready', timestamp: new Date().toISOString() });
+      }
+      wizAutoSave();
+    }
+
+    // ============================================================
+    // AI Draft
+    // ============================================================
+    async function aiDraft(textareaId, question) {
+      if (!currentApp || !authToken) return;
+      const textarea = document.getElementById(textareaId);
+      const btn = event.target;
+      const origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳ Generating...';
+      try {
+        const org = currentApp.organization_profile || {};
+        const proj = currentApp.project_profile || {};
+        const programPriorities = (currentApp.priority_lexicon || []).join(', ');
+        const res = await fetch(`${API}/applications/${currentApp.id}/ai-draft`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question,
+            userInput: textarea.value,
+            programContext: programPriorities || undefined,
+            organizationProfile: Object.keys(org).length ? org : undefined,
+            projectProfile: Object.keys(proj).length ? proj : undefined
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.data?.draftText) {
+          textarea.value = data.data.draftText;
+          wizAutoSave();
+        } else {
+          alert(data.error || 'AI drafting unavailable. Please try again later.');
+        }
+      } catch (e) {
+        alert('AI drafting failed. The OpenAI service may be unavailable.');
+        console.error('AI draft error:', e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+      }
+    }
+
+    // ============================================================
+    // PDF Download
+    // ============================================================
+    async function downloadPdf() {
+      if (!currentApp || !authToken) return;
+      try {
+        const res = await fetch(`${API}/applications/${currentApp.id}/export/pdf`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (!res.ok) { alert('PDF generation failed'); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `grant-application-${currentApp.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert('PDF download failed.');
+        console.error('PDF download error:', e);
+      }
+    }
+
+    // ============================================================
+    // Export
+    // ============================================================
+    async function generateExport() {
+      if (!currentApp || !authToken) return;
+      try {
+        const res = await fetch(`${API}/applications/${currentApp.id}/export`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ packType: 'manual' })
+        });
+        const data = await res.json();
+        if (!data.success) { alert('Export failed: ' + data.error); return; }
+
+        const pack = data.data;
+        const budgetWarnings = pack.budget?.crossCheck?.warnings || [];
+        document.getElementById('exportContent').innerHTML = `
+          <div class="alert alert-success" style="margin-bottom:24px;">
+            <span>✅</span>
+            <span>Draft pack generated successfully. Review each section before submitting through the official portal.</span>
+          </div>
+
+          ${pack.missingDocuments > 0 ? `
+          <div class="alert alert-warning" style="margin-bottom:16px;">
+            <span>📎</span>
+            <span><strong>${pack.missingDocuments} required document(s) still missing.</strong> Check the document checklist below.</span>
+          </div>` : ''}
+
+          ${budgetWarnings.length > 0 ? `
+          <div class="alert alert-warning" style="margin-bottom:16px;">
+            <span>💰</span>
+            <span><strong>Budget check:</strong> ${budgetWarnings.join('; ')}</span>
+          </div>` : ''}
+
+          <div class="export-card">
+            <h4>📄 Answers Document</h4>
+            <pre style="white-space:pre-wrap; font-size:14px; color:var(--text); margin-top:12px; max-height:400px; overflow-y:auto; background:var(--bg); padding:16px; border-radius:8px;">${escapeHtml(pack.answersDocument || 'No answers document generated.')}</pre>
+          </div>
+
+          <div class="export-card">
+            <h4>💰 Budget Summary</h4>
+            <div style="margin-top:12px;">
+              <p style="font-size:15px; font-weight:600;">Total: $${(pack.budget?.totalProjectCost || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+              ${pack.budget?.categoryBreakdown ? `
+                <div style="margin-top:8px; font-size:13px; color:var(--text-light);">
+                  ${Object.entries(pack.budget.categoryBreakdown).map(([cat, amt]) =>
+                    `<span style="display:inline-block; margin-right:16px; margin-bottom:4px;"><strong>${cat}:</strong> $${amt.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>`
+                  ).join('')}
+                </div>` : ''}
+              ${pack.budget?.otherFunding ? `<p style="font-size:13px; color:var(--text-light); margin-top:8px;"><strong>Other funding:</strong> ${escapeHtml(pack.budget.otherFunding)}</p>` : ''}
+              ${pack.budget?.crossCheck ? `
+                <div style="margin-top:12px; padding:10px; background:var(--bg); border-radius:8px; font-size:12px;">
+                  <strong>Cross-check:</strong>
+                  ${pack.budget.crossCheck.allHaveDescriptions ? '✓ All items described' : '⚠ Some items lack descriptions'} ·
+                  ${pack.budget.crossCheck.allHaveAmounts ? '✓ All amounts set' : '⚠ Some amounts missing'} ·
+                  ${pack.budget.crossCheck.itemCount} line items
+                </div>` : ''}
+            </div>
+          </div>
+
+          <div class="export-card">
+            <h4>✅ Document Checklist</h4>
+            ${(pack.checklist || []).map(c => `
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px;">
+                <span>${c.status === 'ready' ? '✅' : '❌'}</span>
+                <span>${escapeHtml(c.document)}</span>
+                <span style="color:var(--text-light);">(${c.status})</span>
+              </div>
+            `).join('')}
+          </div>
+
+          ${(pack.citations || []).length > 0 ? `
+          <div class="export-card">
+            <h4>📚 Source Citations</h4>
+            ${pack.citations.map(c => `
+              <div style="padding:8px 0; font-size:13px; border-bottom:1px solid var(--bg);">
+                <strong>[${c.number}]</strong> ${escapeHtml(c.topic || '')} — ${escapeHtml(c.text || '')}
+                <br><span style="color:var(--text-light); font-style:italic;">Source: ${escapeHtml(c.source || 'N/A')}${c.url ? ` · <a href="${c.url}" target="_blank">Link</a>` : ''}</span>
+              </div>
+            `).join('')}
+          </div>` : ''}
+
+          <div class="export-card">
+            <h4>⚠️ Disclosure & Privacy</h4>
+            <p style="font-size:13px; color:var(--text-light); font-style:italic; margin-top:8px;">${escapeHtml(pack.disclosureNote || '')}</p>
+            ${pack.publicDisclosureWarning ? `<p style="font-size:12px; color:var(--warning); margin-top:8px;">${escapeHtml(pack.publicDisclosureWarning)}</p>` : ''}
+            ${pack.retentionNote ? `<p style="font-size:12px; color:var(--text-light); margin-top:8px;">${escapeHtml(pack.retentionNote)}</p>` : ''}
+          </div>
+
+          <div style="margin-top:24px; text-align:center;">
+            <button class="btn btn-primary btn-sm" onclick="downloadPdf()" style="margin-right:12px;">📥 Download PDF</button>
+            <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">Back to Dashboard</button>
+          </div>
+        `;
+        showView('export');
+      } catch (e) { console.error('Export error:', e); }
+    }
+
+    async function recordOutcome() {
+      const outcome = prompt('What was the result? (awarded / rejected / withdrawn / no_response)');
+      if (!outcome || !['awarded','rejected','withdrawn','no_response'].includes(outcome)) return;
+      const amount = outcome === 'awarded' ? prompt('Award amount ($):') : null;
+      try {
+        await fetch(`${API}/applications/${currentApp.id}/outcome`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outcome, outcomeAmount: amount ? parseFloat(amount) : null })
+        });
+        alert('Outcome recorded. Thank you for helping improve our process!');
+      } catch (e) { console.error('Outcome error:', e); }
+    }
+
+    // ============================================================
+    // Profile
+    // ============================================================
+    async function loadProfile() {
+      if (!authToken) return;
+      try {
+        const res = await fetch(`${API}/profile`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const { data } = await res.json();
+        if (!data) return;
+        document.getElementById('profName').value = data.contact_name || '';
+        document.getElementById('profBusiness').value = data.business_name || '';
+        document.getElementById('profProvince').value = data.province || '';
+        document.getElementById('profPostal').value = data.postal_code || '';
+        document.getElementById('profOrgType').value = data.organization_type || '';
+        document.getElementById('profEmployees').value = data.employee_count || '';
+        document.getElementById('profCRA').value = data.cra_business_number || '';
+      } catch (e) { console.error('Load profile error:', e); }
+    }
+
+    async function handleProfileUpdate(e) {
+      e.preventDefault();
+      try {
+        await fetch(`${API}/profile`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contactName: document.getElementById('profName').value,
+            businessName: document.getElementById('profBusiness').value,
+            province: document.getElementById('profProvince').value,
+            postalCode: document.getElementById('profPostal').value,
+            organizationType: document.getElementById('profOrgType').value,
+            employeeCount: document.getElementById('profEmployees').value ? parseInt(document.getElementById('profEmployees').value) : null,
+            craBusinessNumber: document.getElementById('profCRA').value
+          })
+        });
+        alert('Profile saved!');
+      } catch (e) { console.error('Profile update error:', e); }
+    }
+
+    async function handleDeleteAccount() {
+      if (!confirm('This will permanently delete your account and all application data. This cannot be undone. Continue?')) return;
+      if (!confirm('Are you really sure? All drafts and saved progress will be deleted.')) return;
+      try {
+        await fetch(`${API}/profile`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        logout();
+        alert('Your account and data have been deleted.');
+      } catch (e) { console.error('Delete account error:', e); }
+    }
+
+    // ============================================================
+    // Utils
+    // ============================================================
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+    function escapeAttr(str) {
+      return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // ============================================================
+    // Init
+    // ============================================================
+    (async function init() {
+      // Check for hash navigation
+      const hash = window.location.hash.replace('#', '');
+      
+      if (authToken) {
+        // Validate token
+        try {
+          const res = await fetch(`${API}/profile`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          });
+          const data = await res.json();
+          if (data.success) {
+            currentUser = { contactName: data.data.contact_name, email: data.data.email };
+            updateNavAuth();
+            if (hash === 'programs') {
+              showView('programs');
+            } else {
+              showView('dashboard');
+            }
+            return;
+          }
+        } catch (e) {}
+        // Token invalid
+        logout();
+      }
+
+      // Not authenticated
+      updateNavAuth();
+      if (hash === 'register') {
+        showView('register');
+      } else {
+        showView('landing');
+        loadPublicPrograms();
+      }
+    })();
+  </script>
+</body>
+</html>
