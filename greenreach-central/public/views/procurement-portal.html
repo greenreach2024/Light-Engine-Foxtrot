@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Procurement Portal | Light Engine</title>
+  <link rel="stylesheet" href="/styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ────────────────────────── */
+    .portal-header {
+      background: rgba(0,0,0,0.4);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 1001;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .portal-header h1 { font-size: 1.5rem; color: #60a5fa; font-weight: 700; }
+    .portal-header .farm-name { font-size: 0.85rem; color: #94a3b8; }
+    .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+    .cart-badge {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      background: #3b82f6;
+      color: #fff;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .cart-badge:hover { background: #2563eb; }
+    .cart-count {
+      background: #ef4444;
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 700;
+      min-width: 18px;
+      text-align: center;
+    }
+    .cart-count.empty { display: none; }
+
+    .cart-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 0.75rem 2rem 0.25rem;
+    }
+
+    /* ─── Navigation Tabs ──────────────── */
+    .nav-tabs {
+      display: flex;
+      gap: 0;
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      overflow-x: auto;
+    }
+    .nav-tab {
+      padding: 0.8rem 1.5rem;
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .nav-tab:hover { color: #e2e8f0; background: rgba(255,255,255,0.03); }
+    .nav-tab.active { color: #60a5fa; border-bottom-color: #3b82f6; }
+
+    /* ─── Container / Layout ───────────── */
+    .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ─── Cards ─────────────────────────── */
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: all 0.2s;
+    }
+    .card:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
+
+    /* ─── Category Filter Bar ──────────── */
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+    .filter-bar input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.6rem 1rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #f8fafc;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .filter-bar input[type="text"]:focus { border-color: #3b82f6; }
+    .filter-bar input[type="text"]::placeholder { color: #64748b; }
+    .filter-pill {
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: #94a3b8;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .filter-pill:hover { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+    .filter-pill.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+
+    /* ─── Product Grid ─────────────────── */
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .product-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.2s;
+    }
+    .product-card:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.15); transform: translateY(-1px); }
+    .product-card.featured { border-color: rgba(59,130,246,0.3); }
+    .product-category-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .product-name { font-size: 1rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.4rem; line-height: 1.3; }
+    .product-desc { font-size: 0.8rem; color: #94a3b8; line-height: 1.5; flex: 1; margin-bottom: 0.75rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .product-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .product-price { font-size: 1.2rem; font-weight: 700; color: #4ade80; }
+    .product-unit { font-size: 0.75rem; color: #64748b; }
+    .product-supplier { font-size: 0.75rem; color: #60a5fa; margin-bottom: 0.5rem; }
+    .product-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+    .product-tag { font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: #94a3b8; }
+    .stock-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+    .stock-badge.in-stock { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .stock-badge.out-of-stock { background: rgba(239,68,68,0.15); color: #f87171; }
+    .stock-badge.lead-time { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .add-to-cart-row { display: flex; gap: 0.5rem; align-items: center; margin-top: auto; }
+    .qty-input {
+      width: 60px;
+      padding: 0.4rem;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      color: #f8fafc;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-success { background: #22c55e; color: #0f172a; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-outline { background: transparent; color: #94a3b8; border: 1px solid rgba(255,255,255,0.15); }
+    .btn-outline:hover { background: rgba(255,255,255,0.05); color: #e2e8f0; }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+    .btn-block { width: 100%; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ─── Cart Panel ───────────────────── */
+    .cart-sidebar {
+      position: fixed;
+      top: 0; right: -480px;
+      width: 460px;
+      max-width: 90vw;
+      height: 100vh;
+      background: #1e293b;
+      border-left: 1px solid rgba(255,255,255,0.1);
+      z-index: 2000;
+      transition: right 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    .cart-sidebar.open { right: 0; }
+    .cart-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1999;
+      display: none;
+    }
+    .cart-overlay.open { display: block; }
+    .cart-header {
+      padding: 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cart-header h2 { font-size: 1.2rem; color: #e2e8f0; }
+    .cart-close { background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; }
+    .cart-close:hover { color: #f8fafc; }
+    .cart-items { flex: 1; overflow-y: auto; padding: 1rem; }
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      background: rgba(255,255,255,0.04);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+    }
+    .cart-item-info { flex: 1; }
+    .cart-item-name { font-size: 0.85rem; color: #e2e8f0; font-weight: 500; }
+    .cart-item-detail { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+    .cart-item-price { font-size: 0.9rem; color: #4ade80; font-weight: 600; white-space: nowrap; margin-left: 0.5rem; }
+    .cart-item-actions { display: flex; gap: 0.25rem; align-items: center; margin-left: 0.5rem; }
+    .cart-item-actions button { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
+    .cart-footer {
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 1.25rem;
+    }
+    .cart-totals { margin-bottom: 1rem; }
+    .cart-total-row { display: flex; justify-content: space-between; padding: 0.3rem 0; font-size: 0.9rem; }
+    .cart-total-row.total { font-size: 1.1rem; font-weight: 700; color: #4ade80; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem; margin-top: 0.3rem; }
+    .cart-empty { text-align: center; padding: 3rem 1rem; color: #64748b; }
+    .cart-empty-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+
+    /* ─── Checkout Modal ───────────────── */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      z-index: 3000;
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #1e293b;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      width: 540px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 2rem;
+    }
+    .modal h2 { font-size: 1.3rem; color: #e2e8f0; margin-bottom: 1.5rem; }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.4rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      color: #f8fafc;
+      font-size: 0.9rem;
+    }
+    .form-group textarea { resize: vertical; min-height: 60px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-row-3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; }
+
+    /* ─── Orders Table ─────────────────── */
+    .orders-table { width: 100%; border-collapse: collapse; }
+    .orders-table th {
+      text-align: left;
+      padding: 0.75rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .orders-table td {
+      padding: 0.75rem;
+      font-size: 0.85rem;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: #cbd5e1;
+    }
+    .orders-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .status-pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .status-pending { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .status-confirmed { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .status-shipped { background: rgba(168,85,247,0.15); color: #c084fc; }
+    .status-delivered { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .status-cancelled { background: rgba(239,68,68,0.15); color: #f87171; }
+    .status-return_requested { background: rgba(249,115,22,0.15); color: #fb923c; }
+    .status-received { background: rgba(34,197,94,0.15); color: #4ade80; }
+
+    /* ─── Order Detail ─────────────────── */
+    .order-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.5rem; }
+    .order-items-list { margin-top: 1rem; }
+    .order-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .supplier-group-header { font-size: 0.8rem; color: #60a5fa; font-weight: 600; margin: 1rem 0 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ─── Summary Stats ────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .stat-value { font-size: 1.8rem; font-weight: 700; color: #60a5fa; }
+    .stat-label { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .loading { text-align: center; padding: 3rem; color: #64748b; }
+    .empty-state { text-align: center; padding: 3rem; color: #64748b; }
+    .empty-state-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      padding: 0.75rem 1.25rem;
+      background: #22c55e;
+      color: #0f172a;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      z-index: 5000;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.error { background: #ef4444; color: #fff; }
+
+    @media (max-width: 768px) {
+      .portal-header { padding: 0.75rem 1rem; }
+      .portal-header h1 { font-size: 1.2rem; }
+      .cart-toolbar { padding: 0.5rem 1rem 0.25rem; }
+      .container { padding: 1rem; }
+      .product-grid { grid-template-columns: 1fr; }
+      .form-row, .form-row-3 { grid-template-columns: 1fr; }
+    }
+
+    #farm-assistant { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Header with standard navigation -->
+  <div class="portal-header">
+    <div>
+      <h1>Procurement Portal</h1>
+      <div class="farm-name" id="farmNameDisplay">Loading...</div>
+    </div>
+    <div class="header-actions">
+      <nav class="nav-menu">
+        <div class="nav-item inventory">
+          <button class="nav-button inventory">
+            Inventory Management <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
+            <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
+            <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
+            <a href="tray-inventory.html" class="dropdown-item">Activity Hub</a>
+            <a href="/LE-farm-admin.html#traceability" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+        <div class="nav-item farm-monitoring">
+          <button class="nav-button farm-monitoring">
+            Farm Monitoring <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="/farm-vitality.html" class="dropdown-item">Farm Vitality Dashboard</a>
+            <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+            <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
+          </div>
+        </div>
+        <div class="nav-item admin">
+          <button class="nav-button admin">
+            Admin <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
+            <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
+          </div>
+        </div>
+        <div class="nav-item sales">
+          <button class="nav-button sales">
+            Sales <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu dropdown-right">
+            <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">POS Sale</a>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <div class="cart-toolbar">
+    <button class="cart-badge" onclick="toggleCart()">
+      Cart <span class="cart-count" id="cartCount">0</span>
+    </button>
+  </div>
+
+  <!-- Navigation -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('catalog', this)">Catalog</button>
+    <button class="nav-tab" onclick="switchTab('orders', this)">My Orders</button>
+    <button class="nav-tab" onclick="switchTab('inventory', this)">Supply Inventory</button>
+    <button class="nav-tab" onclick="switchTab('admin', this)">Admin</button>
+  </div>
+
+  <div class="container">
+
+    <!-- ═══════════════════════════════════ -->
+    <!-- CATALOG TAB -->
+    <!-- ═══════════════════════════════════ -->
+    <div class="tab-panel active" id="panel-catalog">
+      <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="Search products by name, SKU, or keyword..." oninput="filterCatalog()">
+        <div id="categoryPills"></div>
+      </div>
+      <div class="product-grid" id="productGrid">
+        <div class="loading">Loading catalog...</div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!-- ORDERS TAB -->
+    <!-- ═══════════════════════════════════ -->
+    <div class="tab-panel" id="panel-orders">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <h2 style="font-size:1.3rem;color:#e2e8f0;">Order History</h2>
+        <button class="btn btn-outline btn-sm" onclick="loadOrders()">↻ Refresh</button>
+      </div>
+      <div id="ordersContainer">
+        <div class="loading">Loading orders...</div>
+      </div>
+      <div id="orderDetail" style="display:none;"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!-- SUPPLY INVENTORY TAB -->
+    <!-- ═══════════════════════════════════ -->
+    <div class="tab-panel" id="panel-inventory">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+        <h2 style="font-size:1.3rem;color:#e2e8f0;">Farm Supply Inventory</h2>
+        <button class="btn btn-outline btn-sm" onclick="loadSupplyInventory()">↻ Refresh</button>
+      </div>
+      <div id="supplyInventoryContainer">
+        <div class="loading">Loading inventory...</div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!-- ADMIN TAB -->
+    <!-- ═══════════════════════════════════ -->
+    <div class="tab-panel" id="panel-admin">
+      <h2 style="font-size:1.3rem;color:#e2e8f0;margin-bottom:1.5rem;">Admin Dashboard</h2>
+      <div class="stats-row" id="adminStats"></div>
+      <div style="margin-bottom:1.5rem;">
+        <h3 style="font-size:1rem;color:#94a3b8;margin-bottom:0.75rem;">Supplier Overview</h3>
+        <div id="supplierList"></div>
+      </div>
+      <div>
+        <h3 style="font-size:1rem;color:#94a3b8;margin-bottom:0.75rem;">Commission Report</h3>
+        <div id="commissionReport"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cart Sidebar -->
+  <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+  <div class="cart-sidebar" id="cartSidebar">
+    <div class="cart-header">
+      <h2>Shopping Cart</h2>
+      <button class="cart-close" onclick="toggleCart()">✕</button>
+    </div>
+    <div class="cart-items" id="cartItems">
+      <div class="cart-empty">
+        <div>Your cart is empty</div>
+        <div style="font-size:0.8rem;margin-top:0.25rem;">Browse the catalog to add items</div>
+      </div>
+    </div>
+    <div class="cart-footer">
+      <div class="cart-totals" id="cartTotals"></div>
+      <button class="btn btn-success btn-block" id="checkoutBtn" onclick="openCheckout()" disabled>Proceed to Checkout</button>
+    </div>
+  </div>
+
+  <!-- Checkout Modal -->
+  <div class="modal-overlay" id="checkoutModal">
+    <div class="modal">
+      <h2>Checkout</h2>
+      <div id="checkoutSummary"></div>
+      <div class="form-group">
+        <label>Shipping Address</label>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label>Street</label><input type="text" id="shipStreet"></div>
+        <div class="form-group"><label>City</label><input type="text" id="shipCity"></div>
+        <div class="form-group"><label>State</label><input type="text" id="shipState"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>ZIP/Postal Code</label><input type="text" id="shipZip"></div>
+        <div class="form-group">
+          <label>Payment Method</label>
+          <select id="paymentMethod">
+            <option value="invoice">Invoice (Net 30)</option>
+            <option value="square">Square</option>
+            <option value="stripe">Stripe</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes (Optional)</label>
+        <textarea id="orderNotes" placeholder="Special instructions, requested delivery date, etc."></textarea>
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1.5rem;">
+        <button class="btn btn-outline" onclick="closeCheckout()">Cancel</button>
+        <button class="btn btn-success" id="placeOrderBtn" onclick="placeOrder()">Place Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+<script>
+// ═════════════════════════════════════════════
+// State
+// ═════════════════════════════════════════════
+const API = '/api/procurement';
+let catalog = { products: [], categories: [] };
+let suppliers = [];
+let cart = [];
+let activeCategory = null;
+let farmInfo = {};
+
+// ═════════════════════════════════════════════
+// Init
+// ═════════════════════════════════════════════
+(async function init() {
+  await loadFarmInfo();
+  await loadCatalog();
+  await loadSuppliers();
+  loadCartFromStorage();
+  updateCartUI();
+})();
+
+async function loadFarmInfo() {
+  try {
+    const r = await fetch('/data/farm.json');
+    if (r.ok) {
+      farmInfo = await r.json();
+      document.getElementById('farmNameDisplay').textContent = farmInfo.name || farmInfo.farmName || 'Farm';
+    }
+  } catch (e) {}
+}
+
+// ═════════════════════════════════════════════
+// Catalog
+// ═════════════════════════════════════════════
+async function loadCatalog() {
+  try {
+    const r = await fetch(`${API}/catalog?limit=100`);
+    const data = await r.json();
+    if (data.ok) {
+      catalog.products = data.products;
+      catalog.categories = data.categories || [];
+      renderCategoryPills();
+      renderProducts(catalog.products);
+    }
+  } catch (e) {
+    document.getElementById('productGrid').innerHTML = '<div class="empty-state">Failed to load catalog</div>';
+  }
+}
+
+function renderCategoryPills() {
+  const container = document.getElementById('categoryPills');
+  const all = `<button class="filter-pill active" onclick="filterByCategory(null, this)">All</button>`;
+  const pills = catalog.categories
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(c => `<button class="filter-pill" onclick="filterByCategory('${c.id}', this)">${c.icon} ${c.name}</button>`)
+    .join('');
+  container.innerHTML = all + pills;
+}
+
+function filterByCategory(cat, btn) {
+  activeCategory = cat;
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  filterCatalog();
+}
+
+function filterCatalog() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let filtered = catalog.products;
+  if (activeCategory) filtered = filtered.filter(p => p.category === activeCategory);
+  if (q) filtered = filtered.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    p.description.toLowerCase().includes(q) ||
+    p.sku.toLowerCase().includes(q) ||
+    (p.tags && p.tags.some(t => t.includes(q)))
+  );
+  renderProducts(filtered);
+}
+
+function renderProducts(products) {
+  const grid = document.getElementById('productGrid');
+  if (!products.length) {
+    grid.innerHTML = '<div class="empty-state">No products found</div>';
+    return;
+  }
+  const catMap = {};
+  catalog.categories.forEach(c => catMap[c.id] = c);
+
+  grid.innerHTML = products.map(p => {
+    const cat = catMap[p.category] || {};
+    const sup = suppliers.find(s => s.id === p.supplierId);
+    const cartItem = cart.find(c => c.sku === p.sku);
+    const qty = cartItem ? cartItem.quantity : 1;
+
+    let stockBadge = '';
+    if (!p.inStock) stockBadge = '<span class="stock-badge out-of-stock">Out of Stock</span>';
+    else if (p.leadTimeDays) stockBadge = `<span class="stock-badge lead-time">${p.leadTimeDays}-day lead</span>`;
+    else stockBadge = '<span class="stock-badge in-stock">In Stock</span>';
+
+    return `
+      <div class="product-card ${p.featured ? 'featured' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          ${stockBadge}
+        </div>
+        <div class="product-name">${p.name}</div>
+        <div class="product-supplier">${sup?.name || p.supplierId}</div>
+        <div class="product-desc">${p.description}</div>
+        <div class="product-tags">${(p.tags || []).slice(0, 4).map(t => `<span class="product-tag">${t}</span>`).join('')}</div>
+        <div class="product-meta">
+          <div>
+            <span class="product-price">$${p.price.toFixed(2)}</span>
+            <span class="product-unit"> / ${p.unitDescription || p.saleUnit}</span>
+          </div>
+        </div>
+        <div class="add-to-cart-row">
+          <input type="number" class="qty-input" value="${qty}" min="1" max="999" id="qty-${p.sku}">
+          <button class="btn btn-primary btn-sm" onclick="addToCart('${p.sku}')" ${!p.inStock ? 'disabled' : ''}>
+            ${cartItem ? '✓ Update' : '+ Add'}
+          </button>
+          ${cartItem ? `<button class="btn btn-danger btn-sm" onclick="removeFromCart('${p.sku}')">✕</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ═════════════════════════════════════════════
+// Cart
+// ═════════════════════════════════════════════
+function loadCartFromStorage() {
+  try {
+    const saved = localStorage.getItem('procurement-cart');
+    if (saved) cart = JSON.parse(saved);
+  } catch (e) { cart = []; }
+}
+
+function saveCartToStorage() {
+  localStorage.setItem('procurement-cart', JSON.stringify(cart));
+}
+
+function addToCart(sku) {
+  const product = catalog.products.find(p => p.sku === sku);
+  if (!product) return;
+  const qtyEl = document.getElementById(`qty-${sku}`);
+  const qty = parseInt(qtyEl?.value) || 1;
+
+  const existing = cart.find(c => c.sku === sku);
+  if (existing) {
+    existing.quantity = qty;
+  } else {
+    cart.push({
+      sku: product.sku,
+      name: product.name,
+      supplierId: product.supplierId,
+      price: product.price,
+      saleUnit: product.saleUnit,
+      unitDescription: product.unitDescription,
+      quantity: qty
+    });
+  }
+  saveCartToStorage();
+  updateCartUI();
+  renderProducts(getFilteredProducts());
+  showToast(`${product.name} added to cart`);
+}
+
+function removeFromCart(sku) {
+  cart = cart.filter(c => c.sku !== sku);
+  saveCartToStorage();
+  updateCartUI();
+  renderProducts(getFilteredProducts());
+}
+
+function updateCartQty(sku, delta) {
+  const item = cart.find(c => c.sku === sku);
+  if (!item) return;
+  item.quantity = Math.max(1, item.quantity + delta);
+  saveCartToStorage();
+  updateCartUI();
+}
+
+function getFilteredProducts() {
+  let filtered = catalog.products;
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  if (activeCategory) filtered = filtered.filter(p => p.category === activeCategory);
+  if (q) filtered = filtered.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    p.description.toLowerCase().includes(q) ||
+    p.sku.toLowerCase().includes(q) ||
+    (p.tags && p.tags.some(t => t.includes(q)))
+  );
+  return filtered;
+}
+
+function updateCartUI() {
+  const countEl = document.getElementById('cartCount');
+  const totalItems = cart.reduce((s, c) => s + c.quantity, 0);
+  countEl.textContent = totalItems;
+  countEl.classList.toggle('empty', totalItems === 0);
+
+  const cartItemsEl = document.getElementById('cartItems');
+  const cartTotalsEl = document.getElementById('cartTotals');
+  const checkoutBtn = document.getElementById('checkoutBtn');
+
+  if (!cart.length) {
+    cartItemsEl.innerHTML = '<div class="cart-empty"><div>Your cart is empty</div></div>';
+    cartTotalsEl.innerHTML = '';
+    checkoutBtn.disabled = true;
+    return;
+  }
+
+  checkoutBtn.disabled = false;
+  // Group by supplier
+  const groups = {};
+  cart.forEach(item => {
+    const sup = suppliers.find(s => s.id === item.supplierId);
+    const key = item.supplierId;
+    if (!groups[key]) groups[key] = { name: sup?.name || key, items: [] };
+    groups[key].items.push(item);
+  });
+
+  let html = '';
+  for (const [supId, group] of Object.entries(groups)) {
+    html += `<div class="supplier-group-header">${group.name}</div>`;
+    for (const item of group.items) {
+      const lineTotal = (item.price * item.quantity).toFixed(2);
+      html += `
+        <div class="cart-item">
+          <div class="cart-item-info">
+            <div class="cart-item-name">${item.name}</div>
+            <div class="cart-item-detail">${item.quantity} × $${item.price.toFixed(2)} / ${item.saleUnit}</div>
+          </div>
+          <div class="cart-item-price">$${lineTotal}</div>
+          <div class="cart-item-actions">
+            <button class="btn btn-outline btn-sm" onclick="updateCartQty('${item.sku}', -1)">−</button>
+            <button class="btn btn-outline btn-sm" onclick="updateCartQty('${item.sku}', 1)">+</button>
+            <button class="btn btn-danger btn-sm" onclick="removeFromCart('${item.sku}')">✕</button>
+          </div>
+        </div>
+      `;
+    }
+  }
+  cartItemsEl.innerHTML = html;
+
+  const subtotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+  const supplierCount = Object.keys(groups).length;
+  cartTotalsEl.innerHTML = `
+    <div class="cart-total-row"><span>Items</span><span>${totalItems}</span></div>
+    <div class="cart-total-row"><span>Suppliers</span><span>${supplierCount}</span></div>
+    <div class="cart-total-row total"><span>Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
+  `;
+}
+
+function toggleCart() {
+  document.getElementById('cartSidebar').classList.toggle('open');
+  document.getElementById('cartOverlay').classList.toggle('open');
+}
+
+// ═════════════════════════════════════════════
+// Checkout
+// ═════════════════════════════════════════════
+function openCheckout() {
+  if (!cart.length) return;
+  toggleCart(); // Close cart sidebar
+
+  // Pre-fill shipping from farm info
+  document.getElementById('shipStreet').value = farmInfo.address || '';
+  document.getElementById('shipCity').value = farmInfo.city || '';
+  document.getElementById('shipState').value = farmInfo.state || '';
+  document.getElementById('shipZip').value = farmInfo.postalCode || '';
+
+  // Summary
+  const subtotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+  const supplierGroups = {};
+  cart.forEach(c => {
+    const sup = suppliers.find(s => s.id === c.supplierId);
+    if (!supplierGroups[c.supplierId]) supplierGroups[c.supplierId] = { name: sup?.name || c.supplierId, total: 0, count: 0 };
+    supplierGroups[c.supplierId].total += c.price * c.quantity;
+    supplierGroups[c.supplierId].count += c.quantity;
+  });
+
+  document.getElementById('checkoutSummary').innerHTML = `
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+        <span style="color:#94a3b8;">Items</span><span>${cart.reduce((s, c) => s + c.quantity, 0)}</span>
+      </div>
+      ${Object.values(supplierGroups).map(g => `
+        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:0.2rem 0;">
+          <span style="color:#60a5fa;">${g.name}</span>
+          <span>$${g.total.toFixed(2)} (${g.count} items)</span>
+        </div>
+      `).join('')}
+      <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.1);margin-top:0.5rem;padding-top:0.5rem;font-weight:700;color:#4ade80;font-size:1.1rem;">
+        <span>Total</span><span>$${subtotal.toFixed(2)}</span>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('checkoutModal').classList.add('open');
+}
+
+function closeCheckout() {
+  document.getElementById('checkoutModal').classList.remove('open');
+}
+
+async function placeOrder() {
+  const btn = document.getElementById('placeOrderBtn');
+  btn.disabled = true;
+  btn.textContent = 'Placing order...';
+
+  try {
+    const payload = {
+      items: cart.map(c => ({ sku: c.sku, quantity: c.quantity })),
+      shippingAddress: {
+        street: document.getElementById('shipStreet').value,
+        city: document.getElementById('shipCity').value,
+        state: document.getElementById('shipState').value,
+        zip: document.getElementById('shipZip').value
+      },
+      paymentMethod: document.getElementById('paymentMethod').value,
+      notes: document.getElementById('orderNotes').value
+    };
+
+    const r = await fetch(`${API}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+
+    if (data.ok) {
+      cart = [];
+      saveCartToStorage();
+      updateCartUI();
+      closeCheckout();
+      showToast(`Order ${data.order.orderId} placed successfully!`);
+      // Switch to orders tab
+      switchTab('orders', document.querySelectorAll('.nav-tab')[1]);
+      loadOrders();
+    } else {
+      showToast(data.error || 'Order failed', true);
+    }
+  } catch (e) {
+    showToast('Order failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Place Order';
+  }
+}
+
+// ═════════════════════════════════════════════
+// Orders
+// ═════════════════════════════════════════════
+async function loadOrders() {
+  const container = document.getElementById('ordersContainer');
+  const detail = document.getElementById('orderDetail');
+  detail.style.display = 'none';
+  container.style.display = 'block';
+
+  try {
+    const r = await fetch(`${API}/orders`);
+    const data = await r.json();
+
+    if (!data.ok || !data.orders.length) {
+      container.innerHTML = '<div class="empty-state">No orders yet<div style="font-size:0.85rem;margin-top:0.25rem;">Place your first order from the catalog</div></div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <table class="orders-table">
+        <thead><tr>
+          <th>Order ID</th>
+          <th>Date</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th>Status</th>
+          <th>Payment</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${data.orders.map(o => `
+            <tr>
+              <td style="font-weight:600;color:#60a5fa;">${o.orderId}</td>
+              <td>${new Date(o.createdAt).toLocaleDateString()}</td>
+              <td>${o.itemCount} item${o.itemCount !== 1 ? 's' : ''}</td>
+              <td style="color:#4ade80;font-weight:600;">$${o.subtotal.toFixed(2)}</td>
+              <td><span class="status-pill status-${o.status}">${o.status.replace(/_/g, ' ')}</span></td>
+              <td><span class="status-pill status-${o.paymentStatus}">${o.paymentStatus}</span></td>
+              <td><button class="btn btn-outline btn-sm" onclick="viewOrder('${o.orderId}')">View</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state">Failed to load orders</div>';
+  }
+}
+
+async function viewOrder(orderId) {
+  const container = document.getElementById('ordersContainer');
+  const detail = document.getElementById('orderDetail');
+  container.style.display = 'none';
+  detail.style.display = 'block';
+
+  try {
+    const r = await fetch(`${API}/orders/${orderId}`);
+    const data = await r.json();
+    if (!data.ok) { detail.innerHTML = '<div class="empty-state">Order not found</div>'; return; }
+
+    const o = data.order;
+    // Group items by supplier
+    const groups = {};
+    o.items.forEach(item => {
+      const key = item.supplierId;
+      if (!groups[key]) groups[key] = { name: item.supplierName || key, items: [] };
+      groups[key].items.push(item);
+    });
+
+    detail.innerHTML = `
+      <div class="order-detail-header">
+        <div>
+          <h2 style="font-size:1.3rem;color:#e2e8f0;">Order ${o.orderId}</h2>
+          <div style="font-size:0.85rem;color:#94a3b8;">Placed ${new Date(o.createdAt).toLocaleString()}</div>
+        </div>
+        <div style="display:flex;gap:0.5rem;">
+          <span class="status-pill status-${o.status}" style="font-size:0.8rem;padding:4px 14px;">${o.status.replace(/_/g, ' ')}</span>
+          <button class="btn btn-outline btn-sm" onclick="loadOrders()">← Back</button>
+          ${o.status === 'confirmed' || o.status === 'shipped' ? `<button class="btn btn-success btn-sm" onclick="receiveOrder('${o.orderId}')">✓ Mark Received</button>` : ''}
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:1rem;">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+          <div>
+            <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;">Ship To</div>
+            <div style="font-size:0.85rem;color:#e2e8f0;">${o.shippingAddress?.street || ''}</div>
+            <div style="font-size:0.85rem;color:#94a3b8;">${o.shippingAddress?.city || ''}, ${o.shippingAddress?.state || ''} ${o.shippingAddress?.zip || ''}</div>
+          </div>
+          <div>
+            <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;">Payment</div>
+            <div style="font-size:0.85rem;color:#e2e8f0;">${o.paymentMethod}</div>
+            <span class="status-pill status-${o.paymentStatus}">${o.paymentStatus}</span>
+          </div>
+          <div>
+            <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;">Total</div>
+            <div style="font-size:1.2rem;font-weight:700;color:#4ade80;">$${o.subtotal.toFixed(2)}</div>
+          </div>
+        </div>
+        ${o.notes ? `<div style="margin-top:0.75rem;font-size:0.85rem;color:#94a3b8;"><strong>Notes:</strong> ${o.notes}</div>` : ''}
+      </div>
+      <div class="order-items-list">
+        ${Object.entries(groups).map(([supId, g]) => `
+          <div class="supplier-group-header">${g.name}</div>
+          ${g.items.map(item => `
+            <div class="order-line">
+              <div style="flex:1;">
+                <div style="font-weight:500;color:#e2e8f0;">${item.name}</div>
+                <div style="font-size:0.8rem;color:#64748b;">${item.sku} · ${item.quantity} × $${item.unitPrice.toFixed(2)} / ${item.saleUnit}</div>
+                ${item.trackingNumber ? `<div style="font-size:0.75rem;color:#c084fc;margin-top:2px;">Tracking: ${item.trackingNumber} (${item.carrier || ''})</div>` : ''}
+              </div>
+              <div style="text-align:right;">
+                <div style="font-weight:600;color:#4ade80;">$${item.lineTotal.toFixed(2)}</div>
+                <span class="status-pill status-${item.status}">${item.status.replace(/_/g, ' ')}</span>
+              </div>
+            </div>
+          `).join('')}
+        `).join('')}
+      </div>
+      ${o.returns && o.returns.length ? `
+        <div style="margin-top:1.5rem;">
+          <h3 style="font-size:1rem;color:#f59e0b;margin-bottom:0.5rem;">Returns</h3>
+          ${o.returns.map(ret => `
+            <div class="card" style="margin-bottom:0.5rem;">
+              <div style="font-size:0.85rem;"><strong>${ret.rmaId}</strong> – <span class="status-pill status-${ret.status}">${ret.status}</span></div>
+              ${ret.items.map(ri => `<div style="font-size:0.8rem;color:#94a3b8;margin-top:0.25rem;">${ri.name} × ${ri.quantity} – ${ri.reason} (Refund: $${ri.refundAmount.toFixed(2)})</div>`).join('')}
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    `;
+  } catch (e) {
+    detail.innerHTML = '<div class="empty-state">Failed to load order</div>';
+  }
+}
+
+async function receiveOrder(orderId) {
+  if (!confirm('Mark all items in this order as received? This will update your supply inventory.')) return;
+  try {
+    const r = await fetch(`${API}/orders/${orderId}/receive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await r.json();
+    if (data.ok) {
+      showToast(`${data.received} item(s) received, inventory updated`);
+      viewOrder(orderId);
+    } else {
+      showToast(data.error || 'Failed', true);
+    }
+  } catch (e) {
+    showToast('Failed to update', true);
+  }
+}
+
+// ═════════════════════════════════════════════
+// Supply Inventory
+// ═════════════════════════════════════════════
+async function loadSupplyInventory() {
+  const container = document.getElementById('supplyInventoryContainer');
+  try {
+    const r = await fetch(`${API}/inventory`);
+    const data = await r.json();
+    if (!data.ok || !data.supplies.length) {
+      container.innerHTML = '<div class="empty-state">No supply inventory yet<div style="font-size:0.85rem;margin-top:0.25rem;">Supplies will appear here once orders are received</div></div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <table class="orders-table">
+        <thead><tr>
+          <th>Item</th>
+          <th>Category</th>
+          <th>On Hand</th>
+          <th>Unit</th>
+          <th>Min Level</th>
+          <th>Last Restocked</th>
+        </tr></thead>
+        <tbody>
+          ${data.supplies.map(s => {
+            const low = s.minStockLevel > 0 && s.qtyOnHand <= s.minStockLevel;
+            return `
+              <tr>
+                <td style="font-weight:500;color:#e2e8f0;">${s.name}</td>
+                <td><span class="product-tag">${s.category}</span></td>
+                <td style="font-weight:600;color:${low ? '#f87171' : '#4ade80'};">${s.qtyOnHand.toLocaleString()}</td>
+                <td>${s.standardUnit}</td>
+                <td>${s.minStockLevel || '—'}</td>
+                <td style="color:#94a3b8;">${s.lastRestockedAt ? new Date(s.lastRestockedAt).toLocaleDateString() : '—'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state">Failed to load inventory</div>';
+  }
+}
+
+// ═════════════════════════════════════════════
+// Admin
+// ═════════════════════════════════════════════
+async function loadSuppliers() {
+  try {
+    const r = await fetch(`${API}/suppliers`);
+    const data = await r.json();
+    if (data.ok) suppliers = data.suppliers;
+  } catch (e) {}
+}
+
+async function loadAdmin() {
+  // Stats
+  try {
+    const [ordersR, commR] = await Promise.all([
+      fetch(`${API}/orders`),
+      fetch(`${API}/commission-report`)
+    ]);
+    const ordersData = await ordersR.json();
+    const commData = await commR.json();
+
+    if (ordersData.ok) {
+      document.getElementById('adminStats').innerHTML = `
+        <div class="stat-card"><div class="stat-value">${ordersData.total}</div><div class="stat-label">Total Orders</div></div>
+        <div class="stat-card"><div class="stat-value">$${(commData.grandTotal || 0).toFixed(0)}</div><div class="stat-label">Total Sales</div></div>
+        <div class="stat-card"><div class="stat-value">$${(commData.grandCommission || 0).toFixed(0)}</div><div class="stat-label">Commission Earned</div></div>
+        <div class="stat-card"><div class="stat-value">${catalog.products.length}</div><div class="stat-label">Catalog Products</div></div>
+      `;
+    }
+
+    // Supplier list
+    document.getElementById('supplierList').innerHTML = suppliers.map(s => `
+      <div class="card" style="margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+        <div>
+          <div style="font-weight:600;color:#e2e8f0;">${s.name}</div>
+          <div style="font-size:0.8rem;color:#94a3b8;">${s.categories.join(', ')} · ${s.integrationMethod.toUpperCase()} integration</div>
+        </div>
+        <div>
+          <span class="status-pill status-${s.status === 'active' ? 'delivered' : 'cancelled'}">${s.status}</span>
+          <span style="font-size:0.8rem;color:#94a3b8;margin-left:0.5rem;">Ships ${s.shippingEstimateDays.min}–${s.shippingEstimateDays.max} days</span>
+        </div>
+      </div>
+    `).join('');
+
+    // Commission report
+    if (commData.ok && commData.suppliers.length) {
+      document.getElementById('commissionReport').innerHTML = `
+        <table class="orders-table">
+          <thead><tr><th>Supplier</th><th>Orders</th><th>Sales</th><th>Commission</th></tr></thead>
+          <tbody>
+            ${commData.suppliers.map(s => `
+              <tr>
+                <td style="font-weight:500;color:#e2e8f0;">${s.supplierName}</td>
+                <td>${s.orderCount}</td>
+                <td style="color:#4ade80;">$${s.totalSales.toFixed(2)}</td>
+                <td style="color:#60a5fa;font-weight:600;">$${s.totalCommission.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+            <tr style="border-top:2px solid rgba(255,255,255,0.1);">
+              <td style="font-weight:700;">Total</td>
+              <td>${commData.orderCount}</td>
+              <td style="color:#4ade80;font-weight:700;">$${commData.grandTotal.toFixed(2)}</td>
+              <td style="color:#60a5fa;font-weight:700;">$${commData.grandCommission.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+    } else {
+      document.getElementById('commissionReport').innerHTML = '<div class="empty-state" style="padding:1rem;">No commission data yet</div>';
+    }
+  } catch (e) {
+    document.getElementById('adminStats').innerHTML = '<div class="empty-state">Failed to load admin data</div>';
+  }
+}
+
+// ═════════════════════════════════════════════
+// Tab Switching
+// ═════════════════════════════════════════════
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel-${tab}`).classList.add('active');
+  btn.classList.add('active');
+
+  // Lazy-load tab data
+  if (tab === 'orders') loadOrders();
+  if (tab === 'inventory') loadSupplyInventory();
+  if (tab === 'admin') loadAdmin();
+}
+
+// ═════════════════════════════════════════════
+// Utils
+// ═════════════════════════════════════════════
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ═════════════════════════════════════════════
+// Nav Menu Dropdowns
+// ═════════════════════════════════════════════
+document.querySelectorAll('.nav-item .nav-button').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const parent = btn.closest('.nav-item');
+    const wasOpen = parent.classList.contains('open');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('open'));
+    if (!wasOpen) parent.classList.add('open');
+  });
+});
+document.addEventListener('click', () => {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('open'));
+});
+</script>
+
+</body>
+</html>

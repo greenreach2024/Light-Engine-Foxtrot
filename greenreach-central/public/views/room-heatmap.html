@@ -1,0 +1,2801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heat Map - Light Engine</title>
+  <link rel="stylesheet" href="../styles.foxtrot.css?v=1761427245">
+  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <!-- Layout v2.0 - Flexbox side-by-side -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e7;
+      overflow: auto;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 1001;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
+    }
+
+    .room-selector {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(30, 41, 59, 0.6);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .room-selector label {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .room-selector select {
+      background: rgba(15, 23, 42, 0.8);
+      color: #e4e4e7;
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+    }
+
+    .btn-primary:hover {
+      background: rgba(59, 130, 246, 0.3);
+      transform: scale(1.05);
+    }
+
+    /* Dropdown Navigation Menu */
+    .nav-menu {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .nav-item {
+      position: relative;
+    }
+
+    .nav-button, .nav-link-button {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .nav-button:hover, .nav-link-button:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .nav-button.active {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .nav-arrow {
+      font-size: 0.7rem;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-item:hover .nav-arrow {
+      transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 0.5rem;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 2000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .dropdown-menu.dropdown-right {
+      left: auto;
+      right: 0;
+    }
+
+    .nav-item:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: block;
+      padding: 0.75rem 1rem;
+      color: #93c5fd;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .dropdown-item.active {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+      font-weight: 600;
+    }
+
+    .btn-secondary {
+      background: rgba(100, 116, 139, 0.2);
+      border: 2px solid #64748b;
+      color: #cbd5e1;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(100, 116, 139, 0.3);
+      transform: scale(1.05);
+    }
+
+    .btn-admin {
+      background: rgba(168, 85, 247, 0.2);
+      border: 2px solid #a855f7;
+      color: #e9d5ff;
+    }
+
+    .btn-admin:hover {
+      background: rgba(168, 85, 247, 0.3);
+      transform: scale(1.05);
+    }
+
+    /* Status Bar */
+    .status-bar {
+      background: rgba(15, 23, 42, 0.8);
+      padding: 1rem 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .status-metric {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .status-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .status-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+
+    .status-unit {
+      font-size: 0.875rem;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    .status-range {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-top: 0.2rem;
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      gap: 1rem;
+      padding: 1rem;
+      overflow: auto;
+    }
+
+    /* Heat Map Panel */
+    .heatmap-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .map-container {
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      backdrop-filter: blur(10px);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .map-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .map-header h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .map-controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .metric-toggle {
+      display: flex;
+      gap: 0.5rem;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0.25rem;
+      border-radius: 6px;
+    }
+
+    .metric-toggle button {
+      padding: 0.4rem 0.8rem;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .metric-toggle button.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .canvas-wrapper {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 600px;
+      padding: 1rem;
+    }
+
+    #heatmapCanvas {
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    /* Timeline Controls */
+    .timeline-panel {
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 12px;
+      padding: 1rem;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .timeline-header h3 {
+      font-size: 1rem;
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .playback-controls {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .playback-controls button {
+      padding: 0.5rem;
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid #3b82f6;
+      color: #93c5fd;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+
+    .playback-controls button:hover {
+      background: rgba(59, 130, 246, 0.3);
+    }
+
+    .playback-controls button.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .timeline-slider {
+      width: 100%;
+    }
+
+    .timeline-slider input {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(59, 130, 246, 0.2);
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    .timeline-slider input::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.5);
+    }
+
+    .timeline-slider input::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.5);
+    }
+
+    .time-display {
+      text-align: center;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #60a5fa;
+      padding: 0.5rem;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 6px;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow-y: auto;
+      max-height: calc(100vh - 200px);
+      padding-right: 0.5rem;
+      width: 350px;
+      flex-shrink: 0;
+    }
+    
+    .sidebar::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .sidebar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 4px;
+    }
+    
+    .sidebar::-webkit-scrollbar-thumb {
+      background: rgba(59, 130, 246, 0.4);
+      border-radius: 4px;
+    }
+    
+    .sidebar::-webkit-scrollbar-thumb:hover {
+      background: rgba(59, 130, 246, 0.6);
+    }
+
+    .sidebar-card {
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 12px;
+      padding: 1.25rem;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      backdrop-filter: blur(10px);
+    }
+
+    .sidebar-card h3 {
+      font-size: 1rem;
+      color: #60a5fa;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    /* Legend */
+    .legend-gradient {
+      height: 30px;
+      width: 100%;
+      border-radius: 6px;
+      /* Default gradient - will be dynamically updated based on metric */
+      background: linear-gradient(
+        to right,
+        rgb(59, 130, 246),
+        rgb(6, 182, 212),
+        rgb(20, 184, 166),
+        rgb(34, 197, 94),
+        rgb(132, 204, 22),
+        rgb(251, 191, 36),
+        rgb(249, 115, 22),
+        rgb(239, 68, 68)
+      );
+      position: relative;
+      margin-bottom: 0.5rem;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .legend-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    /* Sensor List */
+    .sensor-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .sensor-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.75rem;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 6px;
+      border-left: 3px solid #3b82f6;
+    }
+
+    .sensor-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .sensor-name {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #e4e4e7;
+      margin-bottom: 0.2rem;
+    }
+
+    .sensor-location {
+      font-size: 0.7rem;
+      color: #64748b;
+    }
+
+    .sensor-trend {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+    }
+
+    .sparkline-canvas {
+      width: 80px;
+      height: 20px;
+      opacity: 0.8;
+    }
+
+    .trend-indicator {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .trend-up { color: #ef4444; }
+    .trend-down { color: #3b82f6; }
+    .trend-stable { color: #94a3b8; }
+
+    .sensor-metrics {
+      margin-top: 0.35rem;
+    }
+
+    .sensor-metric-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .sensor-metric-table td {
+      padding: 0.35rem 0.5rem;
+      vertical-align: middle;
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+    }
+
+    .sensor-metric-table tr:first-child td {
+      border-top: none;
+    }
+
+    .metric-label-cell {
+      width: 22%;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .metric-value-cell {
+      width: 20%;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+
+    .metric-target-cell {
+      color: #94a3b8;
+      font-size: 0.72rem;
+    }
+
+    .metric-trend-cell {
+      width: 30%;
+      text-align: right;
+    }
+
+    .metric-trend-cell .sensor-trend {
+      justify-content: flex-end;
+    }
+
+    /* Equipment List */
+    .equipment-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .equipment-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 6px;
+    }
+
+    .equipment-name {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #e4e4e7;
+    }
+
+    .equipment-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .equipment-meta {
+      font-size: 0.7rem;
+      color: #94a3b8;
+    }
+
+    .equipment-status {
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .equipment-status.online {
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+      border: 1px solid #22c55e;
+    }
+
+    .equipment-status.offline {
+      background: rgba(100, 116, 139, 0.2);
+      color: #cbd5e1;
+      border: 1px solid #64748b;
+    }
+
+    .equipment-status.unknown {
+      background: rgba(148, 163, 184, 0.15);
+      color: #e2e8f0;
+      border: 1px dashed #94a3b8;
+    }
+
+    /* Loading State */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #94a3b8;
+      gap: 1rem;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(59, 130, 246, 0.2);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Scrollbar Styles */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(59, 130, 246, 0.4);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(59, 130, 246, 0.6);
+    }
+
+    /* Responsive - Disabled for now to force side-by-side layout */
+    /* @media (max-width: 768px) {
+      .main-content {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      }
+    } */
+  </style>
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
+</head>
+<body class="le-theme">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1 id="farmNameHeader">Environmental Heat Map</h1>
+      <div class="room-selector">
+        <label>Room:</label>
+        <select id="roomSelect">
+          <option value="">Loading rooms...</option>
+        </select>
+      </div>
+    </div>
+    <div class="header-actions">
+      <nav class="nav-menu">
+        <div class="nav-item inventory">
+          <button class="nav-button inventory">
+            Inventory Management
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
+            <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
+            <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
+            <a href="tray-inventory.html" class="dropdown-item">Activity Hub</a>
+            <a href="/LE-farm-admin.html#traceability" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+        <div class="nav-item farm-monitoring">
+          <button class="nav-button farm-monitoring active">
+            Farm Monitoring
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="/farm-vitality.html" class="dropdown-item">Farm Vitality Dashboard</a>
+            <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+            <a href="room-heatmap.html" class="dropdown-item active">Heat Map</a>
+          </div>
+        </div>
+        <div class="nav-item admin">
+          <button class="nav-button admin">
+            Admin
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
+            <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Sales
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu dropdown-right">
+            <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">POS Sale</a>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Current Status Bar -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-metric">
+      <div class="status-label">Temperature</div>
+      <div>
+        <span class="status-value" id="currentTemp">--</span>
+        <span class="status-unit">°F</span>
+      </div>
+      <div class="status-range" id="tempRange">Range: -- to --</div>
+    </div>
+    <div class="status-metric">
+      <div class="status-label">Humidity</div>
+      <div>
+        <span class="status-value" id="currentHumidity">--</span>
+        <span class="status-unit">%</span>
+      </div>
+      <div class="status-range" id="humidityRange">Range: -- to --</div>
+    </div>
+    <div class="status-metric">
+      <div class="status-label">VPD</div>
+      <div>
+        <span class="status-value" id="currentVpd">--</span>
+        <span class="status-unit">kPa</span>
+      </div>
+      <div class="status-range" id="vpdRange">Range: -- to --</div>
+    </div>
+    <div class="status-metric">
+      <div class="status-label">Active Sensors</div>
+      <div>
+        <span class="status-value" id="sensorCount">0</span>
+      </div>
+    </div>
+    <div class="status-metric">
+      <div class="status-label">Equipment Online</div>
+      <div>
+        <span class="status-value" id="equipmentCount">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Heat Map (Left) -->
+    <div class="heatmap-panel">
+      <div class="map-container">
+        <div class="map-header">
+          <h2>Spatial Distribution</h2>
+          <div class="map-controls">
+            <div class="metric-toggle" id="metricToggle">
+              <button class="active" data-metric="temperature">Temperature</button>
+              <button data-metric="humidity">Humidity</button>
+              <button data-metric="vpd">VPD</button>
+            </div>
+          </div>
+        </div>
+        <div class="canvas-wrapper" id="canvasWrapper">
+          <canvas id="heatmapCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Timeline Controls -->
+      <div class="timeline-panel">
+        <div class="timeline-header">
+          <h3>24-Hour Playback</h3>
+          <div class="playback-controls">
+            <button id="playBtn" title="Play">▶</button>
+            <button id="pauseBtn" title="Pause" style="display: none;">⏸</button>
+            <button id="resetBtn" title="Reset">⏮</button>
+          </div>
+        </div>
+        <div class="time-display" id="timeDisplay">
+          Now
+        </div>
+        <div class="timeline-slider">
+          <input type="range" id="timeSlider" min="0" max="287" value="287" step="1">
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748b; padding: 0 0.25rem;">
+          <span>24 hours ago</span>
+          <span>Now</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar (Right) -->
+    <div class="sidebar">
+      <!-- Legend -->
+      <div class="sidebar-card">
+        <h3>Heat Map Legend <span id="legendMetricName" style="font-size:0.8rem;color:#94a3b8;font-weight:500"></span></h3>
+        <div class="legend-gradient"></div>
+        <div class="legend-labels">
+          <span id="legendMin">Min</span>
+          <span id="legendMax">Max</span>
+        </div>
+      </div>
+
+      <!-- Sensors -->
+      <div class="sidebar-card">
+        <h3>Active Sensors</h3>
+        <div class="sensor-list" id="sensorList">
+          <div class="loading">
+            <div class="spinner"></div>
+            <div>Loading sensors...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Equipment -->
+      <div class="sidebar-card">
+        <h3>Equipment Status</h3>
+        <div class="equipment-list" id="equipmentList">
+          <div class="loading">
+            <div class="spinner"></div>
+            <div>Loading equipment...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Global State
+    const STATE = {
+      canvas: null,
+      ctx: null,
+      rooms: [],
+      currentRoomId: null,
+      roomMap: null,
+      envData: null,
+      iotDevices: [],
+  equipmentMetadata: {},
+      currentMetric: 'temperature',
+      currentTimeIndex: -1, // Will be set to last data point index dynamically
+      isPlaying: false,
+      playInterval: null,
+      sensors: [],
+      equipment: []
+    };
+
+    const SIMPLE_EQUIPMENT_CATEGORIES = ['fans', 'vents', 'controllers', 'energy-monitor', 'other'];
+
+    function escapeHtml(value) {
+      if (value == null) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    async function fetchEquipmentMetadata() {
+      let metadata = {};
+      try {
+        let response = await fetch('/data/equipment-metadata');
+        if (!response.ok) {
+          response = await fetch('/data/equipment-metadata.json');
+        }
+        if (response.ok) {
+          metadata = await response.json();
+          console.log('[Heat Map] Loaded equipment metadata entries:', Object.keys(metadata).length);
+        } else {
+          console.log('[Heat Map] No equipment metadata found (optional)');
+        }
+      } catch (error) {
+        console.warn('[Heat Map] Failed to load equipment metadata:', error);
+      }
+      return metadata || {};
+    }
+
+    function aggregateEquipmentFromRooms(rooms, metadata) {
+      const equipment = [];
+      const roomList = Array.isArray(rooms) ? rooms : [];
+      const meta = metadata || {};
+
+      // Helper to build a stable equipment id that matches Equipment Overview metadata keys
+      function buildEquipmentId(roomId, eq, index, fallbackCategory) {
+        const vendor = (eq && (eq.vendor || eq.manufacturer)) ? String(eq.vendor || eq.manufacturer).trim() : '';
+        const model = (eq && eq.model) ? String(eq.model).trim() : '';
+        const category = (eq && eq.category) ? String(eq.category).trim() : (fallbackCategory || 'Equipment');
+        // Prefer vendor+model when available to match metadata keys like: roomId-VENDOR-MODEL-i
+        if (vendor && model) {
+          return `${roomId}-${vendor}-${model}-${index}`.replace(/\s+/g, '-');
+        }
+        // Otherwise use whichever is available
+        const base = vendor || model || category || 'Equipment';
+        return `${roomId}-${base}-${index}`.replace(/\s+/g, '-');
+      }
+
+      roomList.forEach(room => {
+        const roomId = (room && (room.id || room.name)) || 'room';
+        const roomName = (room && (room.name || room.location)) || 'Unnamed Room';
+
+        if (Array.isArray(room?.equipment)) {
+          room.equipment.forEach(eq => {
+            const count = eq?.count || 1;
+            for (let i = 0; i < count; i++) {
+              equipment.push({
+                ...eq,
+                id: eq?.id ? `${eq.id}-${i}` : buildEquipmentId(roomId, eq, i),
+                count: 1,
+                roomId,
+                roomName
+              });
+            }
+          });
+        }
+
+        const categoryProgress = room?._categoryProgress || room?.categoryProgress;
+        if (categoryProgress && typeof categoryProgress === 'object') {
+          Object.values(categoryProgress).forEach(progress => {
+            if (Array.isArray(progress?.selectedEquipment)) {
+              progress.selectedEquipment.forEach(eq => {
+                const count = eq?.count || 1;
+                for (let i = 0; i < count; i++) {
+                  equipment.push({
+                    ...eq,
+                    id: eq?.id ? `${eq.id}-${i}` : buildEquipmentId(roomId, eq, i),
+                    count: 1,
+                    roomId,
+                    roomName
+                  });
+                }
+              });
+            }
+          });
+
+          SIMPLE_EQUIPMENT_CATEGORIES.forEach(catKey => {
+            const catData = categoryProgress[catKey];
+            if (catData && catData.count && catData.count > 0) {
+              for (let i = 0; i < catData.count; i++) {
+                equipment.push({
+                  id: buildEquipmentId(roomId, { vendor: catData.manufacturer, model: catData.model, category: catKey }, i, catKey),
+                  category: catKey,
+                  vendor: catData.manufacturer || 'Unknown',
+                  model: catData.model || catKey,
+                  count: 1,
+                  control: catData.control || null,
+                  roomId,
+                  roomName,
+                  wifi: catData.wifi || false,
+                  wired: catData.wired || false,
+                  notes: catData.notes || ''
+                });
+              }
+            }
+          });
+        }
+
+        if (room?.category && typeof room.category === 'object') {
+          SIMPLE_EQUIPMENT_CATEGORIES.forEach(catKey => {
+            const catData = room.category[catKey];
+            if (catData && catData.count && catData.count > 0) {
+              for (let i = 0; i < catData.count; i++) {
+                equipment.push({
+                  id: buildEquipmentId(roomId, { vendor: catData.manufacturer, model: catData.model, category: catKey }, i, catKey),
+                  category: catKey,
+                  vendor: catData.manufacturer || 'Unknown',
+                  model: catData.model || catKey,
+                  count: 1,
+                  control: catData.control || null,
+                  roomId,
+                  roomName,
+                  wifi: catData.wifi || false,
+                  wired: catData.wired || false,
+                  notes: catData.notes || ''
+                });
+              }
+            }
+          });
+        }
+      });
+
+      // Deduplicate by id in case multiple sources (wizard progress vs category) produced the same item
+      const uniqueMap = new Map();
+      equipment.forEach(eq => {
+        if (!eq || !eq.id) return;
+        if (!uniqueMap.has(eq.id)) uniqueMap.set(eq.id, eq);
+      });
+      const deduped = Array.from(uniqueMap.values());
+
+      deduped.forEach(eq => {
+        if (meta[eq.id]) {
+          Object.assign(eq, meta[eq.id]);
+        }
+      });
+
+      const equipmentIds = new Set(deduped.map(eq => eq.id));
+      
+      // Add metadata-only entries ONLY if they represent real equipment, not bare controllers
+      Object.keys(meta).forEach(metaId => {
+        if (!equipmentIds.has(metaId)) {
+          const metaItem = meta[metaId];
+          
+          // Skip if this is just a controller/plug with no real equipment info
+          const category = (metaItem?.category || '').toLowerCase();
+          const control = metaItem?.control || '';
+          const hasRealCategory = category && category !== 'controllers' && category !== 'controller' && category !== 'other';
+          const hasModelInfo = metaItem?.model && metaItem.model.toLowerCase() !== 'unknown';
+          
+          // Only add as standalone if it's real equipment (has category other than controller)
+          // OR if it has substantive model info (not just a bare controller link)
+          if (!hasRealCategory && !hasModelInfo) {
+            console.debug('[Heat Map] Skipping standalone metadata entry (controller-only):', metaId);
+            return;
+          }
+          
+          deduped.push({
+            id: metaId,
+            name: metaItem?.name || 'Equipment',
+            category: metaItem?.category || 'Other',
+            vendor: metaItem?.vendor || 'Unknown',
+            model: metaItem?.model || 'Unknown',
+            count: 1,
+            control: metaItem?.control || null,
+            roomId: metaItem?.roomId || '',
+            roomName: metaItem?.roomName || '—',
+            isStandalone: true,
+            wifi: metaItem?.wifi,
+            wired: metaItem?.wired,
+            notes: metaItem?.notes,
+            capacity: metaItem?.capacity
+          });
+        }
+      });
+
+      return deduped;
+    }
+
+    function buildEquipmentName(equipment) {
+      const vendor = equipment?.vendor ? String(equipment.vendor) : '';
+      const model = equipment?.model ? String(equipment.model) : '';
+      const combined = `${vendor} ${model}`.trim();
+      if (combined) return combined;
+      return equipment?.category || 'Equipment';
+    }
+
+    function matchIoTDeviceForEquipment(equipment, iotDevices) {
+      if (!equipment || !Array.isArray(iotDevices) || iotDevices.length === 0) return null;
+      const devices = iotDevices;
+      const norm = v => (v == null ? '' : String(v)).trim().toLowerCase();
+
+      const control = equipment.control || equipment.controlMethod;
+      if (control && typeof control === 'string') {
+        const controlId = control.startsWith('IoT:') ? control.slice(4) : control;
+        const match = devices.find(device => norm(device.deviceId || device.id) === norm(controlId));
+        if (match) return match;
+      }
+
+      if (equipment.iotDeviceId) {
+        const normalized = equipment.iotDeviceId.startsWith('IoT:') ? equipment.iotDeviceId.slice(4) : equipment.iotDeviceId;
+        const match = devices.find(device => norm(device.deviceId || device.id) === norm(normalized));
+        if (match) return match;
+      }
+
+      if (equipment.id) {
+        const normalized = String(equipment.id).replace(/^IoT:/, '');
+        const match = devices.find(device => norm(device.deviceId || device.id) === norm(normalized));
+        if (match) return match;
+      }
+
+      return null;
+    }
+
+    function enrichEquipmentWithIoT(equipment, iotDevices, fallbackIotDevices) {
+      const list = Array.isArray(equipment) ? equipment.map(item => ({ ...item })) : [];
+      const devices = Array.isArray(iotDevices) ? iotDevices : [];
+      const fallback = Array.isArray(fallbackIotDevices) ? fallbackIotDevices : [];
+
+      const enriched = list.map(eq => {
+        let match = matchIoTDeviceForEquipment(eq, devices);
+        // If not found among positioned devices, try the full registry for label/online info
+        if (!match && fallback.length) {
+          match = matchIoTDeviceForEquipment(eq, fallback);
+        }
+        if (match) {
+          eq.telemetry = match.telemetry || null;
+          eq.iotDeviceId = match.deviceId || match.id;
+          eq.iotDeviceName = match.name || match.deviceName || match.label || '';
+          eq.isOnline = eq.telemetry ? eq.telemetry.online !== false : null;
+          if (!eq.name) {
+            eq.name = eq.iotDeviceName || buildEquipmentName(eq);
+          }
+        } else {
+          eq.isOnline = null;
+          if (!eq.name) {
+            eq.name = buildEquipmentName(eq);
+          }
+        }
+        return eq;
+      });
+
+      enriched.sort((a, b) => {
+        const roomCompare = (a.roomName || '').localeCompare(b.roomName || '', undefined, { sensitivity: 'base' });
+        if (roomCompare !== 0) return roomCompare;
+        const categoryCompare = (a.category || '').localeCompare(b.category || '', undefined, { sensitivity: 'base' });
+        if (categoryCompare !== 0) return categoryCompare;
+        return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+      });
+
+      return enriched;
+    }
+
+    function resolveEquipmentStatus(equipment) {
+      if (!equipment) {
+        return { state: 'unknown', className: 'unknown', label: 'Unknown' };
+      }
+
+      if (equipment.telemetry && typeof equipment.telemetry.online !== 'undefined') {
+        if (equipment.telemetry.online === false) {
+          return { state: 'offline', className: 'offline', label: '○ Offline' };
+        }
+        return { state: 'online', className: 'online', label: '● Online' };
+      }
+
+      if (typeof equipment.isOnline === 'boolean') {
+        return equipment.isOnline
+          ? { state: 'online', className: 'online', label: '● Online' }
+          : { state: 'offline', className: 'offline', label: '○ Offline' };
+      }
+
+      return { state: 'unknown', className: 'unknown', label: 'Unknown' };
+    }
+
+    function calculateEquipmentTotals(equipment) {
+      if (!Array.isArray(equipment) || equipment.length === 0) {
+        return { online: 0, total: 0 };
+      }
+
+      let online = 0;
+      equipment.forEach(item => {
+        const status = resolveEquipmentStatus(item);
+        if (status.state === 'online') {
+          online += 1;
+        }
+      });
+
+      return { online, total: equipment.length };
+    }
+
+    function formatControlLabel(control) {
+      if (!control) return '';
+      if (typeof control !== 'string') return String(control);
+      if (control.startsWith('IoT:')) {
+        return `Linked ${control.slice(4)}`;
+      }
+      return control;
+    }
+
+    // Metric Configuration
+    const METRICS = {
+      temperature: {
+        label: 'Temperature',
+        unit: '°C',
+        colors: [
+          { value: 0, color: [59, 130, 246] },    // Blue (cold)
+          { value: 0.2, color: [6, 182, 212] },   // Cyan
+          { value: 0.4, color: [20, 184, 166] },  // Teal
+          { value: 0.5, color: [34, 197, 94] },   // Green
+          { value: 0.6, color: [132, 204, 22] },  // Lime
+          { value: 0.7, color: [251, 191, 36] },  // Yellow
+          { value: 0.85, color: [249, 115, 22] }, // Orange
+          { value: 1, color: [239, 68, 68] }      // Red (hot)
+        ]
+      },
+      humidity: {
+        label: 'Humidity',
+        unit: '%',
+        colors: [
+          { value: 0, color: [239, 68, 68] },     // Red (dry)
+          { value: 0.3, color: [251, 191, 36] },  // Yellow
+          { value: 0.5, color: [34, 197, 94] },   // Green (ideal)
+          { value: 0.7, color: [6, 182, 212] },   // Cyan
+          { value: 1, color: [59, 130, 246] }     // Blue (humid)
+        ]
+      },
+      vpd: {
+        label: 'VPD',
+        unit: 'kPa',
+        colors: [
+          { value: 0, color: [59, 130, 246] },    // Blue (low)
+          { value: 0.4, color: [34, 197, 94] },   // Green (ideal)
+          { value: 0.7, color: [251, 191, 36] },  // Yellow
+          { value: 1, color: [239, 68, 68] }      // Red (high)
+        ]
+      }
+    };
+
+    const SENSOR_METRIC_CONFIG = [
+      {
+        metric: 'temperature',
+        label: 'Temp',
+        valueKey: 'tempC',
+        targetKey: 'tempC',
+        unit: '°C',
+        decimals: 1,
+        targetDecimals: 1
+      },
+      {
+        metric: 'humidity',
+        label: 'Humidity',
+        valueKey: 'rh',
+        targetKey: 'rh',
+        unit: '%',
+        decimals: 1,
+        targetDecimals: 0
+      },
+      {
+        metric: 'vpd',
+        label: 'VPD',
+        valueKey: 'vpd',
+        targetKey: 'vpd',
+        unit: ' kPa',
+        decimals: 2,
+        targetDecimals: 2
+      }
+    ];
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', async () => {
+      console.debug('[Heat Map] DOMContentLoaded event fired');
+      STATE.canvas = document.getElementById('heatmapCanvas');
+      STATE.ctx = STATE.canvas.getContext('2d');
+      
+      setupEventListeners();
+      
+      console.debug('[Heat Map] Starting loadData...');
+      await loadData();
+      console.debug('[Heat Map] loadData complete, STATE.rooms:', STATE.rooms?.length);
+      
+      renderHeatMap();
+      updateStatusBar();
+      updateTimeDisplay();
+
+      // Auto-refresh: pull fresh environmental data every 3 minutes
+      if (!STATE.refreshTimer) {
+        STATE.refreshTimer = setInterval(async () => {
+          try {
+            const res = await fetch('/env?hours=24');
+            if (res.ok) {
+              STATE.envData = await res.json();
+              STATE.envLastLoadedAt = Date.now();
+              renderHeatMap();
+              updateTimeDisplay();
+              renderSensorList();
+              updateStatusBar();
+            } else {
+              console.warn('[Heat Map] Auto-refresh failed with status', res.status);
+            }
+          } catch (e) {
+            console.warn('[Heat Map] Auto-refresh error:', e);
+          }
+        }, 180000); // 3 minutes (180 seconds)
+      }
+      
+      // Backup: Ensure dropdown is populated even if there was a timing issue
+      setTimeout(() => {
+        console.log('[Heat Map] Backup populate check - STATE.rooms:', STATE.rooms?.length);
+        if (STATE.rooms && STATE.rooms.length > 0) {
+          const select = document.getElementById('roomSelect');
+          if (select && select.value === '') {
+            console.log('[Heat Map] Dropdown still empty, forcing populate');
+            populateRoomDropdown();
+          }
+        }
+      }, 100);
+    });
+
+    function setupEventListeners() {
+      // Metric toggle
+      document.querySelectorAll('#metricToggle button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#metricToggle button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          STATE.currentMetric = btn.dataset.metric;
+          renderHeatMap();
+          updateStatusBar();
+          // Explicitly refresh legend to avoid any stale state
+          updateLegend();
+        });
+      });
+
+      // Timeline controls
+      document.getElementById('playBtn').addEventListener('click', startPlayback);
+      document.getElementById('pauseBtn').addEventListener('click', pausePlayback);
+      document.getElementById('resetBtn').addEventListener('click', resetPlayback);
+      document.getElementById('timeSlider').addEventListener('input', (e) => {
+        STATE.currentTimeIndex = parseInt(e.target.value);
+        renderHeatMap();
+        updateTimeDisplay();
+      });
+
+      // Room selector
+      document.getElementById('roomSelect').addEventListener('change', async (e) => {
+        await loadData();
+        renderHeatMap();
+        updateStatusBar();
+      });
+    }
+
+    async function loadData() {
+      try {
+        console.debug('[Heat Map] Loading data files...');
+        
+        // Load rooms list
+        console.debug('[Heat Map] Fetching /data/rooms.json...');
+        const roomsResponse = await fetch('/data/rooms.json');
+        console.debug('[Heat Map] Rooms response status:', roomsResponse.status, roomsResponse.ok);
+        if (!roomsResponse.ok) throw new Error(`Failed to load rooms.json: ${roomsResponse.status}`);
+        const roomsData = await roomsResponse.json();
+        console.debug('[Heat Map] Rooms data parsed:', roomsData);
+        STATE.rooms = roomsData.rooms || [];
+        console.debug('[Heat Map] Loaded rooms:', STATE.rooms.length, 'rooms', STATE.rooms);
+
+        // Populate room dropdown early so it's available even if later fetches fail
+        populateRoomDropdown();
+
+        STATE.equipmentMetadata = await fetchEquipmentMetadata();
+        
+        // Get selected room ID from dropdown (or default to first room)
+        const selectedRoomId = document.getElementById('roomSelect').value || STATE.rooms[0]?.id;
+        STATE.currentRoomId = selectedRoomId;
+        
+        // Load room map for the selected room
+        // Try room-specific file first (room-map-{roomId}.json), fallback to generic room-map.json
+        let mapResponse;
+        try {
+          mapResponse = await fetch(`/data/room-map-${selectedRoomId}.json`);
+          if (!mapResponse.ok) {
+            console.warn(`[Heat Map] Room-specific map not found: room-map-${selectedRoomId}.json, using generic room-map.json`);
+            mapResponse = await fetch('/data/room-map.json');
+          }
+        } catch (mapFetchErr) {
+          console.warn('[Heat Map] Room map fetch error, trying generic:', mapFetchErr);
+          try { mapResponse = await fetch('/data/room-map.json'); } catch (e) { mapResponse = null; }
+        }
+        if (!mapResponse || !mapResponse.ok) {
+          console.warn('[Heat Map] No room map available, continuing with empty map');
+          STATE.roomMap = { name: selectedRoomId, devices: [], dimensions: {} };
+        } else {
+          STATE.roomMap = await mapResponse.json();
+        }
+        console.log('[Heat Map] Loaded room map for:', STATE.roomMap.name, `(room-map-${selectedRoomId}.json)`);
+
+        // Load environmental data (prefer live API with history)
+        // Request last 24h to enable trend-aware UI and freshness
+        try {
+          const envResponse = await fetch('/env?hours=24');
+          if (!envResponse.ok) throw new Error(`Failed to load /env: ${envResponse.status}`);
+          STATE.envData = await envResponse.json();
+          STATE.envLastLoadedAt = Date.now();
+        } catch (envErr) {
+          console.warn('[Heat Map] Could not load env data, continuing without it:', envErr.message);
+          STATE.envData = { zones: [] };
+          STATE.envLastLoadedAt = Date.now();
+        }
+        
+        // Initialize currentTimeIndex to the last available data point
+        if (STATE.currentTimeIndex === -1) {
+          STATE.currentTimeIndex = getMaxHistoryLength() - 1;
+        }
+        
+        console.log('[Heat Map] Loaded env data:', STATE.envData?.zones?.length, 'zones');
+        console.log('[Heat Map] ENV zones:', STATE.envData?.zones?.map(z => ({
+          id: z.id,
+          hasTempC: !!z.sensors?.tempC,
+          tempCCurrent: z.sensors?.tempC?.current,
+          hasRh: !!z.sensors?.rh,
+          rhCurrent: z.sensors?.rh?.current
+        })));
+
+        // Extract devices from room map (only positioned devices)
+        // These are the devices that were placed in the Mapping Tool
+        if (!STATE.roomMap.devices || STATE.roomMap.devices.length === 0) {
+          console.warn('[Heat Map] No devices positioned in room map');
+          STATE.sensors = [];
+          STATE.iotDevices = [];
+        } else {
+          // Use devices from room-map.json which have position (x,y) and telemetry snapshot
+          STATE.iotDevices = STATE.roomMap.devices.map(placement => ({
+            id: placement.deviceId,
+            deviceId: placement.deviceId,
+            x: placement.x,
+            y: placement.y,
+            name: placement.snapshot?.name || placement.deviceId,
+            type: placement.snapshot?.type,
+            protocol: placement.snapshot?.protocol,
+            category: placement.snapshot?.category,
+            zone: placement.snapshot?.zone,
+            room: placement.snapshot?.room,
+            telemetry: placement.snapshot?.telemetry
+          }));
+
+          console.log('[Heat Map] Loaded devices from room map:', STATE.iotDevices.length, 'positioned devices');
+
+          // Positive filter: Only include devices explicitly marked as sensors (matching Room Mapper)
+          function isSensor(d) {
+            if (!d) return false;
+            const type = (d.type || '').toLowerCase();
+            const category = (d.category || '').toLowerCase();
+            return type.includes('sensor') || category.includes('sensor');
+          }
+
+          // Filter: positioned, IS sensor, AND has valid sensor name (not "None" or null)
+          STATE.sensors = STATE.iotDevices.filter(d => {
+            if (d.x == null || d.y == null) return false;
+            if (!isSensor(d)) return false;
+            // Skip devices with "None" or invalid names
+            const name = (d.name || '').trim().toLowerCase();
+            if (!name || name === 'none' || name === 'null' || name === 'undefined') return false;
+            return true;
+          });
+          console.log('[Heat Map] Processing complete - Sensors:', STATE.sensors.length, '(from placements:', STATE.iotDevices.length, ')');
+          console.debug('[Heat Map] Sensor IDs:', STATE.sensors.map(s => s.deviceId));
+        }
+
+        // Load full IoT registry for name/online resolution of linked controllers not placed on the map
+        try {
+          const allIotRes = await fetch('/data/iot-devices.json');
+          if (allIotRes.ok) {
+            STATE.iotDevicesAll = await allIotRes.json();
+            console.log('[Heat Map] Loaded full IoT registry:', Array.isArray(STATE.iotDevicesAll) ? STATE.iotDevicesAll.length : 0, 'devices');
+          } else {
+            console.warn('[Heat Map] Failed to load /data/iot-devices.json for fallback matching');
+            STATE.iotDevicesAll = [];
+          }
+        } catch (e) {
+          console.warn('[Heat Map] Error loading /data/iot-devices.json:', e);
+          STATE.iotDevicesAll = [];
+        }
+
+        const aggregatedEquipment = aggregateEquipmentFromRooms(STATE.rooms, STATE.equipmentMetadata);
+        
+        // Enrich with IoT device data from positioned devices (room-map.json)
+        // Fallback registry used ONLY for resolving names of linked controllers not placed on map
+        const enriched = enrichEquipmentWithIoT(aggregatedEquipment, STATE.iotDevices, STATE.iotDevicesAll);
+
+        // Remove placeholder/controller-only entries when their IoT device is already linked to a real equipment item
+        function isPlaceholderEquipment(eq) {
+          const vendor = (eq.vendor || '').toLowerCase();
+          const model = (eq.model || '').toLowerCase();
+          const name = (eq.name || '').toLowerCase();
+          const category = (eq.category || '').toLowerCase();
+          const standalone = eq.isStandalone === true;
+          const genericName = !name || name === 'equipment';
+          const unknownVendor = !vendor || vendor === 'unknown';
+          const unknownModel = !model || model === 'unknown';
+          const controllerCat = category === 'controllers' || category === 'controller';
+          return standalone && (genericName || controllerCat) && (unknownVendor || unknownModel);
+        }
+
+        const norm = v => (v == null ? '' : String(v)).trim().toLowerCase();
+
+        // Build set of IoT IDs linked by non-placeholder equipment
+        const linkedByRealEquipment = new Set();
+        enriched.forEach(eq => {
+          if (!eq) return;
+          if (isPlaceholderEquipment(eq)) return; // skip placeholders for this set
+          const ctl = eq.control || eq.controlMethod;
+          if (typeof ctl === 'string' && ctl.startsWith('IoT:')) {
+            linkedByRealEquipment.add(norm(ctl.slice(4)));
+          } else if (eq.iotDeviceId) {
+            linkedByRealEquipment.add(norm(eq.iotDeviceId));
+          }
+        });
+
+        // Filter out placeholder/controller-only entries that are redundant
+        STATE.equipment = enriched.filter(eq => {
+          if (!eq) return false;
+          if (!isPlaceholderEquipment(eq)) return true;
+          const ctl = eq.control || eq.controlMethod;
+          const idFromControl = (typeof ctl === 'string' && ctl.startsWith('IoT:')) ? norm(ctl.slice(4)) : '';
+          const idFromMatch = eq.iotDeviceId ? norm(eq.iotDeviceId) : '';
+          const linkedElsewhere = (idFromControl && linkedByRealEquipment.has(idFromControl)) ||
+                                  (idFromMatch && linkedByRealEquipment.has(idFromMatch));
+          // Drop placeholder if another (non-placeholder) equipment already links the same IoT device
+          return !linkedElsewhere;
+        });
+        console.log('[Heat Map] Equipment overview aggregation complete:', STATE.equipment.length, 'items');
+        
+        populateRoomDropdown();
+        renderSensorList();
+        renderEquipmentList();
+        updateStatusBar();
+
+      } catch (error) {
+        console.error('[Heat Map] Failed to load data:', error);
+        
+        // Only overwrite dropdown with error if rooms never loaded
+        const select = document.getElementById('roomSelect');
+        if (select && (!STATE.rooms || STATE.rooms.length === 0)) {
+          select.innerHTML = `<option value="">Error: ${error.message}</option>`;
+        }
+        
+        // Show error message on canvas
+        if (STATE.canvas && STATE.ctx) {
+          const ctx = STATE.ctx;
+          STATE.canvas.width = 800;
+          STATE.canvas.height = 600;
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+          ctx.fillRect(0, 0, 800, 600);
+          ctx.fillStyle = '#ef4444';
+          ctx.font = '20px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Failed to load heat map data', 400, 280);
+          ctx.font = '14px sans-serif';
+          ctx.fillStyle = '#fca5a5';
+          ctx.fillText(error.message || 'Unknown error', 400, 310);
+        }
+      }
+    }
+
+    function populateRoomDropdown() {
+      const select = document.getElementById('roomSelect');
+      if (!select) {
+        console.error('[Heat Map] Room select element not found');
+        return;
+      }
+
+      if (!STATE.rooms || STATE.rooms.length === 0) {
+        console.warn('[Heat Map] No rooms available in STATE');
+        select.innerHTML = '<option value="">No rooms available</option>';
+        return;
+      }
+
+      console.log('[Heat Map] Populating dropdown with', STATE.rooms.length, 'rooms:', STATE.rooms.map(r => r.name).join(', '));
+      
+      // Filter rooms that have been built with the Mapping tool
+      // A room is "built" if it has layout data in room-map.json or zones defined
+      const builtRooms = STATE.rooms.filter(room => {
+        // Check if room has zones or has been mapped
+        const hasZones = room.zones && room.zones.length > 0;
+        console.log('[Heat Map] Room', room.name, '(', room.id, ') has zones:', hasZones, room.zones);
+        return hasZones;
+      });
+      
+      console.log('[Heat Map] Built rooms:', builtRooms.length, 'of', STATE.rooms.length);
+      
+      if (builtRooms.length === 0) {
+        console.warn('[Heat Map] No rooms built with Mapping tool yet');
+        select.innerHTML = '<option value="">No mapped rooms available</option>';
+        return;
+      }
+      
+      // Populate dropdown with built rooms
+      const options = builtRooms.map(room => 
+        `<option value="${room.id}">${room.name || room.id}</option>`
+      ).join('');
+      
+      console.log('[Heat Map] Setting dropdown HTML:', options);
+      select.innerHTML = options;
+      
+      // Select the first room by default, or the room that matches the current room map
+      const defaultRoomId = STATE.roomMap?.roomId === 'default' ? builtRooms[0]?.id : STATE.roomMap?.roomId;
+      if (defaultRoomId) {
+        select.value = defaultRoomId;
+        STATE.currentRoomId = defaultRoomId;
+      } else {
+        // Fallback to first built room
+        select.value = builtRooms[0].id;
+        STATE.currentRoomId = builtRooms[0].id;
+      }
+      
+      const selectedRoom = builtRooms.find(r => r.id === select.value);
+      console.log('[Heat Map] Selected room:', select.value, '(', selectedRoom?.name, ')');
+    }
+
+    /**
+     * Get live sensor data from /env endpoint by matching sensor zone
+     * @param {object} sensor - Sensor object with zone property
+     * @returns {object|null} Live data {tempC, rh, vpd} or null if not found
+     */
+    function getLiveSensorData(sensor) {
+      if (!STATE.envData?.zones) {
+        console.log('[getLiveSensorData] No env zones available');
+        return null;
+      }
+      
+      // Match sensor.zone - it could be:
+      // 1. A full zone ID like "room-knukf2:1" (matches ENV directly)
+      // 2. A numeric value like 1 or "1" (needs to be formatted as "zone-1")
+      // 3. A compound ID like "zone-1" (matches ENV directly)
+      // 4. null/undefined - if only one zone, use it automatically
+      let zoneId = sensor?.zone;
+      
+      // Smart fallback: If sensor has no zone but there's only ONE zone, use it
+      if (!zoneId && STATE.envData.zones.length === 1) {
+        zoneId = STATE.envData.zones[0].id;
+        console.log('[getLiveSensorData] Sensor has no zone, using single available zone:', zoneId);
+      }
+      
+      if (!zoneId) {
+        console.log('[getLiveSensorData] No zone for sensor:', {
+          sensorId: sensor?.deviceId || sensor?.id,
+          availableZones: STATE.envData.zones.map(z => z.id)
+        });
+        return null;
+      }
+      
+      // If it's a simple number, format it as "zone-N"
+      if (typeof zoneId === 'number' || /^\d+$/.test(zoneId)) {
+        zoneId = `zone-${zoneId}`;
+      }
+      
+      const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
+      
+      console.log('[getLiveSensorData] Looking for zone:', {
+        sensorZone: sensor.zone,
+        zoneId: zoneId,
+        foundZone: !!zoneData,
+        availableZones: STATE.envData.zones.map(z => z.id)
+      });
+      
+      if (!zoneData?.sensors) {
+        console.log('[getLiveSensorData] Zone found but no sensors:', { zoneId, hasZoneData: !!zoneData });
+        return null;
+      }
+      
+      const tempC = zoneData.sensors.tempC?.current;
+      const rh = zoneData.sensors.rh?.current;
+      const vpd = zoneData.sensors.vpd?.current;
+      
+      console.log('[getLiveSensorData] Sensor data:', {
+        zoneId,
+        tempC,
+        rh,
+        vpd,
+        hasTempC: !!zoneData.sensors.tempC,
+        hasRh: !!zoneData.sensors.rh
+      });
+      
+      return { tempC, rh, vpd };
+    }
+
+    function buildSensorSparklineId(sensor, metric) {
+      const base = sensor?.deviceId || sensor?.id || sensor?.name || `zone-${sensor?.zone ?? 'unknown'}`;
+      const safeBase = String(base).replace(/[^a-zA-Z0-9_-]/g, '-');
+      return `sparkline-${metric}-${safeBase}`;
+    }
+
+    /**
+     * Get target values for a sensor's zone
+     * @param {object} sensor - Sensor object with zone property
+     * @returns {object|null} Targets {tempC: {min, max}, rh: {min, max}, vpd: {min, max}} or null
+     */
+    function getSensorTargets(sensor) {
+      if (!STATE.envData?.zones) return null;
+      
+      let zoneId = sensor?.zone;
+      
+      // Smart fallback: If sensor has no zone but there's only ONE zone, use it
+      if (!zoneId && STATE.envData.zones.length === 1) {
+        zoneId = STATE.envData.zones[0].id;
+      }
+      
+      if (!zoneId) return null;
+      
+      // Handle different zone ID formats (see getLiveSensorData)
+      zoneId = sensor.zone;
+      if (typeof sensor.zone === 'number' || /^\d+$/.test(sensor.zone)) {
+        zoneId = `zone-${sensor.zone}`;
+      }
+      
+      const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
+      
+      if (!zoneData?.sensors) return null;
+      
+      return {
+        tempC: zoneData.sensors.tempC?.setpoint,
+        rh: zoneData.sensors.rh?.setpoint,
+        vpd: zoneData.sensors.vpd?.setpoint
+      };
+    }
+
+    /**
+     * Get historical data for sparkline rendering
+     * @param {object} sensor - Sensor object with zone property
+     * @param {string} metric - Metric name (temperature, humidity, vpd)
+     * @returns {Array<number>} Historical values (last 48 points = 4 hours at 5-min intervals)
+     */
+    function getSensorHistory(sensor, metric) {
+      if (!STATE.envData?.zones) return [];
+      
+      let zoneId = sensor?.zone;
+      
+      // Smart fallback: If sensor has no zone but there's only ONE zone, use it
+      if (!zoneId && STATE.envData.zones.length === 1) {
+        zoneId = STATE.envData.zones[0].id;
+      }
+      
+      if (!zoneId) return [];
+      
+      // Handle different zone ID formats (see getLiveSensorData)
+      if (typeof zoneId === 'number' || /^\d+$/.test(zoneId)) {
+        zoneId = `zone-${zoneId}`;
+      }
+      
+      const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
+      
+      if (!zoneData?.sensors) return [];
+      
+      const metricKey = metric === 'temperature' ? 'tempC' : (metric === 'humidity' ? 'rh' : metric);
+      const history = zoneData.sensors[metricKey]?.history;
+      
+      // Return last 48 values (4 hours at 5-min intervals)
+      if (Array.isArray(history) && history.length > 0) {
+        return history.slice(-48);
+      }
+      
+      return [];
+    }
+
+    /**
+     * Calculate trend direction from historical data
+     * @param {Array<number>} history - Historical values
+     * @returns {string} 'up', 'down', or 'stable'
+     */
+    function calculateTrend(history) {
+      if (!history || history.length < 2) return 'stable';
+      
+      // Compare last 6 values (30 min) to previous 6 values
+      const recentCount = Math.min(6, Math.floor(history.length / 2));
+      const recent = history.slice(-recentCount);
+      const previous = history.slice(-recentCount * 2, -recentCount);
+      
+      if (previous.length === 0 || recent.length === 0) return 'stable';
+      
+      const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+      const previousAvg = previous.reduce((a, b) => a + b, 0) / previous.length;
+      
+      const diff = recentAvg - previousAvg;
+      const threshold = 0.5; // 0.5°C or 0.5% threshold
+      
+      if (diff > threshold) return 'up';
+      if (diff < -threshold) return 'down';
+      return 'stable';
+    }
+
+    /**
+     * Render trend HTML for sensor item
+     * @param {object} sensor - Sensor object
+     * @param {string} metric - Current metric
+     * @param {object} liveData - Live sensor data
+     * @returns {string} HTML for trend section
+     */
+    function renderSensorTrend(sensor, metric, liveData, options = {}) {
+      const history = Array.isArray(options.history)
+        ? options.history
+        : getSensorHistory(sensor, metric);
+      
+      if (history.length === 0) {
+        return '<div class="sensor-trend"><span class="trend-indicator trend-stable">No trend data</span></div>';
+      }
+      
+  const trend = calculateTrend(history);
+      const trendIcon = trend === 'up' ? '↗' : trend === 'down' ? '↘' : '→';
+      const trendClass = `trend-${trend}`;
+  const sparklineId = options.sparklineId || buildSensorSparklineId(sensor, metric);
+      
+      // Calculate change
+      const current = liveData?.[metric === 'temperature' ? 'tempC' : (metric === 'humidity' ? 'rh' : metric)];
+      const hourAgo = history.length >= 12 ? history[history.length - 12] : history[0];
+      const change = current != null && hourAgo != null ? (current - hourAgo).toFixed(1) : '--';
+      const changeSign = change !== '--' && parseFloat(change) > 0 ? '+' : '';
+      
+      return `
+        <div class="sensor-trend">
+          <canvas id="${sparklineId}" class="sparkline-canvas" width="80" height="20"></canvas>
+          <span class="trend-indicator ${trendClass}">
+            ${trendIcon} ${changeSign}${change} (1h)
+          </span>
+        </div>
+      `;
+    }
+
+    /**
+     * Draw sparkline on canvas
+     * @param {HTMLCanvasElement} canvas - Canvas element
+     * @param {object} sensor - Sensor object
+     * @param {string} metric - Metric name
+     */
+    function drawSparkline(canvas, sensor, metric) {
+      const ctx = canvas.getContext('2d');
+      const history = getSensorHistory(sensor, metric);
+      
+      if (history.length === 0) return;
+      
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = 2;
+      
+      ctx.clearRect(0, 0, width, height);
+      
+      // Calculate min/max for scaling
+      const min = Math.min(...history);
+      const max = Math.max(...history);
+      const range = max - min || 1;
+      
+      // Draw line
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      
+      history.forEach((value, i) => {
+        const x = (i / (history.length - 1)) * (width - padding * 2) + padding;
+        const y = height - padding - ((value - min) / range) * (height - padding * 2);
+        
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      
+      ctx.stroke();
+      
+      // Draw last point
+      const lastX = width - padding;
+      const lastY = height - padding - ((history[history.length - 1] - min) / range) * (height - padding * 2);
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function renderSensorList() {
+      const list = document.getElementById('sensorList');
+      if (!STATE.sensors.length) {
+        list.innerHTML = '<div style="text-align: center; color: #64748b; padding: 1rem;">No sensors found</div>';
+        return;
+      }
+
+      list.innerHTML = '';
+      const sparklineJobs = [];
+
+      STATE.sensors.forEach(sensor => {
+        // Try live data first, fallback to sensor telemetry
+        let liveData = getLiveSensorData(sensor);
+        if (!liveData && sensor.telemetry) {
+          liveData = {
+            tempC: sensor.telemetry.temperature,
+            rh: sensor.telemetry.humidity,
+            vpd: sensor.telemetry.vpd
+          };
+        }
+        liveData = liveData || {};
+        
+        const targets = getSensorTargets(sensor) || {};
+
+        const rowsHtml = SENSOR_METRIC_CONFIG.map((config) => {
+          const numericValue = Number(liveData[config.valueKey]);
+          const hasValue = Number.isFinite(numericValue);
+          const formattedValue = hasValue
+            ? `${numericValue.toFixed(config.decimals)}${config.unit}`
+            : '--';
+
+          const target = targets[config.targetKey];
+          const minTarget = Number(target?.min);
+          const maxTarget = Number(target?.max);
+          const hasTarget = Number.isFinite(minTarget) && Number.isFinite(maxTarget);
+          const targetText = hasTarget
+            ? `${minTarget.toFixed(config.targetDecimals)}-${maxTarget.toFixed(config.targetDecimals)}${config.unit}`
+            : '--';
+
+          const history = getSensorHistory(sensor, config.metric);
+          const sparklineId = buildSensorSparklineId(sensor, config.metric);
+          const trendHtml = renderSensorTrend(sensor, config.metric, liveData, {
+            sparklineId,
+            history
+          });
+          if (history.length) {
+            sparklineJobs.push({ sparklineId, sensor, metric: config.metric });
+          }
+
+          return `
+            <tr>
+              <td class="metric-label-cell">${config.label}</td>
+              <td class="metric-value-cell">${formattedValue}</td>
+              <td class="metric-target-cell">${targetText}</td>
+              <td class="metric-trend-cell">${trendHtml}</td>
+            </tr>
+          `;
+        }).join('');
+
+        const item = document.createElement('div');
+        item.className = 'sensor-item';
+        item.innerHTML = `
+          <div class="sensor-info">
+            <div class="sensor-name">${escapeHtml(sensor.name || 'Unknown Sensor')}</div>
+            <div class="sensor-location">
+              ${sensor.zone ? `Zone ${escapeHtml(String(sensor.zone))}` : 'Unassigned'}
+              ${sensor.x != null && sensor.y != null ? ` • (${escapeHtml(String(sensor.x))}, ${escapeHtml(String(sensor.y))})` : ''}
+            </div>
+          </div>
+          <div class="sensor-metrics">
+            <table class="sensor-metric-table">
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+
+      sparklineJobs.forEach(({ sparklineId, sensor, metric }) => {
+        const canvas = document.getElementById(sparklineId);
+        if (canvas) {
+          drawSparkline(canvas, sensor, metric);
+        }
+      });
+    }
+
+    function renderEquipmentList() {
+      const list = document.getElementById('equipmentList');
+      if (!STATE.equipment.length) {
+        list.innerHTML = '<div style="text-align: center; color: #64748b; padding: 1rem;">No equipment found</div>';
+        return;
+      }
+
+      list.innerHTML = '';
+      STATE.equipment.forEach(equip => {
+        const status = resolveEquipmentStatus(equip);
+        const displayName = escapeHtml(equip.name || buildEquipmentName(equip));
+        const metaParts = [];
+        if (equip.roomName) {
+          metaParts.push(escapeHtml(equip.roomName));
+        }
+        const controlLabel = equip.iotDeviceName
+          ? `Linked ${equip.iotDeviceName}`
+          : formatControlLabel(equip.control);
+        if (controlLabel) {
+          metaParts.push(escapeHtml(controlLabel));
+        }
+  const metaHtml = metaParts.length ? metaParts.join(' • ') : escapeHtml('Unassigned');
+
+        const item = document.createElement('div');
+        item.className = 'equipment-item';
+        item.innerHTML = `
+          <div class="equipment-info">
+            <div class="equipment-name">${displayName}</div>
+            <div class="equipment-meta">${metaHtml}</div>
+          </div>
+          <div class="equipment-status ${status.className}">${status.label}</div>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function updateStatusBar() {
+      if (!STATE.sensors || STATE.sensors.length === 0) {
+        document.getElementById('currentTemp').textContent = '--';
+        document.getElementById('tempRange').textContent = 'Range: -- to --';
+        document.getElementById('currentHumidity').textContent = '--';
+        document.getElementById('humidityRange').textContent = 'Range: -- to --';
+        document.getElementById('currentVpd').textContent = '--';
+        document.getElementById('vpdRange').textContent = 'Range: -- to --';
+        document.getElementById('sensorCount').textContent = '0';
+        const equipmentTotals = calculateEquipmentTotals(STATE.equipment);
+        document.getElementById('equipmentCount').textContent = `${equipmentTotals.online}/${equipmentTotals.total}`;
+        // Ensure legend reflects the selected metric even when no sensors
+        updateLegend();
+        return;
+      }
+
+      // Aggregate current readings from all sensors using LIVE data or telemetry fallback
+      const temps = [];
+      const humidities = [];
+      const vpds = [];
+
+      console.log('[updateStatusBar] Processing sensors:', STATE.sensors.length, STATE.sensors.map(s => ({
+        id: s.deviceId || s.id,
+        name: s.name,
+        zone: s.zone,
+        hasTelemetry: !!s.telemetry
+      })));
+
+      for (const sensor of STATE.sensors) {
+        // Try live data first
+        let liveData = getLiveSensorData(sensor);
+        
+        // Fallback to sensor telemetry if live data not available
+        if (!liveData && sensor.telemetry) {
+          console.log('[updateStatusBar] Using telemetry fallback for sensor:', sensor.deviceId || sensor.id);
+          liveData = {
+            tempC: sensor.telemetry.temperature,
+            rh: sensor.telemetry.humidity,
+            vpd: sensor.telemetry.vpd
+          };
+        }
+        
+        if (liveData) {
+          if (liveData.tempC != null) temps.push(liveData.tempC);
+          if (liveData.rh != null) humidities.push(liveData.rh);
+          if (liveData.vpd != null) vpds.push(liveData.vpd);
+        }
+      }
+
+      console.log('[updateStatusBar] Aggregated data:', { temps, humidities, vpds });
+
+      // Temperature (display in Celsius)
+      if (temps.length > 0) {
+        const avgTemp = temps.reduce((a, b) => a + b, 0) / temps.length;
+        const minTemp = Math.min(...temps);
+        const maxTemp = Math.max(...temps);
+        
+        document.getElementById('currentTemp').textContent = avgTemp.toFixed(1);
+        document.getElementById('tempRange').textContent = `Range: ${minTemp.toFixed(1)} to ${maxTemp.toFixed(1)}`;
+      } else {
+        document.getElementById('currentTemp').textContent = '--';
+        document.getElementById('tempRange').textContent = 'Range: -- to --';
+      }
+
+      // Humidity
+      if (humidities.length > 0) {
+        const avgHumidity = humidities.reduce((a, b) => a + b, 0) / humidities.length;
+        const minHumidity = Math.min(...humidities);
+        const maxHumidity = Math.max(...humidities);
+        
+        document.getElementById('currentHumidity').textContent = avgHumidity.toFixed(1);
+        document.getElementById('humidityRange').textContent = `Range: ${minHumidity.toFixed(1)} to ${maxHumidity.toFixed(1)}`;
+      } else {
+        document.getElementById('currentHumidity').textContent = '--';
+        document.getElementById('humidityRange').textContent = 'Range: -- to --';
+      }
+
+      // VPD
+      if (vpds.length > 0) {
+        const avgVpd = vpds.reduce((a, b) => a + b, 0) / vpds.length;
+        const minVpd = Math.min(...vpds);
+        const maxVpd = Math.max(...vpds);
+        
+        document.getElementById('currentVpd').textContent = avgVpd.toFixed(2);
+        document.getElementById('vpdRange').textContent = `Range: ${minVpd.toFixed(2)} to ${maxVpd.toFixed(2)}`;
+      } else {
+        document.getElementById('currentVpd').textContent = '--';
+        document.getElementById('vpdRange').textContent = 'Range: -- to --';
+      }
+
+      // Counts
+      document.getElementById('sensorCount').textContent = STATE.sensors.length;
+  const equipmentTotals = calculateEquipmentTotals(STATE.equipment);
+  document.getElementById('equipmentCount').textContent = `${equipmentTotals.online}/${equipmentTotals.total}`;
+
+      // Update legend with ranges from live values
+      updateLegend();
+    }
+
+    function updateLegend() {
+      const metric = METRICS[STATE.currentMetric];
+      // Always update gradient to reflect selected metric
+      const legendGradient = document.querySelector('.legend-gradient');
+      if (legendGradient && metric?.colors) {
+        // Sort by stop.value and place stops according to their value (0-1 => 0-100%)
+        const sortedColors = [...metric.colors].sort((a, b) => a.value - b.value);
+        const colorStops = sortedColors.map((stop) => {
+          const [r, g, b] = stop.color;
+          const position = Math.max(0, Math.min(1, stop.value)) * 100;
+          return `rgb(${r}, ${g}, ${b}) ${position}%`;
+        }).join(', ');
+        legendGradient.style.background = `linear-gradient(to right, ${colorStops})`;
+        console.log('[Heat Map] Updated legend gradient:', colorStops);
+      }
+
+      // Update legend metric name chip for clarity
+      const nameEl = document.getElementById('legendMetricName');
+      if (nameEl && metric?.label) {
+        nameEl.textContent = `— ${metric.label}`;
+      }
+
+      // Compute min/max labels when values exist; otherwise show placeholders
+      const values = [];
+      if (STATE.sensors && STATE.sensors.length > 0) {
+        for (const sensor of STATE.sensors) {
+          if (sensor.telemetry) {
+            let value;
+            if (STATE.currentMetric === 'temperature') {
+              value = sensor.telemetry.temperature;
+            } else if (STATE.currentMetric === 'humidity') {
+              value = sensor.telemetry.humidity;
+            } else if (STATE.currentMetric === 'vpd') {
+              value = sensor.telemetry.vpd;
+            }
+            if (value != null) values.push(value);
+          }
+        }
+      }
+
+      if (values.length > 0) {
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        document.getElementById('legendMin').textContent = `${min.toFixed(1)}${metric.unit}`;
+        document.getElementById('legendMax').textContent = `${max.toFixed(1)}${metric.unit}`;
+      } else {
+        document.getElementById('legendMin').textContent = 'Min';
+        document.getElementById('legendMax').textContent = 'Max';
+      }
+    }
+
+    function renderHeatMap() {
+      console.log('[Heat Map] renderHeatMap called - roomMap:', !!STATE.roomMap, 'envData:', !!STATE.envData);
+      
+      if (!STATE.roomMap || !STATE.iotDevices) {
+        console.warn('[Heat Map] Missing required data for rendering');
+        return;
+      }
+
+      const gridSize = STATE.roomMap.gridSize || 20;
+      const cellSize = STATE.roomMap.cellSize || 40; // Use cellSize from room map or default to 40
+      const width = gridSize * cellSize;
+      const height = Math.floor(gridSize * 0.75) * cellSize;
+
+      console.log('[Heat Map] Canvas dimensions:', width, 'x', height, '(gridSize:', gridSize, 'cellSize:', cellSize, ')');
+
+      STATE.canvas.width = width;
+      STATE.canvas.height = height;
+      
+      // Set explicit display style for visibility
+      STATE.canvas.style.display = 'block';
+      STATE.canvas.style.border = '2px solid #3b82f6';
+
+      const ctx = STATE.ctx;
+      ctx.clearRect(0, 0, width, height);
+
+      // Get sensor readings based on current metric
+      const sensorReadings = getSensorReadingsForMetric(STATE.currentMetric);
+      
+      console.log('[Heat Map] Sensor readings for', STATE.currentMetric, ':', sensorReadings.length, 'readings');
+      
+      if (sensorReadings.length === 0) {
+        ctx.fillStyle = 'rgba(100, 116, 139, 0.3)';
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '18px sans-serif';
+        ctx.textAlign = 'center';
+        
+        // Check if sensors exist but aren't positioned
+        const unpositionedSensors = STATE.sensors.filter(s => s.x == null || s.y == null).length;
+        if (unpositionedSensors > 0) {
+          ctx.fillText('⚠️ Sensors detected but not positioned on grid', width / 2, height / 2 - 20);
+          ctx.font = '14px sans-serif';
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillText(`${unpositionedSensors} sensor(s) need to be placed in Room Mapper`, width / 2, height / 2 + 10);
+          ctx.fillText('Go to Room Mapper → Drag sensors from device list to grid', width / 2, height / 2 + 35);
+        } else {
+          ctx.fillText('No sensor data available for ' + STATE.currentMetric, width / 2, height / 2 - 10);
+          ctx.font = '14px sans-serif';
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillText('Register IoT devices with telemetry on IoT Devices page', width / 2, height / 2 + 20);
+        }
+        return;
+      }
+
+      // Calculate min/max from actual sensor readings
+      const values = sensorReadings.map(s => s.value).filter(v => v != null);
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+
+      // Draw interpolated heat map using real sensor positions
+      drawInterpolatedHeatMap(ctx, width, height, gridSize, cellSize, sensorReadings, min, max);
+
+      // Draw room perimeter if defined
+      if (STATE.roomMap.roomPerimeter) {
+        const rp = STATE.roomMap.roomPerimeter;
+        const x = rp.x1 * cellSize;
+        const y = rp.y1 * cellSize;
+        const w = (rp.x2 - rp.x1 + 1) * cellSize;
+        const h = (rp.y2 - rp.y1 + 1) * cellSize;
+
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]);
+        ctx.strokeRect(x, y, w, h);
+        ctx.setLineDash([]);
+      }
+
+      // Draw zones (if defined)
+      if (STATE.roomMap.zones) {
+        STATE.roomMap.zones.forEach(zone => {
+          ctx.strokeStyle = zone.color || '#3b82f6';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          
+          const x = zone.x1 * cellSize;
+          const y = zone.y1 * cellSize;
+          const w = (zone.x2 - zone.x1 + 1) * cellSize;
+          const h = (zone.y2 - zone.y1 + 1) * cellSize;
+          
+          ctx.strokeRect(x, y, w, h);
+          ctx.setLineDash([]);
+          
+          // Zone label
+          ctx.fillStyle = zone.color || '#3b82f6';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(zone.name, x + 10, y + 20);
+        });
+      }
+
+      // Draw sensor positions
+      STATE.sensors.forEach(sensor => {
+        if (sensor.x != null && sensor.y != null) {
+          const x = sensor.x * cellSize + cellSize / 2;
+          const y = sensor.y * cellSize + cellSize / 2;
+          
+          // Sensor marker
+          ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
+          ctx.beginPath();
+          ctx.arc(x, y, 8, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // Sensor value
+          const tel = sensor.telemetry || {};
+          let reading = '';
+          const metricKey = STATE.currentMetric;
+          if (metricKey === 'temperature' && tel.temperature != null) {
+            reading = tel.temperature.toFixed(1);
+          } else if (metricKey === 'humidity' && tel.humidity != null) {
+            reading = tel.humidity.toFixed(1);
+          } else if (metricKey === 'vpd' && tel.vpd != null) {
+            reading = tel.vpd.toFixed(2);
+          }
+          
+          if (reading) {
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(reading, x, y - 15);
+          }
+        }
+      });
+
+      // Draw equipment positions
+      if (STATE.roomMap.devices) {
+        STATE.roomMap.devices.forEach(placement => {
+          const device = STATE.iotDevices.find(d => d.id === placement.deviceId);
+          const snapshot = placement.snapshot || placement.metadata || null;
+          const deviceType = (device?.type || snapshot?.type || '').toLowerCase();
+          const deviceCategory = (device?.category || snapshot?.category || '').toLowerCase();
+          const isEquipment =
+            deviceType.includes('plug') ||
+            deviceType.includes('light') ||
+            deviceType.includes('hvac') ||
+            deviceCategory.includes('equipment') ||
+            deviceCategory.includes('light');
+
+          if (isEquipment) {
+            const x = placement.x * cellSize + cellSize / 2;
+            const y = placement.y * cellSize + cellSize / 2;
+
+            // Background circle for equipment
+            ctx.fillStyle = 'rgba(30, 41, 59, 0.9)';
+            ctx.beginPath();
+            ctx.arc(x, y, 18, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Equipment icon
+            ctx.font = '24px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#f8fafc';
+
+            const icon = snapshot?.icon || '●';
+            ctx.fillText(icon, x, y);
+
+            // Status indicator (default to online if no telemetry)
+            const isOnline = device ? device.telemetry?.online !== false : true;
+            ctx.fillStyle = isOnline ? '#22c55e' : '#ef4444';
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(x + 16, y - 16, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Equipment name label below icon
+            const name = device?.name || snapshot?.name || '';
+            if (name) {
+              const shortName = name.length > 15 ? name.substring(0, 13) + '...' : name;
+              ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+              ctx.fillRect(x - 35, y + 22, 70, 16);
+              ctx.fillStyle = '#cbd5e1';
+              ctx.font = 'bold 9px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText(shortName, x, y + 32);
+            }
+          }
+        });
+      }
+    }
+
+    // Helper: Get sensor readings for current metric from IoT devices
+    function getSensorReadingsForMetric(metric) {
+      console.log('[Heat Map] getSensorReadingsForMetric called for:', metric);
+      console.log('[Heat Map] STATE.sensors count:', STATE.sensors?.length);
+      console.log('[Heat Map] STATE.envData:', STATE.envData ? 'exists' : 'null');
+      console.log('[Heat Map] STATE.envData.zones count:', STATE.envData?.zones?.length);
+      
+      if (!STATE.sensors || STATE.sensors.length === 0) {
+        console.warn('[Heat Map] No sensors available');
+        return [];
+      }
+
+      const readings = [];
+      const metricKey = metric === 'temperature' ? 'tempC' : (metric === 'humidity' ? 'rh' : metric);
+      const zones = Array.isArray(STATE.envData?.zones) ? STATE.envData.zones : [];
+      const zonesById = new Map(zones.map(z => [z.id, z]));
+      
+      console.log('[Heat Map] Zones by ID:', Array.from(zonesById.keys()));
+      console.log('[Heat Map] Processing', STATE.sensors.length, 'sensors');
+      
+      for (const sensor of STATE.sensors) {
+        if (sensor.x == null || sensor.y == null) {
+          console.log('[Heat Map] Skipping sensor (no position):', sensor.name);
+          continue;
+        }
+
+        // Prefer live reading from env API by deviceId (when sources map exists)
+        let value = null;
+        const deviceId = sensor.deviceId;
+        let source = 'none';
+
+        // Try lookup by sources in any zone
+        for (const z of zones) {
+          const sBucket = z?.sensors?.[metricKey];
+          const srcs = sBucket && sBucket.sources ? sBucket.sources : null;
+          if (srcs && deviceId && Object.prototype.hasOwnProperty.call(srcs, deviceId)) {
+            const srcVal = srcs[deviceId]?.current ?? srcs[deviceId]?.value;
+            if (Number.isFinite(srcVal)) { 
+              value = srcVal; 
+              source = 'sources';
+              break; 
+            }
+          }
+        }
+
+        // Fallback: use the zone's current value based on placement location
+        if (value == null) {
+          const containingZone = findZoneForPoint(sensor.x, sensor.y, STATE.roomMap?.zones || []);
+          if (containingZone) {
+            console.log('[Heat Map] Sensor', sensor.name, 'in zone:', containingZone.zone || containingZone.id);
+          }
+          const zoneObj = containingZone ? zonesById.get(`zone-${containingZone.zone}`) || zonesById.get(containingZone.id) : null;
+          if (zoneObj) {
+            console.log('[Heat Map] Found zone object for', sensor.name, '- has sensors?', !!zoneObj.sensors);
+          }
+          const zoneVal = zoneObj?.sensors?.[metricKey]?.current;
+          if (Number.isFinite(zoneVal)) {
+            value = zoneVal;
+            source = 'zone-current';
+            console.log('[Heat Map] Using zone current for', sensor.name, ':', value);
+          }
+        }
+
+        // Final fallback: use snapshot telemetry value (may be stale)
+        if (value == null && sensor.telemetry) {
+          if (metric === 'temperature') {
+            // Telemetry may be in Fahrenheit, convert to Celsius
+            const tempVal = sensor.telemetry.temperature;
+            if (tempVal != null) {
+              // Assume telemetry is in Fahrenheit if > 40 (heuristic)
+              value = tempVal > 40 ? (tempVal - 32) * 5/9 : tempVal;
+            }
+          } else if (metric === 'humidity') {
+            value = sensor.telemetry.humidity;
+          } else if (metric === 'vpd') {
+            value = sensor.telemetry.vpd;
+          }
+          if (value != null) {
+            source = 'telemetry';
+            console.log('[Heat Map] Using telemetry for', sensor.name, ':', value);
+          }
+        }
+
+        if (value != null) {
+          console.log('[Heat Map] ✓', sensor.name, '=', value, '(source:', source + ')');
+          readings.push({
+            x: sensor.x,
+            y: sensor.y,
+            value: value,
+            deviceId: sensor.deviceId,
+            name: sensor.name || sensor.deviceId
+          });
+        } else {
+          console.warn('[Heat Map] ✗ No value for', sensor.name, '- checked sources/zone/telemetry');
+        }
+      }
+
+      console.log(`[Heat Map] Found ${readings.length} sensor readings for ${metric}`);
+      console.log('[Heat Map] Readings:', readings);
+      return readings;
+    }
+
+    // Helper: find room-map zone containing a point
+    function findZoneForPoint(px, py, zones) {
+      if (!Array.isArray(zones)) return null;
+      for (const z of zones) {
+        if (z && Number.isFinite(z.x1) && Number.isFinite(z.y1) && Number.isFinite(z.x2) && Number.isFinite(z.y2)) {
+          if (px >= z.x1 && px <= z.x2 && py >= z.y1 && py <= z.y2) return z;
+        }
+      }
+      return null;
+    }
+
+    // Helper: Interpolate value at (x, y) using inverse distance weighting
+    function interpolateValue(x, y, sensorReadings, power = 2) {
+      if (sensorReadings.length === 0) return null;
+      if (sensorReadings.length === 1) return sensorReadings[0].value;
+
+      let weightedSum = 0;
+      let weightSum = 0;
+
+      for (const sensor of sensorReadings) {
+        const dx = x - sensor.x;
+        const dy = y - sensor.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // If very close to a sensor, use its value directly
+        if (distance < 0.1) {
+          return sensor.value;
+        }
+
+        const weight = 1 / Math.pow(distance, power);
+        weightedSum += sensor.value * weight;
+        weightSum += weight;
+      }
+
+      return weightSum > 0 ? weightedSum / weightSum : null;
+    }
+
+    // Draw interpolated heat map using actual sensor positions
+    function drawInterpolatedHeatMap(ctx, width, height, gridSize, cellSize, sensorReadings, min, max) {
+      console.log('[Heat Map] Drawing interpolated heat map with', sensorReadings.length, 'sensors');
+      
+      // Create pixel-level heat map data
+      const imageData = ctx.createImageData(width, height);
+      const data = imageData.data;
+
+      // Sample every N pixels for performance
+      const sampleSize = 4;
+      
+      for (let py = 0; py < height; py += sampleSize) {
+        for (let px = 0; px < width; px += sampleSize) {
+          // Convert pixel to grid coordinates
+          const gridX = px / cellSize;
+          const gridY = py / cellSize;
+
+          // Interpolate value at this position
+          const value = interpolateValue(gridX, gridY, sensorReadings);
+
+          if (value != null) {
+            // Normalize to 0-1
+            const normalized = (value - min) / (max - min);
+            
+            // Get color from current metric palette
+            const color = getHeatColorForNormalized(normalized, METRICS[STATE.currentMetric]?.colors);
+
+            // Fill sampled pixels
+            for (let dy = 0; dy < sampleSize; dy++) {
+              for (let dx = 0; dx < sampleSize; dx++) {
+                const x = px + dx;
+                const y = py + dy;
+                if (x < width && y < height) {
+                  const index = (y * width + x) * 4;
+                  data[index] = color.r;
+                  data[index + 1] = color.g;
+                  data[index + 2] = color.b;
+                  data[index + 3] = 200; // Slight transparency
+                }
+              }
+            }
+          }
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    // Get heat map color from normalized value (0-1) using a color stop palette
+    function getHeatColorForNormalized(normalized, colorStops) {
+      // Clamp to 0-1
+      normalized = Math.max(0, Math.min(1, normalized));
+      const palette = Array.isArray(colorStops) && colorStops.length ? colorStops : [
+        { value: 0, color: [59, 130, 246] },
+        { value: 0.5, color: [34, 197, 94] },
+        { value: 1, color: [239, 68, 68] }
+      ];
+      const sorted = [...palette].sort((a, b) => a.value - b.value);
+      const rgb = getColorForValue(normalized, sorted);
+      return { r: rgb[0], g: rgb[1], b: rgb[2] };
+    }
+
+    function drawHeatMapGradient(ctx, width, height, value, min, max) {
+  const metric = METRICS[STATE.currentMetric];
+      
+      // Normalize value to 0-1 range
+      const normalizedValue = (value - min) / (max - min);
+      
+      // Create radial gradient from center (simulating uniform distribution)
+      const gradient = ctx.createRadialGradient(
+        width / 2, height / 2, 0,
+        width / 2, height / 2, Math.max(width, height) / 2
+      );
+      
+      // Get color for current value
+      const color = getColorForValue(normalizedValue, metric.colors);
+      
+      // Add gradient stops (simulate slight variation)
+      gradient.addColorStop(0, `rgba(${color.join(',')}, 0.8)`);
+      gradient.addColorStop(0.5, `rgba(${color.join(',')}, 0.6)`);
+      gradient.addColorStop(1, `rgba(${color.join(',')}, 0.4)`);
+      
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      
+      // Add slight noise/texture for more realistic heat map
+      for (let i = 0; i < 100; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const variation = (Math.random() - 0.5) * 0.2; // ±10% variation
+        const variedValue = Math.max(0, Math.min(1, normalizedValue + variation));
+        const variedColor = getColorForValue(variedValue, metric.colors);
+        
+        ctx.fillStyle = `rgba(${variedColor.join(',')}, 0.3)`;
+        ctx.beginPath();
+        ctx.arc(x, y, 30, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function getColorForValue(value, colorStops) {
+      // Find the two color stops to interpolate between
+      let lowerStop = colorStops[0];
+      let upperStop = colorStops[colorStops.length - 1];
+      
+      for (let i = 0; i < colorStops.length - 1; i++) {
+        if (value >= colorStops[i].value && value <= colorStops[i + 1].value) {
+          lowerStop = colorStops[i];
+          upperStop = colorStops[i + 1];
+          break;
+        }
+      }
+      
+      // Interpolate between the two colors
+      const range = upperStop.value - lowerStop.value;
+      const factor = range === 0 ? 0 : (value - lowerStop.value) / range;
+      
+      const r = Math.round(lowerStop.color[0] + (upperStop.color[0] - lowerStop.color[0]) * factor);
+      const g = Math.round(lowerStop.color[1] + (upperStop.color[1] - lowerStop.color[1]) * factor);
+      const b = Math.round(lowerStop.color[2] + (upperStop.color[2] - lowerStop.color[2]) * factor);
+      
+      return [r, g, b];
+    }
+
+    function getMaxHistoryLength() {
+      if (!STATE.envData?.zones) return 288; // fallback
+      
+      let maxLength = 0;
+      STATE.envData.zones.forEach(zone => {
+        const sensors = zone?.sensors || {};
+        [sensors.tempC, sensors.rh, sensors.vpd].forEach(sensor => {
+          if (sensor?.history?.length > maxLength) {
+            maxLength = sensor.history.length;
+          }
+        });
+      });
+      
+      return maxLength || 288; // fallback if no data
+    }
+
+    function updateTimeDisplay() {
+      const totalPoints = getMaxHistoryLength();
+      const minutesAgo = (totalPoints - 1 - STATE.currentTimeIndex) * 5;
+      
+      if (minutesAgo === 0) {
+        document.getElementById('timeDisplay').textContent = 'Now';
+      } else if (minutesAgo < 60) {
+        document.getElementById('timeDisplay').textContent = `${minutesAgo} min ago`;
+      } else {
+        const hoursAgo = Math.floor(minutesAgo / 60);
+        const remainingMinutes = minutesAgo % 60;
+        if (remainingMinutes === 0) {
+          document.getElementById('timeDisplay').textContent = `${hoursAgo}h ago`;
+        } else {
+          document.getElementById('timeDisplay').textContent = `${hoursAgo}h ${remainingMinutes}m ago`;
+        }
+      }
+    }
+
+    function startPlayback() {
+      if (STATE.isPlaying) return;
+      
+      STATE.isPlaying = true;
+      document.getElementById('playBtn').style.display = 'none';
+      document.getElementById('pauseBtn').style.display = 'block';
+      
+      STATE.playInterval = setInterval(() => {
+        STATE.currentTimeIndex++;
+        const maxIndex = getMaxHistoryLength() - 1;
+        if (STATE.currentTimeIndex > maxIndex) {
+          STATE.currentTimeIndex = 0; // Loop back to start
+        }
+        
+        document.getElementById('timeSlider').value = STATE.currentTimeIndex;
+        renderHeatMap();
+        updateTimeDisplay();
+      }, 200); // Update every 200ms (faster than real-time for visualization)
+    }
+
+    function pausePlayback() {
+      STATE.isPlaying = false;
+      document.getElementById('playBtn').style.display = 'block';
+      document.getElementById('pauseBtn').style.display = 'none';
+      
+      if (STATE.playInterval) {
+        clearInterval(STATE.playInterval);
+        STATE.playInterval = null;
+      }
+    }
+
+    function resetPlayback() {
+      pausePlayback();
+      STATE.currentTimeIndex = getMaxHistoryLength() - 1; // Back to "now"
+      document.getElementById('timeSlider').value = 287;
+      renderHeatMap();
+      updateTimeDisplay();
+    }
+  </script>
+
+  <!-- Intro Card Component -->
+  <script src="/js/intro-card.js?v=5"></script>
+  <script>
+    // Show intro card when page loads (only in demo mode)
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        showIntroCard('environmental-heatmap');
+      }, 500);
+    });
+    
+    // Load farm name into header
+    (async function() {
+      try {
+        const response = await fetch('/data/farm.json');
+        if (response.ok) {
+          const farmData = await response.json();
+          const farmName = farmData.name || farmData.farmName;
+          if (farmName) {
+            const headerEl = document.getElementById('farmNameHeader');
+            if (headerEl) {
+              headerEl.textContent = `${farmName} - Heat Map`;
+            }
+            document.title = `${farmName} - Environmental Heat Map`;
+          }
+        }
+      } catch (error) {
+        console.log('[Heat Map] Could not load farm name:', error.message);
+      }
+    })();
+  </script>
+  <script src="/js/farm-assistant.js"></script>
+</body>
+</html>
