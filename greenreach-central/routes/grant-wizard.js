@@ -379,6 +379,25 @@ router.put('/profile', authenticateGrantUser, async (req, res) => {
 router.delete('/profile', authenticateGrantUser, async (req, res) => {
   try {
     const pool = getPool(req);
+    const { password } = req.body || {};
+
+    if (!password) {
+      return res.status(400).json({ success: false, error: 'Password required' });
+    }
+
+    const passResult = await pool.query(
+      'SELECT password_hash FROM grant_users WHERE id = $1 AND deleted_at IS NULL',
+      [req.grantUserId]
+    );
+
+    if (!passResult.rows.length) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const passMatch = await bcrypt.compare(password, passResult.rows[0].password_hash);
+    if (!passMatch) {
+      return res.status(401).json({ success: false, error: 'Invalid password' });
+    }
     
     // Soft-delete user
     await pool.query('UPDATE grant_users SET deleted_at = NOW() WHERE id = $1', [req.grantUserId]);
