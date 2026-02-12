@@ -416,6 +416,34 @@ async function runMigrations(client) {
     } catch (err) {
       logger.warn('Grant wizard migration warning:', err.message);
     }
+
+    // Migration 012: Project Discovery columns + research jobs table
+    try {
+      await client.query(`
+        ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS project_characterization JSONB DEFAULT '{}';
+        ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS website_intelligence JSONB DEFAULT '{}';
+        ALTER TABLE grant_users ADD COLUMN IF NOT EXISTS website_url TEXT;
+
+        CREATE TABLE IF NOT EXISTS grant_research_jobs (
+          id              SERIAL PRIMARY KEY,
+          application_id  INTEGER REFERENCES grant_applications(id),
+          user_id         INTEGER NOT NULL REFERENCES grant_users(id),
+          job_type        VARCHAR(50) NOT NULL,
+          status          VARCHAR(50) DEFAULT 'pending',
+          input_data      JSONB DEFAULT '{}',
+          result_data     JSONB DEFAULT '{}',
+          error_message   TEXT,
+          created_at      TIMESTAMPTZ DEFAULT NOW(),
+          completed_at    TIMESTAMPTZ
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_grant_research_jobs_app ON grant_research_jobs(application_id);
+        CREATE INDEX IF NOT EXISTS idx_grant_research_jobs_user ON grant_research_jobs(user_id);
+      `);
+      logger.info('Project discovery tables ready (migration 012)');
+    } catch (err) {
+      logger.warn('Project discovery migration warning:', err.message);
+    }
   }
 
   logger.info('Database migrations completed');

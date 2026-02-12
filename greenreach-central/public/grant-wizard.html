@@ -334,6 +334,76 @@
       padding: 16px; text-align: center; color: var(--text-light);
       font-size: 14px;
     }
+
+    /* ---- Project Discovery (pre-wizard) ---- */
+    .discovery-container { max-width: 800px; margin: 0 auto; }
+    .discovery-card {
+      background: var(--surface); border-radius: 24px; padding: 48px;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.06); margin-bottom: 24px;
+    }
+    .discovery-card h2 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .discovery-card .card-desc { font-size: 15px; color: var(--text-light); margin-bottom: 24px; }
+    .goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 600px) { .goal-grid { grid-template-columns: 1fr; } }
+    .goal-option {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px; border: 2px solid #e5e5ea; border-radius: 14px;
+      cursor: pointer; transition: all 0.2s; background: var(--bg);
+    }
+    .goal-option:hover { border-color: var(--accent); }
+    .goal-option.selected {
+      border-color: var(--primary); background: rgba(130,195,65,0.06);
+    }
+    .goal-option input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
+    .goal-option .goal-label { font-size: 15px; font-weight: 500; }
+    .goal-option .goal-desc { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+
+    .budget-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .budget-chip {
+      padding: 10px 20px; border: 2px solid #e5e5ea; border-radius: 12px;
+      background: var(--bg); cursor: pointer; font-size: 14px; font-weight: 500;
+      transition: all 0.2s;
+    }
+    .budget-chip:hover { border-color: var(--accent); }
+    .budget-chip.selected { border-color: var(--primary); background: rgba(130,195,65,0.08); color: var(--primary); font-weight: 600; }
+
+    .timeline-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    @media (max-width: 600px) { .timeline-row { grid-template-columns: 1fr; } }
+
+    /* Discovery website scrape results */
+    .web-intel-card {
+      background: var(--bg); border-radius: 14px; padding: 20px;
+      margin-top: 16px; border: 1px solid rgba(130,195,65,0.15);
+    }
+    .web-intel-card h4 { font-size: 15px; font-weight: 600; color: var(--primary); margin-bottom: 10px; }
+    .web-intel-items { display: flex; flex-direction: column; gap: 6px; }
+    .web-intel-item {
+      font-size: 13px; color: var(--text); padding: 6px 10px;
+      background: rgba(255,255,255,0.7); border-radius: 8px;
+      display: flex; align-items: start; gap: 8px;
+    }
+    .web-intel-item .icon { flex-shrink: 0; }
+    .positioning-summary {
+      background: rgba(130,195,65,0.06); border: 1px solid rgba(130,195,65,0.2);
+      border-radius: 14px; padding: 20px; margin-top: 16px;
+    }
+    .positioning-summary h4 { font-size: 15px; font-weight: 600; color: var(--primary); margin-bottom: 8px; }
+    .positioning-summary p { font-size: 14px; line-height: 1.6; color: var(--text); }
+
+    /* Match badge on program cards */
+    .match-badge {
+      position: absolute; top: 16px; left: 16px; padding: 4px 10px;
+      border-radius: 980px; font-size: 12px; font-weight: 700;
+      background: rgba(130,195,65,0.15); color: var(--primary);
+    }
+    .match-badge.strong { background: rgba(46,125,50,0.12); color: var(--success); }
+    .match-reasons {
+      margin-top: 12px; padding-top: 10px; border-top: 1px solid #f0f0f0;
+    }
+    .match-reason {
+      font-size: 12px; color: var(--primary); display: flex; align-items: center; gap: 4px;
+      margin-bottom: 3px;
+    }
   </style>
 </head>
 <body>
@@ -525,7 +595,7 @@
       <div id="tab-my-apps" class="tab-content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
           <h2 style="font-size: 24px; font-weight: 700;">Applications</h2>
-          <button class="btn btn-primary btn-sm" onclick="showView('programs')">+ New Application</button>
+          <button class="btn btn-primary btn-sm" onclick="startNewDiscovery()">+ New Application</button>
         </div>
         <div id="appsList"></div>
       </div>
@@ -690,6 +760,202 @@
     </div>
 
     <!-- ====================================================== -->
+    <!-- VIEW: Project Discovery (pre-wizard) -->
+    <!-- ====================================================== -->
+    <div id="view-discovery" class="view">
+      <div class="discovery-container">
+        <div class="section-header" style="margin-bottom:32px;">
+          <h1>Project Discovery</h1>
+          <p>Tell us about your project goals. We'll find the best-fit programs and pre-fill your application.</p>
+        </div>
+
+        <!-- Card 1: Project Goals -->
+        <div class="discovery-card">
+          <h2>What are you trying to accomplish?</h2>
+          <p class="card-desc">Select all that apply — this helps us match you to the right funding programs.</p>
+          <div class="goal-grid" id="goalGrid">
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="establish_vertical_farm">
+              <div><div class="goal-label">Establish a vertical farm or CEA facility</div>
+              <div class="goal-desc">Build or set up new controlled-environment growing</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="expand_operation">
+              <div><div class="goal-label">Expand an existing operation</div>
+              <div class="goal-desc">Scale production, add capacity, new growing rooms</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="equipment_purchase">
+              <div><div class="goal-label">Purchase equipment or technology</div>
+              <div class="goal-desc">Automation, lighting, HVAC, sensors, processing</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="workforce_training">
+              <div><div class="goal-label">Hire or train workers</div>
+              <div class="goal-desc">Workforce development, internships, labour costs</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="innovation_rd">
+              <div><div class="goal-label">Innovation & R&D</div>
+              <div class="goal-desc">Research, pilot projects, novel growing methods</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="export_market">
+              <div><div class="goal-label">Enter export or new markets</div>
+              <div class="goal-desc">International trade, market access, buyer development</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="clean_tech">
+              <div><div class="goal-label">Clean technology & sustainability</div>
+              <div class="goal-desc">Energy efficiency, renewables, emissions reduction</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="community_food">
+              <div><div class="goal-label">Community food security</div>
+              <div class="goal-desc">Local food access, food banks, school programs</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="risk_management">
+              <div><div class="goal-label">Business risk management</div>
+              <div class="goal-desc">Insurance, income stabilization, disaster recovery</div></div>
+            </label>
+            <label class="goal-option" onclick="toggleGoal(this)">
+              <input type="checkbox" value="value_added">
+              <div><div class="goal-label">Value-added processing</div>
+              <div class="goal-desc">Packaging, processing facility, product development</div></div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Card 2: Scale & Financials -->
+        <div class="discovery-card">
+          <h2>Project Scale</h2>
+          <p class="card-desc">These help us find programs in the right funding range and verify eligibility.</p>
+
+          <div class="form-group" style="margin-bottom:20px;">
+            <label style="font-size:14px; font-weight:600;">Estimated project budget</label>
+            <div class="budget-chips" id="budgetChips">
+              <span class="budget-chip" onclick="selectBudget(this, 'under_25k')">Under $25K</span>
+              <span class="budget-chip" onclick="selectBudget(this, '25k_100k')">$25K – $100K</span>
+              <span class="budget-chip" onclick="selectBudget(this, '100k_500k')">$100K – $500K</span>
+              <span class="budget-chip" onclick="selectBudget(this, '500k_1m')">$500K – $1M</span>
+              <span class="budget-chip" onclick="selectBudget(this, 'over_1m')">Over $1M</span>
+            </div>
+          </div>
+
+          <div class="timeline-row">
+            <div class="form-group">
+              <label style="font-size:14px;">Current employees</label>
+              <input type="number" id="disc_currentEmp" min="0" value="0" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label style="font-size:14px;">Post-project employees</label>
+              <input type="number" id="disc_futureEmp" min="0" value="" placeholder="Target">
+            </div>
+            <div class="form-group">
+              <label style="font-size:14px;">Project duration (months)</label>
+              <select id="disc_duration">
+                <option value="">Select...</option>
+                <option value="3">3 months</option>
+                <option value="6">6 months</option>
+                <option value="12">12 months</option>
+                <option value="18">18 months</option>
+                <option value="24">24 months</option>
+                <option value="36">36+ months</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label style="font-size:14px;">Province / Territory</label>
+            <select id="disc_province">
+              <option value="">Select...</option>
+              <option value="AB">Alberta</option><option value="BC">British Columbia</option>
+              <option value="MB">Manitoba</option><option value="NB">New Brunswick</option>
+              <option value="NL">Newfoundland</option><option value="NS">Nova Scotia</option>
+              <option value="NT">NWT</option><option value="NU">Nunavut</option>
+              <option value="ON">Ontario</option><option value="PE">PEI</option>
+              <option value="QC">Quebec</option><option value="SK">Saskatchewan</option>
+              <option value="YT">Yukon</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Card 3: Website Intelligence -->
+        <div class="discovery-card">
+          <h2>Your Online Presence</h2>
+          <p class="card-desc">We'll analyze your website to find positioning angles — community events, awards, products, news — that strengthen your application narrative.</p>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="font-size:14px; font-weight:600;">Business website URL</label>
+            <div style="display:flex; gap:10px;">
+              <input type="url" id="disc_websiteUrl" placeholder="https://yourfarm.ca" style="flex:1;">
+              <button class="btn btn-secondary btn-sm" id="scrapeBtn" onclick="scrapeWebsite()" style="white-space:nowrap;">Analyze Site</button>
+            </div>
+            <div style="font-size:12px; color:var(--text-light); margin-top:6px;">Optional. We scan for community involvement, awards, products, and company details to help build your narrative.</div>
+          </div>
+
+          <div id="webIntelResults"></div>
+        </div>
+
+        <!-- Card 4: Existing docs (optional) -->
+        <div class="discovery-card">
+          <h2>Do you have an existing business plan?</h2>
+          <p class="card-desc">Most grant applications need a simple business plan — realistic goals, milestones, and costs. Not a fully audited document.</p>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <label class="goal-option" style="flex:1; min-width:200px;" onclick="selectBizPlan(this, 'yes')">
+              <input type="radio" name="bizPlan" value="yes" style="width:18px;height:18px;accent-color:var(--primary);">
+              <div><div class="goal-label">Yes, I have one</div>
+              <div class="goal-desc">We can tailor wizard steps to build on it</div></div>
+            </label>
+            <label class="goal-option" style="flex:1; min-width:200px;" onclick="selectBizPlan(this, 'partial')">
+              <input type="radio" name="bizPlan" value="partial" style="width:18px;height:18px;accent-color:var(--primary);">
+              <div><div class="goal-label">Partial / in progress</div>
+              <div class="goal-desc">We'll help fill in missing sections</div></div>
+            </label>
+            <label class="goal-option" style="flex:1; min-width:200px;" onclick="selectBizPlan(this, 'no')">
+              <input type="radio" name="bizPlan" value="no" style="width:18px;height:18px;accent-color:var(--primary);">
+              <div><div class="goal-label">No, start from scratch</div>
+              <div class="goal-desc">We'll generate a simple plan from your answers</div></div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex; gap:16px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">← Back to Dashboard</button>
+          <button class="btn btn-primary" id="discoveryNextBtn" onclick="submitDiscovery()">Find Matching Programs →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- VIEW: Smart Program Matches (post-discovery) -->
+    <!-- ====================================================== -->
+    <div id="view-matches" class="view">
+      <div style="max-width:960px; margin:0 auto;">
+        <div class="section-header" style="margin-bottom:24px;">
+          <h1>Your Best-Fit Programs</h1>
+          <p id="matchSummary">Programs ranked by relevance to your project goals.</p>
+        </div>
+
+        <div id="matchFilters" style="display:flex; gap:12px; margin-bottom:24px; flex-wrap:wrap;">
+          <button class="search-pill active" onclick="filterMatches(this, 'all')">All Programs</button>
+          <button class="search-pill" onclick="filterMatches(this, 'strong')">Strong Matches</button>
+          <button class="search-pill" onclick="filterMatches(this, 'open')">Open Now</button>
+        </div>
+
+        <div id="matchedProgramsList" class="programs-grid"></div>
+
+        <div style="text-align:center; margin-top:32px; display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="showView('discovery')">← Refine Goals</button>
+          <button class="btn btn-secondary btn-sm" onclick="showView('programs')">Browse All Programs</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
     <!-- VIEW: Export Pack -->
     <!-- ====================================================== -->
     <div id="view-export" class="view">
@@ -777,6 +1043,43 @@
       if (viewName === 'dashboard') loadDashboard();
       if (viewName === 'programs') loadAllPrograms();
       if (viewName === 'landing') loadPublicPrograms();
+      if (viewName === 'discovery') initDiscoveryView();
+    }
+
+    function startNewDiscovery() {
+      // Reset discovery state
+      discoveryData = { projectGoals: [], budgetRange: null, currentEmployees: 0, futureEmployees: null, projectDuration: null, province: null, websiteUrl: null, businessPlanStatus: null };
+      websiteIntelligence = null;
+      matchedPrograms = [];
+      discoveryAppId = null;
+      showView('discovery');
+    }
+
+    function initDiscoveryView() {
+      // Pre-fill province from user profile if available
+      if (currentUser) {
+        fetch(`${API}/profile`, { headers: { 'Authorization': `Bearer ${authToken}` } })
+          .then(r => r.json())
+          .then(d => {
+            if (d.data?.province) {
+              const sel = document.getElementById('disc_province');
+              if (sel && !sel.value) sel.value = d.data.province;
+            }
+            if (d.data?.employee_count) {
+              const emp = document.getElementById('disc_currentEmp');
+              if (emp && emp.value === '0') emp.value = d.data.employee_count;
+            }
+            if (d.data?.website_url) {
+              const url = document.getElementById('disc_websiteUrl');
+              if (url && !url.value) url.value = d.data.website_url;
+            }
+          }).catch(() => {});
+      }
+      // Clear previous selections
+      document.querySelectorAll('#goalGrid .goal-option').forEach(g => g.classList.remove('selected'));
+      document.querySelectorAll('#goalGrid input[type="checkbox"]').forEach(cb => cb.checked = false);
+      document.querySelectorAll('#budgetChips .budget-chip').forEach(c => c.classList.remove('selected'));
+      document.getElementById('webIntelResults').innerHTML = '';
     }
 
     function switchTab(tabName) {
@@ -1381,6 +1684,17 @@
               <textarea id="wiz_outcomes" onchange="wizAutoSave()" placeholder="e.g., Produce 5,000 kg of leafy greens annually for local restaurants and food banks...">${escapeHtml(answers.outcomes || '')}</textarea>
               <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_outcomes','project outcomes')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>
             </div>
+            ${(websiteIntelligence?.communityEvents?.length || websiteIntelligence?.achievements?.length) ? `
+            <div class="alert alert-info" style="margin-bottom:16px;">
+              <span>🔍</span>
+              <div>
+                <strong>From your website</strong> — consider weaving these into your narrative:
+                <ul style="font-size:13px;margin:8px 0 0 16px;color:var(--text);">
+                  ${(websiteIntelligence.communityEvents || []).slice(0,2).map(e => '<li style="margin-bottom:4px;">' + escapeHtml(e.substring(0,120)) + '</li>').join('')}
+                  ${(websiteIntelligence.achievements || []).slice(0,2).map(a => '<li style="margin-bottom:4px;">' + escapeHtml(a.substring(0,120)) + '</li>').join('')}
+                </ul>
+              </div>
+            </div>` : ''}
             <div class="form-group">
               <label>What risks could affect your project, and how will you mitigate them?</label>
               <div class="why-asking">Strong applications demonstrate you've thought about what could go wrong and have a plan.</div>
@@ -1982,6 +2296,332 @@
         logout();
         alert('Your account and data have been deleted.');
       } catch (e) { console.error('Delete account error:', e); }
+    }
+
+    // ============================================================
+    // Project Discovery (pre-wizard intelligence)
+    // ============================================================
+    let discoveryData = {
+      projectGoals: [],
+      budgetRange: null,
+      currentEmployees: 0,
+      futureEmployees: null,
+      projectDuration: null,
+      province: null,
+      websiteUrl: null,
+      businessPlanStatus: null
+    };
+    let websiteIntelligence = null;
+    let matchedPrograms = [];
+    let discoveryAppId = null; // track application during discovery
+
+    function toggleGoal(label) {
+      const cb = label.querySelector('input[type="checkbox"]');
+      // Don't toggle since onclick already toggles for label; just update visual
+      setTimeout(() => {
+        label.classList.toggle('selected', cb.checked);
+        collectDiscoveryGoals();
+      }, 0);
+    }
+
+    function collectDiscoveryGoals() {
+      discoveryData.projectGoals = [];
+      document.querySelectorAll('#goalGrid input[type="checkbox"]:checked').forEach(cb => {
+        discoveryData.projectGoals.push(cb.value);
+      });
+    }
+
+    function selectBudget(chip, value) {
+      document.querySelectorAll('#budgetChips .budget-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      discoveryData.budgetRange = value;
+    }
+
+    function selectBizPlan(label, value) {
+      document.querySelectorAll('[name="bizPlan"]').forEach(r => {
+        r.closest('.goal-option').classList.remove('selected');
+      });
+      label.classList.add('selected');
+      discoveryData.businessPlanStatus = value;
+    }
+
+    async function scrapeWebsite() {
+      const urlInput = document.getElementById('disc_websiteUrl');
+      const btn = document.getElementById('scrapeBtn');
+      const resultsDiv = document.getElementById('webIntelResults');
+      const url = urlInput.value.trim();
+
+      if (!url) { urlInput.focus(); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Analyzing...';
+      resultsDiv.innerHTML = '<div class="corp-search-loading">🔍 Scanning your website for community events, awards, products, and company details...</div>';
+
+      try {
+        const res = await fetch(`${API}/scrape-website`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          resultsDiv.innerHTML = `<div class="alert alert-error">${escapeHtml(data.error || 'Analysis failed')}</div>`;
+          return;
+        }
+
+        websiteIntelligence = data.data;
+        discoveryData.websiteUrl = url;
+
+        // Render results
+        let html = '';
+
+        // Positioning summary (AI-generated)
+        if (websiteIntelligence.positioningSummary) {
+          html += `<div class="positioning-summary">
+            <h4>📋 Positioning Summary</h4>
+            <p>${escapeHtml(websiteIntelligence.positioningSummary)}</p>
+          </div>`;
+        }
+
+        // Community events & involvement
+        if (websiteIntelligence.communityEvents?.length > 0) {
+          html += `<div class="web-intel-card">
+            <h4>🤝 Community Involvement</h4>
+            <div class="web-intel-items">
+              ${websiteIntelligence.communityEvents.slice(0, 5).map(e => 
+                `<div class="web-intel-item"><span class="icon">•</span><span>${escapeHtml(e)}</span></div>`
+              ).join('')}
+            </div>
+          </div>`;
+        }
+
+        // Awards & achievements
+        if (websiteIntelligence.achievements?.length > 0) {
+          html += `<div class="web-intel-card">
+            <h4>🏆 Awards & Achievements</h4>
+            <div class="web-intel-items">
+              ${websiteIntelligence.achievements.slice(0, 5).map(a => 
+                `<div class="web-intel-item"><span class="icon">•</span><span>${escapeHtml(a)}</span></div>`
+              ).join('')}
+            </div>
+          </div>`;
+        }
+
+        // News & developments
+        if (websiteIntelligence.newsHighlights?.length > 0) {
+          html += `<div class="web-intel-card">
+            <h4>📰 Recent Developments</h4>
+            <div class="web-intel-items">
+              ${websiteIntelligence.newsHighlights.slice(0, 4).map(n => 
+                `<div class="web-intel-item"><span class="icon">•</span><span>${escapeHtml(n)}</span></div>`
+              ).join('')}
+            </div>
+          </div>`;
+        }
+
+        // Products & services
+        if (websiteIntelligence.products?.length > 0) {
+          html += `<div class="web-intel-card">
+            <h4>🌱 Products & Services</h4>
+            <div class="web-intel-items">
+              ${websiteIntelligence.products.slice(0, 6).map(p => 
+                `<div class="web-intel-item"><span class="icon">•</span><span>${escapeHtml(p)}</span></div>`
+              ).join('')}
+            </div>
+          </div>`;
+        }
+
+        // Keywords found
+        if (websiteIntelligence.keywords?.length > 0) {
+          html += `<div style="margin-top:12px;">
+            <span style="font-size:12px; color:var(--text-light); font-weight:600;">Grant-relevant keywords found:</span>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;">
+              ${websiteIntelligence.keywords.map(k => 
+                `<span style="background:rgba(45,80,22,0.08);padding:3px 10px;border-radius:8px;font-size:12px;color:var(--primary);">${escapeHtml(k)}</span>`
+              ).join('')}
+            </div>
+          </div>`;
+        }
+
+        if (!html) {
+          html = `<div class="alert alert-warning"><span>⚠️</span><span>We couldn't extract much from this website. You can still proceed — we'll gather information through the wizard instead.</span></div>`;
+        } else {
+          html = `<div class="alert alert-success" style="margin-bottom:12px;"><span>✅</span><span>Website analyzed! We found data to strengthen your application narrative.</span></div>` + html;
+        }
+
+        resultsDiv.innerHTML = html;
+
+      } catch (err) {
+        console.error('Scrape error:', err);
+        resultsDiv.innerHTML = '<div class="alert alert-error">Website analysis failed. You can continue without it.</div>';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Analyze Site';
+      }
+    }
+
+    async function submitDiscovery() {
+      // Collect remaining fields
+      discoveryData.currentEmployees = parseInt(document.getElementById('disc_currentEmp')?.value) || 0;
+      discoveryData.futureEmployees = parseInt(document.getElementById('disc_futureEmp')?.value) || null;
+      discoveryData.projectDuration = document.getElementById('disc_duration')?.value || null;
+      discoveryData.province = document.getElementById('disc_province')?.value || null;
+      collectDiscoveryGoals();
+
+      // Validate: at least one goal selected
+      if (discoveryData.projectGoals.length === 0) {
+        alert('Please select at least one project goal.');
+        return;
+      }
+
+      const btn = document.getElementById('discoveryNextBtn');
+      btn.disabled = true;
+      btn.textContent = 'Finding matches...';
+
+      try {
+        // Create a new application (no program yet) to store characterization
+        const createRes = await fetch(`${API}/applications`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const createData = await createRes.json();
+        if (!createData.success) throw new Error(createData.error || 'Failed to create application');
+        discoveryAppId = createData.data.id;
+
+        // Save characterization + website intelligence
+        await fetch(`${API}/applications/${discoveryAppId}/characterize`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            characterization: discoveryData,
+            websiteIntelligence: websiteIntelligence || {}
+          })
+        });
+
+        // Run smart matching
+        const matchRes = await fetch(`${API}/applications/${discoveryAppId}/match-programs`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
+        });
+        const matchData = await matchRes.json();
+
+        if (matchData.success) {
+          matchedPrograms = matchData.data.programs;
+          renderMatchedPrograms('all');
+          document.getElementById('matchSummary').textContent = 
+            `${matchData.data.strongMatches} strong match${matchData.data.strongMatches !== 1 ? 'es' : ''} out of ${matchData.data.totalPrograms} programs, ranked by relevance to your goals.`;
+          showView('matches');
+        } else {
+          throw new Error(matchData.error);
+        }
+
+      } catch (err) {
+        console.error('Discovery submit error:', err);
+        alert('Something went wrong. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Find Matching Programs →';
+      }
+    }
+
+    function filterMatches(btn, filter) {
+      document.querySelectorAll('#matchFilters .search-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderMatchedPrograms(filter);
+    }
+
+    function renderMatchedPrograms(filter) {
+      let programs = matchedPrograms;
+      if (filter === 'strong') programs = programs.filter(p => p.matchScore >= 30);
+      if (filter === 'open') programs = programs.filter(p => p.intake_status === 'open');
+
+      const container = document.getElementById('matchedProgramsList');
+      if (!programs.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:40px;">No programs match this filter. Try adjusting your project goals.</p>';
+        return;
+      }
+
+      container.innerHTML = programs.map(p => {
+        const badgeClass = p.matchScore >= 30 ? 'strong' : '';
+        return `
+        <div class="program-card" style="cursor:pointer" onclick="selectMatchedProgram(${p.id})">
+          ${p.matchPercentage > 0 ? `<span class="match-badge ${badgeClass}">${p.matchPercentage}% match</span>` : ''}
+          <span class="status-badge status-${p.intake_status || 'unknown'}" style="right:16px;">${p.intake_status || 'Unknown'}</span>
+          <h3 style="padding-right:160px;">${escapeHtml(p.program_name)}</h3>
+          <div class="agency">${escapeHtml(p.administering_agency || '')}</div>
+          <div class="description">${escapeHtml((p.description || '').substring(0, 150))}${(p.description||'').length > 150 ? '...' : ''}</div>
+          <div class="meta">
+            ${p.funding_type ? `<span class="meta-item"><strong>Type:</strong> ${p.funding_type}</span>` : ''}
+            ${p.max_funding ? `<span class="meta-item"><strong>Up to:</strong> $${Number(p.max_funding).toLocaleString()}</span>` : ''}
+            ${p.cost_share_ratio ? `<span class="meta-item"><strong>Cost share:</strong> ${p.cost_share_ratio}</span>` : ''}
+          </div>
+          ${p.matchReasons?.length ? `
+          <div class="match-reasons">
+            ${p.matchReasons.map(r => `<div class="match-reason">✓ ${escapeHtml(r)}</div>`).join('')}
+          </div>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    async function selectMatchedProgram(programId) {
+      if (!authToken) { showView('register'); return; }
+
+      // If we have a discovery app, update its program_id; otherwise create new
+      if (discoveryAppId) {
+        try {
+          // Update application with selected program
+          await fetch(`${API}/applications/${discoveryAppId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ programId })
+          });
+
+          // Pre-populate organization profile with discovery data
+          const orgProfile = {};
+          if (discoveryData.province) orgProfile.province = discoveryData.province;
+          if (discoveryData.currentEmployees) orgProfile.employeeCount = discoveryData.currentEmployees;
+
+          // Pre-populate project profile from discovery
+          const projProfile = {};
+          const goalLabels = {
+            establish_vertical_farm: 'Establish a vertical farm / CEA facility',
+            expand_operation: 'Expand existing agricultural operation',
+            equipment_purchase: 'Acquire equipment and technology upgrades',
+            workforce_training: 'Workforce development and training',
+            innovation_rd: 'Agricultural innovation and R&D',
+            export_market: 'Market access and export development',
+            clean_tech: 'Clean technology and sustainability improvements',
+            community_food: 'Community food security and local food access',
+            risk_management: 'Business risk management',
+            value_added: 'Value-added processing and product development'
+          };
+          const goalDescriptions = discoveryData.projectGoals.map(g => goalLabels[g] || g).join('; ');
+          projProfile.description = `Project goals: ${goalDescriptions}.`;
+
+          // If we have website positioning summary, add to project description
+          if (websiteIntelligence?.positioningSummary) {
+            projProfile.needStatement = websiteIntelligence.positioningSummary;
+          }
+
+          await fetch(`${API}/applications/${discoveryAppId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              organizationProfile: orgProfile,
+              projectProfile: projProfile
+            })
+          });
+
+          loadWizard(discoveryAppId);
+        } catch (e) {
+          console.error('Select matched program error:', e);
+          showProgramDetail(programId);
+        }
+      } else {
+        showProgramDetail(programId);
+      }
     }
 
     // ============================================================
