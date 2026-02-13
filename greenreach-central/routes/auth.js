@@ -132,8 +132,10 @@ router.post('/login', async (req, res) => {
 
     } else {
       // Fallback mode: Check against fallback credentials
-      if (email.toLowerCase() !== FALLBACK_FARM.email.toLowerCase() || 
-          password !== FALLBACK_FARM.password) {
+      // Email is optional — if provided it must match, password always required
+      const emailStr = (email || '').toLowerCase();
+      const fallbackEmail = FALLBACK_FARM.email.toLowerCase();
+      if ((emailStr && emailStr !== fallbackEmail) || password !== FALLBACK_FARM.password) {
         return res.status(401).json({
           success: false,
           error: 'Authentication failed',
