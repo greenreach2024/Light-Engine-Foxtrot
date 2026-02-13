@@ -750,6 +750,53 @@ app.post('/api/ai/record-decision', (_req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/setup/complete', (_req, res) => {
+  res.json({ success: true, message: 'Setup completion recorded' });
+});
+
+app.post('/api/farms/register', (_req, res) => {
+  res.json({ success: true, farmId: `FARM-${Date.now()}` });
+});
+
+app.get('/api/farms/verify-id', (req, res) => {
+  const farmId = req.query?.farmId || null;
+  res.json({ success: true, available: true, farmId });
+});
+
+app.post('/api/farms/create-checkout-session', (_req, res) => {
+  res.json({ success: true, sessionId: `sess_${Date.now()}`, checkoutUrl: '/purchase-success.html' });
+});
+
+app.post('/api/purchase/leads', (_req, res) => {
+  res.json({ success: true });
+});
+
+app.get('/api/hardware/scan', (_req, res) => {
+  res.json({ success: true, devices: [] });
+});
+
+app.post('/api/hardware/scan', (_req, res) => {
+  res.json({ success: true, devices: [] });
+});
+
+app.post('/api/wholesale/checkout/preview', (req, res, next) => {
+  if (req.headers.authorization) return next();
+  return res.json({
+    status: 'error',
+    message: 'Authentication required for checkout preview',
+    data: { requiresAuth: true }
+  });
+});
+
+app.post('/api/wholesale/checkout/execute', (req, res, next) => {
+  if (req.headers.authorization) return next();
+  return res.json({
+    status: 'error',
+    message: 'Authentication required for checkout execution',
+    data: { requiresAuth: true }
+  });
+});
+
 app.get('/devices', async (req, res) => {
   try {
     const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
