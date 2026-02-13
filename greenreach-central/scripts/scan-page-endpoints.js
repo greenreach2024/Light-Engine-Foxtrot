@@ -23,30 +23,46 @@ function listHtmlFiles(dir, includeRootOnly = false) {
 }
 
 function extractEndpoints(content) {
-  const endpoints = new Set();
-  const patterns = [
-    /fetch\(\s*['"]([^'"]+)['"]/g,
-    /fetch\(\s*`([^`$]+)`/g,
-    /axios\.(?:get|post|put|delete)\(\s*['"]([^'"]+)['"]/g
-  ];
+  const endpoints = new Map();
 
-  for (const re of patterns) {
-    let m;
-    while ((m = re.exec(content)) !== null) {
-      const endpoint = m[1];
-      if (!endpoint) continue;
-      if (!endpoint.startsWith('/')) continue;
-      if (endpoint.includes('${')) continue;
-      endpoints.add(endpoint);
-    }
+  const fetchWithOptions = /fetch\(\s*['"]([^'"]+)['"]\s*,\s*\{([\s\S]*?)\}\s*\)/g;
+  let m;
+  while ((m = fetchWithOptions.exec(content)) !== null) {
+    const endpoint = m[1];
+    const options = m[2] || '';
+    if (!endpoint || !endpoint.startsWith('/') || endpoint.includes('${')) continue;
+    const methodMatch = options.match(/method\s*:\s*['"](GET|POST|PUT|PATCH|DELETE)['"]/i);
+    const method = methodMatch ? methodMatch[1].toUpperCase() : 'GET';
+    endpoints.set(`${method} ${endpoint}`, { endpoint, method });
   }
 
-  return [...endpoints];
+  const fetchSimple = /fetch\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while ((m = fetchSimple.exec(content)) !== null) {
+    const endpoint = m[1];
+    if (!endpoint || !endpoint.startsWith('/') || endpoint.includes('${')) continue;
+    const key = `GET ${endpoint}`;
+    if (!endpoints.has(key)) endpoints.set(key, { endpoint, method: 'GET' });
+  }
+
+  const axiosCalls = /axios\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]/g;
+  while ((m = axiosCalls.exec(content)) !== null) {
+    const method = m[1].toUpperCase();
+    const endpoint = m[2];
+    if (!endpoint || !endpoint.startsWith('/') || endpoint.includes('${')) continue;
+    endpoints.set(`${method} ${endpoint}`, { endpoint, method });
+  }
+
+  return [...endpoints.values()];
 }
 
-async function checkEndpoint(url) {
+async function checkEndpoint(url, method = 'GET') {
   try {
-    const res = await fetch(url, { method: 'GET' });
+    const opts = { method };
+    if (method !== 'GET') {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = '{}';
+    }
+    const res = await fetch(url, opts);
     return { status: res.status, ok: res.ok };
   } catch (error) {
     return { status: 'ERR', ok: false, error: error.message };
@@ -68,10 +84,10 @@ async function main() {
     if (endpoints.length === 0) continue;
 
     for (const ep of endpoints) {
-      const url = `${base}${ep}`;
-      const result = await checkEndpoint(url);
+      const url = `${base}${ep.endpoint}`;
+      const result = await checkEndpoint(url, ep.method);
       if (result.status === 'ERR' || result.status >= 400) {
-        failures.push({ file: rel, endpoint: ep, status: result.status, error: result.error || '' });
+        failures.push({ file: rel, endpoint: ep.endpoint, method: ep.method, status: result.status, error: result.error || '' });
       }
     }
   }
@@ -83,7 +99,7 @@ async function main() {
 
   console.log('❌ Failing endpoints:');
   for (const f of failures) {
-    console.log(`${f.file} | ${f.endpoint} | ${f.status}${f.error ? ` | ${f.error}` : ''}`);
+    console.log(`${f.file} | ${f.method} ${f.endpoint} | ${f.status}${f.error ? ` | ${f.error}` : ''}`);
   }
 
   const grouped = new Map();

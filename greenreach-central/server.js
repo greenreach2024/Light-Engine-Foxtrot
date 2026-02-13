@@ -597,7 +597,15 @@ app.get('/api/inventory/seeds', (_req, res) => {
   res.json({ success: true, data: [] });
 });
 
+app.post('/api/inventory/seeds', (_req, res) => {
+  res.json({ success: true, data: [] });
+});
+
 app.get('/api/inventory/packaging', (_req, res) => {
+  res.json({ success: true, data: [] });
+});
+
+app.post('/api/inventory/packaging', (_req, res) => {
   res.json({ success: true, data: [] });
 });
 
@@ -621,11 +629,23 @@ app.get('/api/wholesale/orders/buyer-review', (_req, res) => {
   res.json({ orders: [] });
 });
 
+app.post('/api/wholesale/orders/buyer-review', (_req, res) => {
+  res.json({ success: true, orders: [] });
+});
+
 app.get('/api/wholesale/orders/farm-verify', (_req, res) => {
   res.json({ success: true, orders: [] });
 });
 
+app.post('/api/wholesale/orders/farm-verify', (_req, res) => {
+  res.json({ success: true, orders: [] });
+});
+
 app.get('/api/farm/configuration', (_req, res) => {
+  res.json({ success: true, configuration: {} });
+});
+
+app.post('/api/farm/configuration', (_req, res) => {
   res.json({ success: true, configuration: {} });
 });
 
@@ -643,6 +663,10 @@ app.get('/api/farm-sales/subscriptions/plans', (_req, res) => {
 
 app.get('/api/farm-sales/orders', (_req, res) => {
   res.json({ success: true, orders: [] });
+});
+
+app.post('/api/farm-sales/orders', (_req, res) => {
+  res.json({ success: true, orderId: `order_${Date.now()}` });
 });
 
 app.get('/api/farm-sales/ai-agent/status', (_req, res) => {
@@ -760,6 +784,11 @@ app.post('/api/farms/register', (_req, res) => {
 
 app.get('/api/farms/verify-id', (req, res) => {
   const farmId = req.query?.farmId || null;
+  res.json({ success: true, available: true, farmId });
+});
+
+app.post('/api/farms/verify-id', (req, res) => {
+  const farmId = req.body?.farmId || null;
   res.json({ success: true, available: true, farmId });
 });
 
