@@ -1,0 +1,4092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Planting Scheduler - Light Engine</title>
+  <link rel="stylesheet" href="../styles/le-dashboard-theme.css?v=2025-12-20-01">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e7;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 1001;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .nav-btn {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .nav-btn:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: scale(1.05);
+    }
+
+    /* Dropdown Navigation Menu */
+    .nav-menu {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .nav-item {
+      position: relative;
+    }
+
+    .nav-button, .nav-link-button {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .nav-button:hover, .nav-link-button:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .nav-button.active {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .nav-arrow {
+      font-size: 0.7rem;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-item:hover .nav-arrow {
+      transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 0.5rem;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 2000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .dropdown-menu.dropdown-right {
+      left: auto;
+      right: 0;
+    }
+
+    .nav-item:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: block;
+      padding: 0.75rem 1rem;
+      color: #93c5fd;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .dropdown-item.active {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+      font-weight: 600;
+    }
+
+    .nav-btn.close {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+      color: #fca5a5;
+    }
+
+    .nav-btn.close:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .nav-btn.refresh {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: #22c55e;
+      color: #86efac;
+    }
+
+    .nav-btn.refresh:hover {
+      background: rgba(34, 197, 94, 0.35);
+    }
+
+    /* Main Container */
+    .container {
+      flex: 1;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      overflow-y: auto;
+    }
+
+    /* Card Styles */
+    .card {
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 16px;
+      padding: 2rem;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: #60a5fa;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      padding-bottom: 0.75rem;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .collapse-icon {
+      font-size: 1rem;
+      transition: transform 0.2s ease;
+    }
+
+    .collapsed {
+      display: none !important;
+    }
+
+    .card h3 {
+      font-size: 1.2rem;
+      color: #93c5fd;
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+
+    /* Summary Cards Grid */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .summary-card {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .summary-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+
+    .summary-card .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .summary-card .label {
+      color: #94a3b8;
+      font-size: 1.1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .summary-card .value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #60a5fa;
+      line-height: 1.2;
+    }
+
+    .summary-card .subvalue {
+      color: #cbd5e1;
+      font-size: 1.05rem;
+      margin-top: 0.25rem;
+    }
+
+    /* Variety Cards for Seeding Timeline */
+    .timeline-section {
+      margin-bottom: 3rem;
+    }
+
+    .timeline-section-title {
+      font-size: 1.5rem;
+      color: #60a5fa;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      padding-bottom: 0.75rem;
+    }
+
+    .variety-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+
+    .variety-card {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .variety-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(96, 165, 250, 0.5);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    }
+
+    .variety-card.urgent {
+      border-left: 4px solid #ef4444;
+    }
+
+    .variety-card.warning {
+      border-left: 4px solid #f59e0b;
+    }
+
+    .variety-card.ready {
+      border-left: 4px solid #22c55e;
+    }
+
+    .variety-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .variety-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #e4e4e7;
+      flex: 1;
+    }
+
+    .variety-urgency-badge {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 0.5rem;
+    }
+
+    .variety-urgency-badge.urgent {
+      background: #ef4444;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+    }
+
+    .variety-urgency-badge.warning {
+      background: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    }
+
+    .variety-urgency-badge.ready {
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+    }
+
+    .variety-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .variety-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .variety-stat-label {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .variety-stat-value {
+      color: #60a5fa;
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .variety-dates {
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .variety-date-label {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .variety-date-value {
+      color: #cbd5e1;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .variety-card-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2));
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      border-radius: 6px;
+      color: #93c5fd;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .variety-card-btn:hover {
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.35), rgba(37, 99, 235, 0.35));
+      border-color: rgba(96, 165, 250, 0.7);
+      transform: translateY(-1px);
+    }
+
+    /* Timeline */
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .timeline-item {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border-left: 4px solid #3b82f6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .timeline-item:hover {
+      transform: translateX(4px);
+      border-left-color: #60a5fa;
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .timeline-item.urgent {
+      border-left-color: #ef4444;
+    }
+
+    .timeline-item.warning {
+      border-left-color: #f59e0b;
+    }
+
+    .timeline-item.ready {
+      border-left-color: #22c55e;
+    }
+
+    .timeline-content {
+      flex: 1;
+    }
+
+    .timeline-date {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #60a5fa;
+      margin-bottom: 0.5rem;
+    }
+
+    .timeline-task {
+      font-size: 1rem;
+      color: #e4e4e7;
+      margin-bottom: 0.25rem;
+    }
+
+    .timeline-details {
+      font-size: 0.875rem;
+      color: #94a3b8;
+    }
+
+    .timeline-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .timeline-btn {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: 1px solid;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .timeline-btn.primary {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: #3b82f6;
+      color: #93c5fd;
+    }
+
+    .timeline-btn.primary:hover {
+      background: rgba(59, 130, 246, 0.35);
+    }
+
+    .timeline-btn.secondary {
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.3);
+      color: #cbd5e1;
+    }
+
+    .timeline-btn.secondary:hover {
+      background: rgba(148, 163, 184, 0.2);
+    }
+
+    /* Tray Forecast Table */
+    .tray-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 0.5rem;
+    }
+
+    .tray-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .tray-table th {
+      background: rgba(15, 23, 42, 0.9);
+      color: #94a3b8;
+      text-align: left;
+      padding: 1rem;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .tray-table td {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 1rem;
+      color: #e4e4e7;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .tray-table tbody tr {
+      transition: background 0.2s ease;
+    }
+
+    .tray-table tbody tr:hover {
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .tray-table tbody tr:first-child td:first-child {
+      border-top-left-radius: 8px;
+    }
+
+    .tray-table tbody tr:first-child td:last-child {
+      border-top-right-radius: 8px;
+    }
+
+    .tray-table tbody tr:last-child td:first-child {
+      border-bottom-left-radius: 8px;
+    }
+
+    .tray-table tbody tr:last-child td:last-child {
+      border-bottom-right-radius: 8px;
+    }
+
+    /* Compatibility Badge */
+    .compat-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .compat-badge.excellent {
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+      border: 1px solid #22c55e;
+    }
+
+    .compat-badge.good {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+    }
+
+    .compat-badge.fair {
+      background: rgba(251, 146, 60, 0.2);
+      color: #fdba74;
+      border: 1px solid #fb923c;
+    }
+
+    .compat-badge.poor {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
+    }
+
+    /* Light Adjustment Card */
+    .light-adjustment {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      margin-bottom: 1rem;
+    }
+
+    .light-adjustment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .light-adjustment-header h4 {
+      color: #60a5fa;
+      font-size: 1.1rem;
+    }
+
+    .ppfd-display {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .ppfd-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f59e0b;
+    }
+
+    .ppfd-arrow {
+      font-size: 1.5rem;
+      color: #94a3b8;
+    }
+
+    .ppfd-target {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #22c55e;
+    }
+
+    .ppfd-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .adjustment-timeline {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .adjustment-phase {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .adjustment-phase .phase-name {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .adjustment-phase .phase-duration {
+      font-size: 0.875rem;
+      color: #cbd5e1;
+      margin-bottom: 0.5rem;
+    }
+
+    .adjustment-phase .phase-ppfd {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+
+    /* Manual Scheduling Form */
+    .scheduling-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .form-group label {
+      color: #94a3b8;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .form-group input,
+    .form-group select {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 8px;
+      padding: 0.75rem;
+      color: #e4e4e7;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: flex-end;
+      margin-top: 1.5rem;
+    }
+
+    /* Loading and Empty States */
+    .loading {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #94a3b8;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(148, 163, 184, 0.3);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #94a3b8;
+    }
+
+    .empty-state .icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+      color: #cbd5e1;
+    }
+
+    .empty-state p {
+      margin-bottom: 1.5rem;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      cursor: help;
+    }
+
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      width: 250px;
+      background: rgba(15, 23, 42, 0.95);
+      color: #e4e4e7;
+      text-align: left;
+      border-radius: 8px;
+      padding: 0.75rem;
+      position: absolute;
+      z-index: 1000;
+      bottom: 125%;
+      left: 50%;
+      margin-left: -125px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    .tooltip .tooltiptext::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -5px;
+      border-width: 5px;
+      border-style: solid;
+      border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
+    }
+
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* Status Indicators */
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+    }
+
+    .status-dot.active {
+      background: #22c55e;
+    }
+
+    .status-dot.pending {
+      background: #f59e0b;
+    }
+
+    .status-dot.inactive {
+      background: #64748b;
+    }
+
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-content {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-radius: 12px;
+      max-width: 900px;
+      width: 90%;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      animation: slideUp 0.3s ease;
+    }
+
+    .modal-header {
+      padding: 1.5rem 2rem;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #60a5fa;
+      margin: 0;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      line-height: 1;
+      transition: all 0.2s ease;
+    }
+
+    .modal-close:hover {
+      color: #ef4444;
+      transform: scale(1.1);
+    }
+
+    .modal-body {
+      padding: 2rem;
+      overflow-y: auto;
+    }
+
+    .tray-details-grid {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .tray-detail-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 8px;
+      padding: 1.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .tray-detail-card:hover {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: rgba(30, 41, 59, 0.8);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .tray-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .tray-detail-id {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #60a5fa;
+    }
+
+    .tray-detail-urgency {
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .tray-detail-urgency.overdue {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
+    }
+
+    .tray-detail-urgency.urgent {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border: 1px solid #f59e0b;
+    }
+
+    .tray-detail-urgency.soon {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+    }
+
+    .tray-detail-urgency.ready {
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+      border: 1px solid #22c55e;
+    }
+
+    .tray-detail-info {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .tray-detail-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .tray-detail-label {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .tray-detail-value {
+      color: #e4e4e7;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .tray-detail-value.highlight {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .tray-compatibility {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .tray-compatibility-header {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .tray-compatibility-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .compatibility-tag {
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+
+      .header-actions {
+        flex-wrap: wrap;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .tray-table {
+        font-size: 0.875rem;
+      }
+
+      .tray-table th,
+      .tray-table td {
+        padding: 0.75rem;
+      }
+
+      .adjustment-timeline {
+        flex-direction: column;
+      }
+
+      .tray-detail-info {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-content {
+        width: 95%;
+        max-height: 90vh;
+      }
+
+      .modal-body {
+        padding: 1rem;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <link rel="stylesheet" href="/styles/nav-color-palette.css">
+</head>
+<body class="le-theme">
+  <!-- Tray Details Modal -->
+  <div id="trayDetailsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Tray Details</h2>
+        <button class="modal-close" onclick="closeTrayModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Tray details will be populated here -->
+      </div>
+    </div>
+  </div>
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1 id="farmNameHeader">Planting Scheduler</h1>
+    </div>
+    <div class="header-actions">
+      <nav class="nav-menu">
+        <a href="/index.charlie.html" class="nav-link-button">Home</a>
+        <a href="/views/farm-summary.html" class="nav-link-button">Dashboard</a>
+        <div class="nav-item inventory">
+          <button class="nav-button inventory active">
+            Inventory Management
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="planting-scheduler.html" class="dropdown-item active">Planting Scheduler</a>
+            <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
+            <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
+            <a href="tray-inventory.html" class="dropdown-item">Activity Hub</a>
+            <a href="/LE-farm-admin.html#traceability" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+        <div class="nav-item farm-monitoring">
+          <button class="nav-button farm-monitoring">
+            Farm Monitoring
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="/farm-vitality.html" class="dropdown-item">Farm Vitality Dashboard</a>
+            <a href="nutrient-management.html" class="dropdown-item">Nutrient Management</a>
+            <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
+          </div>
+        </div>
+        <div class="nav-item admin">
+          <button class="nav-button admin">
+            Admin
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
+            <a href="/LE-dashboard.html" class="dropdown-item">Setup/Update</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Sales
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu dropdown-right">
+            <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">POS Sale</a>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Summary Cards -->
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="icon"></div>
+        <div class="label">Upcoming Seeding Tasks</div>
+        <div class="value" id="upcomingTasksCount">0</div>
+        <div class="subvalue">Next 14 days</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="icon"></div>
+        <div class="label">Active Seedling Batches</div>
+        <div class="value" id="activeSeedlingsCount">0</div>
+        <div class="subvalue">In germination</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="icon"></div>
+        <div class="label">Trays Ready for Planting</div>
+        <div class="value" id="readyTraysCount">0</div>
+        <div class="subvalue">Available slots</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="icon"></div>
+        <div class="label">Light Adjustments Needed</div>
+        <div class="value" id="lightAdjustmentsCount">0</div>
+        <div class="subvalue">For new seedlings</div>
+      </div>
+    </div>
+
+    <!-- Upcoming Seeding Timeline -->
+    <div class="card">
+      <h2>Upcoming Seeding Timeline</h2>
+      <div id="seedingTimeline" class="timeline">
+        <div class="loading">
+          <div class="loading-spinner"></div>
+          <p>Loading seeding schedule...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tray Forecast -->
+    <div class="card">
+      <h2 style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;" onclick="document.getElementById('trayForecastContent').classList.toggle('collapsed'); this.querySelector('.collapse-icon').textContent = document.getElementById('trayForecastContent').classList.contains('collapsed') ? '▶' : '▼';">
+        <span class="collapse-icon">▶</span>
+        Tray Harvest & Seeding Forecast
+      </h2>
+      <div id="trayForecastContent" class="collapsed" style="overflow-x: auto;">
+        <table class="tray-table">
+          <thead>
+            <tr>
+              <th>Tray ID</th>
+              <th>Group/Location</th>
+              <th>Current Crop</th>
+              <th>Expected Harvest</th>
+              <th>Next Seeding Window</th>
+              <th>Recommended Crop</th>
+              <th>Compatibility</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trayForecastBody">
+            <tr>
+              <td colspan="8">
+                <div class="loading">
+                  <div class="loading-spinner"></div>
+                  <p>Loading tray forecast...</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Light Adjustments -->
+    <div class="card">
+      <h2 style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;" onclick="document.getElementById('lightAdjustmentsContainer').classList.toggle('collapsed'); this.querySelector('.collapse-icon').textContent = document.getElementById('lightAdjustmentsContainer').classList.contains('collapsed') ? '▶' : '▼';">
+        <span class="collapse-icon">▶</span>
+        Light Engine Adjustments
+      </h2>
+      <div id="lightAdjustmentsContainer" class="collapsed">
+        <div class="empty-state">
+          <div class="icon">LIGHT</div>
+          <h3>No Adjustments Needed</h3>
+          <p>All groups are currently optimized for their crop stages</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI-Powered Crop Recommendations -->
+    <div class="card" style="border: 2px solid #3b82f6;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <h2 style="margin: 0;">AI Crop Recommendations</h2>
+          <span id="aiEngineBadge" style="background: rgba(59, 130, 246, 0.2); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; color: #93c5fd;">
+            Loading...
+          </span>
+        </div>
+        <div id="aiReadinessIndicator" style="font-size: 0.85rem; color: #94a3b8; text-align: right;">
+          <div id="aiProgressBar" style="width: 150px; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-bottom: 0.25rem;">
+            <div id="aiProgressFill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); width: 0%; transition: width 0.5s;"></div>
+          </div>
+          <span id="aiProgressText">0% Ready</span>
+        </div>
+      </div>
+      <p style="color: #94a3b8; margin-bottom: 1.5rem;">
+        Get intelligent crop recommendations based on nutrient compatibility, market demand, inventory management, harvest timing, and environmental fit.
+      </p>
+      
+      <div class="form-group" style="margin-bottom: 1rem;">
+        <label for="aiGroupSelect">Select Group for Recommendations</label>
+        <select id="aiGroupSelect" style="padding: 0.75rem; border-radius: 8px; border: 2px solid #3b82f6; background: rgba(0,0,0,0.3); color: #e4e4e7;">
+          <option value="">Choose a group to replant...</option>
+        </select>
+      </div>
+
+      <button 
+        type="button" 
+        id="getRecommendationsBtn"
+        class="timeline-btn primary"
+        style="width: 100%; margin-bottom: 1.5rem;"
+        onclick="getAIRecommendations()"
+      >
+        Get AI Recommendations
+      </button>
+
+      <!-- Recommendations Display -->
+      <div id="recommendationsDisplay" style="display: none;">
+        <div style="background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;">
+          <h3 style="color: #60a5fa; margin-bottom: 1rem;">Top Recommendation</h3>
+          <div id="topRecommendation"></div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <h4 style="color: #94a3b8; margin-bottom: 0.75rem;">Alternative Options</h4>
+          <div id="alternativeRecommendations"></div>
+        </div>
+
+        <div class="form-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button type="button" class="timeline-btn secondary" onclick="hideRecommendations()" style="flex: 1; min-width: 120px;">
+            Cancel
+          </button>
+          <button type="button" class="timeline-btn" onclick="remixRecommendations()" style="flex: 1; min-width: 160px; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc;">
+            🔄 Remix Recommendations
+          </button>
+          <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()" style="flex: 2; min-width: 200px;">
+            Accept & Schedule Top Recommendation
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Scheduling -->
+    <div class="card">
+      <h2>Manual Scheduling</h2>
+      <p style="color: #94a3b8; margin-bottom: 1.5rem;">
+        Manually schedule seeding tasks with scope selection — choose tray, group, zone, or room.
+      </p>
+      <form class="scheduling-form" id="manualSchedulingForm" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+
+        <!-- Step 1: Crop from recipe library -->
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="manualCrop">Crop Recipe</label>
+          <select id="manualCrop" required>
+            <option value="">Loading recipes...</option>
+          </select>
+        </div>
+
+        <!-- Step 2: Scope selection -->
+        <div class="form-group">
+          <label for="manualScope">Scope</label>
+          <select id="manualScope" required onchange="onManualScopeChange()">
+            <option value="">Select scope...</option>
+            <option value="tray">Single Tray</option>
+            <option value="group">Entire Group</option>
+            <option value="zone">Entire Zone</option>
+            <option value="room">Entire Room</option>
+          </select>
+        </div>
+
+        <!-- Step 2b: Scope target (dynamic based on scope) -->
+        <div class="form-group">
+          <label for="manualScopeTarget">Target</label>
+          <select id="manualScopeTarget" required>
+            <option value="">Select scope first...</option>
+          </select>
+        </div>
+
+        <!-- Scope summary -->
+        <div id="manualScopeSummary" style="grid-column: 1 / -1; display: none; padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; color: #94a3b8; font-size: 0.85rem;">
+        </div>
+
+        <!-- Step 3: Cadence -->
+        <div class="form-group">
+          <label for="manualCadence">Cadence</label>
+          <select id="manualCadence">
+            <option value="one_time">One-time</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+
+        <!-- Step 4: Seed date -->
+        <div class="form-group">
+          <label for="manualSeedDate">Seeding Date</label>
+          <input type="date" id="manualSeedDate" required>
+        </div>
+
+        <!-- Step 5: Quantity & notes -->
+        <div class="form-group">
+          <label for="manualQuantity">Quantity (plants per tray)</label>
+          <input type="number" id="manualQuantity" min="1" value="48" required>
+        </div>
+
+        <div class="form-group">
+          <label for="manualNotes">Notes</label>
+          <input type="text" id="manualNotes" placeholder="Optional notes...">
+        </div>
+
+        <div class="form-actions" style="grid-column: 1 / -1;">
+          <button type="button" class="timeline-btn secondary" onclick="resetManualForm()">
+            Clear
+          </button>
+          <button type="submit" class="timeline-btn primary">
+            Schedule Seeding Task
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+    
+    /**
+     * Extract display name from plan ID
+     * Handles formats:
+     * - "crop-bibb-butterhead" → "Bibb Butterhead"
+     * - "mei-qing-pak-choi" → "Mei Qing Pak Choi"
+     * - "lacinato-kale" → "Lacinato Kale"
+     * - null/undefined → "Unknown"
+     */
+    function extractCropDisplayName(planId) {
+      if (!planId || typeof planId !== 'string') return 'Unknown';
+      
+      // Remove "crop-" prefix if present
+      const cleanId = planId.replace(/^crop-/, '');
+      
+      // Split on hyphens and capitalize each word
+      return cleanId
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+
+    /**
+     * Get harvest duration (in days) for a crop plan from lighting recipe
+     * @param {string} planId - Plan ID like "crop-bibb-butterhead"
+     * @returns {number} - Harvest days from lighting recipe, or 35 as default
+     */
+    function getPlanHarvestDays(planId) {
+      if (!planId || !state.plans || state.plans.length === 0) return 35;
+      
+      const plan = state.plans.find(p => 
+        p.id === planId || 
+        p.name === planId || 
+        p.crop === planId
+      );
+      
+      if (plan && plan.light && plan.light.days && Array.isArray(plan.light.days)) {
+        // Get the maximum day value from the schedule
+        const maxDay = Math.max(...plan.light.days.map(d => d.day || 0));
+        return Math.ceil(maxDay);
+      }
+      
+      return 35; // Default for leafy greens
+    }
+
+    // ============================================================================
+    // CROP DATABASE & CONSTANTS
+    // ============================================================================
+    
+    const CROP_DATABASE = {
+      'lettuce-buttercrunch': {
+        id: 'lettuce-buttercrunch',
+        name: 'Buttercrunch Lettuce',
+        cropClass: 'leafy',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
+          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
+          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
+        },
+        nutrientProfile: 'LeafyVeg-A',
+        targetDLI: 14,
+        harvestDays: 35
+      },
+      'lettuce-romaine': {
+        id: 'lettuce-romaine',
+        name: 'Romaine Lettuce',
+        cropClass: 'leafy',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
+          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
+          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
+        },
+        nutrientProfile: 'LeafyVeg-A',
+        targetDLI: 15,
+        harvestDays: 35
+      },
+      'kale': {
+        id: 'kale',
+        name: 'Kale',
+        cropClass: 'leafy',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 10, ppfdMin: 150, ppfdMax: 240 },
+          vegetative: { days: 21, ppfdMin: 240, ppfdMax: 320 },
+          finish: { days: 7, ppfdMin: 280, ppfdMax: 350 }
+        },
+        nutrientProfile: 'LeafyVeg-A',
+        targetDLI: 16,
+        harvestDays: 45
+      },
+      'basil': {
+        id: 'basil',
+        name: 'Basil',
+        cropClass: 'herb',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
+          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
+          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
+        },
+        nutrientProfile: 'Herb-Mix',
+        targetDLI: 14,
+        harvestDays: 35
+      },
+      'tomato': {
+        id: 'tomato',
+        name: 'Cherry Tomato',
+        cropClass: 'fruiting',
+        phases: {
+          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
+          seedling: { days: 14, ppfdMin: 150, ppfdMax: 250 },
+          vegetative: { days: 21, ppfdMin: 300, ppfdMax: 450 },
+          flowering: { days: 21, ppfdMin: 400, ppfdMax: 600 },
+          fruiting: { days: 28, ppfdMin: 450, ppfdMax: 650 }
+        },
+        nutrientProfile: 'Fruiting-Hi',
+        targetDLI: 25,
+        harvestDays: 91
+      }
+    };
+
+    const SEEDLING_ACCLIMATION_RULES = {
+      initialReductionPercent: 0.75, // Reduce to 75% of normal for first 3-5 days
+      acclimationDays: 4,
+      rampUpDays: 5,
+      maxPPFDJump: 80 // Max µmol·m⁻²·s⁻¹ increase at transplant
+    };
+
+    const COMPATIBILITY_RULES = {
+      // Hard no: never mix these crop classes in same group
+      incompatibleClasses: [
+        ['leafy', 'fruiting'],
+        ['herb', 'fruiting']
+      ],
+      // PPFD penalty thresholds
+      ppfdPenalty: {
+        low: 30,    // < 30 µmol difference = small penalty
+        medium: 80, // 30-80 = moderate penalty
+        high: 80    // > 80 = heavy penalty
+      }
+    };
+
+    // ============================================================================
+    // STATE MANAGEMENT
+    // ============================================================================
+
+    let state = {
+      trays: [],
+      groups: [],
+      seedingTasks: [],
+      activeSeedlings: [],
+      lightAdjustments: [],
+      savedAssignments: {}  // Keyed by group_id
+    };
+
+    // ============================================================================
+    // FARM ID & PERSISTENCE UTILITIES
+    // ============================================================================
+
+    function getFarmId() {
+      // Try localStorage first, then fall back to default
+      return localStorage.getItem('currentFarmId') || 'foxtrot';
+    }
+
+    async function savePlantingAssignment(groupId, cropId, cropName, seedDate, harvestDate) {
+      const farmId = getFarmId();
+      
+      try {
+        const response = await fetch('/api/planting/assignments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-farm-id': farmId
+          },
+          body: JSON.stringify({
+            farm_id: farmId,
+            group_id: groupId,
+            tray_id: null,  // Group-level assignment
+            crop_id: cropId,
+            crop_name: cropName,
+            seed_date: seedDate,
+            harvest_date: harvestDate,
+            status: 'planned',
+            notes: 'Applied from Planting Scheduler'
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log(`[Planting] Assignment saved: group=${groupId}, crop=${cropName}`);
+        
+        // Update in-memory cache
+        state.savedAssignments[groupId] = result.assignment;
+        
+        // Backup to localStorage
+        saveAssignmentsToLocalStorage();
+        
+        return result.assignment;
+      } catch (error) {
+        console.error('[Planting] Failed to save assignment:', error);
+        
+        // Fallback: save to localStorage only
+        const assignment = {
+          farm_id: farmId,
+          group_id: groupId,
+          crop_id: cropId,
+          crop_name: cropName,
+          seed_date: seedDate,
+          harvest_date: harvestDate,
+          status: 'planned',
+          updated_at: new Date().toISOString(),
+          _localOnly: true  // Flag for sync later
+        };
+        state.savedAssignments[groupId] = assignment;
+        saveAssignmentsToLocalStorage();
+        
+        throw error;  // Re-throw so caller knows it failed
+      }
+    }
+
+    async function loadSavedAssignments() {
+      const farmId = getFarmId();
+      
+      try {
+        const response = await fetch(`/api/planting/assignments?farm_id=${farmId}`, {
+          headers: {
+            'x-farm-id': farmId
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        // Store in memory keyed by group_id
+        state.savedAssignments = {};
+        (result.assignments || []).forEach(assignment => {
+          state.savedAssignments[assignment.group_id] = assignment;
+        });
+        
+        console.log(`[Planting] Loaded ${result.count || 0} saved assignments`);
+        
+        // Backup to localStorage
+        saveAssignmentsToLocalStorage();
+        
+        return result.assignments || [];
+      } catch (error) {
+        console.warn('[Planting] Failed to load assignments from API, using localStorage:', error);
+        
+        // Fallback: load from localStorage
+        return loadAssignmentsFromLocalStorage();
+      }
+    }
+
+    function saveAssignmentsToLocalStorage() {
+      try {
+        localStorage.setItem('plantingAssignments', JSON.stringify(state.savedAssignments));
+      } catch (error) {
+        console.error('[Planting] Failed to save to localStorage:', error);
+      }
+    }
+
+    function loadAssignmentsFromLocalStorage() {
+      try {
+        const stored = localStorage.getItem('plantingAssignments');
+        if (stored) {
+          state.savedAssignments = JSON.parse(stored);
+          return Object.values(state.savedAssignments);
+        }
+      } catch (error) {
+        console.error('[Planting] Failed to load from localStorage:', error);
+      }
+      return [];
+    }
+
+    async function batchFetchCropNames(cropIds) {
+      try {
+        const response = await fetch('/api/planting/crop-info-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crop_ids: cropIds })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        return result.crop_info || {};
+      } catch (error) {
+        console.error('[Planting] Failed to batch fetch crop names:', error);
+        
+        // Fallback: use CROP_DATABASE
+        const fallback = {};
+        cropIds.forEach(id => {
+          const normalized = normalizeCropId(id);
+          fallback[id] = {
+            crop_id: id,
+            crop_name: CROP_DATABASE[normalized]?.name || id,
+            recipe_id: normalized,
+            duration_days: CROP_DATABASE[normalized]?.harvestDays || null
+          };
+        });
+        return fallback;
+      }
+    }
+
+    // ============================================================================
+    // INITIALIZATION
+    // ============================================================================
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeManualForm();
+      loadSchedulerData();
+      
+      // Set up form submission
+      document.getElementById('manualSchedulingForm').addEventListener('submit', handleManualScheduling);
+    });
+
+    async function initializeManualForm() {
+      // Populate crop dropdown from the 50-recipe library
+      const cropSelect = document.getElementById('manualCrop');
+      try {
+        const res = await fetch('/api/planting/recipes');
+        if (res.ok) {
+          const recipes = await res.json();
+          cropSelect.innerHTML = '<option value="">Select recipe...</option>';
+          (Array.isArray(recipes) ? recipes : recipes.recipes || []).forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = `${r.name} (${r.category || 'uncategorized'})`;
+            cropSelect.appendChild(opt);
+          });
+        } else {
+          // Fallback to CROP_DATABASE
+          cropSelect.innerHTML = '<option value="">Select crop...</option>';
+          Object.values(CROP_DATABASE).forEach(crop => {
+            const opt = document.createElement('option');
+            opt.value = crop.id;
+            opt.textContent = crop.name;
+            cropSelect.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load recipes for manual form:', err);
+        cropSelect.innerHTML = '<option value="">Select crop...</option>';
+        Object.values(CROP_DATABASE).forEach(crop => {
+          const opt = document.createElement('option');
+          opt.value = crop.id;
+          opt.textContent = crop.name;
+          cropSelect.appendChild(opt);
+        });
+      }
+
+      // Set default date to today
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('manualSeedDate').value = today;
+    }
+
+    function onManualScopeChange() {
+      const scope = document.getElementById('manualScope').value;
+      const targetSelect = document.getElementById('manualScopeTarget');
+      const summary = document.getElementById('manualScopeSummary');
+      targetSelect.innerHTML = '';
+      summary.style.display = 'none';
+
+      if (!scope) {
+        targetSelect.innerHTML = '<option value="">Select scope first...</option>';
+        return;
+      }
+
+      if (scope === 'tray') {
+        targetSelect.innerHTML = '<option value="">Select tray...</option>';
+        state.trays.forEach(tray => {
+          const opt = document.createElement('option');
+          opt.value = tray.id;
+          const group = state.groups.find(g => g.id === tray.groupId);
+          opt.textContent = `Tray ${tray.id} – ${tray.location || ''}${group ? ' (' + group.name + ')' : ''} [${tray.status}]`;
+          targetSelect.appendChild(opt);
+        });
+      } else if (scope === 'group') {
+        targetSelect.innerHTML = '<option value="">Select group...</option>';
+        state.groups.forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g.id;
+          const ctx = getGroupContextById(g.id);
+          const trayCount = state.trays.filter(t => t.groupId === g.id).length;
+          opt.textContent = `${g.name || g.id} – ${ctx.room} / Zone ${ctx.zone} (${trayCount} trays)`;
+          targetSelect.appendChild(opt);
+        });
+      } else if (scope === 'zone') {
+        // Build unique zones
+        const zones = new Map();
+        state.groups.forEach(g => {
+          const ctx = getGroupContextById(g.id);
+          const key = `${ctx.room}|${ctx.zone}`;
+          if (!zones.has(key)) zones.set(key, { room: ctx.room, zone: ctx.zone, groups: [] });
+          zones.get(key).groups.push(g.id);
+        });
+        targetSelect.innerHTML = '<option value="">Select zone...</option>';
+        for (const [key, z] of zones) {
+          const opt = document.createElement('option');
+          opt.value = key;
+          const trayCount = state.trays.filter(t => z.groups.includes(t.groupId)).length;
+          opt.textContent = `${z.room} / Zone ${z.zone} (${z.groups.length} groups, ${trayCount} trays)`;
+          targetSelect.appendChild(opt);
+        }
+      } else if (scope === 'room') {
+        const rooms = new Map();
+        state.groups.forEach(g => {
+          const ctx = getGroupContextById(g.id);
+          if (!rooms.has(ctx.room)) rooms.set(ctx.room, []);
+          rooms.get(ctx.room).push(g.id);
+        });
+        targetSelect.innerHTML = '<option value="">Select room...</option>';
+        for (const [room, groupIds] of rooms) {
+          const opt = document.createElement('option');
+          opt.value = room;
+          const trayCount = state.trays.filter(t => groupIds.includes(t.groupId)).length;
+          opt.textContent = `${room} (${groupIds.length} groups, ${trayCount} trays)`;
+          targetSelect.appendChild(opt);
+        }
+      }
+
+      targetSelect.addEventListener('change', updateManualScopeSummary, { once: false });
+    }
+
+    function updateManualScopeSummary() {
+      const scope = document.getElementById('manualScope').value;
+      const target = document.getElementById('manualScopeTarget').value;
+      const summary = document.getElementById('manualScopeSummary');
+
+      if (!scope || !target) { summary.style.display = 'none'; return; }
+
+      let groupIds = [];
+      if (scope === 'tray') {
+        const tray = state.trays.find(t => t.id === target);
+        if (tray) groupIds = [tray.groupId];
+        summary.innerHTML = `<strong>Scope:</strong> Single tray ${target}${tray ? ' in ' + (tray.location || '') : ''}`;
+      } else if (scope === 'group') {
+        groupIds = [target];
+        const g = state.groups.find(g => g.id === target);
+        const trayCount = state.trays.filter(t => t.groupId === target).length;
+        summary.innerHTML = `<strong>Scope:</strong> Group ${g ? g.name : target} — ${trayCount} tray(s)`;
+      } else if (scope === 'zone') {
+        const [room, zone] = target.split('|');
+        groupIds = state.groups.filter(g => {
+          const ctx = getGroupContextById(g.id);
+          return ctx.room === room && String(ctx.zone) === zone;
+        }).map(g => g.id);
+        const trayCount = state.trays.filter(t => groupIds.includes(t.groupId)).length;
+        summary.innerHTML = `<strong>Scope:</strong> ${room} / Zone ${zone} — ${groupIds.length} group(s), ${trayCount} tray(s)`;
+      } else if (scope === 'room') {
+        groupIds = state.groups.filter(g => getGroupContextById(g.id).room === target).map(g => g.id);
+        const trayCount = state.trays.filter(t => groupIds.includes(t.groupId)).length;
+        summary.innerHTML = `<strong>Scope:</strong> Room ${target} — ${groupIds.length} group(s), ${trayCount} tray(s)`;
+      }
+      summary.style.display = 'block';
+    }
+
+    function resetManualForm() {
+      document.getElementById('manualSchedulingForm').reset();
+      document.getElementById('manualSeedDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('manualScopeTarget').innerHTML = '<option value="">Select scope first...</option>';
+      document.getElementById('manualScopeSummary').style.display = 'none';
+    }
+
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+
+    // Resolve plan targets for a specific day (from groups-v2.js)
+    function resolvePlanTargetsForDay(plan, dayNumber) {
+      if (!plan || typeof plan !== 'object') return null;
+      
+      // Get light days from the plan
+      const lightDays = Array.isArray(plan.light?.days) ? plan.light.days : [];
+      
+      if (!lightDays.length) {
+        // No daily data, use plan-level defaults
+        return {
+          stage: plan.stage || '',
+          ppfd: plan.ppfd || null,
+          dli: plan.dli || null
+        };
+      }
+      
+      // Sort by day number
+      const sorted = lightDays.slice().sort((a, b) => (a.day || 0) - (b.day || 0));
+      
+      // Find the applicable entry for this day
+      const effectiveDay = Math.max(1, dayNumber || 1);
+      let target = sorted[0];
+      
+      for (const entry of sorted) {
+        if (entry.day && effectiveDay >= entry.day) {
+          target = entry;
+        } else {
+          break;
+        }
+      }
+      
+      return {
+        stage: target?.stage || plan.stage || '',
+        ppfd: target?.ppfd || plan.ppfd || null,
+        dli: target?.dli || plan.dli || null
+      };
+    }
+
+    // ============================================================================
+    // DATA LOADING
+    // ============================================================================
+
+    async function loadSchedulerData() {
+      try {
+        let traysData = { trays: [] };
+        let groupsData = { groups: [] };
+
+        // Load lighting recipes/plans from backend
+        try {
+          const plansResponse = await fetch('/plans', { cache: 'no-store' });
+          if (plansResponse.ok) {
+            const plansDoc = await plansResponse.json();
+            state.plans = Array.isArray(plansDoc?.plans) ? plansDoc.plans : [];
+            console.log(`Loaded ${state.plans.length} lighting recipe plans`);
+          } else {
+            console.warn('Plans endpoint returned status:', plansResponse.status);
+            state.plans = [];
+          }
+        } catch (err) {
+          console.warn('Plans endpoint unavailable:', err.message);
+          state.plans = [];
+        }
+
+        // Load saved planting assignments from database (NEW)
+        try {
+          await loadSavedAssignments();
+        } catch (err) {
+          console.warn('Planting assignments unavailable:', err.message);
+        }
+
+        // Load current inventory data (includes all trays)
+        try {
+          const inventoryResponse = await fetch('/api/inventory/current');
+          if (inventoryResponse.ok) {
+            const inventoryData = await inventoryResponse.json();
+            // Extract trays from the nested structure
+            if (inventoryData.byFarm && inventoryData.byFarm.length > 0) {
+              traysData = { trays: inventoryData.byFarm[0].trays || [] };
+            }
+          } else {
+            console.warn('Inventory API returned status:', inventoryResponse.status);
+          }
+        } catch (err) {
+          console.warn('Inventory API unavailable, using empty data:', err.message);
+        }
+        
+        // Load groups from data file
+        try {
+          const groupsResponse = await fetch('/data/groups.json');
+          if (groupsResponse.ok) {
+            groupsData = await groupsResponse.json();
+          } else {
+            console.warn('Groups data returned status:', groupsResponse.status);
+          }
+        } catch (err) {
+          console.warn('Groups data unavailable, using empty data:', err.message);
+        }
+
+        // Process groups FIRST so state.groups is available for processTrays
+        state.groups = processGroups(groupsData);
+        
+        // Merge saved assignments into groups (NEW)
+        state.groups = state.groups.map(group => {
+          const saved = state.savedAssignments[group.id];
+          if (saved && saved.crop_name) {
+            return {
+              ...group,
+              nextCrop: saved.crop_name,
+              nextSeedDate: saved.seed_date,
+              nextHarvestDate: saved.harvest_date
+            };
+          }
+          return group;
+        });
+        
+        state.trays = processTrays(traysData);
+
+        // Calculate seeding tasks
+        state.seedingTasks = calculateSeedingTasks(state.trays);
+        
+        // Calculate compatibility scores
+        state.seedingTasks = state.seedingTasks.map(task => ({
+          ...task,
+          compatibility: calculateCompatibility(task, state.groups)
+        }));
+
+        // Calculate light adjustments needed
+        state.lightAdjustments = calculateLightAdjustments(state.seedingTasks, state.groups);
+
+        // Render UI
+        renderSummaryCards();
+        renderSeedingTimeline();
+        renderTrayForecast();
+        renderLightAdjustments();
+        // populateTrayDropdown() removed — manual form uses scope-based target
+        populateGroupDropdown(); // Populate AI recommendations dropdown
+        loadAIStatus(); // Load AI training status
+
+      } catch (error) {
+        console.error('Error loading scheduler data:', error);
+        showError('Failed to load scheduling data. Please refresh the page.');
+      }
+    }
+
+    // ============================================================================
+    // AI STATUS & READINESS DISPLAY
+    // ============================================================================
+
+    async function loadAIStatus() {
+      try {
+        const response = await fetch('/api/ai/status');
+        if (!response.ok) {
+          console.warn('[AI Status] Failed to load:', response.status);
+          return;
+        }
+
+        const status = await response.json();
+        updateAIStatusDisplay(status);
+      } catch (error) {
+        console.error('[AI Status] Error:', error);
+      }
+    }
+
+    function updateAIStatusDisplay(status) {
+      const badge = document.getElementById('aiEngineBadge');
+      const progressBar = document.getElementById('aiProgressFill');
+      const progressText = document.getElementById('aiProgressText');
+
+      // Update badge
+      if (status.engine.type === 'ml') {
+        badge.textContent = '🚀 AI Model Active';
+        badge.style.background = 'rgba(16, 185, 129, 0.2)';
+        badge.style.color = '#34d399';
+      } else {
+        badge.textContent = 'Rules Engine (Bridge Phase)';
+        badge.style.background = 'rgba(59, 130, 246, 0.2)';
+        badge.style.color = '#93c5fd';
+      }
+
+      // Update progress bar
+      const readiness = status.progress.overall_readiness_pct;
+      progressBar.style.width = `${readiness}%`;
+
+      // Update progress text
+      if (readiness >= 100 && status.ml.ready) {
+        progressText.textContent = 'AI Ready';
+        progressText.style.color = '#34d399';
+      } else {
+        const daysRemaining = status.timeline.days_remaining;
+        progressText.textContent = `${readiness}% • ${daysRemaining} days`;
+        progressText.style.color = '#94a3b8';
+      }
+
+      // Add tooltip
+      badge.title = `Decisions: ${status.progress.decisions.total}/500 | Cycles: ${status.progress.crop_cycles.total}/100 | Acceptance: ${status.progress.decisions.acceptance_rate}%`;
+    }
+
+    function findGroupPlan(groupId) {
+      if (!state.groups || !Array.isArray(state.groups)) {
+        console.warn('[findGroupPlan] state.groups not available:', state.groups);
+        return null;
+      }
+      console.log(`[findGroupPlan] Looking for groupId: "${groupId}" in ${state.groups.length} groups`);
+      const group = state.groups.find(g => g.id === groupId);
+      if (!group) {
+        console.warn(`[findGroupPlan] Group not found for: "${groupId}"`);
+        console.log('[findGroupPlan] Available group IDs:', state.groups.map(g => g.id));
+      } else {
+        console.log(`[findGroupPlan] Found group with plan: "${group.plan}"`);
+      }
+      return group ? group.plan : null;
+    }
+
+    function processTrays(data) {
+      // Transform API data to internal format
+      if (!data || !data.trays || data.trays.length === 0) {
+        console.log('No tray data available');
+        return [];
+      }
+      
+      console.log(`Processing ${data.trays.length} trays from inventory`);
+      
+      return data.trays.map(tray => {
+        // Calculate expected harvest date from daysOld and harvestIn
+        let expectedHarvest = null;
+        if (tray.harvestIn && tray.harvestIn > 0) {
+          expectedHarvest = new Date();
+          expectedHarvest.setDate(expectedHarvest.getDate() + tray.harvestIn);
+        }
+        
+        // Calculate sow date from seedingDate or daysOld
+        let sowDate = null;
+        if (tray.seedingDate) {
+          sowDate = new Date(tray.seedingDate);
+        } else if (tray.daysOld) {
+          sowDate = new Date();
+          sowDate.setDate(sowDate.getDate() - tray.daysOld);
+        }
+        
+        return {
+          id: tray.trayId,
+          groupId: tray.groupId,
+          location: tray.groupId, // Full ID contains room:zone:group
+          currentCrop: extractCropDisplayName(findGroupPlan(tray.groupId)),
+          sowDate: sowDate,
+          transplantDate: null, // Not tracked in current data
+          expectedHarvest: expectedHarvest,
+          capacity: tray.plantCount || 50,
+          status: 'active'
+        };
+      });
+    }
+
+    function processGroups(data) {
+      // Transform groups data
+      if (!data || !data.groups || data.groups.length === 0) {
+        console.log('No groups data available');
+        return [];
+      }
+      
+      console.log(`Processing ${data.groups.length} groups`);
+      
+      return data.groups.map(group => {
+        // Calculate days old from seed date
+        let daysOld = 1;
+        if (group.planConfig?.anchor?.seedDate) {
+          try {
+            const seedDate = new Date(group.planConfig.anchor.seedDate);
+            const now = new Date();
+            const diffMs = now - seedDate;
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            daysOld = Math.max(1, diffDays); // At least day 1
+          } catch (err) {
+            console.warn(`Failed to calculate daysOld for group ${group.id}:`, err);
+          }
+        }
+
+        // Get the actual PPFD from the light recipe for the current day
+        // This matches how groups-v2.js resolves PPFD values
+        let currentPPFD = 250; // Default fallback
+        
+        if (group.plan && state.plans && state.plans.length > 0) {
+          // Find the plan for this group's plan ID
+          const plan = state.plans.find(p => 
+            p.name === group.plan || 
+            p.crop === group.plan ||
+            p.id === group.plan
+          );
+          
+          if (plan) {
+            // Resolve PPFD for this specific day in the recipe
+            const dayData = resolvePlanTargetsForDay(plan, daysOld);
+            if (dayData && dayData.ppfd != null) {
+              currentPPFD = dayData.ppfd;
+              console.log(`Group ${group.id} (${group.plan}): Day ${daysOld} PPFD = ${currentPPFD}`);
+            }
+          } else {
+            console.warn(`No plan found for plan ID: ${group.plan}`);
+          }
+        }
+        
+        return {
+          id: group.id || group.groupId,
+          name: group.name || `Group ${group.id}`,
+          room: group.room || 'Unknown Room',
+          zone: group.zone || '?',
+          plan: group.plan,  // Preserve canonical plan field for findGroupPlan()
+          currentPPFD: currentPPFD,
+          ppfdMin: 100,
+          ppfdMax: 600,
+          nutrientProfile: extractCropDisplayName(group.plan) || 'LeafyVeg-A',
+          crops: group.plan ? [extractCropDisplayName(group.plan)] : []
+        };
+      });
+    }
+
+    // ============================================================================
+    // SEEDING FORECAST ALGORITHM
+    // ============================================================================
+    
+    /**
+     * 🚨 AI RECOMMENDATION SYSTEM OPPORTUNITY 🚨
+     * 
+     * CURRENT STATE: Simplistic - recommends replanting same crop
+     * 
+     * REQUIREMENTS FOR INTELLIGENT SYSTEM:
+     * 
+     * 1. DEMAND-DRIVEN PLANNING
+     *    - Analyze sales data: which crops are selling? At what volumes?
+     *    - Forecast demand: seasonal trends, buyer preferences, market conditions
+     *    - Prioritize high-demand crops to maximize revenue
+     * 
+     * 2. HARVEST STAGGERING
+     *    - Avoid harvesting all trays of same crop simultaneously
+     *    - Spread harvest dates to balance labor and fulfillment workload
+     *    - Ensure consistent weekly/daily harvest quantities for buyers
+     *    - Example: If 40 trays of lettuce, stagger plantings across 4 weeks
+     * 
+     * 3. NUTRIENT COMPATIBILITY
+     *    - Groups share the same nutrient tank/reservoir
+     *    - Cannot mix crops with incompatible EC, pH, or nutrient profiles
+     *    - Leafy greens (lettuce, kale): EC 1.2-1.8, pH 5.5-6.0
+     *    - Herbs (basil): EC 1.0-1.6, pH 5.5-6.5
+     *    - Fruiting crops (tomatoes): EC 2.0-3.5, pH 5.8-6.3
+     *    - Must recommend crops that can share the zone's current nutrient mix
+     * 
+     * 4. LIGHTING OPTIMIZATION
+     *    - Consider current DLI target for the zone/group
+     *    - High-light crops (tomatoes: DLI 25+) vs low-light (lettuce: DLI 12-17)
+     *    - Maximize light utilization - don't waste high-DLI zones on low-light crops
+     *    - Balance spectrum requirements (R/B ratio) across co-located groups
+     * 
+     * 5. CROP ROTATION & VARIETY
+     *    - Avoid monoculture - rotate crop families for nutrient balance
+     *    - Vary varieties within crop types (different lettuce types)
+     *    - Consider pest/disease management through rotation
+     * 
+     * 6. SCALE CONSIDERATIONS
+     *    - Farms may have 100-500+ trays
+     *    - Recommendations must be computationally efficient
+     *    - Need batch optimization, not per-tray calculations
+     * 
+     * IMPLEMENTATION APPROACH:
+     * - Machine learning model trained on:
+     *   - Historical sales data
+     *   - Harvest timing patterns
+     *   - Crop performance metrics
+     *   - Environmental conditions
+     * - Multi-objective optimization:
+     *   - Maximize revenue (demand matching)
+     *   - Minimize harvest clustering (labor smoothing)
+     *   - Respect constraints (nutrients, lighting)
+     * - Real-time adjustment based on:
+     *   - Current inventory levels
+     *   - Recent order patterns
+     *   - Equipment/zone availability
+     * 
+     * DATA SOURCES NEEDED:
+     * - Sales API: /api/wholesale/orders, /api/wholesale/buyers
+     * - Inventory API: /api/inventory/current
+     * - Environmental data: /api/farm/profile (zones, lighting capacity)
+     * - Crop library: /data/lighting-recipes.json (growth requirements)
+     * 
+     * RECOMMENDED ARCHITECTURE:
+     * - Backend service: /api/planting/recommendations
+     * - Input: farmId, targetDate, zoneId (optional)
+     * - Output: Ranked list of crop recommendations per tray/slot
+     * - Caching: 1-hour TTL, regenerate on inventory changes
+     * 
+     * TODO: Assign to Architecture Agent for ML system design
+     * TODO: Integrate with wholesale demand forecasting
+     * TODO: Create recommendation scoring algorithm
+     * 
+     * For now: Simple fallback - recommend same crop (continuity planning)
+     */
+
+    // Map display crop names to database IDs
+    function mapCropNameToId(cropName) {
+      if (!cropName) return 'lettuce-buttercrunch'; // default
+      
+      const lowerName = cropName.toLowerCase();
+      
+      // Direct match in CROP_DATABASE
+      for (const [key, entry] of Object.entries(CROP_DATABASE)) {
+        if (key === lowerName || entry.name.toLowerCase() === lowerName) return key;
+      }
+      
+      // Partial/classification-based matching
+      const mapping = {
+        'butterhead': 'lettuce-buttercrunch',
+        'bibb': 'lettuce-buttercrunch',
+        'buttercrunch': 'lettuce-buttercrunch',
+        'romaine': 'lettuce-romaine',
+        'cos': 'lettuce-romaine',
+        'oakleaf': 'lettuce-buttercrunch',
+        'oak leaf': 'lettuce-buttercrunch',
+        'red leaf': 'lettuce-buttercrunch',
+        'lettuce': 'lettuce-buttercrunch',
+        'basil': 'basil',
+        'genovese': 'basil',
+        'thai basil': 'basil',
+        'arugula': 'kale',
+        'kale': 'kale',
+        'lacinato': 'kale',
+        'red russian': 'kale',
+        'spinach': 'kale',
+        'chard': 'kale',
+        'swiss chard': 'kale',
+        'collard': 'kale',
+        'mizuna': 'kale',
+        'tatsoi': 'kale',
+        'pak choi': 'kale',
+        'mustard': 'kale',
+        'watercress': 'kale',
+        'komatsuna': 'kale',
+        'escarole': 'lettuce-buttercrunch',
+        'frisee': 'lettuce-buttercrunch',
+        'endive': 'lettuce-buttercrunch',
+        'sorrel': 'kale',
+        'tomato': 'tomato',
+        'san marzano': 'tomato',
+        'sun gold': 'tomato',
+        'brandywine': 'tomato',
+        'celebrity': 'tomato',
+        'better boy': 'tomato',
+        'heatmaster': 'tomato',
+        'strawberry': 'tomato', // similar fruiting profile
+        'albion': 'tomato',
+        'chandler': 'tomato',
+        'seascape': 'tomato',
+        'sequoia': 'tomato',
+        'ozark': 'tomato',
+        'monterey': 'tomato',
+        'tribute': 'tomato',
+        'tristar': 'tomato',
+        'jewel': 'tomato',
+        'eversweet': 'tomato',
+        'herb': 'basil',
+        'cilantro': 'basil',
+        'dill': 'basil',
+        'oregano': 'basil',
+        'thyme': 'basil',
+        'rosemary': 'basil',
+        'sage': 'basil',
+        'parsley': 'basil',
+        'tarragon': 'basil',
+        'mint': 'basil',
+        'spearmint': 'basil',
+        'chervil': 'basil',
+        'marjoram': 'basil',
+        'lovage': 'basil',
+        'lemon balm': 'basil'
+      };
+      
+      // Try partial match
+      for (const [keyword, id] of Object.entries(mapping)) {
+        if (lowerName.includes(keyword)) return id;
+      }
+      
+      return 'lettuce-buttercrunch'; // safe default for unknown crops
+    }
+
+    function normalizeCropId(cropCandidate) {
+      if (!cropCandidate) return 'lettuce-buttercrunch';
+
+      if (typeof cropCandidate === 'string' && CROP_DATABASE[cropCandidate]) {
+        return cropCandidate;
+      }
+
+      return mapCropNameToId(String(cropCandidate));
+    }
+
+    function calculateSeedingTasks(trays) {
+      const tasks = [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      console.log(`Calculating seeding tasks for ${trays.length} trays`);
+
+      trays.forEach(tray => {
+        if (!tray.expectedHarvest || tray.status !== 'active') {
+          return;
+        }
+
+        // Calculate when slot will be free
+        const harvestDate = new Date(tray.expectedHarvest);
+        const cleaningBuffer = 1; // days
+        const slotFreeDate = new Date(harvestDate);
+        slotFreeDate.setDate(slotFreeDate.getDate() + cleaningBuffer);
+
+        // Get the group's plan (what the grower has configured for this location)
+        const groupPlan = findGroupPlan(tray.groupId);
+        if (!groupPlan) {
+          console.warn(`No plan found for group: ${tray.groupId}`);
+          return;
+        }
+
+        const normalizedCropId = normalizeCropId(groupPlan);
+
+        // Get actual harvest duration from the lighting recipe
+        const harvestDays = getPlanHarvestDays(groupPlan);
+        const cropName = extractCropDisplayName(groupPlan);
+
+        // Calculate seeding window (default germination times for leafy greens)
+        const germMax = 10; // days
+        const germMin = 7;  // days
+        
+        const earliestSeedDate = new Date(slotFreeDate);
+        earliestSeedDate.setDate(earliestSeedDate.getDate() - germMax);
+        
+        const latestSeedDate = new Date(slotFreeDate);
+        latestSeedDate.setDate(latestSeedDate.getDate() - germMin);
+        
+        // Target seed date (midpoint)
+        const targetSeedDate = new Date(earliestSeedDate);
+        const daysDiff = Math.floor((latestSeedDate - earliestSeedDate) / (1000 * 60 * 60 * 24));
+        targetSeedDate.setDate(targetSeedDate.getDate() + Math.floor(daysDiff / 2));
+
+        // Calculate urgency
+        const daysUntilSeeding = Math.floor((targetSeedDate - today) / (1000 * 60 * 60 * 24));
+        let urgency = 'normal';
+        if (daysUntilSeeding < 0) urgency = 'overdue';
+        else if (daysUntilSeeding <= 2) urgency = 'urgent';
+        else if (daysUntilSeeding <= 5) urgency = 'soon';
+
+        tasks.push({
+          id: `task-${tray.id}-${targetSeedDate.getTime()}`,
+          trayId: tray.id,
+          groupId: tray.groupId,
+          location: tray.location,
+          cropId: normalizedCropId,
+          cropName: cropName,
+          cropClass: 'leafy', // Most crops in system are leafy greens
+          targetSeedDate,
+          earliestSeedDate,
+          latestSeedDate,
+          targetTransplantDate: slotFreeDate,
+          expectedNewHarvest: new Date(slotFreeDate.getTime() + harvestDays * 24 * 60 * 60 * 1000),
+          quantity: tray.capacity,
+          urgency,
+          daysUntil: daysUntilSeeding
+        });
+      });
+
+      // Sort by target seed date
+      return tasks.sort((a, b) => a.targetSeedDate - b.targetSeedDate);
+    }
+
+    // ============================================================================
+    // COMPATIBILITY SCORING
+    // ============================================================================
+
+    function getCompatibilityTooltip(compatibility) {
+      if (!compatibility || !compatibility.reason) {
+        return 'No compatibility data available';
+      }
+
+      const parts = [
+        `Rating: ${compatibility.rating.toUpperCase()}`,
+        `Score: ${compatibility.score}/100`
+      ];
+
+      // Add companion tray count
+      if (compatibility.companionCount !== undefined) {
+        parts.push(`Companion trays: ${compatibility.companionCount}`);
+      }
+
+      // Add reason details
+      if (compatibility.reason) {
+        parts.push(`\nDetails: ${compatibility.reason}`);
+      }
+
+      // Add PPFD information if available
+      if (compatibility.ppfdDifference !== undefined && compatibility.seedlingIdealPPFD !== undefined) {
+        parts.push(`\nPPFD Difference: ${Math.round(compatibility.ppfdDifference)} µmol/m²/s`);
+        parts.push(`Seedling Ideal: ${Math.round(compatibility.seedlingIdealPPFD)} µmol/m²/s`);
+      }
+
+      return parts.join('\n');
+    }
+
+    function calculateCompatibility(task, groups) {
+      const group = groups.find(g => g.id === task.groupId);
+      if (!group) return { score: 0, rating: 'poor', reason: 'Group not found' };
+
+      const crop = CROP_DATABASE[normalizeCropId(task.cropId)];
+      if (!crop) return { score: 0, rating: 'poor', reason: 'Crop data not found' };
+
+      let score = 100;
+      let reasons = [];
+
+      // Find companion tasks (future crops) in the same group
+      // These are trays that will be planted around the same time window
+      const companionTasks = state.seedingTasks.filter(t => 
+        t.groupId === task.groupId && 
+        t.trayId !== task.trayId &&
+        Math.abs(t.daysUntil - task.daysUntil) <= 14 // Within 2 weeks of each other
+      );
+
+      // Check for hard incompatibilities with companion crops
+      if (companionTasks.length > 0) {
+        const companionCrops = companionTasks
+          .map(t => CROP_DATABASE[normalizeCropId(t.cropId)])
+          .filter(Boolean);
+        
+        const hasIncompatibleCrop = companionCrops.some(companionCrop => {
+          return COMPATIBILITY_RULES.incompatibleClasses.some(([class1, class2]) => {
+            return (crop.cropClass === class1 && companionCrop.cropClass === class2) ||
+                   (crop.cropClass === class2 && companionCrop.cropClass === class1);
+          });
+        });
+
+        if (hasIncompatibleCrop) {
+          return {
+            score: 0,
+            rating: 'poor',
+            reason: 'Incompatible crop classes with companion trays (leafy/herb cannot mix with fruiting)',
+            companionCount: companionTasks.length
+          };
+        }
+
+        // Check nutrient profile compatibility with companions
+        const nutrientMismatch = companionCrops.some(c => c.nutrientProfile !== crop.nutrientProfile);
+        if (nutrientMismatch) {
+          score -= 30;
+          reasons.push(`Nutrient profile mismatch with ${companionCrops.length} companion tray(s)`);
+        } else {
+          reasons.push(`Good nutrient compatibility with ${companionCrops.length} companion tray(s)`);
+        }
+      } else {
+        reasons.push('No companion trays in same planting window');
+      }
+
+      // Check PPFD compatibility
+      const seedlingIdealPPFD = (crop.phases.seedling.ppfdMin + crop.phases.seedling.ppfdMax) / 2;
+      const ppfdDifference = Math.abs(group.currentPPFD - seedlingIdealPPFD);
+
+      if (ppfdDifference < COMPATIBILITY_RULES.ppfdPenalty.low) {
+        reasons.push('Excellent PPFD match');
+      } else if (ppfdDifference < COMPATIBILITY_RULES.ppfdPenalty.medium) {
+        score -= 15;
+        reasons.push('Moderate PPFD adjustment needed');
+      } else {
+        score -= 35;
+        reasons.push('Significant PPFD adjustment required');
+      }
+
+      // Determine rating
+      let rating;
+      if (score >= 85) rating = 'excellent';
+      else if (score >= 65) rating = 'good';
+      else if (score >= 40) rating = 'fair';
+      else rating = 'poor';
+
+      return {
+        score,
+        rating,
+        reason: reasons.join('; ') || 'Compatible',
+        ppfdDifference,
+        seedlingIdealPPFD,
+        companionCount: companionTasks.length
+      };
+    }
+
+    // ============================================================================
+    // LIGHT ADJUSTMENT CALCULATIONS
+    // ============================================================================
+
+    function calculateLightAdjustments(tasks, groups) {
+      const adjustments = [];
+      const upcomingTasks = tasks.filter(t => t.daysUntil >= 0 && t.daysUntil <= 7);
+
+      upcomingTasks.forEach(task => {
+        const group = groups.find(g => g.id === task.groupId);
+        if (!group) return;
+
+        const crop = CROP_DATABASE[task.cropId];
+        if (!crop) return;
+
+        const seedlingIdealPPFD = (crop.phases.seedling.ppfdMin + crop.phases.seedling.ppfdMax) / 2;
+        const currentPPFD = group.currentPPFD;
+
+        // Calculate compromise PPFD
+        const compromisePPFD = Math.min(
+          currentPPFD,
+          seedlingIdealPPFD * 1.2
+        );
+
+        // Clamp to group limits
+        const initialPPFD = Math.max(
+          group.ppfdMin,
+          Math.min(group.ppfdMax, compromisePPFD)
+        );
+
+        // Calculate ramp schedule
+        const acclimationDays = SEEDLING_ACCLIMATION_RULES.acclimationDays;
+        const rampDays = SEEDLING_ACCLIMATION_RULES.rampUpDays;
+        
+        const ppfdIncrement = (currentPPFD - initialPPFD) / rampDays;
+
+        adjustments.push({
+          taskId: task.id,
+          groupId: group.id,
+          groupName: group.name,
+          cropName: task.cropName,
+          currentPPFD,
+          targetPPFD: initialPPFD,
+          finalPPFD: currentPPFD,
+          schedule: [
+            { phase: 'Initial (Days 0-' + acclimationDays + ')', ppfd: Math.round(initialPPFD), duration: acclimationDays + ' days' },
+            { phase: 'Ramp Up (Days ' + acclimationDays + '-' + (acclimationDays + rampDays) + ')', ppfd: Math.round(initialPPFD + ppfdIncrement * 2.5), duration: rampDays + ' days' },
+            { phase: 'Normal', ppfd: Math.round(currentPPFD), duration: 'Ongoing' }
+          ],
+          transplantDate: task.targetTransplantDate
+        });
+      });
+
+      return adjustments;
+    }
+
+    // ============================================================================
+    // UI RENDERING
+    // ============================================================================
+
+    function renderSummaryCards() {
+      document.getElementById('upcomingTasksCount').textContent = 
+        state.seedingTasks.filter(t => t.daysUntil >= 0 && t.daysUntil <= 14).length;
+      
+      document.getElementById('activeSeedlingsCount').textContent = 
+        state.seedingTasks.filter(t => t.daysUntil < 0 && t.daysUntil >= -10).length;
+      
+      document.getElementById('readyTraysCount').textContent = 
+        state.trays.filter(t => t.status === 'empty' || !t.currentCrop).length;
+      
+      document.getElementById('lightAdjustmentsCount').textContent = 
+        state.lightAdjustments.length;
+    }
+
+    function renderSeedingTimeline() {
+      const container = document.getElementById('seedingTimeline');
+      
+      // Group tasks by variety for two time windows
+      const thisWeekTasks = state.seedingTasks.filter(t => t.daysUntil >= 0 && t.daysUntil <= 7);
+      const upcomingTasks = state.seedingTasks.filter(t => t.daysUntil >= 8 && t.daysUntil <= 14);
+      
+      const thisWeekVarieties = groupTasksByVariety(thisWeekTasks);
+      const upcomingVarieties = groupTasksByVariety(upcomingTasks);
+
+      if (thisWeekVarieties.length === 0 && upcomingVarieties.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <h3>No Upcoming Seeding</h3>
+            <p>All seeding tasks are scheduled beyond the next 2 weeks</p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      
+      // This Week's Seeding Section
+      if (thisWeekVarieties.length > 0) {
+        html += `
+          <div class="timeline-section">
+            <h3 class="timeline-section-title">This Week's Seeding</h3>
+            <div class="variety-cards-grid">
+              ${thisWeekVarieties.map(variety => renderVarietyCard(variety)).join('')}
+            </div>
+          </div>
+        `;
+      }
+      
+      // Upcoming Varieties Section
+      if (upcomingVarieties.length > 0) {
+        html += `
+          <div class="timeline-section">
+            <h3 class="timeline-section-title">Upcoming Varieties (Week 2)</h3>
+            <div class="variety-cards-grid">
+              ${upcomingVarieties.map(variety => renderVarietyCard(variety)).join('')}
+            </div>
+          </div>
+        `;
+      }
+      
+      container.innerHTML = html;
+    }
+
+    function groupTasksByVariety(tasks) {
+      const varietyGroups = {};
+      
+      tasks.forEach(task => {
+        if (!varietyGroups[task.cropId]) {
+          varietyGroups[task.cropId] = {
+            cropId: task.cropId,
+            cropName: task.cropName,
+            totalSeedlings: 0,
+            traysCount: 0,
+            trays: [],
+            earliestDate: task.targetSeedDate,
+            latestDate: task.targetSeedDate,
+            mostUrgent: task.urgency
+          };
+        }
+        
+        const group = varietyGroups[task.cropId];
+        group.totalSeedlings += task.quantity;
+        group.traysCount++;
+        group.trays.push(task);
+        
+        // Track date range
+        if (task.targetSeedDate < group.earliestDate) {
+          group.earliestDate = task.targetSeedDate;
+        }
+        if (task.targetSeedDate > group.latestDate) {
+          group.latestDate = task.targetSeedDate;
+        }
+        
+        // Track most urgent status
+        const urgencyLevel = { overdue: 4, urgent: 3, soon: 2, ready: 1 };
+        if (urgencyLevel[task.urgency] > urgencyLevel[group.mostUrgent]) {
+          group.mostUrgent = task.urgency;
+        }
+      });
+      
+      return Object.values(varietyGroups).sort((a, b) => 
+        a.earliestDate - b.earliestDate
+      );
+    }
+
+    function renderVarietyCard(variety) {
+      const urgencyClass = variety.mostUrgent === 'overdue' || variety.mostUrgent === 'urgent' ? 'urgent' : 
+                           variety.mostUrgent === 'soon' ? 'warning' : 'ready';
+      
+      const dateRange = variety.earliestDate.getTime() === variety.latestDate.getTime()
+        ? variety.earliestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : `${variety.earliestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${variety.latestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      
+      return `
+        <div class="variety-card ${urgencyClass}">
+          <div class="variety-card-header">
+            <div class="variety-name">${variety.cropName}</div>
+            <div class="variety-urgency-badge ${urgencyClass}"></div>
+          </div>
+          <div class="variety-stats">
+            <div class="variety-stat">
+              <div class="variety-stat-label">Total Seedlings</div>
+              <div class="variety-stat-value">${variety.totalSeedlings.toLocaleString()}</div>
+            </div>
+            <div class="variety-stat">
+              <div class="variety-stat-label">Number of Trays</div>
+              <div class="variety-stat-value">${variety.traysCount}</div>
+            </div>
+          </div>
+          <div class="variety-dates">
+            <div class="variety-date-label">Seeding Window</div>
+            <div class="variety-date-value">${dateRange}</div>
+          </div>
+          <button class="variety-card-btn" onclick="showVarietyDetails('${variety.cropId}', ${variety.trays.map(t => `'${t.id}'`).join(',')})">
+            View ${variety.traysCount} Tray${variety.traysCount > 1 ? 's' : ''}
+          </button>
+        </div>
+      `;
+    }
+
+    function showVarietyDetails(cropId, ...trayIds) {
+      // Find all tasks for these trays
+      const trayTasks = state.seedingTasks.filter(task => 
+        trayIds.includes(task.trayId) || trayIds.includes(task.id)
+      );
+
+      if (trayTasks.length === 0) {
+        alert('No tray details found.');
+        return;
+      }
+
+      // Get crop name from first task
+      const cropName = trayTasks[0]?.cropName || 'Unknown Crop';
+
+      // Update modal title
+      document.getElementById('modalTitle').textContent = `${cropName} - ${trayTasks.length} Tray${trayTasks.length > 1 ? 's' : ''}`;
+
+      // Build modal content
+      const modalBody = document.getElementById('modalBody');
+      modalBody.innerHTML = `
+        <div class="tray-details-grid">
+          ${trayTasks.map(task => renderTrayDetailCard(task)).join('')}
+        </div>
+      `;
+
+      // Show modal
+      document.getElementById('trayDetailsModal').classList.add('show');
+    }
+
+    function renderTrayDetailCard(task) {
+      const urgencyClass = task.urgency || 'ready';
+      const urgencyLabel = {
+        'overdue': 'Overdue',
+        'urgent': 'Urgent',
+        'soon': 'Due Soon',
+        'ready': 'Ready'
+      }[urgencyClass] || 'Ready';
+
+      const seedDate = task.targetSeedDate ? 
+        task.targetSeedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 
+        'Not scheduled';
+
+      const harvestWindow = task.harvestWindow ? 
+        `${task.harvestWindow.earliest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${task.harvestWindow.latest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 
+        'N/A';
+
+      // Compatibility details
+      const compat = task.compatibility || { rating: 'unknown', reasons: [] };
+      const compatDetails = compat.reasons && compat.reasons.length > 0 ? 
+        compat.reasons.join(', ') : 'No compatibility data';
+
+      return `
+        <div class="tray-detail-card">
+          <div class="tray-detail-header">
+            <div class="tray-detail-id">${task.trayId || task.id}</div>
+            <div class="tray-detail-urgency ${urgencyClass}">${urgencyLabel}</div>
+          </div>
+          
+          <div class="tray-detail-info">
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Location</div>
+              <div class="tray-detail-value">${task.location || 'Unknown'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Seedlings</div>
+              <div class="tray-detail-value highlight">${task.quantity?.toLocaleString() || '0'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Target Seed Date</div>
+              <div class="tray-detail-value highlight">${seedDate}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Harvest Window</div>
+              <div class="tray-detail-value">${harvestWindow}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Current Crop</div>
+              <div class="tray-detail-value">${task.currentCrop || 'Empty'}</div>
+            </div>
+            <div class="tray-detail-field">
+              <div class="tray-detail-label">Current Harvest</div>
+              <div class="tray-detail-value">${task.expectedHarvest ? task.expectedHarvest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}</div>
+            </div>
+          </div>
+
+          <div class="tray-compatibility">
+            <div class="tray-compatibility-header" title="${getCompatibilityTooltip(compat)}" style="cursor: help;">Compatibility ℹ️</div>
+            <div class="tray-compatibility-details">
+              <span class="compatibility-tag" title="${getCompatibilityTooltip(compat)}" style="cursor: help;">Rating: ${compat.rating.toUpperCase()}</span>
+              ${compat.reasons && compat.reasons.length > 0 ? 
+                compat.reasons.map(reason => `<span class="compatibility-tag">${reason}</span>`).join('') : 
+                '<span class="compatibility-tag">No details available</span>'
+              }
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function closeTrayModal() {
+      document.getElementById('trayDetailsModal').classList.remove('show');
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', (e) => {
+      const modal = document.getElementById('trayDetailsModal');
+      if (e.target === modal) {
+        closeTrayModal();
+      }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeTrayModal();
+      }
+    });
+
+    function renderTrayForecast() {
+      const tbody = document.getElementById('trayForecastBody');
+      const forecastTasks = state.seedingTasks.slice(0, 20); // Show first 20
+
+      if (forecastTasks.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">
+                <div class="icon">🌱</div>
+                <h3>No Trays to Forecast</h3>
+                <p>Add trays with active crops to see the seeding schedule</p>
+              </div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = forecastTasks.map(task => {
+        const tray = state.trays.find(t => t.id === task.trayId);
+        const group = state.groups.find(g => g.id === task.groupId);
+        
+        const harvestStr = tray && tray.expectedHarvest ? 
+          tray.expectedHarvest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 
+          'N/A';
+        
+        const seedWindowStr = `${task.earliestSeedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${task.latestSeedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+        // CRITICAL FIX: Show current crop vs next recommended crop separately
+        const currentCrop = tray ? (tray.currentCrop || 'Empty') : 'Unknown';
+        const recommendedCrop = group?.nextCrop || task.cropName;  // Use saved assignment if available
+
+        return `
+          <tr>
+            <td><strong>${task.trayId}</strong></td>
+            <td>${task.location}</td>
+            <td>${currentCrop}</td>
+            <td>${harvestStr}</td>
+            <td>${seedWindowStr}</td>
+            <td>${recommendedCrop}</td>
+            <td><span class="compat-badge ${task.compatibility.rating}" title="${getCompatibilityTooltip(task.compatibility)}" style="cursor: help;">${task.compatibility.rating.toUpperCase()}</span></td>
+            <td>
+              <button class="timeline-btn primary" onclick="scheduleTask('${task.id}')" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
+                Schedule
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderLightAdjustments() {
+      const container = document.getElementById('lightAdjustmentsContainer');
+
+      if (state.lightAdjustments.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">LIGHT</div>
+            <h3>No Adjustments Needed</h3>
+            <p>All groups are currently optimized for their crop stages</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Sort adjustments by group name (rack)
+      const sortedAdjustments = state.lightAdjustments.slice().sort((a, b) => {
+        return (a.groupName || '').localeCompare(b.groupName || '');
+      });
+
+      container.innerHTML = sortedAdjustments.map(adj => `
+        <div class="light-adjustment">
+          <div class="light-adjustment-header">
+            <h4>${adj.groupName} - ${adj.cropName}</h4>
+            <span style="color: #94a3b8; font-size: 0.875rem;">
+              Transplant: ${adj.transplantDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          </div>
+          
+          <div class="ppfd-display">
+            <div style="text-align: center;">
+              <div class="ppfd-label">Current</div>
+              <div class="ppfd-value">${adj.currentPPFD}</div>
+              <div class="ppfd-label">µmol·m⁻²·s⁻¹</div>
+            </div>
+            <div class="ppfd-arrow">→</div>
+            <div style="text-align: center;">
+              <div class="ppfd-label">Initial Target</div>
+              <div class="ppfd-target">${adj.targetPPFD}</div>
+              <div class="ppfd-label">µmol·m⁻²·s⁻¹</div>
+            </div>
+          </div>
+
+          <h4 style="color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.75rem; text-transform: uppercase;">
+            Acclimation Schedule
+          </h4>
+          <div class="adjustment-timeline">
+            ${adj.schedule.map(phase => `
+              <div class="adjustment-phase">
+                <div class="phase-name">${phase.phase}</div>
+                <div class="phase-duration">${phase.duration}</div>
+                <div class="phase-ppfd">${phase.ppfd}</div>
+                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">µmol·m⁻²·s⁻¹</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="margin-top: 1rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
+            <button class="timeline-btn secondary">
+              Preview
+            </button>
+            <button class="timeline-btn primary" onclick="applyLightAdjustment('${adj.taskId}')">
+              Apply Adjustment
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // populateTrayDropdown removed — manual form now uses scope-based target selection
+
+    // ============================================================================
+    // EVENT HANDLERS
+    // ============================================================================
+
+    async function handleManualScheduling(e) {
+      e.preventDefault();
+
+      const cropId = document.getElementById('manualCrop').value;
+      const scope = document.getElementById('manualScope').value;
+      const target = document.getElementById('manualScopeTarget').value;
+      const cadence = document.getElementById('manualCadence').value;
+      const seedDate = document.getElementById('manualSeedDate').value;
+      const quantity = parseInt(document.getElementById('manualQuantity').value) || 48;
+      const notes = document.getElementById('manualNotes').value;
+      const cropName = document.getElementById('manualCrop').selectedOptions[0]?.textContent || cropId;
+
+      if (!cropId || !scope || !target) {
+        alert('Please select a crop, scope, and target.');
+        return;
+      }
+
+      // Build items list based on scope
+      let items = [];
+      let groupIds = [];
+
+      if (scope === 'tray') {
+        const tray = state.trays.find(t => t.id === target);
+        items = [{ trayId: target, groupId: tray?.groupId || '', location: tray?.location || '', quantity, seedDate }];
+      } else if (scope === 'group') {
+        groupIds = [target];
+      } else if (scope === 'zone') {
+        const [room, zone] = target.split('|');
+        groupIds = state.groups.filter(g => {
+          const ctx = getGroupContextById(g.id);
+          return ctx.room === room && String(ctx.zone) === zone;
+        }).map(g => g.id);
+      } else if (scope === 'room') {
+        groupIds = state.groups.filter(g => getGroupContextById(g.id).room === target).map(g => g.id);
+      }
+
+      // For group/zone/room scope, build items from trays in those groups
+      if (scope !== 'tray') {
+        const scopedTrays = state.trays.filter(t => groupIds.includes(t.groupId));
+        if (scopedTrays.length > 0) {
+          items = scopedTrays.map(t => ({ trayId: t.id, groupId: t.groupId, location: t.location || '', quantity, seedDate }));
+        } else {
+          // No trays registered — use group-level placeholder
+          items = groupIds.map(gId => ({ trayId: 'AUTO', groupId: gId, location: '', quantity, seedDate }));
+        }
+      }
+
+      // Submit to backend
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.textContent = 'Scheduling...';
+      submitBtn.disabled = true;
+
+      try {
+        const response = await fetch('/api/planting/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope, cadence, cropId, cropName: cropName.replace(/\s*\(.*?\)$/, ''), items, notes })
+        });
+
+        if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
+        const plan = await response.json();
+
+        // Show result in modal
+        const modal = document.getElementById('trayDetailsModal');
+        document.getElementById('modalTitle').textContent = 'Manual Schedule Created';
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+          <div style="color: #e2e8f0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem;">
+              <div><strong>Crop:</strong> ${cropName}</div>
+              <div><strong>Scope:</strong> ${scope}</div>
+              <div><strong>Cadence:</strong> ${cadence}</div>
+              <div><strong>Items:</strong> ${items.length} tray(s)</div>
+            </div>
+            ${plan.batches ? `
+              <h4 style="color: #60a5fa; margin-bottom: 0.5rem;">Batches</h4>
+              ${plan.batches.map((b, i) => `
+                <div style="padding: 0.5rem; background: rgba(30,41,59,0.5); border-radius: 6px; margin-bottom: 0.4rem;">
+                  Batch ${i+1}: ${b.seedDate} → Harvest ~${b.expectedHarvestDate || 'TBD'}
+                  <span style="color: #94a3b8; font-size: 0.8rem;">(${(b.items && b.items.length) || items.length} trays)</span>
+                </div>
+              `).join('')}
+            ` : ''}
+            ${plan.activityHubTasks ? `
+              <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); border-radius: 8px;">
+                <strong style="color: #22c55e;">Activity Hub Synced</strong>
+                <span style="color: #94a3b8;"> — ${plan.activityHubTasks.length} task(s) created</span>
+              </div>
+            ` : ''}
+            <div style="margin-top: 1.5rem; text-align: center;">
+              <button class="timeline-btn primary" onclick="closeTrayModal(); resetManualForm(); loadSchedulerData();">Done</button>
+            </div>
+          </div>
+        `;
+        modal.classList.add('show');
+
+      } catch (err) {
+        console.error('Manual scheduling failed:', err);
+        alert(`Scheduling failed: ${err.message}`);
+      } finally {
+        submitBtn.textContent = 'Schedule Seeding Task';
+        submitBtn.disabled = false;
+      }
+    }
+
+    function confirmTask(taskId) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      if (confirm(`Confirm seeding task for ${task.quantity} x ${task.cropName}?\nThis will schedule the task and apply any necessary light adjustments.`)) {
+        console.log('Confirming task:', taskId);
+        // TODO: Send to backend
+        alert('Task confirmed! Seeding reminder added to calendar.');
+      }
+    }
+
+    function scheduleTask(taskId) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      showSchedulingScopeModal(task);
+    }
+
+    function getGroupContextById(groupId) {
+      const group = state.groups.find(g => g.id === groupId);
+      if (!group) {
+        const parts = String(groupId || '').split(':');
+        return {
+          id: groupId,
+          name: groupId,
+          room: parts[0] || 'Unknown Room',
+          zone: parts[1] || '?'
+        };
+      }
+
+      let room = group.room;
+      let zone = group.zone;
+      if (!room || !zone) {
+        const parts = String(group.id || '').split(':');
+        if (parts.length >= 2) {
+          room = room || parts[0];
+          zone = zone || parts[1];
+        }
+      }
+
+      return {
+        id: group.id,
+        name: group.name,
+        room: room || 'Unknown Room',
+        zone: zone || '?'
+      };
+    }
+
+    function getScopedTasks(baseTask, scope) {
+      const baseGroupContext = getGroupContextById(baseTask.groupId);
+
+      if (scope === 'tray') {
+        return state.seedingTasks.filter(t => t.id === baseTask.id);
+      }
+
+      if (scope === 'group') {
+        return state.seedingTasks.filter(t => t.groupId === baseTask.groupId);
+      }
+
+      if (scope === 'zone') {
+        const zoneGroupIds = state.groups
+          .filter(g => {
+            const context = getGroupContextById(g.id);
+            return context.room === baseGroupContext.room && String(context.zone) === String(baseGroupContext.zone);
+          })
+          .map(g => g.id);
+
+        return state.seedingTasks.filter(t => zoneGroupIds.includes(t.groupId));
+      }
+
+      if (scope === 'room') {
+        const roomGroupIds = state.groups
+          .filter(g => getGroupContextById(g.id).room === baseGroupContext.room)
+          .map(g => g.id);
+
+        return state.seedingTasks.filter(t => roomGroupIds.includes(t.groupId));
+      }
+
+      return [];
+    }
+
+    function showSchedulingScopeModal(task) {
+      const modal = document.getElementById('trayDetailsModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+
+      const groupTasks = getScopedTasks(task, 'group');
+      const zoneTasks = getScopedTasks(task, 'zone');
+      const roomTasks = getScopedTasks(task, 'room');
+
+      modalTitle.textContent = 'Schedule Seeding Scope';
+      modalBody.innerHTML = `
+        <div style="display: grid; gap: 0.75rem;">
+          <p style="color: #94a3b8; margin-bottom: 0.5rem;">
+            Choose where to apply this schedule for <strong>${task.cropName}</strong>.
+          </p>
+          <button class="timeline-btn primary" onclick="startScopedScheduling('${task.id}','tray')">
+            Schedule Targeted Tray (${task.trayId})
+          </button>
+          <button class="timeline-btn primary" onclick="startScopedScheduling('${task.id}','group')">
+            Schedule Entire Group (${groupTasks.length} tray${groupTasks.length === 1 ? '' : 's'})
+          </button>
+          <button class="timeline-btn primary" onclick="startScopedScheduling('${task.id}','zone')">
+            Schedule Entire Zone (${zoneTasks.length} tray${zoneTasks.length === 1 ? '' : 's'})
+          </button>
+          <button class="timeline-btn primary" onclick="startScopedScheduling('${task.id}','room')">
+            Schedule Entire Room (${roomTasks.length} tray${roomTasks.length === 1 ? '' : 's'})
+          </button>
+          <button class="timeline-btn secondary" onclick="closeTrayModal()">Cancel</button>
+        </div>
+      `;
+
+      modal.classList.add('show');
+    }
+
+    function startScopedScheduling(taskId, scope) {
+      // After scope selection, prompt: maintain current crop OR AI recommendations
+      showMaintainOrRecommendChoice(taskId, scope);
+    }
+
+    function showMaintainOrRecommendChoice(taskId, scope) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+
+      const cropName = task.cropName || 'current crop';
+      modalTitle.textContent = 'Crop Selection';
+      modalBody.innerHTML = `
+        <div style="display: grid; gap: 0.75rem;">
+          <p style="color: #94a3b8; margin-bottom: 0.5rem;">
+            Scheduling <strong>${scope.toUpperCase()}</strong> scope for <strong>${cropName}</strong>.
+            Would you like to continue with the current crop or explore AI-powered alternatives?
+          </p>
+          <button class="timeline-btn secondary" style="width: 100%;"
+                  onclick="proceedWithMaintainCrop('${taskId}','${scope}')">
+            Maintain Current Crop (${cropName})
+          </button>
+          <button class="timeline-btn primary" style="width: 100%;"
+                  onclick="proceedWithAIRecommendations('${taskId}','${scope}')">
+            Update with AI Recommendations
+          </button>
+          <button class="timeline-btn secondary" onclick="showSchedulingScopeModal(state.seedingTasks.find(t => t.id === '${taskId}'))">
+            ← Back to Scope
+          </button>
+        </div>
+      `;
+    }
+
+    function proceedWithMaintainCrop(taskId, scope) {
+      if (scope === 'zone' || scope === 'room') {
+        showCadenceSelection(taskId, scope, true);
+        return;
+      }
+      executeScopedSchedule(taskId, scope, 'one_time', true);
+    }
+
+    async function proceedWithAIRecommendations(taskId, scope) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      modalTitle.textContent = 'AI Recommendations';
+      modalBody.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Analyzing zone capability, sales trends, seasonal data, and crop pricing...</p></div>';
+
+      try {
+        const group = state.groups.find(g => g.id === task.groupId);
+        const photoperiodHours = 16;
+        const currentPpfd = Number(group?.currentPPFD || group?.ppfd || group?.ppfdTarget || group?.ppfdMax || 0);
+        const currentDliFromPpfd = currentPpfd > 0
+          ? Number((currentPpfd * photoperiodHours * 3600 / 1000000).toFixed(2))
+          : null;
+        const zoneConditions = {
+          ec: group?.nutrientEC || 1.5,
+          ph: group?.nutrientPH || 5.8,
+          vpd: group?.targetVPD || 1.0,
+          dli_capacity: Number(group?.currentDLI || currentDliFromPpfd || 22)
+        };
+
+        const response = await fetch('/api/planting/recommendations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            groupId: task.groupId,
+            currentCrop: group?.plan || group?.crop || group?.recipe || task.cropName || '',
+            targetSeedDate: new Date().toISOString().split('T')[0],
+            zoneConditions
+          })
+        });
+
+        if (!response.ok) throw new Error(`API ${response.status}`);
+        const recommendations = await response.json();
+        renderScopedRecommendations(taskId, scope, recommendations);
+      } catch (err) {
+        console.error('AI recommendations failed:', err);
+        modalBody.innerHTML = `<p style="color:#ef4444;">Failed to get recommendations: ${err.message}</p>
+          <button class="timeline-btn secondary" onclick="showMaintainOrRecommendChoice('${taskId}','${scope}')">Back</button>`;
+      }
+    }
+
+    function renderScopedRecommendations(taskId, scope, recommendations) {
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      const top = recommendations.topRecommendation;
+      const alts = recommendations.alternatives || [];
+
+      modalTitle.textContent = 'AI Crop Recommendations';
+
+      const scoreColor = s => s >= 85 ? '#34d399' : s >= 70 ? '#60a5fa' : s >= 50 ? '#f59e0b' : '#ef4444';
+      const badge = (label, score) => `<div style="text-align:center;background:rgba(0,0,0,0.3);padding:0.5rem;border-radius:6px;">
+        <div style="font-size:1.2rem;font-weight:bold;color:${scoreColor(score)}">${Math.round(score)}</div>
+        <div style="font-size:0.7rem;color:#94a3b8;">${label}</div></div>`;
+
+      let html = '';
+      if (top) {
+        html += `
+          <div style="background:rgba(16,185,129,0.1);border:2px solid #10b981;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.75rem;">
+              <div>
+                <div style="font-size:0.7rem;color:#10b981;text-transform:uppercase;font-weight:600;">Recommended</div>
+                <h3 style="color:#34d399;margin:0.25rem 0;">${top.cropName}</h3>
+                <div style="font-size:0.85rem;color:#94a3b8;">${top.category} · ${top.durationDays} days · Harvest ${top.expectedHarvestDate}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:2rem;font-weight:bold;color:#34d399;">${Math.round(top.scores.overall)}</div>
+                <div style="font-size:0.75rem;color:#94a3b8;">Overall</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.75rem;">
+              ${badge('Light', top.scores.light_efficiency)}
+              ${badge('Nutrient', top.scores.nutrient_fit)}
+              ${badge('Revenue', top.scores.revenue)}
+              ${badge('Seasonal', top.scores.seasonal)}
+            </div>
+            <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:0.75rem;line-height:1.4;">
+              <strong style="color:#cbd5e1;">Revenue score</strong> ranks expected gross return using current market pricing and yield potential.
+              <strong style="color:#cbd5e1;">Seasonal score</strong> ranks how well the crop fits the current time of year and demand pattern.
+            </div>
+            <div style="font-size:0.8rem;color:#94a3b8;display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;">
+              <div>DLI Δ: ${top.deltas.dli} mol/m²/d</div>
+              <div>EC Δ: ${top.deltas.ec} dS/m</div>
+              <div>pH Δ: ${top.deltas.ph}</div>
+            </div>
+            <button class="timeline-btn primary" style="width:100%;margin-top:0.75rem;"
+                    onclick="implementRecommendation('${taskId}','${scope}','${top.cropId}','${encodeURIComponent(top.cropName)}')">
+              Implement ${top.cropName}
+            </button>
+          </div>`;
+      }
+
+      if (alts.length) {
+        html += '<div style="margin-bottom:0.75rem;"><h4 style="color:#94a3b8;margin-bottom:0.5rem;">Alternatives</h4>';
+        for (const alt of alts.slice(0, 5)) {
+          html += `
+            <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:0.75rem;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="font-weight:600;color:#60a5fa;">${alt.cropName}</div>
+                <div style="font-size:0.8rem;color:#94a3b8;">${alt.category} · ${alt.durationDays}d · Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Rev: ${Math.round(alt.scores.revenue)}</div>
+              </div>
+              <button class="timeline-btn secondary" style="padding:0.4rem 0.8rem;font-size:0.8rem;"
+                      onclick="implementRecommendation('${taskId}','${scope}','${alt.cropId}','${encodeURIComponent(alt.cropName)}')">
+                Implement
+              </button>
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      html += `<button class="timeline-btn secondary" style="width:100%;" onclick="showMaintainOrRecommendChoice('${taskId}','${scope}')">← Back</button>`;
+      modalBody.innerHTML = html;
+    }
+
+    async function implementRecommendation(taskId, scope, cropId, encodedCropName) {
+      const cropName = decodeURIComponent(encodedCropName);
+      if (scope === 'zone' || scope === 'room') {
+        showCadenceSelection(taskId, scope, false, cropId, cropName);
+        return;
+      }
+      await executeImplementation(taskId, scope, 'one_time', false, cropId, cropName);
+    }
+
+    async function executeImplementation(taskId, scope, cadence, maintainCrop, cropId, cropName) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const scopedTasks = getScopedTasks(task, scope);
+      if (!scopedTasks.length) { alert('No tasks for selected scope.'); return; }
+
+      const payload = {
+        scope, cadence, maintainCrop,
+        cropId: cropId || task.cropId,
+        cropName: cropName || task.cropName,
+        items: scopedTasks.map(t => ({
+          taskId: t.id, trayId: t.trayId, groupId: t.groupId,
+          location: t.location, quantity: Number(t.quantity) || 0,
+          seedDate: t.targetSeedDate ? t.targetSeedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+        }))
+      };
+
+      const modalBody = document.getElementById('modalBody');
+      modalBody.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Creating schedule and syncing to Activity Hub...</p></div>';
+
+      try {
+        const response = await fetch('/api/planting/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error(`API ${response.status}`);
+        const planResponse = await response.json();
+        applyImplementedCropToForecast(scopedTasks, cropId || task.cropId, cropName || task.cropName);
+        renderImplementationResult(task, scopedTasks, planResponse);
+      } catch (err) {
+        console.error('Plan creation failed:', err);
+        modalBody.innerHTML = `<p style="color:#ef4444;">Failed: ${err.message}</p>
+          <button class="timeline-btn secondary" onclick="closeTrayModal()">Close</button>`;
+      }
+    }
+
+    function showCadenceSelection(taskId, scope, maintainCrop, cropId, cropName) {
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+
+      const mc = maintainCrop ? 'true' : 'false';
+      const ci = cropId || '';
+      const cn = cropName ? encodeURIComponent(cropName) : '';
+
+      modalTitle.textContent = 'Select Harvest Cadence';
+      modalBody.innerHTML = `
+        <div style="display: grid; gap: 0.75rem;">
+          <p style="color: #94a3b8; margin-bottom: 0.5rem;">
+            For ${scope.toUpperCase()} scheduling, choose harvest planning cadence.
+          </p>
+          <button class="timeline-btn primary" onclick="executeImplementation('${taskId}','${scope}','weekly',${mc},'${ci}','${cn ? cn : ''}')">
+            Plan Consistent Weekly Harvests
+          </button>
+          <button class="timeline-btn primary" onclick="executeImplementation('${taskId}','${scope}','monthly',${mc},'${ci}','${cn ? cn : ''}')">
+            Plan Monthly Harvest
+          </button>
+          <button class="timeline-btn secondary" onclick="showMaintainOrRecommendChoice('${taskId}','${scope}')">
+            Back
+          </button>
+        </div>
+      `;
+    }
+
+    async function executeScopedSchedule(taskId, scope, cadence) {
+      // Legacy wrapper → delegates to executeImplementation with maintainCrop=true
+      await executeImplementation(taskId, scope, cadence, true, null, null);
+    }
+
+    async function applyImplementedCropToForecast(scopedTasks, cropId, cropName) {
+      if (!Array.isArray(scopedTasks) || !scopedTasks.length) return;
+
+      const normalizedCropId = normalizeCropId(cropId || cropName);
+      const normalizedCropName = cropName || CROP_DATABASE[normalizedCropId]?.name || 'Unknown Crop';
+      const harvestDays = getPlanHarvestDays(cropId || cropName || normalizedCropId);
+
+      const scopedIds = new Set(scopedTasks.map(t => t.id).filter(Boolean));
+      const scopedTrayIds = new Set(scopedTasks.map(t => t.trayId).filter(Boolean));
+      const scopedGroupIds = new Set(scopedTasks.map(t => t.groupId).filter(Boolean));
+
+      // Calculate seed and harvest dates from first task
+      const firstTask = scopedTasks[0];
+      const seedDate = firstTask?.targetTransplantDate || new Date();
+      const harvestDate = new Date(seedDate);
+      harvestDate.setDate(harvestDate.getDate() + harvestDays);
+
+      // CRITICAL FIX: Save assignments to database for each affected group
+      const savePromises = Array.from(scopedGroupIds).map(groupId => 
+        savePlantingAssignment(
+          groupId, 
+          normalizedCropId, 
+          normalizedCropName, 
+          seedDate.toISOString().split('T')[0],
+          harvestDate.toISOString().split('T')[0]
+        ).catch(err => {
+          console.error(`Failed to save assignment for group ${groupId}:`, err);
+          // Continue even if save fails - data is still in localStorage
+        })
+      );
+
+      // Wait for all saves to complete (runs in parallel)
+      try {
+        await Promise.all(savePromises);
+        console.log(`[Planting] Saved ${savePromises.length} assignments to database`);
+      } catch (error) {
+        console.warn('[Planting] Some assignments failed to save:', error);
+        // Non-blocking - show warning but continue
+      }
+
+      // Update in-memory state (keeping existing behavior for UI updates)
+      state.groups = state.groups.map(group => {
+        if (!scopedGroupIds.has(group.id)) return group;
+        return {
+          ...group,
+          nextCrop: normalizedCropName,
+          nextSeedDate: seedDate.toISOString().split('T')[0],
+          nextHarvestDate: harvestDate.toISOString().split('T')[0]
+          // Note: DO NOT update group.plan (current crop) - that's separate!
+        };
+      });
+
+      state.seedingTasks = state.seedingTasks.map(task => {
+        if (!scopedIds.has(task.id) && !scopedTrayIds.has(task.trayId)) return task;
+
+        return {
+          ...task,
+          cropId: normalizedCropId,
+          cropName: normalizedCropName,
+          expectedNewHarvest: new Date(task.targetTransplantDate.getTime() + harvestDays * 24 * 60 * 60 * 1000)
+        };
+      });
+
+      state.trays = state.trays.map(tray => {
+        if (!scopedTrayIds.has(tray.id)) return tray;
+
+        const task = state.seedingTasks.find(t => t.trayId === tray.id);
+        return {
+          ...tray,
+          currentCrop: normalizedCropName,
+          expectedHarvest: task?.expectedNewHarvest || tray.expectedHarvest
+        };
+      });
+
+      state.seedingTasks = state.seedingTasks.map(task => ({
+        ...task,
+        compatibility: calculateCompatibility(task, state.groups)
+      }));
+
+      state.lightAdjustments = calculateLightAdjustments(state.seedingTasks, state.groups);
+      renderSummaryCards();
+      renderSeedingTimeline();
+      renderTrayForecast();
+      renderLightAdjustments();
+    }
+
+    function renderImplementationResult(task, scopedTasks, planResponse) {
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      const summary = planResponse?.planSummary || {};
+      const batches = Array.isArray(planResponse?.batches) ? planResponse.batches : [];
+      const activityTasks = Array.isArray(planResponse?.activityHubTasks) ? planResponse.activityHubTasks : [];
+
+      modalTitle.textContent = 'Schedule Implemented';
+      modalBody.innerHTML = `
+        <div style="display: grid; gap: 1rem;">
+          <div style="background: rgba(16,185,129,0.14); border: 1px solid #10b981; border-radius: 10px; padding: 0.9rem;">
+            <div><strong>Crop:</strong> ${summary.cropName || task.cropName}</div>
+            <div><strong>Scope:</strong> ${(summary.scope || 'tray').toUpperCase()}</div>
+            <div><strong>Cadence:</strong> ${(summary.cadence || 'one_time').replace('_',' ').toUpperCase()}</div>
+            <div><strong>Trays Planned:</strong> ${summary.trays || scopedTasks.length}</div>
+            <div><strong>Total Plants:</strong> ${(summary.totalPlants || 0).toLocaleString()}</div>
+            <div><strong>Est. Harvest:</strong> ${summary.estimatedHarvestDays || '—'} days</div>
+          </div>
+
+          <div>
+            <h4 style="margin-bottom: 0.5rem; color: #60a5fa;">Planned Batches</h4>
+            ${batches.length ? batches.map(b => `
+              <div style="background: rgba(0,0,0,0.24); border-radius: 8px; padding: 0.65rem; margin-bottom: 0.5rem;">
+                Batch ${b.batchNumber}: Seed ${b.seedDate} → Harvest ${b.expectedHarvestDate || '—'} · ${b.trayCount} trays · ${Number(b.totalPlants || 0).toLocaleString()} plants
+              </div>
+            `).join('') : '<div style="color:#94a3b8;">No batches generated.</div>'}
+          </div>
+
+          <div style="background: rgba(59,130,246,0.1); border: 1px solid #3b82f6; border-radius: 10px; padding: 0.9rem;">
+            <h4 style="margin-bottom: 0.5rem; color: #60a5fa;">Activity Hub Synced</h4>
+            <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:0.5rem;">
+              ${activityTasks.length} task${activityTasks.length !== 1 ? 's' : ''} automatically synced to Activity Hub.
+            </p>
+            ${activityTasks.map(t => `
+              <div style="background: rgba(0,0,0,0.24); border-radius: 8px; padding: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem;">
+                <strong>${t.title}</strong> — Due: ${t.dueDate} · ${t.trayCount} trays
+              </div>
+            `).join('')}
+          </div>
+
+          <button class="timeline-btn primary" style="width:100%;" onclick="closeTrayModal();">
+            Done
+          </button>
+        </div>
+      `;
+    }
+
+    function renderScopedScheduleResult(task, scopedTasks, planResponse) {
+      // Delegate to the new implementation result renderer
+      renderImplementationResult(task, scopedTasks, planResponse);
+    }
+
+    function viewTaskDetails(taskId) {
+      const task = state.seedingTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const crop = CROP_DATABASE[task.cropId];
+      
+      alert(`Task Details:\n\nCrop: ${task.cropName}\nTray: ${task.trayId}\nLocation: ${task.location}\nQuantity: ${task.quantity} plants\n\nSeeding Window:\n${task.earliestSeedDate.toDateString()} - ${task.latestSeedDate.toDateString()}\n\nTransplant Date: ${task.targetTransplantDate.toDateString()}\nExpected Harvest: ${task.expectedNewHarvest.toDateString()}\n\nCompatibility: ${task.compatibility.rating.toUpperCase()}\n${task.compatibility.reason}`);
+    }
+
+    function applyLightAdjustment(taskId) {
+      const adjustment = state.lightAdjustments.find(a => a.taskId === taskId);
+      if (!adjustment) return;
+
+      if (confirm(`Apply light adjustment to ${adjustment.groupName}?\n\nThis will reduce PPFD from ${adjustment.currentPPFD} to ${adjustment.targetPPFD} µmol·m⁻²·s⁻¹ for ${SEEDLING_ACCLIMATION_RULES.acclimationDays} days, then gradually ramp back up.`)) {
+        console.log('Applying light adjustment:', adjustment);
+        // TODO: Send to light engine API
+        alert('Light adjustment scheduled! The system will automatically adjust PPFD based on the acclimation schedule.');
+      }
+    }
+
+    function showError(message) {
+      alert(`Error: ${message}`);
+    }
+
+    // ============================================================================
+    // AI CROP RECOMMENDATION FUNCTIONS
+    // ============================================================================
+
+    let currentRecommendations = null;
+
+    // State for tracking excluded crops during remix
+    let excludedCropsForRemix = [];
+
+    async function getAIRecommendations(excludeCrops = []) {
+      const groupSelect = document.getElementById('aiGroupSelect');
+      const groupId = groupSelect.value;
+
+      if (!groupId) {
+        alert('Please select a group first');
+        return;
+      }
+
+      const btn = document.getElementById('getRecommendationsBtn');
+      btn.disabled = true;
+      btn.textContent = 'Analyzing...';
+
+      try {
+        // Get current group data
+        const group = state.groups.find(g => g.id === groupId);
+        if (!group) {
+          throw new Error('Group not found');
+        }
+
+        // Get all available crops from server-side recipe profiles (all 50)
+        // No need to limit to CROP_DATABASE — backend evaluates all recipes
+
+        // Build zone conditions from group
+        // DLI = PPFD × photoperiod(h) × 3600 / 1,000,000
+        const photoperiodHours = 16; // standard indoor photoperiod
+        const currentPpfd = Number(group.currentPPFD || group.ppfd || group.ppfdTarget || group.ppfdMax || 0);
+        const currentDliFromPpfd = currentPpfd > 0
+          ? Number((currentPpfd * photoperiodHours * 3600 / 1000000).toFixed(2))
+          : null;
+        const zoneConditions = {
+          ec: group.nutrientEC || 1.5,
+          ph: group.nutrientPH || 5.8,
+          vpd: group.targetVPD || 1.0,
+          dli_capacity: Number(group.currentDLI || currentDliFromPpfd || 22)
+        };
+
+        const requestBody = {
+          groupId,
+          currentCrop: group.plan || group.crop || group.recipe || '',
+          targetSeedDate: new Date().toISOString().split('T')[0],
+          zoneConditions
+        };
+
+        // Add excludeCrops if provided (for Remix feature)
+        if (Array.isArray(excludeCrops) && excludeCrops.length > 0) {
+          requestBody.excludeCrops = excludeCrops;
+          console.log(`[AI Recommendations] Excluding ${excludeCrops.length} crops:`, excludeCrops);
+        }
+
+        const response = await fetch('/api/planting/recommendations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        currentRecommendations = await response.json();
+        displayRecommendations(currentRecommendations);
+
+      } catch (error) {
+        console.error('Failed to get recommendations:', error);
+        alert(`Failed to get recommendations: ${error.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Get AI Recommendations';
+      }
+    }
+
+    async function remixRecommendations() {
+      if (!currentRecommendations || !currentRecommendations.allScored) {
+        alert('No recommendations to remix. Please get initial recommendations first.');
+        return;
+      }
+
+      // Add current top recommendation to exclusion list
+      if (currentRecommendations.topRecommendation) {
+        const topCropId = currentRecommendations.topRecommendation.cropId;
+        if (!excludedCropsForRemix.includes(topCropId)) {
+          excludedCropsForRemix.push(topCropId);
+        }
+      }
+
+      // Also exclude all current alternatives to ensure fresh results
+      if (currentRecommendations.alternatives) {
+        currentRecommendations.alternatives.forEach(alt => {
+          if (!excludedCropsForRemix.includes(alt.cropId)) {
+            excludedCropsForRemix.push(alt.cropId);
+          }
+        });
+      }
+
+      // Get new recommendations with exclusions
+      await getAIRecommendations(excludedCropsForRemix);
+    }
+
+    function displayRecommendations(recommendations) {
+      const topRec = recommendations.topRecommendation;
+      if (!topRec) {
+        alert('No recommendations available');
+        return;
+      }
+
+      // Display top recommendation
+      const topDiv = document.getElementById('topRecommendation');
+      topDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+          <div>
+            <h3 style="color: #60a5fa; margin-bottom: 0.5rem;">
+              ${topRec.cropName}
+            </h3>
+            <div style="color: #94a3b8; font-size: 0.9rem;">
+              ${topRec.category || ''} · ${topRec.durationDays} days · Harvest: ${topRec.expectedHarvestDate}
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 2rem; font-weight: bold; color: #60a5fa;">
+              ${Math.round(topRec.scores.overall)}
+            </div>
+            <div style="color: #94a3b8; font-size: 0.85rem;">Overall Score</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+          ${renderScoreBadge('Nutrient Fit', topRec.scores.nutrient_fit)}
+          ${renderScoreBadge('Light', topRec.scores.light_efficiency)}
+          ${renderScoreBadge('Revenue', topRec.scores.revenue || 0)}
+          ${renderScoreBadge('Seasonal', topRec.scores.seasonal || 0)}
+          ${renderScoreBadge('Stagger', topRec.scores.harvest_stagger)}
+          ${renderScoreBadge('VPD', topRec.scores.vpd_fit)}
+        </div>
+
+        <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 1rem; line-height: 1.4;">
+          <strong style="color: #cbd5e1;">Revenue score</strong> estimates crop earning potential from market price and projected output.
+          <strong style="color: #cbd5e1;">Seasonal score</strong> estimates crop fit to current seasonal conditions and demand trends.
+        </div>
+
+        <details style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem;">
+          <summary style="font-weight: 600; color: #60a5fa; user-select: none;">
+            View Technical Details
+          </summary>
+          <div style="margin-top: 1rem; font-size: 0.9rem; color: #94a3b8;">
+            <div style="margin-bottom: 0.5rem;"><strong>EC Delta:</strong> ${topRec.deltas.ec} dS/m (ideal: ${topRec.ideal?.ec || '—'})</div>
+            <div style="margin-bottom: 0.5rem;"><strong>pH Delta:</strong> ${topRec.deltas.ph} (ideal: ${topRec.ideal?.ph || '—'})</div>
+            <div style="margin-bottom: 0.5rem;"><strong>DLI Delta:</strong> ${topRec.deltas.dli} mol/m²/d (ideal: ${topRec.ideal?.dli || '—'})</div>
+            <div><strong>Peak PPFD:</strong> ${topRec.ideal?.peakPPFD || '—'} µmol/m²/s</div>
+          </div>
+        </details>
+
+        <button class="timeline-btn primary" style="width:100%;"
+                onclick="implementFromAICard('${topRec.cropId}','${encodeURIComponent(topRec.cropName)}')">
+          Implement ${topRec.cropName}
+        </button>
+      `;
+
+      // Display alternatives
+      const altDiv = document.getElementById('alternativeRecommendations');
+      if (recommendations.alternatives && recommendations.alternatives.length > 0) {
+        altDiv.innerHTML = recommendations.alternatives.map(alt => `
+          <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <div>
+                <div style="font-weight: 600; color: #60a5fa; margin-bottom: 0.25rem;">
+                  ${alt.cropName}
+                </div>
+                <div style="font-size: 0.85rem; color: #94a3b8;">
+                  ${alt.category || ''} · ${alt.durationDays}d · Harvest: ${alt.expectedHarvestDate}
+                </div>
+                <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
+                  Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Seasonal: ${Math.round(alt.scores.seasonal || 0)}
+                </div>
+              </div>
+              <div style="display:flex;gap:0.5rem;">
+                <button 
+                  class="timeline-btn secondary" 
+                  style="padding: 0.5rem 0.8rem; font-size: 0.85rem;"
+                  onclick="selectAlternative('${alt.cropId}')"
+                >
+                  Preview
+                </button>
+                <button 
+                  class="timeline-btn primary" 
+                  style="padding: 0.5rem 0.8rem; font-size: 0.85rem;"
+                  onclick="implementFromAICard('${alt.cropId}','${encodeURIComponent(alt.cropName)}')"
+                >
+                  Implement
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        altDiv.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 1rem;">No alternatives available</div>';
+      }
+
+      document.getElementById('recommendationsDisplay').style.display = 'block';
+    }
+
+    function renderScoreBadge(label, score) {
+      const color = score >= 85 ? '#60a5fa' : score >= 70 ? '#3b82f6' : score >= 50 ? '#f59e0b' : '#ef4444';
+      return `
+        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; text-align: center;">
+          <div style="font-size: 1.5rem; font-weight: bold; color: ${color};">
+            ${Math.round(score)}
+          </div>
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">
+            ${label}
+          </div>
+        </div>
+      `;
+    }
+
+    function selectAlternative(cropId) {
+      if (!currentRecommendations || !currentRecommendations.allScored) return;
+      
+      const selected = currentRecommendations.allScored.find(r => r.cropId === cropId);
+      if (selected) {
+        currentRecommendations.topRecommendation = selected;
+        displayRecommendations(currentRecommendations);
+      }
+    }
+
+    function acceptRecommendation() {
+      // Delegate to implementFromAICard with top recommendation
+      if (!currentRecommendations || !currentRecommendations.topRecommendation) return;
+      const top = currentRecommendations.topRecommendation;
+      implementFromAICard(top.cropId, encodeURIComponent(top.cropName));
+    }
+
+    async function implementFromAICard(cropId, encodedCropName) {
+      const cropName = decodeURIComponent(encodedCropName);
+      if (!currentRecommendations) return;
+
+      const groupId = currentRecommendations.groupId;
+      const group = state.groups.find(g => g.id === groupId);
+      if (!group) { alert('Group not found'); return; }
+
+      // Gather trays for this group to build items
+      const groupTrays = state.trays.filter(t => t.groupId === groupId);
+      const items = groupTrays.length ? groupTrays.map(t => ({
+        trayId: t.id, groupId: groupId, location: t.location || '',
+        quantity: t.capacity || group.plantCount || 48,
+        seedDate: new Date().toISOString().split('T')[0]
+      })) : [{
+        trayId: 'AUTO', groupId: groupId, location: '',
+        quantity: group.plantCount || 48,
+        seedDate: new Date().toISOString().split('T')[0]
+      }];
+
+      try {
+        const response = await fetch('/api/planting/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scope: 'group', cadence: 'one_time', cropId, cropName, items
+          })
+        });
+        if (!response.ok) throw new Error(`API ${response.status}`);
+        const plan = await response.json();
+
+        const scopedTasks = state.seedingTasks.filter(t => t.groupId === groupId);
+        applyImplementedCropToForecast(scopedTasks, cropId, cropName);
+
+        // Log feedback for AI training
+        fetch('/api/planting/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            groupId, recommendedCrop: cropId, actualCrop: cropId, action: 'implemented'
+          })
+        }).catch(() => {});
+
+        fetch('/api/ai/record-decision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'implemented', recommendedCrop: cropId, actualCrop: cropId, groupId
+          })
+        }).catch(() => {});
+
+        hideRecommendations();
+        loadAIStatus();
+
+        // Show implementation result in modal
+        const modal = document.getElementById('trayDetailsModal');
+        document.getElementById('modalTitle').textContent = 'Schedule Implemented';
+        renderImplementationResult({cropName, cropId}, groupTrays, plan);
+        modal.classList.add('show');
+
+      } catch (err) {
+        console.error('Implementation failed:', err);
+        alert(`Failed to implement: ${err.message}`);
+      }
+    }
+
+    function hideRecommendations() {
+      document.getElementById('recommendationsDisplay').style.display = 'none';
+      currentRecommendations = null;
+      excludedCropsForRemix = [];  // Reset exclusion list for fresh start
+    }
+
+    // Populate group dropdown when page loads
+    function populateGroupDropdown() {
+      const groupSelect = document.getElementById('aiGroupSelect');
+      groupSelect.innerHTML = '<option value="">Choose a group to replant...</option>';
+      
+      state.groups.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.id;
+        
+        // Extract room and zone from group data or parse from ID
+        let room = group.room;
+        let zone = group.zone;
+        
+        // Fallback: parse from ID if properties missing (format: "Room:Zone:Group")
+        if (!room || !zone) {
+          const parts = group.id.split(':');
+          if (parts.length === 3) {
+            room = room || parts[0];
+            zone = zone || parts[1];
+          }
+        }
+        
+        option.textContent = `${group.name} (${room} - Zone ${zone})`;
+        groupSelect.appendChild(option);
+      });
+    }
+
+    // ============================================================================
+    // DEMO DATA FALLBACK (for testing without backend)
+    // ============================================================================
+
+    // If API calls fail, you can uncomment this to use demo data
+    /*
+    function loadSchedulerData() {
+      state.trays = [
+        {
+          id: 'T001',
+          groupId: 'G1',
+          location: 'Room A - Zone 1',
+          currentCrop: 'lettuce-buttercrunch',
+          expectedHarvest: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          capacity: 50,
+          status: 'active'
+        },
+        {
+          id: 'T002',
+          groupId: 'G1',
+          location: 'Room A - Zone 1',
+          currentCrop: 'kale',
+          expectedHarvest: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          capacity: 50,
+          status: 'active'
+        }
+      ];
+
+      state.groups = [
+        {
+          id: 'G1',
+          name: 'Group 1',
+          currentPPFD: 280,
+          ppfdMin: 100,
+          ppfdMax: 400,
+          nutrientProfile: 'LeafyVeg-A',
+          crops: []
+        }
+      ];
+
+      state.seedingTasks = calculateSeedingTasks(state.trays);
+      state.seedingTasks = state.seedingTasks.map(task => ({
+        ...task,
+        compatibility: calculateCompatibility(task, state.groups)
+      }));
+      state.lightAdjustments = calculateLightAdjustments(state.seedingTasks, state.groups);
+
+      renderSummaryCards();
+      renderSeedingTimeline();
+      renderTrayForecast();
+      renderLightAdjustments();
+      populateTrayDropdown();
+    }
+    */
+    
+    // Load farm name into header
+    (async function() {
+      try {
+        const response = await fetch('/data/farm.json');
+        if (response.ok) {
+          const farmData = await response.json();
+          const farmName = farmData.name || farmData.farmName;
+          if (farmName) {
+            const headerEl = document.getElementById('farmNameHeader');
+            if (headerEl) {
+              headerEl.textContent = `${farmName} - Planting Scheduler`;
+            }
+            document.title = `${farmName} - Planting Scheduler`;
+          }
+        }
+      } catch (error) {
+        console.log('[Planting Scheduler] Could not load farm name:', error.message);
+      }
+    })();
+  </script>
+  <script src="/js/farm-assistant.js"></script>
+</body>
+</html>

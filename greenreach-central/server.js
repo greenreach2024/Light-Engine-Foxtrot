@@ -31,6 +31,7 @@ import mlForecastRoutes from './routes/ml-forecast.js';
 import billingRoutes from './routes/billing.js';
 import procurementAdminRoutes from './routes/procurement-admin.js';
 import remoteSupportRoutes from './routes/remote-support.js';
+import plantingRoutes from './routes/planting.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
@@ -93,7 +94,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://web.squarecdn.com", "https://www.googletagmanager.com", "https://www.google-analytics.com", "https://code.responsivevoice.org"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://unpkg.com", "https://web.squarecdn.com", "https://www.googletagmanager.com", "https://www.google-analytics.com", "https://code.responsivevoice.org"],
       scriptSrcAttr: ["'unsafe-inline'"],  // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
@@ -121,6 +122,8 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 //   FARM_DAILY_SYNC_HOUR   - hour (0-23) for daily full sync (default 2 = 2 AM)
 // =====================================================
 const FARM_DATA_DIR = path.join(__dirname, 'public', 'data');
+const LEGACY_DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_SEARCH_DIRS = [FARM_DATA_DIR, LEGACY_DATA_DIR];
 const FARM_SYNC_INTERVAL = parseInt(process.env.FARM_SYNC_INTERVAL_MS) || 5 * 60 * 1000;
 const DAILY_SYNC_HOUR = parseInt(process.env.FARM_DAILY_SYNC_HOUR) || 2; // 2 AM default
 const SYNC_DATA_FILES = ['groups.json', 'rooms.json', 'farm.json', 'iot-devices.json', 'room-map.json', 'env.json'];
@@ -134,6 +137,185 @@ const syncStatus = {
   errorCount: 0,
   filesUpdated: 0
 };
+
+async function readDataJsonWithFallback(fileName, fallbackValue = {}) {
+  for (const dir of DATA_SEARCH_DIRS) {
+    const filePath = path.join(dir, fileName);
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      const raw = await fs.promises.readFile(filePath, 'utf8');
+      return JSON.parse(raw);
+    } catch (error) {
+      logger.warn(`[Compat] Failed parsing ${filePath}:`, error.message);
+    }
+  }
+  return fallbackValue;
+}
+
+async function writeFarmDataJson(fileName, payload) {
+  await fs.promises.mkdir(FARM_DATA_DIR, { recursive: true });
+  const filePath = path.join(FARM_DATA_DIR, fileName);
+  await fs.promises.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8');
+}
+
+function formatDateYYYYMMDD(dateValue) {
+  if (!(dateValue instanceof Date) || Number.isNaN(dateValue.getTime())) return null;
+  return dateValue.toISOString().slice(0, 10);
+}
+
+function getDaysBetween(startDate, endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.floor((end - start) / msPerDay);
+}
+
+function extractCropNameFromPlanId(planId) {
+  if (!planId || typeof planId !== 'string') return 'Unknown';
+  return planId
+    .replace(/^crop-/, '')
+    .split('-')
+    .map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1) : part)
+    .join(' ')
+    .trim() || 'Unknown';
+}
+
+function buildSyntheticTraysFromGroups(groups) {
+  if (!Array.isArray(groups) || groups.length === 0) return [];
+
+  const now = new Date();
+  const fallbackGrowthDays = 35;
+  const syntheticTrays = [];
+
+  groups.forEach((group) => {
+    const groupId = group?.id || group?.groupId;
+    if (!groupId) return;
+
+    const trayCount = Math.max(0, Number(group?.trays || 0));
+    if (!trayCount) return;
+
+    const totalPlants = Number(group?.plants || 0);
+    const plantCountPerTray = Math.max(1, Math.round((totalPlants > 0 ? totalPlants : trayCount * 12) / trayCount));
+    const planId = group?.plan || group?.planId || null;
+    const recipeName = group?.recipe || group?.crop || extractCropNameFromPlanId(planId);
+
+    const seedDateRaw = group?.planConfig?.anchor?.seedDate;
+    const seedDate = seedDateRaw ? new Date(seedDateRaw) : null;
+    const daysOld = seedDate && !Number.isNaN(seedDate.getTime())
+      ? Math.max(1, getDaysBetween(seedDate, now) + 1)
+      : 1;
+
+    const currentDay = daysOld;
+    const daysToHarvest = Math.max(0, fallbackGrowthDays - currentDay);
+    const estimatedHarvestDateObj = new Date(now);
+    estimatedHarvestDateObj.setDate(estimatedHarvestDateObj.getDate() + daysToHarvest);
+
+    const roomLabel = group?.roomId || group?.room || 'ROOM-1';
+    const zoneLabel = group?.zoneId || (group?.zone != null ? `ZONE-${group.zone}` : 'ZONE-1');
+    const location = `${roomLabel} - ${zoneLabel}`;
+
+    for (let index = 0; index < trayCount; index += 1) {
+      syntheticTrays.push({
+        trayId: `${groupId}#${index + 1}`,
+        groupId,
+        recipe: recipeName,
+        plan: planId,
+        plantCount: plantCountPerTray,
+        currentDay,
+        daysOld,
+        daysToHarvest,
+        harvestIn: daysToHarvest,
+        seedingDate: seedDate && !Number.isNaN(seedDate.getTime()) ? seedDate.toISOString() : null,
+        estimatedHarvestDate: formatDateYYYYMMDD(estimatedHarvestDateObj),
+        location,
+        status: group?.active === false ? 'inactive' : 'active'
+      });
+    }
+  });
+
+  return syntheticTrays;
+}
+
+function normalizeInventoryTrays(rawTrays) {
+  if (!Array.isArray(rawTrays)) return [];
+
+  const now = new Date();
+  return rawTrays.map((tray, index) => {
+    const trayId = tray?.trayId || tray?.id || `tray-${index + 1}`;
+    const plantCount = Math.max(0, Number(tray?.plantCount || tray?.plants || 0));
+    const currentDay = Math.max(1, Number(tray?.currentDay || tray?.daysOld || 1));
+    const seedingDate = tray?.seedingDate || tray?.seedDate || null;
+
+    let daysToHarvest = Number.isFinite(Number(tray?.daysToHarvest)) ? Number(tray.daysToHarvest) : null;
+    if (daysToHarvest == null && Number.isFinite(Number(tray?.harvestIn))) {
+      daysToHarvest = Number(tray.harvestIn);
+    }
+
+    if (daysToHarvest == null && tray?.estimatedHarvestDate) {
+      const harvestDate = new Date(tray.estimatedHarvestDate);
+      if (!Number.isNaN(harvestDate.getTime())) {
+        daysToHarvest = Math.max(0, getDaysBetween(now, harvestDate));
+      }
+    }
+
+    if (daysToHarvest == null) daysToHarvest = Math.max(0, 35 - currentDay);
+
+    const estimatedHarvestDateObj = tray?.estimatedHarvestDate
+      ? new Date(tray.estimatedHarvestDate)
+      : new Date(now.getTime() + (daysToHarvest * 24 * 60 * 60 * 1000));
+
+    return {
+      ...tray,
+      trayId,
+      groupId: tray?.groupId || tray?.location || 'unassigned',
+      recipe: tray?.recipe || tray?.crop || extractCropNameFromPlanId(tray?.plan || tray?.planId),
+      plantCount,
+      currentDay,
+      daysOld: Math.max(1, Number(tray?.daysOld || currentDay)),
+      daysToHarvest,
+      harvestIn: Number.isFinite(Number(tray?.harvestIn)) ? Number(tray.harvestIn) : daysToHarvest,
+      seedingDate,
+      estimatedHarvestDate: formatDateYYYYMMDD(estimatedHarvestDateObj),
+      location: tray?.location || 'ROOM-1 - ZONE-1',
+      status: tray?.status || 'active'
+    };
+  });
+}
+
+function splitForecastBuckets(trays) {
+  const buckets = {
+    next7Days: [],
+    next14Days: [],
+    next30Days: [],
+    beyond30Days: []
+  };
+
+  trays.forEach((tray) => {
+    if ((tray?.status || '').toLowerCase() === 'harvested') return;
+    const days = Math.max(0, Number(tray?.daysToHarvest || 0));
+    if (days <= 7) buckets.next7Days.push(tray);
+    else if (days <= 14) buckets.next14Days.push(tray);
+    else if (days <= 30) buckets.next30Days.push(tray);
+    else buckets.beyond30Days.push(tray);
+  });
+
+  return buckets;
+}
+
+async function getInventoryTraysForCompat() {
+  const traysDoc = await readDataJsonWithFallback('trays.json', []);
+  const traysRaw = Array.isArray(traysDoc) ? traysDoc : (traysDoc?.trays || []);
+
+  if (Array.isArray(traysRaw) && traysRaw.length > 0) {
+    return normalizeInventoryTrays(traysRaw);
+  }
+
+  const groupsDoc = await readDataJsonWithFallback('groups.json', { groups: [] });
+  const groups = Array.isArray(groupsDoc) ? groupsDoc : (groupsDoc?.groups || []);
+  const syntheticTrays = buildSyntheticTraysFromGroups(groups);
+  return normalizeInventoryTrays(syntheticTrays);
+}
 
 function resolveEdgeUrl() {
   // Env var override takes priority (works around broken Tailscale IPs in farm.json)
@@ -517,6 +699,701 @@ app.post('/api/debug/track', express.json(), (req, res) => {
   res.json({ success: true, logged: events.length });
 });
 
+// Legacy compatibility routes used by existing farm/admin pages
+app.get('/env', async (_req, res) => {
+  try {
+    const envPath = path.join(FARM_DATA_DIR, 'env.json');
+    if (!fs.existsSync(envPath)) {
+      return res.status(200).json({ zones: [] });
+    }
+    const raw = await fs.promises.readFile(envPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return res.status(200).json(parsed);
+  } catch (error) {
+    logger.warn('[Compat] /env fallback failed:', error.message);
+    return res.status(200).json({ zones: [] });
+  }
+});
+
+app.get('/api/env', async (_req, res) => {
+  try {
+    const envPath = path.join(FARM_DATA_DIR, 'env.json');
+    if (!fs.existsSync(envPath)) {
+      return res.status(200).json({ zones: [] });
+    }
+    const raw = await fs.promises.readFile(envPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return res.status(200).json(parsed);
+  } catch (error) {
+    logger.warn('[Compat] /api/env fallback failed:', error.message);
+    return res.status(200).json({ zones: [] });
+  }
+});
+
+const COMPAT_DEFAULT_PLANS = [
+  {
+    id: 'crop-bibb-butterhead',
+    name: 'Bibb Butterhead',
+    crop: 'Bibb Butterhead',
+    ppfd: 220,
+    light: {
+      days: [
+        { day: 1, stage: 'seedling', ppfd: 180, dli: 10 },
+        { day: 8, stage: 'vegetative', ppfd: 220, dli: 12 },
+        { day: 15, stage: 'finish', ppfd: 250, dli: 14 }
+      ]
+    }
+  },
+  {
+    id: 'crop-buttercrunch-lettuce',
+    name: 'Buttercrunch Lettuce',
+    crop: 'Buttercrunch Lettuce',
+    ppfd: 220,
+    light: {
+      days: [
+        { day: 1, stage: 'seedling', ppfd: 180, dli: 10 },
+        { day: 8, stage: 'vegetative', ppfd: 220, dli: 12 },
+        { day: 15, stage: 'finish', ppfd: 260, dli: 14 }
+      ]
+    }
+  },
+  {
+    id: 'crop-salad-bowl-oakleaf',
+    name: 'Salad Bowl Oakleaf',
+    crop: 'Salad Bowl Oakleaf',
+    ppfd: 230,
+    light: {
+      days: [
+        { day: 1, stage: 'seedling', ppfd: 185, dli: 10 },
+        { day: 8, stage: 'vegetative', ppfd: 230, dli: 13 },
+        { day: 15, stage: 'finish', ppfd: 270, dli: 15 }
+      ]
+    }
+  },
+  {
+    id: 'crop-astro-arugula',
+    name: 'Astro Arugula',
+    crop: 'Astro Arugula',
+    ppfd: 240,
+    light: {
+      days: [
+        { day: 1, stage: 'seedling', ppfd: 190, dli: 11 },
+        { day: 8, stage: 'vegetative', ppfd: 240, dli: 13 },
+        { day: 15, stage: 'finish', ppfd: 280, dli: 15 }
+      ]
+    }
+  }
+];
+
+function mergeCompatibilityPlans(plans) {
+  const currentPlans = Array.isArray(plans) ? plans : [];
+  const seen = new Set(currentPlans.map((plan) => String(plan?.id || plan?.name || '').trim()).filter(Boolean));
+  const merged = [...currentPlans];
+
+  for (const fallbackPlan of COMPAT_DEFAULT_PLANS) {
+    if (!seen.has(fallbackPlan.id)) {
+      merged.push(fallbackPlan);
+    }
+  }
+
+  return merged;
+}
+
+app.get('/plans', async (_req, res) => {
+  try {
+    const plansPath = path.join(FARM_DATA_DIR, 'plans.json');
+    if (fs.existsSync(plansPath)) {
+      const raw = await fs.promises.readFile(plansPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const plans = Array.isArray(parsed) ? parsed : (parsed?.plans || []);
+      return res.json({ plans: mergeCompatibilityPlans(plans) });
+    }
+
+    const schedulesPath = path.join(FARM_DATA_DIR, 'schedules.json');
+    if (fs.existsSync(schedulesPath)) {
+      const raw = await fs.promises.readFile(schedulesPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const plans = parsed?.plans || parsed?.schedules || [];
+      return res.json({ plans: mergeCompatibilityPlans(Array.isArray(plans) ? plans : []) });
+    }
+
+    return res.json({ plans: [...COMPAT_DEFAULT_PLANS] });
+  } catch (error) {
+    logger.warn('[Compat] /plans fallback failed:', error.message);
+    return res.json({ plans: [...COMPAT_DEFAULT_PLANS] });
+  }
+});
+
+app.get('/api/farm/profile', async (_req, res) => {
+  try {
+    const farmPath = path.join(FARM_DATA_DIR, 'farm.json');
+    const raw = await fs.promises.readFile(farmPath, 'utf8');
+    const farm = JSON.parse(raw);
+    const farmId = farm.farmId || farm.farm_id || 'FARM-TEST-WIZARD-001';
+
+    return res.json({
+      status: 'success',
+      farm: {
+        farmId,
+        name: farm.name || farm.farmName || 'This is Your Farm',
+        status: farm.status || 'active',
+        metadata: farm,
+        rooms: [],
+        groups: []
+      }
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/farm/profile fallback failed:', error.message);
+    return res.status(500).json({ error: 'Failed to load farm profile' });
+  }
+});
+
+app.get('/api/automation/rules', (_req, res) => {
+  return res.json({ success: true, rules: [] });
+});
+
+app.get('/api/automation/history', (_req, res) => {
+  return res.json({ success: true, history: [] });
+});
+
+app.get('/api/schedule-executor/status', (_req, res) => {
+  return res.json({
+    success: true,
+    enabled: false,
+    message: 'Schedule executor compatibility mode',
+    running: false
+  });
+});
+
+app.get('/api/schedule-executor/ml-anomalies', (_req, res) => {
+  return res.json({ success: true, anomalies: [], count: 0 });
+});
+
+app.get('/api/ml/anomalies/statistics', (_req, res) => {
+  const now = Date.now();
+  const hourly_buckets = [];
+  for (let index = 23; index >= 0; index -= 1) {
+    hourly_buckets.push({
+      timestamp: new Date(now - (index * 60 * 60 * 1000)).toISOString(),
+      critical: 0,
+      warning: 0,
+      info: 0
+    });
+  }
+
+  return res.json({
+    ok: true,
+    total_events: 0,
+    by_severity: { critical: 0, warning: 0, info: 0 },
+    by_zone: {},
+    hourly_buckets
+  });
+});
+
+app.get('/api/ml/energy-forecast', (_req, res) => {
+  const now = new Date();
+  const predictions = [];
+  for (let index = 0; index < 12; index += 1) {
+    const timestamp = new Date(now.getTime() + (index * 60 * 60 * 1000));
+    predictions.push({
+      timestamp: timestamp.toISOString(),
+      energy_kwh: 0,
+      confidence_lower: 0,
+      confidence_upper: 0
+    });
+  }
+
+  return res.json({
+    ok: true,
+    data: {
+      predictions,
+      total_daily_kwh: 0,
+      peak_kwh: 0,
+      avg_kwh: 0
+    }
+  });
+});
+
+app.get('/api/ml/insights/forecast/:zone', (_req, res) => {
+  const now = new Date();
+  const predictions = [];
+  for (let index = 0; index < 6; index += 1) {
+    const timestamp = new Date(now.getTime() + (index * 60 * 60 * 1000));
+    predictions.push({
+      timestamp: timestamp.toISOString(),
+      predicted_temp: 22,
+      lower_bound: 21,
+      upper_bound: 23
+    });
+  }
+  return res.json({ ok: true, predictions });
+});
+
+app.get('/api/health/insights', async (_req, res) => {
+  try {
+    const envPath = path.join(FARM_DATA_DIR, 'env.json');
+    if (!fs.existsSync(envPath)) {
+      return res.json({ ok: true, zones: [] });
+    }
+    const raw = await fs.promises.readFile(envPath, 'utf8');
+    const envData = JSON.parse(raw);
+    const zones = Array.isArray(envData?.zones) ? envData.zones : [];
+    const zoneScores = zones.map((zone) => ({
+      zone_id: zone.id,
+      zone_name: zone.name || zone.id,
+      score: 80,
+      grade: 'B',
+      status: 'healthy'
+    }));
+
+    return res.json({
+      ok: true,
+      farm_score: 80,
+      grade: 'B',
+      zones: zoneScores,
+      summary: {
+        total_zones: zoneScores.length,
+        excellent: 0,
+        good: zoneScores.length,
+        fair: 0,
+        poor: 0
+      },
+      insights: [
+        {
+          message: 'Using compatibility health data while full ML pipeline initializes.',
+          source: 'Compatibility Layer',
+          priority: 'low'
+        }
+      ]
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/health/insights fallback failed:', error.message);
+    return res.json({
+      ok: true,
+      farm_score: 0,
+      grade: 'N/A',
+      zones: [],
+      summary: { total_zones: 0, excellent: 0, good: 0, fair: 0, poor: 0 },
+      insights: []
+    });
+  }
+});
+
+app.get('/api/ai/status', (_req, res) => {
+  return res.json({
+    engine: { type: 'rules' },
+    progress: {
+      overall_readiness_pct: 0,
+      decisions: { total: 0, acceptance_rate: 0 },
+      crop_cycles: { total: 0 }
+    },
+    timeline: { days_remaining: 0 },
+    ml: { ready: false }
+  });
+});
+
+app.get('/api/inventory/current', async (_req, res) => {
+  try {
+    const trays = await getInventoryTraysForCompat();
+    const activeTrays = trays.filter((tray) => (tray.status || '').toLowerCase() !== 'harvested');
+    const totalPlants = activeTrays.reduce((sum, tray) => sum + (Number(tray.plantCount) || 0), 0);
+    const farmCount = new Set(activeTrays.map((tray) => String(tray.location || '').split(' - ')[0]).filter(Boolean)).size || 1;
+    const cropSet = new Set(activeTrays.map((tray) => tray.recipe).filter(Boolean));
+
+    return res.json({
+      inventory: trays,
+      byFarm: [{ farmId: 'local-farm', trays }],
+      activeTrays: activeTrays.length,
+      seedlingPlants: 0,
+      totalPlants,
+      farmCount,
+      crops: Array.from(cropSet),
+      summary: { total: trays.length }
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/inventory/current fallback failed:', error.message);
+    return res.json({ inventory: [], byFarm: [{ farmId: 'local-farm', trays: [] }], activeTrays: 0, seedlingPlants: 0, totalPlants: 0, farmCount: 0, crops: [], summary: { total: 0 } });
+  }
+});
+
+app.get('/api/inventory/forecast', async (_req, res) => {
+  try {
+    const trays = await getInventoryTraysForCompat();
+    const buckets = splitForecastBuckets(trays);
+
+    return res.json({
+      forecast: trays,
+      next7Days: { count: buckets.next7Days.length, trays: buckets.next7Days },
+      next14Days: { count: buckets.next14Days.length, trays: buckets.next14Days },
+      next30Days: { count: buckets.next30Days.length, trays: buckets.next30Days },
+      beyond30Days: { count: buckets.beyond30Days.length, trays: buckets.beyond30Days }
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/inventory/forecast fallback failed:', error.message);
+    return res.json({
+      forecast: [],
+      next7Days: { count: 0, trays: [] },
+      next14Days: { count: 0, trays: [] },
+      next30Days: { count: 0, trays: [] },
+      beyond30Days: { count: 0, trays: [] }
+    });
+  }
+});
+
+app.get('/api/tray-formats', async (_req, res) => {
+  try {
+    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
+    const formats = Array.isArray(formatsDoc)
+      ? formatsDoc
+      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+    return res.json(Array.isArray(formats) ? formats : []);
+  } catch (error) {
+    logger.warn('[Compat] /api/tray-formats GET failed:', error.message);
+    return res.json([]);
+  }
+});
+
+app.post('/api/tray-formats', async (req, res) => {
+  try {
+    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
+    const formats = Array.isArray(formatsDoc)
+      ? formatsDoc
+      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+
+    const payload = req.body || {};
+    const trayFormatId = payload.trayFormatId || `fmt-${Date.now()}`;
+    const format = {
+      trayFormatId,
+      name: payload.name || 'Custom Format',
+      plantSiteCount: Number(payload.plantSiteCount || 0),
+      systemType: payload.systemType || null,
+      trayMaterial: payload.trayMaterial || null,
+      description: payload.description || null,
+      isWeightBased: Boolean(payload.isWeightBased),
+      targetWeightPerSite: payload.targetWeightPerSite ?? null,
+      weightUnit: payload.weightUnit || 'oz',
+      isCustom: payload.isCustom !== false
+    };
+
+    formats.push(format);
+    await writeFarmDataJson('tray-formats.json', formats);
+    return res.status(201).json(format);
+  } catch (error) {
+    logger.warn('[Compat] /api/tray-formats POST failed:', error.message);
+    return res.status(500).json({ error: 'Failed to create tray format' });
+  }
+});
+
+app.put('/api/tray-formats/:formatId', async (req, res) => {
+  try {
+    const { formatId } = req.params;
+    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
+    const formats = Array.isArray(formatsDoc)
+      ? formatsDoc
+      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+
+    const index = formats.findIndex((item) => String(item.trayFormatId) === String(formatId));
+    if (index < 0) {
+      return res.status(404).json({ error: 'Format not found' });
+    }
+
+    formats[index] = {
+      ...formats[index],
+      ...(req.body || {}),
+      trayFormatId: formats[index].trayFormatId
+    };
+
+    await writeFarmDataJson('tray-formats.json', formats);
+    return res.json(formats[index]);
+  } catch (error) {
+    logger.warn('[Compat] /api/tray-formats PUT failed:', error.message);
+    return res.status(500).json({ error: 'Failed to update tray format' });
+  }
+});
+
+app.delete('/api/tray-formats/:formatId', async (req, res) => {
+  try {
+    const { formatId } = req.params;
+    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
+    const formats = Array.isArray(formatsDoc)
+      ? formatsDoc
+      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+
+    const nextFormats = formats.filter((item) => String(item.trayFormatId) !== String(formatId));
+    await writeFarmDataJson('tray-formats.json', nextFormats);
+    return res.json({ success: true });
+  } catch (error) {
+    logger.warn('[Compat] /api/tray-formats DELETE failed:', error.message);
+    return res.status(500).json({ error: 'Failed to delete tray format' });
+  }
+});
+
+app.get('/api/trays', async (_req, res) => {
+  try {
+    const traysDoc = await readDataJsonWithFallback('trays.json', []);
+    const trays = Array.isArray(traysDoc) ? traysDoc : (traysDoc?.trays || []);
+    return res.json(Array.isArray(trays) ? trays : []);
+  } catch (error) {
+    logger.warn('[Compat] /api/trays GET failed:', error.message);
+    return res.json([]);
+  }
+});
+
+app.post('/api/trays/register', async (req, res) => {
+  try {
+    const traysDoc = await readDataJsonWithFallback('trays.json', []);
+    const trays = Array.isArray(traysDoc) ? traysDoc : (traysDoc?.trays || []);
+    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
+    const formats = Array.isArray(formatsDoc)
+      ? formatsDoc
+      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+
+    const payload = req.body || {};
+    const selectedFormat = formats.find((format) => String(format.trayFormatId) === String(payload.trayFormatId));
+
+    const tray = {
+      trayId: payload.trayId || `tray-${Date.now()}`,
+      qrCode: payload.qrCodeValue || payload.qrCode || null,
+      trayFormatId: payload.trayFormatId || null,
+      formatName: selectedFormat?.name || 'Unknown',
+      plantSiteCount: selectedFormat?.plantSiteCount || 0,
+      forecastedYield: selectedFormat?.targetWeightPerSite || 0,
+      status: 'available',
+      currentLocation: payload.currentLocation || null,
+      createdAt: new Date().toISOString()
+    };
+
+    trays.push(tray);
+    await writeFarmDataJson('trays.json', trays);
+    return res.status(201).json({ success: true, tray });
+  } catch (error) {
+    logger.warn('[Compat] /api/trays/register POST failed:', error.message);
+    return res.status(500).json({ error: 'Failed to register tray' });
+  }
+});
+
+app.get('/data/nutrient-dashboard', async (_req, res) => {
+  const payload = await readDataJsonWithFallback('nutrient-dashboard.json', {});
+  return res.json(payload);
+});
+
+app.get('/data/equipment-metadata', async (_req, res) => {
+  const payload = await readDataJsonWithFallback('equipment-metadata.json', {});
+  return res.json(payload);
+});
+
+app.get('/data/room-map.json', async (_req, res) => {
+  const payload = await readDataJsonWithFallback('room-map.json', { zones: [], devices: [] });
+  return res.json(payload);
+});
+
+app.get('/data/room-map-:roomId.json', async (req, res) => {
+  const roomId = String(req.params.roomId || '').trim();
+  const roomSpecificName = roomId ? `room-map-${roomId}.json` : 'room-map.json';
+  const roomSpecific = await readDataJsonWithFallback(roomSpecificName, null);
+  if (roomSpecific) {
+    return res.json(roomSpecific);
+  }
+
+  const generic = await readDataJsonWithFallback('room-map.json', { zones: [], devices: [] });
+  return res.json(generic);
+});
+
+app.get('/api/weather', (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(400).json({ ok: false, error: 'lat and lng are required' });
+  }
+
+  return res.json({
+    ok: true,
+    current: {
+      temperature_c: 22,
+      temperature_f: 72,
+      humidity: 55,
+      description: 'Clear'
+    }
+  });
+});
+
+app.get('/configuration', async (_req, res) => {
+  try {
+    const configPath = path.join(FARM_DATA_DIR, 'configuration.json');
+    if (!fs.existsSync(configPath)) {
+      return res.json({
+        network: { httpPort: '8080', wsPort: '8081' },
+        integrations: {},
+        notifications: {}
+      });
+    }
+    const raw = await fs.promises.readFile(configPath, 'utf8');
+    return res.json(JSON.parse(raw));
+  } catch (error) {
+    logger.warn('[Compat] /configuration read failed:', error.message);
+    return res.json({ network: {}, integrations: {}, notifications: {} });
+  }
+});
+
+app.get('/api/farm/configuration', async (_req, res) => {
+  try {
+    const configPath = path.join(FARM_DATA_DIR, 'configuration.json');
+    if (!fs.existsSync(configPath)) {
+      return res.json({
+        network: { httpPort: '8080', wsPort: '8081' },
+        integrations: {},
+        notifications: {}
+      });
+    }
+    const raw = await fs.promises.readFile(configPath, 'utf8');
+    return res.json(JSON.parse(raw));
+  } catch (error) {
+    logger.warn('[Compat] /api/farm/configuration read failed:', error.message);
+    return res.json({ network: {}, integrations: {}, notifications: {} });
+  }
+});
+
+app.post('/api/farm/configuration', async (req, res) => {
+  try {
+    const configPath = path.join(FARM_DATA_DIR, 'configuration.json');
+    await fs.promises.writeFile(configPath, JSON.stringify(req.body || {}, null, 2), 'utf8');
+    return res.json({ success: true });
+  } catch (error) {
+    logger.warn('[Compat] /api/farm/configuration write failed:', error.message);
+    return res.status(500).json({ success: false, error: 'Failed to save configuration' });
+  }
+});
+
+app.get('/devices', async (_req, res) => {
+  try {
+    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
+    if (!fs.existsSync(devicesPath)) {
+      return res.json({ devices: [] });
+    }
+
+    const raw = await fs.promises.readFile(devicesPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const devices = parsed?.devices || parsed?.iot_devices || parsed || [];
+    return res.json({ devices: Array.isArray(devices) ? devices : [] });
+  } catch (error) {
+    logger.warn('[Compat] /devices fallback failed:', error.message);
+    return res.json({ devices: [] });
+  }
+});
+
+app.post('/devices', async (req, res) => {
+  try {
+    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
+    let current = { devices: [] };
+    if (fs.existsSync(devicesPath)) {
+      const raw = await fs.promises.readFile(devicesPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      current = Array.isArray(parsed) ? { devices: parsed } : (parsed || { devices: [] });
+      if (!Array.isArray(current.devices)) current.devices = [];
+    }
+
+    const payload = req.body || {};
+    const nextDevice = {
+      ...payload,
+      id: payload.id || payload.deviceId || payload.device_id || `device-${Date.now()}`
+    };
+    current.devices.push(nextDevice);
+    await fs.promises.writeFile(devicesPath, JSON.stringify(current, null, 2), 'utf8');
+    return res.status(201).json({ success: true, device: nextDevice });
+  } catch (error) {
+    logger.warn('[Compat] POST /devices failed:', error.message);
+    return res.status(500).json({ success: false, error: 'Failed to save device' });
+  }
+});
+
+app.patch('/devices/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
+    if (!fs.existsSync(devicesPath)) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+
+    const raw = await fs.promises.readFile(devicesPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const payload = Array.isArray(parsed) ? { devices: parsed } : (parsed || { devices: [] });
+    const devices = Array.isArray(payload.devices) ? payload.devices : [];
+
+    const index = devices.findIndex((item) => String(item.id || item.deviceId || item.device_id) === String(deviceId));
+    if (index < 0) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+
+    devices[index] = { ...devices[index], ...(req.body || {}) };
+    payload.devices = devices;
+    await fs.promises.writeFile(devicesPath, JSON.stringify(payload, null, 2), 'utf8');
+    return res.json({ success: true, device: devices[index] });
+  } catch (error) {
+    logger.warn('[Compat] PATCH /devices/:deviceId failed:', error.message);
+    return res.status(500).json({ error: 'Failed to update device' });
+  }
+});
+
+// Compatibility endpoints expected by legacy farm/admin pages
+app.get('/api/groups', async (_req, res) => {
+  try {
+    const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
+    if (!fs.existsSync(groupsPath)) return res.json([]);
+
+    const raw = await fs.promises.readFile(groupsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const groups = Array.isArray(parsed) ? parsed : (parsed?.groups || []);
+
+    const formatted = groups.map((group) => ({
+      id: group.id || group.name,
+      name: group.name,
+      zone: group.zone,
+      crop: group.crop || group.recipe,
+      plan: group.plan,
+      trays: Number(group.trays || 0),
+      plants: Number(group.plants || 0),
+      devices: Array.isArray(group.devices) ? group.devices.length : 0
+    }));
+
+    return res.json(formatted);
+  } catch (error) {
+    logger.warn('[Compat] /api/groups fallback failed:', error.message);
+    return res.json([]);
+  }
+});
+
+app.get('/api/rooms', async (req, res) => {
+  try {
+    if (req.db) {
+      try {
+        const result = await req.db.query(
+          `SELECT room_id, farm_id, name, type, capacity, description, created_at
+           FROM rooms
+           ORDER BY created_at ASC`
+        );
+        return res.json(result.rows);
+      } catch (dbError) {
+        logger.debug('[Compat] /api/rooms DB query failed, using file fallback', { error: dbError.message });
+      }
+    }
+
+    const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
+    if (!fs.existsSync(roomsPath)) return res.json([]);
+
+    const raw = await fs.promises.readFile(roomsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const rooms = Array.isArray(parsed) ? parsed : (parsed?.rooms || [parsed]);
+    return res.json(Array.isArray(rooms) ? rooms : []);
+  } catch (error) {
+    logger.warn('[Compat] /api/rooms fallback failed:', error.message);
+    return res.json([]);
+  }
+});
+
+app.get('/api/wholesale/inventory', (_req, res) => {
+  return res.json({ lots: [] });
+});
+
 // API routes
 app.use('/api/auth', authRoutes); // Farm authentication
 app.use('/api/farms', farmRoutes);
@@ -540,6 +1417,7 @@ app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge 
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
 app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
+app.use('/api/planting', plantingRoutes); // Planting scheduler recommendations
 if (grantWizardRoutes) app.use('/api/grant-wizard', grantWizardRoutes); // Grant wizard (env-gated)
 
 // Root route - redirect to main landing page
@@ -553,6 +1431,18 @@ app.get('/farm-summary.html', (req, res) => {
 
 app.get('/admin.html', (req, res) => {
   res.redirect('/farm-admin.html');
+});
+
+app.get('/LE-farm-admin.html', (_req, res) => {
+  res.redirect('/farm-admin.html');
+});
+
+app.get('/LE-dashboard.html', (_req, res) => {
+  res.redirect('/LE-dashboard-consolidated.html');
+});
+
+app.get('/farm-vitality.html', (_req, res) => {
+  res.redirect('/views/farm-summary.html');
 });
 
 // 404 handler
