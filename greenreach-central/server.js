@@ -32,6 +32,7 @@ import billingRoutes from './routes/billing.js';
 import procurementAdminRoutes from './routes/procurement-admin.js';
 import remoteSupportRoutes from './routes/remote-support.js';
 import plantingRoutes from './routes/planting.js';
+import planningRoutes from './routes/planning.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
@@ -1418,6 +1419,7 @@ app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
 app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
 app.use('/api/planting', plantingRoutes); // Planting scheduler recommendations
+app.use('/api/planning', planningRoutes); // Production planning stubs (farm-admin.html)
 if (grantWizardRoutes) app.use('/api/grant-wizard', grantWizardRoutes); // Grant wizard (env-gated)
 
 // Root route - redirect to main landing page
