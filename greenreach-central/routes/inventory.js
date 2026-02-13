@@ -5,8 +5,14 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const router = express.Router();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
 
@@ -52,6 +58,35 @@ async function loadFarmGroups(farmId) {
     } catch (error) {
       console.warn('[Inventory] farm_backups lookup failed:', error.message);
     }
+
+    try {
+      const result = await query(
+        `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups' ORDER BY updated_at DESC LIMIT 1`,
+        [farmId]
+      );
+
+      if (result.rows.length > 0) {
+        const raw = result.rows[0].data;
+        const groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+        if (Array.isArray(groups) && groups.length > 0) {
+          return groups;
+        }
+      }
+    } catch (error) {
+      console.warn('[Inventory] farm_data groups lookup failed:', error.message);
+    }
+  }
+
+  try {
+    const groupsPath = path.join(__dirname, '..', 'public', 'data', 'groups.json');
+    const raw = await fs.readFile(groupsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const groups = Array.isArray(parsed) ? parsed : (parsed?.groups || []);
+    if (Array.isArray(groups)) {
+      return groups;
+    }
+  } catch (error) {
+    console.warn('[Inventory] groups.json fallback failed:', error.message);
   }
 
   return [];
