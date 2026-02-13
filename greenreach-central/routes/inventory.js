@@ -53,7 +53,7 @@ async function loadFarmGroups(farmId) {
         [farmId]
       );
 
-      if (result.rows.length > 0 && Array.isArray(result.rows[0].groups)) {
+      if (result.rows.length > 0 && Array.isArray(result.rows[0].groups) && result.rows[0].groups.length > 0) {
         return result.rows[0].groups;
       }
     } catch (error) {
