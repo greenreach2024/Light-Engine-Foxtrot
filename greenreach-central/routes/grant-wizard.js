@@ -1523,8 +1523,8 @@ router.get('/applications', authenticateGrantUser, async (req, res) => {
   try {
     const pool = getPool(req);
     const result = await pool.query(`
-      SELECT a.id, a.status, a.wizard_step, a.percent_complete, a.started_at,
-             a.last_saved_at, a.expires_at, a.outcome,
+          SELECT a.id, a.program_id, a.status, a.wizard_step, a.percent_complete, a.started_at,
+            a.last_saved_at, a.expires_at, a.outcome, a.answers,
              p.program_name, p.program_code, p.administering_agency, p.intake_deadline
       FROM grant_applications a
       LEFT JOIN grant_programs p ON a.program_id = p.id
@@ -1548,7 +1548,7 @@ router.get('/applications/:id', authenticateGrantUser, async (req, res) => {
     const result = await pool.query(`
       SELECT a.*, p.program_name, p.program_code, p.question_map,
              p.priority_lexicon, p.evidence_snippets, p.required_documents,
-             p.budget_template_url, p.has_fillable_pdf, p.pdf_template_url
+             p.budget_template_url, p.budget_categories, p.has_fillable_pdf, p.pdf_template_url
       FROM grant_applications a
       LEFT JOIN grant_programs p ON a.program_id = p.id
       WHERE a.id = $1 AND a.user_id = $2
@@ -1946,11 +1946,11 @@ router.get('/applications/:id/export/pdf', authenticateGrantUser, async (req, re
       };
 
       Object.entries(app.answers).forEach(([key, value], index) => {
-        if (!value) return;
+        if (!value || typeof value !== 'string') return;
         if (doc.y > 650) doc.addPage();
         
         doc.fontSize(12).font('Helvetica-Bold').text(answerLabels[key] || `Question: ${key}`);
-        doc.fontSize(10).font('Helvetica').text(value, { width: 468 });
+        doc.fontSize(10).font('Helvetica').text(String(value), { width: 468 });
         doc.moveDown(1.5);
       });
     }
@@ -2072,7 +2072,7 @@ router.get('/applications/:id/export/pdf', authenticateGrantUser, async (req, re
       doc.moveDown(1);
 
       supportLetters.forEach((lt, i) => {
-        const statusLabel = lt.status === 'received' ? '✓ Received' : lt.status === 'requested' ? '⏳ Requested' : '○ Draft';
+        const statusLabel = lt.status === 'received' ? 'Received' : lt.status === 'requested' ? 'Requested' : 'Draft';
         doc.fontSize(11).font('Helvetica-Bold').text(`${i + 1}. ${lt.contactName || 'Unnamed'}  [${statusLabel}]`);
         doc.fontSize(10).font('Helvetica');
         if (lt.organization) doc.text(`Organization/Role: ${lt.organization}`);
