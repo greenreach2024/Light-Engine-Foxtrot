@@ -200,6 +200,31 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_farm_data_updated ON farm_data(updated_at);
   `);
 
+  // Create planting_assignments table for crop selection persistence
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS planting_assignments (
+      id SERIAL PRIMARY KEY,
+      farm_id VARCHAR(255) NOT NULL,
+      group_id VARCHAR(255) NOT NULL,
+      tray_id VARCHAR(255),
+      crop_id VARCHAR(255) NOT NULL,
+      crop_name VARCHAR(255) NOT NULL,
+      seed_date DATE NOT NULL,
+      harvest_date DATE,
+      status VARCHAR(50) DEFAULT 'planned',
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE,
+      UNIQUE(farm_id, group_id)
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_planting_farm_id ON planting_assignments(farm_id);
+    CREATE INDEX IF NOT EXISTS idx_planting_group_id ON planting_assignments(group_id);
+    CREATE INDEX IF NOT EXISTS idx_planting_seed_date ON planting_assignments(seed_date);
+    CREATE INDEX IF NOT EXISTS idx_planting_status ON planting_assignments(status);
+  `);
+
   // Create products table for inventory sync
   await client.query(`
     CREATE TABLE IF NOT EXISTS products (
@@ -498,6 +523,44 @@ async function runMigrations(client) {
       logger.info('Milestones & support letters columns ready (migration 014)');
     } catch (err) {
       logger.warn('Milestones migration warning:', err.message);
+    }
+
+    // Migration 015: Program budget guidance categories
+    try {
+      await client.query(`
+        ALTER TABLE grant_programs ADD COLUMN IF NOT EXISTS budget_categories JSONB DEFAULT '[]';
+      `);
+      logger.info('Grant program budget categories ready (migration 015)');
+    } catch (err) {
+      logger.warn('Grant budget category migration warning:', err.message);
+    }
+
+    // Migration 016: Program verification + change alerts + snapshot confidence
+    try {
+      await client.query(`
+        ALTER TABLE grant_programs ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+        ALTER TABLE grant_programs ADD COLUMN IF NOT EXISTS verified_by VARCHAR(255);
+        ALTER TABLE grant_programs ADD COLUMN IF NOT EXISTS needs_review BOOLEAN DEFAULT FALSE;
+
+        ALTER TABLE grant_program_snapshots ADD COLUMN IF NOT EXISTS scraping_confidence VARCHAR(20) DEFAULT 'medium';
+
+        CREATE TABLE IF NOT EXISTS grant_program_change_alerts (
+          id SERIAL PRIMARY KEY,
+          program_id INTEGER REFERENCES grant_programs(id),
+          change_type VARCHAR(50),
+          details JSONB DEFAULT '{}',
+          acknowledged BOOLEAN DEFAULT FALSE,
+          acknowledged_by VARCHAR(255),
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_grant_program_change_alerts_program ON grant_program_change_alerts(program_id);
+        CREATE INDEX IF NOT EXISTS idx_grant_program_change_alerts_ack ON grant_program_change_alerts(acknowledged);
+        CREATE INDEX IF NOT EXISTS idx_grant_program_change_alerts_created ON grant_program_change_alerts(created_at);
+      `);
+      logger.info('Grant verification + alerting ready (migration 016)');
+    } catch (err) {
+      logger.warn('Grant verification migration warning:', err.message);
     }
   }
 
