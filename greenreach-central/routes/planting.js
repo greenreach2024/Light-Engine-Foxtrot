@@ -6,6 +6,8 @@ import validator from 'validator';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { requireAuth, checkFarmOwnership } from '../middleware/auth.js';
 import logger from '../utils/logger.js';
+import { getMarketData } from './market-intelligence.js';
+import { getCropPricing } from './crop-pricing.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -328,11 +330,15 @@ router.get('/recipes', async (req, res) => {
   });
 });
 
-/** POST /api/planting/recommendations — ranked crop recommendations using all 50 recipes + pricing + seasonal */
+/** POST /api/planting/recommendations — ranked crop recommendations using all 50 recipes + pricing + seasonal + market intelligence */
 router.post('/recommendations', async (req, res) => {
   await loadAllProfiles();
   try {
-    const { groupId, currentCrop, availableCrops, excludeCrops, targetSeedDate, zoneConditions, farmDiversity } = req.body || {};
+    const { 
+      groupId, currentCrop, availableCrops, excludeCrops, excludeCategories, excludeClasses,
+      targetSeedDate, zoneConditions, farmDiversity 
+    } = req.body || {};
+    
     if (!groupId) return res.status(400).json({ error: 'groupId is required' });
 
     const context = {
@@ -350,11 +356,25 @@ router.post('/recommendations', async (req, res) => {
     }
     if (!pool || !pool.length) pool = Object.values(RECIPE_PROFILES);
     
-    // Exclude crops if requested (for "Remix Recommendations" feature)
+    // Exclude specific crops (for "Remix Recommendations" feature)
     if (Array.isArray(excludeCrops) && excludeCrops.length) {
       const excludeIds = excludeCrops.map(c => matchRecipeId(c)).filter(Boolean);
       pool = pool.filter(profile => !excludeIds.includes(profile.cropId));
-      logger.info(`[Planting] Excluded ${excludeIds.length} crops from recommendations pool`);
+      logger.info(`[Planting] Excluded ${excludeIds.length} specific crops from recommendations pool`);
+    }
+    
+    // Exclude by category (e.g., exclude all "Herbs")
+    if (Array.isArray(excludeCategories) && excludeCategories.length) {
+      const excludeCats = excludeCategories.map(c => c.toLowerCase());
+      pool = pool.filter(profile => !excludeCats.includes(profile.category.toLowerCase()));
+      logger.info(`[Planting] Excluded categories: ${excludeCategories.join(', ')}`);
+    }
+    
+    // Exclude by crop class (e.g., exclude all "fruiting" crops)
+    if (Array.isArray(excludeClasses) && excludeClasses.length) {
+      const excludeClassNames = excludeClasses.map(c => c.toLowerCase());
+      pool = pool.filter(profile => !excludeClassNames.includes(profile.cropClass.toLowerCase()));
+      logger.info(`[Planting] Excluded crop classes: ${excludeClasses.join(', ')}`);
     }
 
     const currentId = matchRecipeId(currentCrop);
@@ -380,12 +400,90 @@ router.post('/recommendations', async (req, res) => {
       }
     }
 
+    // Fetch market intelligence data for price anomaly justifications
+    const marketData = getMarketData();
+    
     const allScored = pool.map(profile => {
       const scores = computeRecommendation(profile, context, currentProfile, diversityContext);
       const isCurrent = profile.cropId === currentId;
 
       const harvestDate = new Date(seedDate);
       harvestDate.setDate(harvestDate.getDate() + profile.durationDays);
+
+      // Generate AI justification notes based on scoring factors
+      const justifications = [];
+      
+      // Market intelligence justifications
+      const cropNameLower = profile.recipeName.toLowerCase();
+      for (const [product, data] of Object.entries(marketData)) {
+        const productLower = product.toLowerCase();
+        // Match crop to market data (fuzzy matching)
+        if (cropNameLower.includes(productLower) || productLower.includes(cropNameLower.split(' ')[0])) {
+          const absChange = Math.abs(data.trendPercent);
+          if (data.trend === 'increasing' && absChange >= 7) {
+            justifications.push({
+              type: 'market_opportunity',
+              severity: 'high',
+              message: `${product} prices up ${data.trendPercent}% due to supply constraints. Strong market opportunity.`,
+              source: data.articles[0]?.source || 'Market Analysis',
+              confidence: data.articles.length > 0 ? 'high' : 'medium'
+            });
+          } else if (data.trend === 'decreasing' && absChange >= 10) {
+            justifications.push({
+              type: 'market_caution',
+              severity: 'medium',
+              message: `${product} prices down ${Math.abs(data.trendPercent)}% due to regional oversupply. Consider alternatives or plan for volume sales.`,
+              source: 'Market Analysis',
+              confidence: 'medium'
+            });
+          }
+        }
+      }
+      
+      // Diversity justifications
+      if (scores.diversityScore < 80) {
+        justifications.push({
+          type: 'diversity_concern',
+          severity: 'medium',
+          message: 'This crop is already well-represented on your farm. Consider diversifying into other categories.',
+          source: 'Farm Diversity Analysis'
+        });
+      }
+      
+      // Rotation bonus justifications
+      if (scores.rotationBonus >= 15) {
+        justifications.push({
+          type: 'rotation_benefit',
+          severity: 'low',
+          message: `Excellent crop rotation: switching from ${currentProfile?.cropClass || 'current'} to ${profile.cropClass} class. Reduces pest pressure and nutrient depletion.`,
+          source: 'Crop Rotation Strategy'
+        });
+      } else if (scores.rotationBonus >= 8) {
+        justifications.push({
+          type: 'rotation_benefit',
+          severity: 'low',
+          message: 'Good crop rotation: switching to a different crop family helps maintain soil health.',
+          source: 'Crop Rotation Strategy'
+        });
+      }
+      
+      // Seasonal justifications
+      const seasonal = seasonalMultiplier(profile.category);
+      if (seasonal >= 1.3) {
+        justifications.push({
+          type: 'seasonal_advantage',
+          severity: 'low',
+          message: 'In-season crop: optimal growing conditions and consumer demand.',
+          source: 'Seasonal Analysis'
+        });
+      } else if (seasonal <= 0.7) {
+        justifications.push({
+          type: 'seasonal_caution',
+          severity: 'low',
+          message: 'Off-season crop: may require additional resources or have lower demand.',
+          source: 'Seasonal Analysis'
+        });
+      }
 
       return {
         cropId: profile.cropId,
@@ -395,6 +493,7 @@ router.post('/recommendations', async (req, res) => {
         durationDays: profile.durationDays,
         expectedHarvestDate: toIsoDate(harvestDate),
         isCurrent,
+        justifications, // NEW: AI-generated reasoning for this recommendation
         scores: {
           nutrient_fit:     scores.nutrientFit,
           light_efficiency: scores.lightEfficiency,
