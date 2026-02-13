@@ -1,102 +1,12 @@
 {
-  "equipment": [
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 746 480V",
-      "capacity": "730 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-capacity", "480V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 506 208/230V",
-      "capacity": "500 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-capacity", "208-230V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 506 277V",
-      "capacity": "500 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-capacity", "277V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 335 277V",
-      "capacity": "345 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "277V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 335 208/230V",
-      "capacity": "345 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "208-230V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 225 208/230V",
-      "capacity": "225 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "208-230V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 205",
-      "capacity": "200 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "110-120V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest Hi-E Dry 195",
-      "capacity": "195 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "portable", "115V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 155",
-      "capacity": "155 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "110-120V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest Hi-E Dry 140",
-      "capacity": "135 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "portable", "110-120V"]
-    },
-    {
-      "category": "dehumidifier",
-      "vendor": "Quest",
-      "model": "Quest 100",
-      "capacity": "100 PPD",
-      "control": "Manual",
-      "tags": ["dehumidification", "high-efficiency", "110-120V"]
-    }
-  ],
+  "equipment": [],
   "categories": [
     "Lighting",
     "HVAC",
     "Irrigation",
     "Sensors",
-    "Controllers",
-    "Dehumidifiers"
+    "Controllers"
   ],
-  "lastUpdated": "2026-02-04T00:00:00Z",
-  "version": "1.1.0"
+  "lastUpdated": null,
+  "version": "1.0.0"
 }

@@ -1,4 +1,83 @@
 {
-  "reservations": [],
-  "updated_at": "2026-02-11T04:05:43.729Z"
+  "reservations": [
+    {
+      "order_id": "test-order-1766238761",
+      "sku_id": "SKU-MEI-QING-PAK-CHOI-5LB",
+      "quantity": 1,
+      "reserved_at": "2025-12-20T13:52:41.089Z"
+    },
+    {
+      "order_id": "GRC-ORDER-1766239029",
+      "sku_id": "SKU-LACINATO-KALE-5LB",
+      "quantity": 1,
+      "reserved_at": "2025-12-20T13:57:09.806Z"
+    },
+    {
+      "order_id": "TEST-001",
+      "sku_id": "basil-sweet",
+      "quantity": 1,
+      "reserved_at": "2025-12-20T23:16:04.706Z"
+    },
+    {
+      "reservation_id": "RES-E2E-ORDER-1766947345770-E2E-TOMATO-001",
+      "order_id": "E2E-ORDER-1766947345770",
+      "farm_id": "TEST-FARM-E2E",
+      "sku_id": "E2E-TOMATO-001",
+      "quantity": 5,
+      "status": "active",
+      "created_at": "2025-12-28T18:42:25.772Z",
+      "expires_at": "2025-12-29T18:42:25.772Z"
+    },
+    {
+      "reservation_id": "RES-E2E-ORDER-1766947345770-E2E-LETTUCE-001",
+      "order_id": "E2E-ORDER-1766947345770",
+      "farm_id": "TEST-FARM-E2E",
+      "sku_id": "E2E-LETTUCE-001",
+      "quantity": 10,
+      "status": "active",
+      "created_at": "2025-12-28T18:42:25.772Z",
+      "expires_at": "2025-12-29T18:42:25.772Z"
+    },
+    {
+      "reservation_id": "RES-E2E-ORDER-1766947345770-E2E-EGGS-001",
+      "order_id": "E2E-ORDER-1766947345770",
+      "farm_id": "TEST-FARM-E2E",
+      "sku_id": "E2E-EGGS-001",
+      "quantity": 4,
+      "status": "active",
+      "created_at": "2025-12-28T18:42:25.772Z",
+      "expires_at": "2025-12-29T18:42:25.772Z"
+    },
+    {
+      "reservation_id": "RES-E2E-ORDER-1766947349546-E2E-TOMATO-001",
+      "order_id": "E2E-ORDER-1766947349546",
+      "farm_id": "TEST-FARM-E2E",
+      "sku_id": "E2E-TOMATO-001",
+      "quantity": 5,
+      "status": "active",
+      "created_at": "2025-12-28T18:42:29.546Z",
+      "expires_at": "2025-12-29T18:42:29.546Z"
+    },
+    {
+      "reservation_id": "RES-E2E-ORDER-1766947349546-E2E-LETTUCE-001",
+      "order_id": "E2E-ORDER-1766947349546",
+      "farm_id": "TEST-FARM-E2E",
+      "sku_id": "E2E-LETTUCE-001",
+      "quantity": 10,
+      "status": "active",
+      "created_at": "2025-12-28T18:42:29.546Z",
+      "expires_at": "2025-12-29T18:42:29.546Z"
+    },
+    {
+      "reservation_id": "RES-E2E-ORDER-1766947349546-E2E-EGGS-001",
+      "order_id": "E2E-ORDER-1766947349546",
+      "farm_id": "TEST-FARM-E2E",
+      "sku_id": "E2E-EGGS-001",
+      "quantity": 4,
+      "status": "active",
+      "created_at": "2025-12-28T18:42:29.546Z",
+      "expires_at": "2025-12-29T18:42:29.546Z"
+    }
+  ],
+  "updated_at": "2025-12-20T23:16:04.706Z"
 }
