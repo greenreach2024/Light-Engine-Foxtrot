@@ -43,19 +43,19 @@ router.post('/login', async (req, res) => {
   try {
     const { farm_id, email, password } = req.body;
 
-    if (!email || !password) {
+    if (!password) {
       return res.status(400).json({ 
         success: false,
         error: 'Missing credentials',
-        message: 'Email and password are required' 
+        message: 'Farm ID and password are required' 
       });
     }
 
     // Fallback credentials for non-database mode
     const FALLBACK_FARM = {
-      farm_id: farm_id || 'FARM-MKLOMAT3-A9D8',
-      email: 'shelbygilbert@rogers.com',
-      password: 'ReTerminal2026!', // Plain text for comparison
+      farm_id: farm_id || 'FARM-TEST-WIZARD-001',
+      email: email || 'shelbygilbert@rogers.com',
+      password: 'Grow123',
       name: 'Peter Gilbert',
       role: FARM_ROLES.ADMIN
     };
