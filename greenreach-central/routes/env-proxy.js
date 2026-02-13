@@ -26,6 +26,17 @@ function resolveDefaultFarmId() {
   }
 }
 
+function loadLocalEnvData() {
+  try {
+    const envPath = path.join(__dirname, '..', 'public', 'data', 'env.json');
+    if (!fs.existsSync(envPath)) return null;
+    const raw = fs.readFileSync(envPath, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /env
  * Proxy environmental data from Edge device
@@ -71,6 +82,19 @@ router.get('/', async (req, res, next) => {
     
     // Validate farm has endpoint
     if (!targetFarm.endpoint) {
+      const localData = loadLocalEnvData();
+      if (localData) {
+        return res.json({
+          ...localData,
+          _proxy: {
+            farmId: targetFarm.farm_id || targetFarm.id,
+            farmName: targetFarm.name,
+            source: 'local-env-fallback',
+            proxiedAt: new Date().toISOString()
+          }
+        });
+      }
+
       return res.status(500).json({
         error: 'Farm endpoint not configured',
         message: `Farm ${targetFarm.farm_id || targetFarm.id} does not have an endpoint URL`,
@@ -92,6 +116,19 @@ router.get('/', async (req, res, next) => {
     
     if (!response.ok) {
       logger.error(`[ENV Proxy] Farm ${targetFarm.farm_id || targetFarm.id} returned ${response.status}`);
+      const localData = loadLocalEnvData();
+      if (localData) {
+        return res.json({
+          ...localData,
+          _proxy: {
+            farmId: targetFarm.farm_id || targetFarm.id,
+            farmName: targetFarm.name,
+            source: 'local-env-fallback',
+            proxiedAt: new Date().toISOString()
+          }
+        });
+      }
+
       return res.status(502).json({
         error: 'Farm request failed',
         message: `Farm endpoint returned ${response.status}`,
@@ -114,6 +151,17 @@ router.get('/', async (req, res, next) => {
   } catch (error) {
     if (error.name === 'AbortError') {
       logger.error('[ENV Proxy] Request timeout');
+      const localData = loadLocalEnvData();
+      if (localData) {
+        return res.json({
+          ...localData,
+          _proxy: {
+            source: 'local-env-fallback',
+            proxiedAt: new Date().toISOString()
+          }
+        });
+      }
+
       return res.status(504).json({
         error: 'Gateway timeout',
         message: 'Farm endpoint did not respond in time',
