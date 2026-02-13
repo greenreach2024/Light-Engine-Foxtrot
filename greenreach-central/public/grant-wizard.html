@@ -2281,12 +2281,35 @@
               <p>Your responses formatted in program question order, ready for copy/paste into the official portal.</p>
             </div>
             <div class="export-card">
-              <h4>Budget Summary</h4>
-              <p>Itemized budget with category totals and alignment to project activities.</p>
-            </div>
-            <div class="export-card">
-              <h4>Milestones</h4>
-              <p>Project phases with timelines, deliverables, and per-milestone budgets.</p>
+              <h4 style="margin-bottom:12px;">Budget & Milestones Cross-Reference</h4>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                <div>
+                  <div style="font-size:13px; font-weight:700; text-transform:uppercase; color:var(--text-light); margin-bottom:8px; letter-spacing:0.5px;">Budget Items</div>
+                  ${((currentApp.budget?.items || []).length > 0) ? (currentApp.budget.items || []).map((item, i) => `
+                    <div style="padding:8px 10px; background:var(--bg); border-radius:8px; margin-bottom:6px; font-size:13px;">
+                      <div style="display:flex; justify-content:space-between;">
+                        <span style="font-weight:600;">${escapeHtml(item.description || 'Item ' + (i+1))}</span>
+                        <span style="font-weight:700;">$${(parseFloat(item.amount) || 0).toLocaleString()}</span>
+                      </div>
+                      ${item.category ? '<div style="font-size:11px; color:var(--text-light); margin-top:2px;">' + escapeHtml(item.category) + '</div>' : ''}
+                    </div>
+                  `).join('') : '<div style="font-size:13px; color:var(--text-light); padding:8px;">No budget items entered.</div>'}
+                  <div style="padding:8px 10px; font-size:14px; font-weight:700; border-top:2px solid var(--border); margin-top:4px;">Total: $${((currentApp.budget?.items || []).reduce((s,i) => s + (parseFloat(i.amount)||0), 0)).toLocaleString()}</div>
+                </div>
+                <div>
+                  <div style="font-size:13px; font-weight:700; text-transform:uppercase; color:var(--text-light); margin-bottom:8px; letter-spacing:0.5px;">Milestones</div>
+                  ${((currentApp.milestones || []).length > 0) ? (currentApp.milestones || []).map((ms, i) => `
+                    <div style="padding:8px 10px; background:var(--bg); border-radius:8px; margin-bottom:6px; font-size:13px;">
+                      <div style="display:flex; justify-content:space-between;">
+                        <span style="font-weight:600;">${escapeHtml(ms.title || 'Milestone ' + (i+1))}</span>
+                        ${ms.budgetAmount ? '<span style="font-weight:700;">$' + (parseFloat(ms.budgetAmount)||0).toLocaleString() + '</span>' : ''}
+                      </div>
+                      ${(ms.startDate || ms.endDate) ? '<div style="font-size:11px; color:var(--text-light); margin-top:2px;">' + (ms.startDate||'?') + ' — ' + (ms.endDate||'?') + '</div>' : ''}
+                    </div>
+                  `).join('') : '<div style="font-size:13px; color:var(--text-light); padding:8px;">No milestones entered.</div>'}
+                  <div style="padding:8px 10px; font-size:14px; font-weight:700; border-top:2px solid var(--border); margin-top:4px;">Total: $${((currentApp.milestones || []).reduce((s,m) => s + (parseFloat(m.budgetAmount)||0), 0)).toLocaleString()}</div>
+                </div>
+              </div>
             </div>
             <div class="export-card">
               <h4>Documents Checklist</h4>
@@ -3448,18 +3471,56 @@
       } catch (e) { console.error('Export error:', e); }
     }
 
-    async function recordOutcome() {
-      const outcome = prompt('What was the result? (awarded / rejected / withdrawn / no_response)');
-      if (!outcome || !['awarded','rejected','withdrawn','no_response'].includes(outcome)) return;
-      const amount = outcome === 'awarded' ? prompt('Award amount ($):') : null;
+    function recordOutcome() {
+      if (!currentApp || !authToken) return;
+      const overlay = document.getElementById('stackingOverlay');
+      const modal = overlay.querySelector('.stacking-modal');
+      modal.innerHTML = `
+        <h3 style="font-size:18px; font-weight:700; margin-bottom:8px;">Record Application Outcome</h3>
+        <p style="font-size:14px; color:var(--text-light); margin-bottom:20px;">What was the result of this application?</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+          <button class="btn" onclick="submitOutcome('awarded')" style="padding:16px; border:2px solid var(--border); border-radius:12px; background:#fff; cursor:pointer; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:var(--success); margin-bottom:4px;">Awarded</div>
+            <div style="font-size:12px; color:var(--text-light);">Funding approved</div>
+          </button>
+          <button class="btn" onclick="submitOutcome('rejected')" style="padding:16px; border:2px solid var(--border); border-radius:12px; background:#fff; cursor:pointer; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:var(--error); margin-bottom:4px;">Rejected</div>
+            <div style="font-size:12px; color:var(--text-light);">Application declined</div>
+          </button>
+          <button class="btn" onclick="submitOutcome('withdrawn')" style="padding:16px; border:2px solid var(--border); border-radius:12px; background:#fff; cursor:pointer; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:var(--warning); margin-bottom:4px;">Withdrawn</div>
+            <div style="font-size:12px; color:var(--text-light);">You withdrew the application</div>
+          </button>
+          <button class="btn" onclick="submitOutcome('no_response')" style="padding:16px; border:2px solid var(--border); border-radius:12px; background:#fff; cursor:pointer; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:var(--text-light); margin-bottom:4px;">No Response</div>
+            <div style="font-size:12px; color:var(--text-light);">Never heard back</div>
+          </button>
+        </div>
+        <div style="text-align:center;">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('stackingOverlay').style.display='none'">Cancel</button>
+        </div>
+      `;
+      overlay.style.display = 'flex';
+    }
+
+    async function submitOutcome(outcome) {
+      let amount = null;
+      if (outcome === 'awarded') {
+        const input = prompt('Award amount ($):');
+        if (input) amount = parseFloat(input);
+      }
       try {
         await fetch(`${API}/applications/${currentApp.id}/outcome`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ outcome, outcomeAmount: amount ? parseFloat(amount) : null })
+          body: JSON.stringify({ outcome, outcomeAmount: amount })
         });
-        alert('Outcome recorded. Thank you for helping improve our process!');
-      } catch (e) { console.error('Outcome error:', e); }
+        document.getElementById('stackingOverlay').style.display = 'none';
+        showToast('Outcome recorded. Thank you!', 'success');
+      } catch (e) {
+        console.error('Outcome error:', e);
+        showToast('Failed to record outcome.', 'error');
+      }
     }
 
     // ============================================================
