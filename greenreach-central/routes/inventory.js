@@ -8,6 +8,7 @@ import { query, isDatabaseAvailable } from '../config/database.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getInMemoryGroups } from './sync.js';
 
 const router = express.Router();
 
@@ -87,6 +88,16 @@ async function loadFarmGroups(farmId) {
     }
   } catch (error) {
     console.warn('[Inventory] groups.json fallback failed:', error.message);
+  }
+
+  try {
+    const inMemoryGroups = getInMemoryGroups();
+    const groups = inMemoryGroups.get(farmId) || [];
+    if (Array.isArray(groups) && groups.length > 0) {
+      return groups;
+    }
+  } catch (error) {
+    console.warn('[Inventory] in-memory groups fallback failed:', error.message);
   }
 
   return [];
