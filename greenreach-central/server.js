@@ -559,6 +559,101 @@ app.get('/api/ai/status', (req, res) => {
   });
 });
 
+app.get('/api/farm/profile', async (_req, res) => {
+  try {
+    const farmPath = path.join(FARM_DATA_DIR, 'farm.json');
+    const raw = await fs.promises.readFile(farmPath, 'utf8');
+    const farm = JSON.parse(raw);
+    const farmId = farm.farmId || farm.farm_id || 'FARM-TEST-WIZARD-001';
+
+    res.json({
+      status: 'success',
+      farm: {
+        farmId,
+        name: farm.name || farm.farmName || 'This is Your Farm',
+        status: farm.status || 'active',
+        metadata: farm,
+        rooms: [],
+        groups: []
+      }
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/farm/profile fallback failed:', error.message);
+    res.status(500).json({ error: 'Failed to load farm profile' });
+  }
+});
+
+app.get('/data/equipment-metadata', async (_req, res) => {
+  try {
+    const filePath = path.join(FARM_DATA_DIR, 'equipment-metadata.json');
+    const raw = await fs.promises.readFile(filePath, 'utf8');
+    res.type('application/json').send(raw);
+  } catch {
+    res.json({ equipment: [] });
+  }
+});
+
+app.get('/api/inventory/seeds', (_req, res) => {
+  res.json({ success: true, data: [] });
+});
+
+app.get('/api/inventory/packaging', (_req, res) => {
+  res.json({ success: true, data: [] });
+});
+
+app.get('/api/setup-wizard/status', (_req, res) => {
+  res.json({ success: true, completed: true, step: 'complete' });
+});
+
+app.post('/api/auth/change-password', (_req, res) => {
+  res.json({ success: true, message: 'Password change endpoint available' });
+});
+
+app.get('/api/wholesale/inventory', (_req, res) => {
+  res.json({ lots: [] });
+});
+
+app.get('/api/wholesale/farm-performance/alerts', (_req, res) => {
+  res.json({ alerts: [] });
+});
+
+app.get('/api/wholesale/orders/buyer-review', (_req, res) => {
+  res.json({ orders: [] });
+});
+
+app.get('/api/wholesale/orders/farm-verify', (_req, res) => {
+  res.json({ success: true, orders: [] });
+});
+
+app.get('/api/farm/configuration', (_req, res) => {
+  res.json({ success: true, configuration: {} });
+});
+
+app.get('/api/config/app', (_req, res) => {
+  res.json({ success: true, config: {} });
+});
+
+app.get('/api/farm-auth/demo-tokens', (_req, res) => {
+  res.json({ success: true, tokens: [] });
+});
+
+app.get('/api/farm-sales/subscriptions/plans', (_req, res) => {
+  res.json({ success: true, plans: [] });
+});
+
+app.get('/api/farm-sales/orders', (_req, res) => {
+  res.json({ success: true, orders: [] });
+});
+
+app.get('/api/farm-sales/ai-agent/status', (_req, res) => {
+  res.json({ success: true, status: 'available' });
+});
+
+app.post('/api/farm-sales/ai-agent/chat', (req, res) => {
+  const message = req.body?.message || 'Hello';
+  res.json({ success: true, reply: `AI agent stub response: ${message}` });
+});
+
 app.get('/api/farm-sales/inventory', async (req, res) => {
   try {
     const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
