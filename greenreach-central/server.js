@@ -107,6 +107,11 @@ app.use(helmet({
   },
 }));
 
+// Canonical farm login URL
+app.get(['/login', '/login.html'], (req, res) => {
+  res.redirect(302, '/farm-admin-login.html');
+});
+
 // Static UI (Wholesale portal + Central Admin UI)
 app.use(express.static(path.join(__dirname, 'public')));
 // Fallback to root public directory for shared assets
