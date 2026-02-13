@@ -4,10 +4,27 @@
  */
 
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import logger from '../utils/logger.js';
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
 
 const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function resolveDefaultFarmId() {
+  try {
+    const farmPath = path.join(__dirname, '..', 'public', 'data', 'farm.json');
+    if (!fs.existsSync(farmPath)) return null;
+    const raw = fs.readFileSync(farmPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed?.farmId || parsed?.farm_id || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * GET /env
@@ -43,16 +60,12 @@ router.get('/', async (req, res, next) => {
         });
       }
     } else {
-      // Default to first farm if only one exists
+      // Auto-select default farm to support legacy dashboard requests without farmId
       if (farms.length === 1) {
         targetFarm = farms[0];
       } else {
-        return res.status(400).json({
-          error: 'Multiple farms available',
-          message: 'Please specify farmId query parameter',
-          availableFarms: farms.map(f => ({ id: f.farm_id || f.id, name: f.name })),
-          timestamp: new Date().toISOString()
-        });
+        const defaultFarmId = resolveDefaultFarmId() || process.env.DEFAULT_FARM_ID || 'FARM-TEST-WIZARD-001';
+        targetFarm = farms.find(f => (f.farm_id || f.id) === defaultFarmId) || farms[0];
       }
     }
     
