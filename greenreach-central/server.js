@@ -522,6 +522,83 @@ app.post('/api/debug/track', express.json(), (req, res) => {
   res.json({ success: true, logged: events.length });
 });
 
+// Legacy compatibility routes used by existing dashboard pages
+app.use('/env', envProxyRoutes);
+
+app.get('/plans', async (req, res) => {
+  try {
+    const plansPath = path.join(FARM_DATA_DIR, 'plans.json');
+    if (fs.existsSync(plansPath)) {
+      const raw = await fs.promises.readFile(plansPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const plans = Array.isArray(parsed) ? parsed : (parsed?.plans || []);
+      return res.json({ plans });
+    }
+
+    const schedulesPath = path.join(FARM_DATA_DIR, 'schedules.json');
+    if (fs.existsSync(schedulesPath)) {
+      const raw = await fs.promises.readFile(schedulesPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const plans = parsed?.plans || parsed?.schedules || [];
+      return res.json({ plans: Array.isArray(plans) ? plans : [] });
+    }
+
+    return res.json({ plans: [] });
+  } catch (error) {
+    logger.warn('[Compat] /plans fallback failed:', error.message);
+    return res.json({ plans: [] });
+  }
+});
+
+app.get('/api/ai/status', (req, res) => {
+  res.json({
+    engine: { type: 'rules' },
+    progress: { overall_readiness_pct: 0 },
+    ml: { ready: false }
+  });
+});
+
+app.get('/api/farm-sales/inventory', async (req, res) => {
+  try {
+    const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
+    if (!fs.existsSync(groupsPath)) {
+      return res.json({ inventory: [] });
+    }
+
+    const raw = await fs.promises.readFile(groupsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const groups = Array.isArray(parsed) ? parsed : (parsed?.groups || []);
+    const inventory = groups.map((group) => ({
+      sku: group.recipe || group.crop || group.name || 'unknown',
+      name: group.name || group.crop || 'Unnamed Group',
+      quantity: Number(group.plants || 0),
+      trays: Number(group.trays || 0)
+    }));
+
+    return res.json({ inventory });
+  } catch (error) {
+    logger.warn('[Compat] /api/farm-sales/inventory fallback failed:', error.message);
+    return res.json({ inventory: [] });
+  }
+});
+
+app.get('/devices', async (req, res) => {
+  try {
+    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
+    if (!fs.existsSync(devicesPath)) {
+      return res.json({ devices: [] });
+    }
+
+    const raw = await fs.promises.readFile(devicesPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const devices = parsed?.devices || parsed?.iot_devices || parsed || [];
+    return res.json({ devices: Array.isArray(devices) ? devices : [] });
+  } catch (error) {
+    logger.warn('[Compat] /devices fallback failed:', error.message);
+    return res.json({ devices: [] });
+  }
+});
+
 // API routes
 app.use('/api/auth', authRoutes); // Farm authentication
 app.use('/api/farms', farmRoutes);

@@ -43,6 +43,17 @@ function pickFarmName(farmId) {
   return farmId || 'Unknown Farm';
 }
 
+async function resolveDefaultFarmId() {
+  try {
+    const farmPath = path.join(__dirname, '..', 'public', 'data', 'farm.json');
+    const raw = await fs.readFile(farmPath, 'utf8');
+    const farm = JSON.parse(raw);
+    return farm?.farmId || farm?.farm_id || null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadFarmGroups(farmId) {
   if (!farmId) return [];
 
@@ -109,7 +120,7 @@ async function loadFarmGroups(farmId) {
  */
 router.get('/current', async (req, res) => {
   try {
-    const farmId = resolveFarmId(req);
+    const farmId = resolveFarmId(req) || await resolveDefaultFarmId();
     if (!farmId) {
       return res.status(400).json({
         status: 'error',
@@ -168,7 +179,7 @@ router.get('/current', async (req, res) => {
  */
 router.get('/forecast/:days?', async (req, res) => {
   try {
-    const farmId = resolveFarmId(req);
+    const farmId = resolveFarmId(req) || await resolveDefaultFarmId();
     if (!farmId) {
       return res.status(400).json({
         status: 'error',
