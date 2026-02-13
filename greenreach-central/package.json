@@ -9,7 +9,9 @@
     "dev": "NODE_ENV=development nodemon server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "db:migrate": "node scripts/migrate.js",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "smoke:farm-contract": "bash scripts/test-farm-contract-endpoints.sh",
+    "deploy:prod:gated": "bash scripts/deploy-prod-with-contract-gate.sh"
   },
   "keywords": [
     "agriculture",
