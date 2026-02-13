@@ -583,6 +583,78 @@ app.get('/api/farm-sales/inventory', async (req, res) => {
   }
 });
 
+app.get('/api/automation/rules', (_req, res) => {
+  res.json({ rules: [] });
+});
+
+app.get('/api/automation/history', (_req, res) => {
+  res.json({ history: [] });
+});
+
+app.get('/api/schedule-executor/status', (_req, res) => {
+  res.json({ running: false, executionCount: 0, errorCount: 0, interval: 0 });
+});
+
+app.get('/api/schedule-executor/ml-anomalies', (_req, res) => {
+  res.json({ success: true, anomalies: [] });
+});
+
+app.get('/api/health/insights', (_req, res) => {
+  res.json({ ok: true, zones: [] });
+});
+
+app.get('/api/ml/anomalies/statistics', (_req, res) => {
+  res.json({ success: true, total: 0, critical: 0, warning: 0, info: 0 });
+});
+
+app.get('/api/ml/energy-forecast', (_req, res) => {
+  res.json({ success: true, forecast: [] });
+});
+
+app.post('/api/harvest', (_req, res) => {
+  res.json({ success: true });
+});
+
+app.post('/data/groups', async (req, res) => {
+  try {
+    const groups = Array.isArray(req.body?.groups) ? req.body.groups : [];
+    const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
+    await fs.promises.writeFile(groupsPath, JSON.stringify({ groups }, null, 2));
+    res.json({ success: true, count: groups.length });
+  } catch (error) {
+    logger.warn('[Compat] /data/groups save failed:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to save groups' });
+  }
+});
+
+app.post('/data/groups.json', async (req, res) => {
+  try {
+    const groups = Array.isArray(req.body?.groups) ? req.body.groups : [];
+    const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
+    await fs.promises.writeFile(groupsPath, JSON.stringify({ groups }, null, 2));
+    res.json({ success: true, count: groups.length });
+  } catch (error) {
+    logger.warn('[Compat] /data/groups.json save failed:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to save groups' });
+  }
+});
+
+app.get('/api/planting/recommendations', (_req, res) => {
+  res.json({ success: true, recommendations: [] });
+});
+
+app.post('/api/planting/recommendations', (_req, res) => {
+  res.json({ success: true, recommendations: [] });
+});
+
+app.post('/api/planting/feedback', (_req, res) => {
+  res.json({ success: true });
+});
+
+app.post('/api/ai/record-decision', (_req, res) => {
+  res.json({ success: true });
+});
+
 app.get('/devices', async (req, res) => {
   try {
     const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
