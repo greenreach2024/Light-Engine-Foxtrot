@@ -257,8 +257,7 @@
             <div style="font-size: 13px; font-weight: 600; color: #6ee7b7; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Demo Login Credentials</div>
             <div style="font-size: 14px; color: #e5e7eb; line-height: 1.8;">
                 <div><strong>Farm ID:</strong> <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px; font-family: monospace;">FARM-TEST-WIZARD-001</code></div>
-                <div><strong>Email:</strong> <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px; font-family: monospace;">shelbygilbert@rogers.com</code></div>
-                <div><strong>Password:</strong> <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px; font-family: monospace;">ReTerminal2026!</code></div>
+                <div><strong>Password:</strong> <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px; font-family: monospace;">Grow123</code></div>
             </div>
         </div>
         
@@ -281,18 +280,6 @@
                     placeholder="GR-12345" 
                     required 
                     autocomplete="off"
-                >
-            </div>
-            
-            <div class="form-group">
-                <label for="email">Email</label>
-                <input 
-                    type="email" 
-                    id="email" 
-                    name="email" 
-                    placeholder="your@email.com" 
-                    required 
-                    autocomplete="email"
                 >
             </div>
             
@@ -323,9 +310,7 @@
     <script>
         // Check if already logged in
         if (localStorage.getItem('token')) {
-            // Cloud users go to farm-admin, edge users go to LE-dashboard
-            const planType = localStorage.getItem('planType') || 'cloud';
-            window.location.href = planType === 'cloud' ? '/farm-admin.html' : '/LE-dashboard.html';
+            window.location.href = '/farm-admin.html';
         }
         
         // Check if redirected from successful purchase
@@ -336,8 +321,7 @@
         
         // Auto-fill demo credentials
         document.getElementById('farmId').value = 'FARM-TEST-WIZARD-001';
-        document.getElementById('email').value = 'shelbygilbert@rogers.com';
-        document.getElementById('password').value = 'ReTerminal2026!';
+        document.getElementById('password').value = 'Grow123';
         
         async function handleLogin(event) {
             event.preventDefault();
@@ -345,7 +329,7 @@
             const button = document.getElementById('loginButton');
             const alertDiv = document.getElementById('alertMessage');
             const farmId = document.getElementById('farmId').value.trim();
-            const email = document.getElementById('email').value.trim();
+            const email = 'shelbygilbert@rogers.com'; // Unified platform — email sent automatically
             const password = document.getElementById('password').value;
             
             // Disable button
@@ -400,15 +384,7 @@
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    // Management platform users always use farm-admin.html (monitoring dashboard)
-                    // Farm server users use LE-dashboard.html (full hardware control)
-                    const planType = data.planType || localStorage.getItem('planType') || 'cloud';
-                    
-                    if (planType === 'cloud') {
-                        window.location.href = '/farm-admin.html';
-                    } else {
-                        window.location.href = '/LE-dashboard.html';
-                    }
+                    window.location.href = '/farm-admin.html';
                 }, 1000);
                 
             } catch (error) {
