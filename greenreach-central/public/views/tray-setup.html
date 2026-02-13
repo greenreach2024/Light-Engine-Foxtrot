@@ -749,11 +749,17 @@
       document.getElementById('edit-weight-fields').style.display = isWeightBased ? 'block' : 'none';
     }
 
+    function normalizeFormatsPayload(payload) {
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.formats)) return payload.formats;
+      return [];
+    }
+
     // Load formats
     async function loadFormats() {
       try {
         const response = await fetch(`${API_BASE}/api/tray-formats`);
-        const formats = await response.json();
+        const formats = normalizeFormatsPayload(await response.json());
         
         const container = document.getElementById('formats-list');
         if (formats.length === 0) {
@@ -792,7 +798,7 @@
     async function loadFormatsForDropdown() {
       try {
         const response = await fetch(`${API_BASE}/api/tray-formats`);
-        const formats = await response.json();
+        const formats = normalizeFormatsPayload(await response.json());
         
         const select = document.getElementById('tray-format');
         select.innerHTML = '<option value="">Select format...</option>' + 
@@ -914,7 +920,8 @@
       // Load format data and open modal
       fetch(`${API_BASE}/api/tray-formats`)
         .then(r => r.json())
-        .then(formats => {
+        .then(payload => {
+          const formats = normalizeFormatsPayload(payload);
           const format = formats.find(f => f.trayFormatId === formatId);
           if (!format) return;
 
