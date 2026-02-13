@@ -46,6 +46,7 @@ export async function initDatabase() {
     client.release();
   } catch (error) {
     logger.error('Database connection failed:', error);
+    pool = null; // Mark pool as unavailable so isDatabaseAvailable() returns false
     throw error;
   }
 
