@@ -200,8 +200,8 @@ function seasonalMultiplier(category) {
   return (T[category] || T['Vegetables'])[m] || 1;
 }
 
-/** Full recommendation scoring */
-function computeRecommendation(profile, context) {
+/** Full recommendation scoring with diversity and rotation bonuses */
+function computeRecommendation(profile, context, currentProfile = null, diversityContext = null) {
   const ecScore  = scoreDimension(context.ec, profile.ideal.ec, 1.2);
   const phScore  = scoreDimension(context.ph, profile.ideal.ph, 0.8);
   const nutrientFit     = clampScore(ecScore * 0.6 + phScore * 0.4);
@@ -212,16 +212,66 @@ function computeRecommendation(profile, context) {
   const seasonal        = seasonalMultiplier(profile.category);
   const seasonalScore   = clampScore(revenueScore * seasonal);
 
+  // **NEW: Diversity scoring** - Penalize overrepresented crops/categories
+  let diversityScore = 100;
+  let rotationBonus = 0;
+  
+  if (diversityContext) {
+    const totalFarmCrops = Object.values(diversityContext.cropCounts).reduce((sum, count) => sum + count, 0);
+    
+    // Penalize this specific crop if already heavily planted
+    const thisCount = diversityContext.cropCounts[profile.cropId] || 0;
+    if (totalFarmCrops > 0 && thisCount > 0) {
+      const proportion = thisCount / totalFarmCrops;
+      // Heavy penalty if crop represents >30% of farm, moderate if >15%
+      if (proportion > 0.30) diversityScore -= 40;
+      else if (proportion > 0.15) diversityScore -= 25;
+      else if (proportion > 0.08) diversityScore -= 12;
+    }
+    
+    // Penalize overrepresented categories (e.g., too much "Leafy Greens")
+    const categoryCount = diversityContext.categoryCounts[profile.category] || 0;
+    if (totalFarmCrops > 0 && categoryCount > 0) {
+      const categoryProportion = categoryCount / totalFarmCrops;
+      if (categoryProportion > 0.60) diversityScore -= 20;
+      else if (categoryProportion > 0.45) diversityScore -= 10;
+    }
+    
+    // Penalize overrepresented crop classes (leafy, fruiting, flowering)
+    const classCount = diversityContext.classCounts[profile.cropClass] || 0;
+    if (totalFarmCrops > 0 && classCount > 0) {
+      const classProportion = classCount / totalFarmCrops;
+      if (classProportion > 0.70) diversityScore -= 15;
+      else if (classProportion > 0.50) diversityScore -= 8;
+    }
+  }
+  
+  // **NEW: Crop rotation bonus** - Boost crops different from current
+  if (currentProfile) {
+    // Boost if switching crop families
+    if (currentProfile.cropId !== profile.cropId) rotationBonus += 8;
+    
+    // Extra boost if switching categories (e.g., Herbs → Leafy Greens)
+    if (currentProfile.category !== profile.category) rotationBonus += 12;
+    
+    // Maximum boost if switching crop classes (leafy → fruiting → flowering rotation)
+    if (currentProfile.cropClass !== profile.cropClass) rotationBonus += 15;
+  }
+  
+  diversityScore = clampScore(diversityScore);
+
   const overall = clampScore(
-    nutrientFit     * 0.22 +
-    lightEfficiency * 0.20 +
-    seasonalScore   * 0.22 +
-    harvestStagger  * 0.16 +
-    vpdFit          * 0.10 +
-    revenueScore    * 0.10
+    nutrientFit     * 0.18 +
+    lightEfficiency * 0.16 +
+    seasonalScore   * 0.18 +
+    harvestStagger  * 0.14 +
+    vpdFit          * 0.08 +
+    revenueScore    * 0.08 +
+    diversityScore  * 0.12 +
+    rotationBonus   * 0.06
   );
 
-  return { nutrientFit, lightEfficiency, vpdFit, harvestStagger, revenueScore, seasonalScore, overall };
+  return { nutrientFit, lightEfficiency, vpdFit, harvestStagger, revenueScore, seasonalScore, diversityScore, rotationBonus, overall };
 }
 
 function matchRecipeId(crop) {
@@ -282,7 +332,7 @@ router.get('/recipes', async (req, res) => {
 router.post('/recommendations', async (req, res) => {
   await loadAllProfiles();
   try {
-    const { groupId, currentCrop, availableCrops, excludeCrops, targetSeedDate, zoneConditions } = req.body || {};
+    const { groupId, currentCrop, availableCrops, excludeCrops, targetSeedDate, zoneConditions, farmDiversity } = req.body || {};
     if (!groupId) return res.status(400).json({ error: 'groupId is required' });
 
     const context = {
@@ -308,11 +358,31 @@ router.post('/recommendations', async (req, res) => {
     }
 
     const currentId = matchRecipeId(currentCrop);
+    const currentProfile = currentId ? RECIPE_PROFILES[currentId] : null;
+
+    // Build farm diversity context: count crops by category and class
+    const diversityContext = {
+      categoryCounts: {},
+      classCounts: {},
+      cropCounts: {}
+    };
+    
+    if (Array.isArray(farmDiversity)) {
+      for (const crop of farmDiversity) {
+        const cropId = matchRecipeId(crop);
+        if (!cropId) continue;
+        const profile = RECIPE_PROFILES[cropId];
+        if (!profile) continue;
+        
+        diversityContext.categoryCounts[profile.category] = (diversityContext.categoryCounts[profile.category] || 0) + 1;
+        diversityContext.classCounts[profile.cropClass] = (diversityContext.classCounts[profile.cropClass] || 0) + 1;
+        diversityContext.cropCounts[cropId] = (diversityContext.cropCounts[cropId] || 0) + 1;
+      }
+    }
 
     const allScored = pool.map(profile => {
-      const scores = computeRecommendation(profile, context);
+      const scores = computeRecommendation(profile, context, currentProfile, diversityContext);
       const isCurrent = profile.cropId === currentId;
-      const adjustedOverall = clampScore(scores.overall - (isCurrent && pool.length > 1 ? 10 : 0));
 
       const harvestDate = new Date(seedDate);
       harvestDate.setDate(harvestDate.getDate() + profile.durationDays);
@@ -332,7 +402,9 @@ router.post('/recommendations', async (req, res) => {
           harvest_stagger:  scores.harvestStagger,
           revenue:          scores.revenueScore,
           seasonal:         scores.seasonalScore,
-          overall:          adjustedOverall
+          diversity:        scores.diversityScore,
+          rotation:         scores.rotationBonus,
+          overall:          scores.overall
         },
         deltas: {
           ec:  Number(((profile.ideal.ec)  - (context.ec  ?? profile.ideal.ec)).toFixed(2)),
