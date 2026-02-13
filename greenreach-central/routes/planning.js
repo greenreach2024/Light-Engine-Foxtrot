@@ -13,23 +13,21 @@ const router = express.Router();
 // Get capacity utilization metrics based on actual planting assignments
 router.get('/capacity', async (req, res) => {
   try {
-    const { farm_id } = req.query;
-    
-    if (!farm_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'farm_id is required'
-      });
-    }
+    // Get farm_id from query, session, or use 'demo-farm' as fallback
+    const farm_id = req.query.farm_id || req.session?.farm_id || 'demo-farm';
     
     // Get current planting assignments
     let assignments = [];
     if (isDatabaseAvailable()) {
-      const result = await query(
-        'SELECT * FROM planting_assignments WHERE farm_id = $1',
-        [farm_id]
-      );
-      assignments = result.rows || [];
+      try {
+        const result = await query(
+          'SELECT * FROM planting_assignments WHERE farm_id = $1',
+          [farm_id]
+        );
+        assignments = result.rows || [];
+      } catch (dbError) {
+        logger.warn('[Planning] Database query failed, using empty assignments:', dbError.message);
+      }
     }
     
     // Calculate capacity (assume each group is 1 unit of capacity)
@@ -61,9 +59,8 @@ router.get('/capacity', async (req, res) => {
 // Get demand forecast based on market intelligence + historical trends
 router.get('/demand-forecast', async (req, res) => {
   try {
-    const { horizon = 'MONTHLY', farm_id } = req.query;
-    
-    // Get market intelligence data
+    const horizon = req.query.horizon || 'MONTHLY';
+    const farm_id = req.query.farm_id || req.session?.farm_id || 'demo-farm';
     const marketData = getMarketData();
     const cropPricing = await getCropPricing();
     
@@ -119,14 +116,7 @@ router.get('/demand-forecast', async (req, res) => {
 // Get production planning recommendations (integrates market + capacity + assignments)
 router.get('/recommendations', async (req, res) => {
   try {
-    const { farm_id } = req.query;
-    
-    if (!farm_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'farm_id is required'
-      });
-    }
+    const farm_id = req.query.farm_id || req.session?.farm_id || 'demo-farm';
     
     // Get market data and current assignments
     const marketData = getMarketData();
@@ -134,10 +124,15 @@ router.get('/recommendations', async (req, res) => {
     
     let currentAssignments = [];
     if (isDatabaseAvailable()) {
-      const result = await query(
-        'SELECT crop_sku, COUNT(*) as count FROM planting_assignments WHERE farm_id = $1 GROUP BY crop_sku',
-        [farm_id]
-      );
+      try {
+        const result = await query(
+          'SELECT crop_sku, COUNT(*) as count FROM planting_assignments WHERE farm_id = $1 GROUP BY crop_sku',
+          [farm_id]
+        );
+        currentAssignments = result.rows || [];
+      } catch (dbError) {
+        logger.warn('[Planning] Database query failed, using empty assignments:', dbError.message);
+      }
       currentAssignments = result.rows || [];
     }
     
