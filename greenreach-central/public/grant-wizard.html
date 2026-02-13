@@ -404,6 +404,82 @@
       font-size: 12px; color: var(--primary); display: flex; align-items: center; gap: 4px;
       margin-bottom: 3px;
     }
+
+    /* Stacking program selector modal */
+    .stacking-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.45); z-index: 2000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .stacking-modal {
+      background: var(--surface); border-radius: 24px; padding: 36px;
+      max-width: 680px; width: 100%; max-height: 85vh; overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .stacking-program-card {
+      background: var(--bg); border: 2px solid #e5e5ea; border-radius: 14px;
+      padding: 18px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: start; gap: 14px;
+    }
+    .stacking-program-card:hover { border-color: var(--accent); }
+    .stacking-program-card.selected {
+      border-color: var(--primary); background: rgba(130,195,65,0.06);
+    }
+    .stacking-program-card .select-indicator {
+      width: 22px; height: 22px; border-radius: 6px; border: 2px solid #d2d2d7;
+      flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s; font-size: 14px; color: transparent;
+    }
+    .stacking-program-card.selected .select-indicator {
+      background: var(--primary); border-color: var(--primary); color: white;
+    }
+
+    /* Search spinner */
+    .search-spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid #d2d2d7; border-top-color: var(--primary);
+      border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Advice note */
+    .advice-note {
+      padding: 14px 20px; border-radius: 12px; margin-bottom: 16px;
+      font-size: 14px; display: flex; align-items: start; gap: 10px;
+      background: rgba(130,195,65,0.06); border: 1px solid rgba(130,195,65,0.2);
+      color: var(--text); line-height: 1.5;
+    }
+    .advice-note strong { color: var(--primary); }
+
+    /* Corp search select indicator */
+    .corp-search-result {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .corp-search-result .result-select-icon {
+      width: 20px; height: 20px; border-radius: 50%; border: 2px solid #d2d2d7;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s; font-size: 12px; color: transparent; margin-left: auto;
+    }
+    .corp-search-result:hover .result-select-icon {
+      border-color: var(--primary); color: var(--primary);
+    }
+    .corp-search-result.selected .result-select-icon {
+      background: var(--primary); border-color: var(--primary); color: white;
+    }
+
+    /* AI review panel */
+    .ai-review-panel {
+      background: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 100%);
+      border: 1px solid #bbf7d0; border-radius: 16px; padding: 24px;
+      margin-top: 24px;
+    }
+    .scoring-matrix { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    .scoring-matrix td, .scoring-matrix th {
+      padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e5ea; font-size: 14px;
+    }
+    .scoring-matrix th { font-weight: 600; color: var(--text); }
+    .scoring-matrix .score-cell { text-align: right; font-weight: 700; color: var(--primary); }
   </style>
 </head>
 <body>
@@ -936,7 +1012,7 @@
         </div>
         <div style="margin-bottom:20px;">
           <button id="aiRecommendBtn" class="btn btn-secondary btn-sm" onclick="getAiRecommendations()" style="font-size:14px;">
-            ✨ AI Strategy Advisor — Get personalized funding recommendations
+            AI Strategy Advisor - Get personalized funding recommendations
           </button>
         </div>
 
@@ -951,7 +1027,7 @@
         <!-- Auth gate — shown when unauthenticated user clicks a program -->
         <div id="matchAuthGate" style="display:none; max-width:520px; margin:40px auto 0; text-align:center;">
           <div style="background:linear-gradient(135deg, #f0fdf4 0%, #f8fafc 100%); border:1px solid #bbf7d0; border-radius:16px; padding:40px 32px;">
-            <div style="font-size:40px; margin-bottom:16px;">🌱</div>
+            <div style="font-size:20px; font-weight:700; margin-bottom:16px; color:var(--primary);">GreenReach</div>
             <h2 style="font-size:22px; font-weight:700; margin-bottom:12px; color:var(--text);">Here's how we help</h2>
             <p style="font-size:15px; color:var(--text); line-height:1.7; margin-bottom:8px;">
               We match you to funding programs, draft your application in plain language, prepare budget templates, and generate a ready-to-submit package — all guided by program-specific requirements.
@@ -987,6 +1063,19 @@
       <div id="exportContent" style="max-width: 720px; margin: 0 auto;"></div>
       <div style="text-align: center; margin-top: 32px;">
         <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">← Back to Dashboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stacking Program Selector Overlay -->
+  <div id="stackingOverlay" class="stacking-overlay" style="display:none;">
+    <div class="stacking-modal">
+      <h2 style="font-size:22px; font-weight:700; margin-bottom:6px;">Stackable Funding Opportunities</h2>
+      <p style="font-size:14px; color:var(--text-light); margin-bottom:20px;">We found additional programs that complement your primary application. Select any you would like to apply to as well.</p>
+      <div id="stackingProgramList"></div>
+      <div style="display:flex; gap:12px; margin-top:20px; justify-content:flex-end;">
+        <button class="btn btn-secondary btn-sm" onclick="skipStacking()">Skip</button>
+        <button class="btn btn-primary btn-sm" onclick="confirmStackingSelection()">Continue with selected</button>
       </div>
     </div>
   </div>
@@ -1143,7 +1232,12 @@
           })
         });
         const data = await res.json();
-        if (!data.success) throw new Error(data.error);
+        if (!data.success) {
+          if (res.status === 409) {
+            throw new Error('An account with this email already exists. Sign in instead.');
+          }
+          throw new Error(data.error || 'Registration failed');
+        }
 
         authToken = data.data.token;
         currentUser = data.data.user;
@@ -1377,7 +1471,7 @@
 
           ${p.reimbursement_model === 'reimbursement' ? `
             <div class="alert alert-warning" style="margin-bottom:24px;">
-              <span>💰</span>
+              <span style="font-weight:700;">$</span>
               <span><strong>Cash-flow note:</strong> This program reimburses eligible expenses after they are incurred and paid. You may need upfront capital and the ability to manage claims and reporting before receiving funds.</span>
             </div>` : ''}
 
@@ -1473,7 +1567,7 @@
         if (!data.success) { output.innerHTML = '<p style="color:var(--error);">Check failed.</p>'; return; }
 
         const d = data.data;
-        const icon = d.eligible ? '✅' : d.maybeEligible ? '🟡' : '❌';
+        const icon = d.eligible ? '<span style="color:var(--success); font-weight:700;">Yes</span>' : d.maybeEligible ? '<span style="color:var(--warning); font-weight:700;">Maybe</span>' : '<span style="color:var(--error); font-weight:700;">No</span>';
         const label = d.eligible ? 'Likely eligible' : d.maybeEligible ? 'May be eligible (more info needed)' : 'May not be eligible';
         const color = d.eligible ? 'var(--primary)' : d.maybeEligible ? 'var(--warning)' : 'var(--error)';
 
@@ -1514,7 +1608,7 @@
         if (!data.success || !data.data.length) {
           el.innerHTML = `
             <div style="text-align:center; padding:60px 20px; background:var(--surface); border-radius:20px;">
-              <div style="font-size:48px; margin-bottom:16px;">📝</div>
+              <div style="font-size:16px; font-weight:700; margin-bottom:16px; color:var(--primary);">Application Builder</div>
               <h3 style="font-size:20px; margin-bottom:8px;">No applications yet</h3>
               <p style="color:var(--text-light); margin-bottom:24px;">Browse funding programs to start your first application.</p>
               <button class="btn btn-primary btn-sm" onclick="showView('programs')">Browse Programs</button>
@@ -1522,8 +1616,29 @@
           return;
         }
 
+        const linkedLookup = new Map((data.data || []).map(a => [Number(a.id), a]));
+        const linkedParentByChild = new Map();
+        (data.data || []).forEach(a => {
+          const plan = a?.answers?.stackingPlan;
+          const linked = Array.isArray(plan?.linkedApplications) ? plan.linkedApplications : [];
+          linked.forEach(link => linkedParentByChild.set(Number(link.appId), Number(a.id)));
+        });
         el.innerHTML = data.data.map(app => {
           const daysLeft = app.expires_at ? Math.max(0, Math.ceil((new Date(app.expires_at) - Date.now()) / 86400000)) : '–';
+          const stackingPlan = app?.answers?.stackingPlan || null;
+          const linkedApplications = Array.isArray(stackingPlan?.linkedApplications) ? stackingPlan.linkedApplications : [];
+          const isPrimary = linkedApplications.length > 0;
+          const primaryParentId = linkedParentByChild.get(Number(app.id));
+          const isLinked = Number.isFinite(primaryParentId);
+          const linkedSummary = linkedApplications.map(link => {
+            const linkedApp = linkedLookup.get(Number(link.appId));
+            return {
+              appId: link.appId,
+              programName: linkedApp?.program_name || `Program #${link.programId}`,
+              status: linkedApp?.status || 'draft'
+            };
+          });
+
           return `
             <div style="background:var(--surface); border-radius:16px; padding:24px; margin-bottom:16px; cursor:pointer; box-shadow:0 1px 6px rgba(0,0,0,0.04);"
                  onclick="loadWizard(${app.id})">
@@ -1531,6 +1646,8 @@
                 <div>
                   <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">${escapeHtml(app.program_name || 'General Application')}</h3>
                   <p style="font-size:13px; color:var(--text-light);">${escapeHtml(app.administering_agency || '')} ${app.program_code ? `· ${app.program_code}` : ''}</p>
+                  ${isPrimary ? `<span style="display:inline-block;margin-top:6px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(130,195,65,0.16);color:var(--primary);">Primary</span>` : ''}
+                  ${isLinked ? `<span style="display:inline-block;margin-top:6px;margin-left:6px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(37,99,235,0.10);color:#2563eb;">Linked</span>` : ''}
                 </div>
                 <span class="status-badge status-${app.status === 'draft' || app.status === 'in_progress' ? 'upcoming' : app.status === 'awarded' ? 'open' : 'closed'}">${app.status}</span>
               </div>
@@ -1543,6 +1660,19 @@
               <div style="margin-top:12px; height:4px; background:var(--bg); border-radius:2px; overflow:hidden;">
                 <div style="height:100%; width:${app.percent_complete || 0}%; background:var(--accent); border-radius:2px; transition:width 0.5s;"></div>
               </div>
+              ${linkedSummary.length > 0 ? `
+                <div style="margin-top:14px; padding:12px; background:var(--bg); border-radius:10px; border:1px solid #e5e5ea;" onclick="event.stopPropagation();">
+                  <div style="font-size:13px; font-weight:700; margin-bottom:8px; color:var(--text);">Linked applications (${linkedSummary.length})</div>
+                  <div style="display:flex; flex-direction:column; gap:8px;">
+                    ${linkedSummary.map(link => `
+                      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px;">
+                        <span style="color:var(--text-light);">${escapeHtml(link.programName)} · ${escapeHtml(link.status)}</span>
+                        <button class="btn btn-secondary btn-sm" style="padding:5px 10px; font-size:12px;" onclick="event.stopPropagation(); loadWizard(${link.appId});">Open</button>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
             </div>`;
         }).join('');
       } catch (e) { console.error('Load apps error:', e); }
@@ -1551,13 +1681,33 @@
     async function startApplication(programId) {
       if (!authToken) { showView('register'); return; }
       try {
+        const stackedProgramIds = await promptForStackingPrograms(programId);
         const res = await fetch(`${API}/applications`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ programId })
         });
         const data = await res.json();
-        if (data.success) loadWizard(data.data.id);
+        if (!data.success) return;
+
+        const linkedApplications = await createLinkedApplications(programId, stackedProgramIds);
+        if (linkedApplications.length > 0) {
+          await fetch(`${API}/applications/${data.data.id}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              answers: {
+                stackingPlan: {
+                  primaryProgramId: programId,
+                  selectedProgramIds: [programId, ...stackedProgramIds],
+                  linkedApplications
+                }
+              }
+            })
+          });
+        }
+
+        loadWizard(data.data.id);
       } catch (e) { console.error('Start app error:', e); }
     }
 
@@ -1567,8 +1717,8 @@
     const WIZARD_STEPS = [
       { key: 'organization', title: 'About Your Organization', subtitle: 'Basic facts that identify you as an applicant.' },
       { key: 'project', title: 'Your Project', subtitle: 'What do you want to do, and why does it matter?' },
-      { key: 'budget', title: 'Budget & Resources', subtitle: 'What will it cost and how will you fund it?' },
       { key: 'narrative', title: 'Need & Impact', subtitle: 'Why this project matters and what success looks like.' },
+      { key: 'budget', title: 'Budget & Resources', subtitle: 'What will it cost and how will you fund it?' },
       { key: 'documents', title: 'Documents & Attachments', subtitle: 'Everything the program requires alongside your application.' },
       { key: 'review', title: 'Review & Export', subtitle: 'Check everything, then generate your submission pack.' }
     ];
@@ -1603,6 +1753,25 @@
         const data = await res.json();
         if (!data.success) return;
         currentApp = data.data;
+
+        const stackIds = currentApp?.answers?.stackingPlan?.selectedProgramIds || [];
+        const extraIds = stackIds.filter(id => Number(id) !== Number(currentApp.program_id));
+        currentApp.stacked_program_details = [];
+        for (const pid of extraIds) {
+          try {
+            if (stackedProgramsCache[pid]) {
+              currentApp.stacked_program_details.push(stackedProgramsCache[pid]);
+              continue;
+            }
+            const pRes = await fetch(`${API}/programs/${pid}`);
+            const pData = await pRes.json();
+            if (pData?.success && pData?.data) {
+              stackedProgramsCache[pid] = pData.data;
+              currentApp.stacked_program_details.push(pData.data);
+            }
+          } catch (_e) {}
+        }
+
         wizardStep = (currentApp.wizard_step || 1) - 1;
         wizardStepKey = null;
         wizardStepStartAt = null;
@@ -1645,10 +1814,13 @@
           html += `
             <div class="form-group">
               <label>Legal business name</label>
-              <div class="why-asking">Start typing your business name. We'll search federal corporations for an exact match.</div>
-              <input type="text" id="wiz_legalName" value="${escapeAttr(org.legalName || '')}" 
-                     onblur="searchCorporation()" onchange="wizAutoSave()" 
-                     placeholder="Enter your legal business name...">
+              <div class="why-asking">Start typing your business name. We will search federal corporations for an exact match.</div>
+              <div style="position:relative;">
+                <input type="text" id="wiz_legalName" value="${escapeAttr(org.legalName || '')}" 
+                       oninput="searchCorporation()" onchange="wizAutoSave()" 
+                       placeholder="Enter your legal business name...">
+                <span id="corpSearchSpinner" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);display:none;"><span class="search-spinner"></span></span>
+              </div>
               <div id="corpSearchResults" style="margin-top:8px;"></div>
             </div>
             <div class="form-row">
@@ -1716,65 +1888,125 @@
                 <label>Project end date</label>
                 <input type="date" id="wiz_projEnd" value="${proj.endDate || ''}" onchange="wizAutoSave()">
               </div>
+            </div>
+            <div class="form-group">
+              <label>Technology Readiness Level (TRL)</label>
+              <div class="why-asking">Indicate where your technology or process stands today. Many innovation programs use TRL as an eligibility filter.</div>
+              <select id="wiz_trl" onchange="wizAutoSave()" style="padding:12px 16px;">
+                <option value="">Select TRL level...</option>
+                <option value="1" ${(proj.trlLevel||'')==='1'?'selected':''}>TRL 1 - Basic principles observed and reported</option>
+                <option value="2" ${(proj.trlLevel||'')==='2'?'selected':''}>TRL 2 - Technology concept and application formulated</option>
+                <option value="3" ${(proj.trlLevel||'')==='3'?'selected':''}>TRL 3 - Proof of concept validated in lab or test environment</option>
+                <option value="4" ${(proj.trlLevel||'')==='4'?'selected':''}>TRL 4 - Technology validated in controlled laboratory</option>
+                <option value="5" ${(proj.trlLevel||'')==='5'?'selected':''}>TRL 5 - Technology validated in relevant production environment</option>
+                <option value="6" ${(proj.trlLevel||'')==='6'?'selected':''}>TRL 6 - Technology demonstrated in relevant operational environment</option>
+                <option value="7" ${(proj.trlLevel||'')==='7'?'selected':''}>TRL 7 - System prototype demonstrated in operational environment</option>
+                <option value="8" ${(proj.trlLevel||'')==='8'?'selected':''}>TRL 8 - System complete and qualified through testing</option>
+                <option value="9" ${(proj.trlLevel||'')==='9'?'selected':''}>TRL 9 - Full commercial deployment, proven in production</option>
+              </select>
             </div>`;
           break;
 
         case 'budget':
+          ensureBudgetCategoryStarters();
           const items = budget.items || [];
+          const budgetIssues = validateBudgetRequirements(false);
+          const suggestedBudgetCategories = (currentApp.budget_categories || [])
+            .map(c => c?.category)
+            .filter(Boolean);
           html += `
-            <div class="alert alert-info" style="margin-bottom:24px;">
-              <span>💡</span>
+            <div class="advice-note" style="margin-bottom:24px;">
+              <span style="font-weight:700; font-size:16px;">i</span>
               <span>Budget lines should match your project activities. Where possible, link items to supplier quotes or our procurement catalogue.</span>
             </div>
+            <div class="advice-note" style="margin-bottom:16px;">
+              <span style="font-weight:700; font-size:16px;">Advice</span>
+              <span>Items over <strong>$1,000</strong> should include who is responsible, what is being purchased, and why it is necessary for the project.</span>
+            </div>
+            ${budgetIssues.length ? `
+              <div class="alert alert-error" style="margin-bottom:16px;">
+                <span style="font-weight:700;">!</span>
+                <span>${budgetIssues.length} budget issue(s) require updates before moving forward.</span>
+              </div>
+            ` : ''}
+            ${suggestedBudgetCategories.length ? `
+              <div style="background:rgba(130,195,65,0.06); border-radius:12px; padding:14px; margin-bottom:12px;">
+                <div style="font-size:13px; color:var(--text); margin-bottom:8px;"><strong>Program budget guide categories:</strong></div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                  ${suggestedBudgetCategories.map(cat => `<span style="background:rgba(45,80,22,0.08); padding:4px 10px; border-radius:8px; font-size:12px; color:var(--primary);">${escapeHtml(cat)}</span>`).join('')}
+                </div>
+              </div>
+            ` : ''}
             <div id="budgetItems">
-              ${items.length ? items.map((item, i) => `
-                <div style="background:var(--bg); border-radius:12px; padding:14px; margin-bottom:10px; border:1px solid #e5e5ea;">
-                  <div style="display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; align-items:end;">
-                    <div class="form-group" style="margin-bottom:0;">
-                      ${i === 0 ? '<label style="font-size:13px;">Description</label>' : ''}
-                      <input type="text" value="${escapeAttr(item.description || '')}" data-budget-idx="${i}" data-field="description" onchange="wizBudgetChange()" style="padding:10px;">
-                    </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                      ${i === 0 ? '<label style="font-size:13px;">Amount ($)</label>' : ''}
-                      <input type="number" value="${item.amount || ''}" data-budget-idx="${i}" data-field="amount" onchange="wizBudgetChange()" style="padding:10px;" step="0.01">
-                    </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                      ${i === 0 ? '<label style="font-size:13px;">Category</label>' : ''}
-                      <select data-budget-idx="${i}" data-field="category" onchange="wizBudgetChange()" style="padding:10px;">
-                        <option value="equipment" ${item.category==='equipment'?'selected':''}>Equipment</option>
-                        <option value="supplies" ${item.category==='supplies'?'selected':''}>Supplies</option>
-                        <option value="labour" ${item.category==='labour'?'selected':''}>Labour</option>
-                        <option value="professional" ${item.category==='professional'?'selected':''}>Professional services</option>
-                        <option value="other" ${item.category==='other'?'selected':''}>Other</option>
+              ${items.length ? items.map((item, i) => {
+                const amt = parseFloat(item.amount || 0);
+                const isHighValue = amt > 1000;
+                return `
+                <div style="background:var(--bg); border-radius:14px; padding:20px; margin-bottom:12px; border:1px solid ${isHighValue ? 'rgba(45,80,22,0.25)' : '#e5e5ea'};">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div style="display:flex; gap:8px; align-items:center;">
+                      <select data-budget-idx="${i}" data-field="category" onchange="wizBudgetChange()" style="padding:8px 12px; font-size:13px; border-radius:8px; border:1px solid #d2d2d7; background:#fff;">
+                        ${renderBudgetCategoryOptions(item.category)}
                       </select>
+                      ${isHighValue ? '<span style="font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(245,124,0,0.1); color:var(--warning); font-weight:600;">Over $1K</span>' : ''}
                     </div>
-                    <button onclick="removeBudgetItem(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:20px;padding:10px;">×</button>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <div class="form-group" style="margin-bottom:0; width:130px;">
+                        <input type="number" value="${item.amount || ''}" data-budget-idx="${i}" data-field="amount" onchange="wizBudgetChange()" style="padding:8px 10px; font-size:15px; font-weight:600; text-align:right;" step="0.01" placeholder="$0.00">
+                      </div>
+                      <button onclick="removeBudgetItem(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:20px;padding:4px 8px;" title="Remove item">&times;</button>
+                    </div>
                   </div>
+                  <div class="form-group" style="margin-bottom:12px;">
+                    <label style="font-size:12px; font-weight:600;">Description ${isHighValue ? '(What) <span style=color:var(--error)>*</span>' : ''}</label>
+                    <input type="text" value="${escapeAttr(item.description || '')}" data-budget-idx="${i}" data-field="description" onchange="wizBudgetChange()" style="padding:10px;" placeholder="Describe this expense in detail">
+                  </div>
+                  <div class="form-group" style="margin-bottom:12px;">
+                    <label style="font-size:12px; font-weight:600;">Justification (Why is this needed?) ${isHighValue ? '<span style=color:var(--error)>*</span>' : ''}</label>
+                    <textarea data-budget-idx="${i}" data-field="justification" onchange="wizBudgetChange()" placeholder="Explain why this expense is necessary for the project and how it supports your objectives." style="padding:10px; min-height:80px; font-size:14px;">${escapeHtml(item.justification || '')}</textarea>
+                  </div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:${isHighValue ? '12px' : '0'};">
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label style="font-size:12px;">Responsible party (Who) ${isHighValue ? '<span style=color:var(--error)>*</span>' : ''}</label>
+                      <input type="text" value="${escapeAttr(item.owner || '')}" data-budget-idx="${i}" data-field="owner" onchange="wizBudgetChange()" placeholder="Vendor, contractor, or staff lead" style="padding:8px; font-size:13px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label style="font-size:12px;">Supplier / Source ${isHighValue ? '<span style=color:var(--error)>*</span>' : ''}</label>
+                      <input type="text" value="${escapeAttr(item.supplierName || '')}" data-budget-idx="${i}" data-field="supplierName" onchange="wizBudgetChange()" placeholder="e.g., GreenTech Inc." style="padding:8px; font-size:13px;">
+                    </div>
+                  </div>
+                  ${isHighValue ? `
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label style="font-size:12px;">Units / Qty</label>
+                      <input type="text" value="${escapeAttr(item.units || '')}" data-budget-idx="${i}" data-field="units" onchange="wizBudgetChange()" placeholder="e.g., 10 panels" style="padding:8px; font-size:13px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label style="font-size:12px;">Unit cost ($)</label>
+                      <input type="number" value="${item.unitCost || ''}" data-budget-idx="${i}" data-field="unitCost" onchange="wizBudgetChange()" step="0.01" style="padding:8px; font-size:13px;">
+                    </div>
+                  </div>` : `
                   <details style="margin-top:8px;">
-                    <summary style="font-size:12px; color:var(--text-light); cursor:pointer; user-select:none;">Cost breakdown & justification</summary>
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
+                    <summary style="font-size:12px; color:var(--text-light); cursor:pointer; user-select:none;">Cost breakdown details</summary>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
                       <div class="form-group" style="margin-bottom:0;">
-                        <label style="font-size:11px;">Units / Qty</label>
+                        <label style="font-size:12px;">Units / Qty</label>
                         <input type="text" value="${escapeAttr(item.units || '')}" data-budget-idx="${i}" data-field="units" onchange="wizBudgetChange()" placeholder="e.g., 10 panels" style="padding:8px; font-size:13px;">
                       </div>
                       <div class="form-group" style="margin-bottom:0;">
-                        <label style="font-size:11px;">Unit cost ($)</label>
+                        <label style="font-size:12px;">Unit cost ($)</label>
                         <input type="number" value="${item.unitCost || ''}" data-budget-idx="${i}" data-field="unitCost" onchange="wizBudgetChange()" step="0.01" style="padding:8px; font-size:13px;">
                       </div>
-                      <div class="form-group" style="margin-bottom:0;">
-                        <label style="font-size:11px;">Supplier / Source</label>
-                        <input type="text" value="${escapeAttr(item.supplierName || '')}" data-budget-idx="${i}" data-field="supplierName" onchange="wizBudgetChange()" placeholder="e.g., GreenTech Inc." style="padding:8px; font-size:13px;">
-                      </div>
                     </div>
-                    <div class="form-group" style="margin-top:8px; margin-bottom:0;">
-                      <label style="font-size:11px;">Justification</label>
-                      <input type="text" value="${escapeAttr(item.justification || '')}" data-budget-idx="${i}" data-field="justification" onchange="wizBudgetChange()" placeholder="Why is this expense necessary for the project?" style="padding:8px; font-size:13px;">
-                    </div>
-                  </details>
-                </div>
-              `).join('') : '<p style="color:var(--text-light);margin-bottom:16px;">No budget items yet. Add your first item below.</p>'}
+                  </details>`}
+                </div>`;
+              }).join('') : '<p style="color:var(--text-light);margin-bottom:16px;">No budget items yet. Add your first item below.</p>'}
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="addBudgetItem()" style="margin-top:8px;">+ Add Budget Item</button>
+            <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+              <button class="btn btn-secondary btn-sm" onclick="addBudgetItem()">+ Add Budget Item</button>
+              <button class="btn btn-secondary btn-sm" onclick="aiBudgetReview()" style="margin-left:auto;">AI Review Budget</button>
+            </div>
+            <div id="aiBudgetReviewResult"></div>
             <div style="margin-top:24px; padding:16px; background:var(--bg); border-radius:12px; display:flex; justify-content:space-between;">
               <span style="font-weight:600;">Total Budget</span>
               <span style="font-weight:700; font-size:20px; color:var(--primary);" id="budgetTotal">$${(budget.totalAmount || 0).toLocaleString()}</span>
@@ -1787,7 +2019,10 @@
                   <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Project Milestones</h3>
                   <p style="font-size:13px; color:var(--text-light); margin:0;">Break your project into phases. Nearly all funding programs require milestones tied to budget.</p>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="addMilestone()" style="white-space:nowrap;">+ Add Milestone</button>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn btn-secondary btn-sm" onclick="aiGenerateMilestones()" style="white-space:nowrap;">AI Generate Milestones</button>
+                  <button class="btn btn-secondary btn-sm" onclick="addMilestone()" style="white-space:nowrap;">+ Add Milestone</button>
+                </div>
               </div>
               <div id="milestonesList">
                 ${milestones.length ? milestones.map((ms, mi) => `
@@ -1844,11 +2079,11 @@
               <label>What outcomes will your project achieve?</label>
               <div class="why-asking">Programs score applications on measurable outcomes. Think specific numbers: "produce X kg/year," "reduce emissions by Y%."</div>
               <textarea id="wiz_outcomes" onchange="wizAutoSave()" placeholder="e.g., Produce 5,000 kg of leafy greens annually for local restaurants and food banks...">${escapeHtml(answers.outcomes || '')}</textarea>
-              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_outcomes','project outcomes')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>
+              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_outcomes','project outcomes')" style="margin-top:8px;font-size:13px;">AI Assist</button>
             </div>
             ${(websiteIntelligence?.communityEvents?.length || websiteIntelligence?.achievements?.length) ? `
             <div class="alert alert-info" style="margin-bottom:16px;">
-              <span>🔍</span>
+              <span style="font-weight:600;">Key Evidence</span>
               <div>
                 <strong>From your website</strong> — consider weaving these into your narrative:
                 <ul style="font-size:13px;margin:8px 0 0 16px;color:var(--text);">
@@ -1861,13 +2096,13 @@
               <label>What risks could affect your project, and how will you mitigate them?</label>
               <div class="why-asking">Strong applications demonstrate you've thought about what could go wrong and have a plan.</div>
               <textarea id="wiz_risks" onchange="wizAutoSave()" placeholder="e.g., Supply chain delays → order equipment 8 weeks early; crop failure → maintain backup seed stock...">${escapeHtml(answers.risks || '')}</textarea>
-              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_risks','risk mitigation plan')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>
+              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_risks','risk mitigation plan')" style="margin-top:8px;font-size:13px;">AI Assist</button>
             </div>
             <div class="form-group">
               <label>How does your project align with program priorities?</label>
               <div class="why-asking">Use keywords from the program: innovation, sustainability, food security, market diversification, Indigenous food systems, etc.</div>
               <textarea id="wiz_alignment" onchange="wizAutoSave()" placeholder="e.g., This project directly supports climate resilience and local food security by reducing long-distance supply chain dependence...">${escapeHtml(answers.alignment || '')}</textarea>
-              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_alignment','program alignment statement')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>
+              <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_alignment','program alignment statement')" style="margin-top:8px;font-size:13px;">AI Assist</button>
             </div>
             ${currentApp.priority_lexicon?.length ? `
               <div style="background:rgba(130,195,65,0.06); border-radius:12px; padding:16px; margin-top:16px;">
@@ -1877,56 +2112,39 @@
                 </div>
               </div>` : ''}
 
-            ${/* Program-specific questions from question_map */ ''}
-            ${(() => {
-              const qMap = currentApp.question_map || [];
-              if (!qMap.length) return '';
-              return `
-                <div style="margin-top:32px; padding-top:24px; border-top:2px solid #e5e5ea;">
-                  <div style="margin-bottom:16px;">
-                    <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Program-Specific Questions</h3>
-                    <p style="font-size:13px; color:var(--text-light); margin:0;">These questions are pulled from the actual ${escapeHtml(currentApp.program_name || 'program')} application.</p>
-                  </div>
-                  ${qMap.map((q, qi) => {
-                    const fieldKey = q.fieldKey || ('programQ_' + qi);
-                    const savedAnswer = answers[fieldKey] || '';
-                    const qType = q.questionType || 'textarea';
-                    const isRequired = q.required ? '<span style="color:var(--error);">*</span>' : '';
-                    let inputHtml = '';
-                    if (qType === 'select' && q.options?.length) {
-                      inputHtml = '<select id="wiz_pq_' + qi + '" data-pq-key="' + escapeAttr(fieldKey) + '" onchange="wizProgramQuestionChange()" style="padding:10px;">' +
-                        '<option value="">— Select —</option>' +
-                        q.options.map(opt => '<option value="' + escapeAttr(opt) + '"' + (savedAnswer === opt ? ' selected' : '') + '>' + escapeHtml(opt) + '</option>').join('') +
-                        '</select>';
-                    } else if (qType === 'number') {
-                      inputHtml = '<input type="number" id="wiz_pq_' + qi + '" data-pq-key="' + escapeAttr(fieldKey) + '" value="' + escapeAttr(savedAnswer) + '" onchange="wizProgramQuestionChange()" style="padding:10px;" placeholder="Enter a number">';
-                    } else if (qType === 'text') {
-                      inputHtml = '<input type="text" id="wiz_pq_' + qi + '" data-pq-key="' + escapeAttr(fieldKey) + '" value="' + escapeAttr(savedAnswer) + '" onchange="wizProgramQuestionChange()" style="padding:10px;">';
-                    } else {
-                      inputHtml = '<textarea id="wiz_pq_' + qi + '" data-pq-key="' + escapeAttr(fieldKey) + '" onchange="wizProgramQuestionChange()" placeholder="' + escapeAttr(q.helpText || '') + '" style="padding:10px; min-height:80px;">' + escapeHtml(savedAnswer) + '</textarea>' +
-                        '<button class="btn btn-secondary btn-sm" onclick="aiDraftPQ(' + qi + ')" style="margin-top:8px;font-size:13px;">✨ AI Assist</button>';
-                    }
-                    return '<div class="form-group" style="margin-bottom:20px;">' +
-                      '<label>' + escapeHtml(q.question) + ' ' + isRequired + '</label>' +
-                      (q.helpText ? '<div class="why-asking">' + escapeHtml(q.helpText) + '</div>' : '') +
-                      inputHtml +
-                      '</div>';
-                  }).join('')}
-                </div>`;
-            })()}`;
+            ${renderProgramQuestionGroups(answers)}
+            ${currentApp?.answers?.stackingPlan?.linkedApplications?.length ? `
+              <div style="margin-top:12px;">
+                <button class="btn btn-secondary btn-sm" onclick="syncStackedApplications()">Copy shared answers to linked applications</button>
+              </div>
+            ` : ''}`;
           break;
 
         case 'documents':
           const reqDocs = currentApp.required_documents || [];
           const checklist = currentApp.attachments_checklist || [];
           const letters = currentApp.support_letters || [];
+          const uploadedDocs = getUploadedDocuments();
+          const uploadReq = getUploadRequirements();
+          const fallbackMode = needsApplicationUploadFallback();
+          const docConsistency = evaluateDocumentConsistency();
           const org_doc = currentApp.organization_profile || {};
           const proj_doc = currentApp.project_profile || {};
           html += `
             <div class="alert alert-info" style="margin-bottom:24px;">
-              <span>📎</span>
+              <span style="font-weight:600;">Attachments</span>
               <span>Check off each document as you prepare it. You'll upload files when submitting through the official portal.</span>
             </div>
+            ${fallbackMode ? `
+              <div class="alert alert-warning" style="margin-bottom:16px;">
+                <span style="font-weight:600;">Action Required</span>
+                <span><strong>We could not pull the application questions from this program.</strong> Download the official application form from the program website and upload it here so we can tailor your responses.</span>
+              </div>
+              <div style="margin-bottom:20px; padding:16px; border:2px dashed var(--border); border-radius:12px; text-align:center;">
+                <p style="font-size:14px; color:var(--text); margin-bottom:12px;">Upload the program's application PDF or Word document</p>
+                <input type="file" accept=".pdf,.doc,.docx" onchange="handleApplicationUpload(event)" style="font-size:14px;">
+              </div>
+            ` : ''}
             ${reqDocs.length ? reqDocs.map((doc, i) => {
               const done = checklist.find(c => c.docType === doc);
               return `
@@ -1935,6 +2153,51 @@
                   <span style="font-size:15px;">${escapeHtml(doc)}</span>
                 </div>`;
             }).join('') : '<p style="color:var(--text-light);">No specific documents listed for this program. Check the official program page for requirements.</p>'}
+
+            <div style="margin-top:20px; padding:16px; background:var(--bg); border:1px solid #e5e5ea; border-radius:12px;">
+              <h4 style="font-size:15px; margin-bottom:8px;">Application PDF Upload Review</h4>
+              <p style="font-size:13px; color:var(--text-light); margin-bottom:12px;">Upload all official application documents. Some programs require separate budget and milestone documents.</p>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+                <label style="font-size:12px;"><input type="checkbox" ${uploadReq.requireBudgetDoc ? 'checked' : ''} onchange="setUploadRequirement('requireBudgetDoc', this.checked)"> Separate budget document required</label>
+                <label style="font-size:12px;"><input type="checkbox" ${uploadReq.requireMilestoneDoc ? 'checked' : ''} onchange="setUploadRequirement('requireMilestoneDoc', this.checked)"> Separate milestone/workplan document required</label>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; align-items:end; margin-bottom:10px;">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label style="font-size:12px;">Document type</label>
+                  <select id="uploadDocType" style="padding:8px; font-size:13px;">
+                    <option value="application_form">Application form</option>
+                    <option value="budget_document">Budget document</option>
+                    <option value="milestone_document">Milestone/workplan document</option>
+                    <option value="supporting_document">Supporting document</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label style="font-size:12px;">Notes</label>
+                  <input id="uploadDocNotes" type="text" placeholder="Optional note" style="padding:8px; font-size:13px;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label style="font-size:12px;">Upload PDF</label>
+                  <input id="uploadDocFile" type="file" accept="application/pdf" onchange="addUploadedDocumentFromFile(this)" style="padding:6px; font-size:12px; background:#fff; border:1px solid #d2d2d7; border-radius:8px;">
+                </div>
+              </div>
+
+              ${uploadedDocs.length ? uploadedDocs.map((d, di) => `
+                <div style="background:#fff; border:1px solid #e5e5ea; border-radius:10px; padding:10px; margin-bottom:8px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <div style="font-size:13px;"><strong>${escapeHtml(labelDocType(d.docType))}</strong> · ${escapeHtml(d.fileName || 'Unnamed file')}</div>
+                    <button onclick="removeUploadedDocument(${di})" style="background:none;border:none;color:var(--error);cursor:pointer;">×</button>
+                  </div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+                    <input type="text" value="${escapeAttr(d.summary || '')}" data-updoc-idx="${di}" data-updoc-field="summary" onchange="updateUploadedDocumentMeta()" placeholder="Document summary" style="padding:8px; font-size:12px;">
+                    <input type="text" value="${escapeAttr(d.keyTerms || '')}" data-updoc-idx="${di}" data-updoc-field="keyTerms" onchange="updateUploadedDocumentMeta()" placeholder="Key terms (comma separated)" style="padding:8px; font-size:12px;">
+                  </div>
+                </div>
+              `).join('') : '<p style="font-size:13px; color:var(--text-light); margin:0;">No uploaded documents yet.</p>'}
+
+              <div style="margin-top:8px; font-size:12px; color:${docConsistency.warnings.length ? 'var(--warning)' : 'var(--success)'};">
+                ${docConsistency.warnings.length ? `Consistency warning: ${escapeHtml(docConsistency.warnings[0])}` : 'Consistency check ready.'}
+              </div>
+            </div>
 
             <!-- Letters of Support Section -->
             <div style="margin-top:32px; padding-top:24px; border-top:2px solid #e5e5ea;">
@@ -1951,7 +2214,7 @@
                     <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
                       <span style="font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase;">Supporter ${li+1}</span>
                       <div style="display:flex; gap:8px; align-items:center;">
-                        <span style="font-size:11px; padding:3px 8px; border-radius:6px; font-weight:600; background:${lt.status === 'received' ? '#d4edda; color:#155724' : lt.status === 'requested' ? '#fff3cd; color:#856404' : '#f8f9fa; color:#868e96'};">${lt.status === 'received' ? '✓ Received' : lt.status === 'requested' ? '⏳ Requested' : '○ Draft'}</span>
+                        <span style="font-size:11px; padding:3px 8px; border-radius:6px; font-weight:600; background:${lt.status === 'received' ? '#d4edda; color:#155724' : lt.status === 'requested' ? '#fff3cd; color:#856404' : '#f8f9fa; color:#868e96'};">${lt.status === 'received' ? 'Received' : lt.status === 'requested' ? 'Requested' : 'Draft'}</span>
                         <button onclick="removeSupportLetter(${li})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:16px;">×</button>
                       </div>
                     </div>
@@ -1983,12 +2246,12 @@
                       <label style="font-size:12px;">Relationship to your project</label>
                       <input type="text" value="${escapeAttr(lt.relationship || '')}" data-lt-idx="${li}" data-lt-field="relationship" onchange="wizLetterChange()" placeholder="e.g., Municipal partner, wholesale buyer, community member" style="padding:10px;">
                     </div>
-                    <button class="btn btn-secondary btn-sm" onclick="generateLetterEmail(${li})" style="font-size:13px;">📧 Generate Request Email</button>
+                    <button class="btn btn-secondary btn-sm" onclick="generateLetterEmail(${li})" style="font-size:13px;">Generate Request Email</button>
                     ${lt._generatedEmail ? `
                       <div style="margin-top:12px; background:#fff; border:1px solid #e5e5ea; border-radius:10px; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--text-light);">Email Template</span>
-                          <button class="btn btn-secondary btn-sm" onclick="copyLetterEmail(${li})" style="font-size:12px;">📋 Copy</button>
+                          <button class="btn btn-secondary btn-sm" onclick="copyLetterEmail(${li})" style="font-size:12px;">Copy</button>
                         </div>
                         <div style="font-size:13px; margin-bottom:6px;"><strong>Subject:</strong> ${escapeHtml(lt._generatedEmail.subject || '')}</div>
                         <pre style="white-space:pre-wrap; font-family:inherit; font-size:13px; line-height:1.5; margin:0; color:var(--text);">${escapeHtml(lt._generatedEmail.body || '')}</pre>
@@ -2006,41 +2269,51 @@
           break;
 
         case 'review':
+          const reviewConsistency = evaluateDocumentConsistency();
           html += `
             <div class="alert alert-warning" style="margin-bottom:24px;">
-              <span>⚠️</span>
+              <span style="font-weight:600;">Note</span>
               <span><strong>Draft only.</strong> All content must be reviewed by you and submitted through the official program portal.</span>
             </div>
             <h3 style="font-size:20px; margin-bottom:16px;">Your application summary</h3>
             <div class="export-card">
-              <h4>📄 Answers Document</h4>
+              <h4>Answers Document</h4>
               <p>Your responses formatted in program question order, ready for copy/paste into the official portal.</p>
             </div>
             <div class="export-card">
-              <h4>💰 Budget Summary</h4>
+              <h4>Budget Summary</h4>
               <p>Itemized budget with category totals and alignment to project activities.</p>
             </div>
             <div class="export-card">
-              <h4>📅 Milestones</h4>
+              <h4>Milestones</h4>
               <p>Project phases with timelines, deliverables, and per-milestone budgets.</p>
             </div>
             <div class="export-card">
-              <h4>✅ Documents Checklist</h4>
+              <h4>Documents Checklist</h4>
               <p>Required attachments with status (ready / missing).</p>
             </div>
             <div class="export-card">
-              <h4>🤝 Letters of Support</h4>
+              <h4>Letters of Support</h4>
               <p>Supporter tracking with status and request email templates.</p>
             </div>
             <div class="export-card">
-              <h4>📚 Source Citations</h4>
+              <h4>Source Citations</h4>
               <p>References and evidence snippets included in your narrative, with source links.</p>
+            </div>
+            <div class="export-card">
+              <h4>Document Consistency</h4>
+              <p>Language should be consistent across application, budget, and milestone documents.</p>
+              <div style="margin-top:8px; font-size:13px; color:${reviewConsistency.warnings.length ? 'var(--warning)' : 'var(--success)'};">
+                ${reviewConsistency.warnings.length ? reviewConsistency.warnings.map(w => `• ${escapeHtml(w)}`).join('<br>') : 'No critical consistency issues detected.'}
+              </div>
             </div>
             <div style="margin-top:24px; display:flex; gap:16px; flex-wrap:wrap;">
               <button class="btn btn-primary" onclick="generateExport()">Generate Draft Pack</button>
-              <button class="btn btn-secondary" onclick="downloadPdf()">📥 Download PDF</button>
+              <button class="btn btn-secondary" onclick="downloadPdf()">Download PDF</button>
               <button class="btn btn-secondary" onclick="recordOutcome()">Record Outcome</button>
-            </div>`;
+              <button class="btn btn-secondary" onclick="aiApplicationReview()" style="background:var(--primary); color:#fff;">AI Review & Score</button>
+            </div>
+            <div id="aiApplicationReviewResult" style="margin-top:16px;"></div>`;
           break;
       }
 
@@ -2052,6 +2325,22 @@
     }
 
     function wizardNext() {
+      const step = WIZARD_STEPS[wizardStep];
+      if (step?.key === 'budget') {
+        const budgetIssues = validateBudgetRequirements();
+        if (budgetIssues.length > 0) {
+          alert(`Please fix budget issues before continuing:\n\n${budgetIssues.map(i => `• ${i}`).join('\n')}`);
+          return;
+        }
+      }
+      if (step?.key === 'documents') {
+        const documentIssues = validateDocumentRequirements();
+        if (documentIssues.length > 0) {
+          alert(`Please complete document requirements:\n\n${documentIssues.map(i => `• ${i}`).join('\n')}`);
+          return;
+        }
+      }
+
       wizSave();
       if (wizardStep < WIZARD_STEPS.length - 1) {
         wizardStep++;
@@ -2123,7 +2412,8 @@
             description: gv('wiz_projDesc'),
             needStatement: gv('wiz_projNeed'),
             startDate: gv('wiz_projStart'),
-            endDate: gv('wiz_projEnd')
+            endDate: gv('wiz_projEnd'),
+            trlLevel: gv('wiz_trl')
           };
           break;
         case 'budget':
@@ -2152,6 +2442,12 @@
             const { _generatedEmail, ...rest } = lt;
             return rest;
           });
+          body.answers = {
+            ...currentApp.answers,
+            uploadedDocuments: getUploadedDocuments(),
+            documentUploadState: getUploadRequirements(),
+            documentConsistencyWarnings: evaluateDocumentConsistency().warnings
+          };
           break;
       }
 
@@ -2193,6 +2489,10 @@
 
         const indicator = document.getElementById('autosaveIndicator');
         if (indicator) indicator.innerHTML = '<div class="dot"></div> Saved';
+
+        if (step?.key === 'narrative' && currentApp?.answers?.stackingPlan?.linkedApplications?.length) {
+          syncStackedApplications().catch(() => {});
+        }
       } catch (e) {
         console.error('Save error:', e);
         const indicator = document.getElementById('autosaveIndicator');
@@ -2224,7 +2524,9 @@
 
       // Debounce search
       searchTimeout = setTimeout(async () => {
-        resultsDiv.innerHTML = '<div class="corp-search-loading">🔍 Searching federal corporations registry...</div>';
+        const spinner = document.getElementById('corpSearchSpinner');
+        if (spinner) spinner.style.display = 'inline-block';
+        resultsDiv.innerHTML = '<div class="corp-search-loading"><span class="search-spinner"></span> Searching federal corporations registry...</div>';
 
         try {
           const res = await fetch(`${API}/corporation-search?name=${encodeURIComponent(name)}`);
@@ -2245,12 +2547,15 @@
           data.data.results.forEach((corp, idx) => {
             html += `
               <div class="corp-search-result" onclick="selectCorporation(${idx})" data-corp-idx="${idx}">
-                <div class="corp-result-name">${escapeHtml(corp.name)}</div>
-                <div class="corp-result-meta">
-                  <span><strong>Corp #:</strong> ${escapeHtml(corp.corporationNumber)}</span>
-                  ${corp.status ? `<span><strong>Status:</strong> ${escapeHtml(corp.status)}</span>` : ''}
-                  ${corp.incorporationDate ? `<span><strong>Incorporated:</strong> ${corp.incorporationDate}</span>` : ''}
+                <div style="flex:1;">
+                  <div class="corp-result-name">${escapeHtml(corp.name)}</div>
+                  <div class="corp-result-meta">
+                    <span><strong>Corp #:</strong> ${escapeHtml(corp.corporationNumber)}</span>
+                    ${corp.status ? `<span><strong>Status:</strong> ${escapeHtml(corp.status)}</span>` : ''}
+                    ${corp.incorporationDate ? `<span><strong>Incorporated:</strong> ${corp.incorporationDate}</span>` : ''}
+                  </div>
                 </div>
+                <div class="result-select-icon">&#10003;</div>
               </div>
             `;
           });
@@ -2267,6 +2572,9 @@
               Search temporarily unavailable. Please enter details manually.
             </div>
           `;
+        } finally {
+          const spinner = document.getElementById('corpSearchSpinner');
+          if (spinner) spinner.style.display = 'none';
         }
       }, 800); // 800ms debounce
     }
@@ -2321,10 +2629,67 @@
     // ============================================================
     // Budget helpers
     // ============================================================
+    function normalizeBudgetCategory(value) {
+      return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '') || 'other';
+    }
+
+    function getBudgetCategoryChoices() {
+      const defaults = ['equipment', 'supplies', 'labour', 'professional', 'other'];
+      const fromProgram = (currentApp?.budget_categories || [])
+        .map(c => normalizeBudgetCategory(c?.category))
+        .filter(Boolean);
+      return Array.from(new Set([...fromProgram, ...defaults]));
+    }
+
+    function labelBudgetCategory(value) {
+      return String(value || '')
+        .split('_')
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ') || 'Other';
+    }
+
+    function renderBudgetCategoryOptions(selected) {
+      const selectedNorm = normalizeBudgetCategory(selected);
+      return getBudgetCategoryChoices()
+        .map(opt => `<option value="${escapeAttr(opt)}" ${selectedNorm === opt ? 'selected' : ''}>${escapeHtml(labelBudgetCategory(opt))}</option>`)
+        .join('');
+    }
+
+    function ensureBudgetCategoryStarters() {
+      if (!currentApp) return;
+      if (!currentApp.budget) currentApp.budget = {};
+      if (!Array.isArray(currentApp.budget.items)) currentApp.budget.items = [];
+      if (currentApp.budget.items.length > 0) return;
+
+      const templates = Array.isArray(currentApp.budget_categories) ? currentApp.budget_categories : [];
+      if (!templates.length) return;
+
+      currentApp.budget.items = templates.map((template) => {
+        const category = normalizeBudgetCategory(template?.category);
+        const description = template?.description ? String(template.description) : `Planned ${labelBudgetCategory(category)} costs`;
+        return {
+          description,
+          amount: 0,
+          category,
+          units: '',
+          unitCost: 0,
+          supplierName: '',
+          justification: template?.notes || ''
+        };
+      });
+
+      updateBudgetTotal();
+    }
+
     function addBudgetItem() {
       if (!currentApp.budget) currentApp.budget = {};
       if (!currentApp.budget.items) currentApp.budget.items = [];
-      currentApp.budget.items.push({ description: '', amount: 0, category: 'equipment', units: '', unitCost: 0, supplierName: '', justification: '' });
+      currentApp.budget.items.push({ description: '', amount: 0, category: 'equipment', units: '', unitCost: 0, supplierName: '', justification: '', milestoneLink: '', responsibleParty: '' });
       renderWizardStep();
     }
 
@@ -2383,6 +2748,206 @@
       wizAutoSave();
     }
 
+    function getUploadRequirements() {
+      const state = currentApp?.answers?.documentUploadState || {};
+      return {
+        requireBudgetDoc: !!state.requireBudgetDoc,
+        requireMilestoneDoc: !!state.requireMilestoneDoc
+      };
+    }
+
+    function getUploadedDocuments() {
+      return Array.isArray(currentApp?.answers?.uploadedDocuments) ? currentApp.answers.uploadedDocuments : [];
+    }
+
+    function setUploadRequirement(key, value) {
+      if (!currentApp.answers) currentApp.answers = {};
+      if (!currentApp.answers.documentUploadState) currentApp.answers.documentUploadState = {};
+      currentApp.answers.documentUploadState[key] = !!value;
+      wizAutoSave();
+    }
+
+    function labelDocType(docType) {
+      const labels = {
+        application_form: 'Application Form',
+        budget_document: 'Budget Document',
+        milestone_document: 'Milestone/Workplan Document',
+        supporting_document: 'Supporting Document'
+      };
+      return labels[docType] || 'Document';
+    }
+
+    function addUploadedDocumentFromFile(inputEl) {
+      if (!inputEl?.files?.length) return;
+      if (!currentApp.answers) currentApp.answers = {};
+      if (!Array.isArray(currentApp.answers.uploadedDocuments)) currentApp.answers.uploadedDocuments = [];
+
+      const file = inputEl.files[0];
+      const docTypeEl = document.getElementById('uploadDocType');
+      const notesEl = document.getElementById('uploadDocNotes');
+      const docType = docTypeEl?.value || 'supporting_document';
+      const notes = notesEl?.value?.trim() || '';
+
+      currentApp.answers.uploadedDocuments.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        docType,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type || 'application/pdf',
+        uploadedAt: new Date().toISOString(),
+        summary: notes,
+        keyTerms: ''
+      });
+
+      if (notesEl) notesEl.value = '';
+      inputEl.value = '';
+      renderWizardStep();
+      wizAutoSave();
+    }
+
+    function removeUploadedDocument(idx) {
+      const docs = getUploadedDocuments();
+      if (idx < 0 || idx >= docs.length) return;
+      docs.splice(idx, 1);
+      if (!currentApp.answers) currentApp.answers = {};
+      currentApp.answers.uploadedDocuments = docs;
+      renderWizardStep();
+      wizAutoSave();
+    }
+
+    function updateUploadedDocumentMeta() {
+      const docs = getUploadedDocuments();
+      document.querySelectorAll('[data-updoc-idx]').forEach(el => {
+        const idx = parseInt(el.dataset.updocIdx, 10);
+        const field = el.dataset.updocField;
+        if (!docs[idx]) return;
+        docs[idx][field] = el.value;
+      });
+      if (!currentApp.answers) currentApp.answers = {};
+      currentApp.answers.uploadedDocuments = docs;
+      wizAutoSave();
+    }
+
+    function needsApplicationUploadFallback() {
+      const qMap = currentApp?.question_map || [];
+      return !Array.isArray(qMap) || qMap.length === 0;
+    }
+
+    async function handleApplicationUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      showToast('Uploading application form...', 'info');
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API}/applications/${currentApp.id}/upload-application`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}` },
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (data.data?.questions?.length) {
+            currentApp.question_map = data.data.questions;
+            showToast(`Extracted ${data.data.questions.length} questions from your document.`, 'success');
+            renderWizardStep();
+          } else {
+            showToast('Document uploaded but no questions could be extracted. Try a different format.', 'warning');
+          }
+        } else {
+          showToast(data.error || 'Upload failed.', 'error');
+        }
+      } catch (e) {
+        showToast('Upload failed. Please try again.', 'error');
+      }
+    }
+
+    function normalizeDocText(text) {
+      return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function extractTerms(text) {
+      const stop = new Set(['about', 'after', 'again', 'against', 'because', 'being', 'between', 'could', 'every', 'first', 'grant', 'project', 'shall', 'their', 'there', 'these', 'those', 'through', 'under', 'where', 'which', 'with', 'would']);
+      return Array.from(new Set(normalizeDocText(text).split(' ').filter(w => w.length >= 5 && !stop.has(w))));
+    }
+
+    function evaluateDocumentConsistency() {
+      const warnings = [];
+      const proj = currentApp?.project_profile || {};
+      const answers = currentApp?.answers || {};
+      const docs = getUploadedDocuments();
+      const budgetItems = currentApp?.budget?.items || [];
+
+      const canonicalSource = [proj.title, proj.description, proj.needStatement, answers.outcomes].filter(Boolean).join(' ');
+      const canonicalTerms = extractTerms(canonicalSource);
+
+      if (!proj.title || !proj.description) {
+        warnings.push('Project title and description should be completed before final document review.');
+      }
+
+      docs.forEach((doc) => {
+        const docText = [doc.summary, doc.keyTerms, doc.fileName].filter(Boolean).join(' ');
+        if (!docText.trim()) return;
+        const docTerms = extractTerms(docText);
+        if (!docTerms.length || !canonicalTerms.length) return;
+        const overlap = docTerms.filter(t => canonicalTerms.includes(t));
+        if (overlap.length === 0) {
+          warnings.push(`${labelDocType(doc.docType)} "${doc.fileName || 'document'}" does not appear aligned with project language/goals.`);
+        }
+      });
+
+      const budgetWithoutWhy = budgetItems.filter(item => (parseFloat(item.amount) || 0) > 1000 && !String(item.justification || '').trim()).length;
+      if (budgetWithoutWhy > 0) {
+        warnings.push(`${budgetWithoutWhy} budget item(s) over $1,000 are missing clear "why" justification.`);
+      }
+
+      return { warnings };
+    }
+
+    function validateBudgetRequirements() {
+      const issues = [];
+      const items = currentApp?.budget?.items || [];
+
+      items.forEach((item, idx) => {
+        const amount = parseFloat(item.amount) || 0;
+        if (amount > 1000) {
+          if (!String(item.owner || '').trim()) issues.push(`Budget item #${idx + 1} over $1,000 needs a responsible party (who).`);
+          if (!String(item.description || '').trim()) issues.push(`Budget item #${idx + 1} over $1,000 needs a detailed description (what).`);
+          if (!String(item.justification || '').trim()) issues.push(`Budget item #${idx + 1} over $1,000 needs a justification (why).`);
+        }
+      });
+
+      return issues;
+    }
+
+    function validateDocumentRequirements() {
+      const issues = [];
+      const reqDocs = currentApp?.required_documents || [];
+      const checklist = currentApp?.attachments_checklist || [];
+      const docs = getUploadedDocuments();
+      const uploadReq = getUploadRequirements();
+
+      reqDocs.forEach((doc) => {
+        const done = checklist.some(c => c.docType === doc);
+        if (!done) issues.push(`Required checklist item not completed: ${doc}`);
+      });
+
+      if (needsApplicationUploadFallback() && !docs.some(d => d.docType === 'application_form')) {
+        issues.push('Upload at least one Application Form PDF because template questions were unavailable.');
+      }
+      if (uploadReq.requireBudgetDoc && !docs.some(d => d.docType === 'budget_document')) {
+        issues.push('A separate budget document is required and has not been uploaded.');
+      }
+      if (uploadReq.requireMilestoneDoc && !docs.some(d => d.docType === 'milestone_document')) {
+        issues.push('A separate milestone/workplan document is required and has not been uploaded.');
+      }
+
+      const consistency = evaluateDocumentConsistency();
+      issues.push(...consistency.warnings);
+
+      return issues;
+    }
+
     function toggleDoc(idx, docType) {
       if (!currentApp.attachments_checklist) currentApp.attachments_checklist = [];
       const existing = currentApp.attachments_checklist.findIndex(c => c.docType === docType);
@@ -2426,13 +2991,14 @@
       const org = currentApp.organization_profile || {};
       const proj = currentApp.project_profile || {};
       const programName = currentApp.program_name || 'a funding program';
-      const contactFirst = (lt.contactName || 'there').split(' ')[0];
+      const contactFirst = (lt.contactName || '').split(' ')[0];
       const orgName = org.legalName || 'our organization';
       const projTitle = proj.title || 'our project';
+      const greeting = contactFirst ? `${contactFirst},` : '';
 
       lt._generatedEmail = {
         subject: `Request for Letter of Support — ${projTitle}`,
-        body: `Dear ${contactFirst},\n\nI hope this message finds you well. I'm writing on behalf of ${orgName} to request a letter of support for ${projTitle}.\n\nWe are applying to ${programName}${proj.description ? `, which will ${proj.description.substring(0, 150).toLowerCase()}` : ''}.\n\n${lt.relationship ? `As ${lt.relationship}, your endorsement would demonstrate the community backing and partnerships that reviewers look for.` : 'Your endorsement would demonstrate the community support that reviewers look for when evaluating applications.'}\n\nThe letter does not need to be long — a few paragraphs covering:\n• Your connection to our organization or project\n• Why this project matters to the community\n• Your confidence in our ability to deliver\n\nIf you're able to help, we would need the letter by [DATE]. I'm happy to provide any additional background you might need.\n\nThank you for considering this request.\n\nBest regards,\n${org.contactName || '[Your Name]'}\n${orgName}`
+        body: `${greeting}\n\nI hope this message finds you well. I am writing on behalf of ${orgName} to request a letter of support for ${projTitle}.\n\nWe are applying to ${programName}${proj.description ? `, which will ${proj.description.substring(0, 150).toLowerCase()}` : ''}.\n\n${lt.relationship ? `As ${lt.relationship}, your endorsement would demonstrate the community backing and partnerships that reviewers look for.` : 'Your endorsement would demonstrate the community support that reviewers look for when evaluating applications.'}\n\nThe letter does not need to be long — a few paragraphs covering:\n- Your connection to our organization or project\n- Why this project matters to the community\n- Your confidence in our ability to deliver\n\nIf you are able to help, we would need the letter by [DATE]. I am happy to provide any additional background you might need.\n\nBest regards,\n${org.contactName || '[Your Name]'}\n${orgName}`
       };
 
       renderWizardStep();
@@ -2459,6 +3025,80 @@
     // ============================================================
     // Program-specific question helpers
     // ============================================================
+    function getProgramQuestionGroups() {
+      const groups = [];
+      const primaryMap = currentApp?.question_map || [];
+      if (primaryMap.length) {
+        groups.push({
+          programId: currentApp.program_id,
+          programName: currentApp.program_name || 'Primary Program',
+          namespace: '',
+          questions: primaryMap
+        });
+      }
+
+      const stacked = currentApp?.stacked_program_details || [];
+      stacked.forEach((program) => {
+        const qMap = program?.question_map || [];
+        if (!qMap.length) return;
+        groups.push({
+          programId: program.id,
+          programName: program.program_name || `Program ${program.id}`,
+          namespace: `stack_${program.id}_`,
+          questions: qMap
+        });
+      });
+
+      return groups;
+    }
+
+    function renderProgramQuestionGroups(answers) {
+      const groups = getProgramQuestionGroups();
+      if (!groups.length) return '';
+
+      return `
+        <div style="margin-top:32px; padding-top:24px; border-top:2px solid #e5e5ea;">
+          <div style="margin-bottom:16px;">
+            <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Program-Specific Questions</h3>
+            <p style="font-size:13px; color:var(--text-light); margin:0;">Shared answers are prefilled, with room for program-specific adjustments.</p>
+          </div>
+          ${groups.map((group, gi) => {
+            return `
+              <div style="background:var(--bg); border:1px solid #e5e5ea; border-radius:12px; padding:14px; margin-bottom:16px;">
+                <h4 style="font-size:15px; margin:0 0 10px;">${escapeHtml(group.programName)}</h4>
+                ${group.questions.map((q, qi) => {
+                  const baseFieldKey = q.fieldKey || ('programQ_' + qi);
+                  const fieldKey = `${group.namespace}${baseFieldKey}`;
+                  const fallback = answers[baseFieldKey] || '';
+                  const savedAnswer = answers[fieldKey] ?? fallback;
+                  const qType = q.questionType || 'textarea';
+                  const isRequired = q.required ? '<span style="color:var(--error);">*</span>' : '';
+                  const inputId = `wiz_pq_${gi}_${qi}`;
+                  let inputHtml = '';
+                  if (qType === 'select' && q.options?.length) {
+                    inputHtml = '<select id="' + inputId + '" data-pq-key="' + escapeAttr(fieldKey) + '" onchange="wizProgramQuestionChange()" style="padding:10px;">' +
+                      '<option value="">— Select —</option>' +
+                      q.options.map(opt => '<option value="' + escapeAttr(opt) + '"' + (savedAnswer === opt ? ' selected' : '') + '>' + escapeHtml(opt) + '</option>').join('') +
+                      '</select>';
+                  } else if (qType === 'number') {
+                    inputHtml = '<input type="number" id="' + inputId + '" data-pq-key="' + escapeAttr(fieldKey) + '" value="' + escapeAttr(savedAnswer) + '" onchange="wizProgramQuestionChange()" style="padding:10px;" placeholder="Enter a number">';
+                  } else if (qType === 'text') {
+                    inputHtml = '<input type="text" id="' + inputId + '" data-pq-key="' + escapeAttr(fieldKey) + '" value="' + escapeAttr(savedAnswer) + '" onchange="wizProgramQuestionChange()" style="padding:10px;">';
+                  } else {
+                    inputHtml = '<textarea id="' + inputId + '" data-pq-key="' + escapeAttr(fieldKey) + '" onchange="wizProgramQuestionChange()" placeholder="' + escapeAttr(q.helpText || '') + '" style="padding:10px; min-height:80px;">' + escapeHtml(savedAnswer) + '</textarea>' +
+                      '<button class="btn btn-secondary btn-sm" onclick="aiDraftPQ(\'' + inputId + '\', \'' + escapeAttr(q.question || 'program question') + '\')" style="margin-top:8px;font-size:13px;">AI Assist</button>';
+                  }
+                  return '<div class="form-group" style="margin-bottom:14px;">' +
+                    '<label>' + escapeHtml(q.question) + ' ' + isRequired + '</label>' +
+                    (q.helpText ? '<div class="why-asking">' + escapeHtml(q.helpText) + '</div>' : '') +
+                    inputHtml +
+                    '</div>';
+                }).join('')}
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+
     function wizProgramQuestionChange() {
       if (!currentApp.answers) currentApp.answers = {};
       document.querySelectorAll('[data-pq-key]').forEach(el => {
@@ -2468,10 +3108,180 @@
       wizAutoSave();
     }
 
-    function aiDraftPQ(qi) {
-      const qMap = currentApp.question_map || [];
-      if (!qMap[qi]) return;
-      aiDraft('wiz_pq_' + qi, qMap[qi].question);
+    function aiDraftPQ(inputId, question) {
+      if (!inputId) return;
+      aiDraft(inputId, question || 'program question');
+    }
+
+    // ============================================================
+    // AI Budget Review
+    // ============================================================
+    async function aiBudgetReview() {
+      if (!currentApp || !authToken) return;
+      const resultDiv = document.getElementById('aiBudgetReviewResult');
+      if (!resultDiv) return;
+      resultDiv.innerHTML = '<div class="ai-review-panel"><p style="color:var(--text-light);"><span class="search-spinner"></span> Reviewing budget items against program requirements...</p></div>';
+      try {
+        const res = await fetch(`${API}/applications/${currentApp.id}/ai-draft`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: 'Review this grant application budget. For each budget item, assess: (1) Is the description clear and specific enough for a grant reviewer? (2) Is the justification compelling? (3) Are amounts reasonable? Provide specific improvement suggestions for each item. Format as a numbered list matching the budget items.',
+            userInput: JSON.stringify(currentApp.budget?.items || []),
+            programContext: currentApp.program_name || '',
+            organizationProfile: currentApp.organization_profile,
+            projectProfile: currentApp.project_profile
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.data?.draftText) {
+          resultDiv.innerHTML = `<div class="ai-review-panel">
+            <h4 style="font-size:15px; font-weight:700; margin-bottom:12px;">AI Budget Review</h4>
+            <pre style="white-space:pre-wrap; font-family:inherit; font-size:14px; line-height:1.6; margin:0;">${escapeHtml(data.data.draftText)}</pre>
+          </div>`;
+        } else {
+          resultDiv.innerHTML = '<div class="alert alert-error">AI review unavailable. Please try again later.</div>';
+        }
+      } catch (e) {
+        resultDiv.innerHTML = '<div class="alert alert-error">AI review failed. The service may be temporarily unavailable.</div>';
+      }
+    }
+
+    // ============================================================
+    // AI Milestone Generation
+    // ============================================================
+    async function aiGenerateMilestones() {
+      if (!currentApp || !authToken) return;
+      if (currentApp.milestones?.length > 0) {
+        if (!confirm('This will replace your existing milestones with AI-generated ones. Continue?')) return;
+      }
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Generating...';
+      try {
+        const budgetSummary = (currentApp.budget?.items || []).map(i => `${i.description || 'Item'}: $${i.amount || 0}`).join('; ');
+        const res = await fetch(`${API}/applications/${currentApp.id}/ai-draft`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: 'Based on this project budget and description, generate 3-5 project milestones. For each milestone provide: title, approximate start date relative to project start, approximate end date, key deliverables, and estimated budget allocation. Format as JSON array with fields: title, deliverables, budgetAmount. Return ONLY the JSON array, no other text.',
+            userInput: `Budget items: ${budgetSummary}. Project: ${currentApp.project_profile?.description || ''}. Duration: ${currentApp.project_profile?.startDate || 'TBD'} to ${currentApp.project_profile?.endDate || 'TBD'}`,
+            programContext: currentApp.program_name || ''
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.data?.draftText) {
+          try {
+            const jsonStr = data.data.draftText.replace(/```json\n?|```\n?/g, '').trim();
+            const milestones = JSON.parse(jsonStr);
+            if (Array.isArray(milestones)) {
+              currentApp.milestones = milestones.map(ms => ({
+                title: ms.title || '',
+                startDate: ms.startDate || '',
+                endDate: ms.endDate || '',
+                budgetAmount: parseFloat(ms.budgetAmount) || 0,
+                deliverables: ms.deliverables || '',
+                completionCriteria: ms.completionCriteria || ''
+              }));
+              renderWizardStep();
+              wizAutoSave();
+              showToast('Milestones generated. Review and edit as needed.', 'success');
+            }
+          } catch (parseErr) {
+            showToast('AI generated text but could not parse milestones. Adding as first milestone.', 'warning');
+            currentApp.milestones = [{ title: 'AI Draft', deliverables: data.data.draftText.substring(0, 500), startDate: '', endDate: '', budgetAmount: 0, completionCriteria: '' }];
+            renderWizardStep();
+          }
+        }
+      } catch (e) {
+        showToast('Milestone generation failed. Please try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'AI Generate Milestones';
+      }
+    }
+
+    // ============================================================
+    // AI Full Application Review & Scoring
+    // ============================================================
+    async function aiApplicationReview() {
+      if (!currentApp || !authToken) return;
+      const resultDiv = document.getElementById('aiApplicationReviewResult');
+      if (!resultDiv) return;
+      resultDiv.innerHTML = '<div class="ai-review-panel"><p style="color:var(--text-light);"><span class="search-spinner"></span> Reviewing entire application against program criteria...</p></div>';
+      try {
+        const org = currentApp.organization_profile || {};
+        const proj = currentApp.project_profile || {};
+        const answers = currentApp.answers || {};
+        const budget = currentApp.budget || {};
+        const milestones = currentApp.milestones || [];
+        const res = await fetch(`${API}/applications/${currentApp.id}/ai-draft`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: `You are a grant application reviewer. Review this application for the program "${currentApp.program_name || 'Unknown'}". Evaluate against these criteria and score each 1-10:\n1. Project Clarity - Is the project well-defined?\n2. Need Statement - Is the need clearly articulated?\n3. Budget Alignment - Does the budget support the project goals?\n4. Milestone Quality - Are milestones realistic and measurable?\n5. Program Fit - Does the project align with program priorities?\n6. Impact Potential - Will the project create meaningful outcomes?\n7. Risk Mitigation - Are risks identified with plans to address them?\n8. Language & Tone - Does the application use appropriate terminology?\n\nProvide:\n- A score for each criterion (1-10)\n- An overall score (average)\n- 3 specific recommendations to improve the application\n- Any language or terminology gaps compared to the program description\n\nFormat as JSON: { "scores": [{"criteria": "...", "score": N, "note": "..."}], "overall": N, "recommendations": ["..."], "languageGaps": ["..."] }`,
+            userInput: JSON.stringify({
+              organization: org,
+              project: proj,
+              outcomes: answers.outcomes || '',
+              risks: answers.risks || '',
+              alignment: answers.alignment || '',
+              budgetTotal: budget.totalAmount || 0,
+              budgetItems: (budget.items || []).length,
+              milestoneCount: milestones.length,
+              milestones: milestones.map(m => m.title).join(', ')
+            }),
+            programContext: currentApp.program_name || ''
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.data?.draftText) {
+          let review;
+          try {
+            const jsonStr = data.data.draftText.replace(/```json\n?|```\n?/g, '').trim();
+            review = JSON.parse(jsonStr);
+          } catch (_e) {
+            resultDiv.innerHTML = `<div class="ai-review-panel">
+              <h4 style="font-size:15px; font-weight:700; margin-bottom:12px;">AI Application Review</h4>
+              <pre style="white-space:pre-wrap; font-family:inherit; font-size:14px; line-height:1.6;">${escapeHtml(data.data.draftText)}</pre>
+            </div>`;
+            return;
+          }
+
+          const overallColor = (review.overall || 0) >= 7 ? 'var(--success)' : (review.overall || 0) >= 5 ? 'var(--warning)' : 'var(--error)';
+          let html = `<div class="ai-review-panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+              <h4 style="font-size:17px; font-weight:700;">AI Application Review</h4>
+              <div style="font-size:28px; font-weight:800; color:${overallColor};">${review.overall || '?'}<span style="font-size:14px; font-weight:400; color:var(--text-light);">/10</span></div>
+            </div>
+            <table class="scoring-matrix">
+              <tr><th>Criteria</th><th>Score</th><th>Notes</th></tr>
+              ${(review.scores || []).map(s => {
+                const c = s.score >= 7 ? 'var(--success)' : s.score >= 5 ? 'var(--warning)' : 'var(--error)';
+                return `<tr><td>${escapeHtml(s.criteria)}</td><td class="score-cell" style="color:${c};">${s.score}/10</td><td style="font-size:13px; color:var(--text-light);">${escapeHtml(s.note || '')}</td></tr>`;
+              }).join('')}
+            </table>`;
+
+          if (review.recommendations?.length) {
+            html += `<div style="margin-top:20px;"><h5 style="font-size:14px; font-weight:700; margin-bottom:8px;">Recommendations</h5>
+              ${review.recommendations.map(r => `<div style="font-size:14px; padding:6px 0; border-bottom:1px solid #e5e5ea;">- ${escapeHtml(r)}</div>`).join('')}
+            </div>`;
+          }
+          if (review.languageGaps?.length) {
+            html += `<div style="margin-top:16px;"><h5 style="font-size:14px; font-weight:700; margin-bottom:8px;">Language / Terminology Gaps</h5>
+              <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                ${review.languageGaps.map(g => `<span style="background:rgba(245,124,0,0.1); padding:4px 10px; border-radius:8px; font-size:13px; color:var(--warning);">${escapeHtml(g)}</span>`).join('')}
+              </div>
+            </div>`;
+          }
+          html += '</div>';
+          resultDiv.innerHTML = html;
+        } else {
+          resultDiv.innerHTML = '<div class="alert alert-error">AI review unavailable.</div>';
+        }
+      } catch (e) {
+        resultDiv.innerHTML = '<div class="alert alert-error">AI review failed. Please try again.</div>';
+      }
     }
 
     // ============================================================
@@ -2483,7 +3293,7 @@
       const btn = event.target;
       const origText = btn.textContent;
       btn.disabled = true;
-      btn.textContent = '⏳ Generating...';
+      btn.textContent = 'Generating...';
       try {
         const org = currentApp.organization_profile || {};
         const proj = currentApp.project_profile || {};
@@ -2558,29 +3368,29 @@
         const budgetWarnings = pack.budget?.crossCheck?.warnings || [];
         document.getElementById('exportContent').innerHTML = `
           <div class="alert alert-success" style="margin-bottom:24px;">
-            <span>✅</span>
+            <span style="color:var(--success); font-weight:600;">Ready</span>
             <span>Draft pack generated successfully. Review each section before submitting through the official portal.</span>
           </div>
 
           ${pack.missingDocuments > 0 ? `
           <div class="alert alert-warning" style="margin-bottom:16px;">
-            <span>📎</span>
+            <span style="font-weight:600;">Note</span>
             <span><strong>${pack.missingDocuments} required document(s) still missing.</strong> Check the document checklist below.</span>
           </div>` : ''}
 
           ${budgetWarnings.length > 0 ? `
           <div class="alert alert-warning" style="margin-bottom:16px;">
-            <span>💰</span>
+            <span style="font-weight:600;">$</span>
             <span><strong>Budget check:</strong> ${budgetWarnings.join('; ')}</span>
           </div>` : ''}
 
           <div class="export-card">
-            <h4>📄 Answers Document</h4>
+            <h4>Answers Document</h4>
             <pre style="white-space:pre-wrap; font-size:14px; color:var(--text); margin-top:12px; max-height:400px; overflow-y:auto; background:var(--bg); padding:16px; border-radius:8px;">${escapeHtml(pack.answersDocument || 'No answers document generated.')}</pre>
           </div>
 
           <div class="export-card">
-            <h4>💰 Budget Summary</h4>
+            <h4>Budget Summary</h4>
             <div style="margin-top:12px;">
               <p style="font-size:15px; font-weight:600;">Total: $${(pack.budget?.totalProjectCost || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
               ${pack.budget?.categoryBreakdown ? `
@@ -2593,18 +3403,18 @@
               ${pack.budget?.crossCheck ? `
                 <div style="margin-top:12px; padding:10px; background:var(--bg); border-radius:8px; font-size:12px;">
                   <strong>Cross-check:</strong>
-                  ${pack.budget.crossCheck.allHaveDescriptions ? '✓ All items described' : '⚠ Some items lack descriptions'} ·
-                  ${pack.budget.crossCheck.allHaveAmounts ? '✓ All amounts set' : '⚠ Some amounts missing'} ·
+                  ${pack.budget.crossCheck.allHaveDescriptions ? '✓ All items described' : 'Some items lack descriptions'} ·
+                  ${pack.budget.crossCheck.allHaveAmounts ? '✓ All amounts set' : 'Some amounts missing'} ·
                   ${pack.budget.crossCheck.itemCount} line items
                 </div>` : ''}
             </div>
           </div>
 
           <div class="export-card">
-            <h4>✅ Document Checklist</h4>
+            <h4>Document Checklist</h4>
             ${(pack.checklist || []).map(c => `
               <div style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px;">
-                <span>${c.status === 'ready' ? '✅' : '❌'}</span>
+                <span>${c.status === 'ready' ? '<span style="color:var(--success);">&#10003;</span>' : '<span style="color:var(--error);">&#10007;</span>'}</span>
                 <span>${escapeHtml(c.document)}</span>
                 <span style="color:var(--text-light);">(${c.status})</span>
               </div>
@@ -2613,7 +3423,7 @@
 
           ${(pack.citations || []).length > 0 ? `
           <div class="export-card">
-            <h4>📚 Source Citations</h4>
+            <h4>Source Citations</h4>
             ${pack.citations.map(c => `
               <div style="padding:8px 0; font-size:13px; border-bottom:1px solid var(--bg);">
                 <strong>[${c.number}]</strong> ${escapeHtml(c.topic || '')} — ${escapeHtml(c.text || '')}
@@ -2623,14 +3433,14 @@
           </div>` : ''}
 
           <div class="export-card">
-            <h4>⚠️ Disclosure & Privacy</h4>
+            <h4>Disclosure & Privacy</h4>
             <p style="font-size:13px; color:var(--text-light); font-style:italic; margin-top:8px;">${escapeHtml(pack.disclosureNote || '')}</p>
             ${pack.publicDisclosureWarning ? `<p style="font-size:12px; color:var(--warning); margin-top:8px;">${escapeHtml(pack.publicDisclosureWarning)}</p>` : ''}
             ${pack.retentionNote ? `<p style="font-size:12px; color:var(--text-light); margin-top:8px;">${escapeHtml(pack.retentionNote)}</p>` : ''}
           </div>
 
           <div style="margin-top:24px; text-align:center;">
-            <button class="btn btn-primary btn-sm" onclick="downloadPdf()" style="margin-right:12px;">📥 Download PDF</button>
+            <button class="btn btn-primary btn-sm" onclick="downloadPdf()" style="margin-right:12px;">Download PDF</button>
             <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">Back to Dashboard</button>
           </div>
         `;
@@ -2725,6 +3535,209 @@
     let websiteIntelligence = null;
     let matchedPrograms = [];
     let discoveryAppId = null; // track application during discovery
+    let stackedProgramsCache = {};
+
+    function normalizeWords(text) {
+      return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+    }
+
+    function scoreProgramOverlap(primary, candidate) {
+      const pWords = new Set(normalizeWords((primary?.description || '') + ' ' + (primary?.objectives || '') + ' ' + (primary?.program_name || '')));
+      const cWords = new Set(normalizeWords((candidate?.description || '') + ' ' + (candidate?.objectives || '') + ' ' + (candidate?.program_name || '')));
+      let overlap = 0;
+      for (const w of cWords) if (pWords.has(w)) overlap++;
+      const pAreas = (primary?.priority_areas || []).map(a => String(a).toLowerCase());
+      const cAreas = (candidate?.priority_areas || []).map(a => String(a).toLowerCase());
+      const areaOverlap = cAreas.filter(a => pAreas.some(pa => pa.includes(a) || a.includes(pa))).length;
+      return (candidate.matchScore || 0) + overlap + (areaOverlap * 6) + (candidate.intake_status === 'open' ? 8 : 0);
+    }
+
+    function getStackingOpportunities(primaryProgramId, candidates, maxCount = 3) {
+      const all = Array.isArray(candidates) ? candidates : [];
+      const primary = all.find(p => Number(p.id) === Number(primaryProgramId));
+      if (!primary) return [];
+
+      const scored = all
+        .filter(p => Number(p.id) !== Number(primaryProgramId))
+        .map(p => ({ ...p, stackScore: scoreProgramOverlap(primary, p) }))
+        .sort((a, b) => b.stackScore - a.stackScore);
+
+      const selected = [];
+      const seenFundingTypes = new Set();
+      for (const p of scored) {
+        const ft = String(p.funding_type || '').toLowerCase();
+        if (ft && !seenFundingTypes.has(ft)) {
+          selected.push(p);
+          seenFundingTypes.add(ft);
+        } else if (!ft || selected.length < 2) {
+          selected.push(p);
+        }
+        if (selected.length >= maxCount) break;
+      }
+
+      return selected;
+    }
+
+    async function ensureProgramsCacheForStacking() {
+      if (matchedPrograms.length > 0) return matchedPrograms;
+      try {
+        const res = await fetch(`${API}/programs?status=open&limit=100`);
+        const data = await res.json();
+        return data?.data?.programs || [];
+      } catch (_e) {
+        return [];
+      }
+    }
+
+    async function promptForStackingPrograms(primaryProgramId) {
+      const candidates = await ensureProgramsCacheForStacking();
+      const opportunities = getStackingOpportunities(primaryProgramId, candidates, 3);
+      if (!opportunities.length) return [];
+
+      return new Promise((resolve) => {
+        const overlay = document.getElementById('stackingOverlay');
+        const listEl = document.getElementById('stackingProgramList');
+        window._stackingResolve = resolve;
+        window._stackingSelected = new Set();
+
+        listEl.innerHTML = opportunities.map((p) => `
+          <div class="stacking-program-card" data-program-id="${p.id}" onclick="toggleStackingCard(this, ${p.id})">
+            <div class="select-indicator">&#10003;</div>
+            <div style="flex:1;">
+              <div style="font-size:15px; font-weight:600; margin-bottom:4px;">${escapeHtml(p.program_name)}</div>
+              <div style="font-size:13px; color:var(--text-light); margin-bottom:6px;">${escapeHtml(p.administering_agency || '')}</div>
+              <div style="font-size:13px; color:var(--text-light);">${escapeHtml((p.description || '').substring(0, 140))}${(p.description||'').length > 140 ? '...' : ''}</div>
+              <div style="margin-top:8px; font-size:12px;">
+                ${p.funding_type ? `<span style="background:rgba(45,80,22,0.08); padding:2px 8px; border-radius:6px; color:var(--primary);">${escapeHtml(p.funding_type)}</span>` : ''}
+                ${p.max_funding ? `<span style="margin-left:6px; color:var(--text-light);">Up to $${Number(p.max_funding).toLocaleString()}</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+        overlay.style.display = 'flex';
+      });
+    }
+
+    function toggleStackingCard(el, programId) {
+      el.classList.toggle('selected');
+      if (window._stackingSelected.has(programId)) {
+        window._stackingSelected.delete(programId);
+      } else {
+        window._stackingSelected.add(programId);
+      }
+    }
+
+    function confirmStackingSelection() {
+      const overlay = document.getElementById('stackingOverlay');
+      overlay.style.display = 'none';
+      const ids = Array.from(window._stackingSelected || []);
+      if (window._stackingResolve) window._stackingResolve(ids);
+      window._stackingResolve = null;
+    }
+
+    function skipStacking() {
+      const overlay = document.getElementById('stackingOverlay');
+      overlay.style.display = 'none';
+      if (window._stackingResolve) window._stackingResolve([]);
+      window._stackingResolve = null;
+    }
+
+    function buildDiscoveryProfiles() {
+      const orgProfile = {};
+      if (discoveryData.province) orgProfile.province = discoveryData.province;
+      if (discoveryData.currentEmployees) orgProfile.employeeCount = discoveryData.currentEmployees;
+
+      const goalLabels = {
+        establish_vertical_farm: 'Establish a vertical farm / CEA facility',
+        expand_operation: 'Expand existing agricultural operation',
+        equipment_purchase: 'Acquire equipment and technology upgrades',
+        workforce_training: 'Workforce development and training',
+        innovation_rd: 'Agricultural innovation and R&D',
+        export_market: 'Market access and export development',
+        clean_tech: 'Clean technology and sustainability improvements',
+        community_food: 'Community food security and local food access',
+        risk_management: 'Business risk management',
+        value_added: 'Value-added processing and product development'
+      };
+
+      const projProfile = {};
+      const goalDescriptions = (discoveryData.projectGoals || []).map(g => goalLabels[g] || g).join('; ');
+      if (goalDescriptions) projProfile.description = `Project goals: ${goalDescriptions}.`;
+      if (websiteIntelligence?.positioningSummary) projProfile.needStatement = websiteIntelligence.positioningSummary;
+
+      return { orgProfile, projProfile };
+    }
+
+    async function populateApplicationFromDiscovery(appId) {
+      const { orgProfile, projProfile } = buildDiscoveryProfiles();
+      await fetch(`${API}/applications/${appId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationProfile: orgProfile, projectProfile: projProfile })
+      });
+    }
+
+    async function createLinkedApplications(primaryProgramId, stackedProgramIds) {
+      if (!authToken || !Array.isArray(stackedProgramIds) || !stackedProgramIds.length) return [];
+      const linked = [];
+      for (const pid of stackedProgramIds) {
+        if (Number(pid) === Number(primaryProgramId)) continue;
+        try {
+          const createRes = await fetch(`${API}/applications`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ programId: pid })
+          });
+          const createData = await createRes.json();
+          if (!createData.success || !createData?.data?.id) continue;
+          const appId = createData.data.id;
+          await populateApplicationFromDiscovery(appId);
+          linked.push({ programId: pid, appId });
+        } catch (_e) {}
+      }
+      return linked;
+    }
+
+    async function syncStackedApplications() {
+      const plan = currentApp?.answers?.stackingPlan;
+      if (!plan?.linkedApplications?.length || !authToken) return;
+      for (const link of plan.linkedApplications) {
+        try {
+          const res = await fetch(`${API}/applications/${link.appId}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          });
+          const data = await res.json();
+          const app = data?.data;
+          if (!app) continue;
+
+          const qMap = app.question_map || [];
+          const answers = {
+            outcomes: currentApp?.answers?.outcomes || '',
+            risks: currentApp?.answers?.risks || '',
+            alignment: currentApp?.answers?.alignment || ''
+          };
+          qMap.forEach((q, qi) => {
+            const base = q.fieldKey || ('programQ_' + qi);
+            const stackKey = `stack_${app.program_id}_${base}`;
+            if (currentApp?.answers?.[stackKey] !== undefined) answers[base] = currentApp.answers[stackKey];
+            else if (currentApp?.answers?.[base] !== undefined) answers[base] = currentApp.answers[base];
+          });
+
+          await fetch(`${API}/applications/${link.appId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              organizationProfile: currentApp.organization_profile || {},
+              projectProfile: currentApp.project_profile || {},
+              budget: currentApp.budget || {},
+              milestones: currentApp.milestones || [],
+              answers
+            })
+          });
+        } catch (_e) {}
+      }
+    }
 
     function toggleGoal(label) {
       const cb = label.querySelector('input[type="checkbox"]');
@@ -2766,7 +3779,7 @@
 
       btn.disabled = true;
       btn.textContent = 'Analyzing...';
-      resultsDiv.innerHTML = '<div class="corp-search-loading">🔍 Scanning your website for community events, awards, products, and company details...</div>';
+      resultsDiv.innerHTML = '<div class="corp-search-loading"><span class="search-spinner"></span> Scanning your website for community events, awards, products, and company details...</div>';
 
       try {
         const headers = { 'Content-Type': 'application/json' };
@@ -2792,7 +3805,7 @@
         // Positioning summary (AI-generated)
         if (websiteIntelligence.positioningSummary) {
           html += `<div class="positioning-summary">
-            <h4>📋 Positioning Summary</h4>
+            <h4>Positioning Summary</h4>
             <p>${escapeHtml(websiteIntelligence.positioningSummary)}</p>
           </div>`;
         }
@@ -2800,7 +3813,7 @@
         // Community events & involvement
         if (websiteIntelligence.communityEvents?.length > 0) {
           html += `<div class="web-intel-card">
-            <h4>🤝 Community Involvement</h4>
+            <h4>Community Involvement</h4>
             <div class="web-intel-items">
               ${websiteIntelligence.communityEvents.slice(0, 5).map(e => 
                 `<div class="web-intel-item"><span class="icon">•</span><span>${escapeHtml(e)}</span></div>`
@@ -2812,7 +3825,7 @@
         // Awards & achievements
         if (websiteIntelligence.achievements?.length > 0) {
           html += `<div class="web-intel-card">
-            <h4>🏆 Awards & Achievements</h4>
+            <h4>Awards & Achievements</h4>
             <div class="web-intel-items">
               ${websiteIntelligence.achievements.slice(0, 5).map(a => 
                 `<div class="web-intel-item"><span class="icon">•</span><span>${escapeHtml(a)}</span></div>`
@@ -2824,7 +3837,7 @@
         // News & developments
         if (websiteIntelligence.newsHighlights?.length > 0) {
           html += `<div class="web-intel-card">
-            <h4>📰 Recent Developments</h4>
+            <h4>Recent Developments</h4>
             <div class="web-intel-items">
               ${websiteIntelligence.newsHighlights.slice(0, 4).map(n => 
                 `<div class="web-intel-item"><span class="icon">•</span><span>${escapeHtml(n)}</span></div>`
@@ -2836,7 +3849,7 @@
         // Products & services
         if (websiteIntelligence.products?.length > 0) {
           html += `<div class="web-intel-card">
-            <h4>🌱 Products & Services</h4>
+            <h4>Products & Services</h4>
             <div class="web-intel-items">
               ${websiteIntelligence.products.slice(0, 6).map(p => 
                 `<div class="web-intel-item"><span class="icon">•</span><span>${escapeHtml(p)}</span></div>`
@@ -2858,9 +3871,9 @@
         }
 
         if (!html) {
-          html = `<div class="alert alert-warning"><span>⚠️</span><span>We couldn't extract much from this website. You can still proceed — we'll gather information through the wizard instead.</span></div>`;
+          html = `<div class="alert alert-warning"><span style="font-weight:600;">Note</span><span>We couldn't extract much from this website. You can still proceed — we'll gather information through the wizard instead.</span></div>`;
         } else {
-          html = `<div class="alert alert-success" style="margin-bottom:12px;"><span>✅</span><span>Website analyzed! We found data to strengthen your application narrative.</span></div>` + html;
+          html = `<div class="alert alert-success" style="margin-bottom:12px;"><span style="color:var(--success); font-weight:600;">Done</span><span>Website analyzed! We found data to strengthen your application narrative.</span></div>` + html;
         }
 
         resultsDiv.innerHTML = html;
@@ -2978,7 +3991,7 @@
       const panel = document.getElementById('aiRecommendPanel');
       const content = document.getElementById('aiRecommendContent');
       btn.disabled = true;
-      btn.textContent = '⏳ Analyzing your project against all programs...';
+      btn.textContent = 'Analyzing your project against all programs...';
       panel.style.display = 'block';
       content.innerHTML = '<p style="color:var(--text-light); text-align:center;">Generating strategic recommendations...</p>';
 
@@ -2991,7 +4004,7 @@
         if (!data.success) throw new Error(data.error);
 
         const rec = data.data.recommendations;
-        let html = '<h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">✨ AI Funding Strategy</h3>';
+        let html = '<h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">AI Funding Strategy</h3>';
 
         // Strategic advice
         if (rec.strategicAdvice) {
@@ -3003,7 +4016,7 @@
 
         // Direct matches
         if (rec.directMatches?.length) {
-          html += '<h4 style="font-size:15px; font-weight:700; margin-bottom:12px;">🎯 Top Recommendations</h4>';
+          html += '<h4 style="font-size:15px; font-weight:700; margin-bottom:12px;">Top Recommendations</h4>';
           rec.directMatches.forEach(m => {
             const confColor = m.confidence === 'high' ? '#16a34a' : m.confidence === 'medium' ? '#ca8a04' : '#6b7280';
             html += `<div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:10px; border-left:4px solid ${confColor};">
@@ -3019,7 +4032,7 @@
 
         // Complementary matches
         if (rec.complementaryMatches?.length) {
-          html += '<h4 style="font-size:15px; font-weight:700; margin:16px 0 12px;">🔗 Complementary Programs</h4>';
+          html += '<h4 style="font-size:15px; font-weight:700; margin:16px 0 12px;">Complementary Programs</h4>';
           rec.complementaryMatches.forEach(m => {
             html += `<div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:10px; border-left:4px solid #8b5cf6;">
               <strong style="font-size:14px;">${escapeHtml(m.programName)}</strong>
@@ -3032,18 +4045,18 @@
         // Funding stack suggestion
         if (rec.fundingStackSuggestion) {
           html += `<div style="margin-top:16px; padding:16px; background:rgba(139,92,246,0.06); border-radius:12px;">
-            <h4 style="font-size:14px; font-weight:700; margin-bottom:8px; color:#8b5cf6;">💡 Funding Stack Suggestion</h4>
+            <h4 style="font-size:14px; font-weight:700; margin-bottom:8px; color:#8b5cf6;">Funding Stack Suggestion</h4>
             <p style="font-size:13px; line-height:1.6; margin:0;">${escapeHtml(rec.fundingStackSuggestion)}</p>
           </div>`;
         }
 
         content.innerHTML = html;
-        btn.textContent = '✨ Refresh AI Recommendations';
+        btn.textContent = 'Refresh AI Recommendations';
         btn.disabled = false;
 
       } catch (err) {
         content.innerHTML = `<p style="color:var(--error);">Unable to generate recommendations: ${escapeHtml(err.message)}</p>`;
-        btn.textContent = '✨ Try Again';
+        btn.textContent = 'Try Again';
         btn.disabled = false;
       }
     }
@@ -3098,6 +4111,8 @@
       // If we have a discovery app, update its program_id; otherwise create new
       if (discoveryAppId) {
         try {
+          const stackedProgramIds = await promptForStackingPrograms(programId);
+
           // Update application with selected program
           await fetch(`${API}/applications/${discoveryAppId}`, {
             method: 'PUT',
@@ -3105,41 +4120,24 @@
             body: JSON.stringify({ programId })
           });
 
-          // Pre-populate organization profile with discovery data
-          const orgProfile = {};
-          if (discoveryData.province) orgProfile.province = discoveryData.province;
-          if (discoveryData.currentEmployees) orgProfile.employeeCount = discoveryData.currentEmployees;
+          await populateApplicationFromDiscovery(discoveryAppId);
 
-          // Pre-populate project profile from discovery
-          const projProfile = {};
-          const goalLabels = {
-            establish_vertical_farm: 'Establish a vertical farm / CEA facility',
-            expand_operation: 'Expand existing agricultural operation',
-            equipment_purchase: 'Acquire equipment and technology upgrades',
-            workforce_training: 'Workforce development and training',
-            innovation_rd: 'Agricultural innovation and R&D',
-            export_market: 'Market access and export development',
-            clean_tech: 'Clean technology and sustainability improvements',
-            community_food: 'Community food security and local food access',
-            risk_management: 'Business risk management',
-            value_added: 'Value-added processing and product development'
-          };
-          const goalDescriptions = discoveryData.projectGoals.map(g => goalLabels[g] || g).join('; ');
-          projProfile.description = `Project goals: ${goalDescriptions}.`;
-
-          // If we have website positioning summary, add to project description
-          if (websiteIntelligence?.positioningSummary) {
-            projProfile.needStatement = websiteIntelligence.positioningSummary;
+          const linkedApplications = await createLinkedApplications(programId, stackedProgramIds);
+          if (linkedApplications.length > 0) {
+            await fetch(`${API}/applications/${discoveryAppId}`, {
+              method: 'PUT',
+              headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                answers: {
+                  stackingPlan: {
+                    primaryProgramId: programId,
+                    selectedProgramIds: [programId, ...stackedProgramIds],
+                    linkedApplications
+                  }
+                }
+              })
+            });
           }
-
-          await fetch(`${API}/applications/${discoveryAppId}`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              organizationProfile: orgProfile,
-              projectProfile: projProfile
-            })
-          });
 
           loadWizard(discoveryAppId);
         } catch (e) {
@@ -3154,6 +4152,31 @@
     // ============================================================
     // Utils
     // ============================================================
+    function showToast(message, type = 'info') {
+      try {
+        let container = document.getElementById('grantWizardToastContainer');
+        if (!container) {
+          container = document.createElement('div');
+          container.id = 'grantWizardToastContainer';
+          container.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:420px;';
+          document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        const accent = type === 'error' ? 'var(--error)' : (type === 'success' ? 'var(--success)' : 'var(--primary)');
+        toast.style.cssText = `background:var(--surface);border:1px solid ${accent};border-left:4px solid ${accent};border-radius:10px;padding:10px 12px;color:var(--text);box-shadow:0 4px 12px rgba(0,0,0,0.12);font-size:14px;`;
+        toast.textContent = message || '';
+        container.appendChild(toast);
+
+        setTimeout(() => {
+          toast.remove();
+          if (!container.children.length) container.remove();
+        }, 2800);
+      } catch (_e) {
+        alert(message || 'Notification');
+      }
+    }
+
     function escapeHtml(str) {
       const div = document.createElement('div');
       div.textContent = str || '';
