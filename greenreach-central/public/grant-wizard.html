@@ -358,6 +358,36 @@
     .goal-option .goal-label { font-size: 15px; font-weight: 500; }
     .goal-option .goal-desc { font-size: 12px; color: var(--text-light); margin-top: 2px; }
 
+    /* Competitor Analysis */
+    .competitor-card { background: var(--bg); border-radius: 14px; padding: 16px; margin-bottom: 10px; border: 1px solid #e5e5ea; transition: border-color 0.2s; }
+    .competitor-card:hover { border-color: var(--accent); }
+    .competitor-card.added { border-color: var(--primary); background: rgba(130,195,65,0.04); }
+    .similarity-bar { height: 6px; background: #e5e5ea; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+    .similarity-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+    .similarity-low { background: var(--success); }
+    .similarity-med { background: var(--warning); }
+    .similarity-high { background: var(--error); }
+    .conflict-flag { padding: 10px 14px; background: rgba(255,59,48,0.06); border: 1px solid rgba(255,59,48,0.15); border-radius: 10px; margin-bottom: 8px; font-size: 13px; color: var(--text); }
+    .conflict-flag strong { color: var(--error); }
+    .diff-tip { padding: 10px 14px; background: rgba(130,195,65,0.06); border: 1px solid rgba(130,195,65,0.15); border-radius: 10px; margin-bottom: 8px; font-size: 13px; color: var(--text); }
+    .kw-chip { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; margin: 2px; }
+    .kw-chip-overlap { background: rgba(255,149,0,0.12); color: var(--warning); }
+    .kw-chip-unique { background: rgba(130,195,65,0.12); color: var(--primary); }
+    .kw-chip-competitor { background: rgba(175,82,222,0.10); color: #af52de; }
+
+    /* Innovation Introduction */
+    .intro-feature-card { margin-top:32px; padding:28px; border-radius:20px; border:2px solid rgba(130,195,65,0.3); background:linear-gradient(135deg, #f0fdf4 0%, #fefce8 50%, #eff6ff 100%); position:relative; overflow:hidden; }
+    .intro-feature-card::before { content:''; position:absolute; top:-40px; right:-40px; width:120px; height:120px; background:radial-gradient(circle, rgba(130,195,65,0.15) 0%, transparent 70%); border-radius:50%; }
+    .intro-badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; background:rgba(130,195,65,0.15); color:var(--primary); margin-bottom:12px; }
+    .intro-letter-preview { background:#fff; border:1px solid #e5e5ea; border-radius:14px; padding:24px; margin-top:16px; font-size:14px; line-height:1.7; color:var(--text); position:relative; }
+    .intro-letter-preview .letter-header { font-size:12px; color:var(--text-light); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #f0f0f0; }
+    .intro-letter-preview .letter-body { white-space:pre-wrap; }
+    .intro-controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; align-items:center; }
+    .intro-shield { display:flex; align-items:start; gap:10px; padding:12px 16px; background:rgba(45,80,22,0.04); border-radius:10px; margin-top:16px; font-size:13px; color:var(--text); }
+    .intro-shield-icon { font-size:20px; flex-shrink:0; }
+    .intro-opt-toggle { display:flex; align-items:center; gap:12px; cursor:pointer; user-select:none; }
+    .intro-opt-toggle input[type=checkbox] { width:20px; height:20px; accent-color:var(--primary); cursor:pointer; }
+
     .budget-chips { display: flex; gap: 8px; flex-wrap: wrap; }
     .budget-chip {
       padding: 10px 20px; border: 2px solid #e5e5ea; border-radius: 12px;
@@ -1843,6 +1873,7 @@
       { key: 'organization', title: 'About Your Organization', subtitle: 'Basic facts that identify you as an applicant.' },
       { key: 'project', title: 'Your Project', subtitle: 'What do you want to do, and why does it matter?' },
       { key: 'narrative', title: 'Need & Impact', subtitle: 'Why this project matters and what success looks like.' },
+      { key: 'competitors', title: 'Competitive Landscape', subtitle: 'Search public companies, spot overlaps, and sharpen your differentiation.' },
       { key: 'budget', title: 'Budget & Resources', subtitle: 'What will it cost and how will you fund it?' },
       { key: 'documents', title: 'Documents & Attachments', subtitle: 'Everything the program requires alongside your application.' },
       { key: 'review', title: 'Review & Export', subtitle: 'Check everything, then generate your submission pack.' }
@@ -2029,6 +2060,82 @@
                 <option value="8" ${(proj.trlLevel||'')==='8'?'selected':''}>TRL 8 - System complete and qualified through testing</option>
                 <option value="9" ${(proj.trlLevel||'')==='9'?'selected':''}>TRL 9 - Full commercial deployment, proven in production</option>
               </select>
+            </div>`;
+          break;
+
+        case 'competitors':
+          const compAnalysis = currentApp.answers?.competitorAnalysis || {};
+          const savedCompetitors = compAnalysis.competitors || [];
+          const savedAnalysisResult = compAnalysis.analysisResult || null;
+          const refinedDesc = compAnalysis.refinedDescription || '';
+          html += `
+            <div class="advice-note" style="margin-bottom:24px;">
+              <span style="font-weight:700; font-size:16px;">Why this matters</span>
+              <span>Funding programs regularly compare applications to existing public companies doing similar work. If your project description sounds too close to an established player, reviewers may question the need for public funding. Use this step to identify overlaps and strengthen your differentiation.</span>
+            </div>
+
+            <!-- Search Section -->
+            <div class="form-group">
+              <label>Search for public companies</label>
+              <div class="why-asking">Search by company name or ticker symbol. We query the SEC EDGAR database of all U.S. public companies.</div>
+              <div style="display:flex; gap:8px;">
+                <div style="flex:1; position:relative;">
+                  <input type="text" id="competitorSearchInput" placeholder="e.g., AppHarvest, Beyond Meat, Hydrofarm..."
+                         oninput="debounceCompetitorSearch()" onkeydown="if(event.key==='Enter'){event.preventDefault();searchCompetitors();}">
+                  <span id="compSearchSpinner" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);display:none;"><span class="search-spinner"></span></span>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="searchCompetitors()" style="white-space:nowrap;">Search</button>
+              </div>
+            </div>
+
+            <div id="competitorSearchResults" style="margin-bottom:24px;"></div>
+
+            <!-- Added Competitors -->
+            <div style="margin-top:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 style="font-size:17px; font-weight:700; margin:0;">Your Competitor List</h3>
+                <span style="font-size:13px; color:var(--text-light);" id="compCount">${savedCompetitors.length} added</span>
+              </div>
+              <div id="savedCompetitorsList">
+                ${savedCompetitors.length ? savedCompetitors.map((c, i) => `
+                  <div class="competitor-card added">
+                    <div style="display:flex; justify-content:space-between; align-items:start;">
+                      <div>
+                        <div style="font-weight:700; font-size:15px;">${escapeHtml(c.name)}</div>
+                        <div style="font-size:12px; color:var(--text-light); margin-top:2px;">
+                          ${c.ticker ? '<strong>' + escapeHtml(c.ticker) + '</strong> · ' : ''}${escapeHtml(c.sicDescription || c.industry || 'Public company')}
+                        </div>
+                      </div>
+                      <button onclick="removeCompetitor(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:18px;padding:4px 8px;" title="Remove">×</button>
+                    </div>
+                    ${c.notes ? '<div style="margin-top:8px; font-size:13px; color:var(--text-light); font-style:italic;">' + escapeHtml(c.notes) + '</div>' : ''}
+                  </div>
+                `).join('') : '<div style="text-align:center; padding:20px; background:var(--bg); border-radius:14px; border:2px dashed #d2d2d7;"><p style="color:var(--text-light); margin:0; font-size:14px;">No competitors added yet. Search above to find public companies in your space.</p></div>'}
+              </div>
+            </div>
+
+            <!-- Run Analysis Button -->
+            ${savedCompetitors.length > 0 ? `
+              <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="runCompetitorAnalysis()">Analyze Overlap & Conflicts</button>
+              </div>
+            ` : ''}
+
+            <!-- Analysis Results -->
+            <div id="competitorAnalysisResults">
+              ${savedAnalysisResult ? renderCompetitorAnalysis(savedAnalysisResult) : ''}
+            </div>
+
+            <!-- Refined Description -->
+            <div style="margin-top:24px; padding-top:24px; border-top:2px solid #e5e5ea;">
+              <h3 style="font-size:17px; font-weight:700; margin-bottom:4px;">Refine Your Project Description</h3>
+              <p style="font-size:13px; color:var(--text-light); margin-bottom:12px;">Update your wording here based on the analysis above. This will be saved alongside your application — use it to inform your narrative and pitch.</p>
+              <textarea id="wiz_refinedDesc" onchange="wizAutoSave()" style="min-height:120px;"
+                        placeholder="Rewrite your project description here with clearer differentiation from competitors...">${escapeHtml(refinedDesc || (currentApp.project_profile?.description || ''))}</textarea>
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <button class="btn btn-secondary btn-sm" onclick="copyProjectDescToRefined()">Copy current project description</button>
+                <button class="btn btn-secondary btn-sm" onclick="aiDraft('wiz_refinedDesc','differentiated project description that avoids overlap with competitors')" style="margin-left:auto;">AI Assist</button>
+              </div>
             </div>`;
           break;
 
@@ -2496,6 +2603,14 @@
               <h4>Source Citations</h4>
               <p>References and evidence snippets included in your narrative, with source links.</p>
             </div>
+            ${(currentApp.answers?.competitorAnalysis?.competitors?.length) ? `
+            <div class="export-card">
+              <h4>Competitive Landscape</h4>
+              <p>${currentApp.answers.competitorAnalysis.competitors.length} competitor(s) analyzed: ${currentApp.answers.competitorAnalysis.competitors.map(c => escapeHtml(c.name)).join(', ')}.</p>
+              ${currentApp.answers.competitorAnalysis.analysisResult?.conflictFlags?.length ? `<div style="margin-top:8px; font-size:13px; color:var(--warning);">${currentApp.answers.competitorAnalysis.analysisResult.conflictFlags.length} conflict flag(s) identified.</div>` : '<div style="margin-top:8px; font-size:13px; color:var(--success);">No major conflicts identified.</div>'}
+              ${currentApp.answers.competitorAnalysis.refinedDescription ? '<div style="margin-top:6px; font-size:12px; color:var(--primary);">✓ Refined description saved.</div>' : '<div style="margin-top:6px; font-size:12px; color:var(--text-light);">No refined description yet.</div>'}
+            </div>
+            ` : ''}
             <div class="export-card">
               <h4>Document Consistency</h4>
               <p>Language should be consistent across application, budget, and milestone documents.</p>
@@ -2510,6 +2625,53 @@
               <button class="btn btn-secondary" onclick="aiApplicationReview()" style="background:var(--primary); color:#fff;">AI Review & Score</button>
             </div>
             <div id="aiApplicationReviewResult" style="margin-top:16px;"></div>
+
+            <!-- Innovation Introduction Feature -->
+            <div class="intro-feature-card">
+              <span class="intro-badge">New — Beyond Traditional Funding</span>
+              <h3 style="font-size:20px; font-weight:700; margin-bottom:6px; color:var(--text);">Innovation & Science Introductions</h3>
+              <p style="font-size:15px; color:var(--text-light); line-height:1.6; margin-bottom:16px;">
+                New technology in science and innovation is of interest to several groups outside of traditional funding channels — venture investors, corporate innovation labs, research accelerators, and strategic partners. Based on what you've shared here, your project may be a strong fit.
+              </p>
+              <p style="font-size:15px; color:var(--text); line-height:1.6; margin-bottom:16px; font-weight:500;">
+                Would you like us to create a <strong>high-level summary and introduction letter</strong> for review? We can facilitate a quick introduction on your behalf — no technical details are shared, and <strong>you remain in full control</strong> of what gets disclosed, your IP, and whether you want to continue any conversation.
+              </p>
+
+              <label class="intro-opt-toggle">
+                <input type="checkbox" id="introOptIn" ${currentApp.answers?.introductionRequest?.optedIn ? 'checked' : ''}
+                       onchange="toggleIntroOptIn(this.checked)">
+                <span style="font-size:15px; font-weight:600;">Yes, create an introduction letter for me to review</span>
+              </label>
+
+              <div id="introLetterSection" style="display:${currentApp.answers?.introductionRequest?.optedIn ? 'block' : 'none'};">
+                <div id="introLetterContent">
+                  ${currentApp.answers?.introductionRequest?.optedIn ? '<div style="padding:16px; text-align:center; color:var(--text-light); font-size:13px;">Click "Generate Preview" to see your introduction letter.</div>' : ''}
+                </div>
+
+                <div class="intro-controls">
+                  <button class="btn btn-primary btn-sm" onclick="generateIntroLetter()" style="white-space:nowrap;">Generate Preview</button>
+                  <button class="btn btn-secondary btn-sm" onclick="editIntroLetter()" style="white-space:nowrap;" id="introEditBtn" disabled>Edit Letter</button>
+                  <button class="btn btn-secondary btn-sm" onclick="confirmIntroLetter()" style="white-space:nowrap; background:var(--primary); color:#fff;" id="introConfirmBtn" disabled>Confirm & Send to GreenReach</button>
+                </div>
+
+                <div class="intro-shield">
+                  <span class="intro-shield-icon">🔒</span>
+                  <div>
+                    <strong>Your IP is protected.</strong> The introduction letter contains only a high-level summary of your project's goals and impact — no proprietary methods, technical specifications, or trade secrets. You review and approve everything before it goes anywhere. GreenReach acts solely as a facilitator; we do not share your information without your explicit consent.
+                  </div>
+                </div>
+
+                <div style="margin-top:14px; padding:12px 16px; background:rgba(37,99,235,0.05); border-radius:10px; font-size:13px; color:var(--text);">
+                  <strong>How it works:</strong>
+                  <ol style="margin:8px 0 0 16px; padding:0;">
+                    <li style="margin-bottom:4px;">We generate a high-level intro letter from your application (no technical details).</li>
+                    <li style="margin-bottom:4px;">You review, edit, and approve the letter.</li>
+                    <li style="margin-bottom:4px;">GreenReach identifies relevant parties and facilitates a warm introduction.</li>
+                    <li style="margin-bottom:4px;">Any interested party reaches out — you decide whether to continue the conversation.</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
 
             <!-- Re-match: Find Additional Programs -->
             <div style="margin-top:32px; padding:24px; background:linear-gradient(135deg, #f0fdf4 0%, #fefce8 100%); border:1px solid #bbf7d0; border-radius:16px;">
@@ -2658,6 +2820,17 @@
             outcomes: gv('wiz_outcomes'),
             risks: gv('wiz_risks'),
             alignment: gv('wiz_alignment')
+          };
+          break;
+        case 'competitors':
+          body.answers = {
+            ...currentApp.answers,
+            competitorAnalysis: {
+              ...(currentApp.answers?.competitorAnalysis || {}),
+              competitors: currentApp.answers?.competitorAnalysis?.competitors || [],
+              refinedDescription: gv('wiz_refinedDesc') || '',
+              lastUpdated: new Date().toISOString()
+            }
           };
           break;
         case 'documents':
@@ -2849,6 +3022,452 @@
           </div>
         `;
       }, 500);
+    }
+
+    // ============================================================
+    // Competitor Analysis
+    // ============================================================
+    let compSearchTimeout = null;
+    let compSearchResults = [];
+
+    function debounceCompetitorSearch() {
+      clearTimeout(compSearchTimeout);
+      compSearchTimeout = setTimeout(() => searchCompetitors(), 600);
+    }
+
+    async function searchCompetitors() {
+      const input = document.getElementById('competitorSearchInput');
+      const resultsDiv = document.getElementById('competitorSearchResults');
+      const spinner = document.getElementById('compSearchSpinner');
+      if (!input || !resultsDiv) return;
+
+      const query = input.value.trim();
+      if (query.length < 2) { resultsDiv.innerHTML = ''; return; }
+
+      if (spinner) spinner.style.display = 'inline-block';
+      resultsDiv.innerHTML = '<div style="padding:12px; text-align:center; color:var(--text-light); font-size:13px;"><span class="search-spinner"></span> Searching SEC EDGAR public company database...</div>';
+
+      try {
+        const projDesc = currentApp?.project_profile?.description || '';
+        const res = await fetch(`${API}/competitor-search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json',
+                     ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}) },
+          body: JSON.stringify({ query, projectDescription: projDesc })
+        });
+        const data = await res.json();
+        if (!data.success || !data.data.results.length) {
+          resultsDiv.innerHTML = `<div style="padding:12px; background:var(--bg); border-radius:10px; font-size:13px; color:var(--text-light);">No public companies found matching "${escapeHtml(query)}". Try a different name or ticker symbol.</div>`;
+          return;
+        }
+
+        compSearchResults = data.data.results;
+        const savedCIKs = new Set((currentApp.answers?.competitorAnalysis?.competitors || []).map(c => c.cik));
+
+        resultsDiv.innerHTML = data.data.results.map((c, idx) => {
+          const isAdded = savedCIKs.has(c.cik);
+          const sim = c.similarity;
+          const simClass = sim ? (sim.score > 40 ? 'similarity-high' : sim.score > 20 ? 'similarity-med' : 'similarity-low') : '';
+          return `
+            <div class="competitor-card ${isAdded ? 'added' : ''}" id="compResult-${idx}">
+              <div style="display:flex; justify-content:space-between; align-items:start;">
+                <div style="flex:1;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-weight:700; font-size:15px;">${escapeHtml(c.name)}</span>
+                    ${c.ticker ? `<span style="font-size:12px; font-weight:700; color:var(--accent); background:rgba(37,99,235,0.08); padding:1px 6px; border-radius:4px;">${escapeHtml(c.ticker)}</span>` : ''}
+                  </div>
+                  <div style="font-size:12px; color:var(--text-light); margin-top:3px;">
+                    ${c.sicDescription ? escapeHtml(c.sicDescription) : ''}
+                    ${c.stateOfIncorporation ? ' · ' + escapeHtml(c.stateOfIncorporation) : ''}
+                    ${c.category ? ' · ' + escapeHtml(c.category) : ''}
+                  </div>
+                  ${c.website ? `<a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="font-size:11px; color:var(--primary);">${escapeHtml(c.website)}</a>` : ''}
+                  ${sim ? `
+                    <div style="margin-top:6px;">
+                      <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-light);">
+                        <span>Keyword overlap with your project</span>
+                        <span style="font-weight:700; color:${sim.score > 40 ? 'var(--error)' : sim.score > 20 ? 'var(--warning)' : 'var(--success)'};">${sim.score}%</span>
+                      </div>
+                      <div class="similarity-bar"><div class="similarity-bar-fill ${simClass}" style="width:${Math.min(sim.score, 100)}%;"></div></div>
+                      ${sim.overlappingTerms?.length ? `<div style="margin-top:4px;">${sim.overlappingTerms.slice(0, 8).map(t => '<span class="kw-chip kw-chip-overlap">' + escapeHtml(t) + '</span>').join('')}</div>` : ''}
+                    </div>
+                  ` : ''}
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="${isAdded ? '' : `addCompetitorToAnalysis(${idx})`}" style="white-space:nowrap; margin-left:12px; ${isAdded ? 'opacity:0.5; cursor:default;' : ''}">
+                  ${isAdded ? '✓ Added' : '+ Add'}
+                </button>
+              </div>
+            </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('Competitor search error:', e);
+        resultsDiv.innerHTML = '<div style="padding:12px; background:var(--bg); border-radius:10px; font-size:13px; color:var(--error);">Search failed. Please try again.</div>';
+      } finally {
+        if (spinner) spinner.style.display = 'none';
+      }
+    }
+
+    function addCompetitorToAnalysis(idx) {
+      const comp = compSearchResults[idx];
+      if (!comp) return;
+
+      if (!currentApp.answers) currentApp.answers = {};
+      if (!currentApp.answers.competitorAnalysis) currentApp.answers.competitorAnalysis = { competitors: [], analysisResult: null, refinedDescription: '' };
+
+      const list = currentApp.answers.competitorAnalysis.competitors;
+      if (list.some(c => c.cik === comp.cik)) return; // Already added
+
+      list.push({
+        cik: comp.cik,
+        name: comp.name,
+        ticker: comp.ticker || '',
+        sicCode: comp.sicCode || '',
+        sicDescription: comp.sicDescription || '',
+        industry: comp.sicDescription || '',
+        stateOfIncorporation: comp.stateOfIncorporation || '',
+        category: comp.category || '',
+        website: comp.website || '',
+        exchanges: comp.exchanges || [],
+        addedAt: new Date().toISOString(),
+        notes: ''
+      });
+
+      // Mark button as added
+      const btn = document.querySelector(`#compResult-${idx} button`);
+      if (btn) { btn.textContent = '✓ Added'; btn.style.opacity = '0.5'; btn.style.cursor = 'default'; }
+      const card = document.getElementById(`compResult-${idx}`);
+      if (card) card.classList.add('added');
+
+      // Refresh saved competitors list
+      renderSavedCompetitors();
+      wizAutoSave();
+    }
+
+    function removeCompetitor(idx) {
+      const list = currentApp.answers?.competitorAnalysis?.competitors;
+      if (!list || idx < 0 || idx >= list.length) return;
+      list.splice(idx, 1);
+
+      // Clear analysis if no competitors left
+      if (list.length === 0 && currentApp.answers.competitorAnalysis) {
+        currentApp.answers.competitorAnalysis.analysisResult = null;
+      }
+
+      renderSavedCompetitors();
+      renderWizardStep(); // Full re-render to update analysis button visibility
+      wizAutoSave();
+    }
+
+    function renderSavedCompetitors() {
+      const list = currentApp.answers?.competitorAnalysis?.competitors || [];
+      const container = document.getElementById('savedCompetitorsList');
+      const countEl = document.getElementById('compCount');
+      if (countEl) countEl.textContent = `${list.length} added`;
+      if (!container) return;
+
+      if (!list.length) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; background:var(--bg); border-radius:14px; border:2px dashed #d2d2d7;"><p style="color:var(--text-light); margin:0; font-size:14px;">No competitors added yet. Search above to find public companies in your space.</p></div>';
+        return;
+      }
+
+      container.innerHTML = list.map((c, i) => `
+        <div class="competitor-card added">
+          <div style="display:flex; justify-content:space-between; align-items:start;">
+            <div>
+              <div style="font-weight:700; font-size:15px;">${escapeHtml(c.name)}</div>
+              <div style="font-size:12px; color:var(--text-light); margin-top:2px;">
+                ${c.ticker ? '<strong>' + escapeHtml(c.ticker) + '</strong> · ' : ''}${escapeHtml(c.sicDescription || c.industry || 'Public company')}
+              </div>
+            </div>
+            <button onclick="removeCompetitor(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:18px;padding:4px 8px;" title="Remove">×</button>
+          </div>
+          <div class="form-group" style="margin-top:8px; margin-bottom:0;">
+            <input type="text" value="${escapeAttr(c.notes || '')}" data-comp-idx="${i}" onchange="updateCompetitorNotes(${i}, this.value)"
+                   placeholder="Add notes — what products/services overlap with yours?" style="padding:8px; font-size:13px;">
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function updateCompetitorNotes(idx, value) {
+      const list = currentApp.answers?.competitorAnalysis?.competitors;
+      if (!list || !list[idx]) return;
+      list[idx].notes = value;
+      wizAutoSave();
+    }
+
+    async function runCompetitorAnalysis() {
+      const competitors = currentApp.answers?.competitorAnalysis?.competitors || [];
+      if (!competitors.length) return;
+
+      const projDesc = currentApp.project_profile?.description || '';
+      const projTitle = currentApp.project_profile?.title || '';
+      if (!projDesc) {
+        alert('Please fill in your project description (Step 2) before running the analysis.');
+        return;
+      }
+
+      const container = document.getElementById('competitorAnalysisResults');
+      container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-light);"><span class="search-spinner"></span> Analyzing competitive overlap...</div>';
+
+      try {
+        const res = await fetch(`${API}/competitor-analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json',
+                     ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}) },
+          body: JSON.stringify({ projectDescription: projDesc, projectTitle: projTitle, competitors })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        // Save analysis result
+        if (!currentApp.answers.competitorAnalysis) currentApp.answers.competitorAnalysis = {};
+        currentApp.answers.competitorAnalysis.analysisResult = data.data;
+
+        container.innerHTML = renderCompetitorAnalysis(data.data);
+        wizAutoSave();
+      } catch (e) {
+        console.error('Competitor analysis error:', e);
+        container.innerHTML = '<div class="alert alert-error">Analysis failed. Please try again.</div>';
+      }
+    }
+
+    function renderCompetitorAnalysis(analysis) {
+      if (!analysis) return '';
+      let html = '<div style="margin-top:24px; padding-top:24px; border-top:2px solid #e5e5ea;">';
+      html += '<h3 style="font-size:17px; font-weight:700; margin-bottom:16px;">Analysis Results</h3>';
+
+      // Per-competitor overlap scores
+      if (analysis.competitors?.length) {
+        html += '<div style="margin-bottom:20px;">';
+        analysis.competitors.forEach(c => {
+          const simClass = c.overlapScore > 40 ? 'similarity-high' : c.overlapScore > 20 ? 'similarity-med' : 'similarity-low';
+          const label = c.overlapScore > 40 ? 'High overlap — differentiate strongly' : c.overlapScore > 20 ? 'Moderate overlap — clarify differences' : 'Low overlap — good differentiation';
+          html += `
+            <div style="background:var(--bg); border-radius:12px; padding:14px; margin-bottom:10px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:700;">${escapeHtml(c.name)} ${c.ticker ? '<span style="color:var(--accent); font-size:12px;">(' + escapeHtml(c.ticker) + ')</span>' : ''}</span>
+                <span style="font-size:13px; font-weight:700; color:${c.overlapScore > 40 ? 'var(--error)' : c.overlapScore > 20 ? 'var(--warning)' : 'var(--success)'};">${c.overlapScore}% overlap</span>
+              </div>
+              <div class="similarity-bar"><div class="similarity-bar-fill ${simClass}" style="width:${Math.min(c.overlapScore, 100)}%;"></div></div>
+              <div style="font-size:12px; color:var(--text-light); margin-top:4px;">${label}</div>
+              ${c.overlappingTerms?.length ? `<div style="margin-top:6px;">Shared terms: ${c.overlappingTerms.map(t => '<span class="kw-chip kw-chip-overlap">' + escapeHtml(t) + '</span>').join('')}</div>` : ''}
+            </div>`;
+        });
+        html += '</div>';
+      }
+
+      // Conflict flags
+      if (analysis.conflictFlags?.length) {
+        html += '<h4 style="font-size:15px; font-weight:700; margin-bottom:8px; color:var(--error);">⚠ Potential Conflicts</h4>';
+        analysis.conflictFlags.forEach(f => {
+          html += `<div class="conflict-flag"><strong>Flag:</strong> ${escapeHtml(f)}</div>`;
+        });
+      }
+
+      // Unique strengths
+      if (analysis.uniqueStrengths?.length) {
+        html += '<div style="margin-top:16px; margin-bottom:16px;">';
+        html += '<h4 style="font-size:15px; font-weight:700; margin-bottom:8px; color:var(--primary);">✓ Your Unique Strengths</h4>';
+        html += '<div style="font-size:13px; color:var(--text-light); margin-bottom:8px;">These terms from your project don\'t appear in any competitor profile — emphasize them:</div>';
+        html += '<div>' + analysis.uniqueStrengths.slice(0, 15).map(t => '<span class="kw-chip kw-chip-unique">' + escapeHtml(t) + '</span>').join('') + '</div>';
+        html += '</div>';
+      }
+
+      // Overlapping terms
+      if (analysis.overlappingIndustryTerms?.length) {
+        html += '<div style="margin-bottom:16px;">';
+        html += '<h4 style="font-size:15px; font-weight:700; margin-bottom:8px; color:var(--warning);">Shared Industry Terms</h4>';
+        html += '<div style="font-size:13px; color:var(--text-light); margin-bottom:8px;">These terms overlap with competitors — add specifics to differentiate:</div>';
+        html += '<div>' + analysis.overlappingIndustryTerms.slice(0, 15).map(t => '<span class="kw-chip kw-chip-overlap">' + escapeHtml(t) + '</span>').join('') + '</div>';
+        html += '</div>';
+      }
+
+      // Differentiation tips
+      if (analysis.differentiationTips?.length) {
+        html += '<h4 style="font-size:15px; font-weight:700; margin-bottom:8px;">Differentiation Tips</h4>';
+        analysis.differentiationTips.forEach(tip => {
+          html += `<div class="diff-tip">${escapeHtml(tip)}</div>`;
+        });
+      }
+
+      // Suggested refinements
+      if (analysis.suggestedRefinements?.length) {
+        html += '<h4 style="font-size:15px; font-weight:700; margin-top:16px; margin-bottom:8px;">Suggested Refinements</h4>';
+        analysis.suggestedRefinements.forEach(r => {
+          html += `<div class="diff-tip" style="background:rgba(37,99,235,0.06); border-color:rgba(37,99,235,0.15);">${escapeHtml(r)}</div>`;
+        });
+      }
+
+      html += '</div>';
+      return html;
+    }
+
+    function copyProjectDescToRefined() {
+      const desc = currentApp.project_profile?.description || '';
+      const textarea = document.getElementById('wiz_refinedDesc');
+      if (textarea) { textarea.value = desc; wizAutoSave(); }
+    }
+
+    // ============================================================
+    // Innovation Introduction Feature
+    // ============================================================
+    function toggleIntroOptIn(checked) {
+      if (!currentApp.answers) currentApp.answers = {};
+      if (!currentApp.answers.introductionRequest) {
+        currentApp.answers.introductionRequest = { optedIn: false, letterText: '', confirmedAt: null, status: 'draft' };
+      }
+      currentApp.answers.introductionRequest.optedIn = checked;
+
+      const section = document.getElementById('introLetterSection');
+      if (section) section.style.display = checked ? 'block' : 'none';
+
+      if (checked && !currentApp.answers.introductionRequest.letterText) {
+        generateIntroLetter();
+      }
+      wizAutoSave();
+    }
+
+    function generateIntroLetter() {
+      const org = currentApp.organization_profile || {};
+      const proj = currentApp.project_profile || {};
+      const answers = currentApp.answers || {};
+      const refined = answers.competitorAnalysis?.refinedDescription || '';
+      const userName = org.legalName || currentUser?.contactName || currentUser?.businessName || 'the applicant';
+      const projTitle = proj.title || 'their current project';
+      const province = org.province || '';
+
+      // Build a high-level, non-technical summary
+      const projDesc = refined || proj.description || '';
+      const summaryLines = [];
+      if (projDesc) {
+        // First 2 sentences, stripped of any technical specifics
+        const sentences = projDesc.replace(/\n+/g, ' ').split(/(?<=[.!?])\s+/).filter(s => s.length > 10);
+        summaryLines.push(sentences.slice(0, 2).join(' '));
+      }
+      if (answers.outcomes) {
+        const outcomeSentences = answers.outcomes.replace(/\n+/g, ' ').split(/(?<=[.!?])\s+/).filter(s => s.length > 10);
+        if (outcomeSentences.length) summaryLines.push(outcomeSentences[0]);
+      }
+
+      const impactSummary = summaryLines.length
+        ? summaryLines.join(' ')
+        : 'an innovative project in the agricultural and food technology space with significant community impact potential.';
+
+      const programName = currentApp.program_name || 'relevant funding programs';
+
+      const letter = `Dear [Recipient],
+
+I'm reaching out from GreenReach — we work with growers and agri-food innovators across Canada to connect promising projects with the resources they need to succeed.
+
+I wanted to introduce you to ${userName}${province ? ' (' + province + ')' : ''}, who is working on something I think you're going to appreciate.
+
+Their project, "${projTitle}," focuses on ${impactSummary}
+
+What caught our attention is the alignment between their vision and the kind of innovation your organization champions. They have already begun the process of applying through ${programName}, and the depth of their planning — from competitive analysis to detailed milestones — signals a team that is serious and well-prepared.
+
+This is a high-level introduction only. No proprietary details, technical specifications, or IP have been shared in this letter. ${userName} is interested in exploring whether a conversation might be mutually beneficial, and they remain in full control of what they share going forward.
+
+If this sounds like a fit, I'd be happy to facilitate a brief introduction at a time that works for both of you. No commitment — just a conversation.
+
+Warm regards,
+The GreenReach Innovation Team
+info@greenreachfarms.com`;
+
+      // Save and render
+      if (!currentApp.answers.introductionRequest) {
+        currentApp.answers.introductionRequest = { optedIn: true, letterText: '', confirmedAt: null, status: 'draft' };
+      }
+      currentApp.answers.introductionRequest.letterText = letter;
+      currentApp.answers.introductionRequest.generatedAt = new Date().toISOString();
+      currentApp.answers.introductionRequest.status = 'draft';
+
+      renderIntroLetter(letter);
+      wizAutoSave();
+    }
+
+    function renderIntroLetter(text) {
+      const container = document.getElementById('introLetterContent');
+      if (!container) return;
+
+      const status = currentApp.answers?.introductionRequest?.status || 'draft';
+      const statusLabel = status === 'confirmed' ? '✓ Confirmed' : status === 'editing' ? 'Editing...' : 'Draft — Review Before Sending';
+      const statusColor = status === 'confirmed' ? 'var(--success)' : 'var(--warning)';
+
+      container.innerHTML = `
+        <div class="intro-letter-preview">
+          <div class="letter-header">
+            <span style="color:${statusColor}; font-weight:700;">${statusLabel}</span>
+            <span style="float:right;">Introduction Letter Preview</span>
+          </div>
+          <div class="letter-body" id="introLetterBody">${escapeHtml(text)}</div>
+        </div>`;
+
+      // Enable action buttons
+      const editBtn = document.getElementById('introEditBtn');
+      const confirmBtn = document.getElementById('introConfirmBtn');
+      if (editBtn) editBtn.disabled = false;
+      if (confirmBtn) confirmBtn.disabled = (status === 'confirmed');
+    }
+
+    function editIntroLetter() {
+      const container = document.getElementById('introLetterContent');
+      const currentText = currentApp.answers?.introductionRequest?.letterText || '';
+      if (!container || !currentText) return;
+
+      currentApp.answers.introductionRequest.status = 'editing';
+
+      container.innerHTML = `
+        <div style="margin-top:16px;">
+          <div style="font-size:12px; color:var(--text-light); margin-bottom:8px;">Edit the introduction letter below. Remove or reword anything you're not comfortable sharing.</div>
+          <textarea id="introLetterEditor" style="width:100%; min-height:320px; padding:16px; font-size:14px; line-height:1.7; border:1px solid #d2d2d7; border-radius:12px; font-family:inherit; resize:vertical;">${escapeHtml(currentText)}</textarea>
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <button class="btn btn-primary btn-sm" onclick="saveIntroLetterEdit()">Save Changes</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelIntroLetterEdit()">Cancel</button>
+          </div>
+        </div>`;
+    }
+
+    function saveIntroLetterEdit() {
+      const editor = document.getElementById('introLetterEditor');
+      if (!editor) return;
+      const newText = editor.value.trim();
+      if (!newText) return;
+
+      currentApp.answers.introductionRequest.letterText = newText;
+      currentApp.answers.introductionRequest.editedAt = new Date().toISOString();
+      currentApp.answers.introductionRequest.status = 'draft';
+      renderIntroLetter(newText);
+      wizAutoSave();
+    }
+
+    function cancelIntroLetterEdit() {
+      const currentText = currentApp.answers?.introductionRequest?.letterText || '';
+      currentApp.answers.introductionRequest.status = 'draft';
+      renderIntroLetter(currentText);
+    }
+
+    function confirmIntroLetter() {
+      const intro = currentApp.answers?.introductionRequest;
+      if (!intro?.letterText) return;
+
+      if (!confirm('Confirm this introduction letter?\n\nGreenReach will use this approved text to facilitate introductions on your behalf. No additional information will be shared without your consent.')) {
+        return;
+      }
+
+      intro.status = 'confirmed';
+      intro.confirmedAt = new Date().toISOString();
+      renderIntroLetter(intro.letterText);
+      wizAutoSave();
+
+      // Show confirmation message
+      const container = document.getElementById('introLetterContent');
+      if (container) {
+        const msg = document.createElement('div');
+        msg.style.cssText = 'margin-top:12px; padding:14px; background:rgba(130,195,65,0.1); border:1px solid rgba(130,195,65,0.3); border-radius:10px; font-size:14px; color:var(--primary); font-weight:600;';
+        msg.innerHTML = '✓ Introduction letter confirmed. GreenReach will review and begin facilitating introductions. We\'ll keep you updated on any interest.';
+        container.appendChild(msg);
+      }
     }
 
     // ============================================================
