@@ -1451,6 +1451,10 @@ app.get('/farm-vitality.html', (_req, res) => {
   res.redirect('/views/farm-summary.html');
 });
 
+app.get('/index.charlie.html', (_req, res) => {
+  res.redirect('/views/farm-summary.html');
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
