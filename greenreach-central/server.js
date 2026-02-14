@@ -1420,7 +1420,7 @@ app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge 
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
 app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
-app.use('/api/planting', plantingRoutes); // Planting scheduler recommendations with market intelligence
+app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler recommendations with market intelligence
 app.use('/api/planning', planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', cropPricingRoutes); // Farm-specific crop pricing
