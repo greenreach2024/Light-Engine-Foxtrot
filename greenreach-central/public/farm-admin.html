@@ -7,6 +7,7 @@
     <script src="/auth-guard.js"></script>
     <script src="./js/console-guard.js"></script>
     <link rel="stylesheet" href="/styles/styles.charlie.css?v=2025-12-10-01">
+    <link rel="stylesheet" href="/styles/nav-color-palette.css">
     <style>
         * {
             margin: 0;
@@ -65,7 +66,10 @@
             cursor: pointer;
             transition: all 0.3s ease;
             text-decoration: none;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 44px;
         }
 
         .nav-btn:hover {
@@ -921,14 +925,15 @@
     <!-- Page Header Navigation -->
     <header class="page-header">
         <div>
-            <h1>Farm Admin Dashboard</h1>
+            <h1 id="farmNameHeader">Farm Admin Dashboard</h1>
             <small id="headerFarmId" style="color: var(--text-muted); font-family: monospace; font-size: 12px; display: block; margin-top: 4px;"></small>
         </div>
         <div class="header-actions">
-            <a href="#dashboard" class="nav-btn" data-section="dashboard">Dashboard</a>
-            <a href="#farm-summary" class="nav-btn farm-summary" data-section="iframe-view" data-url="/views/farm-summary.html">Farm Summary</a>
-            <a href="#inventory" class="nav-btn inventory" data-section="iframe-view" data-url="/views/farm-inventory.html">Farm Inventory</a>
-            <a href="#nutrient" class="nav-btn nutrient" data-section="iframe-view" data-url="/views/nutrient-management.html">Nutrient Management</a>
+            <a href="/LE-dashboard.html" class="nav-btn">Dashboard</a>
+            <a href="/farm-vitality.html" class="nav-btn" style="background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #67e8f9;">Vitality</a>
+            <a href="/views/farm-summary.html" class="nav-btn farm-summary">Farm Summary</a>
+            <a href="/views/farm-inventory.html" class="nav-btn inventory">Farm Inventory</a>
+            <a href="/views/nutrient-management.html" class="nav-btn nutrient">Nutrient Management</a>
         </div>
     </header>
 
@@ -946,11 +951,11 @@
                         <span class="nav-item-icon">■</span>
                         Dashboard
                     </a>
-                    <a href="#farm-summary" class="nav-item" data-section="iframe-view" data-url="/views/farm-summary.html">
+                    <a href="/views/farm-summary.html" class="nav-item">
                         <span class="nav-item-icon">■</span>
                         Farm Summary
                     </a>
-                    <a href="#inventory" class="nav-item" data-section="iframe-view" data-url="/views/farm-inventory.html">
+                    <a href="/views/farm-inventory.html" class="nav-item">
                         <span class="nav-item-icon">■</span>
                         Inventory
                     </a>
@@ -961,10 +966,6 @@
                     <a href="#farm-supplies" class="nav-item" data-section="inventory-mgmt">
                         <span class="nav-item-icon">■</span>
                         Farm Supplies & Operations
-                    </a>
-                    <a href="#procurement" class="nav-item" data-section="iframe-view" data-url="/views/procurement-portal.html">
-                        <span class="nav-item-icon">■</span>
-                        Procurement Portal
                     </a>
                     <a href="#sustainability" class="nav-item" data-section="sustainability">
                         <span class="nav-item-icon">■</span>
@@ -1093,7 +1094,7 @@
                 <div class="card">
                     <h2>Quick Actions</h2>
                     <div class="quick-actions">
-                        <a href="#farm-summary" class="action-card" data-section="iframe-view" data-url="/views/farm-summary.html">
+                        <a href="/views/farm-summary.html" class="action-card">
                             <div class="action-icon">FS</div>
                             <div class="action-title">View Farm</div>
                             <div class="action-desc">Monitor zones, groups & growth</div>
@@ -1815,16 +1816,6 @@
                         <div style="font-size: 32px; font-weight: bold; color: var(--accent-red);" id="total-expenses">$0.00</div>
                         <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="expenses-breakdown">--</div>
                     </div>
-                    <div class="card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%); border-left: 4px solid #f59e0b;">
-                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Procurement Spending</h3>
-                        <div style="font-size: 32px; font-weight: bold; color: #f59e0b;" id="procurement-spending">$0.00</div>
-                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="procurement-order-count">0 orders</div>
-                    </div>
-                    <div class="card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%); border-left: 4px solid #f59e0b;">
-                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Procurement Supplies</h3>
-                        <div style="font-size: 32px; font-weight: bold; color: #f59e0b;" id="procurement-expenses">$0.00</div>
-                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="procurement-orders-count">0 orders</div>
-                    </div>
                 </div>
 
                 <!-- Operations Summary -->
@@ -1902,11 +1893,6 @@
                                     <td id="processing-fee-desc">Square transaction fees</td>
                                     <td id="processing-fees">$0.00</td>
                                 </tr>
-                                <tr>
-                                    <td>Farm Supply Procurement</td>
-                                    <td id="procurement-fee-desc">Seeds, nutrients, packaging, equipment</td>
-                                    <td id="procurement-supply-costs">$0.00</td>
-                                </tr>
                                 <tr style="font-weight: bold; background: rgba(239, 68, 68, 0.1);">
                                     <td>Total Expenses</td>
                                     <td></td>
@@ -1965,32 +1951,6 @@
                         <div style="padding: 15px; background: rgba(245, 158, 11, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-yellow);">
                             <strong>Sync Status:</strong> <span id="qb-sync-status">Ready</span>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Farm Supply Providers -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <h2>Farm Supply Providers</h2>
-                    <p style="color: var(--text-secondary); margin-bottom: 15px;">Suppliers providing seeds, nutrients, packaging, and equipment through GreenReach Procurement.</p>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Supplier</th>
-                                    <th>Products</th>
-                                    <th>Orders</th>
-                                    <th>Total Spent</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="supply-providers-tbody">
-                                <tr>
-                                    <td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">
-                                        Loading supply providers...
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
@@ -2462,6 +2422,56 @@
                                 </label>
                                 <p style="color: var(--text-muted); font-size: 11px; margin: 0;">Opt-out to disable wholesale orders from GreenReach Central. All other services (monitoring, updates, support) remain active.</p>
                             </div>
+                            
+                            <!-- Download Activity Hub App -->
+                            <div style="margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; color: white;">
+                                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 10px; color: white;">📱 Download Activity Hub App</h3>
+                                <p style="font-size: 0.9rem; margin-bottom: 15px; opacity: 0.95;">
+                                    Install the Activity Hub app on your iPad to scan trays, log activities, and manage operations.
+                                </p>
+                                <button class="btn-primary" onclick="showActivityHubDownloadQR()" style="width: 100%; margin-bottom: 15px; background: white; color: #667eea; font-weight: 600;">
+                                    Show Download QR Code
+                                </button>
+                                <div id="activityHubDownloadQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center; margin-top: 15px;">
+                                    <h4 style="color: #1a2332; margin-bottom: 15px; font-size: 16px;">Scan with iPad to Download</h4>
+                                    <div id="activityHubDownloadQRCode" style="display: inline-block; padding: 15px; background: white; border-radius: 8px;"></div>
+                                    <div style="margin-top: 20px; padding: 15px; background: #f3f4f6; border-radius: 6px;">
+                                        <p style="color: #1a2332; font-size: 0.9rem; margin: 0 0 8px 0; font-weight: 600;">Installation Steps:</p>
+                                        <ol style="color: #6b7280; font-size: 0.85rem; text-align: left; margin: 0; padding-left: 20px;">
+                                            <li style="margin-bottom: 6px;">Open Camera app on your iPad</li>
+                                            <li style="margin-bottom: 6px;">Point camera at QR code above</li>
+                                            <li style="margin-bottom: 6px;">Tap the notification to open App Store</li>
+                                            <li style="margin-bottom: 6px;">Install "GreenReach Activity Hub"</li>
+                                            <li>After install, use Pairing QR below to connect</li>
+                                        </ol>
+                                    </div>
+                                    <button class="btn-secondary" onclick="closeActivityHubDownloadQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Device Pairing for Activity Hub Tablets -->
+                            <div id="pairing">
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Tablet Device Pairing</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">
+                                    After installing the Activity Hub app, generate a QR code to pair tablets with this farm. Each tablet must scan this code for secure access.
+                                </p>
+                                <button class="btn-primary" onclick="generatePairingQR()" style="width: 100%; margin-bottom: 15px;">
+                                    Generate Pairing QR Code
+                                </button>
+                                <div id="pairingQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <h4 style="color: #1a2332; margin-bottom: 10px;">Scan with Tablet</h4>
+                                    <div id="pairingQRCode" style="display: inline-block;"></div>
+                                    <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
+                                        Farm: <strong id="pairingFarmName" style="color: #1a2332;"></strong><br>
+                                        Token expires in 24 hours
+                                    </p>
+                                    <button class="btn-secondary" onclick="closePairingQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -2528,6 +2538,10 @@
                                     <span id="device-count" style="color: var(--accent-green);">3 active</span>
                                 </div>
                                 <div id="device-list" style="display: grid; gap: 8px; font-size: 13px;">
+                                    <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-card); border-radius: 4px;">
+                                        <span>Activity Hub Tablet</span>
+                                        <span style="color: var(--accent-green);">Online</span>
+                                    </div>
                                     <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-card); border-radius: 4px;">
                                         <span>Mobile Scanner #1</span>
                                         <span style="color: var(--accent-green);">Online</span>
@@ -2898,11 +2912,6 @@
                 </div>
                 <p>Documentation coming soon...</p>
             </div>
-
-            <!-- Iframe section for loading external pages in-frame -->
-            <div id="section-iframe-view" class="content-section" style="display: none;">
-                <iframe id="admin-iframe" src="about:blank" style="width: 100%; height: calc(100vh - 60px); border: none; border-radius: 8px;"></iframe>
-            </div>
         </div>
     </div>
 
@@ -2930,25 +2939,25 @@
                 const capacityRes = await fetch(`${PLANNING_BACKEND_URL}/api/planning/capacity`);
                 const capacityData = await capacityRes.json();
                 
-                if (capacityData.success) {
+                if (capacityData.ok) {
                     document.getElementById('capacity-utilization').textContent = 
-                        `${capacityData.data.utilizationPercent.toFixed(1)}%`;
+                        `${capacityData.capacity.utilization_percentage.toFixed(1)}%`;
                     document.getElementById('capacity-details').textContent = 
-                        `${capacityData.data.usedCapacity} / ${capacityData.data.totalCapacity} trays`;
+                        `${capacityData.capacity.cells_occupied} / ${capacityData.capacity.total_capacity} cells`;
                     document.getElementById('upcoming-harvests').textContent = 
-                        capacityData.data.assignments || 0;
+                        capacityData.capacity.upcoming_harvests_next_7_days;
                 }
 
                 // Load demand forecast
                 const forecastRes = await fetch(`${PLANNING_BACKEND_URL}/api/planning/demand-forecast?horizon=${horizon}`);
                 const forecastData = await forecastRes.json();
                 
-                if (forecastData.success && forecastData.data.forecast.length > 0) {
-                    const totalDemand = forecastData.data.forecast.reduce((sum, f) => sum + f.projectedDemand, 0);
-                    document.getElementById('forecasted-demand').textContent = `${totalDemand.toFixed(1)} units`;
+                if (forecastData.ok && forecastData.forecasts.length > 0) {
+                    const totalDemand = forecastData.forecasts.reduce((sum, f) => sum + f.forecasted_quantity, 0);
+                    document.getElementById('forecasted-demand').textContent = `${totalDemand.toFixed(1)} kg`;
                     
-                    const avgGrowth = forecastData.data.forecast.reduce((sum, f) => sum + f.trendPercent, 0) / forecastData.data.forecast.length;
-                    const trendText = avgGrowth > 0 ? `+${(avgGrowth).toFixed(1)}% trend` : `${(avgGrowth).toFixed(1)}% trend`;
+                    const avgGrowth = forecastData.forecasts.reduce((sum, f) => sum + f.growth_rate, 0) / forecastData.forecasts.length;
+                    const trendText = avgGrowth > 0 ? `+${(avgGrowth * 100).toFixed(1)}% trend` : `${(avgGrowth * 100).toFixed(1)}% trend`;
                     document.getElementById('demand-trend').textContent = trendText;
                 }
 
@@ -2973,7 +2982,7 @@
                 const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/demand-forecast?horizon=${horizon}`);
                 const data = await response.json();
                 
-                if (data.success && data.data.forecast.length > 0) {
+                if (data.ok && data.forecasts.length > 0) {
                     const ctx = document.getElementById('demandForecastChart').getContext('2d');
                     
                     if (demandChart) {
@@ -2984,11 +2993,10 @@
                         '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'
                     ];
 
-                    const datasets = data.data.forecast.map((forecast, idx) => ({
-                        label: forecast.product,
+                    const datasets = data.forecasts.map((forecast, idx) => ({
+                        label: forecast.crop,
                         data: [
-                            { x: 'Baseline', y: forecast.baselineDemand },
-                            { x: 'Projected', y: forecast.projectedDemand }
+                            { x: 'Current', y: forecast.current_avg_daily },
                             { x: 'Forecast', y: forecast.forecasted_quantity / (horizon === 'WEEKLY' ? 7 : 30) }
                         ],
                         borderColor: colors[idx % colors.length],
@@ -3538,8 +3546,116 @@
             alert('Event recording UI coming soon. This will allow you to record:\n- Germination\n- Transplant\n- Growth checks\n- Harvest\n- Packing\n- Sales\n\nWith photos and notes at each stage.');
         }
 
+        // Load real farm KPIs from groups and devices
+        async function loadFarmKPIs() {
+            try {
+                // Load groups data
+                const groupsRes = await fetch('/api/groups');
+                const groups = await groupsRes.json();
+                
+                // Calculate real metrics from CODE3/GROW3 controllers
+                let totalTrays = 0;
+                let totalPlants = 0;
+                let totalDevices = 0;
+                let offlineDevices = 0;
+                
+                groups.forEach(group => {
+                    totalTrays += group.trays || 0;
+                    totalPlants += group.plants || 0;
+                    const lights = group.lights || [];
+                    totalDevices += lights.length;
+                    
+                    // Check device status if available
+                    if (group.controller && group.controller.status === 'offline') {
+                        offlineDevices += lights.length;
+                    }
+                });
+                
+                // Update KPI cards
+                const kpiTrays = document.getElementById('kpi-trays');
+                const kpiPlants = document.getElementById('kpi-plants');
+                const kpiDevices = document.getElementById('kpi-devices');
+                const kpiHarvest = document.getElementById('kpi-harvest');
+                
+                if (kpiTrays) kpiTrays.textContent = totalTrays || groups.length;
+                if (kpiPlants) kpiPlants.textContent = totalPlants || '--';
+                if (kpiDevices) kpiDevices.textContent = totalDevices;
+                
+                // Update change indicators with real status
+                const kpiTraysChange = document.getElementById('kpi-trays-change');
+                const kpiPlantsChange = document.getElementById('kpi-plants-change');
+                const kpiDevicesChange = document.getElementById('kpi-devices-change');
+                const kpiHarvestChange = document.getElementById('kpi-harvest-change');
+                
+                if (kpiTraysChange) {
+                    kpiTraysChange.textContent = totalTrays > 0 
+                        ? `${groups.length} active group${groups.length !== 1 ? 's' : ''}` 
+                        : `${groups.length} group${groups.length !== 1 ? 's' : ''} configured`;
+                }
+                
+                if (kpiPlantsChange) {
+                    kpiPlantsChange.textContent = totalPlants > 0 
+                        ? `${totalTrays || groups.length} tray${(totalTrays || groups.length) !== 1 ? 's' : ''}` 
+                        : 'Set tray count in group config';
+                }
+                
+                if (kpiDevicesChange) {
+                    if (offlineDevices > 0) {
+                        kpiDevicesChange.textContent = `${offlineDevices} offline`;
+                        kpiDevicesChange.parentElement.classList.remove('positive');
+                        kpiDevicesChange.parentElement.classList.add('negative');
+                    } else {
+                        kpiDevicesChange.textContent = `${totalDevices} light${totalDevices !== 1 ? 's' : ''} online`;
+                        kpiDevicesChange.parentElement.classList.remove('negative');
+                    }
+                }
+                
+                // Calculate next harvest from crop plans
+                if (kpiHarvest && groups.length > 0) {
+                    const groupsWithDates = groups.filter(g => g.planConfig && g.planConfig.anchor && g.planConfig.anchor.seedDate);
+                    if (groupsWithDates.length > 0) {
+                        // Find earliest harvest (assuming 30-day cycle as default)
+                        const harvestDays = 30; // TODO: Get from crop plan
+                        const seedDates = groupsWithDates.map(g => new Date(g.planConfig.anchor.seedDate));
+                        const earliestSeed = new Date(Math.min(...seedDates));
+                        const harvestDate = new Date(earliestSeed);
+                        harvestDate.setDate(harvestDate.getDate() + harvestDays);
+                        
+                        const daysUntil = Math.ceil((harvestDate - new Date()) / (1000 * 60 * 60 * 24));
+                        
+                        if (daysUntil > 0) {
+                            kpiHarvest.textContent = `${daysUntil}d`;
+                            if (kpiHarvestChange) kpiHarvestChange.textContent = harvestDate.toLocaleDateString();
+                        } else {
+                            kpiHarvest.textContent = 'Ready';
+                            if (kpiHarvestChange) kpiHarvestChange.textContent = 'Harvest ready';
+                        }
+                    } else {
+                        kpiHarvest.textContent = '--';
+                        if (kpiHarvestChange) kpiHarvestChange.textContent = 'Set seed dates';
+                    }
+                }
+                
+                console.log('[Farm KPIs] Loaded:', { totalTrays, totalPlants, totalDevices, offlineDevices, groups: groups.length });
+            } catch (error) {
+                console.error('[Farm KPIs] Error loading real data:', error);
+                // Fallback to showing zeros instead of mock data
+                const kpiTrays = document.getElementById('kpi-trays');
+                const kpiPlants = document.getElementById('kpi-plants');
+                const kpiDevices = document.getElementById('kpi-devices');
+                
+                if (kpiTrays) kpiTrays.textContent = '0';
+                if (kpiPlants) kpiPlants.textContent = '0';
+                if (kpiDevices) kpiDevices.textContent = '0';
+            }
+        }
+
         // Initialize traceability section when it becomes active
         document.addEventListener('DOMContentLoaded', () => {
+            // Load real farm KPIs on page load
+            loadFarmKPIs();
+            
+            // Listen for section changes
             // Listen for section changes
             document.querySelectorAll('[data-section="traceability"]').forEach(link => {
                 link.addEventListener('click', () => {
@@ -4223,6 +4339,26 @@
     if (document.getElementById('farm-ssid')) {
       loadFarmConfiguration();
     }
+    
+    // Load farm name into header
+    (async function loadFarmNameIntoHeader() {
+      try {
+        const response = await fetch('/data/farm.json');
+        if (response.ok) {
+          const farmData = await response.json();
+          const farmName = farmData.name || farmData.farmName;
+          if (farmName) {
+            const headerEl = document.getElementById('farmNameHeader');
+            if (headerEl) {
+              headerEl.textContent = `${farmName} - Admin Dashboard`;
+            }
+            document.title = `${farmName} - Admin Dashboard`;
+          }
+        }
+      } catch (error) {
+        console.log('[Farm Admin] Could not load farm name:', error.message);
+      }
+    })();
   </script>
 </body>
 </html>
