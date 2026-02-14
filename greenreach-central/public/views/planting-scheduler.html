@@ -2989,10 +2989,12 @@
         const currentCrop = tray ? (tray.currentCrop || 'Empty') : 'Unknown';
         const recommendedCrop = task.recommendedCropName || group?.nextCrop || 'TBD';
 
-        // Show next seed date if available
-        const nextSeedInfo = task.nextSeedDate 
-          ? `<div style="font-size: 0.75rem; color: #60a5fa;">Seed: ${task.nextSeedDate}</div>`
-          : '';
+        // Show next plant (transplant) date if available
+        const nextSeedInfo = task.nextPlantDate
+          ? `<div style="font-size: 0.75rem; color: #60a5fa;">Plant: ${task.nextPlantDate}</div>`
+          : task.nextSeedDate 
+            ? `<div style="font-size: 0.75rem; color: #60a5fa;">Seed: ${task.nextSeedDate}</div>`
+            : '';
 
         return `
           <tr>
@@ -3373,13 +3375,18 @@
           dli_capacity: Number(group?.currentDLI || currentDliFromPpfd || 22)
         };
 
+        // Use task's actual seeding window date instead of today
+        const taskSeedDate = task.targetSeedDate
+          ? (task.targetSeedDate instanceof Date ? task.targetSeedDate : new Date(task.targetSeedDate)).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0];
+
         const response = await fetch('/api/planting/recommendations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             groupId: task.groupId,
             currentCrop: group?.plan || group?.crop || group?.recipe || task.cropName || '',
-            targetSeedDate: new Date().toISOString().split('T')[0],
+            targetSeedDate: taskSeedDate,
             zoneConditions
           })
         });
@@ -3415,7 +3422,7 @@
               <div>
                 <div style="font-size:0.7rem;color:#10b981;text-transform:uppercase;font-weight:600;">Recommended</div>
                 <h3 style="color:#34d399;margin:0.25rem 0;">${top.cropName}</h3>
-                <div style="font-size:0.85rem;color:#94a3b8;">${top.category} · ${top.durationDays} days · Harvest ${top.expectedHarvestDate}</div>
+                <div style="font-size:0.85rem;color:#94a3b8;">${top.category} · ${top.durationDays} days · Seed: ${recommendations.targetSeedDate || '—'} · Harvest: ${top.expectedHarvestDate}</div>
               </div>
               <div style="text-align:right;">
                 <div style="font-size:2rem;font-weight:bold;color:#34d399;">${Math.round(top.scores.overall)}</div>
@@ -3556,10 +3563,11 @@
       const scopedTrayIds = new Set(scopedTasks.map(t => t.trayId).filter(Boolean));
       const scopedGroupIds = new Set(scopedTasks.map(t => t.groupId).filter(Boolean));
 
-      // Calculate seed and harvest dates from first task
+      // Calculate seed date, plant/transplant date, and harvest date from first task
       const firstTask = scopedTasks[0];
-      const seedDate = firstTask?.targetTransplantDate || new Date();
-      const harvestDate = new Date(seedDate);
+      const seedDate = firstTask?.targetSeedDate || new Date();
+      const plantDate = firstTask?.targetTransplantDate || seedDate;
+      const harvestDate = new Date(plantDate);
       harvestDate.setDate(harvestDate.getDate() + harvestDays);
 
       // CRITICAL FIX: Save assignments to database for each affected group
@@ -3592,7 +3600,8 @@
           ...group,
           nextCrop: normalizedCropName,
           nextCropId: normalizedCropId,
-          nextSeedDate: seedDate.toISOString().split('T')[0],
+          nextSeedDate: (seedDate instanceof Date ? seedDate : new Date(seedDate)).toISOString().split('T')[0],
+          nextPlantDate: (plantDate instanceof Date ? plantDate : new Date(plantDate)).toISOString().split('T')[0],
           nextHarvestDate: harvestDate.toISOString().split('T')[0]
           // DO NOT update group.plan / group.crop (current crop) — that's separate!
         };
@@ -3607,7 +3616,8 @@
           // Keep task.cropId and task.cropName as-is (current crop)
           recommendedCropId: normalizedCropId,
           recommendedCropName: normalizedCropName,
-          nextSeedDate: seedDate.toISOString().split('T')[0],
+          nextSeedDate: (seedDate instanceof Date ? seedDate : new Date(seedDate)).toISOString().split('T')[0],
+          nextPlantDate: (plantDate instanceof Date ? plantDate : new Date(plantDate)).toISOString().split('T')[0],
           expectedNewHarvest: new Date(task.targetTransplantDate.getTime() + harvestDays * 24 * 60 * 60 * 1000)
         };
       });
@@ -3749,10 +3759,19 @@
           dli_capacity: Number(group.currentDLI || currentDliFromPpfd || 22)
         };
 
+        // Use the group's actual next seeding window instead of today
+        let bestSeedDate = new Date().toISOString().split('T')[0];
+        if (state.seedingTasks && state.seedingTasks.length) {
+          const groupTask = state.seedingTasks.find(t => t.groupId === groupId);
+          if (groupTask && groupTask.targetSeedDate) {
+            bestSeedDate = groupTask.targetSeedDate.toISOString().split('T')[0];
+          }
+        }
+
         const requestBody = {
           groupId,
           currentCrop: group.plan || group.crop || group.recipe || '',
-          targetSeedDate: new Date().toISOString().split('T')[0],
+          targetSeedDate: bestSeedDate,
           zoneConditions
         };
 
@@ -3872,7 +3891,7 @@
               ${topRec.cropName}
             </h3>
             <div style="color: #94a3b8; font-size: 0.9rem;">
-              ${topRec.category || ''} · ${topRec.durationDays} days · Harvest: ${topRec.expectedHarvestDate}
+              ${topRec.category || ''} · ${topRec.durationDays} days · Seed: ${recommendations.targetSeedDate || '—'} · Harvest: ${topRec.expectedHarvestDate}
             </div>
           </div>
           <div style="text-align: right;">
@@ -3932,7 +3951,7 @@
                   ${alt.category || ''} · ${alt.durationDays}d · Harvest: ${alt.expectedHarvestDate}
                 </div>
                 <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
-                  Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Market: ${Math.round(alt.scores.market || 70)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Seasonal: ${Math.round(alt.scores.seasonal || 0)}
+                  Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Market: ${Math.round(alt.scores.market || 70)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Off-Season: ${Math.round(alt.scores.off_season || 0)}
                 </div>
                 ${renderJustificationPills(alt.justifications)}
               </div>
