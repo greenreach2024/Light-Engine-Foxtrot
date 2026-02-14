@@ -1439,16 +1439,8 @@ app.get('/admin.html', (req, res) => {
   res.redirect('/farm-admin.html');
 });
 
-app.get('/LE-farm-admin.html', (_req, res) => {
-  res.redirect('/farm-admin.html');
-});
-
-app.get('/LE-dashboard.html', (_req, res) => {
-  res.redirect('/farm-admin.html#settings');
-});
-
-// farm-vitality.html is served from parent public/ via express.static
-// No redirect needed — static middleware serves it directly
+// LE-dashboard.html, LE-farm-admin.html, farm-vitality.html now served
+// directly as static files from public/ (no redirects needed)
 
 // 404 handler
 app.use((req, res) => {

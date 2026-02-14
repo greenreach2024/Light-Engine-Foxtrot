@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farm Vitality Dashboard - Light Engine</title>
+    <script src="/auth-guard.js"></script>
+    <!-- Lottie Script Removed (Switched to B.O.B. Blobs) -->
+    <link rel="stylesheet" href="/styles/light-engine.css?v=2">
+    <script src="/js/light-engine-help.js" defer></script>
+    <script src="/js/character-renderer.js"></script>
+    <script src="/js/farm-vitality.js"></script>
+    <style>
+        /* Vitality View Specific Overrides */
+        /* Use standard vars where possible */
+        
+        /* Page Header Navigation overridden by global styles where compatible */
+        
+        .page-header .subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .nav-btn {
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid var(--accent-blue);
+            color: #93c5fd;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 100px;
+            height: 44px;
+            text-align: center;
+        }
+
+        .nav-btn:hover {
+            background: rgba(59, 130, 246, 0.35);
+            transform: scale(1.05);
+        }
+
+        .nav-btn.home {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: var(--accent-green);
+            color: #6ee7b7;
+        }
+
+        .nav-btn.home:hover {
+            background: rgba(16, 185, 129, 0.35);
+        }
+
+        .nav-btn.settings {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: var(--accent-purple);
+            color: #c4b5fd;
+        }
+
+        .nav-btn.settings:hover {
+            background: rgba(139, 92, 246, 0.35);
+        }
+
+        /* Main Container */
+        .container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 88px);
+            overflow: hidden;
+        }
+
+        /* View Container */
+        .view-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        /* View Controls */
+        .view-controls {
+            position: static;
+            transform: none;
+            display: inline-flex;
+            gap: 0.75rem;
+            z-index: 50;
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            backdrop-filter: none;
+        }
+
+        .view-btn {
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid rgba(59, 130, 246, 0.45);
+            color: var(--text-secondary);
+            padding: 0.6rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 110px;
+            text-align: center;
+            height: 44px;
+        }
+
+        .view-btn:hover {
+            background: rgba(59, 130, 246, 0.5);
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+        }
+
+        .view-btn.active {
+            background: rgba(59, 130, 246, 0.8);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+
+        /* Settings Panel */
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100vh;
+            background: rgba(26, 35, 50, 0.98);
+            border-left: 2px solid var(--accent-blue);
+            backdrop-filter: blur(20px);
+            z-index: 200;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .settings-panel.open {
+            right: 0;
+        }
+
+        .settings-panel h2 {
+            color: #60a5fa;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+
+        .settings-group {
+            margin-bottom: 2rem;
+        }
+
+        .settings-group h3 {
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .setting-item {
+            margin-bottom: 1.5rem;
+        }
+
+        .setting-item label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .setting-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .setting-item input[type="number"],
+        .setting-item select {
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .setting-item input[type="number"]:focus,
+        .setting-item select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .checkbox-item label {
+            margin: 0;
+            cursor: pointer;
+        }
+
+        /* Status Bar (bottom) */
+        .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border);
+        }
+
+        .status-bar .last-updated {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .status-bar .overall-score {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .status-bar .data-freshness {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .freshness-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .freshness-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .freshness-dot.fresh { background: var(--accent-green); }
+        .freshness-dot.acceptable { background: var(--accent-yellow); }
+        .freshness-dot.stale { background: var(--accent-red); }
+        .freshness-dot.no_data { background: var(--text-muted); }
+
+        /* View Canvases */
+        .view-canvas {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .view-canvas.active {
+            display: block;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .loading .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error State */
+        .error {
+            text-align: center;
+            color: var(--accent-red);
+            padding: 2rem;
+        }
+
+        /* ==================== PHASE 1: UI POLISH TRANSITIONS ==================== */
+        
+        /* Enhanced Button States - Smoother, more professional */
+        .nav-btn {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .nav-btn:active {
+            transform: translateY(0);
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav-btn:focus {
+            outline: 2px solid var(--accent-blue);
+            outline-offset: 2px;
+        }
+
+        /* View Button Enhanced States */
+        .view-btn {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .view-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+        }
+
+        .view-btn:active {
+            transform: scale(0.98);
+            transition: all 0.1s ease;
+        }
+
+        .view-btn.active {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+
+        .view-btn:focus {
+            outline: 2px solid var(--accent-blue);
+            outline-offset: 2px;
+        }
+
+        /* Freshness Dot Pulsing Animation */
+        .freshness-dot {
+            transition: all 0.3s ease;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .freshness-dot.fresh {
+            animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .freshness-dot.acceptable {
+            animation: pulse-yellow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .freshness-dot.stale {
+            animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-green {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            }
+            50% {
+                opacity: 0.9;
+                box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+            }
+        }
+
+        @keyframes pulse-yellow {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+            }
+            50% {
+                opacity: 0.9;
+                box-shadow: 0 0 0 4px rgba(245, 158, 11, 0);
+            }
+        }
+
+        @keyframes pulse-red {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            50% {
+                opacity: 0.9;
+                box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+
+        /* Score Number Smooth Transitions */
+        .status-bar .overall-score {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .status-bar .overall-score.updating {
+            transform: scale(1.1);
+            filter: brightness(1.3);
+        }
+
+        /* View Canvas Fade/Scale Transitions */
+        .view-canvas {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .view-canvas.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Settings Panel Smooth Slide */
+        .settings-panel {
+            transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .settings-panel.open {
+            box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Settings Input Focus States */
+        .setting-item input[type="number"]:focus,
+        .setting-item select:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        /* Loading Spinner Enhanced */
+        .loading .spinner {
+            animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+
+        /* Hover States for Interactive Elements */
+        .checkbox-item:hover {
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+
+        /* ==================== END PHASE 1 TRANSITIONS ==================== */
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .page-header {
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1rem;
+            }
+
+            .page-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .header-actions {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .view-controls {
+                flex-direction: column;
+                width: auto;
+                padding: 0.75rem;
+            }
+
+            .settings-panel {
+                width: 100%;
+                right: -100%;
+            }
+
+            .status-bar {
+                flex-direction: column;
+                gap: 0.75rem;
+                align-items: flex-start;
+            }
+        }
+
+        /* Farm Friends View specific styles */
+        .friends-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            width: 100%;
+            height: 100%;
+            padding: 2rem;
+            gap: 2rem;
+            box-sizing: border-box;
+        }
+
+        .friend-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            transition: transform 0.3s ease;
+        }
+
+        .friend-cell:hover {
+            transform: scale(1.02);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .lottie-player {
+            width: 250px;
+            height: 250px;
+            max-width: 100%;
+            max-height: 70%;
+        }
+
+        .friend-label {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            margin-top: 1rem;
+            font-weight: 600;
+        }
+
+        .friend-score {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-top: 0.5rem;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Navigation -->
+    <div class="page-header">
+        <div>
+            <h1 id="farmNameHeader">Farm Vitality</h1>
+            <div class="subtitle">Real-time farm health visualization</div>
+        </div>
+        <div class="header-actions">
+            <div class="view-controls" id="viewControls">
+                <button class="view-btn active" data-view="rings" onclick="switchView('rings')" 
+                        data-help-title="Rings View" data-help="Visualizes farm metrics as concentric rings: Efficiency, Balance, and Output.">
+                    Rings
+                </button>
+                <button class="view-btn" data-view="heartbeat" onclick="switchView('heartbeat')"
+                        data-help-title="Heartbeat View" data-help="Real-time EKG-style graph showing the 'pulse' of farm data over time." 
+                        data-help-ai="Heartbeat irregularities detected in Zone 3 (Temp fluctuation).">
+                    Heartbeat
+                </button>
+                <button class="view-btn" data-view="friends" onclick="switchView('friends')"
+                        data-help-title="Farm Friends" data-help="Animated characters representing farm health. Happier characters equal higher vitality."
+                        data-help-ai="The Sun is wearing sunglasses. Environment is optimal.">
+                    Farm Friends
+                </button>
+            </div>
+            <a href="/index.charlie.html" class="nav-btn home">Home</a>
+            <button class="nav-btn settings" onclick="toggleSettings()" data-help="Configure health thresholds and display options.">Settings</button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- View Container -->
+        <div class="view-container" id="viewContainer">
+            <!-- Loading State -->
+            <div id="loadingState" class="loading">
+                <div class="spinner"></div>
+                <p>Loading farm vitality data...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="errorState" class="error" style="display: none;">
+                <h2>Error Loading Data</h2>
+                <p id="errorMessage"></p>
+                <button class="nav-btn" onclick="location.reload()">Retry</button>
+            </div>
+
+            <!-- Rings View -->
+            <canvas id="ringsCanvas" class="view-canvas" width="1600" height="1000"></canvas>
+
+            <!-- Heartbeat View -->
+            <canvas id="heartbeatCanvas" class="view-canvas" width="1400" height="900"></canvas>
+
+            <!-- Farm Friends View (Blobs) -->
+            <canvas id="friendsCanvas" class="view-canvas" width="1600" height="1000"></canvas>
+            <!-- Deprecated Lottie Container Removed -->
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar" id="statusBar" style="display: none;">
+            <div class="last-updated">
+                Last updated: <span id="lastUpdated">--</span>
+            </div>
+            <div class="overall-score">
+                Farm Health: <span id="overallScore">--</span>/100
+            </div>
+            <div class="data-freshness">
+                <div class="freshness-indicator">
+                    <span class="freshness-dot" id="envDot"></span>
+                    <span>Env</span>
+                </div>
+                <div class="freshness-indicator">
+                    <span class="freshness-dot" id="nutrientDot"></span>
+                    <span>Nutrients</span>
+                </div>
+                <div class="freshness-indicator">
+                    <span class="freshness-dot" id="inventoryDot"></span>
+                    <span>Inventory</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+        <h2>Dashboard Settings</h2>
+        
+        <div class="settings-group">
+            <h3>Screensaver Mode</h3>
+            <div class="setting-item checkbox-item">
+                <input type="checkbox" id="screensaverEnabled" onchange="saveSettings()">
+                <label for="screensaverEnabled">Enable screensaver mode</label>
+            </div>
+            <div class="setting-item">FriendsEnabled" checked onchange="saveSettings()">
+                    <label for="viewFriendsEnabled">Farm Frienday (seconds)</label>
+                <input type="number" id="screensaverDelay" value="120" min="30" max="600" onchange="saveSettings()">
+            </div>
+            <div class="setting-item">
+                <label for="screensaverRotation">Rotation interval (seconds)</label>
+                <input type="number" id="screensaverRotation" value="30" min="10" max="300" onchange="saveSettings()">
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <h3>Active Views</h3>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="viewRingsEnabled" checked onchange="saveSettings()">
+                    <label for="viewRingsEnabled">Living Rings (Professional)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="viewHeartbeatEnabled" checked onchange="saveSettings()">
+                    <label for="viewHeartbeatEnabled">Farm Heartbeat (Precision)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="viewFriendsEnabled" checked onchange="saveSettings()">
+                    <label for="viewFriendsEnabled">Farm Friends (Data Orbs)</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <h3>Friends View Style</h3>
+            <div class="setting-item">
+                <label for="orbStyle">Animation style</label>
+                <select id="orbStyle" onchange="saveSettings()">
+                    <option value="professional" selected>Professional (Dashboard)</option>
+                    <option value="kids">Kid-Friendly (Bouncy Characters)</option>
+                    <option value="ai">AI-Generated (Unique Creatures)</option>
+                </select>
+            </div>
+            <p style="color: #9ca3af; font-size: 0.85rem; margin-top: 0.5rem; line-height: 1.4;">
+                <strong>Professional:</strong> Clean data orbs with rings and particles<br>
+                <strong>Kid-Friendly:</strong> Animated faces with bouncing motion<br>
+                <strong>AI-Generated:</strong> Unique procedural creatures (Cloud Spirit, Plant Creature, Droplet Being, Gear Bot)
+            </p>
+        </div>
+
+        <div class="settings-group">
+            <h3>Data Refresh</h3>
+            <div class="setting-item">
+                <label for="refreshInterval">Update interval (seconds)</label>
+                <input type="number" id="refreshInterval" value="5" min="1" max="60" onchange="saveSettings()">
+            </div>
+            <div class="setting-item checkbox-item">
+                <input type="checkbox" id="showStalenessWarnings" checked onchange="saveSettings()">
+                <label for="showStalenessWarnings">Show staleness warnings</label>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <h3>Performance</h3>
+            <div class="setting-item">
+                <label for="targetFPS">Target FPS</label>
+                <select id="targetFPS" onchange="saveSettings()">
+                    <option value="60">60 FPS (Smooth)</option>
+                    <option value="30" selected>30 FPS (Balanced)</option>
+                    <option value="15">15 FPS (Battery Saver)</option>
+                </select>
+            </div>
+        </div>
+
+        <button class="nav-btn" onclick="closeSettings()" style="width: 100%; margin-top: 2rem;">
+            Close Settings
+        </button>
+    </div>
+
+</body>
+</html>
