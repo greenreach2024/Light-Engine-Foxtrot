@@ -2987,7 +2987,12 @@
 
         // CRITICAL FIX: Show current crop vs next recommended crop separately
         const currentCrop = tray ? (tray.currentCrop || 'Empty') : 'Unknown';
-        const recommendedCrop = group?.nextCrop || task.cropName;  // Use saved assignment if available
+        const recommendedCrop = task.recommendedCropName || group?.nextCrop || 'TBD';
+
+        // Show next seed date if available
+        const nextSeedInfo = task.nextSeedDate 
+          ? `<div style="font-size: 0.75rem; color: #60a5fa;">Seed: ${task.nextSeedDate}</div>`
+          : '';
 
         return `
           <tr>
@@ -2996,7 +3001,7 @@
             <td>${currentCrop}</td>
             <td>${harvestStr}</td>
             <td>${seedWindowStr}</td>
-            <td>${recommendedCrop}</td>
+            <td>${recommendedCrop}${nextSeedInfo}</td>
             <td><span class="compat-badge ${task.compatibility.rating}" title="${getCompatibilityTooltip(task.compatibility)}" style="cursor: help;">${task.compatibility.rating.toUpperCase()}</span></td>
             <td>
               <button class="timeline-btn primary" onclick="scheduleTask('${task.id}')" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
@@ -3580,39 +3585,35 @@
         // Non-blocking - show warning but continue
       }
 
-      // Update in-memory state (keeping existing behavior for UI updates)
+      // Update in-memory state — only NEXT crop fields, never current crop/harvest
       state.groups = state.groups.map(group => {
         if (!scopedGroupIds.has(group.id)) return group;
         return {
           ...group,
           nextCrop: normalizedCropName,
+          nextCropId: normalizedCropId,
           nextSeedDate: seedDate.toISOString().split('T')[0],
           nextHarvestDate: harvestDate.toISOString().split('T')[0]
-          // Note: DO NOT update group.plan (current crop) - that's separate!
+          // DO NOT update group.plan / group.crop (current crop) — that's separate!
         };
       });
 
+      // Update seeding tasks with the recommended next crop — preserve original cropId/cropName
       state.seedingTasks = state.seedingTasks.map(task => {
         if (!scopedIds.has(task.id) && !scopedTrayIds.has(task.trayId)) return task;
 
         return {
           ...task,
-          cropId: normalizedCropId,
-          cropName: normalizedCropName,
+          // Keep task.cropId and task.cropName as-is (current crop)
+          recommendedCropId: normalizedCropId,
+          recommendedCropName: normalizedCropName,
+          nextSeedDate: seedDate.toISOString().split('T')[0],
           expectedNewHarvest: new Date(task.targetTransplantDate.getTime() + harvestDays * 24 * 60 * 60 * 1000)
         };
       });
 
-      state.trays = state.trays.map(tray => {
-        if (!scopedTrayIds.has(tray.id)) return tray;
-
-        const task = state.seedingTasks.find(t => t.trayId === tray.id);
-        return {
-          ...tray,
-          currentCrop: normalizedCropName,
-          expectedHarvest: task?.expectedNewHarvest || tray.expectedHarvest
-        };
-      });
+      // DO NOT update tray.currentCrop or tray.expectedHarvest — those reflect the ACTIVE grow
+      // Trays keep their current state; only the forecast "Recommended Crop" column changes
 
       state.seedingTasks = state.seedingTasks.map(task => ({
         ...task,
