@@ -1010,13 +1010,19 @@
           </div>
 
           <div class="form-group" style="margin-top:16px;">
-            <label style="font-size:14px; font-weight:600;">Funding type preference</label>
-            <div style="display:flex; flex-wrap:wrap; gap:8px;">
-              <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;"><input type="checkbox" id="disc_ft_grant" checked style="accent-color:var(--primary);"> Grants</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;"><input type="checkbox" id="disc_ft_loan" style="accent-color:var(--primary);"> Loans</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;"><input type="checkbox" id="disc_ft_taxcredit" style="accent-color:var(--primary);"> Tax credits</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;"><input type="checkbox" id="disc_ft_equity" style="accent-color:var(--primary);"> Equity investment</label>
-            </div>
+            <label style="font-size:14px;">Primary sector</label>
+            <select id="disc_sector">
+              <option value="">Select...</option>
+              <option value="vertical_farming">Vertical farming / CEA</option>
+              <option value="field_crops">Field crops</option>
+              <option value="greenhouse">Greenhouse</option>
+              <option value="livestock">Livestock</option>
+              <option value="aquaculture">Aquaculture</option>
+              <option value="food_processing">Food processing</option>
+              <option value="agtech">AgTech</option>
+              <option value="cannabis">Cannabis</option>
+              <option value="other">Other agriculture</option>
+            </select>
           </div>
 
           <div class="form-group" style="margin-top:16px;">
@@ -1034,19 +1040,13 @@
           </div>
 
           <div class="form-group" style="margin-top:16px;">
-            <label style="font-size:14px;">Primary sector</label>
-            <select id="disc_sector">
-              <option value="">Select...</option>
-              <option value="vertical_farming">Vertical farming / CEA</option>
-              <option value="field_crops">Field crops</option>
-              <option value="greenhouse">Greenhouse</option>
-              <option value="livestock">Livestock</option>
-              <option value="aquaculture">Aquaculture</option>
-              <option value="food_processing">Food processing</option>
-              <option value="agtech">AgTech</option>
-              <option value="cannabis">Cannabis</option>
-              <option value="other">Other agriculture</option>
-            </select>
+            <label style="font-size:14px; font-weight:600;">Funding type preference</label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px;">
+              <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; padding:10px 14px; border:2px solid #e5e5ea; border-radius:12px; background:var(--bg); transition:all 0.2s;" onchange="this.style.borderColor=this.querySelector('input').checked?'var(--primary)':'#e5e5ea';this.style.background=this.querySelector('input').checked?'rgba(130,195,65,0.06)':'var(--bg)'"><input type="checkbox" id="disc_ft_grant" checked style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;"> Grants</label>
+              <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; padding:10px 14px; border:2px solid #e5e5ea; border-radius:12px; background:var(--bg); transition:all 0.2s;" onchange="this.style.borderColor=this.querySelector('input').checked?'var(--primary)':'#e5e5ea';this.style.background=this.querySelector('input').checked?'rgba(130,195,65,0.06)':'var(--bg)'"><input type="checkbox" id="disc_ft_loan" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;"> Loans</label>
+              <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; padding:10px 14px; border:2px solid #e5e5ea; border-radius:12px; background:var(--bg); transition:all 0.2s;" onchange="this.style.borderColor=this.querySelector('input').checked?'var(--primary)':'#e5e5ea';this.style.background=this.querySelector('input').checked?'rgba(130,195,65,0.06)':'var(--bg)'"><input type="checkbox" id="disc_ft_taxcredit" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;"> Tax credits</label>
+              <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; padding:10px 14px; border:2px solid #e5e5ea; border-radius:12px; background:var(--bg); transition:all 0.2s;" onchange="this.style.borderColor=this.querySelector('input').checked?'var(--primary)':'#e5e5ea';this.style.background=this.querySelector('input').checked?'rgba(130,195,65,0.06)':'var(--bg)'"><input type="checkbox" id="disc_ft_equity" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;"> Equity investment</label>
+            </div>
           </div>
         </div>
 
@@ -3495,6 +3495,9 @@
               'NARRATIVE-BUDGET ALIGNMENT:\n' +
               '14. Does every narrative claim have a corresponding budget item?\n' +
               '15. Do budget line descriptions tell the project story (not just accounting categories)?\n\n' +
+              'WRITING RULES:\n' +
+              '- NEVER use abbreviations without spelling them out first. Write "greenhouse gas (GHG)" not "GHG", "controlled environment agriculture (CEA)" not "CEA".\n' +
+              '- Where equipment or technologies appear in the budget, cite known industry data. Example: "LED grow lights reduce energy consumption by up to 40-60% compared to high-pressure sodium lighting (U.S. Department of Energy)".\n\n' +
               'For each issue found, provide the specific budget item, what\'s wrong, and a concrete fix. Rate overall budget readiness 1-10.',
             userInput: JSON.stringify(currentApp.budget?.items || []),
             programContext: currentApp.program_name || '',
@@ -3549,7 +3552,9 @@
               '- Have a realistic budget allocation that connects to specific budget line items\n' +
               '- Include completion criteria a funder could objectively verify\n' +
               '- Show logical progression — each milestone should build on the previous one\n' +
-              '- Use forward-looking, confident language ("will" not "might")\n\n' +
+              '- Use forward-looking, confident language ("will" not "might")\n' +
+              '- NEVER use abbreviations without spelling them out. Write "greenhouse gas (GHG)" not "GHG".\n' +
+              '- Where relevant, cite credible industry data in deliverables (e.g., "LED installation reducing energy use by 40-60% per U.S. Department of Energy")\n\n' +
               'Budget allocation across milestones should sum to approximately the total project budget.\n' +
               'Format as JSON array with fields: title, deliverables, budgetAmount, completionCriteria. Return ONLY the JSON array.',
             userInput: `Budget items: ${budgetSummary}. Project: ${currentApp.project_profile?.description || ''}. Duration: ${currentApp.project_profile?.startDate || 'TBD'} to ${currentApp.project_profile?.endDate || 'TBD'}`,
@@ -3626,6 +3631,9 @@
               `8. RISK & FEASIBILITY - Are risks identified with mitigation plans? Is there preliminary data or track record demonstrating capability?\n` +
               `9. SUSTAINABILITY & DIVERSIFICATION - Does the project show diversified funding? Is ongoing viability addressed? Are in-kind contributions documented?\n` +
               `10. REVIEWER EXPERIENCE - Is the application well-organized, concise, and easy to navigate? Are summaries provided at key points? Would a tired reviewer find this pleasant to read?\n\n` +
+              `WRITING RULES (apply when scoring and providing recommendations):\n` +
+              `- Flag any abbreviations used without being spelled out first. "GHG" should be "greenhouse gas (GHG)" on first use.\n` +
+              `- Check whether claims are supported by credible data. If the project mentions technologies (LED lighting, vertical farming, water recycling), note whether industry statistics are cited (e.g., energy savings %, water reduction %, yield improvement data with named sources).\n\n` +
               `Provide:\n` +
               `- A score for each criterion (1-10)\n` +
               `- An overall score (weighted average, budget and storytelling count double)\n` +
