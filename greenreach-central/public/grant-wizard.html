@@ -2324,6 +2324,54 @@
                   </div>
                 `}
               </div>
+            </div>
+
+            <!-- Political Official Outreach Section -->
+            <div style="margin-top:32px; padding-top:24px; border-top:2px solid #e5e5ea;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+                <div>
+                  <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">🏛️ Political Official Advocacy</h3>
+                  <p style="font-size:13px; color:var(--text-light); margin:0;">Letters from elected officials carry significant weight. Reach out to your Mayor, MPP/MLA, and MP for letters of support and advocacy.</p>
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;" id="politicalOfficialsGrid">
+                ${['Mayor', 'MPP / MLA', 'Member of Parliament (MP)'].map((role, ri) => {
+                  const officials = currentApp.political_officials || [];
+                  const official = officials[ri] || {};
+                  return `
+                    <div style="background:var(--bg); border-radius:14px; padding:20px; border:1px solid #e5e5ea;">
+                      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                        <span style="font-size:20px;">${ri === 0 ? '🏘️' : ri === 1 ? '🏢' : '🇨🇦'}</span>
+                        <span style="font-size:14px; font-weight:700;">${role}</span>
+                      </div>
+                      <div class="form-group" style="margin-bottom:8px;">
+                        <input type="text" value="${escapeAttr(official.name || '')}" data-pol-idx="${ri}" data-pol-field="name" onchange="wizPoliticalChange()" placeholder="Official's full name" style="padding:10px; font-size:13px;">
+                      </div>
+                      <div class="form-group" style="margin-bottom:8px;">
+                        <input type="email" value="${escapeAttr(official.email || '')}" data-pol-idx="${ri}" data-pol-field="email" onchange="wizPoliticalChange()" placeholder="Email address" style="padding:10px; font-size:13px;">
+                      </div>
+                      <div class="form-group" style="margin-bottom:8px;">
+                        <input type="text" value="${escapeAttr(official.constituency || '')}" data-pol-idx="${ri}" data-pol-field="constituency" onchange="wizPoliticalChange()" placeholder="Constituency / municipality" style="padding:10px; font-size:13px;">
+                      </div>
+                      <button class="btn btn-secondary btn-sm" onclick="generatePoliticalEmail(${ri}, '${escapeAttr(role)}')" style="font-size:12px; width:100%;">Generate Request Email</button>
+                      ${official._generatedEmail ? `
+                        <div style="margin-top:12px; background:#fff; border:1px solid #e5e5ea; border-radius:10px; padding:14px;">
+                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-light);">Email Template</span>
+                            <button class="btn btn-secondary btn-sm" onclick="copyPoliticalEmail(${ri})" style="font-size:11px;">Copy</button>
+                          </div>
+                          <div style="font-size:12px; margin-bottom:4px;"><strong>Subject:</strong> ${escapeHtml(official._generatedEmail.subject || '')}</div>
+                          <pre style="white-space:pre-wrap; font-family:inherit; font-size:12px; line-height:1.4; margin:0; color:var(--text); max-height:180px; overflow-y:auto;">${escapeHtml(official._generatedEmail.body || '')}</pre>
+                        </div>
+                      ` : ''}
+                    </div>`;
+                }).join('')}
+              </div>
+              <div style="margin-top:16px; padding:14px; background:#fffbeb; border:1px solid #fcd34d; border-radius:10px;">
+                <p style="font-size:13px; margin:0; color:#92400e;">
+                  <strong>💡 Tip:</strong> An advocacy letter from an elected official signals community importance. Reach out early — officials' offices often need 2-3 weeks. Include your project summary and the specific program you're applying to.
+                </p>
+              </div>
             </div>`;
           break;
 
@@ -2395,7 +2443,36 @@
               <button class="btn btn-secondary" onclick="recordOutcome()">Record Outcome</button>
               <button class="btn btn-secondary" onclick="aiApplicationReview()" style="background:var(--primary); color:#fff;">AI Review & Score</button>
             </div>
-            <div id="aiApplicationReviewResult" style="margin-top:16px;"></div>`;
+            <div id="aiApplicationReviewResult" style="margin-top:16px;"></div>
+
+            <!-- Re-match: Find Additional Programs -->
+            <div style="margin-top:32px; padding:24px; background:linear-gradient(135deg, #f0fdf4 0%, #fefce8 100%); border:1px solid #bbf7d0; border-radius:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:12px;">
+                <div>
+                  <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">🔍 Find Additional Programs</h3>
+                  <p style="font-size:13px; color:var(--text-light); margin:0;">Now that your application is detailed, we can search for additional matching programs you may have missed. Many funders accept similar applications.</p>
+                </div>
+                <button class="btn btn-primary" onclick="rematchPrograms()" style="white-space:nowrap;">Re-Match Programs</button>
+              </div>
+              <div id="rematchResults" style="margin-top:16px; display:none;"></div>
+            </div>
+
+            <!-- Multi-Program Application Opportunities -->
+            <div style="margin-top:20px; padding:24px; background:linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%); border:1px solid #bfdbfe; border-radius:16px;">
+              <div style="display:flex; align-items:start; gap:12px;">
+                <span style="font-size:28px;">📋</span>
+                <div>
+                  <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Apply to Multiple Programs</h3>
+                  <p style="font-size:13px; color:var(--text-light); margin:0 0 12px 0;">Many grant programs accept near-identical applications. We can create linked applications that reuse your narrative, budget, and milestones — adjusting only program-specific details like terminology and funding amounts.</p>
+                  ${currentApp.stacking_group?.length > 1 ? `
+                    <div style="font-size:13px; color:var(--primary); font-weight:600; margin-bottom:8px;">✓ You have ${currentApp.stacking_group.length} programs in your stacking group already.</div>
+                    <button class="btn btn-secondary btn-sm" onclick="showView('programs')">Manage Stacking Group</button>
+                  ` : `
+                    <button class="btn btn-secondary btn-sm" onclick="rematchPrograms()">Find Stackable Programs</button>
+                  `}
+                </div>
+              </div>
+            </div>`;
           break;
       }
 
@@ -3102,6 +3179,149 @@
           window.getSelection().addRange(range);
         }
       });
+    }
+
+    // ============================================================
+    // Political Official Outreach helpers
+    // ============================================================
+    function wizPoliticalChange() {
+      if (!currentApp.political_officials) currentApp.political_officials = [{}, {}, {}];
+      document.querySelectorAll('[data-pol-idx]').forEach(el => {
+        const idx = parseInt(el.dataset.polIdx);
+        const field = el.dataset.polField;
+        if (!currentApp.political_officials[idx]) currentApp.political_officials[idx] = {};
+        currentApp.political_officials[idx][field] = el.value;
+      });
+      wizAutoSave();
+    }
+
+    function generatePoliticalEmail(idx, role) {
+      if (!currentApp.political_officials) currentApp.political_officials = [{}, {}, {}];
+      const official = currentApp.political_officials[idx] || {};
+      const org = currentApp.organization_profile || {};
+      const proj = currentApp.project_profile || {};
+      const programName = currentApp.program_name || 'a government funding program';
+      const orgName = org.legalName || 'our organization';
+      const projTitle = proj.title || 'our project';
+      const province = currentApp.discovery?.province || '';
+      const officialName = official.name || `[${role}'s Name]`;
+      const constituency = official.constituency || '[Constituency]';
+      const greeting = official.name ? `Dear ${officialName},` : `Dear ${role},`;
+
+      const jobsText = (currentApp.discovery?.currentEmployees && currentApp.discovery?.futureEmployees)
+        ? `This project will grow our team from ${currentApp.discovery.currentEmployees} to ${currentApp.discovery.futureEmployees} employees, creating local jobs in ${constituency}.`
+        : `This project will create local employment opportunities in ${constituency}.`;
+
+      const budgetText = currentApp.budget?.items?.length
+        ? `Our total project budget is $${currentApp.budget.items.reduce((s,i) => s + (parseFloat(i.amount)||0), 0).toLocaleString()}.`
+        : '';
+
+      official._generatedEmail = {
+        subject: `Request for Letter of Support — ${projTitle} (${programName})`,
+        body: `${greeting}\n\nI am writing on behalf of ${orgName} to respectfully request a letter of support for ${projTitle}.\n\nWe are applying to ${programName}, a program that supports agricultural innovation and sustainable food production in ${province || 'our region'}. ${budgetText}\n\n${proj.description ? `Our project will ${proj.description.substring(0, 200).toLowerCase()}.` : ''}\n\n${jobsText}\n\nAs ${role} for ${constituency}, your endorsement would signal to program reviewers that this project has strong community backing and aligns with local economic development priorities.\n\nSpecifically, a letter from your office would ideally touch on:\n• The importance of local agriculture and food security in ${constituency}\n• Your awareness of and support for our project's goals\n• How this project aligns with community economic development\n• Your confidence in our organization's ability to deliver results\n\nWe would be happy to provide any additional background or arrange a brief meeting at your convenience. If you are able to provide a letter, we would need it by [DATE] to meet the application deadline.\n\nThank you for your time and your service to ${constituency}.\n\nRespectfully,\n${org.contactName || '[Your Name]'}\n${orgName}\n${org.email || '[Your Email]'}\n${org.phone || '[Your Phone]'}`
+      };
+
+      renderWizardStep();
+    }
+
+    function copyPoliticalEmail(idx) {
+      const official = (currentApp.political_officials || [])[idx];
+      if (!official?._generatedEmail) return;
+      const text = `Subject: ${official._generatedEmail.subject}\n\n${official._generatedEmail.body}`;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Email template copied to clipboard');
+      }).catch(() => {
+        showToast('Could not copy — try selecting the text manually');
+      });
+    }
+
+    // ============================================================
+    // Re-match Programs from Review Step
+    // ============================================================
+    async function rematchPrograms() {
+      const container = document.getElementById('rematchResults');
+      if (!container) return;
+      container.style.display = 'block';
+      container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-light);"><div class="spinner"></div> Searching for additional matching programs...</div>';
+
+      try {
+        // Build a rich characterization from the full application
+        const org = currentApp.organization_profile || {};
+        const proj = currentApp.project_profile || {};
+        const disc = currentApp.discovery || {};
+        const budget = currentApp.budget || {};
+
+        const searchPayload = {
+          goals: disc.goals || [],
+          province: disc.province || '',
+          country: disc.country || '',
+          budgetRange: disc.budgetRange || '',
+          sector: disc.sector || '',
+          orgType: disc.orgType || '',
+          fundingTypes: disc.fundingTypes || [],
+          projectTitle: proj.title || '',
+          projectDescription: proj.description || '',
+          currentEmployees: disc.currentEmployees || 0,
+          futureEmployees: disc.futureEmployees || null,
+          totalBudget: (budget.items || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)
+        };
+
+        const res = await fetch(`${API}/applications/${currentApp.id}/rematch`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(searchPayload)
+        });
+        const data = await res.json();
+
+        if (!data.success || !data.data?.programs?.length) {
+          container.innerHTML = '<p style="color:var(--text-light); font-size:14px; padding:8px;">No additional programs found beyond your current match. You may already have the best fit!</p>';
+          return;
+        }
+
+        const currentProgramId = currentApp.program_id;
+        const additionalPrograms = data.data.programs.filter(p => p.id !== currentProgramId);
+
+        if (!additionalPrograms.length) {
+          container.innerHTML = '<p style="color:var(--text-light); font-size:14px; padding:8px;">All matching programs are already in your current application. Great coverage!</p>';
+          return;
+        }
+
+        container.innerHTML = `
+          <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:12px;">Found ${additionalPrograms.length} additional program${additionalPrograms.length > 1 ? 's' : ''} that match your detailed profile:</div>
+          ${additionalPrograms.slice(0, 6).map(p => `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#fff; border:1px solid #e5e5ea; border-radius:10px; margin-bottom:8px;">
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:14px; font-weight:600;">${escapeHtml(p.program_name || p.name || 'Unnamed')}</div>
+                <div style="font-size:12px; color:var(--text-light);">${escapeHtml(p.agency || '')} · ${p.match_score ? (p.match_score * 100).toFixed(0) + '% match' : ''}</div>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="createLinkedAppFromRematch(${p.id})" style="font-size:12px; white-space:nowrap;">+ Create Linked App</button>
+            </div>
+          `).join('')}
+          <p style="font-size:12px; color:var(--text-light); margin-top:8px;">Creating a linked application copies your narrative, budget, and milestones to a new application tailored to the selected program.</p>
+        `;
+      } catch (e) {
+        container.innerHTML = `<p style="color:var(--error); font-size:13px;">Error searching for programs: ${escapeHtml(e.message)}</p>`;
+      }
+    }
+
+    async function createLinkedAppFromRematch(programId) {
+      if (!confirm('Create a linked application for this program? Your current narrative, budget, and milestones will be copied.')) return;
+      try {
+        const res = await fetch(`${API}/applications/${currentApp.id}/create-linked`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_program_id: programId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Linked application created! Check your applications list.');
+          loadApplications();
+        } else {
+          showToast(data.error || 'Failed to create linked application', 'error');
+        }
+      } catch (e) {
+        showToast('Error creating linked application: ' + e.message, 'error');
+      }
     }
 
     // ============================================================

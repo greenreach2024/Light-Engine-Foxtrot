@@ -1182,6 +1182,255 @@ router.post('/applications/:id/match-programs', authenticateGrantUser, async (re
 });
 
 // ============================================================
+// POST /applications/:id/rematch - Re-match programs from review step
+// Uses the detailed application data to find additional programs
+// ============================================================
+router.post('/applications/:id/rematch', authenticateGrantUser, async (req, res) => {
+  try {
+    const pool = getPool(req);
+
+    // Get the full application
+    const appResult = await pool.query(
+      'SELECT * FROM grant_applications WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.grantUserId]
+    );
+    if (appResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Application not found' });
+    }
+
+    const app = appResult.rows[0];
+    const char = app.project_characterization || {};
+    const org = app.organization_profile || {};
+    const enrichment = req.body || {};
+
+    // Get all active programs
+    const programsResult = await pool.query(`
+      SELECT id, program_code, program_name, administering_agency, description,
+             funding_type, min_funding, max_funding, cost_share_ratio,
+             intake_status, intake_deadline, priority_areas, eligibility_rules,
+             equity_enhanced, source_url, objectives
+      FROM grant_programs
+      WHERE active = TRUE
+      ORDER BY intake_status, program_name
+    `);
+
+    const programs = programsResult.rows;
+    const scored = programs.map(p => {
+      let score = 0;
+      const reasons = [];
+      const desc = (p.description || '').toLowerCase();
+      const objectives = (p.objectives || '').toLowerCase();
+      const priorities = (p.priority_areas || []).map(pa => pa.toLowerCase());
+
+      // 1. Goal matching (same as match-programs)
+      const goals = enrichment.goals || char.projectGoals || [];
+      const goalKeywordMap = {
+        'establish_vertical_farm': ['vertical farm', 'controlled environment', 'innovation', 'technology', 'greenhouse', 'indoor'],
+        'expand_operation': ['expansion', 'scale', 'growth', 'capacity', 'production'],
+        'equipment_purchase': ['equipment', 'machinery', 'capital', 'technology', 'automation'],
+        'export_market': ['export', 'trade', 'international', 'market access', 'market development'],
+        'workforce_training': ['training', 'workforce', 'hiring', 'employment', 'labour', 'skills', 'youth'],
+        'innovation_rd': ['innovation', 'research', 'development', 'r&d', 'technology', 'novel', 'pilot'],
+        'risk_management': ['risk', 'insurance', 'business risk'],
+        'clean_tech': ['clean tech', 'sustainability', 'environment', 'renewable', 'energy efficiency', 'climate', 'emission'],
+        'community_food': ['food security', 'community', 'local food', 'food access'],
+        'value_added': ['processing', 'value-added', 'value added', 'product development']
+      };
+      for (const goal of goals) {
+        const keywords = goalKeywordMap[goal] || [];
+        for (const kw of keywords) {
+          if (priorities.some(pa => pa.includes(kw)) || desc.includes(kw) || objectives.includes(kw)) {
+            score += 15;
+            reasons.push(`Matches "${goal.replace(/_/g, ' ')}" goal`);
+            break;
+          }
+        }
+      }
+
+      // 2. Budget range
+      const totalBudget = enrichment.totalBudget || 0;
+      if (totalBudget > 0 && p.max_funding) {
+        const maxFunding = parseFloat(p.max_funding);
+        if (maxFunding >= totalBudget * 0.1) {
+          score += 10;
+          reasons.push(`Funding up to $${maxFunding.toLocaleString()}`);
+        }
+      }
+
+      // 3. Status bonus
+      if (p.intake_status === 'open') { score += 20; reasons.push('Currently open'); }
+      else if (p.intake_status === 'continuous') { score += 15; reasons.push('Continuous intake'); }
+      else if (p.intake_status === 'upcoming') { score += 5; reasons.push('Opening soon'); }
+
+      // 4. Province / country
+      const province = enrichment.province || org.province || char.province;
+      const country = enrichment.country || '';
+      if (province && p.eligibility_rules?.province) {
+        const provRule = p.eligibility_rules.province;
+        if (provRule.type === 'province_list' && provRule.provinces?.includes(province)) {
+          score += 10; reasons.push(`Available in ${province}`);
+        }
+      }
+
+      // 5. Project description keyword overlap
+      const projDesc = (enrichment.projectDescription || '').toLowerCase();
+      if (projDesc) {
+        const descWords = projDesc.split(/\s+/).filter(w => w.length > 5);
+        let descMatches = 0;
+        for (const word of descWords.slice(0, 20)) {
+          if (desc.includes(word) || objectives.includes(word)) descMatches++;
+        }
+        if (descMatches >= 3) { score += 10; reasons.push('Strong keyword overlap'); }
+        else if (descMatches >= 1) { score += 5; reasons.push('Some keyword overlap'); }
+      }
+
+      // 6. Sector match
+      const sector = enrichment.sector || '';
+      if (sector) {
+        const sectorKeywords = {
+          'vertical_farming': ['vertical', 'indoor', 'controlled environment', 'cea'],
+          'greenhouse': ['greenhouse', 'horticulture'],
+          'field_crops': ['crop', 'field', 'grain'],
+          'agtech': ['agtech', 'technology', 'innovation', 'digital'],
+          'food_processing': ['processing', 'value-added'],
+          'aquaculture': ['aquaculture', 'fish', 'aqua']
+        };
+        for (const kw of (sectorKeywords[sector] || [])) {
+          if (desc.includes(kw) || objectives.includes(kw)) {
+            score += 8; reasons.push('Sector alignment');
+            break;
+          }
+        }
+      }
+
+      // 7. Funding type preference
+      const fundingTypes = enrichment.fundingTypes || [];
+      if (fundingTypes.length && p.funding_type) {
+        const ft = p.funding_type.toLowerCase();
+        if (fundingTypes.some(t => ft.includes(t))) {
+          score += 5; reasons.push('Preferred funding type');
+        }
+      }
+
+      // 8. Equity bonus
+      if (p.equity_enhanced) { score += 3; reasons.push('Enhanced cost-share'); }
+
+      return {
+        id: p.id,
+        program_name: p.program_name,
+        name: p.program_name,
+        agency: p.administering_agency,
+        description: (p.description || '').substring(0, 120),
+        funding_type: p.funding_type,
+        intake_status: p.intake_status,
+        match_score: Math.min(1, score / 80),
+        match_reasons: [...new Set(reasons)].slice(0, 4)
+      };
+    });
+
+    scored.sort((a, b) => b.match_score - a.match_score);
+
+    res.json({
+      success: true,
+      data: {
+        programs: scored.filter(p => p.match_score >= 0.25),
+        totalScanned: scored.length
+      }
+    });
+
+  } catch (error) {
+    logger.error('[grant-wizard] Rematch error:', error);
+    res.status(500).json({ success: false, error: 'Re-matching failed' });
+  }
+});
+
+// ============================================================
+// POST /applications/:id/create-linked - Create a linked application
+// Copies narrative, budget, milestones from source to a new app
+// ============================================================
+router.post('/applications/:id/create-linked', authenticateGrantUser, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const { target_program_id } = req.body;
+    if (!target_program_id) {
+      return res.status(400).json({ success: false, error: 'target_program_id is required' });
+    }
+
+    // Get source application
+    const sourceResult = await pool.query(
+      'SELECT * FROM grant_applications WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.grantUserId]
+    );
+    if (sourceResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Source application not found' });
+    }
+
+    // Get target program
+    const progResult = await pool.query(
+      'SELECT id, program_name, program_code FROM grant_programs WHERE id = $1',
+      [target_program_id]
+    );
+    if (progResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Target program not found' });
+    }
+
+    const source = sourceResult.rows[0];
+    const targetProg = progResult.rows[0];
+
+    // Create linked application with copied data
+    const insertResult = await pool.query(`
+      INSERT INTO grant_applications (
+        user_id, program_id, program_name, status,
+        organization_profile, project_profile, project_characterization,
+        website_intelligence, narrative_answers, budget, milestones,
+        discovery_data, stacking_group,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, 'draft',
+        $4, $5, $6, $7, $8, $9, $10, $11, $12,
+        NOW(), NOW()
+      ) RETURNING id
+    `, [
+      req.grantUserId,
+      target_program_id,
+      targetProg.program_name,
+      JSON.stringify(source.organization_profile || {}),
+      JSON.stringify(source.project_profile || {}),
+      JSON.stringify(source.project_characterization || {}),
+      JSON.stringify(source.website_intelligence || {}),
+      JSON.stringify(source.narrative_answers || {}),
+      JSON.stringify(source.budget || {}),
+      JSON.stringify(source.milestones || []),
+      JSON.stringify(source.discovery_data || {}),
+      JSON.stringify([req.params.id, target_program_id])
+    ]);
+
+    const newAppId = insertResult.rows[0].id;
+
+    // Update stacking group on both applications
+    const stackGroup = [req.params.id, newAppId.toString()];
+    await pool.query(
+      'UPDATE grant_applications SET stacking_group = $1 WHERE id = ANY($2::int[]) AND user_id = $3',
+      [JSON.stringify(stackGroup), [parseInt(req.params.id), newAppId], req.grantUserId]
+    );
+
+    logger.info(`[grant-wizard] Created linked application ${newAppId} from ${req.params.id} for program ${targetProg.program_name}`);
+
+    res.json({
+      success: true,
+      data: {
+        id: newAppId,
+        program_name: targetProg.program_name,
+        source_id: req.params.id
+      }
+    });
+
+  } catch (error) {
+    logger.error('[grant-wizard] Create linked app error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create linked application' });
+  }
+});
+
+// ============================================================
 // POST /applications/:id/ai-recommend - AI-powered recommendations
 // Uses GPT-4 to analyze project profile vs programs and suggest
 // direct matches + complementary/strategic funding opportunities
