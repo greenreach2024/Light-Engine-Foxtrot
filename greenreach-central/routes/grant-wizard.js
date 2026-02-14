@@ -730,6 +730,245 @@ router.get('/corporation-search', async (req, res) => {
 });
 
 // ============================================================
+// Competitor Search — SEC EDGAR public company lookup
+// ============================================================
+let edgarCompanyCache = null;
+let edgarCacheTimestamp = 0;
+const EDGAR_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const EDGAR_UA = 'GreenReach-Grant-Wizard/1.0 (info@greenreachfarms.com)';
+
+const KEYWORD_STOP_WORDS = new Set([
+  'the','a','an','and','or','but','in','on','at','to','for','of','with','by',
+  'is','are','was','were','be','been','being','have','has','had','do','does',
+  'did','will','would','could','should','may','might','can','shall','it','its',
+  'this','that','these','those','we','you','they','he','she','my','our',
+  'your','their','his','her','not','no','so','if','then','than','also','very',
+  'just','about','as','from','up','out','into','over','after','before','between',
+  'under','above','below','each','every','all','both','few','more','most','other',
+  'some','such','only','own','same','how','what','when','where','which','who',
+  'whom','why','new','first','last','long','great','little','old','right','big',
+  'high','different','small','large','next','early','young','important','public',
+  'bad','good','inc','corp','llc','ltd','company','co','group','holdings',
+  'international','technologies','services','solutions','systems','global'
+]);
+
+function extractKeywords(text) {
+  if (!text) return [];
+  return text.toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !KEYWORD_STOP_WORDS.has(w))
+    .filter((v, i, a) => a.indexOf(v) === i);
+}
+
+async function getEdgarCompanies() {
+  if (edgarCompanyCache && (Date.now() - edgarCacheTimestamp < EDGAR_CACHE_TTL)) {
+    return edgarCompanyCache;
+  }
+  try {
+    const res = await axios.get('https://www.sec.gov/files/company_tickers.json', {
+      timeout: 15000,
+      headers: { 'User-Agent': EDGAR_UA, 'Accept': 'application/json' }
+    });
+    edgarCompanyCache = Object.values(res.data).map(c => ({
+      cik: String(c.cik_str),
+      ticker: c.ticker,
+      name: c.title
+    }));
+    edgarCacheTimestamp = Date.now();
+    logger.info(`[grant-wizard] Cached ${edgarCompanyCache.length} SEC EDGAR public companies`);
+    return edgarCompanyCache;
+  } catch (e) {
+    logger.warn('[grant-wizard] Failed to fetch EDGAR company tickers:', e.message);
+    return edgarCompanyCache || [];
+  }
+}
+
+// POST /competitor-search — Search SEC EDGAR for public companies
+router.post('/competitor-search', optionalAuth, async (req, res) => {
+  try {
+    const { query, projectDescription } = req.body;
+    if (!query || query.length < 2) {
+      return res.status(400).json({ success: false, error: 'Search query required (min 2 characters)' });
+    }
+
+    const companies = await getEdgarCompanies();
+    if (!companies.length) {
+      return res.json({ success: true, data: { query, results: [], total: 0, source: 'SEC EDGAR (unavailable)' } });
+    }
+
+    const queryLower = query.toLowerCase().trim();
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 1);
+
+    // Score and rank companies by relevance
+    const scored = companies
+      .map(c => {
+        const nameLower = c.name.toLowerCase();
+        let score = 0;
+        if (c.ticker.toLowerCase() === queryLower) score += 20;
+        if (nameLower === queryLower) score += 15;
+        if (nameLower.startsWith(queryLower)) score += 12;
+        if (nameLower.includes(queryLower)) score += 8;
+        queryWords.forEach(qw => {
+          if (nameLower.includes(qw)) score += 3;
+        });
+        return score > 0 ? { ...c, _score: score } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 20);
+
+    // Enrich top 5 with SEC filing details
+    const enriched = [];
+    for (let i = 0; i < scored.length; i++) {
+      const company = scored[i];
+      if (i < 5) {
+        try {
+          const cikPadded = company.cik.padStart(10, '0');
+          const detailRes = await axios.get(
+            `https://data.sec.gov/submissions/CIK${cikPadded}.json`,
+            { timeout: 8000, headers: { 'User-Agent': EDGAR_UA, 'Accept': 'application/json' } }
+          );
+          const d = detailRes.data;
+          const result = {
+            cik: company.cik,
+            name: d.name || company.name,
+            ticker: d.tickers?.[0] || company.ticker,
+            sicCode: d.sic || '',
+            sicDescription: d.sicDescription || '',
+            stateOfIncorporation: d.stateOfIncorporation || '',
+            category: d.category || '',
+            website: d.website || '',
+            exchanges: d.exchanges || [],
+            formerNames: (d.formerNames || []).slice(0, 3).map(fn => fn.name)
+          };
+          if (projectDescription) {
+            const projKw = extractKeywords(projectDescription);
+            const compText = [result.name, result.sicDescription, result.category].join(' ');
+            const compKw = extractKeywords(compText);
+            const overlap = projKw.filter(pk => compKw.some(ck => ck.includes(pk) || pk.includes(ck)));
+            result.similarity = {
+              score: projKw.length > 0 ? Math.round((overlap.length / projKw.length) * 100) : 0,
+              overlappingTerms: overlap,
+              uniqueProjectTerms: projKw.filter(pk => !compKw.some(ck => ck.includes(pk) || pk.includes(ck)))
+            };
+          }
+          enriched.push(result);
+          await new Promise(r => setTimeout(r, 120));
+        } catch {
+          enriched.push({ cik: company.cik, name: company.name, ticker: company.ticker,
+            sicCode: '', sicDescription: '', stateOfIncorporation: '', category: '',
+            website: '', exchanges: [], formerNames: [] });
+        }
+      } else {
+        enriched.push({ cik: company.cik, name: company.name, ticker: company.ticker,
+          sicCode: '', sicDescription: '', stateOfIncorporation: '', category: '',
+          website: '', exchanges: [], formerNames: [] });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { query, results: enriched, total: enriched.length, source: 'SEC EDGAR' }
+    });
+  } catch (error) {
+    logger.error('[grant-wizard] Competitor search error:', error);
+    res.status(500).json({ success: false, error: 'Competitor search failed' });
+  }
+});
+
+// POST /competitor-analyze — Deep competitor overlap analysis
+router.post('/competitor-analyze', optionalAuth, async (req, res) => {
+  try {
+    const { projectDescription, projectTitle, competitors } = req.body;
+    if (!projectDescription || !competitors?.length) {
+      return res.status(400).json({ success: false, error: 'Project description and at least one competitor required' });
+    }
+
+    const projKw = extractKeywords(projectDescription);
+    const titleKw = extractKeywords(projectTitle || '');
+    const allProjKw = [...new Set([...projKw, ...titleKw])];
+    const allCompanyKw = new Set();
+
+    const analysis = {
+      competitors: [],
+      conflictFlags: [],
+      differentiationTips: [],
+      uniqueStrengths: [],
+      overlappingIndustryTerms: [],
+      suggestedRefinements: []
+    };
+
+    for (const comp of competitors) {
+      const compText = [comp.name, comp.sicDescription || '', comp.industry || '', comp.notes || ''].join(' ');
+      const compKw = extractKeywords(compText);
+      compKw.forEach(k => allCompanyKw.add(k));
+
+      const overlap = allProjKw.filter(pk => compKw.some(ck => ck.includes(pk) || pk.includes(ck)));
+      const overlapScore = allProjKw.length > 0 ? Math.round((overlap.length / allProjKw.length) * 100) : 0;
+      analysis.competitors.push({
+        name: comp.name,
+        ticker: comp.ticker || '',
+        overlapScore,
+        overlappingTerms: overlap,
+        uniqueToCompetitor: compKw.filter(ck => !allProjKw.some(pk => ck.includes(pk) || pk.includes(ck)))
+      });
+
+      if (overlapScore > 40) {
+        analysis.conflictFlags.push(
+          `High overlap (${overlapScore}%) with ${comp.name}. Grant reviewers may question how your project differs from ${comp.name}'s existing products or services.`
+        );
+      } else if (overlapScore > 20) {
+        analysis.conflictFlags.push(
+          `Moderate overlap (${overlapScore}%) with ${comp.name}. Consider clarifying your differentiation in the application narrative.`
+        );
+      }
+    }
+
+    analysis.uniqueStrengths = allProjKw.filter(pk =>
+      ![...allCompanyKw].some(ck => ck.includes(pk) || pk.includes(ck))
+    );
+    analysis.overlappingIndustryTerms = allProjKw.filter(pk =>
+      [...allCompanyKw].some(ck => ck.includes(pk) || pk.includes(ck))
+    );
+
+    if (analysis.overlappingIndustryTerms.length > 0) {
+      analysis.differentiationTips.push(
+        `Terms like "${analysis.overlappingIndustryTerms.slice(0, 5).join('", "')}" also appear in competitor profiles. Add specifics that distinguish your approach — location, method, community impact.`
+      );
+    }
+    if (analysis.uniqueStrengths.length > 0) {
+      analysis.differentiationTips.push(
+        `Lean into your unique elements: "${analysis.uniqueStrengths.slice(0, 6).join('", "')}". These don't appear in competitor profiles and strengthen your case.`
+      );
+    }
+    analysis.differentiationTips.push(
+      'Quantify your impact with specific metrics (production volume, emission reductions, jobs created) that no competitor can claim.'
+    );
+    analysis.differentiationTips.push(
+      'Highlight community-specific benefits, Indigenous partnerships, geographic advantages, or novel technology that set your project apart.'
+    );
+
+    if (analysis.overlappingIndustryTerms.length > 3) {
+      analysis.suggestedRefinements.push(
+        'Your description uses several generic industry terms. Replace broad language with specific details about your technology, team, or approach.'
+      );
+    }
+    analysis.suggestedRefinements.push(
+      'Add a "What Makes This Different" paragraph that explicitly explains how your project complements rather than competes with existing market players.'
+    );
+    analysis.suggestedRefinements.push(
+      'Frame your project as filling a gap that existing companies have not addressed — geographic, demographic, or technological.'
+    );
+
+    res.json({ success: true, data: analysis });
+  } catch (error) {
+    logger.error('[grant-wizard] Competitor analyze error:', error);
+    res.status(500).json({ success: false, error: 'Competitor analysis failed' });
+  }
+});
+
+// ============================================================
 // POST /scrape-website - Scrape user's website for positioning intel
 // ============================================================
 router.post('/scrape-website', optionalAuth, async (req, res) => {
