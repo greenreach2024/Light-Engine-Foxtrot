@@ -196,11 +196,15 @@
     .container {
       flex: 1;
       padding: 2rem;
-      padding-top: 8.5rem; /* Extra space below sticky header to prevent overlap */
+      padding-top: 12rem; /* Generous space below sticky header — JS adjusts dynamically */
       display: flex;
       flex-direction: column;
       gap: 2rem;
       overflow-y: auto;
+    }
+
+    .card {
+      scroll-margin-top: 10rem; /* Clear sticky header when scrolled to */
     }
 
     /* Card Styles */
@@ -1241,6 +1245,80 @@
       </div>
     </div>
 
+    <!-- AI-Powered Crop Recommendations (moved to top of page for visibility) -->
+    <div class="card" id="aiRecommendationsCard" style="border: 2px solid #3b82f6;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <h2 style="margin: 0;">AI Crop Recommendations</h2>
+          <span id="aiEngineBadge" style="background: rgba(59, 130, 246, 0.2); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; color: #93c5fd;">
+            Loading...
+          </span>
+        </div>
+        <div id="aiReadinessIndicator" style="font-size: 0.85rem; color: #94a3b8; text-align: right;">
+          <div id="aiProgressBar" style="width: 150px; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-bottom: 0.25rem;">
+            <div id="aiProgressFill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); width: 0%; transition: width 0.5s;"></div>
+          </div>
+          <span id="aiProgressText">0% Ready</span>
+        </div>
+      </div>
+      <p style="color: #94a3b8; margin-bottom: 1.5rem;">
+        Get intelligent crop recommendations based on nutrient compatibility, <strong>real-time market pricing</strong>, inventory management, harvest timing, and environmental fit.
+      </p>
+      
+      <div class="form-group" style="margin-bottom: 1rem;">
+        <label for="aiGroupSelect">Select Group for Recommendations</label>
+        <select id="aiGroupSelect" style="padding: 0.75rem; border-radius: 8px; border: 2px solid #3b82f6; background: rgba(0,0,0,0.3); color: #e4e4e7; width: 100%;">
+          <option value="">Choose a group to replant...</option>
+        </select>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
+        <button 
+          type="button" 
+          id="getRecommendationsBtn"
+          class="timeline-btn primary"
+          style="flex: 2;"
+          onclick="getAIRecommendations()"
+        >
+          Get AI Recommendations
+        </button>
+        <button 
+          type="button" 
+          id="remixBtn"
+          class="timeline-btn"
+          style="flex: 1; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc; display: none;"
+          onclick="remixRecommendations()"
+        >
+          🔄 Remix
+        </button>
+      </div>
+
+      <!-- Recommendations Display -->
+      <div id="recommendationsDisplay" style="display: none; max-height: 70vh; overflow-y: auto; padding-right: 0.25rem;">
+        <div style="background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;">
+          <h3 style="color: #60a5fa; margin-bottom: 1rem;">Top Recommendation</h3>
+          <div id="topRecommendation"></div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <h4 style="color: #94a3b8; margin-bottom: 0.75rem;">Alternative Options</h4>
+          <div id="alternativeRecommendations"></div>
+        </div>
+
+        <div class="form-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap; position: sticky; bottom: 0; background: rgba(15, 23, 42, 0.95); padding: 0.75rem 0; z-index: 5; border-top: 1px solid rgba(59,130,246,0.2);">
+          <button type="button" class="timeline-btn secondary" onclick="hideRecommendations()" style="flex: 1; min-width: 120px;">
+            Cancel
+          </button>
+          <button type="button" class="timeline-btn" onclick="remixRecommendations()" style="flex: 1; min-width: 160px; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc;">
+            🔄 Remix Recommendations
+          </button>
+          <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()" style="flex: 2; min-width: 200px;">
+            Accept & Schedule Top Recommendation
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Upcoming Seeding Timeline -->
     <div class="card">
       <h2>Upcoming Seeding Timeline</h2>
@@ -1297,69 +1375,6 @@
           <div class="icon">LIGHT</div>
           <h3>No Adjustments Needed</h3>
           <p>All groups are currently optimized for their crop stages</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- AI-Powered Crop Recommendations -->
-    <div class="card" style="border: 2px solid #3b82f6;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-          <h2 style="margin: 0;">AI Crop Recommendations</h2>
-          <span id="aiEngineBadge" style="background: rgba(59, 130, 246, 0.2); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; color: #93c5fd;">
-            Loading...
-          </span>
-        </div>
-        <div id="aiReadinessIndicator" style="font-size: 0.85rem; color: #94a3b8; text-align: right;">
-          <div id="aiProgressBar" style="width: 150px; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-bottom: 0.25rem;">
-            <div id="aiProgressFill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); width: 0%; transition: width 0.5s;"></div>
-          </div>
-          <span id="aiProgressText">0% Ready</span>
-        </div>
-      </div>
-      <p style="color: #94a3b8; margin-bottom: 1.5rem;">
-        Get intelligent crop recommendations based on nutrient compatibility, market demand, inventory management, harvest timing, and environmental fit.
-      </p>
-      
-      <div class="form-group" style="margin-bottom: 1rem;">
-        <label for="aiGroupSelect">Select Group for Recommendations</label>
-        <select id="aiGroupSelect" style="padding: 0.75rem; border-radius: 8px; border: 2px solid #3b82f6; background: rgba(0,0,0,0.3); color: #e4e4e7;">
-          <option value="">Choose a group to replant...</option>
-        </select>
-      </div>
-
-      <button 
-        type="button" 
-        id="getRecommendationsBtn"
-        class="timeline-btn primary"
-        style="width: 100%; margin-bottom: 1.5rem;"
-        onclick="getAIRecommendations()"
-      >
-        Get AI Recommendations
-      </button>
-
-      <!-- Recommendations Display -->
-      <div id="recommendationsDisplay" style="display: none; max-height: 70vh; overflow-y: auto; padding-right: 0.25rem;">
-        <div style="background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;">
-          <h3 style="color: #60a5fa; margin-bottom: 1rem;">Top Recommendation</h3>
-          <div id="topRecommendation"></div>
-        </div>
-
-        <div style="margin-bottom: 1rem;">
-          <h4 style="color: #94a3b8; margin-bottom: 0.75rem;">Alternative Options</h4>
-          <div id="alternativeRecommendations"></div>
-        </div>
-
-        <div class="form-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap; position: sticky; bottom: 0; background: rgba(15, 23, 42, 0.95); padding: 0.75rem 0; z-index: 5; border-top: 1px solid rgba(59,130,246,0.2);">
-          <button type="button" class="timeline-btn secondary" onclick="hideRecommendations()" style="flex: 1; min-width: 120px;">
-            Cancel
-          </button>
-          <button type="button" class="timeline-btn" onclick="remixRecommendations()" style="flex: 1; min-width: 160px; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc;">
-            🔄 Remix Recommendations
-          </button>
-          <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()" style="flex: 2; min-width: 200px;">
-            Accept & Schedule Top Recommendation
-          </button>
         </div>
       </div>
     </div>
@@ -1766,12 +1781,26 @@
     // ============================================================================
 
     document.addEventListener('DOMContentLoaded', () => {
+      // Dynamically adjust container padding to match actual header height
+      adjustContainerPadding();
+      window.addEventListener('resize', adjustContainerPadding);
+
       initializeManualForm();
       loadSchedulerData();
       
       // Set up form submission
       document.getElementById('manualSchedulingForm').addEventListener('submit', handleManualScheduling);
     });
+
+    /** Measure real header height and adjust container padding so nothing is hidden */
+    function adjustContainerPadding() {
+      const header = document.querySelector('.header');
+      const container = document.querySelector('.container');
+      if (header && container) {
+        const headerHeight = header.getBoundingClientRect().height;
+        container.style.paddingTop = Math.max(headerHeight + 32, 160) + 'px';
+      }
+    }
 
     async function initializeManualForm() {
       // Populate crop dropdown from the 50-recipe library
@@ -3856,6 +3885,7 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
           ${renderScoreBadge('Nutrient Fit', topRec.scores.nutrient_fit)}
           ${renderScoreBadge('Light', topRec.scores.light_efficiency)}
+          ${renderScoreBadge('Market', topRec.scores.market || 70)}
           ${renderScoreBadge('Revenue', topRec.scores.revenue || 0)}
           ${renderScoreBadge('Seasonal', topRec.scores.seasonal || 0)}
           ${renderScoreBadge('Stagger', topRec.scores.harvest_stagger)}
@@ -3901,7 +3931,7 @@
                   ${alt.category || ''} · ${alt.durationDays}d · Harvest: ${alt.expectedHarvestDate}
                 </div>
                 <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
-                  Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Seasonal: ${Math.round(alt.scores.seasonal || 0)}
+                  Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Market: ${Math.round(alt.scores.market || 70)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Seasonal: ${Math.round(alt.scores.seasonal || 0)}
                 </div>
                 ${renderJustificationPills(alt.justifications)}
               </div>
@@ -3929,6 +3959,10 @@
       }
 
       document.getElementById('recommendationsDisplay').style.display = 'block';
+
+      // Show the standalone Remix button now that recommendations are loaded
+      const remixBtn = document.getElementById('remixBtn');
+      if (remixBtn) remixBtn.style.display = '';
     }
 
     function renderScoreBadge(label, score) {
