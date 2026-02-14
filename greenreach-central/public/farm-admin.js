@@ -425,14 +425,15 @@ async function loadDashboardData() {
             document.getElementById('kpi-harvest-change').textContent = 'Start your first grow to see live data';
         }
 
-        // Fetch device count from API
+        // Fetch device count from public compatibility endpoint
         try {
-            const devResp = await fetch(`${API_BASE}/api/admin/farms/${currentSession.farmId}/devices`, {
-                headers: { 'Authorization': `Bearer ${currentSession.token}` }
-            });
+            const devResp = await fetch(`${API_BASE}/devices`);
             if (devResp.ok) {
                 const devData = await devResp.json();
-                const devCount = devData.count || (Array.isArray(devData.devices) ? devData.devices.length : 0);
+                const devices = Array.isArray(devData)
+                    ? devData
+                    : (Array.isArray(devData.devices) ? devData.devices : []);
+                const devCount = devices.length;
                 document.getElementById('kpi-devices').textContent = devCount > 0 ? devCount : '0';
                 document.getElementById('kpi-devices-change').textContent = devCount > 0 ? 'Connected' : 'No devices registered';
             } else {
@@ -732,16 +733,7 @@ function setupNavigation() {
 
             // For iframe-view action cards, handle directly
             if (section === 'iframe-view' && url) {
-                document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
-                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                const iframeSection = document.getElementById('section-iframe-view');
-                const iframe = document.getElementById('admin-iframe');
-                if (iframeSection && iframe) {
-                    iframe.src = url;
-                    iframeSection.style.display = 'block';
-                }
-                const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${url}"]`);
-                if (matchNav) matchNav.classList.add('active');
+                window.location.href = url;
                 return;
             }
 
@@ -759,23 +751,18 @@ function setupNavigation() {
             const section = btn.dataset.section;
             const url = btn.dataset.url;
 
+            if (section === 'iframe-view' && url) {
+                window.location.href = url;
+                return;
+            }
+
             // Hide all sections
             document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
 
             // Update sidebar active state
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
-            if (section === 'iframe-view' && url) {
-                const iframeSection = document.getElementById('section-iframe-view');
-                const iframe = document.getElementById('admin-iframe');
-                if (iframeSection && iframe) {
-                    iframe.src = url;
-                    iframeSection.style.display = 'block';
-                }
-                // Highlight matching sidebar item if present
-                const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${url}"]`);
-                if (matchNav) matchNav.classList.add('active');
-            } else {
+            if (section !== 'iframe-view') {
                 const sectionEl = document.getElementById(`section-${section}`);
                 if (sectionEl) {
                     sectionEl.style.display = 'block';
@@ -1555,6 +1542,15 @@ function openAIPricingAssistant() {
     runAIPricingAnalysis();
 }
 
+async function ensurePricingDataLoaded() {
+    if (Array.isArray(pricingData) && pricingData.length > 0) {
+        return true;
+    }
+
+    await loadCropsFromDatabase();
+    return Array.isArray(pricingData) && pricingData.length > 0;
+}
+
 /**
  * Close AI Pricing Assistant modal
  */
@@ -1574,6 +1570,12 @@ async function runAIPricingAnalysis() {
     
     statusDiv.style.display = 'block';
     recommendationsDiv.style.display = 'none';
+
+    const hasPricingData = await ensurePricingDataLoaded();
+    if (!hasPricingData) {
+        statusText.textContent = 'No crop pricing data found. Add at least one crop in Crop Pricing, then run AI analysis again.';
+        return;
+    }
     
     const steps = [
         'Fetching current USD to CAD exchange rate...',
@@ -1598,6 +1600,10 @@ async function runAIPricingAnalysis() {
     
     // Generate recommendations
     const recommendations = generateRecommendations();
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+        statusText.textContent = 'No recommendations available for current crops. Please review Crop Pricing entries and try again.';
+        return;
+    }
     
     // Store recommendations
     localStorage.setItem(AI_PRICING_KEY, JSON.stringify(recommendations));
@@ -1838,9 +1844,18 @@ function displayRecommendations(recommendations) {
 function displayCachedRecommendations() {
     const cached = localStorage.getItem(AI_PRICING_KEY);
     if (cached) {
-        const recommendations = JSON.parse(cached);
-        displayRecommendations(recommendations);
+        try {
+            const recommendations = JSON.parse(cached);
+            if (Array.isArray(recommendations) && recommendations.length > 0) {
+                displayRecommendations(recommendations);
+                return;
+            }
+        } catch (error) {
+            console.warn('Invalid cached AI pricing recommendations:', error.message);
+        }
     }
+
+    runAIPricingAnalysis();
 }
 
 /**

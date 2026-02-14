@@ -42,6 +42,7 @@ const generateFarmToken = (payload) => {
 router.post('/login', async (req, res) => {
   try {
     const { farm_id, email, password } = req.body;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
     if (!password) {
       return res.status(400).json({ 
@@ -78,6 +79,14 @@ router.post('/login', async (req, res) => {
     }
 
     if (useDatabase) {
+      if (!normalizedEmail) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing credentials',
+          message: 'Email and password are required when database authentication is enabled'
+        });
+      }
+
       // Database mode: Query farm_users table
       const userQuery = `
         SELECT 
@@ -97,7 +106,7 @@ router.post('/login', async (req, res) => {
         AND fu.active = true
       `;
 
-      const params = farm_id ? [email.toLowerCase(), farm_id] : [email.toLowerCase()];
+      const params = farm_id ? [normalizedEmail, farm_id] : [normalizedEmail];
       const { rows } = await req.db.query(userQuery, params);
 
       if (rows.length === 0) {
@@ -133,7 +142,7 @@ router.post('/login', async (req, res) => {
     } else {
       // Fallback mode: Check against fallback credentials
       // Email is optional — if provided it must match, password always required
-      const emailStr = (email || '').toLowerCase();
+      const emailStr = normalizedEmail;
       const fallbackEmail = FALLBACK_FARM.email.toLowerCase();
       if ((emailStr && emailStr !== fallbackEmail) || password !== FALLBACK_FARM.password) {
         return res.status(401).json({

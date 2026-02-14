@@ -9198,9 +9198,62 @@ async function loadGrantSummary() {
                 </tr>
             `).join('') : '<tr><td colspan="3" class="loading">No data</td></tr>';
         }
+
+        await loadGrantProgramAlerts();
     } catch (error) {
         console.error('Grant summary load error:', error);
         showToast('Failed to load grant summary.', 'error');
+    }
+}
+
+async function loadGrantProgramAlerts() {
+    const tbody = document.getElementById('grant-program-alerts-tbody');
+    if (!tbody) return;
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/program-alerts?limit=50`);
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load grant program alerts');
+
+        const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+        tbody.innerHTML = alerts.length ? alerts.map((alert) => {
+            const programLabel = alert.program_code || alert.program_name || `Program #${alert.program_id || 'unknown'}`;
+            const created = formatDateShort(alert.created_at);
+            return `
+                <tr>
+                    <td>
+                        <div style="font-weight:600;">${programLabel}</div>
+                        <div style="font-size:12px; color: var(--text-secondary);">${alert.program_name || '—'}</div>
+                    </td>
+                    <td>${alert.change_type || 'unknown'}</td>
+                    <td>${created}</td>
+                    <td>
+                        <button class="btn btn-primary" style="padding: 6px 10px;" onclick="ackGrantProgramAlert(${alert.id})">Acknowledge</button>
+                    </td>
+                </tr>
+            `;
+        }).join('') : '<tr><td colspan="4" class="loading">No unacknowledged alerts.</td></tr>';
+    } catch (error) {
+        console.error('Grant alerts load error:', error);
+        tbody.innerHTML = `<tr><td colspan="4" class="loading">Failed to load alerts: ${error.message}</td></tr>`;
+    }
+}
+
+async function ackGrantProgramAlert(alertId) {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/program-alerts/${alertId}/acknowledge`, {
+            method: 'POST'
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to acknowledge alert');
+
+        showToast('Grant program alert acknowledged.', 'success');
+        await loadGrantProgramAlerts();
+    } catch (error) {
+        console.error('Grant alert acknowledge error:', error);
+        showToast('Failed to acknowledge alert.', 'error');
     }
 }
 

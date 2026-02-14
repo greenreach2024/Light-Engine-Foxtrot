@@ -536,6 +536,13 @@
       <div id="publicPrograms" class="programs-grid">
         <div style="text-align: center; padding: 40px; color: var(--text-light);">Loading programs...</div>
       </div>
+      <div id="openProgramsBadge" style="text-align:center; margin-top:24px;">
+        <a href="#" onclick="authToken ? showView('programs') : showView('register')" style="display:inline-flex; align-items:center; gap:8px; background:linear-gradient(135deg, #f0fdf4 0%, #fefce8 100%); border:1px solid #bbf7d0; border-radius:40px; padding:12px 28px; text-decoration:none; color:var(--text); font-size:15px; font-weight:600; transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+          <span id="openProgramsCount" style="display:inline-flex; align-items:center; justify-content:center; background:var(--primary); color:#fff; font-weight:800; font-size:16px; min-width:36px; height:36px; border-radius:50%; padding:0 6px;">...</span>
+          <span>open programs accepting applications</span>
+          <span style="color:var(--primary);">Browse all →</span>
+        </a>
+      </div>
     </div>
 
     <!-- ====================================================== -->
@@ -943,6 +950,55 @@
               <option value="ON">Ontario</option><option value="PE">PEI</option>
               <option value="QC">Quebec</option><option value="SK">Saskatchewan</option>
               <option value="YT">Yukon</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label style="font-size:14px;">Country</label>
+            <select id="disc_country">
+              <option value="">Select...</option>
+              <option value="CA" selected>Canada</option>
+              <option value="US">United States</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label style="font-size:14px; font-weight:600;">Funding type preference</label>
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;"><input type="checkbox" id="disc_ft_grant" checked style="accent-color:var(--primary);"> Grants</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;"><input type="checkbox" id="disc_ft_loan" style="accent-color:var(--primary);"> Loans</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;"><input type="checkbox" id="disc_ft_taxcredit" style="accent-color:var(--primary);"> Tax credits</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;"><input type="checkbox" id="disc_ft_equity" style="accent-color:var(--primary);"> Equity investment</label>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label style="font-size:14px;">Organization type</label>
+            <select id="disc_orgType">
+              <option value="">Select...</option>
+              <option value="sole_proprietor">Sole proprietor</option>
+              <option value="corporation">Corporation</option>
+              <option value="cooperative">Cooperative</option>
+              <option value="partnership">Partnership</option>
+              <option value="non_profit">Not-for-profit</option>
+              <option value="indigenous">Indigenous organization</option>
+              <option value="future_grower">Future grower / startup</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label style="font-size:14px;">Primary sector</label>
+            <select id="disc_sector">
+              <option value="">Select...</option>
+              <option value="vertical_farming">Vertical farming / CEA</option>
+              <option value="field_crops">Field crops</option>
+              <option value="greenhouse">Greenhouse</option>
+              <option value="livestock">Livestock</option>
+              <option value="aquaculture">Aquaculture</option>
+              <option value="food_processing">Food processing</option>
+              <option value="agtech">AgTech</option>
+              <option value="cannabis">Cannabis</option>
+              <option value="other">Other agriculture</option>
             </select>
           </div>
         </div>
@@ -1380,6 +1436,9 @@
         // Update counter on growing-made-easy
         const counter = document.getElementById('grantCountNum');
         if (counter) counter.textContent = data.data.total + '+';
+        // Update open programs count badge
+        const badge = document.getElementById('openProgramsCount');
+        if (badge) badge.textContent = data.data.total;
       } catch (e) {
         document.getElementById('publicPrograms').innerHTML = '<p style="color:var(--text-light);">Programs will appear once the server is running.</p>';
       }
@@ -3149,7 +3208,27 @@
           method: 'POST',
           headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            question: 'Review this grant application budget. For each budget item, assess: (1) Is the description clear and specific enough for a grant reviewer? (2) Is the justification compelling? (3) Are amounts reasonable? Provide specific improvement suggestions for each item. Format as a numbered list matching the budget items.',
+            question: 'You are an expert grant budget reviewer applying best practices from Imagine Canada and top funding organizations. Review this budget comprehensively:\n\n' +
+              'BUDGET COMPLETENESS:\n' +
+              '1. Are ALL direct costs listed (salaries, materials, equipment, travel)?\n' +
+              '2. Are indirect/overhead costs included (admin, utilities, insurance, office space)? Funders expect realistic overhead — omitting it makes the project seem unachievable.\n' +
+              '3. Are employee benefits/fringe included (~25% of salaries)? Missing fringe is a red flag.\n' +
+              '4. Are in-kind contributions listed with market values? These show community support and diversified backing.\n' +
+              '5. Are personnel costs calculated correctly? (e.g., $55K/yr x 10% x 6 months = $2,750) Show calculations.\n\n' +
+              'BUDGET QUALITY:\n' +
+              '6. Does each line item have clear, specific descriptions (not just "staff" but "Community Outreach Coordinator")?\n' +
+              '7. Are calculations shown next to totals? (Funders need to see how you arrived at each number)\n' +
+              '8. Are amounts realistic and well-researched? Compare to market rates.\n' +
+              '9. Items over 5% of total budget — do they have narrative justification?\n' +
+              '10. Do budget categories match program-eligible cost categories?\n\n' +
+              'REVENUE & SUSTAINABILITY:\n' +
+              '11. Are all revenue sources listed (other grants, fee-for-service, donations)?\n' +
+              '12. Does the budget show diversified income? Funders want evidence of sustainability.\n' +
+              '13. Is the requested amount realistic relative to the funder\'s typical gift size and stated range?\n\n' +
+              'NARRATIVE-BUDGET ALIGNMENT:\n' +
+              '14. Does every narrative claim have a corresponding budget item?\n' +
+              '15. Do budget line descriptions tell the project story (not just accounting categories)?\n\n' +
+              'For each issue found, provide the specific budget item, what\'s wrong, and a concrete fix. Rate overall budget readiness 1-10.',
             userInput: JSON.stringify(currentApp.budget?.items || []),
             programContext: currentApp.program_name || '',
             organizationProfile: currentApp.organization_profile,
@@ -3187,7 +3266,16 @@
           method: 'POST',
           headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            question: 'Based on this project budget and description, generate 3-5 project milestones. For each milestone provide: title, approximate start date relative to project start, approximate end date, key deliverables, and estimated budget allocation. Format as JSON array with fields: title, deliverables, budgetAmount. Return ONLY the JSON array, no other text.',
+            question: 'Based on this project budget and description, generate 3-5 project milestones following grant writing best practices.\n\n' +
+              'Each milestone must:\n' +
+              '- Have a clear, specific title (not generic like "Phase 1")\n' +
+              '- Include measurable deliverables with concrete metrics (acres planted, units produced, people trained)\n' +
+              '- Have a realistic budget allocation that connects to specific budget line items\n' +
+              '- Include completion criteria a funder could objectively verify\n' +
+              '- Show logical progression — each milestone should build on the previous one\n' +
+              '- Use forward-looking, confident language ("will" not "might")\n\n' +
+              'Budget allocation across milestones should sum to approximately the total project budget.\n' +
+              'Format as JSON array with fields: title, deliverables, budgetAmount, completionCriteria. Return ONLY the JSON array.',
             userInput: `Budget items: ${budgetSummary}. Project: ${currentApp.project_profile?.description || ''}. Duration: ${currentApp.project_profile?.startDate || 'TBD'} to ${currentApp.project_profile?.endDate || 'TBD'}`,
             programContext: currentApp.program_name || ''
           })
@@ -3242,7 +3330,25 @@
           method: 'POST',
           headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            question: `You are a grant application reviewer. Review this application for the program "${currentApp.program_name || 'Unknown'}". Evaluate against these criteria and score each 1-10:\n1. Project Clarity - Is the project well-defined?\n2. Need Statement - Is the need clearly articulated?\n3. Budget Alignment - Does the budget support the project goals?\n4. Milestone Quality - Are milestones realistic and measurable?\n5. Program Fit - Does the project align with program priorities?\n6. Impact Potential - Will the project create meaningful outcomes?\n7. Risk Mitigation - Are risks identified with plans to address them?\n8. Language & Tone - Does the application use appropriate terminology?\n\nProvide:\n- A score for each criterion (1-10)\n- An overall score (average)\n- 3 specific recommendations to improve the application\n- Any language or terminology gaps compared to the program description\n\nFormat as JSON: { "scores": [{"criteria": "...", "score": N, "note": "..."}], "overall": N, "recommendations": ["..."], "languageGaps": ["..."] }`,
+            question: `You are a senior grant reviewer applying best practices from U of T, Funding For Good, Imagine Canada, and Western University grant writing frameworks. Review this application for the program "${currentApp.program_name || 'Unknown'}".\n\nEvaluate against these criteria and score each 1-10:\n\n` +
+              `1. PROJECT CLARITY - Is the project well-defined with clear goals, objectives, and timeline? Does it get to the point early?\n` +
+              `2. NEED STATEMENT - Is the community need clearly articulated with supporting evidence? Does it answer "so what?"\n` +
+              `3. STORYTELLING - Does the application tell a compelling story? Is there a clear narrative thread from need to solution to impact?\n` +
+              `4. BUDGET QUALITY - Are all costs listed (including overhead, fringe, in-kind)? Are calculations shown? Do amounts match the funder's typical range? Does the budget tell the project story?\n` +
+              `5. MILESTONE QUALITY - Are milestones measurable and verifiable? Do they show logical progression with specific deliverables?\n` +
+              `6. PROGRAM FIT & TERMINOLOGY - Does the application mirror the funder's language and priorities? Are key funder terms used consistently?\n` +
+              `7. IMPACT & MEASUREMENT - Are outcomes specific and measurable? Are evaluation methods defined? Can the funder show their board concrete results?\n` +
+              `8. RISK & FEASIBILITY - Are risks identified with mitigation plans? Is there preliminary data or track record demonstrating capability?\n` +
+              `9. SUSTAINABILITY & DIVERSIFICATION - Does the project show diversified funding? Is ongoing viability addressed? Are in-kind contributions documented?\n` +
+              `10. REVIEWER EXPERIENCE - Is the application well-organized, concise, and easy to navigate? Are summaries provided at key points? Would a tired reviewer find this pleasant to read?\n\n` +
+              `Provide:\n` +
+              `- A score for each criterion (1-10)\n` +
+              `- An overall score (weighted average, budget and storytelling count double)\n` +
+              `- Top 3 specific, actionable recommendations to strengthen the application\n` +
+              `- Missing elements that reviewers commonly look for\n` +
+              `- Language/terminology gaps vs. the funder's stated priorities\n` +
+              `- Estimate of competitive readiness: "Ready to submit", "Needs revision", or "Major gaps"\n\n` +
+              `Format as JSON: { "scores": [{"criteria": "...", "score": N, "note": "..."}], "overall": N, "readiness": "...", "recommendations": ["..."], "missingElements": ["..."], "languageGaps": ["..."] }`,
             userInput: JSON.stringify({
               organization: org,
               project: proj,
@@ -3272,10 +3378,14 @@
           }
 
           const overallColor = (review.overall || 0) >= 7 ? 'var(--success)' : (review.overall || 0) >= 5 ? 'var(--warning)' : 'var(--error)';
+          const readinessColor = review.readiness === 'Ready to submit' ? 'var(--success)' : review.readiness === 'Needs revision' ? 'var(--warning)' : 'var(--error)';
           let html = `<div class="ai-review-panel">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
               <h4 style="font-size:17px; font-weight:700;">AI Application Review</h4>
-              <div style="font-size:28px; font-weight:800; color:${overallColor};">${review.overall || '?'}<span style="font-size:14px; font-weight:400; color:var(--text-light);">/10</span></div>
+              <div style="text-align:right;">
+                <div style="font-size:28px; font-weight:800; color:${overallColor};">${review.overall || '?'}<span style="font-size:14px; font-weight:400; color:var(--text-light);">/10</span></div>
+                ${review.readiness ? `<div style="font-size:12px; font-weight:600; color:${readinessColor}; margin-top:2px;">${escapeHtml(review.readiness)}</div>` : ''}
+              </div>
             </div>
             <table class="scoring-matrix">
               <tr><th>Criteria</th><th>Score</th><th>Notes</th></tr>
@@ -3288,6 +3398,13 @@
           if (review.recommendations?.length) {
             html += `<div style="margin-top:20px;"><h5 style="font-size:14px; font-weight:700; margin-bottom:8px;">Recommendations</h5>
               ${review.recommendations.map(r => `<div style="font-size:14px; padding:6px 0; border-bottom:1px solid #e5e5ea;">- ${escapeHtml(r)}</div>`).join('')}
+            </div>`;
+          }
+          if (review.missingElements?.length) {
+            html += `<div style="margin-top:16px;"><h5 style="font-size:14px; font-weight:700; margin-bottom:8px;">Missing Elements</h5>
+              <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                ${review.missingElements.map(m => `<span style="background:rgba(234,67,53,0.1); padding:4px 10px; border-radius:8px; font-size:13px; color:var(--error);">${escapeHtml(m)}</span>`).join('')}
+              </div>
             </div>`;
           }
           if (review.languageGaps?.length) {
@@ -3954,6 +4071,15 @@
       discoveryData.futureEmployees = parseInt(document.getElementById('disc_futureEmp')?.value) || null;
       discoveryData.projectDuration = document.getElementById('disc_duration')?.value || null;
       discoveryData.province = document.getElementById('disc_province')?.value || null;
+      discoveryData.country = document.getElementById('disc_country')?.value || null;
+      discoveryData.orgType = document.getElementById('disc_orgType')?.value || null;
+      discoveryData.sector = document.getElementById('disc_sector')?.value || null;
+      // Funding type preferences
+      discoveryData.fundingTypes = [];
+      if (document.getElementById('disc_ft_grant')?.checked) discoveryData.fundingTypes.push('grant');
+      if (document.getElementById('disc_ft_loan')?.checked) discoveryData.fundingTypes.push('loan');
+      if (document.getElementById('disc_ft_taxcredit')?.checked) discoveryData.fundingTypes.push('tax_credit');
+      if (document.getElementById('disc_ft_equity')?.checked) discoveryData.fundingTypes.push('equity');
       collectDiscoveryGoals();
 
       // Validate: at least one goal selected
