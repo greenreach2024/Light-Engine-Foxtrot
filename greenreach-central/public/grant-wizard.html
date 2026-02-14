@@ -480,6 +480,53 @@
     }
     .scoring-matrix th { font-weight: 600; color: var(--text); }
     .scoring-matrix .score-cell { text-align: right; font-weight: 700; color: var(--primary); }
+
+    /* AI Citation Popup */
+    .ai-citation-popup {
+      position: fixed; right: 20px; bottom: 20px; z-index: 10000;
+      max-width: 380px; width: calc(100vw - 40px);
+      background: var(--surface); border: 1px solid #c6e9c0;
+      border-left: 5px solid var(--primary); border-radius: 14px;
+      padding: 18px 20px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      transform: translateX(420px); opacity: 0;
+      transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.35s ease;
+    }
+    .ai-citation-popup.visible { transform: translateX(0); opacity: 1; }
+    .ai-citation-popup.hiding { transform: translateX(420px); opacity: 0; }
+    .ai-citation-popup .cite-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    }
+    .ai-citation-popup .cite-icon {
+      width: 28px; height: 28px; border-radius: 50%; background: rgba(45,80,22,0.1);
+      display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+    }
+    .ai-citation-popup .cite-title {
+      font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.3;
+    }
+    .ai-citation-popup .cite-close {
+      position: absolute; top: 10px; right: 12px; background: none; border: none;
+      font-size: 18px; color: var(--text-light); cursor: pointer; padding: 4px;
+    }
+    .ai-citation-popup .cite-justification {
+      font-size: 13px; line-height: 1.55; color: var(--text); margin-bottom: 10px;
+    }
+    .ai-citation-popup .cite-sources {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .ai-citation-popup .cite-source {
+      font-size: 12px; color: var(--text-light); padding: 4px 0;
+      border-top: 1px solid #f0f0f0;
+    }
+    .ai-citation-popup .cite-source:first-child { border-top: none; }
+    .ai-citation-popup .cite-source strong { color: var(--primary); font-weight: 600; }
+    .ai-citation-popup .cite-progress {
+      position: absolute; bottom: 0; left: 5px; right: 0; height: 3px;
+      background: rgba(45,80,22,0.15); border-radius: 0 0 14px 0; overflow: hidden;
+    }
+    .ai-citation-popup .cite-progress-bar {
+      height: 100%; background: var(--primary); border-radius: 0 0 14px 0;
+      transition: width linear;
+    }
   </style>
 </head>
 <body>
@@ -3461,6 +3508,15 @@
             <h4 style="font-size:15px; font-weight:700; margin-bottom:12px;">AI Budget Review</h4>
             <pre style="white-space:pre-wrap; font-family:inherit; font-size:14px; line-height:1.6; margin:0;">${escapeHtml(data.data.draftText)}</pre>
           </div>`;
+          showAiCitation(
+            'Budget Review — Why these changes?',
+            'Budget items were evaluated for completeness, cost realism, and alignment with program-eligible categories. Missing overhead, fringe, and in-kind items were flagged per funder expectations.',
+            [
+              { label: 'Imagine Canada', detail: 'Budget best practices — overhead and in-kind standards' },
+              { label: 'Funding For Good', detail: 'Budget narrative alignment and calculation transparency' },
+              { label: 'Program criteria', detail: currentApp?.program_name || 'Target program requirements' }
+            ]
+          );
         } else {
           resultDiv.innerHTML = '<div class="alert alert-error">AI review unavailable. Please try again later.</div>';
         }
@@ -3517,6 +3573,15 @@
               renderWizardStep();
               wizAutoSave();
               showToast('Milestones generated. Review and edit as needed.', 'success');
+              showAiCitation(
+                'Milestones — How AI structured these',
+                'Milestones were generated to show logical project progression with measurable deliverables, verifiable completion criteria, and budget allocations that align with your total project budget.',
+                [
+                  { label: 'Grant writing standard', detail: 'Milestones must be measurable, time-bound, and verifiable by funders' },
+                  { label: 'Budget alignment', detail: 'Milestone costs sum to project total for funder transparency' },
+                  { label: 'Project context', detail: currentApp?.project_profile?.description?.substring(0, 80) || 'Your project details' }
+                ]
+              );
             }
           } catch (parseErr) {
             showToast('AI generated text but could not parse milestones. Adding as first milestone.', 'warning');
@@ -3636,6 +3701,16 @@
           }
           html += '</div>';
           resultDiv.innerHTML = html;
+          showAiCitation(
+            'Application Scoring — Evaluation Framework',
+            'Your application was scored across 10 criteria used by real grant reviewers. Budget and storytelling were weighted double, matching how funders prioritize these areas.',
+            [
+              { label: 'U of T Anesthesia', detail: 'Project clarity and need statement evaluation framework' },
+              { label: 'Imagine Canada', detail: 'Budget quality and sustainability assessment standards' },
+              { label: 'Funding For Good', detail: 'Storytelling, reviewer experience, and impact scoring' },
+              { label: 'Western University', detail: 'Risk analysis and program-fit terminology alignment' }
+            ]
+          );
         } else {
           resultDiv.innerHTML = '<div class="alert alert-error">AI review unavailable.</div>';
         }
@@ -3673,6 +3748,16 @@
         if (data.success && data.data?.draftText) {
           textarea.value = data.data.draftText;
           wizAutoSave();
+          showAiCitation(
+            'AI Draft — Sources & Approach',
+            'Your notes were transformed into grant-ready narrative using storytelling, measurable outcomes, and funder-aligned terminology. Your authentic voice and farm-specific details were preserved.',
+            [
+              { label: 'U of T Anesthesia', detail: 'Grant narrative structure — clear topic sentences and "so what?" framing' },
+              { label: 'Funding For Good', detail: 'Storytelling and reviewer empathy best practices' },
+              { label: 'Western University', detail: 'Evidence-based claims and measurable impact standards' },
+              { label: 'Funder terminology', detail: currentApp?.program_name ? ('Mirrored language from ' + currentApp.program_name) : 'Aligned with target program priorities' }
+            ]
+          );
         } else {
           alert(data.error || 'AI drafting unavailable. Please try again later.');
         }
@@ -4467,6 +4552,18 @@
         btn.textContent = 'Refresh AI Recommendations';
         btn.disabled = false;
 
+        const matchCount = (rec.directMatches?.length || 0) + (rec.complementaryMatches?.length || 0);
+        showAiCitation(
+          'Strategy Advisor — How programs were ranked',
+          `${matchCount} programs were analyzed against your project profile, budget, keywords, location, and sector. Confidence levels reflect funder-alignment strength and stacking potential.`,
+          [
+            { label: 'Funder alignment', detail: 'Matched your project language against each program\'s stated priorities' },
+            { label: 'Budget feasibility', detail: 'Compared your budget to each program\'s typical funding range' },
+            { label: 'Stacking analysis', detail: 'Identified complementary programs that fund different project aspects' },
+            { label: 'GPT-4 analysis', detail: 'Strategic recommendations generated by OpenAI GPT-4' }
+          ]
+        );
+
       } catch (err) {
         content.innerHTML = `<p style="color:var(--error);">Unable to generate recommendations: ${escapeHtml(err.message)}</p>`;
         btn.textContent = 'Try Again';
@@ -4565,6 +4662,53 @@
     // ============================================================
     // Utils
     // ============================================================
+    // ============================================================
+    // AI Citation Popup — shows justification + sources, auto-dismisses
+    // ============================================================
+    let _citationTimer = null;
+    function showAiCitation(title, justification, sources, durationMs) {
+      const dur = durationMs || 10000;
+      // Remove any existing citation popup
+      const old = document.querySelector('.ai-citation-popup');
+      if (old) { old.remove(); clearTimeout(_citationTimer); }
+
+      const popup = document.createElement('div');
+      popup.className = 'ai-citation-popup';
+
+      let sourcesHtml = '';
+      if (sources && sources.length) {
+        sourcesHtml = '<div class="cite-sources">' +
+          sources.map(s => `<div class="cite-source"><strong>${escapeHtml(s.label || 'Source')}:</strong> ${escapeHtml(s.detail || s)}</div>`).join('') +
+          '</div>';
+      }
+
+      popup.innerHTML =
+        '<div class="cite-header">' +
+          '<div class="cite-icon">📋</div>' +
+          '<div class="cite-title">' + escapeHtml(title || 'AI Justification') + '</div>' +
+        '</div>' +
+        '<button class="cite-close" onclick="this.parentElement.classList.add(\'hiding\');setTimeout(()=>this.parentElement.remove(),350)" aria-label="Close">&times;</button>' +
+        '<div class="cite-justification">' + escapeHtml(justification || '') + '</div>' +
+        sourcesHtml +
+        '<div class="cite-progress"><div class="cite-progress-bar" style="width:100%"></div></div>';
+
+      document.body.appendChild(popup);
+      // Trigger slide-in
+      requestAnimationFrame(() => {
+        popup.classList.add('visible');
+        // Start progress bar countdown
+        const bar = popup.querySelector('.cite-progress-bar');
+        if (bar) { bar.style.transitionDuration = dur + 'ms'; bar.style.width = '0%'; }
+      });
+
+      // Auto-dismiss
+      _citationTimer = setTimeout(() => {
+        popup.classList.remove('visible');
+        popup.classList.add('hiding');
+        setTimeout(() => popup.remove(), 400);
+      }, dur);
+    }
+
     function showToast(message, type = 'info') {
       try {
         let container = document.getElementById('grantWizardToastContainer');
