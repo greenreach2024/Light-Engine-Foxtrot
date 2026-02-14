@@ -972,7 +972,7 @@
           const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
           const tokensData = await tokensResponse.json();
           
-          if (tokensData.ok) {
+          if (tokensData.ok && tokensData.tokens[farmId]) {
             token = tokensData.tokens[farmId]['manager'] || tokensData.tokens[farmId]['staff'];
             
             localStorage.setItem('farm_token', token);

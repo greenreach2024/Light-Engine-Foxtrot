@@ -10,7 +10,7 @@
   const PUBLIC_PAGES = [
     '/',
     '/index.html',
-    '/greenreach-org.html',
+    '/index.charlie.html',
     '/farm-sales-shop.html',  // Customer-facing online store
     '/health',                // System health check
     '/healthz'                // Simple health check
@@ -114,7 +114,7 @@
   // Redirect to login page
   function redirectToLogin() {
     const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/login.html?return=${returnUrl}`;
+    window.location.href = `/farm-admin-login.html?return=${returnUrl}`;
   }
 
   // Main authentication check
