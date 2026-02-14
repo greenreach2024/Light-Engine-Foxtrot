@@ -3999,29 +3999,128 @@
 
     function showAICadenceSelection(cropId, cropName) {
       const modal = document.getElementById('trayDetailsModal');
-      document.getElementById('modalTitle').textContent = 'Select Scheduling Cadence';
+      document.getElementById('modalTitle').textContent = 'Schedule AI Recommendation';
       const modalBody = document.getElementById('modalBody');
+
+      // Get the selected group and its room context
+      const groupId = currentRecommendations?.groupId;
+      const group = state.groups.find(g => g.id === groupId);
+      const ctx = getGroupContextById(groupId);
+      const roomGroups = state.groups.filter(g => getGroupContextById(g.id).room === ctx.room);
+      const roomGroupCount = roomGroups.length;
+
       modalBody.innerHTML = `
-        <div style="display: grid; gap: 0.75rem;">
-          <p style="color: #94a3b8; margin-bottom: 0.5rem;">
-            How would you like to schedule <strong style="color: #60a5fa;">${cropName}</strong>?
+        <div style="display: grid; gap: 1rem;">
+          <p style="color: #94a3b8;">
+            Schedule <strong style="color: #60a5fa;">${cropName}</strong> — choose scope and cadence.
           </p>
-          <button class="timeline-btn primary" onclick="implementWithCadence('${cropId}','${encodeURIComponent(cropName)}','one_time')">
-            Single Seeding (One-time)
-          </button>
-          <button class="timeline-btn primary" style="background: rgba(34,197,94,0.2); border-color: #22c55e; color: #86efac;" onclick="implementWithCadence('${cropId}','${encodeURIComponent(cropName)}','weekly')">
-            Stagger Over 4 Weeks (Weekly Batches)
-          </button>
-          <button class="timeline-btn secondary" onclick="closeTrayModal()">
-            Back
-          </button>
+
+          <!-- Scope selection -->
+          <div>
+            <label style="color: #cbd5e1; font-weight: 600; margin-bottom: 0.5rem; display: block;">Scope</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+              <button type="button" id="aiScopeGroup" class="timeline-btn primary" style="padding: 0.75rem;"
+                onclick="selectAIScope('group')">
+                🎯 This Group Only
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">${group?.name || groupId}</div>
+              </button>
+              <button type="button" id="aiScopeRoom" class="timeline-btn secondary" style="padding: 0.75rem;"
+                onclick="selectAIScope('room')">
+                🏠 Entire Room
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">${ctx.room} (${roomGroupCount} groups)</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Cadence selection -->
+          <div>
+            <label style="color: #cbd5e1; font-weight: 600; margin-bottom: 0.5rem; display: block;">Cadence</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+              <button type="button" id="aiCadenceOnce" class="timeline-btn primary" style="padding: 0.75rem;"
+                onclick="selectAICadence('one_time')">
+                ⚡ One-time
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">All at once</div>
+              </button>
+              <button type="button" id="aiCadenceWeekly" class="timeline-btn secondary" style="padding: 0.75rem;"
+                onclick="selectAICadence('weekly')">
+                📅 Stage Over 4 Weeks
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">One batch per week</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Summary of what will happen -->
+          <div id="aiImplementSummary" style="padding: 0.75rem; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #94a3b8; font-size: 0.85rem;">
+            <strong style="color: #60a5fa;">Plan:</strong> Plant <strong>${cropName}</strong> in group <em>${group?.name || groupId}</em> as a single seeding.
+          </div>
+
+          <div style="display: flex; gap: 0.75rem;">
+            <button class="timeline-btn secondary" style="flex: 1;" onclick="closeTrayModal()">Back</button>
+            <button class="timeline-btn primary" style="flex: 2;" id="aiImplementBtn"
+              onclick="implementWithCadence('${cropId}','${encodeURIComponent(cropName)}')">
+              Implement Plan
+            </button>
+          </div>
         </div>
       `;
+
+      // Store selected scope/cadence on the modal for retrieval
+      modal.dataset.aiScope = 'group';
+      modal.dataset.aiCadence = 'one_time';
+      modal.dataset.aiRoom = ctx.room;
       modal.classList.add('show');
     }
 
-    async function implementWithCadence(cropId, encodedCropName, cadence) {
+    function selectAIScope(scope) {
+      const modal = document.getElementById('trayDetailsModal');
+      modal.dataset.aiScope = scope;
+      // Toggle button styles
+      document.getElementById('aiScopeGroup').className = scope === 'group' ? 'timeline-btn primary' : 'timeline-btn secondary';
+      document.getElementById('aiScopeRoom').className = scope === 'room' ? 'timeline-btn primary' : 'timeline-btn secondary';
+      updateAIImplementSummary();
+    }
+
+    function selectAICadence(cadence) {
+      const modal = document.getElementById('trayDetailsModal');
+      modal.dataset.aiCadence = cadence;
+      document.getElementById('aiCadenceOnce').className = cadence === 'one_time' ? 'timeline-btn primary' : 'timeline-btn secondary';
+      document.getElementById('aiCadenceWeekly').className = cadence === 'weekly' ? 'timeline-btn primary' : 'timeline-btn secondary';
+      updateAIImplementSummary();
+    }
+
+    function updateAIImplementSummary() {
+      const modal = document.getElementById('trayDetailsModal');
+      const scope = modal.dataset.aiScope || 'group';
+      const cadence = modal.dataset.aiCadence || 'one_time';
+      const room = modal.dataset.aiRoom || '';
+      const groupId = currentRecommendations?.groupId;
+      const group = state.groups.find(g => g.id === groupId);
+      const roomGroups = state.groups.filter(g => getGroupContextById(g.id).room === room);
+      const cropName = currentRecommendations?.topRecommendation?.cropName || 'selected crop';
+
+      const summary = document.getElementById('aiImplementSummary');
+      if (!summary) return;
+
+      let text = '';
+      if (scope === 'group' && cadence === 'one_time') {
+        text = `Plant <strong>${cropName}</strong> in group <em>${group?.name || groupId}</em> as a single seeding.`;
+      } else if (scope === 'group' && cadence === 'weekly') {
+        const trayCount = state.trays.filter(t => t.groupId === groupId).length || 1;
+        text = `Plant <strong>${cropName}</strong> in group <em>${group?.name || groupId}</em>, splitting ${trayCount} tray(s) across 4 weekly batches.`;
+      } else if (scope === 'room' && cadence === 'one_time') {
+        text = `Plant <strong>${cropName}</strong> across all ${roomGroups.length} groups in <em>${room}</em> at once.`;
+      } else if (scope === 'room' && cadence === 'weekly') {
+        text = `Stage <strong>${cropName}</strong> across <em>${room}</em> — one group per week over ${Math.min(roomGroups.length, 4)} weeks (${roomGroups.length} groups total).`;
+      }
+      summary.innerHTML = `<strong style="color: #60a5fa;">Plan:</strong> ${text}`;
+    }
+
+    async function implementWithCadence(cropId, encodedCropName) {
+      const modal = document.getElementById('trayDetailsModal');
+      const scope = modal.dataset.aiScope || 'group';
+      const cadence = modal.dataset.aiCadence || 'one_time';
       closeTrayModal();
+
       const cropName = decodeURIComponent(encodedCropName);
       if (!currentRecommendations) return;
 
@@ -4029,44 +4128,96 @@
       const group = state.groups.find(g => g.id === groupId);
       if (!group) { alert('Group not found'); return; }
 
-      const groupTrays = state.trays.filter(t => t.groupId === groupId);
-      const items = groupTrays.length ? groupTrays.map(t => ({
-        trayId: t.id, groupId: groupId, location: t.location || '',
-        quantity: t.capacity || group.plantCount || 48,
-        seedDate: new Date().toISOString().split('T')[0]
-      })) : [{
-        trayId: 'AUTO', groupId: groupId, location: '',
-        quantity: group.plantCount || 48,
-        seedDate: new Date().toISOString().split('T')[0]
-      }];
+      const ctx = getGroupContextById(groupId);
+      let targetGroupIds = [];
+      let items = [];
+      const baseSeedDate = new Date().toISOString().split('T')[0];
+
+      if (scope === 'room') {
+        // Room scope: gather all groups in the room
+        targetGroupIds = state.groups
+          .filter(g => getGroupContextById(g.id).room === ctx.room)
+          .map(g => g.id);
+      } else {
+        // Group scope: just the selected group
+        targetGroupIds = [groupId];
+      }
+
+      if (scope === 'room' && cadence === 'weekly') {
+        // STAGGER: assign each group to a different week
+        // Sort groups for consistent ordering
+        targetGroupIds.sort();
+        targetGroupIds.forEach((gId, index) => {
+          const weekOffset = index % 4; // weeks 0-3
+          const seedDate = new Date();
+          seedDate.setDate(seedDate.getDate() + weekOffset * 7);
+          const seedDateStr = seedDate.toISOString().split('T')[0];
+
+          const gTrays = state.trays.filter(t => t.groupId === gId);
+          const g = state.groups.find(g => g.id === gId);
+          if (gTrays.length) {
+            gTrays.forEach(t => items.push({
+              trayId: t.id, groupId: gId, location: t.location || '',
+              quantity: t.capacity || g?.plantCount || 48,
+              seedDate: seedDateStr
+            }));
+          } else {
+            items.push({
+              trayId: 'AUTO', groupId: gId, location: '',
+              quantity: g?.plantCount || 48,
+              seedDate: seedDateStr
+            });
+          }
+        });
+      } else {
+        // Non-staggered: all items share the same seed date
+        targetGroupIds.forEach(gId => {
+          const gTrays = state.trays.filter(t => t.groupId === gId);
+          const g = state.groups.find(g => g.id === gId);
+          if (gTrays.length) {
+            gTrays.forEach(t => items.push({
+              trayId: t.id, groupId: gId, location: t.location || '',
+              quantity: t.capacity || g?.plantCount || 48,
+              seedDate: baseSeedDate
+            }));
+          } else {
+            items.push({
+              trayId: 'AUTO', groupId: gId, location: '',
+              quantity: g?.plantCount || 48,
+              seedDate: baseSeedDate
+            });
+          }
+        });
+      }
 
       try {
         const response = await fetch('/api/planting/plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            scope: 'group', cadence, cropId, cropName, items
+            scope, cadence, cropId, cropName, items
           })
         });
         if (!response.ok) throw new Error(`API ${response.status}`);
         const plan = await response.json();
 
-        const scopedTasks = state.seedingTasks.filter(t => t.groupId === groupId);
+        // Apply forecast updates for all target groups
+        const scopedTasks = state.seedingTasks.filter(t => targetGroupIds.includes(t.groupId));
         applyImplementedCropToForecast(scopedTasks, cropId, cropName);
 
         fetch('/api/planting/feedback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groupId, recommendedCrop: cropId, actualCrop: cropId, action: 'implemented' })
+          body: JSON.stringify({ groupId, recommendedCrop: cropId, actualCrop: cropId, action: 'implemented', scope, cadence })
         }).catch(() => {});
 
         hideRecommendations();
         loadAIStatus();
 
-        const modal = document.getElementById('trayDetailsModal');
+        const resultModal = document.getElementById('trayDetailsModal');
         document.getElementById('modalTitle').textContent = 'Schedule Implemented';
-        renderImplementationResult({cropName, cropId}, groupTrays.length ? groupTrays : items, plan);
-        modal.classList.add('show');
+        renderImplementationResult({cropName, cropId}, items, plan);
+        resultModal.classList.add('show');
       } catch (err) {
         console.error('Implementation failed:', err);
         alert(`Failed to implement: ${err.message}`);
@@ -4074,69 +4225,10 @@
     }
 
     async function implementFromAICard(cropId, encodedCropName) {
+      // Route through scope/cadence selection instead of direct implementation
       const cropName = decodeURIComponent(encodedCropName);
       if (!currentRecommendations) return;
-
-      const groupId = currentRecommendations.groupId;
-      const group = state.groups.find(g => g.id === groupId);
-      if (!group) { alert('Group not found'); return; }
-
-      // Gather trays for this group to build items
-      const groupTrays = state.trays.filter(t => t.groupId === groupId);
-      const items = groupTrays.length ? groupTrays.map(t => ({
-        trayId: t.id, groupId: groupId, location: t.location || '',
-        quantity: t.capacity || group.plantCount || 48,
-        seedDate: new Date().toISOString().split('T')[0]
-      })) : [{
-        trayId: 'AUTO', groupId: groupId, location: '',
-        quantity: group.plantCount || 48,
-        seedDate: new Date().toISOString().split('T')[0]
-      }];
-
-      try {
-        const response = await fetch('/api/planting/plan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            scope: 'group', cadence: 'one_time', cropId, cropName, items
-          })
-        });
-        if (!response.ok) throw new Error(`API ${response.status}`);
-        const plan = await response.json();
-
-        const scopedTasks = state.seedingTasks.filter(t => t.groupId === groupId);
-        applyImplementedCropToForecast(scopedTasks, cropId, cropName);
-
-        // Log feedback for AI training
-        fetch('/api/planting/feedback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            groupId, recommendedCrop: cropId, actualCrop: cropId, action: 'implemented'
-          })
-        }).catch(() => {});
-
-        fetch('/api/ai/record-decision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'implemented', recommendedCrop: cropId, actualCrop: cropId, groupId
-          })
-        }).catch(() => {});
-
-        hideRecommendations();
-        loadAIStatus();
-
-        // Show implementation result in modal
-        const modal = document.getElementById('trayDetailsModal');
-        document.getElementById('modalTitle').textContent = 'Schedule Implemented';
-        renderImplementationResult({cropName, cropId}, groupTrays, plan);
-        modal.classList.add('show');
-
-      } catch (err) {
-        console.error('Implementation failed:', err);
-        alert(`Failed to implement: ${err.message}`);
-      }
+      showAICadenceSelection(cropId, cropName);
     }
 
     function hideRecommendations() {

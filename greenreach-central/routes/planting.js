@@ -596,19 +596,47 @@ router.post('/plan', async (req, res) => {
       batchCount = 2; intervalDays = 28;
     }
 
-    const perBatch = Array.from({ length: batchCount }, () => []);
-    cleanedItems.forEach((item, i) => perBatch[batchCount > 1 ? i % batchCount : 0].push(item));
+    // Check if items already have staggered seed dates (room+weekly from frontend)
+    const uniqueSeedDates = [...new Set(cleanedItems.map(item => toIsoDate(item.seedDate)))];
+    const itemsHaveStaggeredDates = uniqueSeedDates.length > 1;
 
-    const batches = perBatch.map((bi, idx) => {
-      if (!bi.length) return null;
-      const sd = new Date(baseSeedDate); sd.setDate(sd.getDate() + intervalDays * idx);
-      const hd = new Date(sd); hd.setDate(hd.getDate() + durationDays);
-      return {
-        batchNumber: idx + 1, seedDate: toIsoDate(sd), expectedHarvestDate: toIsoDate(hd),
-        trayCount: bi.length, totalPlants: bi.reduce((s,r) => s + r.quantity, 0),
-        trays: bi.map(r => r.trayId)
-      };
-    }).filter(Boolean);
+    let batches;
+    if (itemsHaveStaggeredDates && normalizedCadence === 'weekly') {
+      // Group items by their actual seed date (frontend already staggered them)
+      const byDate = new Map();
+      cleanedItems.forEach(item => {
+        const key = toIsoDate(item.seedDate);
+        if (!byDate.has(key)) byDate.set(key, []);
+        byDate.get(key).push(item);
+      });
+      let batchNum = 0;
+      batches = Array.from(byDate.entries()).map(([seedDateStr, items]) => {
+        batchNum++;
+        const sd = parseSeedDate(seedDateStr);
+        const hd = new Date(sd); hd.setDate(hd.getDate() + durationDays);
+        return {
+          batchNumber: batchNum, seedDate: seedDateStr, expectedHarvestDate: toIsoDate(hd),
+          trayCount: items.length, totalPlants: items.reduce((s,r) => s + r.quantity, 0),
+          trays: items.map(r => r.trayId),
+          groups: [...new Set(items.map(r => r.groupId))]
+        };
+      });
+    } else {
+      // Original logic: round-robin items into batches with computed dates
+      const perBatch = Array.from({ length: batchCount }, () => []);
+      cleanedItems.forEach((item, i) => perBatch[batchCount > 1 ? i % batchCount : 0].push(item));
+
+      batches = perBatch.map((bi, idx) => {
+        if (!bi.length) return null;
+        const sd = new Date(baseSeedDate); sd.setDate(sd.getDate() + intervalDays * idx);
+        const hd = new Date(sd); hd.setDate(hd.getDate() + durationDays);
+        return {
+          batchNumber: idx + 1, seedDate: toIsoDate(sd), expectedHarvestDate: toIsoDate(hd),
+          trayCount: bi.length, totalPlants: bi.reduce((s,r) => s + r.quantity, 0),
+          trays: bi.map(r => r.trayId)
+        };
+      }).filter(Boolean);
+    }
 
     const activityHubTasks = batches.map(b => ({
       id: `task-${Date.now()}-${b.batchNumber}`,
