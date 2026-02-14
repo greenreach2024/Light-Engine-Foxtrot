@@ -564,10 +564,10 @@ router.post('/plan', async (req, res) => {
     const baseSeedDate = cleanedItems[0].seedDate;
 
     let batchCount = 1, intervalDays = 0;
-    if ((scope === 'zone' || scope === 'room') && normalizedCadence === 'weekly') {
+    if (normalizedCadence === 'weekly') {
       batchCount = 4; intervalDays = 7;
-    } else if ((scope === 'zone' || scope === 'room') && normalizedCadence === 'monthly') {
-      batchCount = 1; intervalDays = 28;
+    } else if (normalizedCadence === 'monthly') {
+      batchCount = 2; intervalDays = 28;
     }
 
     const perBatch = Array.from({ length: batchCount }, () => []);
