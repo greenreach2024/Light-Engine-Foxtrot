@@ -1117,6 +1117,89 @@ router.get('/grants/wizard-analytics', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/grants/program-alerts
+ * List grant program change alerts
+ */
+router.get('/grants/program-alerts', requireAdminRole('admin', 'operations', 'support'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, alerts: [] });
+        }
+
+        const includeAcknowledged = String(req.query.includeAcknowledged || '').toLowerCase() === 'true';
+        const limitRaw = Number(req.query.limit);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+
+        const where = includeAcknowledged ? '' : 'WHERE a.acknowledged = FALSE';
+        const result = await query(
+            `SELECT a.id, a.program_id, a.change_type, a.details, a.acknowledged,
+                    a.acknowledged_by, a.created_at,
+                    p.program_code, p.program_name, p.source_url, p.needs_review
+             FROM grant_program_change_alerts a
+             LEFT JOIN grant_programs p ON p.id = a.program_id
+             ${where}
+             ORDER BY a.created_at DESC
+             LIMIT $1`,
+            [limit]
+        );
+
+        return res.json({ success: true, alerts: result.rows });
+    } catch (error) {
+        console.error('[Admin API] Error loading grant program alerts:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load grant program alerts' });
+    }
+});
+
+/**
+ * POST /api/admin/grants/program-alerts/:id/acknowledge
+ * Acknowledge a grant program change alert
+ */
+router.post('/grants/program-alerts/:id/acknowledge', requireAdminRole('admin', 'operations', 'support'), async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const alertId = Number(req.params.id);
+        if (!Number.isFinite(alertId)) {
+            return res.status(400).json({ success: false, error: 'Invalid alert id' });
+        }
+
+        const acknowledgedBy = req.user?.email || req.user?.name || 'admin';
+        const result = await query(
+            `UPDATE grant_program_change_alerts
+             SET acknowledged = TRUE,
+                 acknowledged_by = $1
+             WHERE id = $2
+             RETURNING id, program_id, change_type, acknowledged, acknowledged_by, created_at`,
+            [acknowledgedBy, alertId]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({ success: false, error: 'Alert not found' });
+        }
+
+        const programId = result.rows[0].program_id;
+        if (programId) {
+            await query(
+                `UPDATE grant_programs p
+                 SET needs_review = EXISTS (
+                     SELECT 1 FROM grant_program_change_alerts a
+                     WHERE a.program_id = p.id AND a.acknowledged = FALSE
+                 )
+                 WHERE p.id = $1`,
+                [programId]
+            );
+        }
+
+        return res.json({ success: true, alert: result.rows[0] });
+    } catch (error) {
+        console.error('[Admin API] Error acknowledging grant program alert:', error);
+        return res.status(500).json({ success: false, error: 'Failed to acknowledge grant program alert' });
+    }
+});
+
+/**
  * GET /api/admin/farms
  * Get list of all farms in the network
  */

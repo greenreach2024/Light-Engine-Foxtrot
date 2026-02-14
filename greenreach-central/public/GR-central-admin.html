@@ -1877,6 +1877,32 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                        <div class="card-title">Grant Program Change Alerts</div>
+                        <button class="btn" onclick="loadGrantProgramAlerts()" style="padding: 6px 10px;">Refresh Alerts</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Program</th>
+                                        <th>Alert Type</th>
+                                        <th>Created</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grant-program-alerts-tbody">
+                                    <tr>
+                                        <td colspan="4" class="loading">Loading alerts...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Grant Users View -->

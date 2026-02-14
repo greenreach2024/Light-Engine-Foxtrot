@@ -945,7 +945,15 @@ router.post('/scrape-website', optionalAuth, async (req, res) => {
           messages: [
             {
               role: 'system',
-              content: 'You are a grant writing strategist. Given web-scraped data about a Canadian agricultural business, produce a concise 2-3 paragraph "positioning summary" that highlights the strongest angles for a funding application. Focus on: community impact, innovation, sustainability, job creation, food security, and any awards/recognition. Write in third person. Be factual — only reference what the data supports.'
+              content: 'You are a grant writing strategist with deep expertise in agricultural funding. Given web-scraped data about a North American agricultural business, produce a concise 2-3 paragraph "positioning summary" that highlights the strongest angles for a funding application.\n\n' +
+                'Apply these grant writing principles:\n' +
+                '- Identify the most compelling STORY this organization can tell funders — what makes them unique?\n' +
+                '- Highlight evidence of community support, partnerships, and in-kind contributions (funders value diversified backing)\n' +
+                '- Note any preliminary data or track record that demonstrates feasibility and credibility\n' +
+                '- Flag strengths across key funder priorities: community impact, innovation, sustainability, job creation, food security, Indigenous/underserved community support, and awards/recognition\n' +
+                '- Identify potential "stacking" angles — areas where multiple programs might fund different aspects\n' +
+                '- Use confident, forward-looking language that positions the organization as capable and ambitious\n\n' +
+                'Write in third person. Be factual — only reference what the data supports. Emphasize measurable outcomes wherever possible.'
             },
             {
               role: 'user',
@@ -1239,13 +1247,20 @@ router.post('/applications/:id/ai-recommend', authenticateGrantUser, async (req,
       `Priorities: ${(p.priority_areas || []).join(', ')}`
     ).join('\n\n');
 
-    const prompt = `You are a Canadian agricultural grant strategist. Analyze this project and the available funding programs, then provide strategic recommendations.
+    const prompt = `You are a senior agricultural grant strategist with deep expertise in Canadian and US funding landscapes. Analyze this project against available programs using grant writing best practices.
 
 PROJECT PROFILE:
 ${projectSummary}
 
 AVAILABLE PROGRAMS:
 ${programList}
+
+STRATEGIC ANALYSIS FRAMEWORK:
+- Consider funder alignment: Does this project use the funder's language and match their stated priorities?
+- Assess budget feasibility: Is the requested amount realistic relative to each program's typical gift size?
+- Evaluate storytelling angle: What compelling narrative connects this project to each program's mission?
+- Check stacking potential: Which programs can fund different aspects without overlap?
+- Identify preparation gaps: What boilerplate materials, attachments, or data would strengthen applications?
 
 Respond in JSON with this exact structure:
 {
@@ -1255,7 +1270,8 @@ Respond in JSON with this exact structure:
       "programName": "...",
       "confidence": "high|medium|low",
       "rationale": "2-sentence explanation of why this is a strong match",
-      "applicationTip": "1-sentence tactical advice for the application"
+      "applicationTip": "1-sentence tactical advice for the application",
+      "keyTermsToUse": ["funder-specific terms to mirror in the application"]
     }
   ],
   "complementaryMatches": [
@@ -1267,7 +1283,8 @@ Respond in JSON with this exact structure:
     }
   ],
   "strategicAdvice": "2-3 sentence overall funding strategy recommendation",
-  "fundingStackSuggestion": "How to combine multiple programs for maximum funding"
+  "fundingStackSuggestion": "How to combine multiple programs for maximum funding",
+  "preparationChecklist": ["Key items to prepare before applying (e.g., audits, board lists, budget narratives)"]
 }
 
 Rules:
@@ -1275,6 +1292,7 @@ Rules:
 - complementaryMatches: max 3 programs that could supplement the direct matches
 - Only use programs from the provided list (reference by programCode)
 - Be specific about WHY each program fits this particular project
+- Include funder-specific terminology the applicant should mirror
 - Return ONLY valid JSON, no markdown formatting`;
 
     const completion = await openai.chat.completions.create({
@@ -1282,7 +1300,7 @@ Rules:
       messages: [
         {
           role: "system",
-          content: "You are an expert Canadian agricultural grant strategist. Respond only with valid JSON."
+          content: "You are an expert agricultural grant strategist specializing in Canadian and US funding programs. Apply best practices from leading grant writing frameworks: tell a compelling story, mirror funder terminology, ensure budget-narrative alignment, and recommend diversified funding strategies. Respond only with valid JSON."
         },
         {
           role: "user",
@@ -2260,13 +2278,15 @@ router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res
       return res.status(404).json({ success: false, error: 'Application not found' });
     }
 
-    // Build AI prompt
-    let prompt = `You are helping a Canadian farmer write a grant application. Transform their informal notes into polished, professional grant narrative language.\n\n`;
+    // Build AI prompt — enriched with grant writing best practices from
+    // U of T Anesthesia, Funding For Good, Imagine Canada, Western/UWO
+    let prompt = `You are an expert grant writer helping a Canadian farmer write a compelling grant application. Transform their informal notes into polished, reviewer-ready narrative.\n\n`;
     prompt += `QUESTION: ${question}\n\n`;
     prompt += `FARMER'S NOTES: ${userInput}\n\n`;
 
     if (programContext) {
-      prompt += `PROGRAM PRIORITIES: ${programContext}\n\n`;
+      prompt += `PROGRAM PRIORITIES & TERMINOLOGY: ${programContext}\n`;
+      prompt += `(Mirror this exact language and terminology in the draft — funders use specific terms for a reason.)\n\n`;
     }
 
     if (organizationProfile) {
@@ -2274,20 +2294,30 @@ router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res
       if (organizationProfile.businessName) prompt += `- Business: ${organizationProfile.businessName}\n`;
       if (organizationProfile.organizationType) prompt += `- Type: ${organizationProfile.organizationType}\n`;
       if (organizationProfile.province) prompt += `- Location: ${organizationProfile.province}\n`;
+      if (organizationProfile.employeeCount) prompt += `- Employees: ${organizationProfile.employeeCount}\n`;
+      if (organizationProfile.farmDetails) prompt += `- Farm details: ${JSON.stringify(organizationProfile.farmDetails)}\n`;
     }
 
     if (projectProfile) {
       prompt += `\nPROJECT CONTEXT:\n`;
       if (projectProfile.projectTitle) prompt += `- Project: ${projectProfile.projectTitle}\n`;
       if (projectProfile.crops) prompt += `- Crops: ${projectProfile.crops}\n`;
+      if (projectProfile.description) prompt += `- Description: ${projectProfile.description}\n`;
+      if (projectProfile.startDate) prompt += `- Timeline: ${projectProfile.startDate} to ${projectProfile.endDate || 'TBD'}\n`;
     }
 
-    prompt += `\nProvide a polished 2-4 paragraph response that:\n`;
-    prompt += `1. Uses professional grant language aligned with the program priorities\n`;
-    prompt += `2. Maintains the farmer's authentic voice and specific details\n`;
-    prompt += `3. Emphasizes measurable outcomes and community impact\n`;
-    prompt += `4. Is concise and directly answers the question\n\n`;
-    prompt += `Return ONLY the draft text, no meta-commentary.`;
+    prompt += `\nGRANT WRITING BEST PRACTICES TO APPLY:\n`;
+    prompt += `1. Tell a compelling story — every paragraph should advance the narrative of community need and the plan to address it\n`;
+    prompt += `2. Open each paragraph with a clear topic sentence so reviewers (who read dozens of grants) can navigate quickly\n`;
+    prompt += `3. Use confident future-tense language ("will" not "might") and terms like "ground-breaking" and "cutting-edge" where appropriate\n`;
+    prompt += `4. Include specific, measurable outcomes — reviewers need metrics they can show their board\n`;
+    prompt += `5. Provide research context: "While X has been achieved, this project will advance the field by doing Y"\n`;
+    prompt += `6. Connect budget line items to narrative claims — every dollar should support the story\n`;
+    prompt += `7. Articulate the "so what?" — why this work is urgent, innovative, and ground-breaking in context\n`;
+    prompt += `8. Write for generalist reviewers but with enough depth to convince experts\n`;
+    prompt += `9. Emphasize community impact, food security, sustainability, innovation, and job creation\n`;
+    prompt += `10. Maintain the farmer's authentic voice and specific details — don't genericize\n\n`;
+    prompt += `Provide a polished 2-4 paragraph response. Return ONLY the draft text, no meta-commentary.`;
 
     // Call GPT-4
     const completion = await openai.chat.completions.create({
@@ -2295,7 +2325,17 @@ router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res
       messages: [
         {
           role: "system",
-          content: "You are an expert grant writer specializing in Canadian agricultural funding programs. Write in clear, professional language that emphasizes innovation, sustainability, and community impact."
+          content: "You are an expert grant writer specializing in Canadian and North American agricultural funding programs. Apply these core principles:\n" +
+            "- STORYTELLING: Every grant is a story about real community needs and a credible plan to address them. Make the reviewer as excited as the applicant.\n" +
+            "- REVIEWER EMPATHY: Write as if the reviewer has already read dozens of proposals today. Be concise, well-organized, and easy to follow.\n" +
+            "- FUNDER ALIGNMENT: Mirror the funder's exact terminology and stated priorities. If they say 'food sovereignty' don't write 'food security'.\n" +
+            "- EVIDENCE-BASED: Support claims with preliminary data, statistics, or concrete examples. Show feasibility.\n" +
+            "- MEASURABLE IMPACT: Include specific numbers — acres, jobs, families served, yield improvements, revenue targets.\n" +
+            "- FORWARD-LOOKING: Use future tense ('will achieve') not conditional ('might achieve'). Show confidence and capability.\n" +
+            "- BUDGET-NARRATIVE LINK: Every budget item should connect to a narrative claim. Every narrative claim should be supported in the budget.\n" +
+            "- PROACTIVE RISK: Address potential concerns before reviewers raise them.\n" +
+            "- CLEAR STRUCTURE: Use topic sentences, logical paragraph flow, and section summaries. Bold headings when appropriate.\n" +
+            "Write in clear, professional language. Maintain the applicant's authentic voice while elevating the prose to professional grant standards."
         },
         {
           role: "user",

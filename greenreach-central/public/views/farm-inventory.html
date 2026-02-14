@@ -481,6 +481,8 @@
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
+        <a href="/index.charlie.html" class="nav-link-button">Home</a>
+        <a href="/views/farm-summary.html" class="nav-link-button">Dashboard</a>
         <div class="nav-item inventory">
           <button class="nav-button inventory active">
             Inventory Management
@@ -589,25 +591,13 @@
       // Use current server origin for API calls (works on localhost and AWS)
       const API_BASE = window.location.origin;
 
-      // Detect if we're on Central server or Farm server
-      const isCentralServer = window.location.hostname.includes('greenreachgreens.com') || 
-                             window.location.hostname.includes('greenreach.farm');
-
     async function loadInventory() {
       console.debug('[loadInventory] Starting...');
       console.log('[loadInventory] API_BASE:', API_BASE);
-      console.log('[loadInventory] isCentralServer:', isCentralServer);
       console.log('[loadInventory] window.location:', window.location.href);
       showLoading();
 
       try {
-        // If on Central server, show message that this page is for farm view only
-        if (isCentralServer) {
-          hideLoading();
-          showError('This inventory view is designed for individual farm servers. Please access this page from your farm\'s Light Engine dashboard.');
-          return;
-        }
-
         console.debug('[loadInventory] Fetching data from:', API_BASE);
         console.log('[loadInventory] Endpoint 1:', `${API_BASE}/api/inventory/current`);
         console.log('[loadInventory] Endpoint 2:', `${API_BASE}/api/inventory/forecast`);
