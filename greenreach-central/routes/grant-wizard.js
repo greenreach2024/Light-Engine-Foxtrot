@@ -1542,6 +1542,8 @@ Rules:
 - Only use programs from the provided list (reference by programCode)
 - Be specific about WHY each program fits this particular project
 - Include funder-specific terminology the applicant should mirror
+- NEVER use abbreviations without spelling them out first (e.g., "greenhouse gas" not "GHG", "controlled environment agriculture" not "CEA")
+- Where applicable, cite credible industry statistics in rationale (e.g., energy savings, water reduction, yield data with named sources)
 - Return ONLY valid JSON, no markdown formatting`;
 
     const completion = await openai.chat.completions.create({
@@ -1549,7 +1551,7 @@ Rules:
       messages: [
         {
           role: "system",
-          content: "You are an expert agricultural grant strategist specializing in Canadian and US funding programs. Apply best practices from leading grant writing frameworks: tell a compelling story, mirror funder terminology, ensure budget-narrative alignment, and recommend diversified funding strategies. Respond only with valid JSON."
+          content: "You are an expert agricultural grant strategist specializing in Canadian and US funding programs. Apply best practices from leading grant writing frameworks: tell a compelling story, mirror funder terminology, ensure budget-narrative alignment, and recommend diversified funding strategies. IMPORTANT: Never use abbreviations without spelling them out first (write 'greenhouse gas' not 'GHG', 'controlled environment agriculture' not 'CEA'). Where applicable, include credible industry statistics to support recommendations (e.g., energy savings percentages, water reduction data, yield improvements with named sources). Respond only with valid JSON."
         },
         {
           role: "user",
@@ -2565,7 +2567,9 @@ router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res
     prompt += `7. Articulate the "so what?" — why this work is urgent, innovative, and ground-breaking in context\n`;
     prompt += `8. Write for generalist reviewers but with enough depth to convince experts\n`;
     prompt += `9. Emphasize community impact, food security, sustainability, innovation, and job creation\n`;
-    prompt += `10. Maintain the farmer's authentic voice and specific details — don't genericize\n\n`;
+    prompt += `10. Maintain the farmer's authentic voice and specific details — don't genericize\n`;
+    prompt += `11. NEVER use abbreviations without first spelling out the full term. Write 'greenhouse gas (GHG)' on first use, then 'GHG' is acceptable. Same for all technical terms: 'controlled environment agriculture (CEA)', 'light-emitting diode (LED)', etc.\n`;
+    prompt += `12. CITE REAL DATA: Support the farmer's claims with known, credible industry statistics. For example: if they mention LED lights, include 'LED grow lights reduce energy consumption by up to 40–60% compared to high-pressure sodium lighting (U.S. Department of Energy)'. If they mention vertical farming water savings, cite 'up to 95% less water than conventional agriculture (Association for Vertical Farming)'. If they mention yield improvements, cite 'CEA can achieve 10–20x higher yield per square foot (Cornell University)'. Always name the source.\n\n`;
     prompt += `Provide a polished 2-4 paragraph response. Return ONLY the draft text, no meta-commentary.`;
 
     // Call GPT-4
@@ -2584,6 +2588,8 @@ router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res
             "- BUDGET-NARRATIVE LINK: Every budget item should connect to a narrative claim. Every narrative claim should be supported in the budget.\n" +
             "- PROACTIVE RISK: Address potential concerns before reviewers raise them.\n" +
             "- CLEAR STRUCTURE: Use topic sentences, logical paragraph flow, and section summaries. Bold headings when appropriate.\n" +
+            "- NO ABBREVIATIONS: Always spell out terms in full. Write 'greenhouse gas' not 'GHG', 'controlled environment agriculture' not 'CEA', 'light-emitting diode' not 'LED' (first use — then abbreviation is acceptable in parentheses). Never assume the reviewer knows acronyms.\n" +
+            "- CITE KNOWN DATA: Where the project involves common technologies or practices, include widely-accepted industry statistics to support claims. Examples: 'LED grow lights reduce energy consumption by up to 40–60% compared to high-pressure sodium lighting (U.S. Department of Energy)', 'Vertical farms use up to 95% less water than conventional field agriculture (Association for Vertical Farming)', 'Controlled environment agriculture can achieve 10–20x higher yield per square foot than field farming (Cornell University CEA program)'. Always attribute the statistic to a credible source.\n" +
             "Write in clear, professional language. Maintain the applicant's authentic voice while elevating the prose to professional grant standards."
         },
         {
