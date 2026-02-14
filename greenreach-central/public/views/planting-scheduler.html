@@ -3426,11 +3426,11 @@
               ${badge('Light', top.scores.light_efficiency)}
               ${badge('Nutrient', top.scores.nutrient_fit)}
               ${badge('Revenue', top.scores.revenue)}
-              ${badge('Seasonal', top.scores.seasonal)}
+              ${badge('Off-Season', top.scores.off_season)}
             </div>
             <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:0.75rem;line-height:1.4;">
               <strong style="color:#cbd5e1;">Revenue score</strong> ranks expected gross return using current market pricing and yield potential.
-              <strong style="color:#cbd5e1;">Seasonal score</strong> ranks how well the crop fits the current time of year and demand pattern.
+              <strong style="color:#cbd5e1;">Off-Season score</strong> boosts crops that are off-season outdoors — less field-farm competition means higher prices for vertical farms.
             </div>
             <div style="font-size:0.8rem;color:#94a3b8;display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;">
               <div>DLI Δ: ${top.deltas.dli} mol/m²/d</div>
@@ -3888,7 +3888,7 @@
           ${renderScoreBadge('Light', topRec.scores.light_efficiency)}
           ${renderScoreBadge('Market', topRec.scores.market || 70)}
           ${renderScoreBadge('Revenue', topRec.scores.revenue || 0)}
-          ${renderScoreBadge('Seasonal', topRec.scores.seasonal || 0)}
+          ${renderScoreBadge('Off-Season', topRec.scores.off_season || 0)}
           ${renderScoreBadge('Stagger', topRec.scores.harvest_stagger)}
           ${renderScoreBadge('VPD', topRec.scores.vpd_fit)}
         </div>
@@ -3897,7 +3897,7 @@
 
         <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 1rem; line-height: 1.4;">
           <strong style="color: #cbd5e1;">Revenue score</strong> estimates crop earning potential from market price and projected output.
-          <strong style="color: #cbd5e1;">Seasonal score</strong> estimates crop fit to current seasonal conditions and demand trends.
+          <strong style="color: #cbd5e1;">Off-Season score</strong> boosts crops that are off-season outdoors — less field-farm competition means higher prices for vertical farms.
         </div>
 
         <details style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem;">
