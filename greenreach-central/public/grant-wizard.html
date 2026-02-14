@@ -4390,8 +4390,14 @@
     // AI Funding Strategy Recommendations
     // ============================================================
     async function getAiRecommendations() {
-      if (!currentApp || !authToken) {
-        showToast('Sign in to get AI recommendations');
+      const appId = currentApp?.id || discoveryAppId;
+      if (!appId || !authToken) {
+        if (!authToken) {
+          showToast('Sign in to get AI recommendations');
+          showView('login');
+        } else {
+          showToast('Run program discovery first to generate recommendations');
+        }
         return;
       }
       const btn = document.getElementById('aiRecommendBtn');
@@ -4403,7 +4409,7 @@
       content.innerHTML = '<p style="color:var(--text-light); text-align:center;">Generating strategic recommendations...</p>';
 
       try {
-        const res = await fetch(`${API}/applications/${currentApp.id}/ai-recommend`, {
+        const res = await fetch(`${API}/applications/${appId}/ai-recommend`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
         });
