@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home - Light Engine</title>
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="/styles/light-engine.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
+    
+    /* Header */
+    .header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #3b82f6;
+      backdrop-filter: blur(10px);
+    }
+    
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.5px;
+    }
+    
+    .header .subtitle {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-top: 0.25rem;
+    }
+    
+    .container {
+      flex: 1;
+      padding: 2rem;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    
+    .status {
+      background: rgba(34, 197, 94, 0.2);
+      border: 2px solid #22c55e;
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+      text-align: center;
+      backdrop-filter: blur(10px);
+    }
+    
+    .status-text {
+      color: #86efac;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+    
+    .category-section {
+      margin-bottom: 3rem;
+    }
+    
+    .category-header {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #60a5fa;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    
+    .apps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+    
+    .app-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 2px solid rgba(59, 130, 246, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      display: block;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    
+    .app-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+    
+    .app-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 0.75rem;
+    }
+    
+    .app-description {
+      color: #94a3b8;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    
+    .footer {
+      margin-top: 3rem;
+      padding: 2rem;
+      border-top: 2px solid rgba(59, 130, 246, 0.2);
+      text-align: center;
+      color: #64748b;
+      font-size: 0.9rem;
+      background: rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+    }
+    
+    .build-info {
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="header">
+    <div>
+      <h1 data-help-title="Light Engine Home" data-help="Central hub for all farm operations." data-help-ai="System Status: All systems nominal. 3 active zones.">Light Engine Foxtrot</h1>
+      <div class="subtitle">Production Farm Management System</div>
+    </div>
+  </div>
+  
+  <div class="container">
+    <div class="status">
+      <div class="status-text">System Online - All Services Running</div>
+    </div>
+    
+    <!-- Farm Monitoring -->
+    <div class="category-section">
+      <div class="category-header">Farm Monitoring</div>
+      <div class="apps-grid">
+        <a href="/views/farm-summary.html" class="app-card">
+          <div class="app-title">Farm Summary</div>
+          <div class="app-description">Overview of farm operations, inventory, and key metrics</div>
+        </a>
+
+        <a href="/farm-vitality.html" class="app-card">
+          <div class="app-title">Farm Vitality</div>
+          <div class="app-description">Live vitality signals and performance indicators</div>
+        </a>
+        
+        <a href="/LE-dashboard.html" class="app-card">
+          <div class="app-title">Setup/Update</div>
+          <div class="app-description">Configure rooms, zones, groups, and automation schedules</div>
+        </a>
+        
+        <a href="/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Activity Hub</div>
+          <div class="app-description">Track and manage farm activities with QR-based workflows</div>
+        </a>
+        
+        <a href="/views/nutrient-management.html" class="app-card">
+          <div class="app-title">Nutrient Management</div>
+          <div class="app-description">Monitor and manage nutrient levels, EC, and pH</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Farm Checklists -->
+    <div class="category-section">
+      <div class="category-header">Farm Checklists</div>
+      <div class="apps-grid">
+        <a href="/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Daily</div>
+          <div class="app-description">Open the daily checklist in Activity Hub</div>
+        </a>
+
+        <a href="/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Weekly</div>
+          <div class="app-description">Open the weekly checklist in Activity Hub</div>
+        </a>
+
+        <a href="/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Monthly</div>
+          <div class="app-description">Open the monthly checklist in Activity Hub</div>
+        </a>
+
+        <a href="/views/tray-inventory.html" class="app-card">
+          <div class="app-title">Quarterly</div>
+          <div class="app-description">Open the quarterly checklist in Activity Hub</div>
+        </a>
+      </div>
+    </div>
+    
+    <!-- Inventory Management -->
+    <div class="category-section">
+      <div class="category-header">Inventory Management</div>
+      <div class="apps-grid">
+        <a href="/views/farm-inventory.html" class="app-card">
+          <div class="app-title">Farm Inventory</div>
+          <div class="app-description">Track plants, trays, and harvest inventory</div>
+        </a>
+
+        <a href="/views/planting-scheduler.html" class="app-card">
+          <div class="app-title">Planting Scheduler</div>
+          <div class="app-description">Plan seedings and predict harvest windows</div>
+        </a>
+
+        <a href="/LE-wholesale-orders.html" class="app-card">
+          <div class="app-title">Wholesale Orders</div>
+          <div class="app-description">Review inbound wholesale orders and fulfillment</div>
+        </a>
+      </div>
+    </div>
+    
+    <!-- Sales -->
+    <div class="category-section">
+      <div class="category-header">Sales</div>
+      <div class="apps-grid">
+        <a href="/farm-sales-pos.html" class="app-card">
+          <div class="app-title">POS</div>
+          <div class="app-description">Point-of-sale system for in-person farm store and market sales</div>
+        </a>
+        
+        <a href="/wholesale.html" class="app-card">
+          <div class="app-title">Wholesale</div>
+          <div class="app-description">Manage wholesale orders and network marketplace</div>
+        </a>
+      </div>
+    </div>
+    
+    <!-- Admin -->
+    <div class="category-section">
+      <div class="category-header">Admin</div>
+      <div class="apps-grid">
+        <a href="/farm-admin.html" class="app-card">
+          <div class="app-title">Admin</div>
+          <div class="app-description">Manage farm operations, automation, and environmental controls</div>
+        </a>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <div>Light Engine Foxtrot v1.0.0</div>
+    <div class="build-info">Built: {{BUILD_TIME}}</div>
+  </div>
+  <script src="/js/light-engine-help.js"></script>
+</body>
+</html>
