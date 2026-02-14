@@ -202,8 +202,8 @@ function seasonalMultiplier(category) {
   return (T[category] || T['Vegetables'])[m] || 1;
 }
 
-/** Full recommendation scoring with diversity and rotation bonuses */
-function computeRecommendation(profile, context, currentProfile = null, diversityContext = null) {
+/** Full recommendation scoring with diversity, rotation, and market intelligence */
+function computeRecommendation(profile, context, currentProfile = null, diversityContext = null, marketData = null) {
   const ecScore  = scoreDimension(context.ec, profile.ideal.ec, 1.2);
   const phScore  = scoreDimension(context.ph, profile.ideal.ph, 0.8);
   const nutrientFit     = clampScore(ecScore * 0.6 + phScore * 0.4);
@@ -213,6 +213,30 @@ function computeRecommendation(profile, context, currentProfile = null, diversit
   const revenueScore    = computePricingScore(profile.recipeName);
   const seasonal        = seasonalMultiplier(profile.category);
   const seasonalScore   = clampScore(revenueScore * seasonal);
+
+  // Market intelligence score — boost/penalize based on real market trends
+  let marketScore = 70; // neutral baseline
+  if (marketData && typeof marketData === 'object') {
+    const cropNameLower = profile.recipeName.toLowerCase();
+    for (const [product, data] of Object.entries(marketData)) {
+      const productLower = product.toLowerCase();
+      const firstWord = cropNameLower.split(/\s+/)[0];
+      if (cropNameLower.includes(productLower) || productLower.includes(firstWord)) {
+        const trendPct = data.trendPercent || 0;
+        if (data.trend === 'increasing' && trendPct >= 7) {
+          // Strong market opportunity — price rising, grower gets premium
+          marketScore = clampScore(70 + trendPct * 1.5);
+        } else if (data.trend === 'decreasing' && Math.abs(trendPct) >= 7) {
+          // Market caution — price falling, oversupply
+          marketScore = clampScore(70 + trendPct * 1.2); // trendPct is negative
+        } else if (data.trend === 'stable') {
+          // Stable market — slight positive signal
+          marketScore = 75;
+        }
+        break; // use first match
+      }
+    }
+  }
 
   // **NEW: Diversity scoring** - Penalize overrepresented crops/categories
   let diversityScore = 100;
@@ -263,17 +287,18 @@ function computeRecommendation(profile, context, currentProfile = null, diversit
   diversityScore = clampScore(diversityScore);
 
   const overall = clampScore(
-    nutrientFit     * 0.18 +
-    lightEfficiency * 0.16 +
-    seasonalScore   * 0.18 +
-    harvestStagger  * 0.14 +
-    vpdFit          * 0.08 +
+    nutrientFit     * 0.15 +
+    lightEfficiency * 0.14 +
+    seasonalScore   * 0.14 +
+    marketScore     * 0.12 +
+    harvestStagger  * 0.12 +
+    vpdFit          * 0.07 +
     revenueScore    * 0.08 +
-    diversityScore  * 0.12 +
-    rotationBonus   * 0.06
+    diversityScore  * 0.10 +
+    rotationBonus   * 0.08
   );
 
-  return { nutrientFit, lightEfficiency, vpdFit, harvestStagger, revenueScore, seasonalScore, diversityScore, rotationBonus, overall };
+  return { nutrientFit, lightEfficiency, vpdFit, harvestStagger, revenueScore, seasonalScore, marketScore, diversityScore, rotationBonus, overall };
 }
 
 function matchRecipeId(crop) {
@@ -400,11 +425,11 @@ router.post('/recommendations', async (req, res) => {
       }
     }
 
-    // Fetch market intelligence data for price anomaly justifications
+    // Fetch market intelligence data for scoring AND justifications
     const marketData = getMarketData();
     
     const allScored = pool.map(profile => {
-      const scores = computeRecommendation(profile, context, currentProfile, diversityContext);
+      const scores = computeRecommendation(profile, context, currentProfile, diversityContext, marketData);
       const isCurrent = profile.cropId === currentId;
 
       const harvestDate = new Date(seedDate);
@@ -501,6 +526,7 @@ router.post('/recommendations', async (req, res) => {
           harvest_stagger:  scores.harvestStagger,
           revenue:          scores.revenueScore,
           seasonal:         scores.seasonalScore,
+          market:           scores.marketScore,
           diversity:        scores.diversityScore,
           rotation:         scores.rotationBonus,
           overall:          scores.overall
