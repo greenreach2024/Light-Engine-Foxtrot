@@ -3781,6 +3781,51 @@
       await getAIRecommendations(excludedCropsForRemix);
     }
 
+    /** Render AI justification tags for a recommendation */
+    function renderJustifications(justifications) {
+      if (!Array.isArray(justifications) || justifications.length === 0) return '';
+      const iconMap = {
+        market_opportunity: { icon: '📈', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+        market_caution:     { icon: '📉', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+        diversity_concern:  { icon: '🌱', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+        rotation_benefit:   { icon: '🔄', color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
+        seasonal_advantage: { icon: '☀️', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+        seasonal_caution:   { icon: '❄️', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' }
+      };
+      return `
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+          ${justifications.map(j => {
+            const style = iconMap[j.type] || { icon: 'ℹ️', color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' };
+            return `<div style="background: ${style.bg}; border: 1px solid ${style.color}33; border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.82rem; line-height: 1.4;">
+              <div style="color: ${style.color}; font-weight: 600; margin-bottom: 0.2rem;">
+                ${style.icon} ${j.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </div>
+              <div style="color: #cbd5e1;">${j.message}</div>
+              ${j.source ? `<div style="color: #64748b; font-size: 0.75rem; margin-top: 0.25rem;">Source: ${j.source}${j.confidence ? ' · Confidence: ' + j.confidence : ''}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    /** Render compact justification pills for alternative cards */
+    function renderJustificationPills(justifications) {
+      if (!Array.isArray(justifications) || justifications.length === 0) return '';
+      const pillColors = {
+        market_opportunity: '#22c55e',
+        market_caution: '#f59e0b',
+        diversity_concern: '#f59e0b',
+        rotation_benefit: '#60a5fa',
+        seasonal_advantage: '#22c55e',
+        seasonal_caution: '#f59e0b'
+      };
+      const pills = justifications.slice(0, 3).map(j => {
+        const color = pillColors[j.type] || '#94a3b8';
+        const label = j.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return `<span style="display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 9999px; background: ${color}22; color: ${color}; border: 1px solid ${color}44; white-space: nowrap;">${label}</span>`;
+      }).join(' ');
+      return `<div style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem;">${pills}</div>`;
+    }
+
     function displayRecommendations(recommendations) {
       const topRec = recommendations.topRecommendation;
       if (!topRec) {
@@ -3816,6 +3861,8 @@
           ${renderScoreBadge('Stagger', topRec.scores.harvest_stagger)}
           ${renderScoreBadge('VPD', topRec.scores.vpd_fit)}
         </div>
+
+        ${renderJustifications(topRec.justifications)}
 
         <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 1rem; line-height: 1.4;">
           <strong style="color: #cbd5e1;">Revenue score</strong> estimates crop earning potential from market price and projected output.
@@ -3856,6 +3903,7 @@
                 <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
                   Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Seasonal: ${Math.round(alt.scores.seasonal || 0)}
                 </div>
+                ${renderJustificationPills(alt.justifications)}
               </div>
               <div style="display:flex;gap:0.5rem;">
                 <button 

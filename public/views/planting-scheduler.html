@@ -196,6 +196,7 @@
     .container {
       flex: 1;
       padding: 2rem;
+      padding-top: 8.5rem; /* Extra space below sticky header to prevent overlap */
       display: flex;
       flex-direction: column;
       gap: 2rem;
@@ -1349,11 +1350,14 @@
           <div id="alternativeRecommendations"></div>
         </div>
 
-        <div class="form-actions">
-          <button type="button" class="timeline-btn secondary" onclick="hideRecommendations()">
+        <div class="form-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button type="button" class="timeline-btn secondary" onclick="hideRecommendations()" style="flex: 1; min-width: 120px;">
             Cancel
           </button>
-          <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()">
+          <button type="button" class="timeline-btn" onclick="remixRecommendations()" style="flex: 1; min-width: 160px; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc;">
+            🔄 Remix Recommendations
+          </button>
+          <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()" style="flex: 2; min-width: 200px;">
             Accept & Schedule Top Recommendation
           </button>
         </div>
@@ -1596,8 +1600,166 @@
       groups: [],
       seedingTasks: [],
       activeSeedlings: [],
-      lightAdjustments: []
+      lightAdjustments: [],
+      savedAssignments: {}  // Keyed by group_id
     };
+
+    // ============================================================================
+    // FARM ID & PERSISTENCE UTILITIES
+    // ============================================================================
+
+    function getFarmId() {
+      // Try localStorage first, then fall back to default
+      return localStorage.getItem('currentFarmId') || 'foxtrot';
+    }
+
+    async function savePlantingAssignment(groupId, cropId, cropName, seedDate, harvestDate) {
+      const farmId = getFarmId();
+      
+      try {
+        const response = await fetch('/api/planting/assignments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-farm-id': farmId
+          },
+          body: JSON.stringify({
+            farm_id: farmId,
+            group_id: groupId,
+            tray_id: null,  // Group-level assignment
+            crop_id: cropId,
+            crop_name: cropName,
+            seed_date: seedDate,
+            harvest_date: harvestDate,
+            status: 'planned',
+            notes: 'Applied from Planting Scheduler'
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log(`[Planting] Assignment saved: group=${groupId}, crop=${cropName}`);
+        
+        // Update in-memory cache
+        state.savedAssignments[groupId] = result.assignment;
+        
+        // Backup to localStorage
+        saveAssignmentsToLocalStorage();
+        
+        return result.assignment;
+      } catch (error) {
+        console.error('[Planting] Failed to save assignment:', error);
+        
+        // Fallback: save to localStorage only
+        const assignment = {
+          farm_id: farmId,
+          group_id: groupId,
+          crop_id: cropId,
+          crop_name: cropName,
+          seed_date: seedDate,
+          harvest_date: harvestDate,
+          status: 'planned',
+          updated_at: new Date().toISOString(),
+          _localOnly: true  // Flag for sync later
+        };
+        state.savedAssignments[groupId] = assignment;
+        saveAssignmentsToLocalStorage();
+        
+        throw error;  // Re-throw so caller knows it failed
+      }
+    }
+
+    async function loadSavedAssignments() {
+      const farmId = getFarmId();
+      
+      try {
+        const response = await fetch(`/api/planting/assignments?farm_id=${farmId}`, {
+          headers: {
+            'x-farm-id': farmId
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        // Store in memory keyed by group_id
+        state.savedAssignments = {};
+        (result.assignments || []).forEach(assignment => {
+          state.savedAssignments[assignment.group_id] = assignment;
+        });
+        
+        console.log(`[Planting] Loaded ${result.count || 0} saved assignments`);
+        
+        // Backup to localStorage
+        saveAssignmentsToLocalStorage();
+        
+        return result.assignments || [];
+      } catch (error) {
+        console.warn('[Planting] Failed to load assignments from API, using localStorage:', error);
+        
+        // Fallback: load from localStorage
+        return loadAssignmentsFromLocalStorage();
+      }
+    }
+
+    function saveAssignmentsToLocalStorage() {
+      try {
+        localStorage.setItem('plantingAssignments', JSON.stringify(state.savedAssignments));
+      } catch (error) {
+        console.error('[Planting] Failed to save to localStorage:', error);
+      }
+    }
+
+    function loadAssignmentsFromLocalStorage() {
+      try {
+        const stored = localStorage.getItem('plantingAssignments');
+        if (stored) {
+          state.savedAssignments = JSON.parse(stored);
+          return Object.values(state.savedAssignments);
+        }
+      } catch (error) {
+        console.error('[Planting] Failed to load from localStorage:', error);
+      }
+      return [];
+    }
+
+    async function batchFetchCropNames(cropIds) {
+      try {
+        const response = await fetch('/api/planting/crop-info-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crop_ids: cropIds })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        return result.crop_info || {};
+      } catch (error) {
+        console.error('[Planting] Failed to batch fetch crop names:', error);
+        
+        // Fallback: use CROP_DATABASE
+        const fallback = {};
+        cropIds.forEach(id => {
+          const normalized = normalizeCropId(id);
+          fallback[id] = {
+            crop_id: id,
+            crop_name: CROP_DATABASE[normalized]?.name || id,
+            recipe_id: normalized,
+            duration_days: CROP_DATABASE[normalized]?.harvestDays || null
+          };
+        });
+        return fallback;
+      }
+    }
 
     // ============================================================================
     // INITIALIZATION
@@ -1826,6 +1988,13 @@
           state.plans = [];
         }
 
+        // Load saved planting assignments from database (NEW)
+        try {
+          await loadSavedAssignments();
+        } catch (err) {
+          console.warn('Planting assignments unavailable:', err.message);
+        }
+
         // Load current inventory data (includes all trays)
         try {
           const inventoryResponse = await fetch('/api/inventory/current');
@@ -1856,6 +2025,21 @@
 
         // Process groups FIRST so state.groups is available for processTrays
         state.groups = processGroups(groupsData);
+        
+        // Merge saved assignments into groups (NEW)
+        state.groups = state.groups.map(group => {
+          const saved = state.savedAssignments[group.id];
+          if (saved && saved.crop_name) {
+            return {
+              ...group,
+              nextCrop: saved.crop_name,
+              nextSeedDate: saved.seed_date,
+              nextHarvestDate: saved.harvest_date
+            };
+          }
+          return group;
+        });
+        
         state.trays = processTrays(traysData);
 
         // Calculate seeding tasks
@@ -1926,7 +2110,7 @@
 
       // Update progress text
       if (readiness >= 100 && status.ml.ready) {
-        progressText.textContent = '✅ AI Ready!';
+        progressText.textContent = 'AI Ready';
         progressText.style.color = '#34d399';
       } else {
         const daysRemaining = status.timeline.days_remaining;
@@ -2752,7 +2936,7 @@
           <tr>
             <td colspan="8">
               <div class="empty-state">
-                <div class="icon">TRAY</div>
+                <div class="icon">🌱</div>
                 <h3>No Trays to Forecast</h3>
                 <p>Add trays with active crops to see the seeding schedule</p>
               </div>
@@ -2764,20 +2948,26 @@
 
       tbody.innerHTML = forecastTasks.map(task => {
         const tray = state.trays.find(t => t.id === task.trayId);
+        const group = state.groups.find(g => g.id === task.groupId);
+        
         const harvestStr = tray && tray.expectedHarvest ? 
           tray.expectedHarvest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 
           'N/A';
         
         const seedWindowStr = `${task.earliestSeedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${task.latestSeedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
+        // CRITICAL FIX: Show current crop vs next recommended crop separately
+        const currentCrop = tray ? (tray.currentCrop || 'Empty') : 'Unknown';
+        const recommendedCrop = group?.nextCrop || task.cropName;  // Use saved assignment if available
+
         return `
           <tr>
             <td><strong>${task.trayId}</strong></td>
             <td>${task.location}</td>
-            <td>${tray ? (tray.currentCrop || 'Empty') : 'Unknown'}</td>
+            <td>${currentCrop}</td>
             <td>${harvestStr}</td>
             <td>${seedWindowStr}</td>
-            <td>${task.cropName}</td>
+            <td>${recommendedCrop}</td>
             <td><span class="compat-badge ${task.compatibility.rating}" title="${getCompatibilityTooltip(task.compatibility)}" style="cursor: help;">${task.compatibility.rating.toUpperCase()}</span></td>
             <td>
               <button class="timeline-btn primary" onclick="scheduleTask('${task.id}')" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
@@ -2927,7 +3117,7 @@
 
         // Show result in modal
         const modal = document.getElementById('trayDetailsModal');
-        document.getElementById('modalTitle').textContent = '✅ Manual Schedule Created';
+        document.getElementById('modalTitle').textContent = 'Manual Schedule Created';
         const modalBody = document.getElementById('modalBody');
         modalBody.innerHTML = `
           <div style="color: #e2e8f0;">
@@ -2948,7 +3138,7 @@
             ` : ''}
             ${plan.activityHubTasks ? `
               <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); border-radius: 8px;">
-                <strong style="color: #22c55e;">✓ Activity Hub Synced</strong>
+                <strong style="color: #22c55e;">Activity Hub Synced</strong>
                 <span style="color: #94a3b8;"> — ${plan.activityHubTasks.length} task(s) created</span>
               </div>
             ` : ''}
@@ -3103,13 +3293,13 @@
             Scheduling <strong>${scope.toUpperCase()}</strong> scope for <strong>${cropName}</strong>.
             Would you like to continue with the current crop or explore AI-powered alternatives?
           </p>
-          <button class="timeline-btn primary" style="background: linear-gradient(135deg, #10b981, #059669);"
+          <button class="timeline-btn secondary" style="width: 100%;"
                   onclick="proceedWithMaintainCrop('${taskId}','${scope}')">
-            ✅ Maintain Current Crop (${cropName})
+            Maintain Current Crop (${cropName})
           </button>
-          <button class="timeline-btn primary" style="background: linear-gradient(135deg, #3b82f6, #6366f1);"
+          <button class="timeline-btn primary" style="width: 100%;"
                   onclick="proceedWithAIRecommendations('${taskId}','${scope}')">
-            🤖 Update with AI Recommendations
+            Update with AI Recommendations
           </button>
           <button class="timeline-btn secondary" onclick="showSchedulingScopeModal(state.seedingTasks.find(t => t.id === '${taskId}'))">
             ← Back to Scope
@@ -3138,13 +3328,15 @@
       try {
         const group = state.groups.find(g => g.id === task.groupId);
         const photoperiodHours = 16;
+        const currentPpfd = Number(group?.currentPPFD || group?.ppfd || group?.ppfdTarget || group?.ppfdMax || 0);
+        const currentDliFromPpfd = currentPpfd > 0
+          ? Number((currentPpfd * photoperiodHours * 3600 / 1000000).toFixed(2))
+          : null;
         const zoneConditions = {
           ec: group?.nutrientEC || 1.5,
           ph: group?.nutrientPH || 5.8,
           vpd: group?.targetVPD || 1.0,
-          dli_capacity: group?.ppfdMax
-            ? Number((group.ppfdMax * photoperiodHours * 3600 / 1000000).toFixed(2))
-            : 22
+          dli_capacity: Number(group?.currentDLI || currentDliFromPpfd || 22)
         };
 
         const response = await fetch('/api/planting/recommendations', {
@@ -3202,14 +3394,18 @@
               ${badge('Revenue', top.scores.revenue)}
               ${badge('Seasonal', top.scores.seasonal)}
             </div>
+            <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:0.75rem;line-height:1.4;">
+              <strong style="color:#cbd5e1;">Revenue score</strong> ranks expected gross return using current market pricing and yield potential.
+              <strong style="color:#cbd5e1;">Seasonal score</strong> ranks how well the crop fits the current time of year and demand pattern.
+            </div>
             <div style="font-size:0.8rem;color:#94a3b8;display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;">
               <div>DLI Δ: ${top.deltas.dli} mol/m²/d</div>
               <div>EC Δ: ${top.deltas.ec} dS/m</div>
               <div>pH Δ: ${top.deltas.ph}</div>
             </div>
-            <button class="timeline-btn primary" style="width:100%;margin-top:0.75rem;background:linear-gradient(135deg,#10b981,#059669);"
+            <button class="timeline-btn primary" style="width:100%;margin-top:0.75rem;"
                     onclick="implementRecommendation('${taskId}','${scope}','${top.cropId}','${encodeURIComponent(top.cropName)}')">
-              ✅ Implement ${top.cropName}
+              Implement ${top.cropName}
             </button>
           </div>`;
       }
@@ -3274,6 +3470,7 @@
         });
         if (!response.ok) throw new Error(`API ${response.status}`);
         const planResponse = await response.json();
+        applyImplementedCropToForecast(scopedTasks, cropId || task.cropId, cropName || task.cropName);
         renderImplementationResult(task, scopedTasks, planResponse);
       } catch (err) {
         console.error('Plan creation failed:', err);
@@ -3314,6 +3511,92 @@
       await executeImplementation(taskId, scope, cadence, true, null, null);
     }
 
+    async function applyImplementedCropToForecast(scopedTasks, cropId, cropName) {
+      if (!Array.isArray(scopedTasks) || !scopedTasks.length) return;
+
+      const normalizedCropId = normalizeCropId(cropId || cropName);
+      const normalizedCropName = cropName || CROP_DATABASE[normalizedCropId]?.name || 'Unknown Crop';
+      const harvestDays = getPlanHarvestDays(cropId || cropName || normalizedCropId);
+
+      const scopedIds = new Set(scopedTasks.map(t => t.id).filter(Boolean));
+      const scopedTrayIds = new Set(scopedTasks.map(t => t.trayId).filter(Boolean));
+      const scopedGroupIds = new Set(scopedTasks.map(t => t.groupId).filter(Boolean));
+
+      // Calculate seed and harvest dates from first task
+      const firstTask = scopedTasks[0];
+      const seedDate = firstTask?.targetTransplantDate || new Date();
+      const harvestDate = new Date(seedDate);
+      harvestDate.setDate(harvestDate.getDate() + harvestDays);
+
+      // CRITICAL FIX: Save assignments to database for each affected group
+      const savePromises = Array.from(scopedGroupIds).map(groupId => 
+        savePlantingAssignment(
+          groupId, 
+          normalizedCropId, 
+          normalizedCropName, 
+          seedDate.toISOString().split('T')[0],
+          harvestDate.toISOString().split('T')[0]
+        ).catch(err => {
+          console.error(`Failed to save assignment for group ${groupId}:`, err);
+          // Continue even if save fails - data is still in localStorage
+        })
+      );
+
+      // Wait for all saves to complete (runs in parallel)
+      try {
+        await Promise.all(savePromises);
+        console.log(`[Planting] Saved ${savePromises.length} assignments to database`);
+      } catch (error) {
+        console.warn('[Planting] Some assignments failed to save:', error);
+        // Non-blocking - show warning but continue
+      }
+
+      // Update in-memory state (keeping existing behavior for UI updates)
+      state.groups = state.groups.map(group => {
+        if (!scopedGroupIds.has(group.id)) return group;
+        return {
+          ...group,
+          nextCrop: normalizedCropName,
+          nextSeedDate: seedDate.toISOString().split('T')[0],
+          nextHarvestDate: harvestDate.toISOString().split('T')[0]
+          // Note: DO NOT update group.plan (current crop) - that's separate!
+        };
+      });
+
+      state.seedingTasks = state.seedingTasks.map(task => {
+        if (!scopedIds.has(task.id) && !scopedTrayIds.has(task.trayId)) return task;
+
+        return {
+          ...task,
+          cropId: normalizedCropId,
+          cropName: normalizedCropName,
+          expectedNewHarvest: new Date(task.targetTransplantDate.getTime() + harvestDays * 24 * 60 * 60 * 1000)
+        };
+      });
+
+      state.trays = state.trays.map(tray => {
+        if (!scopedTrayIds.has(tray.id)) return tray;
+
+        const task = state.seedingTasks.find(t => t.trayId === tray.id);
+        return {
+          ...tray,
+          currentCrop: normalizedCropName,
+          expectedHarvest: task?.expectedNewHarvest || tray.expectedHarvest
+        };
+      });
+
+      state.seedingTasks = state.seedingTasks.map(task => ({
+        ...task,
+        compatibility: calculateCompatibility(task, state.groups)
+      }));
+
+      state.lightAdjustments = calculateLightAdjustments(state.seedingTasks, state.groups);
+      renderSummaryCards();
+      renderSeedingTimeline();
+      renderTrayForecast();
+      renderLightAdjustments();
+    }
+
     function renderImplementationResult(task, scopedTasks, planResponse) {
       const modalTitle = document.getElementById('modalTitle');
       const modalBody = document.getElementById('modalBody');
@@ -3321,7 +3604,7 @@
       const batches = Array.isArray(planResponse?.batches) ? planResponse.batches : [];
       const activityTasks = Array.isArray(planResponse?.activityHubTasks) ? planResponse.activityHubTasks : [];
 
-      modalTitle.textContent = '✅ Schedule Implemented';
+      modalTitle.textContent = 'Schedule Implemented';
       modalBody.innerHTML = `
         <div style="display: grid; gap: 1rem;">
           <div style="background: rgba(16,185,129,0.14); border: 1px solid #10b981; border-radius: 10px; padding: 0.9rem;">
@@ -3343,7 +3626,7 @@
           </div>
 
           <div style="background: rgba(59,130,246,0.1); border: 1px solid #3b82f6; border-radius: 10px; padding: 0.9rem;">
-            <h4 style="margin-bottom: 0.5rem; color: #60a5fa;">🔄 Activity Hub Synced</h4>
+            <h4 style="margin-bottom: 0.5rem; color: #60a5fa;">Activity Hub Synced</h4>
             <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:0.5rem;">
               ${activityTasks.length} task${activityTasks.length !== 1 ? 's' : ''} automatically synced to Activity Hub.
             </p>
@@ -3354,7 +3637,7 @@
             `).join('')}
           </div>
 
-          <button class="timeline-btn primary" style="width:100%;" onclick="closeTrayModal(); loadSchedulerData();">
+          <button class="timeline-btn primary" style="width:100%;" onclick="closeTrayModal();">
             Done
           </button>
         </div>
@@ -3396,7 +3679,10 @@
 
     let currentRecommendations = null;
 
-    async function getAIRecommendations() {
+    // State for tracking excluded crops during remix
+    let excludedCropsForRemix = [];
+
+    async function getAIRecommendations(excludeCrops = []) {
       const groupSelect = document.getElementById('aiGroupSelect');
       const groupId = groupSelect.value;
 
@@ -3422,24 +3708,34 @@
         // Build zone conditions from group
         // DLI = PPFD × photoperiod(h) × 3600 / 1,000,000
         const photoperiodHours = 16; // standard indoor photoperiod
+        const currentPpfd = Number(group.currentPPFD || group.ppfd || group.ppfdTarget || group.ppfdMax || 0);
+        const currentDliFromPpfd = currentPpfd > 0
+          ? Number((currentPpfd * photoperiodHours * 3600 / 1000000).toFixed(2))
+          : null;
         const zoneConditions = {
           ec: group.nutrientEC || 1.5,
           ph: group.nutrientPH || 5.8,
           vpd: group.targetVPD || 1.0,
-          dli_capacity: group.ppfdMax
-            ? Number((group.ppfdMax * photoperiodHours * 3600 / 1000000).toFixed(2))
-            : 22
+          dli_capacity: Number(group.currentDLI || currentDliFromPpfd || 22)
         };
+
+        const requestBody = {
+          groupId,
+          currentCrop: group.plan || group.crop || group.recipe || '',
+          targetSeedDate: new Date().toISOString().split('T')[0],
+          zoneConditions
+        };
+
+        // Add excludeCrops if provided (for Remix feature)
+        if (Array.isArray(excludeCrops) && excludeCrops.length > 0) {
+          requestBody.excludeCrops = excludeCrops;
+          console.log(`[AI Recommendations] Excluding ${excludeCrops.length} crops:`, excludeCrops);
+        }
 
         const response = await fetch('/api/planting/recommendations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            groupId,
-            currentCrop: group.plan || group.crop || group.recipe || '',
-            targetSeedDate: new Date().toISOString().split('T')[0],
-            zoneConditions
-          })
+          body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -3456,6 +3752,78 @@
         btn.disabled = false;
         btn.textContent = 'Get AI Recommendations';
       }
+    }
+
+    async function remixRecommendations() {
+      if (!currentRecommendations || !currentRecommendations.allScored) {
+        alert('No recommendations to remix. Please get initial recommendations first.');
+        return;
+      }
+
+      // Add current top recommendation to exclusion list
+      if (currentRecommendations.topRecommendation) {
+        const topCropId = currentRecommendations.topRecommendation.cropId;
+        if (!excludedCropsForRemix.includes(topCropId)) {
+          excludedCropsForRemix.push(topCropId);
+        }
+      }
+
+      // Also exclude all current alternatives to ensure fresh results
+      if (currentRecommendations.alternatives) {
+        currentRecommendations.alternatives.forEach(alt => {
+          if (!excludedCropsForRemix.includes(alt.cropId)) {
+            excludedCropsForRemix.push(alt.cropId);
+          }
+        });
+      }
+
+      // Get new recommendations with exclusions
+      await getAIRecommendations(excludedCropsForRemix);
+    }
+
+    /** Render AI justification tags for a recommendation */
+    function renderJustifications(justifications) {
+      if (!Array.isArray(justifications) || justifications.length === 0) return '';
+      const iconMap = {
+        market_opportunity: { icon: '📈', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+        market_caution:     { icon: '📉', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+        diversity_concern:  { icon: '🌱', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+        rotation_benefit:   { icon: '🔄', color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
+        seasonal_advantage: { icon: '☀️', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+        seasonal_caution:   { icon: '❄️', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' }
+      };
+      return `
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+          ${justifications.map(j => {
+            const style = iconMap[j.type] || { icon: 'ℹ️', color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' };
+            return `<div style="background: ${style.bg}; border: 1px solid ${style.color}33; border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.82rem; line-height: 1.4;">
+              <div style="color: ${style.color}; font-weight: 600; margin-bottom: 0.2rem;">
+                ${style.icon} ${j.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </div>
+              <div style="color: #cbd5e1;">${j.message}</div>
+              ${j.source ? `<div style="color: #64748b; font-size: 0.75rem; margin-top: 0.25rem;">Source: ${j.source}${j.confidence ? ' · Confidence: ' + j.confidence : ''}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    /** Render compact justification pills for alternative cards */
+    function renderJustificationPills(justifications) {
+      if (!Array.isArray(justifications) || justifications.length === 0) return '';
+      const pillColors = {
+        market_opportunity: '#22c55e',
+        market_caution: '#f59e0b',
+        diversity_concern: '#f59e0b',
+        rotation_benefit: '#60a5fa',
+        seasonal_advantage: '#22c55e',
+        seasonal_caution: '#f59e0b'
+      };
+      const pills = justifications.slice(0, 3).map(j => {
+        const color = pillColors[j.type] || '#94a3b8';
+        const label = j.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return `<span style="display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 9999px; background: ${color}22; color: ${color}; border: 1px solid ${color}44; white-space: nowrap;">${label}</span>`;
+      }).join(' ');
+      return `<div style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem;">${pills}</div>`;
     }
 
     function displayRecommendations(recommendations) {
@@ -3494,6 +3862,13 @@
           ${renderScoreBadge('VPD', topRec.scores.vpd_fit)}
         </div>
 
+        ${renderJustifications(topRec.justifications)}
+
+        <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 1rem; line-height: 1.4;">
+          <strong style="color: #cbd5e1;">Revenue score</strong> estimates crop earning potential from market price and projected output.
+          <strong style="color: #cbd5e1;">Seasonal score</strong> estimates crop fit to current seasonal conditions and demand trends.
+        </div>
+
         <details style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem;">
           <summary style="font-weight: 600; color: #60a5fa; user-select: none;">
             View Technical Details
@@ -3506,9 +3881,9 @@
           </div>
         </details>
 
-        <button class="timeline-btn primary" style="width:100%; background: linear-gradient(135deg, #10b981, #059669);"
+        <button class="timeline-btn primary" style="width:100%;"
                 onclick="implementFromAICard('${topRec.cropId}','${encodeURIComponent(topRec.cropName)}')">
-          ✅ Implement ${topRec.cropName}
+          Implement ${topRec.cropName}
         </button>
       `;
 
@@ -3528,6 +3903,7 @@
                 <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
                   Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Seasonal: ${Math.round(alt.scores.seasonal || 0)}
                 </div>
+                ${renderJustificationPills(alt.justifications)}
               </div>
               <div style="display:flex;gap:0.5rem;">
                 <button 
@@ -3617,6 +3993,9 @@
         if (!response.ok) throw new Error(`API ${response.status}`);
         const plan = await response.json();
 
+        const scopedTasks = state.seedingTasks.filter(t => t.groupId === groupId);
+        applyImplementedCropToForecast(scopedTasks, cropId, cropName);
+
         // Log feedback for AI training
         fetch('/api/planting/feedback', {
           method: 'POST',
@@ -3639,7 +4018,7 @@
 
         // Show implementation result in modal
         const modal = document.getElementById('trayDetailsModal');
-        document.getElementById('modalTitle').textContent = '✅ Schedule Implemented';
+        document.getElementById('modalTitle').textContent = 'Schedule Implemented';
         renderImplementationResult({cropName, cropId}, groupTrays, plan);
         modal.classList.add('show');
 
@@ -3652,6 +4031,7 @@
     function hideRecommendations() {
       document.getElementById('recommendationsDisplay').style.display = 'none';
       currentRecommendations = null;
+      excludedCropsForRemix = [];  // Reset exclusion list for fresh start
     }
 
     // Populate group dropdown when page loads
