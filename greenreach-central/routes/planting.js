@@ -189,18 +189,8 @@ function computePricingScore(recipeName) {
   return clampScore(priceScore * 0.7 + spreadScore * 0.3);
 }
 
-/** Seasonal multiplier by crop category (0.85 – 1.15) */
-function seasonalMultiplier(category) {
-  const m = new Date().getMonth();
-  const T = {
-    'Leafy Greens': [1.12,1.10,1.05,1.00,0.95,0.90,0.88,0.90,0.95,1.00,1.08,1.12],
-    'Herbs':        [1.08,1.05,1.02,1.00,0.98,0.95,0.93,0.95,1.00,1.05,1.08,1.10],
-    'Tomatoes':     [0.85,0.88,0.92,0.98,1.05,1.12,1.15,1.12,1.05,0.95,0.88,0.85],
-    'Berries':      [0.88,0.90,0.95,1.02,1.08,1.12,1.15,1.10,1.05,0.95,0.90,0.88],
-    'Vegetables':   [1,1,1,1,1,1,1,1,1,1,1,1]
-  };
-  return (T[category] || T['Vegetables'])[m] || 1;
-}
+// NOTE: seasonalMultiplier removed — vertical farms operate in controlled
+// environments so outdoor growing seasons are not relevant to crop selection.
 
 /** Full recommendation scoring with diversity, rotation, and market intelligence */
 function computeRecommendation(profile, context, currentProfile = null, diversityContext = null, marketData = null) {
@@ -211,8 +201,6 @@ function computeRecommendation(profile, context, currentProfile = null, diversit
   const vpdFit          = scoreDimension(context.vpd, profile.ideal.vpd, 0.8);
   const harvestStagger  = clampScore(100 - Math.max(0, profile.durationDays - 25) * 1.5);
   const revenueScore    = computePricingScore(profile.recipeName);
-  const seasonal        = seasonalMultiplier(profile.category);
-  const seasonalScore   = clampScore(revenueScore * seasonal);
 
   // Market intelligence score — boost/penalize based on real market trends
   let marketScore = 70; // neutral baseline
@@ -272,33 +260,34 @@ function computeRecommendation(profile, context, currentProfile = null, diversit
     }
   }
   
-  // **NEW: Crop rotation bonus** - Boost crops different from current
+  // Crop rotation bonus — strongly favor switching crop families/classes
+  // to reduce pest pressure, nutrient depletion, and maintain growing media health
   if (currentProfile) {
-    // Boost if switching crop families
-    if (currentProfile.cropId !== profile.cropId) rotationBonus += 8;
+    // Small boost for any different crop
+    if (currentProfile.cropId !== profile.cropId) rotationBonus += 10;
     
-    // Extra boost if switching categories (e.g., Herbs → Leafy Greens)
-    if (currentProfile.category !== profile.category) rotationBonus += 12;
+    // Strong boost for switching categories (e.g., Herbs → Leafy Greens)
+    if (currentProfile.category !== profile.category) rotationBonus += 20;
     
-    // Maximum boost if switching crop classes (leafy → fruiting → flowering rotation)
-    if (currentProfile.cropClass !== profile.cropClass) rotationBonus += 15;
+    // Maximum boost for switching crop classes (leafy → fruiting → flowering)
+    if (currentProfile.cropClass !== profile.cropClass) rotationBonus += 25;
   }
   
   diversityScore = clampScore(diversityScore);
 
+  // Weights: rotation (16%) + diversity (14%) = 30% toward variety
   const overall = clampScore(
     nutrientFit     * 0.15 +
     lightEfficiency * 0.14 +
-    seasonalScore   * 0.14 +
     marketScore     * 0.12 +
     harvestStagger  * 0.12 +
     vpdFit          * 0.07 +
-    revenueScore    * 0.08 +
-    diversityScore  * 0.10 +
-    rotationBonus   * 0.08
+    revenueScore    * 0.10 +
+    diversityScore  * 0.14 +
+    rotationBonus   * 0.16
   );
 
-  return { nutrientFit, lightEfficiency, vpdFit, harvestStagger, revenueScore, seasonalScore, marketScore, diversityScore, rotationBonus, overall };
+  return { nutrientFit, lightEfficiency, vpdFit, harvestStagger, revenueScore, marketScore, diversityScore, rotationBonus, overall };
 }
 
 function matchRecipeId(crop) {
@@ -355,7 +344,7 @@ router.get('/recipes', async (req, res) => {
   });
 });
 
-/** POST /api/planting/recommendations — ranked crop recommendations using all 50 recipes + pricing + seasonal + market intelligence */
+/** POST /api/planting/recommendations — ranked crop recommendations using all 50 recipes + pricing + rotation + market intelligence */
 router.post('/recommendations', async (req, res) => {
   await loadAllProfiles();
   try {
@@ -476,37 +465,26 @@ router.post('/recommendations', async (req, res) => {
       }
       
       // Rotation bonus justifications
-      if (scores.rotationBonus >= 15) {
+      if (scores.rotationBonus >= 35) {
+        justifications.push({
+          type: 'rotation_benefit',
+          severity: 'high',
+          message: `Excellent rotation: switching from ${currentProfile?.cropClass || 'current'} to ${profile.cropClass} class. Different crop family reduces pest pressure and maintains growing media health.`,
+          source: 'Crop Rotation Strategy'
+        });
+      } else if (scores.rotationBonus >= 20) {
+        justifications.push({
+          type: 'rotation_benefit',
+          severity: 'medium',
+          message: `Good rotation: switching crop categories helps maintain growing media health and reduces nutrient depletion.`,
+          source: 'Crop Rotation Strategy'
+        });
+      } else if (scores.rotationBonus >= 10) {
         justifications.push({
           type: 'rotation_benefit',
           severity: 'low',
-          message: `Excellent crop rotation: switching from ${currentProfile?.cropClass || 'current'} to ${profile.cropClass} class. Reduces pest pressure and nutrient depletion.`,
+          message: 'Switching to a different crop. Consider a different crop family for best rotation benefit.',
           source: 'Crop Rotation Strategy'
-        });
-      } else if (scores.rotationBonus >= 8) {
-        justifications.push({
-          type: 'rotation_benefit',
-          severity: 'low',
-          message: 'Good crop rotation: switching to a different crop family helps maintain soil health.',
-          source: 'Crop Rotation Strategy'
-        });
-      }
-      
-      // Seasonal justifications
-      const seasonal = seasonalMultiplier(profile.category);
-      if (seasonal >= 1.3) {
-        justifications.push({
-          type: 'seasonal_advantage',
-          severity: 'low',
-          message: 'In-season crop: optimal growing conditions and consumer demand.',
-          source: 'Seasonal Analysis'
-        });
-      } else if (seasonal <= 0.7) {
-        justifications.push({
-          type: 'seasonal_caution',
-          severity: 'low',
-          message: 'Off-season crop: may require additional resources or have lower demand.',
-          source: 'Seasonal Analysis'
         });
       }
 
@@ -525,7 +503,6 @@ router.post('/recommendations', async (req, res) => {
           vpd_fit:          scores.vpdFit,
           harvest_stagger:  scores.harvestStagger,
           revenue:          scores.revenueScore,
-          seasonal:         scores.seasonalScore,
           market:           scores.marketScore,
           diversity:        scores.diversityScore,
           rotation:         scores.rotationBonus,
