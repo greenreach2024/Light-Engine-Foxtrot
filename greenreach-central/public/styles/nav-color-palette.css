@@ -1,0 +1,214 @@
+/**
+ * Light Engine Navigation Button Color Palette
+ * Extracted from LE-farm-admin.html (February 2026)
+ * Apply to all pages for consistent look
+ */
+
+/* ===== BASE DROPDOWN STYLES ===== */
+
+.nav-menu {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.nav-item {
+  position: relative;
+}
+
+.nav-button, .nav-link-button, .nav-btn {
+  background: rgba(59, 130, 246, 0.2);
+  border: 2px solid #3b82f6;
+  color: #93c5fd;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-button:hover, .nav-link-button:hover, .nav-btn:hover {
+  background: rgba(59, 130, 246, 0.35);
+  transform: scale(1.05) translateY(-2px);
+  border-color: #60a5fa;
+  color: white;
+}
+
+.nav-arrow {
+  font-size: 0.7rem;
+  transition: transform 0.3s ease;
+}
+
+.nav-item:hover .nav-arrow {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  padding: 0.5rem;
+  min-width: 200px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  z-index: 2000;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.dropdown-menu.dropdown-right {
+  left: auto;
+  right: 0;
+}
+
+.nav-item:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  display: block;
+  padding: 0.75rem 1rem;
+  color: #93c5fd;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.dropdown-item:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
+  transform: translateX(4px);
+}
+
+.dropdown-item.active {
+  background: rgba(59, 130, 246, 0.4);
+  color: white;
+  font-weight: 600;
+}
+
+/* ===== CATEGORY-SPECIFIC COLOR VARIANTS ===== */
+
+/* Inventory Management - Amber/Orange */
+.nav-button.inventory, .nav-btn.inventory {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+  color: #fcd34d;
+}
+
+.nav-button.inventory:hover, .nav-btn.inventory:hover {
+  background: rgba(245, 158, 11, 0.35);
+  border-color: #fbbf24;
+}
+
+.nav-item.inventory .dropdown-menu {
+  border-color: #f59e0b;
+}
+
+.nav-item.inventory .dropdown-item:hover {
+  background: rgba(245, 158, 11, 0.3);
+}
+
+/* Farm Monitoring - Emerald Green */
+.nav-button.farm-monitoring, .nav-btn.farm-summary {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  color: #6ee7b7;
+}
+
+.nav-button.farm-monitoring:hover, .nav-btn.farm-summary:hover {
+  background: rgba(16, 185, 129, 0.35);
+  border-color: #34d399;
+}
+
+.nav-item.farm-monitoring .dropdown-menu {
+  border-color: #10b981;
+}
+
+.nav-item.farm-monitoring .dropdown-item:hover {
+  background: rgba(16, 185, 129, 0.3);
+}
+
+/* Admin - Purple */
+.nav-button.admin, .nav-btn.farm-admin {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  color: #c4b5fd;
+}
+
+.nav-button.admin:hover, .nav-btn.farm-admin:hover {
+  background: rgba(139, 92, 246, 0.35);
+  border-color: #a78bfa;
+}
+
+.nav-item.admin .dropdown-menu {
+  border-color: #8b5cf6;
+}
+
+.nav-item.admin .dropdown-item:hover {
+  background: rgba(139, 92, 246, 0.3);
+}
+
+/* Sales - Cyan */
+.nav-button.sales, .nav-btn.sales {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: #06b6d4;
+  color: #67e8f9;
+}
+
+.nav-button.sales:hover, .nav-btn.sales:hover {
+  background: rgba(6, 182, 212, 0.35);
+  border-color: #22d3ee;
+}
+
+.nav-item.sales .dropdown-menu {
+  border-color: #06b6d4;
+}
+
+.nav-item.sales .dropdown-item:hover {
+  background: rgba(6, 182, 212, 0.3);
+}
+
+/* Nutrient Management - Teal */
+.nav-button.nutrient, .nav-btn.nutrient {
+  background: rgba(20, 184, 166, 0.2);
+  border-color: #14b8a6;
+  color: #5eead4;
+}
+
+.nav-button.nutrient:hover, .nav-btn.nutrient:hover {
+  background: rgba(20, 184, 166, 0.35);
+  border-color: #2dd4bf;
+}
+
+.nav-item.nutrient .dropdown-menu {
+  border-color: #14b8a6;
+}
+
+.nav-item.nutrient .dropdown-item:hover {
+  background: rgba(20, 184, 166, 0.3);
+}
+
+/* Close/Danger - Red */
+.nav-button.close, .nav-btn.close {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.nav-button.close:hover, .nav-btn.close:hover {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: #f87171;
+}
