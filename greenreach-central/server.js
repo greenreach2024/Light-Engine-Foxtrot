@@ -1397,6 +1397,38 @@ app.get('/api/wholesale/inventory', (_req, res) => {
   return res.json({ lots: [] });
 });
 
+// Edge-compatible login: /api/farm/auth/login
+// Translates edge format { farmId } → central format { farm_id }
+// and response { success } → { status: 'success' }
+app.post('/api/farm/auth/login', (req, res, next) => {
+  const { farmId, email, password } = req.body;
+  // Rewrite to central field names
+  req.body = { farm_id: farmId, email, password };
+  // Rewrite URL so the auth router matches /login
+  req.url = '/login';
+  // Wrap res.json to translate response format
+  const origJson = res.json.bind(res);
+  res.json = function(data) {
+    if (data && data.success && data.token) {
+      return origJson({
+        status: 'success',
+        token: data.token,
+        farmId: data.farm_id,
+        farmName: data.name || data.farm_id,
+        email: data.email,
+        role: data.role,
+        subscription: data.planType || 'cloud'
+      });
+    }
+    return origJson({
+      status: 'error',
+      message: data.message || data.error || 'Authentication failed'
+    });
+  };
+  // Forward to auth router
+  authRoutes(req, res, next);
+});
+
 // API routes
 app.use('/api/auth', authRoutes); // Farm authentication
 app.use('/api/farms', farmRoutes);
