@@ -189,8 +189,29 @@ function computePricingScore(recipeName) {
   return clampScore(priceScore * 0.7 + spreadScore * 0.3);
 }
 
-// NOTE: seasonalMultiplier removed — vertical farms operate in controlled
-// environments so outdoor growing seasons are not relevant to crop selection.
+/**
+ * Counter-seasonal multiplier for vertical farming.
+ * When a crop is OFF-SEASON outdoors, vertical farms have a competitive
+ * advantage: less field-farm competition, higher wholesale prices, and
+ * stronger buyer demand. The multiplier is INVERTED from outdoor seasons
+ * so off-season = boost, in-season = penalty.
+ */
+function counterSeasonalMultiplier(category) {
+  const m = new Date().getMonth();
+  // Outdoor peak seasons by category (higher = more outdoor supply)
+  const outdoor = {
+    'Leafy Greens': [0.88,0.90,0.95,1.00,1.05,1.10,1.12,1.10,1.05,1.00,0.92,0.88],
+    'Herbs':        [0.92,0.95,0.98,1.00,1.02,1.05,1.07,1.05,1.00,0.95,0.92,0.90],
+    'Tomatoes':     [1.15,1.12,1.08,1.02,0.95,0.88,0.85,0.88,0.95,1.05,1.12,1.15],
+    'Berries':      [1.12,1.10,1.05,0.98,0.92,0.88,0.85,0.90,0.95,1.05,1.10,1.12],
+    'Vegetables':   [1,1,1,1,1,1,1,1,1,1,1,1]
+  };
+  // Invert: when outdoor supply is HIGH (in-season), our advantage is LOW
+  // When outdoor supply is LOW (off-season), our advantage is HIGH
+  const outdoorSupply = (outdoor[category] || outdoor['Vegetables'])[m] || 1;
+  // Invert around 1.0: if outdoor is 1.12, we get 0.88; if outdoor is 0.85, we get 1.15
+  return 2.0 - outdoorSupply;
+}
 
 /** Full recommendation scoring with diversity, rotation, and market intelligence */
 function computeRecommendation(profile, context, currentProfile = null, diversityContext = null, marketData = null) {
@@ -201,6 +222,8 @@ function computeRecommendation(profile, context, currentProfile = null, diversit
   const vpdFit          = scoreDimension(context.vpd, profile.ideal.vpd, 0.8);
   const harvestStagger  = clampScore(100 - Math.max(0, profile.durationDays - 25) * 1.5);
   const revenueScore    = computePricingScore(profile.recipeName);
+  const counterSeasonal = counterSeasonalMultiplier(profile.category);
+  const offSeasonScore  = clampScore(revenueScore * counterSeasonal);
 
   // Market intelligence score — boost/penalize based on real market trends
   let marketScore = 70; // neutral baseline
@@ -275,19 +298,20 @@ function computeRecommendation(profile, context, currentProfile = null, diversit
   
   diversityScore = clampScore(diversityScore);
 
-  // Weights: rotation (16%) + diversity (14%) = 30% toward variety
+  // Weights: rotation (14%) + diversity (12%) + off-season (10%) balanced with fundamentals
   const overall = clampScore(
-    nutrientFit     * 0.15 +
-    lightEfficiency * 0.14 +
+    nutrientFit     * 0.14 +
+    lightEfficiency * 0.12 +
+    offSeasonScore  * 0.10 +
     marketScore     * 0.12 +
-    harvestStagger  * 0.12 +
-    vpdFit          * 0.07 +
+    harvestStagger  * 0.10 +
+    vpdFit          * 0.06 +
     revenueScore    * 0.10 +
-    diversityScore  * 0.14 +
-    rotationBonus   * 0.16
+    diversityScore  * 0.12 +
+    rotationBonus   * 0.14
   );
 
-  return { nutrientFit, lightEfficiency, vpdFit, harvestStagger, revenueScore, marketScore, diversityScore, rotationBonus, overall };
+  return { nutrientFit, lightEfficiency, vpdFit, harvestStagger, revenueScore, offSeasonScore, marketScore, diversityScore, rotationBonus, overall };
 }
 
 function matchRecipeId(crop) {
@@ -488,6 +512,24 @@ router.post('/recommendations', async (req, res) => {
         });
       }
 
+      // Counter-seasonal justifications (vertical farm advantage)
+      const counterSeasonal = counterSeasonalMultiplier(profile.category);
+      if (counterSeasonal >= 1.08) {
+        justifications.push({
+          type: 'off_season_advantage',
+          severity: 'medium',
+          message: `Off-season advantage: outdoor ${profile.category.toLowerCase()} supply is low right now. Less competition and higher wholesale prices for vertical farms.`,
+          source: 'Counter-Seasonal Strategy'
+        });
+      } else if (counterSeasonal <= 0.92) {
+        justifications.push({
+          type: 'in_season_competition',
+          severity: 'low',
+          message: `In-season competition: field farms are producing ${profile.category.toLowerCase()} at scale right now, putting downward pressure on prices.`,
+          source: 'Counter-Seasonal Strategy'
+        });
+      }
+
       return {
         cropId: profile.cropId,
         cropName: profile.recipeName,
@@ -503,6 +545,7 @@ router.post('/recommendations', async (req, res) => {
           vpd_fit:          scores.vpdFit,
           harvest_stagger:  scores.harvestStagger,
           revenue:          scores.revenueScore,
+          off_season:       scores.offSeasonScore,
           market:           scores.marketScore,
           diversity:        scores.diversityScore,
           rotation:         scores.rotationBonus,
