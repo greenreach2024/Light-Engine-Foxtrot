@@ -669,6 +669,55 @@ async function loadRecentActivity() {
  * Setup navigation
  */
 function setupNavigation() {
+    const renderEmbeddedView = (url, title = 'Embedded View') => {
+        if (!url) return;
+        document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
+        const iframeSection = document.getElementById('section-iframe-view');
+        const iframe = document.getElementById('admin-iframe');
+        const iframeTitle = document.getElementById('iframeSectionTitle');
+        if (!iframeSection || !iframe) return;
+
+        const embedUrl = (() => {
+            try {
+                const parsed = new URL(url, window.location.origin);
+                parsed.searchParams.set('embedded', '1');
+                return parsed.pathname + parsed.search + parsed.hash;
+            } catch {
+                return url;
+            }
+        })();
+
+        iframe.src = embedUrl;
+        iframeSection.style.display = 'block';
+        if (iframeTitle) iframeTitle.textContent = title;
+
+        iframe.onload = () => {
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                if (!doc) return;
+                const selectors = [
+                    'header.page-header',
+                    '.page-header',
+                    '.header-actions',
+                    '.top-nav',
+                    '.nav-menu',
+                    '.dashboard-header',
+                    '.main-nav',
+                    '.sidebar-header-nav'
+                ];
+                selectors.forEach((selector) => {
+                    doc.querySelectorAll(selector).forEach((el) => {
+                        el.style.display = 'none';
+                    });
+                });
+                const body = doc.body;
+                if (body) body.style.paddingTop = '0';
+            } catch (error) {
+                console.warn('[Farm Admin] Unable to apply embedded page chrome suppression:', error.message);
+            }
+        };
+    };
+
     // Handle section navigation
     document.querySelectorAll('.nav-item[data-section]').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -691,12 +740,7 @@ function setupNavigation() {
             
             // Handle iframe-view sections (external pages loaded in iframe)
             if (section === 'iframe-view' && item.dataset.url) {
-                const iframeSection = document.getElementById('section-iframe-view');
-                const iframe = document.getElementById('admin-iframe');
-                if (iframeSection && iframe) {
-                    iframe.src = item.dataset.url;
-                    iframeSection.style.display = 'block';
-                }
+                renderEmbeddedView(item.dataset.url, item.textContent.trim() || 'Embedded View');
                 return;
             }
             
@@ -732,14 +776,8 @@ function setupNavigation() {
 
             // For iframe-view action cards, handle directly
             if (section === 'iframe-view' && url) {
-                document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                const iframeSection = document.getElementById('section-iframe-view');
-                const iframe = document.getElementById('admin-iframe');
-                if (iframeSection && iframe) {
-                    iframe.src = url;
-                    iframeSection.style.display = 'block';
-                }
+                renderEmbeddedView(url, card.querySelector('.action-title')?.textContent?.trim() || 'Embedded View');
                 const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${url}"]`);
                 if (matchNav) matchNav.classList.add('active');
                 return;
@@ -766,12 +804,7 @@ function setupNavigation() {
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
             if (section === 'iframe-view' && url) {
-                const iframeSection = document.getElementById('section-iframe-view');
-                const iframe = document.getElementById('admin-iframe');
-                if (iframeSection && iframe) {
-                    iframe.src = url;
-                    iframeSection.style.display = 'block';
-                }
+                renderEmbeddedView(url, btn.textContent.trim() || 'Embedded View');
                 // Highlight matching sidebar item if present
                 const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${url}"]`);
                 if (matchNav) matchNav.classList.add('active');
@@ -803,20 +836,26 @@ function setupNavigation() {
  * Setup header dropdown menu navigation
  */
 function setupHeaderDropdowns() {
+    function closeAllMenus() {
+        document.querySelectorAll('.dropdown-menu').forEach(menu => {
+            menu.classList.remove('open');
+        });
+    }
+
     // Handle dropdown button clicks
     document.querySelectorAll('.nav-button').forEach(button => {
         button.addEventListener('click', (e) => {
             e.stopPropagation();
             
-            // Close other menus
-            document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                menu.style.display = 'none';
-            });
+            const menu = button.nextElementSibling;
+            const isOpen = menu && menu.classList.contains('open');
+            
+            // Close all menus first
+            closeAllMenus();
             
             // Toggle current menu
-            const menu = button.nextElementSibling;
-            if (menu && menu.classList.contains('dropdown-menu')) {
-                menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            if (menu && menu.classList.contains('dropdown-menu') && !isOpen) {
+                menu.classList.add('open');
             }
         });
     });
@@ -824,33 +863,39 @@ function setupHeaderDropdowns() {
     // Handle dropdown item clicks
     document.querySelectorAll('.dropdown-item').forEach(item => {
         item.addEventListener('click', (e) => {
-            e.preventDefault();
-            
             const href = item.getAttribute('href');
             
-            // If it's an external link, navigate
+            // If it's an embedded /views/ link, prevent default and render in iframe
             if (href && href.startsWith('/views/')) {
-                window.location.href = href;
+                e.preventDefault();
+                renderEmbeddedView(href, item.textContent.trim() || 'Embedded View');
+                document.querySelectorAll('.nav-item').forEach((navItem) => navItem.classList.remove('active'));
+                const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${href}"]`);
+                if (matchNav) matchNav.classList.add('active');
+                closeAllMenus();
                 return;
             }
             
-            // If it has target="_blank", open in new tab
+            // If it has target="_blank", let the browser handle it (opens new tab)
             if (item.getAttribute('target') === '_blank') {
-                window.open(href);
+                closeAllMenus();
                 return;
             }
             
-            // Otherwise treat as internal section navigation
-            const section = href.substring(1); // Remove #
-            const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
-            if (navItem) {
-                navItem.click();
+            // For hash links, try internal section navigation
+            if (href && href.startsWith('#')) {
+                e.preventDefault();
+                const section = href.substring(1);
+                const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
+                if (navItem) {
+                    navItem.click();
+                }
+                closeAllMenus();
+                return;
             }
             
-            // Close menu after selection
-            document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                menu.style.display = 'none';
-            });
+            // All other links: allow normal navigation
+            closeAllMenus();
         });
     });
     
@@ -860,9 +905,7 @@ function setupHeaderDropdowns() {
         const isMenu = e.target.closest('.dropdown-menu');
         
         if (!isButton && !isMenu) {
-            document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                menu.style.display = 'none';
-            });
+            closeAllMenus();
         }
     });
 }
