@@ -3,29 +3,102 @@
     {
       "id": "room-3xxjln",
       "name": "Your Grow Room",
-      "type": "vertical",
-      "capacity": 100,
-      "zones": [
-        {
-          "id": "room-3xxjln-z1",
-          "name": "Zone 1",
-          "zone": 1
-        }
+      "location": "",
+      "hardwareCats": [
+        "dehumidifier",
+        "fans"
       ],
-      "fixtures": [
-        {
-          "name": "GROW3 Pro 640",
-          "vendor": "Light Engine",
-          "model": "GROW3 Pro 640",
-          "spectrum": "dynamic",
-          "count": 4
+      "hardwareOrder": [
+        "dehumidifier",
+        "fans"
+      ],
+      "layout": {
+        "type": "",
+        "rows": 0,
+        "racks": 0,
+        "levels": 0
+      },
+      "zones": [],
+      "fixtures": [],
+      "controlMethod": null,
+      "devices": [],
+      "sensors": {
+        "categories": [],
+        "placements": {}
+      },
+      "energy": "",
+      "energyHours": 0,
+      "targetPpfd": 0,
+      "photoperiod": 0,
+      "connectivity": {
+        "hasHub": null,
+        "hubType": "",
+        "hubIp": "",
+        "cloudTenant": "Azure"
+      },
+      "roles": {
+        "admin": [],
+        "operator": [],
+        "viewer": []
+      },
+      "grouping": {
+        "groups": [],
+        "planId": "",
+        "scheduleId": ""
+      },
+      "category": {
+        "dehumidifier": {
+          "selectedEquipment": [
+            {
+              "category": "dehumidifier",
+              "vendor": "Quest",
+              "model": "Quest 100",
+              "capacity": "100 PPD",
+              "control": "Manual",
+              "count": 1
+            }
+          ],
+          "wifi": false,
+          "wired": false,
+          "count": 1,
+          "manufacturer": "Quest",
+          "model": "Quest 100"
+        },
+        "fans": {
+          "manufacturer": "No Name",
+          "count": 2,
+          "wifi": false,
+          "wired": false
         }
-      ]
+      },
+      "_categoryProgress": {
+        "dehumidifier": {
+          "selectedEquipment": [
+            {
+              "category": "dehumidifier",
+              "vendor": "Quest",
+              "model": "Quest 100",
+              "capacity": "100 PPD",
+              "control": "Manual",
+              "count": 1
+            }
+          ]
+        }
+      },
+      "categoryProgress": {
+        "dehumidifier": {
+          "selectedEquipment": [
+            {
+              "category": "dehumidifier",
+              "vendor": "Quest",
+              "model": "Quest 100",
+              "capacity": "100 PPD",
+              "control": "Manual",
+              "count": 1
+            }
+          ]
+        }
+      }
     }
-  ],
-  "metadata": {
-    "lastUpdated": "2026-02-10T12:00:00.000Z",
-    "version": "1.0",
-    "source": "edge_sync"
-  }
+  ]
 }
