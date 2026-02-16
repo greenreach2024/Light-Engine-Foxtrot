@@ -12416,11 +12416,16 @@ async function loadAllData() {
         console.warn('forwarder devicedatas fetch failed, falling back to /api/devicedatas', e);
       }
       if (!deviceResponse || !deviceResponse.data) {
-        try {
-          deviceResponse = await api('/api/devicedatas');
-        } catch (e) {
-          console.error('Failed to load device list from /api/devicedatas', e);
-          deviceResponse = { data: [], meta: { source: 'fallback', error: e?.message || String(e) } };
+        const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        if (isLocalHost) {
+          try {
+            deviceResponse = await api('/api/devicedatas');
+          } catch (e) {
+            console.error('Failed to load device list from /api/devicedatas', e);
+            deviceResponse = { data: [], meta: { source: 'fallback', error: e?.message || String(e) } };
+          }
+        } else {
+          deviceResponse = { data: [], meta: { source: 'fallback', error: 'skipped /api/devicedatas on non-local host' } };
         }
       }
       STATE.devicesMeta = deviceResponse?.meta || {};
@@ -16928,6 +16933,11 @@ async function getLightOptions() {
 
   const apiBase = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : '';
   const endpoint = `${apiBase}/api/devicedatas`;
+  const sameOriginEndpoint = typeof window !== 'undefined' && (endpoint.startsWith('/') || endpoint.startsWith(window.location.origin));
+  const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  if (sameOriginEndpoint && !isLocalHost) {
+    return [];
+  }
   try {
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
