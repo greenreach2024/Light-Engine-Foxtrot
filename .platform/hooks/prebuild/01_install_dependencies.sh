@@ -8,6 +8,11 @@ echo "Current directory: $(pwd)"
 echo "Listing files:"
 ls -la
 
+if [ -f "Procfile" ] && grep -q "cd greenreach-central" "Procfile"; then
+    echo "Procfile uses greenreach-central; skipping root dependency install"
+    exit 0
+fi
+
 # Install dependencies
 if [ -f "package-lock.json" ]; then
     echo "Using npm ci..."
