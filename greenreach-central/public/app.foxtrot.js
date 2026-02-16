@@ -5099,6 +5099,24 @@ async function loadRoomsFromBackend() {
     const token = localStorage.getItem('token');
     const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
 
+    if (!token) {
+      try {
+        const staticRoomsResp = await fetch('/data/rooms.json', { cache: 'no-store' });
+        if (staticRoomsResp.ok) {
+          const staticRoomsData = await staticRoomsResp.json();
+          const staticRooms = Array.isArray(staticRoomsData?.rooms) ? staticRoomsData.rooms : [];
+          STATE.rooms = staticRooms.map(normalizeRoomRecord);
+          localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+          return;
+        }
+      } catch (staticError) {
+        console.warn('[loadRoomsFromBackend] Static rooms fallback unavailable:', staticError);
+      }
+
+      STATE.rooms = [];
+      return;
+    }
+
     // Prefer dedicated rooms endpoint
     const roomsResp = await fetch('/api/setup/rooms', { headers: authHeaders });
     if (roomsResp.ok) {
@@ -6068,12 +6086,23 @@ async function fetchPlansDocument() {
 }
 
 async function fetchSchedulesDocument() {
+  const pin = getFarmPin();
   try {
-    const resp = await fetch('/sched', { cache: 'no-store' });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    return await resp.json();
+    if (pin) {
+      const resp = await fetch('/sched', { cache: 'no-store' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return await resp.json();
+    }
   } catch (error) {
     console.warn('[sched] Failed to fetch /sched', error);
+  }
+
+  try {
+    const localResp = await fetch('/data/schedules.json', { cache: 'no-store' });
+    if (!localResp.ok) throw new Error(`HTTP ${localResp.status}`);
+    return await localResp.json();
+  } catch (error) {
+    console.warn('[sched] Failed to fetch /data/schedules.json', error);
     return null;
   }
 }
@@ -12699,16 +12728,30 @@ async function loadAllData() {
       console.error('[loadAllData] ❌ Failed to dispatch groups-updated:', err);
     }
 
-    try {
-      await initLightSearch();
-    } catch (error) {
-      console.warn('Light search init failed', error);
+    const lightSearchHost =
+      document.querySelector('[data-search-scope="lights"]') ||
+      document.getElementById('lightsSearch') ||
+      document.getElementById('lightsSearchRoot') ||
+      document.querySelector('[data-search="lights"]');
+    if (lightSearchHost && lightSearchHost.offsetParent !== null) {
+      try {
+        await initLightSearch();
+      } catch (error) {
+        console.warn('Light search init failed', error);
+      }
     }
 
-    try {
-      await initDehumSearch();
-    } catch (error) {
-      console.warn('Dehumidifier search init failed', error);
+    const dehumSearchHost =
+      document.querySelector('[data-search-scope="dehum"]') ||
+      document.getElementById('dehumSearch') ||
+      document.getElementById('dehumSearchRoot') ||
+      document.querySelector('[data-search="dehum"]');
+    if (dehumSearchHost && dehumSearchHost.offsetParent !== null) {
+      try {
+        await initDehumSearch();
+      } catch (error) {
+        console.warn('Dehumidifier search init failed', error);
+      }
     }
 
     // Wire controller assignments buttons
@@ -16869,6 +16912,18 @@ function callRenderSearch(scope, options = [], config = {}) {
 }
 
 async function getLightOptions() {
+  if (Array.isArray(STATE?.lights) && STATE.lights.length) {
+    return STATE.lights
+      .map((entry) => {
+        const id = entry?.id != null ? String(entry.id) : '';
+        if (!id) return null;
+        const name = entry?.deviceName || entry?.name || entry?.label || id;
+        const status = entry?.onOffStatus ? ` · ${entry.onOffStatus}` : '';
+        return { id, label: `${name}${status}` };
+      })
+      .filter(Boolean);
+  }
+
   const apiBase = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : '';
   const endpoint = `${apiBase}/api/devicedatas`;
   try {
@@ -16962,7 +17017,10 @@ let HEALTHZ_BACKOFF = 5000;
 
 async function pollHealthz() {
   try {
-    const response = await fetch('/healthz', { cache: 'no-store' });
+    let response = await fetch('/health', { cache: 'no-store' });
+    if (!response.ok && response.status === 404) {
+      response = await fetch('/healthz', { cache: 'no-store' });
+    }
     if (!response.ok) throw new Error(`healthz:${response.status}`);
     const body = await response.json().catch(() => ({ status: 'Controller reachable' }));
     
@@ -21502,8 +21560,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
 
-    await loadPreAutomationRules();
-    await loadSmartPlugs({ silent: true });
+    const switchBotCreds = STATE?.farm?.integrations?.switchbot || {};
+    const hasSwitchBotCreds = !!(switchBotCreds.token && switchBotCreds.secret);
+
+    if (hasSwitchBotCreds) {
+      await loadPreAutomationRules();
+      await loadSmartPlugs({ silent: true });
+    } else {
+      STATE.preAutomationRules = [];
+      STATE.smartPlugs = [];
+      renderSmartPlugs();
+    }
     await reloadEnvironment();
     startEnvPolling();
 

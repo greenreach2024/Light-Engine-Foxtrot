@@ -36,7 +36,12 @@
 
   async function healthz(BASE) {
     try {
-      const j = await fetchJSON(`${BASE}/healthz`, { timeout: 4000 });
+      let j = null;
+      try {
+        j = await fetchJSON(`${BASE}/health`, { timeout: 4000 });
+      } catch (primaryError) {
+        j = await fetchJSON(`${BASE}/healthz`, { timeout: 4000 });
+      }
       // Any success → restore normal polling cadence
       state.offline = false;
       state.backoffMs = 2000;
