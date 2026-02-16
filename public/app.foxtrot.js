@@ -4324,6 +4324,21 @@ const GROW3_FIXTURES = [
 window.checkGrow3Status = async function() {
   const statusEl = document.getElementById('grow3Status');
   if (!statusEl) return;
+
+  const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  if (!GROW3_BASE_URL && !isLocalHost) {
+    statusEl.innerHTML = `
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #6b7280;"></span>
+      <span>Unavailable</span>
+    `;
+    const code3Dot = document.getElementById('code3StatusDot');
+    const code3Pill = document.getElementById('code3StatusPill');
+    const code3Text = document.getElementById('code3StatusText');
+    if (code3Dot) code3Dot.style.background = '#6b7280';
+    if (code3Pill) code3Pill.style.background = '#6b7280';
+    if (code3Text) code3Text.textContent = 'Unavailable';
+    return;
+  }
   
   try {
     // Most Grow3 controllers don't expose /healthz; using /api/devicedatas avoids a noisy 404
@@ -4387,6 +4402,16 @@ window.checkGrow3Status = async function() {
 window.testGrow3Connection = async function() {
   const btn = document.getElementById('btnTestGrow3');
   if (!btn) return;
+
+  const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  if (!GROW3_BASE_URL && !isLocalHost) {
+    showToast({
+      title: 'Code3 Endpoint Unavailable',
+      msg: 'Grow3 proxy is not configured on this environment.',
+      kind: 'warning'
+    });
+    return;
+  }
   
   const originalText = btn.textContent;
   btn.disabled = true;
