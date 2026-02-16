@@ -1,0 +1,24 @@
+branch-defaults:
+  recovery/feb11-clean:
+    environment: light-engine-foxtrot-test-recovery
+  wip/remove-debug-and-data-edits:
+    environment: light-engine-foxtrot-prod-v2
+environment-defaults:
+  light-engine-foxtrot-test-recovery:
+    branch: null
+    repository: null
+  light-engine-foxtrot-prod-v2:
+    branch: null
+    repository: null
+global:
+  application_name: light-engine-foxtrot
+  default_ec2_keyname: null
+  default_platform: Node.js 20 running on 64bit Amazon Linux 2023
+  default_region: us-east-1
+  include_git_submodules: true
+  instance_profile: null
+  platform_name: null
+  platform_version: null
+  profile: null
+  sc: git
+  workspace_type: Application
