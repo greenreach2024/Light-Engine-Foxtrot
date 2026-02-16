@@ -21,6 +21,16 @@ class PWAInstaller {
     // Register service worker
     if ('serviceWorker' in navigator) {
       try {
+        const serviceWorkerProbe = await fetch('/service-worker.js', {
+          method: 'HEAD',
+          cache: 'no-store'
+        });
+
+        if (!serviceWorkerProbe.ok) {
+          console.log('[PWA] Service worker script not found; skipping registration');
+          return;
+        }
+
         this.serviceWorkerRegistration = await navigator.serviceWorker.register('/service-worker.js', {
           scope: '/'
         });
