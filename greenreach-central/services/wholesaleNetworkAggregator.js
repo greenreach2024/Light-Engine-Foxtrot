@@ -118,7 +118,79 @@ export async function addMarketEvent(event) {
   return { success: true };
 }
 
-export async function allocateCartFromNetwork(cart, sourcing, buyerLocation) {
+function normalizeAllocationResult({ allocations, unavailable, commissionRate = 0.12 }) {
+  const farmMap = new Map();
+
+  for (const alloc of allocations || []) {
+    const farmId = String(alloc.farm_id || 'unknown-farm');
+    if (!farmMap.has(farmId)) {
+      farmMap.set(farmId, {
+        farm_id: farmId,
+        farm_name: alloc.farm_name || farmId,
+        subtotal: 0,
+        status: 'pending',
+        items: []
+      });
+    }
+
+    const quantity = Number(alloc.quantity || 0);
+    const pricePerUnit = Number(alloc.price_per_unit || 0);
+    const lineTotal = quantity * pricePerUnit;
+    const farmSubOrder = farmMap.get(farmId);
+
+    farmSubOrder.items.push({
+      sku_id: alloc.sku_id,
+      product_name: alloc.product_name || alloc.sku_id,
+      quantity,
+      unit: alloc.unit || 'case',
+      size: alloc.size || 5,
+      price_per_unit: pricePerUnit,
+      line_total: lineTotal
+    });
+    farmSubOrder.subtotal += lineTotal;
+  }
+
+  const farmSubOrders = Array.from(farmMap.values());
+  const subtotal = farmSubOrders.reduce((sum, sub) => sum + Number(sub.subtotal || 0), 0);
+  const brokerFeeTotal = Number((subtotal * Number(commissionRate || 0)).toFixed(2));
+  const netToFarmsTotal = Number((subtotal - brokerFeeTotal).toFixed(2));
+  const grandTotal = Number(subtotal.toFixed(2));
+
+  const paymentSplit = farmSubOrders.map((sub) => {
+    const gross = Number(sub.subtotal || 0);
+    const brokerFee = Number((gross * Number(commissionRate || 0)).toFixed(2));
+    const net = Number((gross - brokerFee).toFixed(2));
+    return {
+      farm_id: sub.farm_id,
+      farm_name: sub.farm_name,
+      gross_amount: gross,
+      broker_fee: brokerFee,
+      net_amount: net
+    };
+  });
+
+  return {
+    allocation: {
+      subtotal,
+      broker_fee_total: brokerFeeTotal,
+      net_to_farms_total: netToFarmsTotal,
+      grand_total: grandTotal,
+      farm_sub_orders: farmSubOrders,
+      unavailable_items: unavailable || []
+    },
+    payment_split: paymentSplit,
+    allocations: allocations || [],
+    unavailable: unavailable || []
+  };
+}
+
+export async function allocateCartFromNetwork(cartOrInput, sourcing, buyerLocation) {
+  const input = Array.isArray(cartOrInput)
+    ? { cart: cartOrInput, sourcing, buyerLocation }
+    : (cartOrInput || {});
+  const cart = Array.isArray(input.cart) ? input.cart : [];
+  const commissionRate = Number(input.commissionRate ?? 0.12);
+
   // Use cached inventory to allocate cart items across farms
   if (!inventoryCache.skus.length) {
     await refreshNetworkInventory();
@@ -147,7 +219,10 @@ export async function allocateCartFromNetwork(cart, sourcing, buyerLocation) {
           farm_id: farm.farm_id,
           farm_name: farm.farm_name,
           quantity: alloc,
-          price_per_unit: farm.price_per_unit
+          price_per_unit: farm.price_per_unit,
+          product_name: skuData.product_name || item.sku_id,
+          unit: skuData.unit || 'case',
+          size: skuData.size || 5
         });
         remaining -= alloc;
       }
@@ -159,7 +234,7 @@ export async function allocateCartFromNetwork(cart, sourcing, buyerLocation) {
     allocations.push(...itemAllocations);
   }
 
-  return { allocations, unavailable };
+  return normalizeAllocationResult({ allocations, unavailable, commissionRate });
 }
 
 export async function buildAggregateCatalog() {

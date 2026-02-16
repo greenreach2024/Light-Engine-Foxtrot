@@ -85,6 +85,16 @@ function requireBuyerAuth(req, res, next) {
   }
 }
 
+function shouldUseNetworkAllocation(req) {
+  const override = String(process.env.WHOLESALE_USE_NETWORK_ALLOCATION || '').toLowerCase();
+  if (override === 'true' || override === '1') return true;
+  if (override === 'false' || override === '0') return false;
+
+  // Default to network allocation to match the catalog hotfix behavior
+  // until farm_inventory schema parity is restored.
+  return true;
+}
+
 /**
  * GET /api/wholesale/catalog
  * Get wholesale catalog with optional filtering by farm certifications
@@ -627,9 +637,9 @@ router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
 
     // Limited mode: allocate from network snapshots (proximity-aware)
-    if (req.app?.locals?.databaseReady === false) {
+    if (shouldUseNetworkAllocation(req)) {
       const catalog = await buildAggregateCatalog({ buyerLocation });
-      const result = allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
+      const result = await allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
       if (!result.allocation.farm_sub_orders?.length) {
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
       }
@@ -645,7 +655,7 @@ router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
     }
 
     const demoCatalog = await loadWholesaleDemoCatalog();
-    const result = allocateCartFromDemo({ cart, demoCatalog, commissionRate });
+  const result = await allocateCartFromDemo({ cart, demoCatalog, commissionRate });
 
     if (!result.allocation.farm_sub_orders?.length) {
       return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
@@ -680,9 +690,9 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
 
     // Limited mode: allocate from network snapshots (proximity-aware)
-    if (req.app?.locals?.databaseReady === false) {
+    if (shouldUseNetworkAllocation(req)) {
       const catalog = await buildAggregateCatalog({ buyerLocation });
-      const result = allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
+      const result = await allocateCartFromNetwork({ cart, catalog, commissionRate, sourcing, buyerLocation });
       if (!result.allocation.farm_sub_orders?.length) {
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
       }
@@ -881,7 +891,7 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
     }
 
     const demoCatalog = await loadWholesaleDemoCatalog();
-    const result = allocateCartFromDemo({ cart, demoCatalog, commissionRate });
+  const result = await allocateCartFromDemo({ cart, demoCatalog, commissionRate });
 
     if (!result.allocation.farm_sub_orders?.length) {
       return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
@@ -979,7 +989,21 @@ router.get('/network/farms', async (req, res, next) => {
 
 router.post('/network/farms', async (req, res, next) => {
   try {
-    const farm = await upsertNetworkFarm(req.body || {});
+    const payload = req.body || {};
+    const farmId = String(payload.farm_id || payload.farmId || '').trim();
+    if (!farmId) {
+      return res.status(400).json({ status: 'error', message: 'farm_id is required' });
+    }
+
+    const farm = await upsertNetworkFarm(farmId, {
+      farm_id: farmId,
+      name: payload.name || farmId,
+      api_url: payload.api_url || payload.url || null,
+      url: payload.url || payload.api_url || null,
+      status: payload.status || 'active',
+      contact: payload.contact || {},
+      location: payload.location || {}
+    });
     return res.json({ status: 'ok', data: { farm } });
   } catch (error) {
     return next(error);
