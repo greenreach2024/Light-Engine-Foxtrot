@@ -4309,7 +4309,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ===== GROW3 CONTROLLER FUNCTIONS =====
 // Use relative URL to proxy through Node.js server instead of direct connection
-const GROW3_BASE_URL = '/api/grow3';
+const GROW3_BASE_URL = (typeof window !== 'undefined' && typeof window.GROW3_PROXY_BASE === 'string')
+  ? window.GROW3_PROXY_BASE
+  : '';
 const GROW3_FIXTURES = [
   { controllerId: 2, fixtureUid: 'F00001' },
   { controllerId: 3, fixtureUid: 'F00002' },
