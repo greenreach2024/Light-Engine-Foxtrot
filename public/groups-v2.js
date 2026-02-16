@@ -964,7 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
               
               // Check controller health by querying devices endpoint
               // Note: Grow3 controller doesn't have /healthz, so we use /api/devicedatas as health check
-              const devicesResponse = await fetch('/api/grow3/api/devicedatas', {
+              const devicesResponse = await fetch('/api/devicedatas', {
                 method: 'GET',
                 signal: AbortSignal.timeout(5000)
               });
@@ -981,7 +981,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Blink sequence: Off → On → Off → On
                     // Turn off
-                    await fetch(`/api/grow3/api/devicedatas/device/${controllerId}`, {
+                    await fetch(`/api/devicedatas/device/${controllerId}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ status: 'off' }),
@@ -1017,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const hexValue = encodeChannels(channels);
                     
-                    await fetch(`/api/grow3/api/devicedatas/device/${controllerId}`, {
+                    await fetch(`/api/devicedatas/device/${controllerId}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ status: 'on', value: hexValue }),
@@ -1027,7 +1027,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     await new Promise(resolve => setTimeout(resolve, 300)); // Wait 300ms
                     
                     // Turn off again
-                    await fetch(`/api/grow3/api/devicedatas/device/${controllerId}`, {
+                    await fetch(`/api/devicedatas/device/${controllerId}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ status: 'off' }),
@@ -1046,14 +1046,14 @@ document.addEventListener('DOMContentLoaded', () => {
                       const originalValue = original?.value || null;
 
                       if (originalStatus === 'off') {
-                        await fetch(`/api/grow3/api/devicedatas/device/${controllerId}`, {
+                        await fetch(`/api/devicedatas/device/${controllerId}`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'off', value: null }),
                           signal: AbortSignal.timeout(3000)
                         });
                       } else if (originalStatus === 'on') {
-                        await fetch(`/api/grow3/api/devicedatas/device/${controllerId}`, {
+                        await fetch(`/api/devicedatas/device/${controllerId}`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'on', value: typeof originalValue === 'string' ? originalValue : hexValue }),
@@ -1061,7 +1061,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                       } else {
                         // Unknown original state: default to a final ON so it’s visible
-                        await fetch(`/api/grow3/api/devicedatas/device/${controllerId}`, {
+                        await fetch(`/api/devicedatas/device/${controllerId}`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'on', value: hexValue }),
@@ -1070,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       }
                     } catch (restoreErr) {
                       // Fallback: turn back on with test value
-                      await fetch(`/api/grow3/api/devicedatas/device/${controllerId}`, {
+                      await fetch(`/api/devicedatas/device/${controllerId}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: 'on', value: hexValue }),
