@@ -6,6 +6,7 @@
 const API_BASE = window.location.origin;
 const STORAGE_KEY_SESSION = 'farm_admin_session';
 const STORAGE_KEY_REMEMBER = 'farm_admin_remember';
+const DEFAULT_CONTACT_EMAIL = 'shelbygilbert@rogers.com';
 
 // Debug logger: enable with localStorage.setItem('gr.debug','true') or when running on localhost
 const GR_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -70,8 +71,7 @@ function initLogin() {
     if (remembered.farmId) {
         document.getElementById('farmId').value = remembered.farmId;
     }
-    if (remembered.email) {
-        document.getElementById('email').value = remembered.email;
+    if (remembered.farmId) {
         document.getElementById('remember').checked = true;
     }
     
@@ -81,14 +81,7 @@ function initLogin() {
         form.addEventListener('submit', handleLogin);
     }
     
-    // Auto-fill test credentials
-    if (window.location.search.includes('demo=true') || window.location.search.includes('test=true')) {
-        document.getElementById('farmId').value = 'FARM-TEST-WIZARD-001';
-        if (document.getElementById('email')) {
-            document.getElementById('email').value = 'admin@test-farm.com';
-        }
-        document.getElementById('password').value = 'Grow123';
-    }
+    // Auto-fill removed — live credentials must not be embedded in client code
 }
 
 /**
@@ -116,7 +109,7 @@ async function initDashboard() {
                     farmId: payload.farm_id || payload.farmId || existingFarmId,
                     userId: payload.user_id || payload.userId,
                     farmName: localStorage.getItem('farm_name') || payload.name || payload.farmName || 'Light Engine Farm',
-                    email: payload.email || existingEmail || 'admin@farm.com',
+                    email: payload.email || existingEmail || DEFAULT_CONTACT_EMAIL,
                     role: payload.role || 'admin'
                 };
                 grLog(' Using existing session:', currentSession.farmId, currentSession.email);
@@ -128,7 +121,7 @@ async function initDashboard() {
                 token: existingToken,
                 farmId: existingFarmId,
                 farmName: sessionStorage.getItem('farm_name') || localStorage.getItem('farm_name') || 'Light Engine Farm',
-                email: existingEmail || 'admin@farm.com',
+                email: existingEmail || DEFAULT_CONTACT_EMAIL,
                 role: 'admin'
             };
             grLog(' Using existing session (non-JWT):', currentSession.farmId, currentSession.email);
@@ -155,7 +148,7 @@ async function initDashboard() {
             token: 'local-access',
             farmId: 'LOCAL-FARM',
             farmName: 'Light Engine Farm',
-            email: 'admin@local-farm.com',
+            email: DEFAULT_CONTACT_EMAIL,
             role: 'admin'
         };
         
@@ -194,8 +187,6 @@ async function handleLogin(e) {
     e.preventDefault();
     
     const farmId = document.getElementById('farmId').value.trim();
-    const emailInput = document.getElementById('email');
-    const email = emailInput ? emailInput.value.trim() : '';
     const password = document.getElementById('password').value;
     const rememberInput = document.getElementById('remember');
     const remember = rememberInput ? rememberInput.checked : false;
@@ -219,7 +210,7 @@ async function handleLogin(e) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ farmId, email, password })
+            body: JSON.stringify({ farmId, password })
         });
         
         const data = await response.json();
@@ -242,7 +233,7 @@ async function handleLogin(e) {
             sessionStorage.setItem('token', data.token);
             sessionStorage.setItem('farm_id', data.farmId || farmId);
             if (data.farmName) sessionStorage.setItem('farm_name', data.farmName);
-            if (data.email || email) sessionStorage.setItem('email', data.email || email);
+            if (data.email) sessionStorage.setItem('email', data.email);
             
             // ALWAYS save to localStorage as fallback (may be restricted in private mode)
             // This helps with cross-tab access and normal mode persistence
@@ -250,7 +241,7 @@ async function handleLogin(e) {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('farm_id', data.farmId || farmId);
                 if (data.farmName) localStorage.setItem('farm_name', data.farmName);
-                if (data.email || email) localStorage.setItem('email', data.email || email);
+                if (data.email) localStorage.setItem('email', data.email);
             } catch (e) {
                 console.warn('[Login] localStorage blocked (private mode?), using sessionStorage only');
             }
@@ -259,8 +250,7 @@ async function handleLogin(e) {
             if (remember) {
                 try {
                     localStorage.setItem(STORAGE_KEY_REMEMBER, JSON.stringify({
-                        farmId,
-                        email
+                        farmId
                     }));
                 } catch (e) {
                     console.warn('[Login] Cannot save remember-me preference in private mode');
@@ -666,58 +656,63 @@ async function loadRecentActivity() {
 }
 
 /**
+ * Render an external page inside the admin iframe
+ * Defined at module scope so both setupNavigation() and setupHeaderDropdowns() can use it.
+ */
+function renderEmbeddedView(url, title) {
+    title = title || 'Embedded View';
+    if (!url) return;
+    document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
+    const iframeSection = document.getElementById('section-iframe-view');
+    const iframe = document.getElementById('admin-iframe');
+    const iframeTitle = document.getElementById('iframeSectionTitle');
+    if (!iframeSection || !iframe) return;
+
+    const embedUrl = (() => {
+        try {
+            const parsed = new URL(url, window.location.origin);
+            parsed.searchParams.set('embedded', '1');
+            return parsed.pathname + parsed.search + parsed.hash;
+        } catch {
+            return url;
+        }
+    })();
+
+    iframe.src = embedUrl;
+    iframeSection.style.display = 'block';
+    if (iframeTitle) iframeTitle.textContent = title;
+
+    iframe.onload = () => {
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) return;
+            const selectors = [
+                'header.page-header',
+                '.page-header',
+                '.header-actions',
+                '.top-nav',
+                '.nav-menu',
+                '.dashboard-header',
+                '.main-nav',
+                '.sidebar-header-nav'
+            ];
+            selectors.forEach((selector) => {
+                doc.querySelectorAll(selector).forEach((el) => {
+                    el.style.display = 'none';
+                });
+            });
+            const body = doc.body;
+            if (body) body.style.paddingTop = '0';
+        } catch (error) {
+            console.warn('[Farm Admin] Unable to apply embedded page chrome suppression:', error.message);
+        }
+    };
+}
+
+/**
  * Setup navigation
  */
 function setupNavigation() {
-    const renderEmbeddedView = (url, title = 'Embedded View') => {
-        if (!url) return;
-        document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
-        const iframeSection = document.getElementById('section-iframe-view');
-        const iframe = document.getElementById('admin-iframe');
-        const iframeTitle = document.getElementById('iframeSectionTitle');
-        if (!iframeSection || !iframe) return;
-
-        const embedUrl = (() => {
-            try {
-                const parsed = new URL(url, window.location.origin);
-                parsed.searchParams.set('embedded', '1');
-                return parsed.pathname + parsed.search + parsed.hash;
-            } catch {
-                return url;
-            }
-        })();
-
-        iframe.src = embedUrl;
-        iframeSection.style.display = 'block';
-        if (iframeTitle) iframeTitle.textContent = title;
-
-        iframe.onload = () => {
-            try {
-                const doc = iframe.contentDocument || iframe.contentWindow?.document;
-                if (!doc) return;
-                const selectors = [
-                    'header.page-header',
-                    '.page-header',
-                    '.header-actions',
-                    '.top-nav',
-                    '.nav-menu',
-                    '.dashboard-header',
-                    '.main-nav',
-                    '.sidebar-header-nav'
-                ];
-                selectors.forEach((selector) => {
-                    doc.querySelectorAll(selector).forEach((el) => {
-                        el.style.display = 'none';
-                    });
-                });
-                const body = doc.body;
-                if (body) body.style.paddingTop = '0';
-            } catch (error) {
-                console.warn('[Farm Admin] Unable to apply embedded page chrome suppression:', error.message);
-            }
-        };
-    };
-
     // Handle section navigation
     document.querySelectorAll('.nav-item[data-section]').forEach(item => {
         item.addEventListener('click', (e) => {
