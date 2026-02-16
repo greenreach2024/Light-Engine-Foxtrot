@@ -23,12 +23,13 @@
     // Use current page protocol (HTTPS in production, HTTP in local dev)
     // This prevents mixed content warnings when page loads over HTTPS
     window.API_BASE = window.location.origin;
-    window.grLog = window.grLog || function (...args) {
+    function grLog(...args) {
       const enabled = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') ||
         window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1';
       if (enabled) console.debug(...args);
-    };
+    }
+    window.grLog = window.grLog || grLog;
     console.debug('[index.html] Set window.API_BASE to:', window.API_BASE);
     
     // DEBUG: Version tracking
