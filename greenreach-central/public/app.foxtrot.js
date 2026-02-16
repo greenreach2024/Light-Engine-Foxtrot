@@ -12585,6 +12585,19 @@ async function loadAllData() {
       STATE.rooms = fileRooms;
       console.log(' [loadAllData] Loaded STATE.rooms from rooms.json:', STATE.rooms.length, 'rooms');
     }
+
+    STATE.rooms = (Array.isArray(STATE.rooms) ? STATE.rooms : [])
+      .filter(room => room && typeof room === 'object')
+      .map((room, index) => {
+        const fallbackName = String(room.name || room.roomName || room.room_id || room.roomId || room.id || `Room ${index + 1}`).trim();
+        const fallbackId = String(room.id || room.roomId || room.room_id || fallbackName || `room-${index + 1}`).trim();
+        return {
+          ...room,
+          id: fallbackId,
+          name: fallbackName
+        };
+      });
+
     STATE.equipmentMetadata = equipmentMetadata || {};
     console.log(' [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
     if (STATE.rooms.length > 0) {

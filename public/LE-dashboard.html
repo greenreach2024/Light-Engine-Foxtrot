@@ -276,17 +276,6 @@
                       style="cursor: help;"
                       title="Loading connection status...">System Online</div>
                     
-                    <!-- Farm Summary Button -->
-                    <a 
-                      href="/views/farm-summary.html" 
-                      rel="noopener"
-                      class="btn btn--primary" 
-                      style="margin-top: 0.75rem; margin-right: 0.5rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
-                      title="Open full-screen farm room summary">
-                      Farm Summary
-                    </a>
-                    
-                    
                     <!-- Farm Admin Button -->
                     <a 
                       href="/farm-admin-login.html" 
@@ -295,27 +284,6 @@
                       style="margin-top: 0.75rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
                       title="Access farm administration portal">
                       Farm Admin
-                    </a>
-                    
-                    
-                    <!-- QR Generator Button -->
-                    <a 
-                      href="/LE-qr-generator.html" 
-                      rel="noopener"
-                      class="btn btn--secondary" 
-                      style="margin-top: 0.75rem; margin-right: 0.5rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
-                      title="Generate QR codes for trays">
-                      QR Generator
-                    </a>
-                    
-                    <!-- Activity Hub Button -->
-                    <a 
-                      href="/views/tray-inventory.html" 
-                      rel="noopener"
-                      class="btn btn--primary" 
-                      style="margin-top: 0.75rem; font-size: 0.875rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;"
-                      title="View activity hub">
-                      Activity Hub
                     </a>
                   </div>
                 </div>
@@ -2949,6 +2917,13 @@
       window.open(storeUrl, '_blank');
     }
     
+    const DASH_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+    function grLog(...args) {
+      if (DASH_DEBUG) console.debug(...args);
+    }
+
     // Setup sidebar group accordion behavior
     function setupSidebarGroups() {
       document.querySelectorAll('.sidebar-group__trigger').forEach(trigger => {
@@ -2990,18 +2965,16 @@
           }
         });
       });
-    }grLog('Initializing sidebar...');
-      setupSidebarGroups();
-      setupWizardHandlers();
-      grLog('Sidebar initialized successfully');
-      
-      // Make functions globally accessible for testing
-      window.testPaymentWizard = openPaymentWizard;
-      window.testStoreWizard = openStoreWizard
+    }
+
     function initializeSidebar() {
       setupSidebarGroups();
       setupWizardHandlers();
-      console.log('Sidebar initialized');
+      grLog('Sidebar initialized successfully');
+
+      // Make functions globally accessible for testing
+      window.testPaymentWizard = openPaymentWizard;
+      window.testStoreWizard = openStoreWizard;
     }
     
     if (document.readyState === 'loading') {
