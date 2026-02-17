@@ -2848,14 +2848,16 @@ router.get('/farms/:farmId/devices', async (req, res) => {
 
 /**
  * GET /api/admin/farms/:farmId/inventory
- * Get inventory for a specific farm
+ * Get inventory (trays) for a specific farm.
+ * Falls back to building synthetic trays from groups when no
+ * explicit inventory records exist.
  */
 router.get('/farms/:farmId/inventory', async (req, res) => {
     try {
         const { farmId } = req.params;
         console.log(`[Admin API] Fetching inventory for farm: ${farmId}`);
         
-        // Try to get inventory from farm_inventory table
+        // 1. Try explicit inventory from farm_inventory table
         let inventory = [];
         try {
             const result = await query(
@@ -2876,11 +2878,88 @@ router.get('/farms/:farmId/inventory', async (req, res) => {
         } catch (e) {
             console.warn('[Admin API] farm_inventory table not available:', e.message);
         }
+
+        // 2. If no explicit inventory, synthesize trays from groups
+        let trays = [];
+        if (inventory.length === 0) {
+            let groups = [];
+
+            // 2a. Try groups from farm_data table
+            try {
+                const gResult = await query(
+                    `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups'`,
+                    [farmId]
+                );
+                if (gResult.rows.length > 0) {
+                    const raw = gResult.rows[0].data;
+                    groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+                }
+            } catch (_) { /* ignore */ }
+
+            // 2b. Fall back to static groups.json file
+            if (groups.length === 0) {
+                try {
+                    const fs = await import('fs');
+                    const path = await import('path');
+                    const groupsPath = path.default.join(process.cwd(), 'public', 'data', 'groups.json');
+                    if (fs.default.existsSync(groupsPath)) {
+                        const raw = JSON.parse(fs.default.readFileSync(groupsPath, 'utf8'));
+                        groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+                    }
+                } catch (_) { /* ignore */ }
+            }
+
+            if (groups.length > 0) {
+                const now = new Date();
+                const fallbackGrowthDays = 35;
+                const msPerDay = 1000 * 60 * 60 * 24;
+
+                for (const group of groups) {
+                    const groupId = group?.id || group?.groupId;
+                    if (!groupId) continue;
+                    const trayCount = Math.max(0, Number(group?.trays || 0));
+                    if (!trayCount) continue;
+
+                    const totalPlants = Number(group?.plants || 0);
+                    const plantsPerTray = Math.max(1, Math.round((totalPlants > 0 ? totalPlants : trayCount * 12) / trayCount));
+                    const recipeName = group?.recipe || group?.crop || group?.plan || 'Unknown';
+                    const seedDateRaw = group?.planConfig?.anchor?.seedDate;
+                    const seedDate = seedDateRaw ? new Date(seedDateRaw) : null;
+                    const daysOld = seedDate && !Number.isNaN(seedDate.getTime())
+                        ? Math.max(1, Math.floor((now - seedDate) / msPerDay) + 1)
+                        : 1;
+                    const daysToHarvest = Math.max(0, fallbackGrowthDays - daysOld);
+                    const roomLabel = group?.roomId || group?.room || 'ROOM-1';
+                    const zoneLabel = group?.zoneId || (group?.zone != null ? `ZONE-${group.zone}` : 'ZONE-1');
+                    const location = `${roomLabel} - ${zoneLabel}`;
+
+                    for (let i = 0; i < trayCount; i++) {
+                        trays.push({
+                            tray_code: `${groupId}#${i + 1}`,
+                            trayId: `${groupId}#${i + 1}`,
+                            groupId,
+                            recipe_name: recipeName,
+                            recipe: recipeName,
+                            plant_count: plantsPerTray,
+                            plantCount: plantsPerTray,
+                            age_days: daysOld,
+                            daysOld,
+                            days_to_harvest: daysToHarvest,
+                            daysToHarvest,
+                            location,
+                            status: group?.active === false ? 'inactive' : 'active'
+                        });
+                    }
+                }
+                console.log(`[Admin API] Built ${trays.length} synthetic trays from ${groups.length} groups for farm ${farmId}`);
+            }
+        }
         
         res.json({
             success: true,
             inventory: inventory,
-            count: inventory.length,
+            trays: trays,
+            count: inventory.length + trays.length,
             farmId: farmId
         });
         
