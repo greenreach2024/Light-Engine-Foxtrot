@@ -568,12 +568,30 @@
           }
 
           const response = await fetch(`/api/wholesale/catalog?${params.toString()}`);
-          const data = await response.json();
+          const data = await response.json().catch(() => null);
+          const payload = data?.data || {};
 
-          // API returns { ok: true, items: [], farms: [] }
-          if (data.ok) {
-            this.catalog = Array.isArray(data.items) ? data.items : [];
-            this.farms = Array.isArray(data.farms) ? data.farms : [];
+          // Support both envelopes:
+          // - legacy: { ok: true, items: [], farms: [] }
+          // - current: { status: 'ok', data: { skus: [], farms: [] }, items: [], farms: [] }
+          const isSuccess = response.ok && (data?.ok === true || data?.status === 'ok');
+          if (isSuccess) {
+            const skus = Array.isArray(payload.skus)
+              ? payload.skus
+              : Array.isArray(payload.items)
+                ? payload.items
+                : Array.isArray(data?.items)
+                  ? data.items
+                  : [];
+
+            const farms = Array.isArray(payload.farms)
+              ? payload.farms
+              : Array.isArray(data?.farms)
+                ? data.farms
+                : [];
+
+            this.catalog = skus;
+            this.farms = farms;
             this.renderCatalog();
             this.renderFarmList(); // Show farms even if no inventory
             this.updateDemoBanner();
@@ -1410,13 +1428,23 @@
         const response = await fetch('/api/wholesale/farm-performance/dashboard?timeframe=30d');
         const data = await response.json().catch(() => null);
         
-        if (data?.farms) {
+        const farms = Array.isArray(data?.farms)
+          ? data.farms
+          : Array.isArray(data?.data?.farms)
+            ? data.data.farms
+            : Array.isArray(data?.metrics?.farms)
+              ? data.metrics.farms
+              : [];
+
+        if (farms.length) {
           // Convert array to lookup object keyed by farm_id
           this.farmPerformance = {};
-          data.farms.forEach(farm => {
+          farms.forEach(farm => {
             this.farmPerformance[farm.farm_id] = farm.metrics;
           });
-          console.log(`[Wholesale] Loaded performance data for ${data.farms.length} farms`);
+          console.log(`[Wholesale] Loaded performance data for ${farms.length} farms`);
+        } else {
+          this.farmPerformance = {};
         }
       } catch (error) {
         console.warn('[Wholesale] Farm performance data unavailable:', error);
