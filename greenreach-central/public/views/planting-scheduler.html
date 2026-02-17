@@ -2476,6 +2476,12 @@
         // Get actual harvest duration from the lighting recipe
         const harvestDays = getPlanHarvestDays(groupPlan);
         const cropName = extractCropDisplayName(groupPlan);
+        const currentCrop = tray.currentCrop || cropName || 'Empty';
+        const currentHarvestDate = tray.expectedHarvest ? new Date(tray.expectedHarvest) : null;
+        const harvestWindow = currentHarvestDate ? {
+          earliest: new Date(currentHarvestDate),
+          latest: new Date(currentHarvestDate)
+        } : null;
 
         // Calculate seeding window (default germination times for leafy greens)
         const germMax = 10; // days
@@ -2504,6 +2510,9 @@
           trayId: tray.id,
           groupId: tray.groupId,
           location: tray.location,
+          currentCrop,
+          expectedHarvest: currentHarvestDate,
+          harvestWindow,
           cropId: normalizedCropId,
           cropName: cropName,
           cropClass: 'leafy', // Most crops in system are leafy greens
