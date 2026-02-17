@@ -1,7 +1,9 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { query } from '../config/database.js';
 import { ValidationError } from '../middleware/errorHandler.js';
+import { adminAuthMiddleware } from '../middleware/adminAuth.js';
 
 import {
   authenticateBuyer,
@@ -9,13 +11,19 @@ import {
   createOrder,
   createPayment,
   getBuyerById,
+  getBuyerByEmail,
   getOrderById,
   listAllOrders,
   listOrdersForBuyer,
   listPayments,
   listRefunds,
   saveOrder,
-  updateFarmSubOrder
+  updateBuyerPassword,
+  updateFarmSubOrder,
+  recordLoginAttempt,
+  isAccountLocked,
+  resetLoginAttempts,
+  logOrderEvent
 } from '../services/wholesaleMemoryStore.js';
 
 import { allocateCartFromDemo, loadWholesaleDemoCatalog } from '../services/wholesaleDemoCatalog.js';
@@ -32,8 +40,90 @@ import {
 import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
 import { processSquarePayments } from '../services/squarePaymentService.js';
+import emailService from '../services/email-service.js';
 
 const router = express.Router();
+
+// ── Per-route rate limiters ──────────────────────────────────────────
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 10,                    // 10 registrations per IP per window
+  message: { status: 'error', message: 'Too many registration attempts. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,                    // 20 login attempts per IP per window
+  message: { status: 'error', message: 'Too many login attempts. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { status: 'error', message: 'Too many password-reset requests. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// ── Input sanitization helper ────────────────────────────────────────
+function sanitizeText(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// ── Farm API-key auth (for farm→Central callbacks) ───────────────────
+// Pre-load farm API keys at startup
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+let _farmApiKeys = null;
+function loadFarmApiKeys() {
+  if (_farmApiKeys !== null) return _farmApiKeys;
+  try {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const keysPath = resolve(__dirname, '..', 'public', 'data', 'farm-api-keys.json');
+    _farmApiKeys = JSON.parse(readFileSync(keysPath, 'utf8'));
+  } catch {
+    _farmApiKeys = {};
+  }
+  return _farmApiKeys;
+}
+
+function requireFarmApiKey(req, res, next) {
+  const farmId = req.headers['x-farm-id'] || req.body?.farm_id;
+  const apiKey = req.headers['x-api-key'];
+
+  if (!farmId || !apiKey) {
+    return res.status(401).json({ status: 'error', message: 'Missing X-Farm-ID or X-API-Key header' });
+  }
+
+  // Validate against env-based key first
+  const envKey = process.env.WHOLESALE_FARM_API_KEY;
+  if (envKey && apiKey === envKey) {
+    req.farmAuth = { farm_id: farmId };
+    return next();
+  }
+
+  // Check farm-api-keys.json
+  const keys = loadFarmApiKeys();
+  const farmEntry = keys[farmId];
+  if (farmEntry?.api_key === apiKey && farmEntry?.status === 'active') {
+    req.farmAuth = { farm_id: farmId };
+    return next();
+  }
+
+  return res.status(403).json({ status: 'error', message: 'Invalid farm credentials' });
+}
 
 function getWholesaleJwtSecret() {
   const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET;
@@ -502,7 +592,7 @@ router.get('/farms', async (req, res, next) => {
 
 // --- Buyer portal (DB-less dev mode) ---
 
-router.post('/buyers/register', async (req, res, next) => {
+router.post('/buyers/register', registerLimiter, async (req, res, next) => {
   try {
     const { businessName, contactName, email, password, buyerType, location } = req.body || {};
 
@@ -510,8 +600,26 @@ router.post('/buyers/register', async (req, res, next) => {
       throw new ValidationError('Email and password are required');
     }
 
-    const buyer = await createBuyer({ businessName, contactName, email, password, buyerType, location });
+    if (typeof password === 'string' && password.length < 8) {
+      throw new ValidationError('Password must be at least 8 characters');
+    }
+
+    const buyer = await createBuyer({
+      businessName: sanitizeText(businessName),
+      contactName: sanitizeText(contactName),
+      email,
+      password,
+      buyerType: sanitizeText(buyerType),
+      location
+    });
     const token = issueBuyerToken(buyer.id);
+
+    // Send welcome email (non-blocking)
+    emailService.sendEmail({
+      to: buyer.email,
+      subject: 'Welcome to GreenReach Wholesale',
+      text: `Hi ${buyer.contactName || buyer.businessName},\n\nYour wholesale buyer account has been created.\n\nYou can now browse the catalog and place orders.\n\n— GreenReach Farms`
+    }).catch(err => console.warn('[Email] Welcome email failed:', err.message));
 
     return res.json({
       status: 'ok',
@@ -525,23 +633,103 @@ router.post('/buyers/register', async (req, res, next) => {
   }
 });
 
-router.post('/buyers/login', async (req, res, next) => {
+router.post('/buyers/login', loginLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) {
       throw new ValidationError('Email and password are required');
     }
 
+    // Check lockout before authenticating
+    if (isAccountLocked(email)) {
+      return res.status(423).json({ status: 'error', message: 'Account temporarily locked due to too many failed attempts. Try again in 30 minutes.' });
+    }
+
     const buyer = await authenticateBuyer({ email, password });
     if (!buyer) {
+      recordLoginAttempt(email, false);
       return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
     }
 
+    recordLoginAttempt(email, true);
     const token = issueBuyerToken(buyer.id);
     return res.json({ status: 'ok', data: { buyer, token } });
   } catch (error) {
     return next(error);
   }
+});
+
+// ── Buyer password management ────────────────────────────────────────
+
+import { createPasswordResetToken, consumePasswordResetToken } from '../services/wholesaleMemoryStore.js';
+
+router.post('/buyers/change-password', requireBuyerAuth, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      throw new ValidationError('currentPassword and newPassword are required');
+    }
+    if (typeof newPassword === 'string' && newPassword.length < 8) {
+      throw new ValidationError('New password must be at least 8 characters');
+    }
+
+    // Verify current password
+    const buyer = await authenticateBuyer({ email: req.wholesaleBuyer.email, password: currentPassword });
+    if (!buyer) {
+      return res.status(401).json({ status: 'error', message: 'Current password is incorrect' });
+    }
+
+    await updateBuyerPassword(req.wholesaleBuyer.id, newPassword);
+    return res.json({ status: 'ok', message: 'Password updated successfully' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/buyers/forgot-password', passwordResetLimiter, async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) {
+    return res.status(400).json({ status: 'error', message: 'Email is required' });
+  }
+
+  // Always return success to avoid email enumeration
+  const buyer = getBuyerByEmail(email);
+  if (buyer) {
+    const token = createPasswordResetToken(email);
+    const resetUrl = `${process.env.APP_BASE_URL || 'https://www.greenreachgreens.com'}/GR-wholesale.html?resetToken=${token}`;
+
+    emailService.sendEmail({
+      to: buyer.email,
+      subject: 'GreenReach Wholesale — Password Reset',
+      text: `Hi ${buyer.contactName || buyer.businessName},\n\nA password reset was requested for your account.\n\nReset your password: ${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.\n\n— GreenReach Farms`
+    }).catch(err => console.warn('[Email] Password reset email failed:', err.message));
+  }
+
+  return res.json({ status: 'ok', message: 'If that email is registered, a reset link has been sent.' });
+});
+
+router.post('/buyers/reset-password', passwordResetLimiter, async (req, res) => {
+  const { token, newPassword } = req.body || {};
+  if (!token || !newPassword) {
+    return res.status(400).json({ status: 'error', message: 'token and newPassword are required' });
+  }
+  if (typeof newPassword === 'string' && newPassword.length < 8) {
+    return res.status(400).json({ status: 'error', message: 'Password must be at least 8 characters' });
+  }
+
+  const email = consumePasswordResetToken(token);
+  if (!email) {
+    return res.status(400).json({ status: 'error', message: 'Invalid or expired reset token' });
+  }
+
+  const buyer = getBuyerByEmail(email);
+  if (!buyer) {
+    return res.status(400).json({ status: 'error', message: 'Account not found' });
+  }
+
+  await updateBuyerPassword(buyer.id, newPassword);
+  resetLoginAttempts(email);
+  return res.json({ status: 'ok', message: 'Password has been reset. You can now log in.' });
 });
 
 router.get('/orders', requireBuyerAuth, async (req, res) => {
@@ -887,6 +1075,10 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
         }
       })();
 
+      // Order confirmation email + audit (non-blocking)
+      logOrderEvent(order.master_order_id, 'order_created', { buyer_id: req.wholesaleBuyer.id, payment_id: payment.payment_id, total: order.grand_total });
+      emailService.sendOrderConfirmation(order, req.wholesaleBuyer).catch(err => console.warn('[Email] Confirmation failed:', err.message));
+
       return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id } });
     }
 
@@ -931,6 +1123,10 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
       });
     }
 
+    // Order confirmation email + audit (non-blocking)
+    logOrderEvent(order.master_order_id, 'order_created', { buyer_id: req.wholesaleBuyer.id, payment_id: payment.payment_id, total: order.grand_total });
+    emailService.sendOrderConfirmation(order, req.wholesaleBuyer).catch(err => console.warn('[Email] Confirmation failed:', err.message));
+
     return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id } });
   } catch (error) {
     return next(error);
@@ -967,10 +1163,7 @@ router.delete('/oauth/square/disconnect/:farmId', (req, res) => {
   return res.json({ status: 'ok', data: { disconnected: true, farm_id: req.params.farmId } });
 });
 
-router.get('/admin/orders', async (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(404).json({ status: 'error', message: 'Not Found' });
-  }
+router.get('/admin/orders', adminAuthMiddleware, async (req, res) => {
   const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
   const orders = await listAllOrders({ includeArchived });
   return res.json({ status: 'ok', data: { orders } });
@@ -987,7 +1180,7 @@ router.get('/network/farms', async (req, res, next) => {
   }
 });
 
-router.post('/network/farms', async (req, res, next) => {
+router.post('/network/farms', adminAuthMiddleware, async (req, res, next) => {
   try {
     const payload = req.body || {};
     const farmId = String(payload.farm_id || payload.farmId || '').trim();
@@ -1010,7 +1203,7 @@ router.post('/network/farms', async (req, res, next) => {
   }
 });
 
-router.delete('/network/farms/:farmId', async (req, res, next) => {
+router.delete('/network/farms/:farmId', adminAuthMiddleware, async (req, res, next) => {
   try {
     const result = await removeNetworkFarm(req.params.farmId);
     return res.json({ status: 'ok', data: result });
@@ -1036,12 +1229,12 @@ router.get('/network/market-events', (req, res) => {
   return res.json({ status: 'ok', data: { events: listMarketEvents() } });
 });
 
-router.post('/network/market-events', (req, res) => {
+router.post('/network/market-events', adminAuthMiddleware, (req, res) => {
   const { date, title, notes, impact } = req.body || {};
   if (!title) {
     return res.status(400).json({ status: 'error', message: 'title is required' });
   }
-  const evt = addMarketEvent({ date, title, notes, impact });
+  const evt = addMarketEvent({ date: sanitizeText(date), title: sanitizeText(title), notes: sanitizeText(notes), impact });
   return res.json({ status: 'ok', data: { event: evt } });
 });
 
@@ -1054,7 +1247,7 @@ router.get('/network/recommendations', async (req, res) => {
 // ADMIN ENDPOINTS - Payment Management
 // ============================================================================
 
-router.get('/admin/orders', async (req, res) => {
+router.get('/admin/orders', adminAuthMiddleware, async (req, res) => {
   try {
     const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
     const orders = await listAllOrders({ includeArchived });
@@ -1065,7 +1258,7 @@ router.get('/admin/orders', async (req, res) => {
   }
 });
 
-router.post('/admin/orders/:orderId/payment', express.json(), async (req, res) => {
+router.post('/admin/orders/:orderId/payment', adminAuthMiddleware, express.json(), async (req, res) => {
   try {
     const { orderId } = req.params;
     const { status, payment_reference, payment_method, marked_at } = req.body;
@@ -1089,6 +1282,7 @@ router.post('/admin/orders/:orderId/payment', express.json(), async (req, res) =
     order.payment.marked_at = marked_at || new Date().toISOString();
 
     await saveOrder(order).catch(() => {});
+    logOrderEvent(orderId, 'payment_marked', { status, payment_reference, payment_method: payment_method || 'manual' });
 
     return res.json({ status: 'ok', data: { order } });
   } catch (error) {
@@ -1098,7 +1292,7 @@ router.post('/admin/orders/:orderId/payment', express.json(), async (req, res) =
 });
 
 // Update farm sub-order tracking (for farm fulfillment UI)
-router.patch('/admin/orders/:orderId/farms/:farmId/tracking', express.json(), async (req, res) => {
+router.patch('/admin/orders/:orderId/farms/:farmId/tracking', adminAuthMiddleware, express.json(), async (req, res) => {
   try {
     const { orderId, farmId } = req.params;
     const { tracking_number, tracking_carrier, status } = req.body;
@@ -1120,6 +1314,8 @@ router.patch('/admin/orders/:orderId/farms/:farmId/tracking', express.json(), as
     if (!subOrder) {
       return res.status(404).json({ status: 'error', message: 'Order or farm sub-order not found' });
     }
+
+    logOrderEvent(orderId, 'tracking_updated', { farm_id: farmId, tracking_number, tracking_carrier: tracking_carrier || 'unknown', status: status || null });
 
     return res.json({ status: 'ok', data: { subOrder } });
   } catch (error) {
@@ -1178,7 +1374,7 @@ router.get('/inventory/check-overselling', async (req, res) => {
 /** * POST /api/wholesale/order-status
  * Receive order status updates from farms (callback endpoint)
  */
-router.post('/order-status', async (req, res) => {
+router.post('/order-status', requireFarmApiKey, async (req, res) => {
   try {
     const { order_id, status, farm_id, timestamp } = req.body;
     
@@ -1195,10 +1391,12 @@ router.post('/order-status', async (req, res) => {
     const order = await getOrderById(order_id, { includeArchived: true });
     
     if (order) {
+      const previousStatus = order.fulfillment_status || 'unknown';
       order.fulfillment_status = status;
       order.status_updated_at = timestamp || new Date().toISOString();
 
       await saveOrder(order).catch(() => {});
+      logOrderEvent(order_id, 'status_changed', { from: previousStatus, to: status, farm_id });
       
       console.log(`✅ Updated order ${order_id} status to ${status}`);
       

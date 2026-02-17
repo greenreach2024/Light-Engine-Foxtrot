@@ -140,8 +140,17 @@ router.post('/login', async (req, res) => {
       }
 
     } else {
-      // Fallback mode: Check against fallback credentials
-      // Email is optional — if provided it must match, password always required
+      // Fallback mode — ONLY allowed in development
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[Auth] Database unavailable in production — refusing fallback credentials');
+        return res.status(503).json({
+          success: false,
+          error: 'Service unavailable',
+          message: 'Authentication service temporarily unavailable'
+        });
+      }
+
+      // Dev-only fallback credentials
       const emailStr = normalizedEmail;
       const fallbackEmail = FALLBACK_FARM.email.toLowerCase();
       if ((emailStr && emailStr !== fallbackEmail) || password !== FALLBACK_FARM.password) {

@@ -130,7 +130,17 @@ router.post('/login', async (req, res) => {
         }
       }
     } else {
-      // Fallback mode (no database): Use hardcoded credentials
+      // Fallback mode — ONLY allowed in development
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[Admin Auth] Database unavailable in production — refusing fallback credentials');
+        return res.status(503).json({
+          success: false,
+          error: 'Service unavailable',
+          message: 'Admin authentication service temporarily unavailable'
+        });
+      }
+
+      // Dev-only fallback credentials
       if (email.toLowerCase() !== FALLBACK_ADMIN.email.toLowerCase() || password !== FALLBACK_ADMIN.password) {
         return res.status(401).json({
           success: false,

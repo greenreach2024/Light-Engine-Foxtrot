@@ -12,6 +12,17 @@ const ordersByBuyerId = new Map();
 
 const paymentsById = new Map();
 
+// ── Login lockout tracking ───────────────────────────────────────────
+const loginAttempts = new Map(); // email → { count, lockedUntil }
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+
+// ── Order audit trail ────────────────────────────────────────────────
+const orderAuditLog = [];
+
+// ── Password-reset tokens ────────────────────────────────────────────
+const passwordResetTokens = new Map(); // token → { email, expiresAt }
+
 const ARCHIVE_PATH = process.env.WHOLESALE_ORDER_ARCHIVE_PATH
   ? path.resolve(process.env.WHOLESALE_ORDER_ARCHIVE_PATH)
   : path.resolve(process.cwd(), 'data', 'wholesale-orders-archive.csv');
@@ -197,6 +208,101 @@ export function listPayments() {
 
 export function listRefunds() {
   return [];
+}
+
+// ── Login lockout helpers ────────────────────────────────────────────
+
+export function isAccountLocked(email) {
+  const key = String(email || '').trim().toLowerCase();
+  const entry = loginAttempts.get(key);
+  if (!entry) return false;
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true;
+  // Lock expired — reset
+  if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
+    loginAttempts.delete(key);
+  }
+  return false;
+}
+
+export function recordLoginAttempt(email, success) {
+  const key = String(email || '').trim().toLowerCase();
+  if (success) {
+    loginAttempts.delete(key);
+    return;
+  }
+  const entry = loginAttempts.get(key) || { count: 0, lockedUntil: null };
+  entry.count += 1;
+  if (entry.count >= MAX_LOGIN_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+    console.warn(`[Lockout] Account ${key} locked until ${new Date(entry.lockedUntil).toISOString()}`);
+  }
+  loginAttempts.set(key, entry);
+}
+
+export function resetLoginAttempts(email) {
+  loginAttempts.delete(String(email || '').trim().toLowerCase());
+}
+
+// ── Buyer helpers ────────────────────────────────────────────────────
+
+export function getBuyerByEmail(email) {
+  const key = String(email || '').trim().toLowerCase();
+  const buyer = buyersByEmail.get(key);
+  return buyer || null;
+}
+
+export async function updateBuyerPassword(buyerId, newPassword) {
+  const buyer = buyersById.get(buyerId);
+  if (!buyer) return null;
+  buyer.passwordHash = await bcrypt.hash(String(newPassword || ''), 10);
+  return sanitizeBuyer(buyer);
+}
+
+// ── Password-reset token helpers ─────────────────────────────────────
+
+export function createPasswordResetToken(email) {
+  const key = String(email || '').trim().toLowerCase();
+  const token = randomUUID();
+  const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
+  passwordResetTokens.set(token, { email: key, expiresAt });
+  return token;
+}
+
+export function validatePasswordResetToken(token) {
+  const entry = passwordResetTokens.get(token);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    passwordResetTokens.delete(token);
+    return null;
+  }
+  return entry.email;
+}
+
+export function consumePasswordResetToken(token) {
+  const email = validatePasswordResetToken(token);
+  if (email) passwordResetTokens.delete(token);
+  return email;
+}
+
+// ── Order audit trail ────────────────────────────────────────────────
+
+export function logOrderEvent(orderId, action, details = {}) {
+  const event = {
+    order_id: orderId,
+    action,
+    details,
+    timestamp: new Date().toISOString()
+  };
+  orderAuditLog.push(event);
+  // Keep last 10 000 events in memory
+  if (orderAuditLog.length > 10000) orderAuditLog.splice(0, orderAuditLog.length - 10000);
+  console.log(`[Audit] ${orderId} → ${action}`, JSON.stringify(details));
+  return event;
+}
+
+export function getOrderAuditLog(orderId) {
+  if (orderId) return orderAuditLog.filter(e => e.order_id === orderId);
+  return [...orderAuditLog];
 }
 
 export async function getOrderById(orderId, options = {}) {
