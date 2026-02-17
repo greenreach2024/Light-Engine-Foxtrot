@@ -1873,78 +1873,51 @@
     },
 
     /**
-     * Initialize Stripe and mount card element
+     * Initialize Square Web Payments SDK and attach card element
      */
-    stripeInstance: null,
-    cardElement: null,
-    
-    initializeStripe() {
-      // Use test publishable key (should be from environment variable in production)
-      const stripe = Stripe('pk_test_51QWImID4okxjlqBc8bv5vXnvqSaZqmqH5YhN2sE0WM4qnC0VHjZPSQfBQ4XFB9DW8K6QMvd0cQs3xPBCqb3WjxhT00xT5zJZKL');
-      this.stripeInstance = stripe;
-      
-      const elements = stripe.elements();
-      this.cardElement = elements.create('card', {
-        style: {
-          base: {
-            fontSize: '16px',
-            color: '#1a1a1a',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            '::placeholder': {
-              color: '#999',
-            },
-          },
-          invalid: {
-            color: '#c53030',
-          },
-        },
-      });
-      
-      const cardElementContainer = document.getElementById('card-element');
-      if (cardElementContainer) {
-        this.cardElement.mount('#card-element');
-        
-        this.cardElement.on('change', (event) => {
-          const displayError = document.getElementById('card-errors');
-          if (event.error) {
-            displayError.textContent = event.error.message;
-          } else {
-            displayError.textContent = '';
-          }
-        });
+    squarePayments: null,
+    squareCard: null,
+
+    async initializeSquare() {
+      if (!window.Square) {
+        console.warn('Square SDK not loaded');
+        return;
+      }
+      try {
+        // Sandbox credentials – in production these should come from the server
+        const appId = 'sandbox-sq0idb-ByoyD4t2Zy96QhAUZd9_SA';
+        const locationId = 'TC4Z3ZEBKRXRH';
+
+        this.squarePayments = window.Square.payments(appId, locationId);
+        this.squareCard = await this.squarePayments.card();
+
+        const cardElementContainer = document.getElementById('card-element');
+        if (cardElementContainer) {
+          await this.squareCard.attach('#card-element');
+        }
+      } catch (err) {
+        console.error('Square init error:', err);
+        const displayError = document.getElementById('card-errors');
+        if (displayError) displayError.textContent = 'Payment form could not load. Please refresh.';
       }
     },
 
     /**
-     * Create payment method with Stripe
+     * Tokenize card via Square Web Payments SDK
      */
-    async createPaymentMethod() {
-      if (!this.stripeInstance || !this.cardElement) {
-        throw new Error('Stripe not initialized');
+    async createPaymentToken() {
+      if (!this.squarePayments || !this.squareCard) {
+        throw new Error('Square payments not initialized');
       }
-      
-      const billingDetails = {
-        name: document.getElementById('buyer-name')?.value,
-        email: document.getElementById('buyer-email')?.value,
-        address: {
-          line1: document.getElementById('delivery-address')?.value,
-          city: document.getElementById('delivery-city')?.value,
-          state: document.getElementById('delivery-province')?.value,
-          postal_code: document.getElementById('delivery-postal')?.value,
-        },
-      };
-      
-      const { error, paymentMethod } = await this.stripeInstance.createPaymentMethod({
-        type: 'card',
-        card: this.cardElement,
-        billing_details: billingDetails,
-      });
-      
-      if (error) {
-        throw new Error(error.message);
+
+      const result = await this.squareCard.tokenize();
+
+      if (result.status === 'OK') {
+        return result.token;
       }
-      
-      return paymentMethod.id;
+
+      const msgs = (result.errors || []).map(e => e.message).join('; ');
+      throw new Error(msgs || 'Card tokenization failed');
     },
 
     /**
@@ -1975,9 +1948,9 @@
           throw new Error('Please fill in all required fields');
         }
         
-        // Create payment method
-        const paymentMethodId = await this.createPaymentMethod();
-        
+        // Tokenize card via Square
+        const paymentToken = await this.createPaymentToken();
+
         // Prepare order data
         const orderData = {
           buyer_id: this.currentBuyer?.id || 'demo-buyer-001',
@@ -1999,7 +1972,8 @@
             price_per_unit: item.price_per_unit,
             farm_id: item.farm_id
           })),
-          payment_method_id: paymentMethodId
+          payment_token: paymentToken,
+          payment_provider: 'square'
         };
         
         // Submit order to backend
@@ -2290,13 +2264,13 @@
   document.addEventListener('DOMContentLoaded', () => {
     app.init();
     
-    // Initialize Stripe when navigating to checkout
+    // Initialize Square when navigating to checkout
     const checkoutNavBtn = document.querySelector('[data-view="checkout"]');
     if (checkoutNavBtn) {
       checkoutNavBtn.addEventListener('click', () => {
         setTimeout(() => {
-          if (!app.stripeInstance) {
-            app.initializeStripe();
+          if (!app.squarePayments) {
+            app.initializeSquare();
           }
         }, 100);
       });
