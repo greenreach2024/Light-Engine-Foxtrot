@@ -1997,11 +1997,19 @@
 
         // Load current inventory data (includes all trays)
         try {
-          const inventoryResponse = await fetch('/api/inventory/current');
+          const inventoryResponse = await fetch('/api/inventory/current', {
+            headers: {
+              'x-farm-id': getFarmId()
+            }
+          });
           if (inventoryResponse.ok) {
             const inventoryData = await inventoryResponse.json();
-            // Extract trays from the nested structure
-            if (inventoryData.byFarm && inventoryData.byFarm.length > 0) {
+            // Accept current and legacy response shapes
+            if (Array.isArray(inventoryData.inventory)) {
+              traysData = { inventory: inventoryData.inventory };
+            } else if (Array.isArray(inventoryData.trays)) {
+              traysData = { trays: inventoryData.trays };
+            } else if (inventoryData.byFarm && inventoryData.byFarm.length > 0) {
               traysData = { trays: inventoryData.byFarm[0].trays || [] };
             }
           } else {
@@ -2140,19 +2148,27 @@
 
     function processTrays(data) {
       // Transform API data to internal format
-      if (!data || !data.trays || data.trays.length === 0) {
+      const sourceTrays = Array.isArray(data?.trays)
+        ? data.trays
+        : Array.isArray(data?.inventory)
+          ? data.inventory
+          : [];
+
+      if (sourceTrays.length === 0) {
         console.log('No tray data available');
         return [];
       }
       
-      console.log(`Processing ${data.trays.length} trays from inventory`);
+      console.log(`Processing ${sourceTrays.length} trays from inventory`);
       
-      return data.trays.map(tray => {
+      return sourceTrays.map(tray => {
         // Calculate expected harvest date from daysOld and harvestIn
         let expectedHarvest = null;
         if (tray.harvestIn && tray.harvestIn > 0) {
           expectedHarvest = new Date();
           expectedHarvest.setDate(expectedHarvest.getDate() + tray.harvestIn);
+        } else if (tray.estimatedHarvestDate) {
+          expectedHarvest = new Date(tray.estimatedHarvestDate);
         }
         
         // Calculate sow date from seedingDate or daysOld
@@ -2165,15 +2181,15 @@
         }
         
         return {
-          id: tray.trayId,
-          groupId: tray.groupId,
-          location: tray.groupId, // Full ID contains room:zone:group
-          currentCrop: extractCropDisplayName(findGroupPlan(tray.groupId)),
+          id: tray.trayId || tray.id,
+          groupId: tray.groupId || tray.group_id,
+          location: tray.location || tray.groupId || tray.group_id, // Full ID contains room:zone:group
+          currentCrop: extractCropDisplayName(tray.recipe || tray.plan || findGroupPlan(tray.groupId || tray.group_id)),
           sowDate: sowDate,
           transplantDate: null, // Not tracked in current data
           expectedHarvest: expectedHarvest,
           capacity: tray.plantCount || 50,
-          status: 'active'
+          status: tray.status || 'active'
         };
       });
     }
