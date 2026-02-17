@@ -4,7 +4,19 @@
  */
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import { createRequire } from 'module';
 import { query, isDatabaseAvailable } from '../config/database.js';
+
+// Load crop utilities (Phase 2b)
+const require = createRequire(import.meta.url);
+const cropUtils = require('../public/js/crop-utils.js');
+try {
+  const fs = await import('fs');
+  const path = await import('path');
+  const registryPath = path.default.join(path.default.dirname(new URL(import.meta.url).pathname), '..', 'public', 'data', 'crop-registry.json');
+  const registryData = JSON.parse(fs.default.readFileSync(registryPath, 'utf8'));
+  cropUtils.setRegistry(registryData);
+} catch (e) { console.warn('[inventory] crop registry load failed:', e.message); }
 
 const router = express.Router();
 
@@ -133,17 +145,6 @@ router.get('/forecast/:days?', async (req, res) => {
     const groups = await loadFarmGroups(farmId);
     const daysLimit = req.params.days ? parseInt(req.params.days, 10) : null;
 
-    const VARIETY_GROW_DAYS = {
-      'Mei Qing Pak Choi': 28,
-      'Lacinato Kale': 45,
-      'Bibb Butterhead': 35,
-      'Frisée Endive': 45,
-      'Red Russian Kale': 50,
-      'Buttercrunch Lettuce': 42,
-      'Tatsoi': 28,
-      'Watercress': 21
-    };
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -157,7 +158,7 @@ router.get('/forecast/:days?', async (req, res) => {
       if (Number.isNaN(seedDate.getTime())) return;
 
       const cropName = group.crop || group.recipe || group.name || 'Mixed crops';
-      const growDays = VARIETY_GROW_DAYS[cropName] || 35;
+      const growDays = cropUtils.getCropGrowDays(cropName) || 35;
 
       const harvestDate = new Date(seedDate);
       harvestDate.setDate(seedDate.getDate() + growDays);

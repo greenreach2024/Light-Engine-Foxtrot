@@ -564,28 +564,15 @@
     </div>
   </div>
 
+  <script src="/js/crop-utils.js"></script>
   <script>
     // Wrap in IIFE to prevent API_BASE conflicts when loaded in iframe
     (function() {
       /**
-       * Extract display name from plan ID
-       * Handles formats:
-       * - "crop-bibb-butterhead" → "Bibb Butterhead"
-       * - "mei-qing-pak-choi" → "Mei Qing Pak Choi"
-       * - "lacinato-kale" → "Lacinato Kale"
-       * - null/undefined → "Unknown"
+       * Extract display name from plan ID — delegates to cropUtils (Phase 2b)
        */
       function extractCropDisplayName(planId) {
-        if (!planId || typeof planId !== 'string') return 'Unknown';
-        
-        // Remove "crop-" prefix if present
-        const cleanId = planId.replace(/^crop-/, '');
-        
-        // Split on hyphens and capitalize each word
-        return cleanId
-          .split('-')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
+        return (window.cropUtils && cropUtils.planIdToCropName(planId)) || 'Unknown';
       }
 
       // Use current server origin for API calls (works on localhost and AWS)
