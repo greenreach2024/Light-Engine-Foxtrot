@@ -84,6 +84,41 @@ function initLogin() {
     // Auto-fill removed — live credentials must not be embedded in client code
 }
 
+function resolveMarketDataForCrop(cropName) {
+    if (!cropName) return null;
+
+    const exact = marketDataSources[cropName];
+    if (exact) return exact;
+
+    const normalized = String(cropName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const aliasChecks = [
+        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
+        { test: ['romaine'], key: 'Romaine Lettuce' },
+        { test: ['red leaf'], key: 'Red Leaf Lettuce' },
+        { test: ['oakleaf', 'oak leaf', 'salad bowl'], key: 'Oak Leaf Lettuce' },
+        { test: ['lettuce', 'salad'], key: 'Lettuce' },
+        { test: ['arugula', 'rocket'], key: 'Arugula' },
+        { test: ['basil', 'genovese', 'thai basil', 'purple basil', 'lemon basil', 'holy basil'], key: 'Basil' },
+        { test: ['kale', 'lacinato', 'dinosaur', 'russian kale'], key: 'Kale' },
+        { test: ['frisee', 'frisée', 'endive'], key: 'Frisée Endive' },
+        { test: ['watercress'], key: 'Watercress' }
+    ];
+
+    for (const alias of aliasChecks) {
+        if (alias.test.some(token => normalized.includes(token))) {
+            return marketDataSources[alias.key] || null;
+        }
+    }
+
+    const fuzzyKey = Object.keys(marketDataSources).find((key) => {
+        const keyNormalized = key.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        return normalized.includes(keyNormalized) || keyNormalized.includes(normalized);
+    });
+
+    return fuzzyKey ? marketDataSources[fuzzyKey] : null;
+}
+
 /**
  * Initialize dashboard
  */
@@ -694,7 +729,11 @@ function renderEmbeddedView(url, title) {
                 '.nav-menu',
                 '.dashboard-header',
                 '.main-nav',
-                '.sidebar-header-nav'
+                '.sidebar-header-nav',
+                '#farm-assistant',
+                '.voice-assistant-btn',
+                '#voiceModal',
+                '#voiceBtn'
             ];
             selectors.forEach((selector) => {
                 doc.querySelectorAll(selector).forEach((el) => {
@@ -1630,6 +1669,11 @@ async function runAIPricingAnalysis() {
         statusText.textContent = steps[i];
         await new Promise(resolve => setTimeout(resolve, 700));
     }
+
+    // Ensure pricing data is loaded before analysis (needed for current-price comparisons)
+    if (!Array.isArray(pricingData) || pricingData.length === 0) {
+        await loadCropsFromDatabase();
+    }
     
     // Simulate fetching exchange rate (in production, call real API)
     await fetchExchangeRate();
@@ -1683,10 +1727,23 @@ async function fetchExchangeRate() {
  */
 function generateRecommendations() {
     const recommendations = [];
-    
-    pricingData.forEach(item => {
-        const marketData = marketDataSources[item.crop];
+
+    const pricingMap = new Map(
+        (pricingData || []).map(item => [item.crop, item])
+    );
+
+    // Analyze full recipe universe: market-supported recipes + current pricing recipes
+    const analysisCrops = [...new Set([
+        ...Object.keys(marketDataSources),
+        ...(pricingData || []).map(item => item.crop)
+    ])].sort();
+
+    analysisCrops.forEach(cropName => {
+        const marketData = resolveMarketDataForCrop(cropName);
         if (!marketData) return;
+
+        const pricingItem = pricingMap.get(cropName);
+        const defaultItem = defaultPricing[cropName] || null;
         
         // Calculate price per oz from market data
         const pricePerOzUSD = marketData.avgPriceUSD / marketData.avgWeightOz;
@@ -1699,7 +1756,7 @@ function generateRecommendations() {
         // Calculate price per 25g (1 oz = 28.35g, so 25g = 0.8818 oz)
         const pricePer25gCAD = pricePerOzCAD * 0.8818;
         
-        const currentPrice = item.retail;
+        const currentPrice = Number(pricingItem?.retail ?? defaultItem?.retail ?? pricePerOzCAD);
         const marketAvg = pricePerOzCAD;
         const difference = ((currentPrice - marketAvg) / marketAvg * 100).toFixed(1);
         
@@ -1709,7 +1766,7 @@ function generateRecommendations() {
         
         if (marketData.trend === 'increasing') {
             recommendation = marketAvg * 1.05; // Suggest 5% above average
-            reasoning = `Market analysis shows ${item.crop} prices are trending upward. `;
+            reasoning = `Market analysis shows ${cropName} prices are trending upward. `;
             priceChangeType = 'up';
             
             if (marketData.articles.length > 0) {
@@ -1719,11 +1776,11 @@ function generateRecommendations() {
             reasoning += `Recommended to adjust pricing to capitalize on market conditions.`;
         } else if (marketData.trend === 'decreasing') {
             recommendation = marketAvg * 0.95; // Suggest 5% below average
-            reasoning = `Market prices for ${item.crop} are declining due to increased supply. Consider competitive pricing to maintain market share.`;
+            reasoning = `Market prices for ${cropName} are declining due to increased supply. Consider competitive pricing to maintain market share.`;
             priceChangeType = 'down';
         } else {
             recommendation = marketAvg;
-            reasoning = `Current ${item.crop} market is stable. Your pricing is ${Math.abs(difference)}% ${difference > 0 ? 'above' : 'below'} market average. `;
+            reasoning = `Current ${cropName} market is stable. Your pricing is ${Math.abs(difference)}% ${difference > 0 ? 'above' : 'below'} market average. `;
             
             if (Math.abs(difference) > 10) {
                 reasoning += difference > 0 ? 
@@ -1740,7 +1797,7 @@ function generateRecommendations() {
             marketData.priceRange.map(p => p / marketData.avgWeightOz);
         
         recommendations.push({
-            crop: item.crop,
+            crop: cropName,
             currentPrice: currentPrice,
             recommendedPrice: recommendation,
             marketAverage: marketAvg,
@@ -1755,6 +1812,7 @@ function generateRecommendations() {
             priceChangeType: priceChangeType,
             articles: marketData.articles,
             retailers: marketData.retailers,
+            hasPricingRow: Boolean(pricingItem),
             timestamp: Date.now()
         });
     });
@@ -1768,6 +1826,17 @@ function generateRecommendations() {
 function displayRecommendations(recommendations) {
     const contentDiv = document.getElementById('ai-recommendations-content');
     const recommendationsDiv = document.getElementById('ai-recommendations');
+
+    if (!recommendations || recommendations.length === 0) {
+        contentDiv.innerHTML = `
+            <div class="card" style="padding: 16px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3);">
+                <strong>No matching market data found for current crop names.</strong><br>
+                Add crop aliases in the assistant mapping or verify crop naming in pricing data.
+            </div>
+        `;
+        recommendationsDiv.style.display = 'block';
+        return;
+    }
     
     contentDiv.innerHTML = recommendations.map(rec => {
         const priceChange = ((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100).toFixed(1);
