@@ -1482,80 +1482,79 @@
     // ============================================================================
     // CROP DATABASE & CONSTANTS
     // ============================================================================
-    
-    const CROP_DATABASE = {
-      'lettuce-buttercrunch': {
-        id: 'lettuce-buttercrunch',
-        name: 'Buttercrunch Lettuce',
-        cropClass: 'leafy',
-        phases: {
-          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
-          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
-          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
-          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
-        },
-        nutrientProfile: 'LeafyVeg-A',
-        targetDLI: 14,
-        harvestDays: 35
-      },
-      'lettuce-romaine': {
-        id: 'lettuce-romaine',
-        name: 'Romaine Lettuce',
-        cropClass: 'leafy',
-        phases: {
-          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
-          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
-          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
-          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
-        },
-        nutrientProfile: 'LeafyVeg-A',
-        targetDLI: 15,
-        harvestDays: 35
-      },
-      'kale': {
-        id: 'kale',
-        name: 'Kale',
-        cropClass: 'leafy',
-        phases: {
-          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
-          seedling: { days: 10, ppfdMin: 150, ppfdMax: 240 },
-          vegetative: { days: 21, ppfdMin: 240, ppfdMax: 320 },
-          finish: { days: 7, ppfdMin: 280, ppfdMax: 350 }
-        },
-        nutrientProfile: 'LeafyVeg-A',
-        targetDLI: 16,
-        harvestDays: 45
-      },
-      'basil': {
-        id: 'basil',
-        name: 'Basil',
-        cropClass: 'herb',
-        phases: {
-          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
-          seedling: { days: 7, ppfdMin: 150, ppfdMax: 220 },
-          vegetative: { days: 14, ppfdMin: 220, ppfdMax: 300 },
-          finish: { days: 7, ppfdMin: 250, ppfdMax: 330 }
-        },
-        nutrientProfile: 'Herb-Mix',
-        targetDLI: 14,
-        harvestDays: 35
-      },
-      'tomato': {
-        id: 'tomato',
-        name: 'Cherry Tomato',
-        cropClass: 'fruiting',
-        phases: {
-          germination: { daysMin: 7, daysMax: 10, ppfdMin: 50, ppfdMax: 150 },
-          seedling: { days: 14, ppfdMin: 150, ppfdMax: 250 },
-          vegetative: { days: 21, ppfdMin: 300, ppfdMax: 450 },
-          flowering: { days: 21, ppfdMin: 400, ppfdMax: 600 },
-          fruiting: { days: 28, ppfdMin: 450, ppfdMax: 650 }
-        },
-        nutrientProfile: 'Fruiting-Hi',
-        targetDLI: 25,
-        harvestDays: 91
-      }
+
+    // Fallback defaults (replaced at startup by buildCropDatabase with all 50 recipes)
+    let CROP_DATABASE = {
+      'buttercrunch-lettuce': { id: 'buttercrunch-lettuce', name: 'Buttercrunch Lettuce', cropClass: 'leafy', harvestDays: 32, nutrientProfile: 'LeafyVeg-A', phases: { seedling: { ppfdMin: 139, ppfdMax: 208 } } },
+      'parris-island-cos-romaine': { id: 'parris-island-cos-romaine', name: 'Parris Island Cos Romaine', cropClass: 'leafy', harvestDays: 35, nutrientProfile: 'LeafyVeg-A', phases: { seedling: { ppfdMin: 139, ppfdMax: 208 } } },
+      'lacinato-kale': { id: 'lacinato-kale', name: 'Lacinato Kale', cropClass: 'leafy', harvestDays: 35, nutrientProfile: 'LeafyVeg-A', phases: { seedling: { ppfdMin: 139, ppfdMax: 208 } } },
+      'genovese-basil': { id: 'genovese-basil', name: 'Genovese Basil', cropClass: 'herb', harvestDays: 30, nutrientProfile: 'Herb-Mix', phases: { seedling: { ppfdMin: 139, ppfdMax: 208 } } },
+      'better-boy': { id: 'better-boy', name: 'Better Boy', cropClass: 'fruiting', harvestDays: 125, nutrientProfile: 'Fruiting-Hi', phases: { seedling: { ppfdMin: 154, ppfdMax: 216 } } }
     };
+
+    const HERB_PATTERN = /basil|cilantro|parsley|thyme|oregano|rosemary|sage|dill|tarragon|marjoram|mint|spearmint|chervil|lovage|lemon.?balm|sorrel/i;
+
+    /**
+     * Build CROP_DATABASE dynamically from the 50-crop lighting-recipes.json.
+     * Each recipe's day-by-day data provides exact seedling PPFD ranges,
+     * harvest duration, and stage info for cropClass classification.
+     */
+    async function buildCropDatabase() {
+      try {
+        const res = await fetch('/data/lighting-recipes.json');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data || !data.crops) throw new Error('No crops data');
+
+        const db = {};
+        for (const [name, days] of Object.entries(data.crops)) {
+          if (!Array.isArray(days) || !days.length) continue;
+
+          const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+          // Derive cropClass from growth stages
+          const stages = new Set(days.map(d => d.stage));
+          let cropClass = 'leafy';
+          if (stages.has('Fruiting')) cropClass = 'fruiting';
+
+          // Detect herbs by name (they share leafy stages but are a distinct class)
+          let nutrientProfile = 'LeafyVeg-A';
+          if (HERB_PATTERN.test(name)) {
+            cropClass = 'herb';
+            nutrientProfile = 'Herb-Mix';
+          } else if (cropClass === 'fruiting') {
+            nutrientProfile = 'Fruiting-Hi';
+          }
+
+          // Extract exact seedling PPFD range from day-by-day data
+          const seedlingPPFDs = days
+            .filter(d => d.stage === 'Seedling')
+            .map(d => d.ppfd)
+            .filter(v => typeof v === 'number' && isFinite(v));
+
+          db[id] = {
+            id,
+            name,
+            cropClass,
+            harvestDays: days.length,
+            nutrientProfile,
+            phases: {
+              seedling: {
+                ppfdMin: seedlingPPFDs.length ? Math.round(Math.min(...seedlingPPFDs)) : 150,
+                ppfdMax: seedlingPPFDs.length ? Math.round(Math.max(...seedlingPPFDs)) : 220
+              }
+            }
+          };
+        }
+
+        if (Object.keys(db).length > 0) {
+          CROP_DATABASE = db;
+          console.log(`[CROP_DATABASE] Built ${Object.keys(db).length} entries from lighting recipes`);
+        }
+      } catch (err) {
+        console.warn('[CROP_DATABASE] Failed to build from recipes, using fallback defaults:', err.message);
+      }
+    }
 
     const SEEDLING_ACCLIMATION_RULES = {
       initialReductionPercent: 0.75, // Reduce to 75% of normal for first 3-5 days
@@ -1752,7 +1751,10 @@
     // INITIALIZATION
     // ============================================================================
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Build CROP_DATABASE from 50-recipe lighting-recipes.json before anything uses it
+      await buildCropDatabase();
+
       initializeManualForm();
       loadSchedulerData();
       
@@ -2324,100 +2326,53 @@
      * For now: Simple fallback - recommend same crop (continuity planning)
      */
 
-    // Map display crop names to database IDs
+    // Map display crop names to CROP_DATABASE keys using fuzzy matching
     function mapCropNameToId(cropName) {
-      if (!cropName) return 'lettuce-buttercrunch'; // default
-      
-      const lowerName = cropName.toLowerCase();
-      
-      // Direct match in CROP_DATABASE
+      const defaultKey = Object.keys(CROP_DATABASE)[0] || 'unknown';
+      if (!cropName) return defaultKey;
+
+      const lower = cropName.toLowerCase().trim();
+      const slug = lower.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+      // 1. Direct key match
+      if (CROP_DATABASE[slug]) return slug;
+
+      // 2. Strip "crop-" prefix (plan IDs like "crop-bibb-butterhead")
+      const stripped = slug.replace(/^crop-/, '');
+      if (CROP_DATABASE[stripped]) return stripped;
+
+      // 3. Exact name match
       for (const [key, entry] of Object.entries(CROP_DATABASE)) {
-        if (key === lowerName || entry.name.toLowerCase() === lowerName) return key;
+        if (entry.name.toLowerCase() === lower) return key;
       }
-      
-      // Partial/classification-based matching
-      const mapping = {
-        'butterhead': 'lettuce-buttercrunch',
-        'bibb': 'lettuce-buttercrunch',
-        'buttercrunch': 'lettuce-buttercrunch',
-        'romaine': 'lettuce-romaine',
-        'cos': 'lettuce-romaine',
-        'oakleaf': 'lettuce-buttercrunch',
-        'oak leaf': 'lettuce-buttercrunch',
-        'red leaf': 'lettuce-buttercrunch',
-        'lettuce': 'lettuce-buttercrunch',
-        'basil': 'basil',
-        'genovese': 'basil',
-        'thai basil': 'basil',
-        'arugula': 'kale',
-        'kale': 'kale',
-        'lacinato': 'kale',
-        'red russian': 'kale',
-        'spinach': 'kale',
-        'chard': 'kale',
-        'swiss chard': 'kale',
-        'collard': 'kale',
-        'mizuna': 'kale',
-        'tatsoi': 'kale',
-        'pak choi': 'kale',
-        'mustard': 'kale',
-        'watercress': 'kale',
-        'komatsuna': 'kale',
-        'escarole': 'lettuce-buttercrunch',
-        'frisee': 'lettuce-buttercrunch',
-        'endive': 'lettuce-buttercrunch',
-        'sorrel': 'kale',
-        'tomato': 'tomato',
-        'san marzano': 'tomato',
-        'sun gold': 'tomato',
-        'brandywine': 'tomato',
-        'celebrity': 'tomato',
-        'better boy': 'tomato',
-        'heatmaster': 'tomato',
-        'strawberry': 'tomato', // similar fruiting profile
-        'albion': 'tomato',
-        'chandler': 'tomato',
-        'seascape': 'tomato',
-        'sequoia': 'tomato',
-        'ozark': 'tomato',
-        'monterey': 'tomato',
-        'tribute': 'tomato',
-        'tristar': 'tomato',
-        'jewel': 'tomato',
-        'eversweet': 'tomato',
-        'herb': 'basil',
-        'cilantro': 'basil',
-        'dill': 'basil',
-        'oregano': 'basil',
-        'thyme': 'basil',
-        'rosemary': 'basil',
-        'sage': 'basil',
-        'parsley': 'basil',
-        'tarragon': 'basil',
-        'mint': 'basil',
-        'spearmint': 'basil',
-        'chervil': 'basil',
-        'marjoram': 'basil',
-        'lovage': 'basil',
-        'lemon balm': 'basil'
-      };
-      
-      // Try partial match
-      for (const [keyword, id] of Object.entries(mapping)) {
-        if (lowerName.includes(keyword)) return id;
+
+      // 4. Best partial match — key/name with most word overlap
+      const words = lower.split(/[\s\-]+/).filter(w => w.length > 2);
+      let bestKey = null, bestCount = 0;
+      for (const [key, entry] of Object.entries(CROP_DATABASE)) {
+        const target = (key + ' ' + entry.name.toLowerCase()).split(/[\s\-]+/).filter(t => t.length > 2);
+        let count = 0;
+        for (const w of words) {
+          if (target.some(t => t.includes(w) || w.includes(t))) count++;
+        }
+        if (count > bestCount) { bestCount = count; bestKey = key; }
       }
-      
-      return 'lettuce-buttercrunch'; // safe default for unknown crops
+      if (bestKey && bestCount > 0) return bestKey;
+
+      return defaultKey;
     }
 
     function normalizeCropId(cropCandidate) {
-      if (!cropCandidate) return 'lettuce-buttercrunch';
+      if (!cropCandidate) return Object.keys(CROP_DATABASE)[0] || 'unknown';
 
-      if (typeof cropCandidate === 'string' && CROP_DATABASE[cropCandidate]) {
-        return cropCandidate;
-      }
+      const str = String(cropCandidate);
+      if (CROP_DATABASE[str]) return str;
 
-      return mapCropNameToId(String(cropCandidate));
+      // Strip crop- prefix before fallback
+      const stripped = str.replace(/^crop-/i, '');
+      if (CROP_DATABASE[stripped]) return stripped;
+
+      return mapCropNameToId(str);
     }
 
     function calculateSeedingTasks(trays) {
