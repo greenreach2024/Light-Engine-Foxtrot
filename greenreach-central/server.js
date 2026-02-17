@@ -1973,6 +1973,14 @@ async function startServer() {
     // Wholesale network sync (DB optional)
     startWholesaleNetworkSync(app);
 
+    // Load persisted buyers into memory on startup
+    try {
+      const { loadBuyersFromDb } = await import('./services/wholesaleMemoryStore.js');
+      await loadBuyersFromDb();
+    } catch (e) {
+      logger.warn('Buyer DB load skipped:', e.message);
+    }
+
     // Graceful shutdown
     const shutdown = async (signal) => {
       logger.info(`${signal} received, shutting down gracefully...`);

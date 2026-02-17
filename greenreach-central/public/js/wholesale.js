@@ -1922,6 +1922,7 @@
 
     /**
      * Place wholesale order with payment authorization
+     * Uses the checkout/execute flow which handles allocation + payment
      */
     async placeOrder() {
       const placeOrderBtn = document.getElementById('place-order-btn');
@@ -1933,8 +1934,8 @@
       try {
         // Disable button
         placeOrderBtn.disabled = true;
-        placeOrderText.style.display = 'none';
-        placeOrderSpinner.style.display = 'inline';
+        if (placeOrderText) placeOrderText.style.display = 'none';
+        if (placeOrderSpinner) placeOrderSpinner.style.display = 'inline';
         
         // Validate cart
         if (this.cart.length === 0) {
@@ -1943,54 +1944,73 @@
         
         // Validate form
         const form = document.getElementById('checkout-form');
-        if (!form.checkValidity()) {
+        if (form && !form.checkValidity()) {
           form.reportValidity();
           throw new Error('Please fill in all required fields');
         }
-        
-        // Tokenize card via Square
-        const paymentToken = await this.createPaymentToken();
 
-        // Prepare order data
-        const orderData = {
-          buyer_id: this.currentBuyer?.id || 'demo-buyer-001',
-          buyer_name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName,
-          buyer_email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
-          buyer_phone: this.currentBuyer?.phone || '',
-          delivery_address: document.getElementById('delivery-address')?.value,
-          delivery_city: document.getElementById('delivery-city')?.value,
-          delivery_province: document.getElementById('delivery-province')?.value,
-          delivery_postal_code: document.getElementById('delivery-postal')?.value,
-          delivery_instructions: document.getElementById('delivery-instructions')?.value || null,
-          delivery_time_slot: document.getElementById('delivery-time-slot')?.value || 'flexible',
-          fulfillment_cadence: document.getElementById('fulfillment-cadence')?.value || 'one_time',
-          cart_items: this.cart.map(item => ({
-            sku_id: item.sku_id,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit: item.unit,
-            price_per_unit: item.price_per_unit,
-            farm_id: item.farm_id
-          })),
-          payment_token: paymentToken,
-          payment_provider: 'square'
+        // Build checkout payload (same format as checkout/execute)
+        const buyerAccount = {
+          email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
+          name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName
         };
-        
-        // Submit order to backend
-        const response = await fetch('/api/wholesale/orders/create', {
+
+        const deliveryAddress = {
+          street: document.getElementById('delivery-address')?.value || '',
+          city: document.getElementById('delivery-city')?.value || '',
+          zip: document.getElementById('delivery-postal')?.value || ''
+        };
+
+        const deliveryDate = document.getElementById('delivery-date')?.value || this.deliveryDate;
+        const cadence = document.getElementById('fulfillment-cadence')?.value || 'one_time';
+
+        const cartItems = this.cart.map(item => ({
+          sku_id: item.sku_id,
+          quantity: item.quantity
+        }));
+
+        // Try to get Square payment token if available
+        let paymentProvider = 'manual';
+        let paymentSource = null;
+        try {
+          if (this.squarePayments && this.squareCard) {
+            const tokenResult = await this.squareCard.tokenize();
+            if (tokenResult.status === 'OK') {
+              paymentProvider = 'square';
+              paymentSource = { source_id: tokenResult.token };
+            }
+          }
+        } catch (tokenErr) {
+          console.warn('Square tokenization skipped:', tokenErr.message);
+        }
+
+        const sourcing = this.getSourcingSelection ? this.getSourcingSelection() : { mode: 'auto_network' };
+
+        const response = await fetch('/api/wholesale/checkout/execute', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {})
           },
-          body: JSON.stringify(orderData)
+          body: JSON.stringify({
+            buyer_account: buyerAccount,
+            delivery_date: deliveryDate,
+            delivery_address: deliveryAddress,
+            recurrence: { cadence },
+            cart: cartItems,
+            payment_provider: paymentProvider,
+            payment_source: paymentSource,
+            sourcing
+          })
         });
         
         const result = await response.json();
         
-        if (!response.ok || !result.ok) {
-          throw new Error(result.message || 'Failed to place order');
+        if (!response.ok || result?.status !== 'ok') {
+          throw new Error(result?.message || 'Failed to place order');
         }
+        
+        const order = result.data;
         
         // Success!
         this.showToast('Order placed successfully!', 'success');
@@ -2004,20 +2024,20 @@
           <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 3rem; color: var(--success); margin-bottom: 1rem;">✓</div>
             <h2>Order Placed Successfully!</h2>
-            <p style="margin: 1rem 0;">Order #${result.order_id}</p>
+            <p style="margin: 1rem 0;">Order #${order.master_order_id || 'confirmed'}</p>
             <p style="margin: 1rem 0; color: var(--text-secondary);">
-              Your payment has been authorized but <strong>not charged yet</strong>.
-              <br/>Farms have 24 hours to confirm their portions.
-              <br/>You'll receive an email when farms respond.
+              Your order has been submitted to the farm network.
+              <br/>You'll receive an email confirmation shortly.
             </p>
             <p style="margin: 1.5rem 0;">
-              <strong>Total Authorized:</strong> $${result.total_amount.toFixed(2)}
+              <strong>Total:</strong> $${Number(order.grand_total || 0).toFixed(2)}
             </p>
             <button class="btn btn-primary" onclick="app.navigateTo('orders')">View My Orders</button>
           </div>
         `;
         
-        document.querySelector('.checkout-container').innerHTML = successMessage;
+        const container = document.querySelector('.checkout-container');
+        if (container) container.innerHTML = successMessage;
         
       } catch (error) {
         console.error('Order placement error:', error);
@@ -2028,9 +2048,9 @@
         }
       } finally {
         // Re-enable button
-        placeOrderBtn.disabled = false;
-        placeOrderText.style.display = 'inline';
-        placeOrderSpinner.style.display = 'none';
+        if (placeOrderBtn) placeOrderBtn.disabled = false;
+        if (placeOrderText) placeOrderText.style.display = 'inline';
+        if (placeOrderSpinner) placeOrderSpinner.style.display = 'none';
       }
     },
 
@@ -2076,22 +2096,16 @@
       };
 
       try {
-        const response = await fetch('/api/wholesale/product-requests/create', {
+        const { response, json } = await this.apiFetch('/api/wholesale/product-requests', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.token}`
-          },
           body: JSON.stringify(formData)
         });
 
-        const result = await response.json();
-
-        if (!response.ok || !result.ok) {
-          throw new Error(result.message || 'Failed to submit request');
+        if (!response.ok || json?.status !== 'ok') {
+          throw new Error(json?.message || 'Product requests are not yet available');
         }
 
-        this.showToast(`Request submitted! ${result.matched_farms} farms notified`, 'success');
+        this.showToast(`Request submitted! ${json?.data?.matched_farms || 0} farms notified`, 'success');
         this.closeProductRequestModal();
         
         // Reload requests if on that view
@@ -2109,21 +2123,15 @@
       if (!this.currentBuyer) return;
 
       try {
-        const response = await fetch(`/api/wholesale/product-requests/buyer/${this.currentBuyer.id}`, {
-          headers: {
-            'Authorization': `Bearer ${this.token}`
-          }
-        });
+        const { response, json } = await this.apiFetch(`/api/wholesale/product-requests`);
 
-        const result = await response.json();
-
-        if (response.ok && result.ok) {
-          this.productRequests = result.requests || [];
+        if (response.ok && json?.status === 'ok') {
+          this.productRequests = json.data?.requests || [];
           this.renderProductRequests();
         }
 
       } catch (error) {
-        console.error('Failed to load product requests:', error);
+        console.warn('Product requests not yet available');
       }
     },
 

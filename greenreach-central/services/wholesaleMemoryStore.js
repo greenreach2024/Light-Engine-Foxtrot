@@ -11,6 +11,10 @@ const ordersById = new Map();
 const ordersByBuyerId = new Map();
 
 const paymentsById = new Map();
+const refundsById = new Map();
+
+// ── Blacklisted tokens (logout) ──────────────────────────────────────
+const tokenBlacklist = new Set();
 
 // ── Login lockout tracking ───────────────────────────────────────────
 const loginAttempts = new Map(); // email → { count, lockedUntil }
@@ -63,6 +67,8 @@ export async function createBuyer({ businessName, contactName, email, password, 
   buyersByEmail.set(normalizedEmail, buyer);
   buyersById.set(buyerId, buyer);
 
+  persistBuyer(buyer).catch(() => {});
+
   return sanitizeBuyer(buyer);
 }
 
@@ -88,8 +94,136 @@ export function sanitizeBuyer(buyer) {
     email: buyer.email,
     buyerType: buyer.buyerType,
     location: buyer.location || null,
-    createdAt: buyer.createdAt
+    createdAt: buyer.createdAt,
+    status: buyer.status || 'active',
+    phone: buyer.phone || null
   };
+}
+
+// ── Buyer persistence (DB) ───────────────────────────────────────────
+
+async function persistBuyer(buyer) {
+  if (!isDatabaseAvailable()) return;
+  const now = new Date().toISOString();
+  try {
+    await query(
+      `INSERT INTO wholesale_buyers
+        (id, business_name, contact_name, email, buyer_type, location, password_hash, status, phone, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)
+       ON CONFLICT (id) DO UPDATE
+       SET business_name = EXCLUDED.business_name,
+           contact_name = EXCLUDED.contact_name,
+           email = EXCLUDED.email,
+           buyer_type = EXCLUDED.buyer_type,
+           location = EXCLUDED.location,
+           password_hash = EXCLUDED.password_hash,
+           status = EXCLUDED.status,
+           phone = EXCLUDED.phone,
+           updated_at = EXCLUDED.updated_at`,
+      [buyer.id, buyer.businessName, buyer.contactName, buyer.email,
+       buyer.buyerType, JSON.stringify(buyer.location || null), buyer.passwordHash,
+       buyer.status || 'active', buyer.phone || null, buyer.createdAt || now, now]
+    );
+  } catch (err) {
+    // If table doesn't exist yet, silently skip
+    if (!String(err?.message || '').includes('relation')) {
+      console.warn('[BuyerPersist] Error:', err.message);
+    }
+  }
+}
+
+export async function loadBuyersFromDb() {
+  if (!isDatabaseAvailable()) return;
+  try {
+    const result = await query('SELECT * FROM wholesale_buyers ORDER BY created_at ASC');
+    for (const row of result.rows) {
+      const buyer = {
+        id: row.id,
+        businessName: row.business_name,
+        contactName: row.contact_name,
+        email: row.email,
+        buyerType: row.buyer_type,
+        location: row.location || null,
+        passwordHash: row.password_hash,
+        status: row.status || 'active',
+        phone: row.phone || null,
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
+      };
+      const key = buyer.email.trim().toLowerCase();
+      if (!buyersByEmail.has(key)) {
+        buyersByEmail.set(key, buyer);
+        buyersById.set(buyer.id, buyer);
+      }
+    }
+    console.log(`[BuyerPersist] Loaded ${result.rows.length} buyers from DB`);
+  } catch (err) {
+    if (!String(err?.message || '').includes('relation')) {
+      console.warn('[BuyerPersist] Load failed:', err.message);
+    }
+  }
+}
+
+export async function updateBuyer(buyerId, updates) {
+  const buyer = buyersById.get(buyerId);
+  if (!buyer) return null;
+
+  // Only allow updating safe fields
+  const allowedFields = ['businessName', 'contactName', 'phone', 'buyerType', 'location'];
+  for (const field of allowedFields) {
+    if (updates[field] !== undefined) {
+      buyer[field] = updates[field];
+    }
+  }
+  // Email change: re-key the email map
+  if (updates.email && updates.email !== buyer.email) {
+    const newEmail = String(updates.email).trim().toLowerCase();
+    if (buyersByEmail.has(newEmail)) {
+      const err = new Error('Email already registered');
+      err.code = 'EMAIL_EXISTS';
+      throw err;
+    }
+    buyersByEmail.delete(buyer.email.trim().toLowerCase());
+    buyer.email = newEmail;
+    buyersByEmail.set(newEmail, buyer);
+  }
+
+  persistBuyer(buyer).catch(() => {});
+  return sanitizeBuyer(buyer);
+}
+
+export function deactivateBuyer(buyerId) {
+  const buyer = buyersById.get(buyerId);
+  if (!buyer) return null;
+  buyer.status = 'deactivated';
+  persistBuyer(buyer).catch(() => {});
+  return sanitizeBuyer(buyer);
+}
+
+export function reactivateBuyer(buyerId) {
+  const buyer = buyersById.get(buyerId);
+  if (!buyer) return null;
+  buyer.status = 'active';
+  persistBuyer(buyer).catch(() => {});
+  return sanitizeBuyer(buyer);
+}
+
+export function listAllBuyers() {
+  return Array.from(buyersById.values()).map(sanitizeBuyer);
+}
+
+// ── Token blacklist (logout) ─────────────────────────────────────────
+
+export function blacklistToken(token) {
+  tokenBlacklist.add(token);
+  // Limit size to avoid memory leak (tokens expire after 7d anyway)
+  if (tokenBlacklist.size > 10000) {
+    const iter = tokenBlacklist.values();
+    tokenBlacklist.delete(iter.next().value);
+  }
+}
+
+export function isTokenBlacklisted(token) {
+  return tokenBlacklist.has(token);
 }
 
 export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, deliveryAddress, recurrence, farmSubOrders, totals }) {
@@ -122,45 +256,48 @@ export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, del
 
 export async function listOrdersForBuyer(buyerId, options = {}) {
   await runArchiveIfNeeded().catch(() => {});
+  let dbOrders = [];
   if (isDatabaseAvailable()) {
-    const result = await query(
-      'SELECT order_data FROM wholesale_orders WHERE buyer_id = $1 ORDER BY created_at DESC',
-      [buyerId]
-    );
-    const dbOrders = result.rows.map((row) => row.order_data);
-    if (options.includeArchived) {
-      const archived = await loadArchivedOrders({ buyerId });
-      return mergeOrders(dbOrders, archived);
+    try {
+      const result = await query(
+        'SELECT order_data FROM wholesale_orders WHERE buyer_id = $1 ORDER BY created_at DESC',
+        [buyerId]
+      );
+      dbOrders = result.rows.map((row) => row.order_data);
+    } catch {
+      // DB query failed — fall through to memory
     }
-    return dbOrders;
   }
+  // Merge DB results with in-memory (covers orders not yet persisted)
   const memOrders = ordersByBuyerId.get(buyerId) || [];
+  const merged = mergeOrders(dbOrders, memOrders);
   if (options.includeArchived) {
     const archived = await loadArchivedOrders({ buyerId });
-    return mergeOrders(memOrders, archived);
+    return mergeOrders(merged, archived);
   }
-  return memOrders;
+  return merged;
 }
 
 export async function listAllOrders(options = {}) {
   await runArchiveIfNeeded().catch(() => {});
+  let dbOrders = [];
   if (isDatabaseAvailable()) {
-    const result = await query(
-      'SELECT order_data FROM wholesale_orders ORDER BY created_at DESC'
-    );
-    const dbOrders = result.rows.map((row) => row.order_data);
-    if (options.includeArchived) {
-      const archived = await loadArchivedOrders();
-      return mergeOrders(dbOrders, archived);
+    try {
+      const result = await query(
+        'SELECT order_data FROM wholesale_orders ORDER BY created_at DESC'
+      );
+      dbOrders = result.rows.map((row) => row.order_data);
+    } catch {
+      // DB query failed — fall through to memory
     }
-    return dbOrders;
   }
   const memOrders = Array.from(ordersById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const merged = mergeOrders(dbOrders, memOrders);
   if (options.includeArchived) {
     const archived = await loadArchivedOrders();
-    return mergeOrders(memOrders, archived);
+    return mergeOrders(merged, archived);
   }
-  return memOrders;
+  return merged;
 }
 
 export async function updateFarmSubOrder({ orderId, farmId, updates }) {
@@ -207,7 +344,38 @@ export function listPayments() {
 }
 
 export function listRefunds() {
-  return [];
+  return Array.from(refundsById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+export function listPaymentsForBuyer(buyerId) {
+  return Array.from(paymentsById.values())
+    .filter(p => {
+      // Match via order's buyer_id
+      const order = ordersById.get(p.order_id);
+      return order && order.buyer_id === buyerId;
+    })
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+export function createRefund({ orderId, amount, reason, adminId }) {
+  const refundId = `ref-${randomUUID()}`;
+  const refund = {
+    id: refundId,
+    order_id: orderId,
+    amount: Number(amount || 0),
+    reason: reason || '',
+    status: 'processed',
+    admin_id: adminId || null,
+    created_at: new Date().toISOString()
+  };
+  refundsById.set(refundId, refund);
+  return refund;
+}
+
+export function listRefundsForOrder(orderId) {
+  return Array.from(refundsById.values())
+    .filter(r => r.order_id === orderId)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
 // ── Login lockout helpers ────────────────────────────────────────────
@@ -255,6 +423,7 @@ export async function updateBuyerPassword(buyerId, newPassword) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;
   buyer.passwordHash = await bcrypt.hash(String(newPassword || ''), 10);
+  persistBuyer(buyer).catch(() => {});
   return sanitizeBuyer(buyer);
 }
 
@@ -307,17 +476,15 @@ export function getOrderAuditLog(orderId) {
 
 export async function getOrderById(orderId, options = {}) {
   if (isDatabaseAvailable()) {
-    const result = await query('SELECT order_data FROM wholesale_orders WHERE master_order_id = $1', [orderId]);
-    const row = result.rows[0];
-    if (!row) {
-      if (options.includeArchived) {
-        const archived = await loadArchivedOrders({ orderId });
-        return archived[0] || null;
-      }
-      return null;
+    try {
+      const result = await query('SELECT order_data FROM wholesale_orders WHERE master_order_id = $1', [orderId]);
+      const row = result.rows[0];
+      if (row) return row.order_data;
+    } catch {
+      // DB query failed — fall through to memory
     }
-    return row.order_data;
   }
+  // Always check in-memory as fallback
   const order = ordersById.get(orderId) || null;
   if (order) return order;
   if (options.includeArchived) {

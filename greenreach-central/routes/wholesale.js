@@ -16,14 +16,24 @@ import {
   listAllOrders,
   listOrdersForBuyer,
   listPayments,
+  listPaymentsForBuyer,
   listRefunds,
+  listRefundsForOrder,
+  createRefund,
   saveOrder,
+  updateBuyer,
   updateBuyerPassword,
   updateFarmSubOrder,
+  deactivateBuyer,
+  listAllBuyers,
+  loadBuyersFromDb,
+  blacklistToken,
+  isTokenBlacklisted,
   recordLoginAttempt,
   isAccountLocked,
   resetLoginAttempts,
-  logOrderEvent
+  logOrderEvent,
+  getOrderAuditLog
 } from '../services/wholesaleMemoryStore.js';
 
 import { allocateCartFromDemo, loadWholesaleDemoCatalog } from '../services/wholesaleDemoCatalog.js';
@@ -152,6 +162,10 @@ function requireBuyerAuth(req, res, next) {
     return res.status(401).json({ status: 'error', message: 'Missing bearer token' });
   }
 
+  if (isTokenBlacklisted(token)) {
+    return res.status(401).json({ status: 'error', message: 'Token has been revoked' });
+  }
+
   const secret = getWholesaleJwtSecret();
   if (!secret) {
     return res.status(500).json({ status: 'error', message: 'Wholesale auth not configured' });
@@ -168,7 +182,12 @@ function requireBuyerAuth(req, res, next) {
       return res.status(401).json({ status: 'error', message: 'Buyer not found (server restart?)' });
     }
 
+    if (buyer.status === 'deactivated') {
+      return res.status(403).json({ status: 'error', message: 'Account has been deactivated' });
+    }
+
     req.wholesaleBuyer = buyer;
+    req.wholesaleToken = token;
     return next();
   } catch (error) {
     return res.status(401).json({ status: 'error', message: 'Invalid or expired token' });
@@ -734,12 +753,158 @@ router.post('/buyers/reset-password', passwordResetLimiter, async (req, res) => 
 
 router.get('/orders', requireBuyerAuth, async (req, res) => {
   const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
+  const { status: statusFilter, from, to, search } = req.query;
+
+  let orders = await listOrdersForBuyer(req.wholesaleBuyer.id, { includeArchived });
+
+  // Optional filters
+  if (statusFilter) {
+    orders = orders.filter(o => o.status === statusFilter);
+  }
+  if (from) {
+    const fromDate = new Date(from);
+    orders = orders.filter(o => new Date(o.created_at) >= fromDate);
+  }
+  if (to) {
+    const toDate = new Date(to);
+    orders = orders.filter(o => new Date(o.created_at) <= toDate);
+  }
+  if (search) {
+    const s = search.toLowerCase();
+    orders = orders.filter(o =>
+      (o.master_order_id || '').toLowerCase().includes(s) ||
+      (o.po_number || '').toLowerCase().includes(s) ||
+      (o.farm_sub_orders || []).some(sub => (sub.farm_name || '').toLowerCase().includes(s))
+    );
+  }
+
   return res.json({
     status: 'ok',
     data: {
-      orders: await listOrdersForBuyer(req.wholesaleBuyer.id, { includeArchived })
+      orders
     }
   });
+});
+
+// ── Buyer session / profile routes ───────────────────────────────────
+
+router.get('/buyers/me', requireBuyerAuth, (req, res) => {
+  return res.json({ status: 'ok', data: { buyer: req.wholesaleBuyer } });
+});
+
+router.put('/buyers/me', requireBuyerAuth, async (req, res, next) => {
+  try {
+    const { businessName, contactName, email, phone, buyerType, address, city, province, postalCode, country } = req.body || {};
+
+    const location = {
+      address1: sanitizeText(address) || req.wholesaleBuyer.location?.address1 || null,
+      city: sanitizeText(city) || req.wholesaleBuyer.location?.city || null,
+      state: sanitizeText(province) || req.wholesaleBuyer.location?.state || null,
+      postalCode: sanitizeText(postalCode) || req.wholesaleBuyer.location?.postalCode || null,
+      country: sanitizeText(country) || req.wholesaleBuyer.location?.country || null,
+      latitude: req.wholesaleBuyer.location?.latitude || null,
+      longitude: req.wholesaleBuyer.location?.longitude || null
+    };
+
+    const updated = await updateBuyer(req.wholesaleBuyer.id, {
+      businessName: sanitizeText(businessName),
+      contactName: sanitizeText(contactName),
+      email: email ? String(email).trim().toLowerCase() : undefined,
+      phone: sanitizeText(phone),
+      buyerType: sanitizeText(buyerType),
+      location
+    });
+
+    if (!updated) {
+      return res.status(404).json({ status: 'error', message: 'Buyer not found' });
+    }
+
+    return res.json({ status: 'ok', data: { buyer: updated } });
+  } catch (error) {
+    if (error?.code === 'EMAIL_EXISTS') {
+      return res.status(409).json({ status: 'error', message: 'Email already registered' });
+    }
+    return next(error);
+  }
+});
+
+router.post('/auth/logout', requireBuyerAuth, (req, res) => {
+  blacklistToken(req.wholesaleToken);
+  return res.json({ status: 'ok', message: 'Logged out' });
+});
+
+// ── Buyer order detail ───────────────────────────────────────────────
+
+router.get('/orders/:orderId', requireBuyerAuth, async (req, res) => {
+  const order = await getOrderById(req.params.orderId, { includeArchived: true });
+
+  if (!order || order.buyer_id !== req.wholesaleBuyer.id) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  // Enrich with payment data
+  const payments = listPaymentsForBuyer(req.wholesaleBuyer.id)
+    .filter(p => p.order_id === order.master_order_id);
+  const refunds = listRefundsForOrder(order.master_order_id);
+
+  return res.json({
+    status: 'ok',
+    data: {
+      order,
+      payments,
+      refunds
+    }
+  });
+});
+
+// ── Buyer payment history ────────────────────────────────────────────
+
+router.get('/buyers/payments', requireBuyerAuth, (req, res) => {
+  const payments = listPaymentsForBuyer(req.wholesaleBuyer.id);
+  return res.json({ status: 'ok', data: { payments } });
+});
+
+// ── Order cancellation ───────────────────────────────────────────────
+
+router.post('/orders/:orderId/cancel', requireBuyerAuth, async (req, res) => {
+  const order = await getOrderById(req.params.orderId, { includeArchived: false });
+
+  if (!order || order.buyer_id !== req.wholesaleBuyer.id) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  // Only allow cancellation of recent orders that haven't shipped
+  const cancellableStatuses = ['confirmed', 'pending', 'processing'];
+  if (!cancellableStatuses.includes(order.status)) {
+    return res.status(400).json({
+      status: 'error',
+      message: `Order cannot be cancelled (status: ${order.status}). Contact support for assistance.`
+    });
+  }
+
+  // Check if order is less than 24h old
+  const orderAge = Date.now() - new Date(order.created_at).getTime();
+  const MAX_CANCEL_AGE = 24 * 60 * 60 * 1000; // 24 hours
+  if (orderAge > MAX_CANCEL_AGE) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Orders can only be self-cancelled within 24 hours. Please contact support.'
+    });
+  }
+
+  const previousStatus = order.status;
+  order.status = 'cancelled';
+  order.cancelled_at = new Date().toISOString();
+  order.cancellation_reason = sanitizeText(req.body?.reason || 'Buyer requested cancellation');
+
+  await saveOrder(order).catch(() => {});
+  logOrderEvent(order.master_order_id, 'order_cancelled', {
+    buyer_id: req.wholesaleBuyer.id,
+    previous_status: previousStatus,
+    reason: order.cancellation_reason
+  });
+
+  return res.json({ status: 'ok', data: { order } });
 });
 
 // Get invoice for a specific order
@@ -1161,12 +1326,6 @@ router.post('/oauth/square/refresh', (req, res) => {
 
 router.delete('/oauth/square/disconnect/:farmId', (req, res) => {
   return res.json({ status: 'ok', data: { disconnected: true, farm_id: req.params.farmId } });
-});
-
-router.get('/admin/orders', adminAuthMiddleware, async (req, res) => {
-  const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
-  const orders = await listAllOrders({ includeArchived });
-  return res.json({ status: 'ok', data: { orders } });
 });
 
 // --- Network admin (DB optional) ---
