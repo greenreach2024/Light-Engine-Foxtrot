@@ -69,6 +69,18 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Crop registry — single source of truth for all crop metadata (Phase 2a)
+import { createRequire } from 'module';
+const _require = createRequire(import.meta.url);
+const cropUtils = _require('./public/js/crop-utils.js');
+try {
+  const registryData = JSON.parse(fs.readFileSync(path.join(__dirname, 'public/data/crop-registry.json'), 'utf8'));
+  cropUtils.setRegistry(registryData);
+  console.log(`[startup] Crop registry loaded: ${Object.keys(registryData.crops).length} crops (v${registryData.version})`);
+} catch (err) {
+  console.warn('[startup] Crop registry not loaded — falling back to plan-ID parsing:', err?.message);
+}
+
 // Version constants
 const BUILD_TIME = Date.now().toString();
 const APP_VERSION = (process.env.APP_VERSION
@@ -174,14 +186,13 @@ function getDaysBetween(startDate, endDate) {
   return Math.floor((end - start) / msPerDay);
 }
 
+/**
+ * Extract a human-readable crop name from a plan ID.
+ * Delegates to cropUtils.planIdToCropName() (Phase 2a — unified crop registry).
+ */
 function extractCropNameFromPlanId(planId) {
   if (!planId || typeof planId !== 'string') return 'Unknown';
-  return planId
-    .replace(/^crop-/, '')
-    .split('-')
-    .map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1) : part)
-    .join(' ')
-    .trim() || 'Unknown';
+  return cropUtils.planIdToCropName(planId);
 }
 
 function buildSyntheticTraysFromGroups(groups) {
@@ -851,6 +862,250 @@ app.get('/api/farm/profile', async (_req, res) => {
   }
 });
 
+app.get('/farm', async (_req, res) => {
+  try {
+    const farmPath = path.join(FARM_DATA_DIR, 'farm.json');
+    const raw = await fs.promises.readFile(farmPath, 'utf8');
+    return res.json(JSON.parse(raw));
+  } catch (_error) {
+    return res.json({
+      farmId: 'LOCAL-FARM',
+      farmName: 'Local Farm',
+      ownerName: '',
+      contactEmail: '',
+      contactPhone: ''
+    });
+  }
+});
+
+app.post('/farm', async (req, res) => {
+  try {
+    const payload = req.body && typeof req.body === 'object' ? req.body : {};
+    await writeFarmDataJson('farm.json', payload);
+    return res.json({ success: true, farm: payload });
+  } catch (error) {
+    logger.warn('[Compat] POST /farm failed:', error.message);
+    return res.status(500).json({ success: false, error: 'Failed to save farm profile' });
+  }
+});
+
+app.get('/api/setup/data', async (_req, res) => {
+  try {
+    const farmDoc = await readDataJsonWithFallback('farm.json', {});
+    const roomsDoc = await readDataJsonWithFallback('rooms.json', { rooms: [] });
+    const rooms = Array.isArray(roomsDoc) ? roomsDoc : (roomsDoc?.rooms || []);
+
+    return res.json({
+      success: true,
+      config: {
+        farmName: farmDoc?.farmName || farmDoc?.name || 'This is Your Farm',
+        ownerName: farmDoc?.ownerName || farmDoc?.owner || '',
+        contactEmail: farmDoc?.contactEmail || farmDoc?.email || '',
+        contactPhone: farmDoc?.contactPhone || farmDoc?.phone || '',
+        rooms: Array.isArray(rooms) ? rooms : []
+      }
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/setup/data fallback failed:', error.message);
+    return res.json({ success: true, config: { farmName: 'This is Your Farm', ownerName: '', contactEmail: '', contactPhone: '', rooms: [] } });
+  }
+});
+
+app.post('/api/setup/save-rooms', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
+    await writeFarmDataJson('rooms.json', { rooms });
+    return res.json({ success: true, rooms, source: 'compat-file' });
+  } catch (error) {
+    logger.warn('[Compat] /api/setup/save-rooms failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Failed to save rooms' });
+  }
+});
+
+app.get('/api/reverse-geocode', (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(400).json({ ok: false, error: 'lat and lng are required' });
+  }
+
+  return res.json({
+    ok: true,
+    display_name: `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`,
+    address: {
+      city: 'Local City',
+      state: 'NY',
+      country: 'USA',
+      postcode: '00000'
+    }
+  });
+});
+
+app.get('/forwarder/network/wifi/scan', (_req, res) => {
+  return res.json({
+    ok: true,
+    networks: [
+      { ssid: 'Farm-WiFi', signal: -52, security: 'WPA2' },
+      { ssid: 'Farm-Guest', signal: -67, security: 'WPA2' }
+    ]
+  });
+});
+
+app.get('/forwarder/network/scan', (_req, res) => {
+  return res.json({
+    ok: true,
+    devices: []
+  });
+});
+
+app.get('/api/admin/farms/:farmId/devices', async (_req, res) => {
+  try {
+    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
+    if (!fs.existsSync(devicesPath)) {
+      return res.json({ success: true, farmId: _req.params.farmId, count: 0, devices: [] });
+    }
+
+    const raw = await fs.promises.readFile(devicesPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const devices = Array.isArray(parsed)
+      ? parsed
+      : (Array.isArray(parsed?.devices) ? parsed.devices : []);
+
+    return res.json({
+      success: true,
+      farmId: _req.params.farmId,
+      count: devices.length,
+      devices
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/admin/farms/:farmId/devices failed:', error.message);
+    return res.json({ success: true, farmId: _req.params.farmId, count: 0, devices: [] });
+  }
+});
+
+app.get('/api/audit/recent', (_req, res) => {
+  return res.json({ ok: true, activities: [] });
+});
+
+app.get('/api/activity-hub/orders/pending', (_req, res) => {
+  return res.json({ ok: true, orders: [] });
+});
+
+app.get('/api/wholesale/orders/pending', (_req, res) => {
+  return res.json({ ok: true, orders: [] });
+});
+
+app.get('/api/inventory/dashboard', async (_req, res) => {
+  return res.json({
+    ok: true,
+    total_value: 0,
+    alerts_by_category: {
+      seeds: [],
+      nutrients: [],
+      packaging: [],
+      equipment: [],
+      supplies: []
+    }
+  });
+});
+
+app.get('/api/inventory/reorder-alerts', (_req, res) => {
+  return res.json({ ok: true, alerts: [] });
+});
+
+app.get('/api/inventory/usage/weekly-summary', (_req, res) => {
+  return res.json({
+    ok: true,
+    summary: {
+      seeds_used: {},
+      nutrients_used_ml: {},
+      grow_media_kg: 0
+    }
+  });
+});
+
+app.get('/api/inventory/seeds/list', (_req, res) => {
+  return res.json({ ok: true, seeds: [] });
+});
+
+app.get('/api/inventory/nutrients/list', (_req, res) => {
+  return res.json({ ok: true, nutrients: [] });
+});
+
+app.get('/api/inventory/packaging/list', (_req, res) => {
+  return res.json({ ok: true, packaging: [] });
+});
+
+app.get('/api/inventory/equipment/list', (_req, res) => {
+  return res.json({ ok: true, equipment: [] });
+});
+
+app.get('/api/inventory/supplies/list', (_req, res) => {
+  return res.json({ ok: true, supplies: [] });
+});
+
+app.get('/api/traceability/stats', (_req, res) => {
+  return res.json({ ok: true, stats: { total_batches: 0, active_batches: 0, completed_batches: 0 } });
+});
+
+app.get('/api/traceability/batches/list', (_req, res) => {
+  return res.json({ ok: true, batches: [] });
+});
+
+app.get('/api/traceability/search', (_req, res) => {
+  return res.json({ ok: true, batches: [] });
+});
+
+app.get('/api/traceability/batches/:batchId', (req, res) => {
+  return res.json({ ok: true, batch: { batch_id: req.params.batchId, status: 'pending', events: [] } });
+});
+
+app.post('/api/traceability/batches/create', (req, res) => {
+  const payload = req.body || {};
+  return res.json({ ok: true, batch_id: payload.batch_id || `batch-${Date.now()}` });
+});
+
+app.get('/api/traceability/batches/:batchId/report', (req, res) => {
+  return res.json({ ok: true, report: { batch_id: req.params.batchId, generated_at: new Date().toISOString() } });
+});
+
+app.get('/api/planning/recommendations', (_req, res) => {
+  return res.json({ ok: true, recommendations: [] });
+});
+
+app.get('/api/sustainability/esg-report', (_req, res) => {
+  return res.json({
+    ok: true,
+    esg_score: {
+      total_score: 0,
+      grade: 'N/A',
+      breakdown: { energy: 0, water: 0, nutrients: 0, waste: 0, carbon: 0 },
+      metrics: { renewable_energy_percent: 0, water_recycling_percent: 0, waste_diversion_percent: 0 }
+    }
+  });
+});
+
+app.get('/api/sustainability/energy/usage', (_req, res) => {
+  return res.json({ ok: true, total_kwh: 0, by_source: {}, total_carbon_kg: 0, total_cost_cad: 0 });
+});
+
+app.get('/api/sustainability/water/usage', (_req, res) => {
+  return res.json({ ok: true, total_liters_used: 0, average_efficiency_percent: 0, total_liters_recycled: 0 });
+});
+
+app.get('/api/sustainability/carbon-footprint', (_req, res) => {
+  return res.json({ ok: true, total_carbon_kg: 0, daily_average_kg: 0 });
+});
+
+app.get('/api/sustainability/waste/tracking', (_req, res) => {
+  return res.json({ ok: true, total_waste_kg: 0, diversion_rate_percent: 0, total_diverted_kg: 0 });
+});
+
+app.get('/api/sustainability/trends', (_req, res) => {
+  return res.json({ ok: true, trends: [] });
+});
+
 app.get('/api/automation/rules', (_req, res) => {
   return res.json({ success: true, rules: [] });
 });
@@ -1514,6 +1769,7 @@ app.use('/api/auth', authRoutes); // Farm authentication
 app.use('/api/farms', farmRoutes);
 app.use('/api/farm', farmRoutes); // Singular route for profile endpoint
 app.use('/api/setup-wizard', setupWizardRoutes); // First-time farm setup wizard
+app.use('/api/setup', setupWizardRoutes); // Legacy setup API alias used by dashboard/app.foxtrot
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 app.use('/api/inventory', authMiddleware, inventoryRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
@@ -1536,6 +1792,54 @@ app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler 
 app.use('/api/planning', planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', cropPricingRoutes); // Farm-specific crop pricing
+
+// --- Crop Registry API (Phase 2a — single source of truth) ---
+app.get('/api/crops', (req, res) => {
+  const registryPath = path.join(__dirname, 'public/data/crop-registry.json');
+  try {
+    const registryData = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+    const activeOnly = req.query.active === 'true';
+    const categoryFilter = req.query.category || null;
+
+    const crops = Object.entries(registryData.crops)
+      .filter(([, crop]) => !activeOnly || crop.active)
+      .filter(([, crop]) => !categoryFilter || crop.category === categoryFilter)
+      .map(([name, crop]) => ({
+        name,
+        category: crop.category,
+        active: crop.active,
+        aliases: crop.aliases,
+        planIds: crop.planIds,
+        growth: crop.growth,
+        pricing: crop.pricing,
+        market: crop.market,
+        nutrientProfile: crop.nutrientProfile
+      }));
+
+    res.json({ version: registryData.version, crops });
+  } catch (error) {
+    console.error('[crops] Failed to load crop registry:', error?.message);
+    const fallback = cropUtils.getAllCrops();
+    res.json({ version: 'fallback', crops: fallback.map(c => ({ name: c.name, ...c.crop })) });
+  }
+});
+
+app.get('/api/crops/:name', (req, res) => {
+  const registryPath = path.join(__dirname, 'public/data/crop-registry.json');
+  try {
+    const registryData = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+    const cropName = req.params.name;
+    // Try exact match first, then normalize
+    const crop = registryData.crops[cropName] || registryData.crops[cropUtils.normalizeCropName(cropName)];
+    if (!crop) {
+      return res.status(404).json({ error: `Crop not found: ${cropName}` });
+    }
+    res.json({ name: cropName, ...crop });
+  } catch (error) {
+    console.error('[crops] Failed to load crop:', error?.message);
+    res.status(500).json({ error: 'Failed to load crop data' });
+  }
+});
 if (grantWizardRoutes) app.use('/api/grant-wizard', grantWizardRoutes); // Grant wizard (env-gated)
 
 // Root route - redirect to main landing page

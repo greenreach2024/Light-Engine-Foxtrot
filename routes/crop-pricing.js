@@ -8,6 +8,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
 const router = express.Router();
 
@@ -17,17 +18,18 @@ const PRICING_FILE = path.resolve(__dirname, '../public/data/crop-pricing.json')
 const RECIPES_FILE = path.resolve(__dirname, '../public/data/lighting-recipes.json');
 const GROUPS_FILE = path.resolve(__dirname, '../public/data/groups.json');
 
+// Crop utilities — Phase 2a unified crop registry
+const _require = createRequire(import.meta.url);
+const cropUtils = _require('../public/js/crop-utils.js');
+
 /**
- * Extract a human-readable crop name from a plan ID
- * e.g. "crop-bibb-butterhead" → "Bibb Butterhead"
+ * Extract a human-readable crop name from a plan ID.
+ * Delegates to cropUtils.planIdToCropName() (Phase 2a).
  */
 function planIdToCropName(planId) {
   if (!planId || typeof planId !== 'string') return null;
-  const cleanId = planId.replace(/^crop-/, '');
-  return cleanId
-    .split('-')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  const result = cropUtils.planIdToCropName(planId);
+  return result === 'Unknown' ? null : result;
 }
 
 /**

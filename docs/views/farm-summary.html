@@ -353,11 +353,13 @@
             const TRAYS_PER_GROUP = 4;
             const PLANTS_PER_TRAY = 12;
             const VARIETY_GROW_DAYS = {
-              'Butterhead Lettuce': 50, 'Romaine Lettuce': 35, 'Oak Leaf Lettuce': 45,
-              'Red Leaf Lettuce': 45, 'Mixed Lettuce': 40, 'Genovese Basil': 75,
-              'Thai Basil': 75, 'Lemon Basil': 70, 'Purple Basil': 75,
-              'Baby Arugula': 28, 'Cultivated Arugula': 38, 'Red Arugula': 35,
-              'Curly Kale': 55, 'Lacinato Kale': 60, 'Baby Kale': 30
+              'Butterhead Lettuce': 32, 'Buttercrunch Lettuce': 32, 'Bibb Butterhead': 32,
+              'Romaine Lettuce': 35, 'Oak Leaf Lettuce': 30, 'Salad Bowl Oakleaf': 30,
+              'Red Leaf Lettuce': 30, 'Mixed Lettuce': 30, 'Genovese Basil': 25,
+              'Thai Basil': 25, 'Lemon Basil': 24, 'Purple Basil': 25,
+              'Astro Arugula': 21, 'Baby Arugula': 21, 'Cultivated Arugula': 24, 'Red Arugula': 24,
+              'Curly Kale': 38, 'Lacinato Kale': 40, 'Baby Kale': 28,
+              'Mei Qing Pak Choi': 30, 'Tatsoi': 28, 'Frisée Endive': 35, 'Watercress': 25
             };
             
             return originalFetch('/data/rooms.json')
@@ -3037,28 +3039,36 @@
                     : (Array.isArray(plan?.env?.days) ? plan.env.days : []));
                 
                 if (currentDay != null && planDays.length > 0) {
-                  // Variety-specific grow times (in days) - based on commercial CEA standards
+                  // Variety-specific grow times (in days) — aligned with crop-registry.json (Phase 2a)
                   const VARIETY_GROW_DAYS = {
-                    'Butterhead Lettuce': 50,
+                    'Butterhead Lettuce': 32,
+                    'Buttercrunch Lettuce': 32,
+                    'Bibb Butterhead': 32,
                     'Romaine Lettuce': 35,
-                    'Oak Leaf Lettuce': 45,
-                    'Red Leaf Lettuce': 45,
-                    'Mixed Lettuce': 40,
-                    'Genovese Basil': 75,
-                    'Thai Basil': 75,
-                    'Lemon Basil': 70,
-                    'Purple Basil': 75,
-                    'Holy Basil': 70,
-                    'Baby Arugula': 28,
-                    'Cultivated Arugula': 38,
-                    'Red Arugula': 35,
-                    'Wild Arugula': 40,
-                    'Wasabi Arugula': 35,
-                    'Curly Kale': 55,
-                    'Lacinato Kale': 60,
-                    'Dinosaur Kale': 60,
-                    'Baby Kale': 30,
-                    'Red Russian Kale': 50
+                    'Oak Leaf Lettuce': 30,
+                    'Red Leaf Lettuce': 30,
+                    'Salad Bowl Oakleaf': 30,
+                    'Mixed Lettuce': 30,
+                    'Genovese Basil': 25,
+                    'Thai Basil': 25,
+                    'Lemon Basil': 24,
+                    'Purple Basil': 25,
+                    'Holy Basil': 26,
+                    'Astro Arugula': 21,
+                    'Baby Arugula': 21,
+                    'Cultivated Arugula': 24,
+                    'Red Arugula': 24,
+                    'Wild Arugula': 28,
+                    'Wasabi Arugula': 24,
+                    'Curly Kale': 38,
+                    'Lacinato Kale': 40,
+                    'Dinosaur Kale': 40,
+                    'Baby Kale': 28,
+                    'Red Russian Kale': 38,
+                    'Mei Qing Pak Choi': 30,
+                    'Tatsoi': 28,
+                    'Frisée Endive': 35,
+                    'Watercress': 25
                   };
                   
                   // Find the last day in the plan (harvest day)
