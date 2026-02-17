@@ -1230,6 +1230,7 @@
           <h2 class="card-title">Buyer Accounts</h2>
           <div class="card-actions" style="display: flex; gap: 0.5rem; align-items: center;">
             <input type="text" id="buyers-search" placeholder="Search buyers..." style="padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.875rem; width: 200px;" />
+            <button class="btn btn-secondary" onclick="admin.exportBuyers()">Export CSV</button>
             <button class="btn btn-primary" id="buyers-refresh-btn">Refresh</button>
           </div>
         </div>
@@ -1272,6 +1273,25 @@
           </div>
         </div>
         <div id="audit-log-content"></div>
+      </div>
+
+      <!-- Password Reset Modal -->
+      <div id="resetPasswordModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 2rem; max-width: 450px; width: 90%;">
+          <h3 style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">Reset Buyer Password</h3>
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.35rem; font-size: 0.875rem; color: var(--text-secondary);">Buyer Email</label>
+            <input type="text" id="resetEmail" readonly style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 0.875rem;" />
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.35rem; font-size: 0.875rem; color: var(--text-secondary);">New Password</label>
+            <input type="text" id="resetNewPassword" placeholder="Enter new password (min 8 chars)" style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 0.875rem;" />
+          </div>
+          <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.5rem;">
+            <button class="btn btn-secondary" onclick="admin.closeResetModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="admin.submitPasswordReset()">Reset Password</button>
+          </div>
+        </div>
       </div>
     </div>
 

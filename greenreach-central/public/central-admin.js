@@ -650,50 +650,6 @@ const INFO_CARDS = {
             }
         ]
     },
-    'wholesale-buyers': {
-        title: 'Wholesale Buyer Management',
-        subtitle: 'Manage restaurants, retailers, and distributors purchasing from the network',
-        sections: [
-            {
-                title: 'What This Page Shows',
-                content: '<ul><li>Complete directory of all registered wholesale buyers</li><li>Buyer profiles: business type, order history, subscription status</li><li>Active orders, delivery schedules, and fulfillment tracking</li><li>Payment status, credit limits, and billing information</li></ul>'
-            },
-            {
-                title: 'Why We Monitor This',
-                content: 'Buyer management is critical to the GreenReach wholesale marketplace success. Staff use this to support buyer onboarding, troubleshoot order issues, manage account relationships, and ensure smooth marketplace operations. Understanding buyer behavior helps optimize the Light Engine network to meet market demand.'
-            },
-            {
-                title: 'What To Look For',
-                content: '<ul><li>New buyer registrations needing onboarding assistance</li><li>Payment issues or expired payment methods</li><li>Large orders requiring special fulfillment coordination</li><li>Inactive buyers who may need re-engagement</li></ul>'
-            },
-            {
-                title: 'Common Actions',
-                content: 'Assist new buyers with first orders and platform training. Resolve payment and billing issues. Coordinate with farms for special order fulfillment. Track buyer satisfaction and marketplace engagement metrics.'
-            }
-        ]
-    },
-    'wholesale-buyer': {
-        title: 'Buyer Portal View',
-        subtitle: 'Experience the marketplace from the buyer perspective',
-        sections: [
-            {
-                title: 'What This Page Shows',
-                content: '<ul><li>The buyer-facing GreenReach Wholesale marketplace interface</li><li>Product catalog, pricing, and availability from network farms</li><li>Shopping cart, checkout flow, and order management</li><li>Delivery scheduling and order tracking</li></ul>'
-            },
-            {
-                title: 'Why We Monitor This',
-                content: 'Viewing the buyer portal helps GreenReach staff understand the customer experience, troubleshoot reported issues, and provide effective support. Staff can walk buyers through the ordering process, verify pricing and product availability, and ensure the marketplace operates smoothly. This view connects to real-time Light Engine inventory data across all farms.'
-            },
-            {
-                title: 'What To Look For',
-                content: '<ul><li>UI/UX issues that may confuse buyers or block orders</li><li>Pricing or inventory discrepancies from farm data</li><li>Checkout flow problems or payment errors</li><li>Delivery date or fulfillment coordination issues</li></ul>'
-            },
-            {
-                title: 'Common Actions',
-                content: 'Test ordering workflows to verify functionality. Assist buyers who report problems by replicating their experience. Coordinate with engineering to fix bugs or improve usability. Verify that Light Engine inventory syncs correctly to marketplace.'
-            }
-        ]
-    },
     'analytics': {
         title: 'AI Insights & Predictive Analytics',
         subtitle: 'Machine learning and artificial intelligence powering the Light Engine network',
@@ -1199,9 +1155,7 @@ function renderContextualSidebar() {
                 {
                     title: 'Wholesale',
                     items: [
-                        { label: 'Admin Dashboard', view: 'wholesale-admin' },
-                        { label: 'Buyers', view: 'wholesale-buyers' },
-                        { label: 'Buyer Portal', view: 'wholesale-buyer' }
+                        { label: 'Admin Dashboard', view: 'wholesale-admin' }
                     ]
                 },
                 {

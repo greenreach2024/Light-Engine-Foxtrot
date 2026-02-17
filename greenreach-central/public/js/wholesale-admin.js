@@ -1555,7 +1555,8 @@
             <td><span style="padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; background: ${statusColor}20; color: ${statusColor};">${status}</span></td>
             <td>—</td>
             <td>${created}</td>
-            <td>
+            <td style="white-space: nowrap;">
+              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-right: 0.25rem;" onclick="admin.openResetPassword('${this.esc(b.email || '')}')">Reset PW</button>
               ${status === 'active'
                 ? `<button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="admin.deactivateBuyer('${b.id}')">Deactivate</button>`
                 : `<button class="btn btn-primary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="admin.reactivateBuyer('${b.id}')">Reactivate</button>`
@@ -1747,6 +1748,67 @@
         } else {
           this.showToast(json.message || 'Refund failed', 'error');
         }
+      } catch (err) {
+        this.showToast('Error: ' + err.message, 'error');
+      }
+    },
+
+    exportBuyers() {
+      if (!this.buyers || this.buyers.length === 0) {
+        return this.showToast('No buyers to export', 'error');
+      }
+      const csv = [
+        ['Business Name', 'Contact', 'Email', 'Type', 'Status', 'Registered'],
+        ...this.buyers.map(b => [
+          (b.businessName || b.business_name || '').replace(/,/g, ' '),
+          (b.contactName || b.contact_name || '').replace(/,/g, ' '),
+          b.email || '',
+          b.buyerType || b.buyer_type || '',
+          b.status || 'active',
+          b.createdAt || b.created_at ? new Date(b.createdAt || b.created_at).toLocaleDateString() : ''
+        ])
+      ].map(row => row.join(',')).join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wholesale-buyers-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      this.showToast('Buyers exported to CSV', 'success');
+    },
+
+    openResetPassword(email) {
+      const modal = document.getElementById('resetPasswordModal');
+      document.getElementById('resetEmail').value = email;
+      document.getElementById('resetNewPassword').value = '';
+      if (modal) modal.style.display = 'flex';
+    },
+
+    closeResetModal() {
+      const modal = document.getElementById('resetPasswordModal');
+      if (modal) modal.style.display = 'none';
+    },
+
+    async submitPasswordReset() {
+      const email = document.getElementById('resetEmail').value;
+      const newPassword = document.getElementById('resetNewPassword').value;
+      if (!newPassword || newPassword.length < 8) {
+        return this.showToast('Password must be at least 8 characters', 'error');
+      }
+      try {
+        const headers = this.getAuthHeaders();
+        const res = await fetch('/api/admin/wholesale/buyers/reset-password', {
+          method: 'POST', headers,
+          body: JSON.stringify({ email, newPassword })
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || (json && json.status === 'error')) {
+          return this.showToast(json?.message || json?.error || 'Password reset failed', 'error');
+        }
+        this.showToast('Password reset successfully', 'success');
+        this.closeResetModal();
       } catch (err) {
         this.showToast('Error: ' + err.message, 'error');
       }
