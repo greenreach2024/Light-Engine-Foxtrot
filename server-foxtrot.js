@@ -67,6 +67,7 @@ import http from 'node:http';
 import https from 'node:https';
 import path from "path";
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import Datastore from 'nedb-promises';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -434,6 +435,17 @@ const __dirname = path.dirname(__filename);
 const STRICT_DEVICE_VALIDATION = ['1', 'true', 'yes'].includes(String(process.env.STRICT_DEVICE_VALIDATION || '').toLowerCase());
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const LIGHT_ENGINE_DIR = path.join(__dirname, 'light-engine', 'public');
+
+// Crop registry — single source of truth for all crop metadata (Phase 2a)
+const _require = createRequire(import.meta.url);
+const cropUtils = _require('./public/js/crop-utils.js');
+try {
+  const registryData = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'data/crop-registry.json'), 'utf8'));
+  cropUtils.setRegistry(registryData);
+  console.log(`[startup] Crop registry loaded: ${Object.keys(registryData.crops).length} crops (v${registryData.version})`);
+} catch (err) {
+  console.warn('[startup] Crop registry not loaded — falling back to plan-ID parsing:', err?.message);
+}
 const BUILD_TIME = Date.now().toString();
 const APP_VERSION = (process.env.APP_VERSION
   || process.env.GIT_SHA
@@ -16495,16 +16507,14 @@ app.get('/api/demo/intro-cards', (req, res) => {
  */
 /**
  * Extract a human-readable crop name from a plan ID
+ * Delegates to cropUtils.planIdToCropName() (Phase 2a — unified crop registry)
  * e.g. "crop-bibb-butterhead" → "Bibb Butterhead"
  *      "crop-mei-qing-pak-choi" → "Mei Qing Pak Choi"
  */
 function extractCropDisplayName(planId) {
   if (!planId || typeof planId !== 'string') return null;
-  const cleanId = planId.replace(/^crop-/, '');
-  return cleanId
-    .split('-')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  const result = cropUtils.planIdToCropName(planId);
+  return result === 'Unknown' ? null : result;
 }
 
 function getCropHarvestDays(planId) {
@@ -16709,17 +16719,8 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    // Real crop grow times from lighting-recipes.json
-    const VARIETY_GROW_DAYS = {
-      'Mei Qing Pak Choi': 28,
-      'Lacinato Kale': 45,
-      'Bibb Butterhead': 35,
-      'Frisée Endive': 45,
-      'Red Russian Kale': 50,
-      'Buttercrunch Lettuce': 42,
-      'Tatsoi': 28,
-      'Watercress': 21
-    };
+    // Crop grow times from crop registry (Phase 2a — single source of truth)
+    // cropUtils.getCropGrowDays() reads from crop-registry.json
 
     const buckets = {
       next7Days: [],
@@ -16746,8 +16747,8 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
       const groupRoomId = group.roomId || group.room || 'Room-1';
       const groupZoneId = group.zoneId || group.zone || 'Zone-1';
 
-      // Use real crop grow times (try by display name first, then by recipe harvest days)
-      const actualGrowDays = VARIETY_GROW_DAYS[cropName] || getCropHarvestDays(group.plan) || 35;
+      // Use real crop grow times from registry, then recipe, then default
+      const actualGrowDays = cropUtils.getCropGrowDays(cropName) || getCropHarvestDays(group.plan) || 35;
       
       const harvestDate = new Date(seedDate);
       harvestDate.setDate(seedDate.getDate() + actualGrowDays);
@@ -18000,41 +18001,37 @@ app.post('/api/trays/:trayId/seed', (req, res) => {
 
 /**
  * GET /api/crops
- * Returns available crop definitions from lighting recipes
+ * Returns crop definitions from crop-registry.json (Phase 2a — single source of truth)
+ * Query params: ?active=true (filter to active crops only), ?category=lettuce
  */
 app.get('/api/crops', (req, res) => {
-  const recipesPath = path.join(PUBLIC_DIR, 'data/lighting-recipes.json');
+  const registryPath = path.join(PUBLIC_DIR, 'data/crop-registry.json');
   try {
-    if (fs.existsSync(recipesPath)) {
-      const recipesData = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
-      const crops = [];
-      
-      // Extract crop list from recipes data structure
-      if (recipesData.crops) {
-        Object.keys(recipesData.crops).forEach((cropName, index) => {
-          crops.push({
-            id: `crop-${index + 1}`,
-            name: cropName,
-            variety: cropName, // Can be enhanced with variety data if available
-            active: true,
-            default_recipe_id: `recipe-${index + 1}`
-          });
-        });
-      }
-      
-      res.json(crops);
-    } else {
-      // Fallback crop list
-      res.json([
-        { id: 'crop-1', name: 'Buttercrunch Lettuce', variety: 'Buttercrunch', active: true, default_recipe_id: 'recipe-1' },
-        { id: 'crop-2', name: 'Basil', variety: 'Genovese', active: true, default_recipe_id: 'recipe-2' },
-        { id: 'crop-3', name: 'Arugula', variety: 'Wild', active: true, default_recipe_id: 'recipe-3' },
-        { id: 'crop-4', name: 'Kale', variety: 'Lacinato', active: true, default_recipe_id: 'recipe-4' }
-      ]);
-    }
+    const registryData = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+    const activeOnly = req.query.active === 'true';
+    const categoryFilter = req.query.category || null;
+
+    const crops = Object.entries(registryData.crops)
+      .filter(([, crop]) => !activeOnly || crop.active)
+      .filter(([, crop]) => !categoryFilter || crop.category === categoryFilter)
+      .map(([name, crop]) => ({
+        name,
+        category: crop.category,
+        active: crop.active,
+        aliases: crop.aliases,
+        planIds: crop.planIds,
+        growth: crop.growth,
+        pricing: crop.pricing,
+        market: crop.market,
+        nutrientProfile: crop.nutrientProfile
+      }));
+
+    res.json({ version: registryData.version, crops });
   } catch (error) {
-    console.error('[crops] Failed to load crops:', error);
-    res.status(500).json({ error: 'Failed to load crop data' });
+    console.error('[crops] Failed to load crop registry:', error?.message);
+    // Fallback: return active crops from cropUtils cache
+    const fallback = cropUtils.getAllCrops();
+    res.json({ version: 'fallback', crops: fallback.map(c => ({ name: c.name, ...c.crop })) });
   }
 });
 
