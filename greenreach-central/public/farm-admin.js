@@ -512,19 +512,6 @@ function getGroupTotals(groups) {
 }
 
 function getNextHarvestFromGroups(groups) {
-    const VARIETY_GROW_DAYS = {
-        'Mei Qing Pak Choi': 30,
-        'Lacinato Kale': 40,
-        'Bibb Butterhead': 32,
-        'Frisée Endive': 35,
-        'Red Russian Kale': 38,
-        'Buttercrunch Lettuce': 32,
-        'Tatsoi': 28,
-        'Watercress': 25,
-        'Salad Bowl Oakleaf': 30,
-        'Astro Arugula': 21
-    };
-
     let nextHarvest = null;
 
     groups.forEach((group) => {
@@ -535,7 +522,7 @@ function getNextHarvestFromGroups(groups) {
         if (Number.isNaN(seedDate.getTime())) return;
 
         const cropName = group.crop || 'Mixed crops';
-        const growDays = VARIETY_GROW_DAYS[cropName] || 35;
+        const growDays = (window.cropUtils && cropUtils.getCropGrowDays(cropName)) || 35;
 
         const harvestDate = new Date(seedDate);
         harvestDate.setDate(seedDate.getDate() + growDays);
@@ -1071,49 +1058,25 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-02-17-v1';
+const PRICING_VERSION = '2026-02-17-v2';
 
-// Default pricing (per oz) - Based on organic market research Dec 2025
-// Prices calculated from actual retail packages and converted to per-oz rates
-const defaultPricing = {
-    // Active farm crops — match crop-pricing.json names (per-oz from $/lb)
-    'Bibb Butterhead': { retail: 0.31, ws1: 15, ws2: 25, ws3: 35 },        // $5.00/lb butterhead
-    'Buttercrunch Lettuce': { retail: 0.31, ws1: 15, ws2: 25, ws3: 35 },   // $5.00/lb butterhead
-    'Salad Bowl Oakleaf': { retail: 0.31, ws1: 15, ws2: 25, ws3: 35 },     // $5.00/lb oak leaf lettuce
-    'Astro Arugula': { retail: 0.42, ws1: 15, ws2: 25, ws3: 35 },          // $6.75/lb arugula
-    
-    // Lettuce varieties - Premium butterhead, standard for others
-    'Butterhead Lettuce': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // $5.99/6oz living head
-    'Romaine Lettuce': { retail: 0.41, ws1: 15, ws2: 25, ws3: 35 },     // $5.49/18oz hearts
-    'Red Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
-    'Oak Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
-    'Mixed Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },       // Standard lettuce pricing
-    'Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },             // Generic lettuce
-    
-    // Basil varieties - Premium herb pricing
-    'Genovese Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
-    'Thai Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Purple Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },        // Same as Genovese
-    'Lemon Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },         // Same as Genovese
-    'Holy Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },               // Generic basil
-    
-    // Arugula varieties - Specialty green pricing
-    'Baby Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
-    'Cultivated Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // Standard arugula
-    'Wild Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // Standard arugula
-    'Wasabi Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },      // Standard arugula
-    'Red Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },         // Standard arugula
-    'Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },             // Generic arugula
-    
-    // Kale varieties - Standard pricing
-    'Curly Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
-    'Lacinato Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Dinosaur kale
-    'Dinosaur Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Same as Lacinato
-    'Baby Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },           // Tender baby leaves
-    'Red Russian Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },    // Standard kale
-    'Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 }                 // Generic kale
-};
+// Build defaultPricing from crop registry (Phase 2b) — falls back to empty if registry unavailable
+const defaultPricing = (function() {
+    const dp = {};
+    if (window.cropUtils) {
+        cropUtils.getAllCrops().forEach(function(item) {
+            if (item.crop.pricing) {
+                dp[item.name] = {
+                    retail: item.crop.pricing.retailPerOz || 0,
+                    ws1: (item.crop.pricing.wholesaleDiscounts && item.crop.pricing.wholesaleDiscounts.tier1) || 15,
+                    ws2: (item.crop.pricing.wholesaleDiscounts && item.crop.pricing.wholesaleDiscounts.tier2) || 25,
+                    ws3: (item.crop.pricing.wholesaleDiscounts && item.crop.pricing.wholesaleDiscounts.tier3) || 35
+                };
+            }
+        });
+    }
+    return dp;
+})();
 
 /**
  * Load unique crops from groups data
@@ -2077,51 +2040,22 @@ function checkForScheduledPriceUpdates() {
  * Insurance valuation based on current inventory, growth stages, and retail pricing
  */
 
-// Growth parameters by crop type (days to harvest and retail price per POUND)
-// Pricing matches crop-pricing.json - weight-based model ($/lb)
-const cropGrowthParams = {
-    // Lettuce varieties - 28-35 day cycle, priced per lb
-    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerLb: 5.00, yieldFactor: 0.90 },
-    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
-    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
-    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.90 },
-    
-    // Kale varieties - 35-42 day cycle, priced per lb
-    'Lacinato Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
-    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
-    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
-    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 6.50, yieldFactor: 0.92 },
-    'Red Russian Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
-    
-    // Asian Greens - priced per lb
-    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 5.50, yieldFactor: 0.90 },
-    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 6.00, yieldFactor: 0.91 },
-    
-    // Specialty Greens - priced per lb
-    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 8.00, yieldFactor: 0.87 },
-    'Watercress': { daysToHarvest: 25, retailPricePerLb: 7.00, yieldFactor: 0.90 },
-    
-    // Oakleaf lettuce - 30 day cycle, priced per lb
-    'Salad Bowl Oakleaf': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
-    
-    // Arugula varieties - 21-28 day cycle, priced per lb
-    'Astro Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.92 },
-    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.93 },
-    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.91 },
-    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 6.75, yieldFactor: 0.89 },
-    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
-    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
-    
-    // Basil varieties - 21-28 day cycle, priced per lb (~$114/lb for premium herbs)
-    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
-    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
-    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.87 },
-    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 114.72, yieldFactor: 0.87 },
-    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 114.72, yieldFactor: 0.86 }
-};
+// Growth parameters by crop type — built from crop registry (Phase 2b)
+const cropGrowthParams = (function() {
+    const cgp = {};
+    if (window.cropUtils) {
+        cropUtils.getAllCrops().forEach(function(item) {
+            if (item.crop.growth) {
+                cgp[item.name] = {
+                    daysToHarvest: item.crop.growth.daysToHarvest || 35,
+                    retailPricePerLb: item.crop.growth.retailPricePerLb || 5.00,
+                    yieldFactor: item.crop.growth.yieldFactor || 0.90
+                };
+            }
+        });
+    }
+    return cgp;
+})();
 
 // Global crop value data
 let cropValueData = null;

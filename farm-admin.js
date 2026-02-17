@@ -283,17 +283,6 @@ function getGroupTotals(groups) {
 }
 
 function getNextHarvestFromGroups(groups) {
-    const VARIETY_GROW_DAYS = {
-        'Mei Qing Pak Choi': 28,
-        'Lacinato Kale': 45,
-        'Bibb Butterhead': 35,
-        'Frisée Endive': 45,
-        'Red Russian Kale': 50,
-        'Buttercrunch Lettuce': 42,
-        'Tatsoi': 28,
-        'Watercress': 21
-    };
-
     let nextHarvest = null;
 
     groups.forEach((group) => {
@@ -304,7 +293,7 @@ function getNextHarvestFromGroups(groups) {
         if (Number.isNaN(seedDate.getTime())) return;
 
         const cropName = group.crop || 'Mixed crops';
-        const growDays = VARIETY_GROW_DAYS[cropName] || 35;
+        const growDays = (window.cropUtils && cropUtils.getCropGrowDays(cropName)) || 35;
 
         const harvestDate = new Date(seedDate);
         harvestDate.setDate(seedDate.getDate() + growDays);

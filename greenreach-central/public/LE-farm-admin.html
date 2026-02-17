@@ -3779,6 +3779,16 @@
         </div>
     </div>
 
+    <script src="/js/crop-utils.js"></script>
+    <script>
+      // Load crop registry synchronously so farm-admin.js can build dictionaries from it
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/data/crop-registry.json', false);
+        xhr.send();
+        if (xhr.status === 200) cropUtils.setRegistry(JSON.parse(xhr.responseText));
+      } catch(e) { console.warn('[crop-registry] Sync load failed, using fallbacks:', e); }
+    </script>
     <script src="/farm-admin.js?v=2025-12-28-setup"></script>
     
     <!-- Production Planning System JavaScript -->
@@ -4453,13 +4463,29 @@
         const INVENTORY_API = `${window.location.origin}/api/inventory`;
         
         function showSuppliesTab(tab) {
+            const tabContentIdMap = {
+                planting: 'suppliesContent-planting',
+                nutrients: 'invContent-nutrients',
+                packaging: 'suppliesContent-nutrients',
+                equipment: 'suppliesContent-equipment',
+                lab: 'suppliesContent-lab'
+            };
+
             // Update tab buttons
             document.querySelectorAll('.supplies-tab').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`suppliesTab-${tab}`).classList.add('active');
+            const tabButton = document.getElementById(`suppliesTab-${tab}`);
+            if (tabButton) tabButton.classList.add('active');
             
             // Update tab content
             document.querySelectorAll('.supplies-tab-content').forEach(content => content.style.display = 'none');
-            document.getElementById(`suppliesContent-${tab}`).style.display = 'block';
+            const contentId = tabContentIdMap[tab] || `suppliesContent-${tab}`;
+            const contentEl = document.getElementById(contentId);
+            if (contentEl) {
+                contentEl.style.display = 'block';
+            } else {
+                console.warn('[supplies] Missing tab content element for tab:', tab, 'mapped id:', contentId);
+                return;
+            }
             
             // Load data for active tab
             switch(tab) {
@@ -5187,7 +5213,7 @@
         // SUSTAINABILITY DASHBOARD FUNCTIONS
         // ===================================================================
         
-        const SUSTAINABILITY_API = 'http://localhost:8000/api/sustainability';
+        const SUSTAINABILITY_API = `${window.location.origin}/api/sustainability`;
         let energyChart, waterChart, carbonChart, wasteChart;
 
         async function loadSustainabilityDashboard() {
