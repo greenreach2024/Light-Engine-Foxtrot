@@ -461,8 +461,17 @@ async function loadDashboardData() {
                 document.getElementById('kpi-devices').textContent = devCount > 0 ? devCount : '0';
                 document.getElementById('kpi-devices-change').textContent = devCount > 0 ? 'Connected' : 'No devices registered';
             } else {
-                document.getElementById('kpi-devices').textContent = '0';
-                document.getElementById('kpi-devices-change').textContent = 'No devices registered';
+                const fallbackResp = await fetch(`${API_BASE}/devices`);
+                if (fallbackResp.ok) {
+                    const fallbackData = await fallbackResp.json();
+                    const fallbackDevices = Array.isArray(fallbackData?.devices) ? fallbackData.devices : [];
+                    const fallbackCount = fallbackDevices.length;
+                    document.getElementById('kpi-devices').textContent = fallbackCount > 0 ? fallbackCount : '0';
+                    document.getElementById('kpi-devices-change').textContent = fallbackCount > 0 ? 'Connected' : 'No devices registered';
+                } else {
+                    document.getElementById('kpi-devices').textContent = '0';
+                    document.getElementById('kpi-devices-change').textContent = 'No devices registered';
+                }
             }
         } catch (devErr) {
             console.warn('Could not fetch device count:', devErr.message);
@@ -504,14 +513,16 @@ function getGroupTotals(groups) {
 
 function getNextHarvestFromGroups(groups) {
     const VARIETY_GROW_DAYS = {
-        'Mei Qing Pak Choi': 28,
-        'Lacinato Kale': 45,
-        'Bibb Butterhead': 35,
-        'Frisée Endive': 45,
-        'Red Russian Kale': 50,
-        'Buttercrunch Lettuce': 42,
+        'Mei Qing Pak Choi': 30,
+        'Lacinato Kale': 40,
+        'Bibb Butterhead': 32,
+        'Frisée Endive': 35,
+        'Red Russian Kale': 38,
+        'Buttercrunch Lettuce': 32,
         'Tatsoi': 28,
-        'Watercress': 21
+        'Watercress': 25,
+        'Salad Bowl Oakleaf': 30,
+        'Astro Arugula': 21
     };
 
     let nextHarvest = null;
@@ -1060,11 +1071,17 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2025-12-09-v2';
+const PRICING_VERSION = '2026-02-17-v1';
 
 // Default pricing (per oz) - Based on organic market research Dec 2025
 // Prices calculated from actual retail packages and converted to per-oz rates
 const defaultPricing = {
+    // Active farm crops — match crop-pricing.json names (per-oz from $/lb)
+    'Bibb Butterhead': { retail: 0.31, ws1: 15, ws2: 25, ws3: 35 },        // $5.00/lb butterhead
+    'Buttercrunch Lettuce': { retail: 0.31, ws1: 15, ws2: 25, ws3: 35 },   // $5.00/lb butterhead
+    'Salad Bowl Oakleaf': { retail: 0.31, ws1: 15, ws2: 25, ws3: 35 },     // $5.00/lb oak leaf lettuce
+    'Astro Arugula': { retail: 0.42, ws1: 15, ws2: 25, ws3: 35 },          // $6.75/lb arugula
+    
     // Lettuce varieties - Premium butterhead, standard for others
     'Butterhead Lettuce': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // $5.99/6oz living head
     'Romaine Lettuce': { retail: 0.41, ws1: 15, ws2: 25, ws3: 35 },     // $5.49/18oz hearts
@@ -2087,7 +2104,11 @@ const cropGrowthParams = {
     'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 8.00, yieldFactor: 0.87 },
     'Watercress': { daysToHarvest: 25, retailPricePerLb: 7.00, yieldFactor: 0.90 },
     
+    // Oakleaf lettuce - 30 day cycle, priced per lb
+    'Salad Bowl Oakleaf': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    
     // Arugula varieties - 21-28 day cycle, priced per lb
+    'Astro Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.92 },
     'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.93 },
     'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.91 },
     'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 6.75, yieldFactor: 0.89 },
