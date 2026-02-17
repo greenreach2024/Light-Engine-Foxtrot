@@ -52,6 +52,14 @@
         });
       });
 
+      // Buyers search on Enter
+      const buyersSearch = document.getElementById('buyers-search');
+      if (buyersSearch) {
+        buyersSearch.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') this.loadBuyers();
+        });
+      }
+
       document.addEventListener('click', (event) => {
         const target = event.target;
 
@@ -65,6 +73,7 @@
 
         if (target.closest('#orders-apply-filters-btn')) return this.filterOrders();
         if (target.closest('#run-reconciliation-btn')) return this.runReconciliation();
+        if (target.closest('#buyers-refresh-btn')) return this.loadBuyers();
 
         if (target.closest('#network-refresh-btn')) return this.loadNetwork();
 
@@ -107,6 +116,9 @@
           break;
         case 'payments':
           this.loadPayments();
+          break;
+        case 'buyers':
+          this.loadBuyers();
           break;
         case 'orders':
           this.loadOrders();
@@ -1487,6 +1499,263 @@
       `;
 
       container.insertBefore(historyItem, container.firstChild);
+    },
+
+    // ── Buyer Management ─────────────────────────────────────────
+
+    async loadBuyers() {
+      const headers = this.getAuthHeaders();
+      const search = document.getElementById('buyers-search')?.value || '';
+      try {
+        const url = search
+          ? `/api/admin/wholesale/buyers?search=${encodeURIComponent(search)}`
+          : '/api/admin/wholesale/buyers';
+        const res = await fetch(url, { headers });
+        const json = await res.json();
+        const buyers = json.data?.buyers || [];
+        this.buyers = buyers;
+
+        // Stats
+        const totalEl = document.getElementById('buyers-total');
+        const activeEl = document.getElementById('buyers-active');
+        if (totalEl) totalEl.textContent = buyers.length;
+        if (activeEl) activeEl.textContent = buyers.filter(b => b.status !== 'deactivated').length;
+
+        // Load aggregate order stats
+        let orderCount = 0;
+        let revenue = 0;
+        try {
+          const ordRes = await fetch('/api/admin/wholesale/orders', { headers });
+          const ordJson = await ordRes.json();
+          const orders = ordJson.data?.orders || ordJson.orders || [];
+          orderCount = orders.length;
+          revenue = orders.reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
+        } catch (_) {}
+        const ordTotalEl = document.getElementById('buyers-orders-total');
+        const revEl = document.getElementById('buyers-revenue');
+        if (ordTotalEl) ordTotalEl.textContent = orderCount;
+        if (revEl) revEl.textContent = '$' + revenue.toFixed(2);
+
+        // Table
+        const tbody = document.getElementById('buyers-table');
+        if (!tbody) return;
+        if (buyers.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: var(--text-secondary);">No buyers found</td></tr>';
+          return;
+        }
+        tbody.innerHTML = buyers.map(b => {
+          const status = b.status || 'active';
+          const statusColor = status === 'active' ? 'var(--success)' : 'var(--error)';
+          const created = b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '—';
+          return `<tr>
+            <td><a href="#" onclick="admin.viewBuyerDetail('${b.id}'); return false;" style="color: var(--primary); font-weight: 600;">${this.esc(b.businessName || '—')}</a></td>
+            <td>${this.esc(b.contactName || '—')}</td>
+            <td>${this.esc(b.email || '—')}</td>
+            <td>${this.esc(b.buyerType || '—')}</td>
+            <td><span style="padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; background: ${statusColor}20; color: ${statusColor};">${status}</span></td>
+            <td>—</td>
+            <td>${created}</td>
+            <td>
+              ${status === 'active'
+                ? `<button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="admin.deactivateBuyer('${b.id}')">Deactivate</button>`
+                : `<button class="btn btn-primary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="admin.reactivateBuyer('${b.id}')">Reactivate</button>`
+              }
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        console.error('[Buyers] Load error:', err);
+        const tbody = document.getElementById('buyers-table');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="color: var(--error);">Failed to load buyers</td></tr>';
+      }
+    },
+
+    async viewBuyerDetail(buyerId) {
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}`, { headers });
+        const json = await res.json();
+        if (json.status !== 'ok') throw new Error(json.message || 'Failed to load buyer');
+
+        const buyer = json.data.buyer;
+        const orders = json.data.orders || [];
+        const payments = json.data.payments || [];
+        const summary = json.data.summary || {};
+
+        const panel = document.getElementById('buyer-detail-panel');
+        const title = document.getElementById('buyer-detail-title');
+        const content = document.getElementById('buyer-detail-content');
+        if (!panel || !content) return;
+
+        title.textContent = buyer.businessName || buyer.email;
+        panel.style.display = 'block';
+
+        content.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-main); border-radius: 8px;">
+            <div><strong>Contact:</strong> ${this.esc(buyer.contactName || '—')}</div>
+            <div><strong>Email:</strong> ${this.esc(buyer.email || '—')}</div>
+            <div><strong>Phone:</strong> ${this.esc(buyer.phone || '—')}</div>
+            <div><strong>Type:</strong> ${this.esc(buyer.buyerType || '—')}</div>
+            <div><strong>Status:</strong> <span style="font-weight:600; color: ${buyer.status === 'active' ? 'var(--success)' : 'var(--error)'}">${buyer.status || 'active'}</span></div>
+            <div><strong>Registered:</strong> ${buyer.createdAt ? new Date(buyer.createdAt).toLocaleDateString() : '—'}</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="stat-card"><div class="stat-label">Total Orders</div><div class="stat-value">${summary.order_count || 0}</div></div>
+            <div class="stat-card"><div class="stat-label">Total Spent</div><div class="stat-value">$${(summary.total_spent || 0).toFixed(2)}</div></div>
+            <div class="stat-card"><div class="stat-label">First Order</div><div class="stat-value" style="font-size:0.9rem;">${summary.first_order ? new Date(summary.first_order).toLocaleDateString() : '—'}</div></div>
+            <div class="stat-card"><div class="stat-label">Last Order</div><div class="stat-value" style="font-size:0.9rem;">${summary.last_order ? new Date(summary.last_order).toLocaleDateString() : '—'}</div></div>
+          </div>
+
+          <h3 style="margin-bottom: 0.75rem;">Orders (${orders.length})</h3>
+          ${orders.length === 0 ? '<p style="color: var(--text-secondary);">No orders yet</p>' : `
+          <table style="margin-bottom: 1.5rem;">
+            <thead><tr><th>Order ID</th><th>Date</th><th>Status</th><th>Total</th><th>Actions</th></tr></thead>
+            <tbody>
+              ${orders.map(o => `<tr>
+                <td style="font-family: monospace; font-size: 0.8rem;">${this.esc((o.id || o.master_order_id || '').slice(0, 16))}...</td>
+                <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '—'}</td>
+                <td>${this.esc(o.status || '—')}</td>
+                <td>$${(parseFloat(o.total) || 0).toFixed(2)}</td>
+                <td>
+                  <button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="admin.viewOrderAudit('${o.id || o.master_order_id}')">Audit</button>
+                  <button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="admin.issueRefund('${o.id || o.master_order_id}', ${parseFloat(o.total) || 0})">Refund</button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`}
+
+          <h3 style="margin-bottom: 0.75rem;">Payments (${payments.length})</h3>
+          ${payments.length === 0 ? '<p style="color: var(--text-secondary);">No payments recorded</p>' : `
+          <table>
+            <thead><tr><th>Payment ID</th><th>Order</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>
+              ${payments.map(p => `<tr>
+                <td style="font-family: monospace; font-size: 0.8rem;">${this.esc((p.id || '').slice(0, 16))}</td>
+                <td style="font-family: monospace; font-size: 0.8rem;">${this.esc((p.orderId || '').slice(0, 16))}</td>
+                <td>$${(parseFloat(p.amount) || 0).toFixed(2)}</td>
+                <td>${this.esc(p.status || '—')}</td>
+                <td>${p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`}
+        `;
+
+        panel.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        console.error('[Buyers] Detail error:', err);
+        this.showToast('Failed to load buyer detail: ' + err.message, 'error');
+      }
+    },
+
+    closeBuyerDetail() {
+      const panel = document.getElementById('buyer-detail-panel');
+      if (panel) panel.style.display = 'none';
+    },
+
+    async deactivateBuyer(buyerId) {
+      if (!confirm('Deactivate this buyer account? They will lose API access immediately.')) return;
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}/deactivate`, {
+          method: 'POST', headers
+        });
+        const json = await res.json();
+        if (json.status === 'ok') {
+          this.showToast('Buyer deactivated', 'success');
+          this.loadBuyers();
+        } else {
+          this.showToast(json.message || 'Deactivation failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Error: ' + err.message, 'error');
+      }
+    },
+
+    async reactivateBuyer(buyerId) {
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}/reactivate`, {
+          method: 'POST', headers
+        });
+        const json = await res.json();
+        if (json.status === 'ok') {
+          this.showToast('Buyer reactivated', 'success');
+          this.loadBuyers();
+        } else {
+          this.showToast(json.message || 'Reactivation failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Error: ' + err.message, 'error');
+      }
+    },
+
+    async viewOrderAudit(orderId) {
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch(`/api/admin/wholesale/audit-log?orderId=${encodeURIComponent(orderId)}`, { headers });
+        const json = await res.json();
+        const events = json.data?.events || [];
+
+        const panel = document.getElementById('audit-log-panel');
+        const content = document.getElementById('audit-log-content');
+        if (!panel || !content) return;
+        panel.style.display = 'block';
+
+        content.innerHTML = events.length === 0
+          ? '<p style="color: var(--text-secondary);">No audit events for this order</p>'
+          : `<table>
+              <thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Details</th></tr></thead>
+              <tbody>
+                ${events.map(e => `<tr>
+                  <td style="font-size: 0.8rem;">${new Date(e.timestamp).toLocaleString()}</td>
+                  <td><strong>${this.esc(e.event)}</strong></td>
+                  <td>${this.esc(e.actor || '—')}</td>
+                  <td style="font-size: 0.8rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${this.esc(JSON.stringify(e.details || {}))}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>`;
+
+        panel.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        this.showToast('Failed to load audit log: ' + err.message, 'error');
+      }
+    },
+
+    closeAuditLog() {
+      const panel = document.getElementById('audit-log-panel');
+      if (panel) panel.style.display = 'none';
+    },
+
+    async issueRefund(orderId, maxAmount) {
+      const amount = prompt(`Enter refund amount (max $${maxAmount.toFixed(2)}):`);
+      if (!amount) return;
+      const parsedAmt = parseFloat(amount);
+      if (isNaN(parsedAmt) || parsedAmt <= 0 || parsedAmt > maxAmount) {
+        return this.showToast('Invalid refund amount', 'error');
+      }
+      const reason = prompt('Reason for refund:') || 'Admin-initiated refund';
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch('/api/admin/wholesale/refunds', {
+          method: 'POST', headers,
+          body: JSON.stringify({ orderId, amount: parsedAmt, reason })
+        });
+        const json = await res.json();
+        if (json.status === 'ok') {
+          this.showToast(`Refund of $${parsedAmt.toFixed(2)} processed`, 'success');
+        } else {
+          this.showToast(json.message || 'Refund failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Error: ' + err.message, 'error');
+      }
+    },
+
+    esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
     }
   };
 

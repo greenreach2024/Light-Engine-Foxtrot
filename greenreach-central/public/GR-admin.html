@@ -640,6 +640,7 @@
     <button class="nav-tab" data-view="network">Hyperlocal Network</button>
     <button class="nav-tab" data-view="payment-setup">Payment Setup</button>
     <button class="nav-tab" data-view="payments">Payments & Fees</button>
+    <button class="nav-tab" data-view="buyers">Buyers</button>
     <button class="nav-tab" data-view="orders">Orders</button>
     <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
     <button class="nav-tab" data-view="compliance">Compliance Export</button>
@@ -1202,6 +1203,77 @@
       </div>
     </div>
   </div>
+
+  <!-- Buyers View -->
+    <div id="buyers-view" class="view">
+      <div class="stats-grid" id="buyers-stats">
+        <div class="stat-card">
+          <div class="stat-label">Total Buyers</div>
+          <div class="stat-value" id="buyers-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Buyers</div>
+          <div class="stat-value" id="buyers-active">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Orders</div>
+          <div class="stat-value" id="buyers-orders-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Revenue</div>
+          <div class="stat-value" id="buyers-revenue">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Buyer Accounts</h2>
+          <div class="card-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" id="buyers-search" placeholder="Search buyers..." style="padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.875rem; width: 200px;" />
+            <button class="btn btn-primary" id="buyers-refresh-btn">Refresh</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Business Name</th>
+              <th>Contact</th>
+              <th>Email</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Orders</th>
+              <th>Registered</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="buyers-table">
+            <tr><td colspan="8" class="loading">Loading buyers...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Buyer Detail Panel -->
+      <div id="buyer-detail-panel" class="card" style="display: none; margin-top: 1.5rem;">
+        <div class="card-header">
+          <h2 class="card-title" id="buyer-detail-title">Buyer Detail</h2>
+          <div class="card-actions">
+            <button class="btn btn-secondary" onclick="admin.closeBuyerDetail()">Close</button>
+          </div>
+        </div>
+        <div id="buyer-detail-content"></div>
+      </div>
+
+      <!-- Audit Log Panel -->
+      <div id="audit-log-panel" class="card" style="display: none; margin-top: 1.5rem;">
+        <div class="card-header">
+          <h2 class="card-title">Audit Log</h2>
+          <div class="card-actions">
+            <button class="btn btn-secondary" onclick="admin.closeAuditLog()">Close</button>
+          </div>
+        </div>
+        <div id="audit-log-content"></div>
+      </div>
+    </div>
 
   <!-- Compliance Export View -->
   <div id="compliance-view" class="view">
