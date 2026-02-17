@@ -668,6 +668,63 @@ async function loadRecentActivity() {
 /**
  * Setup navigation
  */
+function renderEmbeddedView(url, title) {
+    title = title || 'Embedded View';
+    if (!url) return;
+
+    document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
+    const iframeSection = document.getElementById('section-iframe-view');
+    const iframe = document.getElementById('admin-iframe');
+    const iframeTitle = document.getElementById('iframeSectionTitle');
+    if (!iframeSection || !iframe) return;
+
+    const embedUrl = (() => {
+        try {
+            const parsed = new URL(url, window.location.origin);
+            parsed.searchParams.set('embedded', '1');
+            return parsed.pathname + parsed.search + parsed.hash;
+        } catch {
+            return url;
+        }
+    })();
+
+    iframe.src = embedUrl;
+    iframeSection.style.display = 'block';
+    if (iframeTitle) iframeTitle.textContent = title;
+
+    iframe.onload = () => {
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) return;
+
+            const selectors = [
+                'header.page-header',
+                '.page-header',
+                '.header-actions',
+                '.top-nav',
+                '.nav-menu',
+                '.dashboard-header',
+                '.main-nav',
+                '.sidebar-header-nav',
+                '#farm-assistant',
+                '.voice-assistant-btn',
+                '#voiceModal',
+                '#voiceBtn'
+            ];
+
+            selectors.forEach((selector) => {
+                doc.querySelectorAll(selector).forEach((el) => {
+                    el.style.display = 'none';
+                });
+            });
+
+            if (doc.body) doc.body.style.paddingTop = '0';
+        } catch (error) {
+            console.warn('[Farm Admin] Unable to apply embedded page chrome suppression:', error.message);
+        }
+    };
+}
+
 function setupNavigation() {
     // Handle section navigation
     document.querySelectorAll('.nav-item[data-section]').forEach(item => {
@@ -691,12 +748,7 @@ function setupNavigation() {
             
             // Handle iframe-view sections (external pages loaded in iframe)
             if (section === 'iframe-view' && item.dataset.url) {
-                const iframeSection = document.getElementById('section-iframe-view');
-                const iframe = document.getElementById('admin-iframe');
-                if (iframeSection && iframe) {
-                    iframe.src = item.dataset.url;
-                    iframeSection.style.display = 'block';
-                }
+                renderEmbeddedView(item.dataset.url, item.textContent.trim() || 'Embedded View');
                 return;
             }
             
@@ -732,14 +784,8 @@ function setupNavigation() {
 
             // For iframe-view action cards, handle directly
             if (section === 'iframe-view' && url) {
-                document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                const iframeSection = document.getElementById('section-iframe-view');
-                const iframe = document.getElementById('admin-iframe');
-                if (iframeSection && iframe) {
-                    iframe.src = url;
-                    iframeSection.style.display = 'block';
-                }
+                renderEmbeddedView(url, card.querySelector('.action-title')?.textContent?.trim() || 'Embedded View');
                 const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${url}"]`);
                 if (matchNav) matchNav.classList.add('active');
                 return;
@@ -766,12 +812,7 @@ function setupNavigation() {
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
             if (section === 'iframe-view' && url) {
-                const iframeSection = document.getElementById('section-iframe-view');
-                const iframe = document.getElementById('admin-iframe');
-                if (iframeSection && iframe) {
-                    iframe.src = url;
-                    iframeSection.style.display = 'block';
-                }
+                renderEmbeddedView(url, btn.textContent.trim() || 'Embedded View');
                 // Highlight matching sidebar item if present
                 const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${url}"]`);
                 if (matchNav) matchNav.classList.add('active');
@@ -1592,6 +1633,11 @@ async function runAIPricingAnalysis() {
         statusText.textContent = steps[i];
         await new Promise(resolve => setTimeout(resolve, 700));
     }
+
+    // Ensure pricing data is loaded before analysis (needed for current-price comparisons)
+    if (!Array.isArray(pricingData) || pricingData.length === 0) {
+        await loadCropsFromDatabase();
+    }
     
     // Simulate fetching exchange rate (in production, call real API)
     await fetchExchangeRate();
@@ -1640,15 +1686,63 @@ async function fetchExchangeRate() {
     console.log(`💱 Exchange rate updated: 1 USD = ${currentExchangeRate.toFixed(4)} CAD`);
 }
 
+function resolveMarketDataForCrop(cropName) {
+    if (!cropName) return null;
+
+    const exact = marketDataSources[cropName];
+    if (exact) return exact;
+
+    const normalized = String(cropName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const aliasChecks = [
+        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
+        { test: ['romaine'], key: 'Romaine Lettuce' },
+        { test: ['red leaf'], key: 'Red Leaf Lettuce' },
+        { test: ['oakleaf', 'oak leaf', 'salad bowl'], key: 'Oak Leaf Lettuce' },
+        { test: ['lettuce', 'salad'], key: 'Lettuce' },
+        { test: ['arugula', 'rocket'], key: 'Arugula' },
+        { test: ['basil', 'genovese', 'thai basil', 'purple basil', 'lemon basil', 'holy basil'], key: 'Basil' },
+        { test: ['kale', 'lacinato', 'dinosaur', 'russian kale'], key: 'Kale' },
+        { test: ['frisee', 'frisée', 'endive'], key: 'Frisée Endive' },
+        { test: ['watercress'], key: 'Watercress' }
+    ];
+
+    for (const alias of aliasChecks) {
+        if (alias.test.some(token => normalized.includes(token))) {
+            return marketDataSources[alias.key] || null;
+        }
+    }
+
+    const fuzzyKey = Object.keys(marketDataSources).find((key) => {
+        const keyNormalized = key.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        return normalized.includes(keyNormalized) || keyNormalized.includes(normalized);
+    });
+
+    return fuzzyKey ? marketDataSources[fuzzyKey] : null;
+}
+
 /**
  * Generate pricing recommendations based on market data
  */
 function generateRecommendations() {
     const recommendations = [];
-    
-    pricingData.forEach(item => {
-        const marketData = marketDataSources[item.crop];
+
+    const pricingMap = new Map(
+        (pricingData || []).map(item => [item.crop, item])
+    );
+
+    // Analyze full recipe universe: market-supported recipes + current pricing recipes
+    const analysisCrops = [...new Set([
+        ...Object.keys(marketDataSources),
+        ...(pricingData || []).map(item => item.crop)
+    ])].sort();
+
+    analysisCrops.forEach(cropName => {
+        const marketData = resolveMarketDataForCrop(cropName);
         if (!marketData) return;
+
+        const pricingItem = pricingMap.get(cropName);
+        const defaultItem = defaultPricing[cropName] || null;
         
         // Calculate price per oz from market data
         const pricePerOzUSD = marketData.avgPriceUSD / marketData.avgWeightOz;
@@ -1661,7 +1755,7 @@ function generateRecommendations() {
         // Calculate price per 25g (1 oz = 28.35g, so 25g = 0.8818 oz)
         const pricePer25gCAD = pricePerOzCAD * 0.8818;
         
-        const currentPrice = item.retail;
+        const currentPrice = Number(pricingItem?.retail ?? defaultItem?.retail ?? pricePerOzCAD);
         const marketAvg = pricePerOzCAD;
         const difference = ((currentPrice - marketAvg) / marketAvg * 100).toFixed(1);
         
@@ -1671,7 +1765,7 @@ function generateRecommendations() {
         
         if (marketData.trend === 'increasing') {
             recommendation = marketAvg * 1.05; // Suggest 5% above average
-            reasoning = `Market analysis shows ${item.crop} prices are trending upward. `;
+            reasoning = `Market analysis shows ${cropName} prices are trending upward. `;
             priceChangeType = 'up';
             
             if (marketData.articles.length > 0) {
@@ -1681,11 +1775,11 @@ function generateRecommendations() {
             reasoning += `Recommended to adjust pricing to capitalize on market conditions.`;
         } else if (marketData.trend === 'decreasing') {
             recommendation = marketAvg * 0.95; // Suggest 5% below average
-            reasoning = `Market prices for ${item.crop} are declining due to increased supply. Consider competitive pricing to maintain market share.`;
+            reasoning = `Market prices for ${cropName} are declining due to increased supply. Consider competitive pricing to maintain market share.`;
             priceChangeType = 'down';
         } else {
             recommendation = marketAvg;
-            reasoning = `Current ${item.crop} market is stable. Your pricing is ${Math.abs(difference)}% ${difference > 0 ? 'above' : 'below'} market average. `;
+            reasoning = `Current ${cropName} market is stable. Your pricing is ${Math.abs(difference)}% ${difference > 0 ? 'above' : 'below'} market average. `;
             
             if (Math.abs(difference) > 10) {
                 reasoning += difference > 0 ? 
@@ -1702,7 +1796,7 @@ function generateRecommendations() {
             marketData.priceRange.map(p => p / marketData.avgWeightOz);
         
         recommendations.push({
-            crop: item.crop,
+            crop: cropName,
             currentPrice: currentPrice,
             recommendedPrice: recommendation,
             marketAverage: marketAvg,
@@ -1717,6 +1811,7 @@ function generateRecommendations() {
             priceChangeType: priceChangeType,
             articles: marketData.articles,
             retailers: marketData.retailers,
+            hasPricingRow: Boolean(pricingItem),
             timestamp: Date.now()
         });
     });
@@ -1730,6 +1825,17 @@ function generateRecommendations() {
 function displayRecommendations(recommendations) {
     const contentDiv = document.getElementById('ai-recommendations-content');
     const recommendationsDiv = document.getElementById('ai-recommendations');
+
+    if (!recommendations || recommendations.length === 0) {
+        contentDiv.innerHTML = `
+            <div class="card" style="padding: 16px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3);">
+                <strong>No matching market data found for current crop names.</strong><br>
+                Add crop aliases in the assistant mapping or verify crop naming in pricing data.
+            </div>
+        `;
+        recommendationsDiv.style.display = 'block';
+        return;
+    }
     
     contentDiv.innerHTML = recommendations.map(rec => {
         const priceChange = ((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100).toFixed(1);

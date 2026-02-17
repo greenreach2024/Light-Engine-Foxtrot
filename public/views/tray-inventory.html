@@ -3781,10 +3781,37 @@
       
       // Check authentication first (must await — async sets farmId)
       await checkAuthentication();
+
+      // Fallback bootstrap for cloud where /api/wholesale/inventory may not include farm_id
+      if (!farmId || !farmName || farmName === 'This is Your Farm') {
+        try {
+          const farmRes = await fetch('/data/farm.json');
+          if (farmRes.ok) {
+            const farmData = await farmRes.json();
+            const resolvedFarmId = farmData.farmId || farmData.id || farmData.farm_id;
+            const resolvedFarmName = farmData.farmName || farmData.name || farmName || 'Farm';
+
+            if (resolvedFarmId && !farmId) {
+              farmId = resolvedFarmId;
+              localStorage.setItem('farmId', farmId);
+            }
+            if (resolvedFarmName) {
+              farmName = resolvedFarmName;
+              localStorage.setItem('farmName', farmName);
+            }
+            if (!deviceToken && farmId) {
+              deviceToken = 'EDGE_DEVICE_LOCAL_ACCESS';
+              localStorage.setItem('deviceToken', deviceToken);
+            }
+          }
+        } catch (e) {
+          console.warn('[Init] farm.json bootstrap failed:', e);
+        }
+      }
       
       // Show farm indicator regardless of full auth
       const farmNameEl = document.getElementById('farmName');
-      if (farmNameEl && !farmNameEl.textContent) {
+      if (farmNameEl && (!farmNameEl.textContent || farmNameEl.textContent === 'This is Your Farm')) {
         // Fallback: try loading farm name from farm.json
         try {
           const farmRes = await fetch('/data/farm.json');

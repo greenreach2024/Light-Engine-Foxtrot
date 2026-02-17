@@ -3783,10 +3783,37 @@
       
       // Check authentication first (must await — async sets farmId)
       await checkAuthentication();
+
+      // Fallback bootstrap for cloud where /api/wholesale/inventory may not include farm_id
+      if (!farmId || !farmName || farmName === 'This is Your Farm') {
+        try {
+          const farmRes = await fetch('/data/farm.json');
+          if (farmRes.ok) {
+            const farmData = await farmRes.json();
+            const resolvedFarmId = farmData.farmId || farmData.id || farmData.farm_id;
+            const resolvedFarmName = farmData.farmName || farmData.name || farmName || 'Farm';
+
+            if (resolvedFarmId && !farmId) {
+              farmId = resolvedFarmId;
+              localStorage.setItem('farmId', farmId);
+            }
+            if (resolvedFarmName) {
+              farmName = resolvedFarmName;
+              localStorage.setItem('farmName', farmName);
+            }
+            if (!deviceToken && farmId) {
+              deviceToken = 'EDGE_DEVICE_LOCAL_ACCESS';
+              localStorage.setItem('deviceToken', deviceToken);
+            }
+          }
+        } catch (e) {
+          console.warn('[Init] farm.json bootstrap failed:', e);
+        }
+      }
       
       // Show farm indicator regardless of full auth
       const farmNameEl = document.getElementById('farmName');
-      if (farmNameEl && !farmNameEl.textContent) {
+      if (farmNameEl && (!farmNameEl.textContent || farmNameEl.textContent === 'This is Your Farm')) {
         // Fallback: try loading farm name from farm.json
         try {
           const farmRes = await fetch('/data/farm.json');
@@ -3837,35 +3864,76 @@
       if (timeEl) timeEl.textContent = timeStr;
     }
 
+    function buildFarmHeaders() {
+      const headers = {
+        ...getAuthHeaders()
+      };
+      if (farmId) {
+        headers['X-Farm-ID'] = farmId;
+      }
+      return headers;
+    }
+
+    function normalizeInventoryRows(payload) {
+      const rows = payload?.inventory || payload?.byFarm?.[0]?.trays || payload?.trays || [];
+      return rows.map(row => ({
+        trayId: row.trayId || row.tray_id || row.id || 'Unknown Tray',
+        groupId: row.groupId || row.group_id || row.group || 'Unknown Group',
+        cropName: row.crop_name || row.recipe || row.plan || row.groupName || row.currentCrop || 'Unknown Crop',
+        location: row.location || row.roomName || row.room || 'Unknown Room',
+        stage: row.stage || '',
+        plantCount: Number(row.plantCount ?? row.plant_count ?? row.quantity ?? 12) || 0,
+        harvestDate: row.estimatedHarvestDate || row.harvest_date || null,
+        recipe: row.recipe || row.plan || ''
+      }));
+    }
+
+    function normalizeForecastRows(payload) {
+      const rows = payload?.forecast || payload?.next7Days?.trays || [];
+      return rows.map(row => ({
+        trayId: row.trayId || row.tray_id || row.id || 'Unknown Tray',
+        groupId: row.groupId || row.group_id || row.group || 'Unknown Group',
+        cropName: row.crop_name || row.recipe || row.plan || row.groupName || row.currentCrop || 'Unknown Crop',
+        location: row.location || row.roomName || row.room || 'Unknown Room',
+        harvestDate: row.estimatedHarvestDate || row.harvest_date || null,
+        expectedYield: Number(row.expected_yield ?? row.plantCount ?? row.plant_count ?? row.quantity ?? 0) || 0,
+        recipe: row.recipe || row.plan || ''
+      }));
+    }
+
     // Load Dashboard Data
     async function loadDashboardData() {
-      const farmHeaders = farmId ? { 'X-Farm-ID': farmId } : {};
+      const farmHeaders = buildFarmHeaders();
       try {
         // Load inventory forecast
         const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`, { headers: farmHeaders });
+        if (!forecastRes.ok) throw new Error(`Forecast request failed: ${forecastRes.status}`);
         const forecastData = await forecastRes.json();
+        const forecastRows = normalizeForecastRows(forecastData);
         
-        // Count ready to harvest (next 7 days bucket)
-        const readyToHarvest = forecastData.next7Days?.trays || forecastData.forecast?.filter(item => 
-          new Date(item.harvest_date || item.estimatedHarvestDate).getTime() <= Date.now() + (2 * 24 * 60 * 60 * 1000)
-        ) || [];
+        // Count ready to harvest (next 7 days)
+        const now = Date.now();
+        const sevenDays = now + (7 * 24 * 60 * 60 * 1000);
+        const readyToHarvest = forecastRows.filter(item => {
+          const harvestTime = item.harvestDate ? new Date(item.harvestDate).getTime() : NaN;
+          return Number.isFinite(harvestTime) && harvestTime <= sevenDays;
+        });
         
         document.getElementById('harvestCount').textContent = readyToHarvest.length;
         // Normalize harvest items for display
         const normalizedHarvest = readyToHarvest.map(item => ({
-          tray_id: item.trayId || item.tray_id,
-          crop_name: item.recipe || item.crop_name || item.groupName || 'Unknown Crop',
-          recipe_name: item.recipe || item.recipe_name || '',
-          harvest_date: item.estimatedHarvestDate || item.harvest_date || ''
+          tray_id: item.trayId,
+          crop_name: item.cropName,
+          recipe_name: item.recipe || '',
+          harvest_date: item.harvestDate || ''
         }));
         populateHarvestList(normalizedHarvest);
 
         // Load current inventory
         const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`, { headers: farmHeaders });
+        if (!inventoryRes.ok) throw new Error(`Inventory request failed: ${inventoryRes.status}`);
         const inventoryData = await inventoryRes.json();
-        
-        // Support both API shapes: { inventory: [...] } and { activeTrays, byFarm: [{ trays }] }
-        const trays = inventoryData.inventory || inventoryData.byFarm?.[0]?.trays || [];
+        const trays = normalizeInventoryRows(inventoryData);
         
         // Seedling count: total plants in trays whose grow recipe stage is still 'Seedling'
         // Uses recipe-based stage from server; falls back to summing plants in young trays
@@ -3889,7 +3957,7 @@
         updateChecklistCount();
         
         // Load order pick list
-        loadOrderPickList();
+        loadOrderPickList(farmHeaders);
         
       } catch (error) {
         console.error('Error loading dashboard data:', error);
@@ -3932,13 +4000,25 @@
 
     // === ORDER PICK LIST FUNCTIONS ===
     
-    async function loadOrderPickList() {
+    async function loadOrderPickList(headers = buildFarmHeaders()) {
       try {
-        // Fetch pending wholesale orders
-        const response = await fetch(`${currentAPI}/api/wholesale/orders/pending`);
+        let response = await fetch(`${currentAPI}/api/activity-hub/orders/pending`, {
+          headers
+        });
+
+        if (!response.ok && response.status === 404) {
+          response = await fetch(`${currentAPI}/api/wholesale/orders/pending`, {
+            headers
+          });
+        }
+
+        if (!response.ok) {
+          throw new Error(`Pending orders request failed: ${response.status}`);
+        }
+
         const data = await response.json();
         
-        const orders = data.orders || [];
+        const orders = (data.ok === false) ? [] : (data.orders || []);
         populateOrderPickList(orders);
         
       } catch (error) {
@@ -4429,28 +4509,33 @@
     // Load Inventory Data
     async function loadInventoryData() {
       const container = document.getElementById('inventoryContent');
+      const headers = buildFarmHeaders();
       
       try {
         // Fetch current inventory
-        const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`);
+        const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`, { headers });
+        if (!inventoryRes.ok) throw new Error(`Inventory request failed: ${inventoryRes.status}`);
         const inventoryData = await inventoryRes.json();
+        const inventoryRows = normalizeInventoryRows(inventoryData);
         
         // Fetch 48-hour forecast
-        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`);
+        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`, { headers });
+        if (!forecastRes.ok) throw new Error(`Forecast request failed: ${forecastRes.status}`);
         const forecastData = await forecastRes.json();
+        const forecastRows = normalizeForecastRows(forecastData);
         
         // Filter for next 48 hours
         const now = Date.now();
         const fortyEightHours = now + (48 * 60 * 60 * 1000);
-        const upcomingHarvests = forecastData.forecast?.filter(item => {
-          const harvestTime = new Date(item.harvest_date).getTime();
+        const upcomingHarvests = forecastRows.filter(item => {
+          const harvestTime = item.harvestDate ? new Date(item.harvestDate).getTime() : NaN;
           return harvestTime >= now && harvestTime <= fortyEightHours;
-        }) || [];
+        });
         
         // Group current inventory by crop
         const cropGroups = {};
-        inventoryData.inventory?.forEach(item => {
-          const cropName = item.crop_name || 'Unknown';
+        inventoryRows.forEach(item => {
+          const cropName = item.cropName || 'Unknown';
           if (!cropGroups[cropName]) {
             cropGroups[cropName] = {
               name: cropName,
@@ -4459,13 +4544,13 @@
             };
           }
           cropGroups[cropName].trays.push(item);
-          cropGroups[cropName].totalPlants += item.plant_count || 0;
+          cropGroups[cropName].totalPlants += item.plantCount || 0;
         });
         
         // Group upcoming harvests by crop
         const harvestGroups = {};
         upcomingHarvests.forEach(item => {
-          const cropName = item.crop_name || 'Unknown';
+          const cropName = item.cropName || 'Unknown';
           if (!harvestGroups[cropName]) {
             harvestGroups[cropName] = {
               name: cropName,
@@ -4474,7 +4559,7 @@
             };
           }
           harvestGroups[cropName].trays.push(item);
-          harvestGroups[cropName].totalPlants += item.expected_yield || 0;
+          harvestGroups[cropName].totalPlants += item.expectedYield || 0;
         });
         
         // Build HTML
