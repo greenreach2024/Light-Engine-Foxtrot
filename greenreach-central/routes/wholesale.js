@@ -1300,6 +1300,8 @@ router.get('/check-overselling', async (req, res) => {
  */
 router.get('/farm-performance/dashboard', async (req, res) => {
   try {
+    const timeframe = req.query?.timeframe || '30d';
+
     if (req.app?.locals?.databaseReady === false) {
       return res.json({
         status: 'ok',
@@ -1307,28 +1309,54 @@ router.get('/farm-performance/dashboard', async (req, res) => {
           farms: 0,
           orders: 0,
           revenue: 0,
-          timeframe: req.query?.timeframe || '30d',
+          timeframe,
           mode: 'limited'
         }
       });
     }
 
-    const farmsResult = await query(`SELECT COUNT(*)::int AS total FROM farms`);
-    const ordersResult = await query(`SELECT COUNT(*)::int AS total FROM orders`);
-    const revenueResult = await query(`SELECT COALESCE(SUM((order_data->>'total')::numeric), 0) AS revenue FROM orders`);
+    const safeNumber = async (sql, field, fallback = 0) => {
+      try {
+        const result = await query(sql);
+        return Number(result.rows?.[0]?.[field] || fallback);
+      } catch (error) {
+        console.warn(`[Farm Performance Dashboard] Fallback for ${field}:`, error.message);
+        return fallback;
+      }
+    };
+
+    const farms = await safeNumber(`SELECT COUNT(*)::int AS total FROM farms`, 'total', 0);
+    const orders = await safeNumber(`SELECT COUNT(*)::int AS total FROM orders`, 'total', 0);
+    const revenue = await safeNumber(
+      `SELECT COALESCE(SUM((order_data->>'total')::numeric), 0) AS revenue FROM orders`,
+      'revenue',
+      0
+    );
+
+    const mode = (farms === 0 && orders === 0 && revenue === 0) ? 'limited' : 'live';
 
     res.json({
       status: 'ok',
       data: {
-        farms: farmsResult.rows[0]?.total || 0,
-        orders: ordersResult.rows[0]?.total || 0,
-        revenue: Number(revenueResult.rows[0]?.revenue || 0),
-        timeframe: req.query?.timeframe || '30d'
+        farms,
+        orders,
+        revenue,
+        timeframe,
+        mode
       }
     });
   } catch (error) {
     console.error('[Farm Performance Dashboard] Error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to load farm performance dashboard' });
+    res.json({
+      status: 'ok',
+      data: {
+        farms: 0,
+        orders: 0,
+        revenue: 0,
+        timeframe: req.query?.timeframe || '30d',
+        mode: 'limited'
+      }
+    });
   }
 });
 export default router;
