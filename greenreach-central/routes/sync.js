@@ -776,8 +776,66 @@ router.get('/:farmId/groups', async (req, res) => {
 });
 
 /**
+ * Build synthetic tray inventory from groups data.
+ * Each group with a trays count expands into individual tray records.
+ */
+function buildSyntheticTraysFromGroups(groups) {
+  if (!Array.isArray(groups) || groups.length === 0) return [];
+
+  const now = new Date();
+  const fallbackGrowthDays = 35;
+  const trays = [];
+
+  for (const group of groups) {
+    const groupId = group?.id || group?.groupId;
+    if (!groupId) continue;
+
+    const trayCount = Math.max(0, Number(group?.trays || 0));
+    if (!trayCount) continue;
+
+    const totalPlants = Number(group?.plants || 0);
+    const plantsPerTray = Math.max(1, Math.round((totalPlants > 0 ? totalPlants : trayCount * 12) / trayCount));
+    const recipeName = group?.recipe || group?.crop || group?.plan || 'Unknown';
+
+    const seedDateRaw = group?.planConfig?.anchor?.seedDate;
+    const seedDate = seedDateRaw ? new Date(seedDateRaw) : null;
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysOld = seedDate && !Number.isNaN(seedDate.getTime())
+      ? Math.max(1, Math.floor((now - seedDate) / msPerDay) + 1)
+      : 1;
+    const daysToHarvest = Math.max(0, fallbackGrowthDays - daysOld);
+
+    const roomLabel = group?.roomId || group?.room || 'ROOM-1';
+    const zoneLabel = group?.zoneId || (group?.zone != null ? `ZONE-${group.zone}` : 'ZONE-1');
+    const location = `${roomLabel} - ${zoneLabel}`;
+
+    for (let i = 0; i < trayCount; i++) {
+      trays.push({
+        tray_code: `${groupId}#${i + 1}`,
+        trayId: `${groupId}#${i + 1}`,
+        groupId,
+        recipe_name: recipeName,
+        recipe: recipeName,
+        plant_count: plantsPerTray,
+        plantCount: plantsPerTray,
+        age_days: daysOld,
+        daysOld,
+        days_to_harvest: daysToHarvest,
+        daysToHarvest,
+        location,
+        status: group?.active === false ? 'inactive' : 'active'
+      });
+    }
+  }
+
+  return trays;
+}
+
+/**
  * GET /api/sync/:farmId/inventory
- * Retrieve inventory (trays) data for a farm (public read access)
+ * Retrieve inventory (trays) data for a farm (public read access).
+ * Falls back to building synthetic trays from groups data when
+ * no explicit inventory records exist.
  */
 router.get('/:farmId/inventory', async (req, res) => {
   try {
@@ -787,8 +845,8 @@ router.get('/:farmId/inventory', async (req, res) => {
     
     let inventory = [];
     
+    // 1. Try explicit inventory records in farm_data table
     if (await isDatabaseAvailable()) {
-      // Retrieve from database
       const result = await query(
         `SELECT data FROM farm_data 
          WHERE farm_id = $1 AND data_type = $2`,
@@ -797,18 +855,55 @@ router.get('/:farmId/inventory', async (req, res) => {
       
       if (result.rows.length > 0) {
         inventory = result.rows[0].data;
+        if (!Array.isArray(inventory)) inventory = [];
       }
-      
-      logger.info(`[Sync] Retrieved ${inventory.length} inventory items from database for farm ${farmId}`);
     } else {
-      // Retrieve from memory
       inventory = inMemoryStore.inventory?.get(farmId) || [];
-      logger.info(`[Sync] Retrieved ${inventory.length} inventory items from memory for farm ${farmId}`);
+    }
+    
+    // 2. If no explicit inventory, synthesize trays from groups
+    if (inventory.length === 0) {
+      let groups = [];
+
+      // 2a. Try groups from farm_data table
+      if (await isDatabaseAvailable()) {
+        const gResult = await query(
+          `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+          [farmId, 'groups']
+        );
+        if (gResult.rows.length > 0) {
+          const raw = gResult.rows[0].data;
+          groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+        }
+      } else {
+        groups = inMemoryStore.groups?.get(farmId) || [];
+      }
+
+      // 2b. Fall back to synced groups.json static file
+      if (groups.length === 0) {
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const groupsPath = path.default.join(process.cwd(), 'public', 'data', 'groups.json');
+          if (fs.default.existsSync(groupsPath)) {
+            const raw = JSON.parse(fs.default.readFileSync(groupsPath, 'utf8'));
+            groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+          }
+        } catch (_) { /* ignore */ }
+      }
+
+      if (groups.length > 0) {
+        inventory = buildSyntheticTraysFromGroups(groups);
+        logger.info(`[Sync] Built ${inventory.length} synthetic trays from ${groups.length} groups for farm ${farmId}`);
+      }
+    } else {
+      logger.info(`[Sync] Retrieved ${inventory.length} inventory items from store for farm ${farmId}`);
     }
     
     res.json({ 
       success: true,
       inventory,
+      trays: inventory,
       count: inventory.length,
       timestamp: new Date().toISOString()
     });

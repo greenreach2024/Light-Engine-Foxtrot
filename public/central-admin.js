@@ -2490,18 +2490,22 @@ async function loadFarmInventory(farmId, trayCount) {
         const response = await authenticatedFetch(`/api/admin/farms/${farmId}/inventory`);
         const data = await response.json();
         
-        if (data.success && data.trays) {
-            inventoryData = data.trays.map(tray => ({
-                trayId: tray.tray_code,
-                recipe: tray.recipe_name || 'Unknown',
-                location: tray.location || 'Unassigned',
-                plantCount: tray.plant_count || 0,
-                age: tray.age_days || 0,
-                harvestEst: tray.days_to_harvest !== null ? 
-                    (tray.days_to_harvest <= 0 ? 'Today' : `${Math.max(0, Math.floor(tray.days_to_harvest))}d`) : 
-                    'Unknown',
-                status: tray.status || 'unknown'
-            }));
+        if (data.success && (data.trays || data.inventory)) {
+            const trays = data.trays || data.inventory || [];
+            inventoryData = trays.map(tray => {
+                const dth = tray.days_to_harvest ?? tray.daysToHarvest ?? null;
+                return {
+                    trayId: tray.tray_code || tray.trayId || tray.id,
+                    recipe: tray.recipe_name || tray.recipe || 'Unknown',
+                    location: tray.location || 'Unassigned',
+                    plantCount: tray.plant_count || tray.plantCount || 0,
+                    age: tray.age_days || tray.daysOld || 0,
+                    harvestEst: dth !== null ?
+                        (dth <= 0 ? 'Today' : `${Math.max(0, Math.floor(dth))}d`) :
+                        'Unknown',
+                    status: tray.status || 'unknown'
+                };
+            });
         } else {
             inventoryData = [];
         }
