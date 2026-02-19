@@ -1993,6 +1993,25 @@
   <!-- Chart.js for ML Dashboard Widgets - Served locally to avoid CDN blocking -->
   <script src="/lib/chart.umd.js?v=20260203"></script>
 
+  <!-- Crop registry utilities (Phase 2b migration — unified grow-day source) -->
+  <script src="/js/crop-utils.js"></script>
+  <script>
+    // Bootstrap crop registry so inline scripts can use cropUtils.getCropGrowDays()
+    (function() {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/data/crop-registry.json', false); // sync
+        xhr.send();
+        if (xhr.status === 200) {
+          var reg = JSON.parse(xhr.responseText);
+          if (window.cropUtils && reg) cropUtils.setRegistry(reg);
+        }
+      } catch (e) {
+        console.warn('crop-registry.json bootstrap failed:', e);
+      }
+    })();
+  </script>
+
   <script>
     console.debug('🔄 FARM SUMMARY - CODE VERSION 2.3 LOADED - Dec 22, 2025 - Local Chart.js');
     console.log('🔄 If you see this message, the updated file is being served!');
@@ -3150,37 +3169,7 @@
                 
                 // Always show detailed card if we have plan days
                 if (currentDay != null && planDays.length > 0) {
-                  // Variety-specific grow times (in days) — aligned with crop-registry.json (Phase 2a)
-                  const VARIETY_GROW_DAYS = {
-                    'Butterhead Lettuce': 32,
-                    'Buttercrunch Lettuce': 32,
-                    'Bibb Butterhead': 32,
-                    'Romaine Lettuce': 35,
-                    'Oak Leaf Lettuce': 30,
-                    'Red Leaf Lettuce': 30,
-                    'Salad Bowl Oakleaf': 30,
-                    'Mixed Lettuce': 30,
-                    'Genovese Basil': 25,
-                    'Thai Basil': 25,
-                    'Lemon Basil': 24,
-                    'Purple Basil': 25,
-                    'Holy Basil': 26,
-                    'Astro Arugula': 21,
-                    'Baby Arugula': 21,
-                    'Cultivated Arugula': 24,
-                    'Red Arugula': 24,
-                    'Wild Arugula': 28,
-                    'Wasabi Arugula': 24,
-                    'Curly Kale': 38,
-                    'Lacinato Kale': 40,
-                    'Dinosaur Kale': 40,
-                    'Baby Kale': 28,
-                    'Red Russian Kale': 38,
-                    'Mei Qing Pak Choi': 30,
-                    'Tatsoi': 28,
-                    'Frisée Endive': 35,
-                    'Watercress': 25
-                  };
+                  // Use crop-utils.js for variety-specific grow times (reads from crop-registry.json)
                   
                   // Find the last day in the plan (harvest day)
                   const dayNumbers = planDays.map(d => d.day || 0).filter(d => d > 0);
@@ -3188,7 +3177,8 @@
                   
                   // Use variety-specific grow time if available, otherwise fall back to plan maxDay
                   const groupCrop = group.crop || '';
-                  const maxDay = VARIETY_GROW_DAYS[groupCrop] || planMaxDay;
+                  const registryGrowDays = (window.cropUtils && cropUtils.getCropGrowDays(groupCrop)) || 0;
+                  const maxDay = registryGrowDays || planMaxDay;
                   
                   const daysToHarvest = maxDay - currentDay;
                   

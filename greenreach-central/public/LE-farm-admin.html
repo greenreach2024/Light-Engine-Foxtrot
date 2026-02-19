@@ -3782,7 +3782,25 @@
         </div>
     </div>
 
-    <script src="/farm-admin.js?v=2025-12-28-setup"></script>
+    <!-- Crop registry utilities (Phase 2b migration — unified grow-day source) -->
+    <script src="/js/crop-utils.js"></script>
+    <script>
+      // Bootstrap crop registry synchronously so farm-admin.js can use cropUtils
+      (function() {
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', '/data/crop-registry.json', false); // sync
+          xhr.send();
+          if (xhr.status === 200) {
+            var reg = JSON.parse(xhr.responseText);
+            if (window.cropUtils && reg) cropUtils.setRegistry(reg);
+          }
+        } catch (e) {
+          console.warn('crop-registry.json bootstrap failed:', e);
+        }
+      })();
+    </script>
+    <script src="/farm-admin.js?v=2026-02-19-crop-utils"></script>
     
     <!-- Production Planning System JavaScript -->
     <script>

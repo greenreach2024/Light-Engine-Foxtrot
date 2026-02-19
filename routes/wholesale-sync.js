@@ -218,7 +218,7 @@ router.get('/inventory', async (req, res) => {
     const deductedBySku = getTotalDeductedBySku();
 
     groups.forEach((group) => {
-      const cropName = group.crop || group.recipe;
+      const cropName = (group.crop || group.recipe || '').trim();
       
       // Skip groups without a crop/recipe assigned
       if (!cropName) {

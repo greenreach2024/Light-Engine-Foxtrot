@@ -497,17 +497,6 @@ function getGroupTotals(groups) {
 }
 
 function getNextHarvestFromGroups(groups) {
-    const VARIETY_GROW_DAYS = {
-        'Mei Qing Pak Choi': 28,
-        'Lacinato Kale': 45,
-        'Bibb Butterhead': 35,
-        'Frisée Endive': 45,
-        'Red Russian Kale': 50,
-        'Buttercrunch Lettuce': 42,
-        'Tatsoi': 28,
-        'Watercress': 21
-    };
-
     let nextHarvest = null;
 
     groups.forEach((group) => {
@@ -518,7 +507,7 @@ function getNextHarvestFromGroups(groups) {
         if (Number.isNaN(seedDate.getTime())) return;
 
         const cropName = group.crop || 'Mixed crops';
-        const growDays = VARIETY_GROW_DAYS[cropName] || 35;
+        const growDays = (window.cropUtils && cropUtils.getCropGrowDays(cropName)) || 35;
 
         const harvestDate = new Date(seedDate);
         harvestDate.setDate(seedDate.getDate() + growDays);
@@ -1103,8 +1092,8 @@ async function loadCropsFromDatabase() {
         const response = await fetch(`${API_BASE}/data/groups.json`);
         const data = await response.json();
         
-        // Extract unique crop names
-        const crops = [...new Set(data.groups.map(g => g.crop))].sort();
+        // Extract unique crop names (filter empty strings for farms with no crops yet)
+        const crops = [...new Set(data.groups.map(g => g.crop).filter(c => c && c.trim()))].sort();
         
         // Initialize pricing data
         pricingData = crops.map(crop => {
@@ -1130,15 +1119,9 @@ async function loadCropsFromDatabase() {
     } catch (error) {
         console.error(' Error loading crops:', error);
         
-        // Fallback to default crops
-        pricingData = Object.keys(defaultPricing).map(crop => ({
-            crop,
-            retail: defaultPricing[crop].retail,
-            ws1Discount: defaultPricing[crop].ws1,
-            ws2Discount: defaultPricing[crop].ws2,
-            ws3Discount: defaultPricing[crop].ws3,
-            isTaxable: false
-        }));
+        // Fallback: show empty pricing table (no phantom crops for new farms)
+        pricingData = [];
+        console.warn('Pricing: no crops loaded — farm may not have crops assigned yet.');
         
         renderPricingTable();
     }
