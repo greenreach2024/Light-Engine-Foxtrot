@@ -1574,27 +1574,9 @@
       }
     }
 
-    /* Floating New Planting Button */
+    /* Floating New Planting Button — removed, use Activity Hub */
     .floating-new-planting-btn {
-      position: fixed;
-      right: 2rem;
-      top: 9.5rem;
-      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-      color: white;
-      border: 2px solid #4ade80;
-      padding: 1rem 2rem;
-      font-size: 1.125rem;
-      font-weight: 700;
-      border-radius: 12px;
-      cursor: pointer;
-      box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4);
-      z-index: 1000;
-      transition: all 0.3s ease;
-    }
-
-    .floating-new-planting-btn:hover {
-      transform: scale(1.05) translateY(-2px);
-      box-shadow: 0 12px 32px rgba(34, 197, 94, 0.6);
+      display: none;
     }
 
     .close-btn.admin {
@@ -1723,10 +1705,7 @@
     </div>
   </div>
 
-  <!-- Floating New Planting Button -->
-  <button class="floating-new-planting-btn" onclick="openNewPlantingModal()">
-    + New Planting Today
-  </button>
+  <!-- New Planting button removed — use Activity Hub for planting -->
 
   <div class="container">
     <!-- ML Insights Dashboard -->
@@ -1915,7 +1894,10 @@
         </div>
         <div class="chart" id="chartContainer">
           <canvas id="trendChart"></canvas>
-          <div class="chart-empty" id="chartEmptyState" hidden>No trending data available</div>
+          <div class="chart-empty" id="chartEmptyState" hidden>
+            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div>Connect environmental sensors to review data</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2234,7 +2216,7 @@
       const notice = document.createElement('div');
       notice.style.cssText = `
         background: rgba(59, 130, 246, 0.15);
-        border: 2px solid #3b82f6;
+        border: 2px dashed rgba(59, 130, 246, 0.4);
         border-radius: 12px;
         padding: 1.5rem;
         margin: 1rem 2rem;
@@ -2242,11 +2224,11 @@
         color: #93c5fd;
       `;
       notice.innerHTML = `
-        <div style="font-size: 2rem; margin-bottom: 0.5rem;">☁️</div>
-        <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">Management Mode - Sales & Administration</div>
+        <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+        <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">Connect environmental sensors to review data</div>
         <div style="font-size: 0.95rem; opacity: 0.9;">
-          This farm instance is configured for sales, inventory, and administration only.
-          <br>Sensor data, environmental controls, and automation features are not available.
+          Link sensors to the Light Engine and assign them to zones via the Room Mapper.
+          <br>Environmental monitoring, trends, and automation will become available once sensors are connected.
         </div>
       `;
       mainContent.insertBefore(notice, mainContent.firstChild);
@@ -2256,28 +2238,25 @@
      * Hide ML/sensor widgets in management-only mode
      */
     function hideMLWidgets() {
-      // Hide sensor-dependent widgets
-      const widgetsToHide = [
-        'anomalySparklineLoading',
-        'energyForecastLoading', 
-        'tempForecastLoading'
-      ];
+      // Show "connect sensors" message in each ML widget
+      const sensorMsg = `
+        <div style="text-align: center; padding: 1.5rem 1rem;">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌡️</div>
+          <div style="color: #94a3b8; font-weight: 600; font-size: 0.85rem;">Connect sensors to enable</div>
+        </div>`;
       
-      widgetsToHide.forEach(id => {
-        const widget = document.getElementById(id);
-        if (widget && widget.parentElement) {
-          widget.parentElement.style.display = 'none';
+      ['anomalySparklineLoading', 'energyForecastLoading', 'tempForecastLoading'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.innerHTML = sensorMsg;
+          el.style.position = 'relative';
+          el.style.transform = 'none';
         }
       });
       
-      // Hide environment chart section
-      const chartSection = document.querySelector('.scrollable-content');
-      if (chartSection) {
-        const chartContainer = chartSection.querySelector('canvas');
-        if (chartContainer) {
-          chartContainer.closest('.card')?.remove();
-        }
-      }
+      // Clear energy forecast summary
+      const eSummary = document.getElementById('energyForecastSummary');
+      if (eSummary) eSummary.style.display = 'none';
     }
     
     /**
@@ -2297,15 +2276,31 @@
         console.log('[Farm Summary] Management inventory not available:', e.message);
       }
       
-      // Hide sensor-related UI elements
-      const envCard = document.querySelector('#environmentCard');
-      if (envCard) envCard.style.display = 'none';
+      // Show connect-sensors message in AI Health Monitor
+      const healthContent = document.getElementById('healthContent');
+      if (healthContent) {
+        healthContent.innerHTML = `
+          <div style="text-align: center; padding: 2rem 1rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div style="color: #94a3b8; font-weight: 600;">Connect environmental sensors to review data</div>
+            <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Health scoring requires live sensor readings from your zones</div>
+          </div>`;
+      }
       
-      const scheduleCard = document.querySelector('#scheduleCard');
-      if (scheduleCard) scheduleCard.style.display = 'none';
+      // Show connect-sensors in env grid
+      const envGrid = document.getElementById('envGrid');
+      if (envGrid) {
+        envGrid.innerHTML = `
+          <div style="grid-column: 1 / -1; padding: 2rem; text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div style="color: #94a3b8; font-weight: 600;">Connect environmental sensors to review data</div>
+            <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Link sensors via the Room Mapper to see live readings here</div>
+          </div>`;
+      }
       
-      const zonesCard = document.querySelector('#zonesCard');
-      if (zonesCard) zonesCard.style.display = 'none';
+      // Hide ML anomaly alerts card
+      const mlAnomalyCard = document.getElementById('mlAnomalyCard');
+      if (mlAnomalyCard) mlAnomalyCard.style.display = 'none';
     }
     
     /**
@@ -2831,7 +2826,11 @@
         console.error('Failed to load environmental data:', error);
         const grid = document.getElementById('envGrid');
         if (grid) {
-          grid.innerHTML = '<div class="no-data">Failed to load environmental data</div>';
+          grid.innerHTML = `<div style="grid-column: 1 / -1; padding: 2rem; text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div style="color: #94a3b8; font-weight: 600;">Connect environmental sensors to review data</div>
+            <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Link sensors via the Room Mapper to see live readings here</div>
+          </div>`;
         }
         updateZoneIndicator(null, { error: true });
         return null;
@@ -3702,12 +3701,10 @@
               
               <!-- Zone Environmental Metrics (shown first) -->
               ${!Number.isFinite(temp) && !Number.isFinite(humidity) ? `
-                <div style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 12px; text-align: center;">
-                  <div style="color: #1e40af; font-weight: 600; margin-bottom: 8px;">Environmental Monitoring</div>
-                  <div style="color: #475569; font-size: 0.9rem; margin-bottom: 12px;">View detailed sensor readings and spatial heatmap</div>
-                  <a href="/views/room-heatmap.html" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 0.9rem; transition: background 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
-                    Open Room Heatmap →
-                  </a>
+                <div style="margin-bottom: 20px; padding: 20px; background: rgba(59, 130, 246, 0.08); border: 2px dashed rgba(59, 130, 246, 0.4); border-radius: 12px; text-align: center;">
+                  <div style="font-size: 1.5rem; margin-bottom: 8px;">🌡️</div>
+                  <div style="color: #64748b; font-weight: 600; font-size: 0.95rem;">Connect environmental sensors to review data</div>
+                  <div style="color: #94a3b8; font-size: 0.8rem; margin-top: 6px;">Link sensors via the Room Mapper to see live readings</div>
                 </div>
               ` : `
                 <div class="env-grid" style="margin-bottom: 20px;">
@@ -3818,7 +3815,12 @@
       if (!data || !Array.isArray(data.zones) || data.zones.length === 0) {
         const grid = document.getElementById('envGrid');
         if (grid) {
-          grid.innerHTML = '<div class="no-data">No environmental data available</div>';
+          grid.innerHTML = `
+            <div style="grid-column: 1 / -1; padding: 2rem; text-align: center;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+              <div style="color: #94a3b8; font-weight: 600; font-size: 1rem;">Connect environmental sensors to review data</div>
+              <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Link sensors via the Room Mapper to see live readings here</div>
+            </div>`;
         }
         updateZoneIndicator(null, { empty: true });
         return null;
@@ -4092,6 +4094,22 @@
         `;
       }).join('');
 
+      // Check if ALL metrics have no data (no sensors connected)
+      const hasAnySensorData = metrics.some(m => {
+        const sensor = zone.sensors?.[m.sensorKey] || {};
+        return Number.isFinite(sensor.current);
+      });
+
+      let finalHtml = html;
+      if (!hasAnySensorData) {
+        finalHtml = `
+          <div style="grid-column: 1 / -1; padding: 2rem; text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+            <div style="color: #94a3b8; font-weight: 600; font-size: 1rem;">Connect environmental sensors to review data</div>
+            <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Link sensors via the Room Mapper to see live readings here</div>
+          </div>`;
+      }
+
       // Add outdoor conditions section if outdoor sensor found
       let outdoorHtml = '';
       if (outdoorZone) {
@@ -4131,7 +4149,7 @@
       }
 
       const grid = document.getElementById('envGrid');
-      if (grid) grid.innerHTML = html + outdoorHtml;
+      if (grid) grid.innerHTML = finalHtml + outdoorHtml;
     }
 
     function formatNumber(value, fractionDigits) {
@@ -4555,10 +4573,10 @@
       const renderHealthCard = (healthData) => {
         if (!healthData.zones || healthData.zones.length === 0) {
           container.innerHTML = `
-            <div class="health-no-data">
-              <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
-              <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">No Environmental Data Yet</div>
-              <div>${healthData.message || 'Waiting for sensors to report...'}</div>
+            <div style="text-align: center; padding: 2rem 1rem;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
+              <div style="color: #94a3b8; font-weight: 600;">Connect environmental sensors to review data</div>
+              <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Health scoring requires live sensor readings from your zones</div>
             </div>
           `;
           return;
