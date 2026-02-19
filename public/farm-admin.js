@@ -870,36 +870,58 @@ function setupHeaderDropdowns() {
         });
     });
     
-    // Handle dropdown item clicks
+    // Handle dropdown item clicks — load pages inside admin iframe (except Farm Vitality)
     document.querySelectorAll('.dropdown-item').forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             
             const href = item.getAttribute('href');
+            const label = item.textContent.trim();
+            const closeMenus = () => document.querySelectorAll('.dropdown-menu').forEach(m => m.style.display = 'none');
             
-            // If it's an external link, navigate
-            if (href && href.startsWith('/views/')) {
+            // New tab links (QR Label Generator)
+            if (item.getAttribute('target') === '_blank') {
+                window.open(href);
+                closeMenus();
+                return;
+            }
+            
+            // Farm Vitality Dashboard — opens as standalone page (exception)
+            if (href === '/farm-vitality.html') {
                 window.location.href = href;
                 return;
             }
             
-            // If it has target="_blank", open in new tab
-            if (item.getAttribute('target') === '_blank') {
-                window.open(href);
+            // Self-link (Admin → Admin) — show dashboard
+            if (href === '/LE-farm-admin.html') {
+                const dashNav = document.querySelector('.nav-item[data-section="dashboard"]');
+                if (dashNav) dashNav.click();
+                closeMenus();
                 return;
             }
             
-            // Otherwise treat as internal section navigation
-            const section = href.substring(1); // Remove #
-            const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
-            if (navItem) {
-                navItem.click();
+            // Internal section links (hash-based, e.g., /LE-farm-admin.html#traceability or #wholesale-orders)
+            if (href && href.includes('#')) {
+                const section = href.split('#').pop();
+                if (section) {
+                    const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
+                    if (navItem) {
+                        navItem.click();
+                        closeMenus();
+                        return;
+                    }
+                }
             }
             
-            // Close menu after selection
-            document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                menu.style.display = 'none';
-            });
+            // All other pages — load as iframe in admin main content area
+            if (href) {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${href}"]`);
+                if (matchNav) matchNav.classList.add('active');
+                renderEmbeddedView(href, label);
+            }
+            
+            closeMenus();
         });
     });
     
