@@ -777,7 +777,10 @@
           <div class="gr-card" id="groupsV2GroupListSection" style="margin-top:8px;padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
               <h3 style="margin:0;font-size:14px;font-weight:600;color:#1e293b;">Standard Groups</h3>
-              <span id="groupsV2GroupCount" class="tiny text-muted"></span>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span id="groupsV2GroupCount" class="tiny text-muted"></span>
+                <button id="bulkEditGroupsBtn" type="button" class="ghost tiny" style="padding:4px 10px;font-size:11px;border:1px dashed #8b5cf6;color:#8b5cf6;border-radius:6px;font-weight:600;" title="Edit all groups that share a common prefix">✏️ Bulk Edit</button>
+              </div>
             </div>
             <div id="groupsV2GroupListBody" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;max-height:420px;overflow-y:auto;">
               <!-- Group cards rendered dynamically by renderGroupsV2GroupList() -->
@@ -3071,6 +3074,79 @@
     // Run setup check immediately
     checkSetupStatus();
   </script>
+
+<!-- Bulk Edit Groups Modal -->
+<dialog id="bulkEditGroupModal" style="max-width:580px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">
+  <form method="dialog" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;font-size:1.15rem;">Bulk Edit Standard Groups</h3>
+      <button type="button" id="bulkEditGroupClose" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">&times;</button>
+    </div>
+    <p class="tiny" style="color:#64748b;margin:0;">Select a group family by its shared prefix, then change properties across all matching groups at once.</p>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Group family
+      <select id="bulkEditPrefix" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+        <option value="">(select group family)</option>
+      </select>
+    </label>
+
+    <div id="bulkEditSummary" class="tiny" style="padding:8px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;color:#0c4a6e;min-height:24px;"></div>
+
+    <p class="tiny" style="margin:0;color:#64748b;font-style:italic;">Only fill fields you want to change. Blank fields are left unchanged.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Trays / group
+        <input id="bulkEditTrays" type="number" min="0" max="200" placeholder="unchanged" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Plants / group
+        <input id="bulkEditPlants" type="number" min="0" max="5000" placeholder="unchanged" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Zone
+        <select id="bulkEditZone" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+          <option value="">(unchanged)</option>
+        </select>
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Status
+        <select id="bulkEditStatus" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+          <option value="">(unchanged)</option>
+          <option value="draft">Draft</option>
+          <option value="deployed">Deployed</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Rename prefix to
+        <input id="bulkEditRenamePrefix" type="text" placeholder="unchanged" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Crop
+        <input id="bulkEditCrop" type="text" placeholder="unchanged" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input id="bulkEditClearLights" type="checkbox">
+      <span class="tiny">Remove all light assignments</span>
+    </label>
+
+    <div id="bulkEditPreview" style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px;min-height:40px;font-size:0.8rem;color:#78350f;display:none;"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" id="bulkEditGroupCancel" class="ghost">Cancel</button>
+      <button type="button" id="bulkEditGroupApply" class="primary" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);min-width:140px;">Apply to All</button>
+    </div>
+  </form>
+</dialog>
 
 <!-- Build Stock Groups Modal -->
 <dialog id="buildStockGroupModal" style="max-width:540px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">

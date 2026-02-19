@@ -6965,6 +6965,336 @@ async function executeBuildStockGroups() {
   return { created, skipped };
 }
 
+// ── Bulk Edit Standard Groups ──────────────────────────────────────────────
+// Allows users to change properties across all groups that share a common
+// naming prefix (e.g. "ZipGrow Grou 1" … "ZipGrow Grou 78").
+
+/**
+ * Detect group families by extracting the common prefix (everything before
+ * the trailing number) from each group name.
+ * @returns {Object<string, object[]>}  prefix → array of matching groups
+ */
+function detectGroupFamilies() {
+  const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
+  const families = {};
+  groups.forEach(function(g) {
+    if (!g || !g.name) return;
+    var m = g.name.match(/^(.+?)\s*\d+$/);
+    var prefix = m ? m[1].trim() : g.name;
+    if (!families[prefix]) families[prefix] = [];
+    families[prefix].push(g);
+  });
+  return families;
+}
+
+/**
+ * Populate the Bulk Edit modal.
+ */
+function populateBulkEditModal() {
+  var prefixSelect = document.getElementById('bulkEditPrefix');
+  var zoneSelect   = document.getElementById('bulkEditZone');
+  if (!prefixSelect) return;
+
+  // Clear and repopulate prefix dropdown
+  prefixSelect.innerHTML = '<option value="">(select group family)</option>';
+  var families = detectGroupFamilies();
+  // Sort by count descending
+  var sorted = Object.keys(families).sort(function(a, b) {
+    return families[b].length - families[a].length;
+  });
+  sorted.forEach(function(prefix) {
+    var count = families[prefix].length;
+    var opt = document.createElement('option');
+    opt.value = prefix;
+    opt.textContent = prefix + ' (' + count + ' group' + (count !== 1 ? 's' : '') + ')';
+    prefixSelect.appendChild(opt);
+  });
+
+  // Populate zone dropdown from rooms
+  if (zoneSelect) {
+    zoneSelect.innerHTML = '<option value="">(unchanged)</option>';
+    var rooms = (window.STATE && Array.isArray(window.STATE.rooms)) ? window.STATE.rooms : [];
+    rooms.forEach(function(room) {
+      if (!room) return;
+      var zones = Array.isArray(room.zones) && room.zones.length > 0
+        ? room.zones
+        : (room.zoneCount ? Array.from({ length: room.zoneCount }, function(_, i) { return { id: String(i + 1), name: 'Zone ' + (i + 1) }; }) : []);
+      zones.forEach(function(z) {
+        var val  = typeof z === 'string' ? z : (z.id || z.name || String(z));
+        var name = typeof z === 'string' ? z : (z.name || z.id || String(z));
+        var opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = (room.name || '') + ' → ' + name;
+        zoneSelect.appendChild(opt);
+      });
+    });
+  }
+
+  // Clear form fields
+  ['bulkEditTrays', 'bulkEditPlants', 'bulkEditRenamePrefix', 'bulkEditCrop'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var statusSel = document.getElementById('bulkEditStatus');
+  if (statusSel) statusSel.value = '';
+  if (zoneSelect) zoneSelect.value = '';
+  var clearLights = document.getElementById('bulkEditClearLights');
+  if (clearLights) clearLights.checked = false;
+
+  updateBulkEditSummary();
+  updateBulkEditPreview();
+}
+
+/**
+ * Update the summary bar showing how many groups are selected.
+ */
+function updateBulkEditSummary() {
+  var el = document.getElementById('bulkEditSummary');
+  var prefixSelect = document.getElementById('bulkEditPrefix');
+  if (!el || !prefixSelect) return;
+
+  var prefix = prefixSelect.value;
+  if (!prefix) {
+    el.innerHTML = '<span style="color:#94a3b8;">Select a group family to see details.</span>';
+    return;
+  }
+
+  var families = detectGroupFamilies();
+  var members = families[prefix] || [];
+  var zones = {};
+  var rooms = {};
+  var traysSet = {};
+  var plantsSet = {};
+  members.forEach(function(g) {
+    zones[g.zone || '—'] = true;
+    rooms[g.room || '—'] = true;
+    traysSet[g.trays || 0] = true;
+    plantsSet[g.plants || 0] = true;
+  });
+
+  el.innerHTML =
+    '<strong>' + members.length + ' group' + (members.length !== 1 ? 's' : '') + '</strong> in family "' + escapeHtml(prefix) + '"' +
+    '<br>Room: ' + Object.keys(rooms).join(', ') +
+    ' &bull; Zone: ' + Object.keys(zones).join(', ') +
+    ' &bull; Trays: ' + Object.keys(traysSet).join(', ') +
+    ' &bull; Plants: ' + Object.keys(plantsSet).join(', ');
+}
+
+/**
+ * Update the preview bar showing what will change.
+ */
+function updateBulkEditPreview() {
+  var previewEl = document.getElementById('bulkEditPreview');
+  if (!previewEl) return;
+
+  var prefix = (document.getElementById('bulkEditPrefix') || {}).value || '';
+  if (!prefix) { previewEl.style.display = 'none'; return; }
+
+  var families = detectGroupFamilies();
+  var count = (families[prefix] || []).length;
+  if (!count) { previewEl.style.display = 'none'; return; }
+
+  var changes = [];
+  var trays = (document.getElementById('bulkEditTrays') || {}).value;
+  var plants = (document.getElementById('bulkEditPlants') || {}).value;
+  var zone = (document.getElementById('bulkEditZone') || {}).value;
+  var status = (document.getElementById('bulkEditStatus') || {}).value;
+  var renamePrefix = ((document.getElementById('bulkEditRenamePrefix') || {}).value || '').trim();
+  var crop = ((document.getElementById('bulkEditCrop') || {}).value || '').trim();
+  var clearLights = (document.getElementById('bulkEditClearLights') || {}).checked;
+
+  if (trays !== '' && trays !== undefined) changes.push('Trays → ' + trays);
+  if (plants !== '' && plants !== undefined) changes.push('Plants → ' + plants);
+  if (zone) changes.push('Zone → ' + zone);
+  if (status) changes.push('Status → ' + status);
+  if (renamePrefix) changes.push('Rename prefix → "' + renamePrefix + '"');
+  if (crop) changes.push('Crop → ' + crop);
+  if (clearLights) changes.push('Remove all light assignments');
+
+  if (!changes.length) {
+    previewEl.style.display = 'none';
+    return;
+  }
+
+  previewEl.style.display = 'block';
+  previewEl.innerHTML =
+    '<strong>Changes to apply to ' + count + ' group' + (count !== 1 ? 's' : '') + ':</strong><br>' +
+    changes.join('<br>');
+}
+
+/**
+ * Apply the bulk edit to all matching groups and persist.
+ * @returns {Promise<{updated: number}>}
+ */
+async function executeBulkEditGroups() {
+  var prefixSelect = document.getElementById('bulkEditPrefix');
+  var prefix = prefixSelect ? prefixSelect.value : '';
+  if (!prefix) { alert('Please select a group family.'); return { updated: 0 }; }
+
+  var families = detectGroupFamilies();
+  var members = families[prefix] || [];
+  if (!members.length) return { updated: 0 };
+
+  // Gather field values (blank = no change)
+  var traysVal   = (document.getElementById('bulkEditTrays') || {}).value;
+  var plantsVal  = (document.getElementById('bulkEditPlants') || {}).value;
+  var zoneVal    = (document.getElementById('bulkEditZone') || {}).value;
+  var statusVal  = (document.getElementById('bulkEditStatus') || {}).value;
+  var renamePrefix = ((document.getElementById('bulkEditRenamePrefix') || {}).value || '').trim();
+  var cropVal    = ((document.getElementById('bulkEditCrop') || {}).value || '').trim();
+  var clearLights = (document.getElementById('bulkEditClearLights') || {}).checked;
+
+  var trays  = traysVal  !== '' && traysVal  !== undefined ? parseInt(traysVal)  : null;
+  var plants = plantsVal !== '' && plantsVal !== undefined ? parseInt(plantsVal) : null;
+
+  // Apply changes
+  var now = new Date().toISOString();
+  var updated = 0;
+
+  members.forEach(function(group) {
+    var changed = false;
+
+    if (trays !== null)  { group.trays  = trays;  changed = true; }
+    if (plants !== null) { group.plants = plants; changed = true; }
+    if (zoneVal)         { group.zone   = zoneVal; changed = true; }
+    if (statusVal)       { group.status = statusVal; changed = true; }
+    if (cropVal)         { group.crop   = cropVal; changed = true; }
+    if (clearLights)     { group.lights = []; group.deviceCount = 0; changed = true; }
+
+    // Rename prefix — preserve the trailing number
+    if (renamePrefix) {
+      var m = group.name.match(/^(.+?)\s*(\d+)$/);
+      if (m) {
+        var num = m[2];
+        group.name = renamePrefix + ' ' + num;
+        // Rebuild id to match new name
+        var oldId = group.id;
+        group.id = group.room + ':' + group.zone + ':' + group.name;
+        // Update schedule reference if it references old id
+        console.log('[Bulk Edit] Renamed: ' + oldId + ' → ' + group.id);
+      }
+      changed = true;
+    }
+
+    if (changed) {
+      group.lastModified = now;
+      updated++;
+    }
+  });
+
+  if (!updated) return { updated: 0 };
+
+  // Persist to server
+  try {
+    var response = await fetch('/data/groups.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groups: window.STATE.groups })
+    });
+    if (!response.ok) {
+      var errorText = await response.text();
+      throw new Error('Server error: ' + response.status + ' ' + errorText);
+    }
+    await response.json();
+    console.log('[Bulk Edit] Saved ' + updated + ' groups to server');
+  } catch (error) {
+    console.error('[Bulk Edit] Failed to persist:', error);
+    if (typeof showToast === 'function') {
+      showToast({ title: 'Bulk Edit Failed', msg: error.message, kind: 'error', icon: '' });
+    } else {
+      alert('Failed to save: ' + error.message);
+    }
+    return { updated: 0 };
+  }
+
+  // Refresh UI
+  document.dispatchEvent(new Event('groups-updated'));
+  if (typeof renderGroupsV2GroupList === 'function') renderGroupsV2GroupList();
+  if (typeof populateGroupsV2LoadGroupDropdown === 'function') populateGroupsV2LoadGroupDropdown();
+  if (clearLights) {
+    document.dispatchEvent(new Event('lights-updated'));
+    if (typeof populateGroupsV2UnassignedLightsDropdown === 'function') populateGroupsV2UnassignedLightsDropdown();
+  }
+
+  return { updated: updated };
+}
+
+// Wire up Bulk Edit Groups modal
+document.addEventListener('DOMContentLoaded', function() {
+  var dialog    = document.getElementById('bulkEditGroupModal');
+  var openBtn   = document.getElementById('bulkEditGroupsBtn');
+  var closeBtn  = document.getElementById('bulkEditGroupClose');
+  var cancelBtn = document.getElementById('bulkEditGroupCancel');
+  var applyBtn  = document.getElementById('bulkEditGroupApply');
+
+  if (!dialog || !openBtn) return;
+
+  // Open modal
+  openBtn.addEventListener('click', function() {
+    populateBulkEditModal();
+    dialog.showModal();
+  });
+
+  // Close modal
+  if (closeBtn) closeBtn.addEventListener('click', function() { dialog.close(); });
+  if (cancelBtn) cancelBtn.addEventListener('click', function() { dialog.close(); });
+
+  // Close on backdrop click
+  dialog.addEventListener('click', function(e) {
+    if (e.target === dialog) dialog.close();
+  });
+
+  // Live summary + preview updates
+  var prefixSel = document.getElementById('bulkEditPrefix');
+  if (prefixSel) {
+    prefixSel.addEventListener('change', function() {
+      updateBulkEditSummary();
+      updateBulkEditPreview();
+    });
+  }
+
+  ['bulkEditTrays', 'bulkEditPlants', 'bulkEditZone', 'bulkEditStatus',
+   'bulkEditRenamePrefix', 'bulkEditCrop', 'bulkEditClearLights'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', updateBulkEditPreview);
+  });
+
+  // Apply button
+  if (applyBtn) {
+    applyBtn.addEventListener('click', async function() {
+      var prefix = (document.getElementById('bulkEditPrefix') || {}).value || '';
+      if (!prefix) { alert('Please select a group family first.'); return; }
+
+      var families = detectGroupFamilies();
+      var count = (families[prefix] || []).length;
+      if (!confirm('Apply changes to ' + count + ' group' + (count !== 1 ? 's' : '') + ' in "' + prefix + '"?')) return;
+
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'Applying...';
+      try {
+        var result = await executeBulkEditGroups();
+        if (result.updated > 0) {
+          dialog.close();
+          if (typeof showToast === 'function') {
+            showToast({
+              title: 'Bulk Edit Complete',
+              msg: 'Updated ' + result.updated + ' group' + (result.updated !== 1 ? 's' : '') + ' in "' + prefix + '".',
+              kind: 'success',
+              icon: '✏️'
+            }, 3000);
+          }
+        }
+      } catch (error) {
+        console.error('[Bulk Edit] Error:', error);
+        alert('Bulk edit failed: ' + error.message);
+      } finally {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply to All';
+      }
+    });
+  }
+});
+
 // Wire up Build Stock Groups modal
 document.addEventListener('DOMContentLoaded', () => {
   const dialog = document.getElementById('buildStockGroupModal');
