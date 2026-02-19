@@ -1138,13 +1138,38 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
           const farms = await listNetworkFarms();
           const byId = new Map(farms.map((f) => [String(f.farm_id), f]));
 
-          const notify = async (farmBaseUrl, body) => {
+          const farmApiKeys = loadFarmApiKeys();
+
+          // Resolve auth credentials: prefer stored farm credentials, fall back to farm-api-keys.json
+          const resolveAuth = (farmObj, farmId) => {
+            // 1. Stored credentials on the network farm entry
+            if (farmObj?.api_key) return { farmId: farmObj.auth_farm_id || farmId, apiKey: farmObj.api_key };
+            // 2. Look up by auth_farm_id in farm-api-keys.json
+            if (farmObj?.auth_farm_id && farmApiKeys[farmObj.auth_farm_id]?.api_key) {
+              return { farmId: farmObj.auth_farm_id, apiKey: farmApiKeys[farmObj.auth_farm_id].api_key };
+            }
+            // 3. Look up by network farm_id in farm-api-keys.json
+            if (farmApiKeys[farmId]?.api_key) return { farmId, apiKey: farmApiKeys[farmId].api_key };
+            // 4. Env-based key
+            const envKey = process.env.WHOLESALE_FARM_API_KEY;
+            if (envKey) return { farmId, apiKey: envKey };
+            // 5. Last resort: first active key entry (handles single-farm setups with mismatched IDs)
+            const entry = Object.entries(farmApiKeys).find(([, v]) => v?.status === 'active' && v?.api_key);
+            if (entry) return { farmId: entry[0], apiKey: entry[1].api_key };
+            return { farmId, apiKey: null };
+          };
+
+          const notify = async (farmBaseUrl, body, farmId, farmObj) => {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 3000);
             try {
+              const auth = resolveAuth(farmObj, farmId);
+              const headers = { 'Content-Type': 'application/json' };
+              if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
+              if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
               await fetch(new URL('/api/wholesale/order-events', farmBaseUrl).toString(), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(body),
                 signal: controller.signal
               });
@@ -1155,13 +1180,17 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
             }
           };
 
-          const reserve = async (farmBaseUrl, body) => {
+          const reserve = async (farmBaseUrl, body, farmId, farmObj) => {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 3000);
             try {
+              const auth = resolveAuth(farmObj, farmId);
+              const headers = { 'Content-Type': 'application/json' };
+              if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
+              if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
               const res = await fetch(new URL('/api/wholesale/inventory/reserve', farmBaseUrl).toString(), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(body),
                 signal: controller.signal
               });
@@ -1176,13 +1205,17 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
             }
           };
 
-          const confirm = async (farmBaseUrl, body) => {
+          const confirm = async (farmBaseUrl, body, farmId, farmObj) => {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 3000);
             try {
+              const auth = resolveAuth(farmObj, farmId);
+              const headers = { 'Content-Type': 'application/json' };
+              if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
+              if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
               const res = await fetch(new URL('/api/wholesale/inventory/confirm', farmBaseUrl).toString(), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(body),
                 signal: controller.signal
               });
@@ -1201,10 +1234,11 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
 
           for (const sub of order.farm_sub_orders || []) {
             const farm = byId.get(String(sub.farm_id));
-            if (!farm?.base_url) continue;
+            const farmUrl = farm?.api_url || farm?.url;
+            if (!farmUrl) continue;
 
             // Send order notification
-            await notify(farm.base_url, {
+            await notify(farmUrl, {
               type: 'wholesale_order_created',
               order_id: order.master_order_id,
               farm_id: sub.farm_id,
@@ -1216,23 +1250,23 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
                 quantity: it.quantity,
                 unit: it.unit
               }))
-            });
+            }, sub.farm_id, farm);
 
             // Reserve inventory (temporary hold)
-            await reserve(farm.base_url, {
+            await reserve(farmUrl, {
               order_id: order.master_order_id,
               items: (sub.items || []).map((it) => ({
                 sku_id: it.sku_id,
                 quantity: it.quantity
               }))
-            });
+            }, sub.farm_id, farm);
 
             // CRITICAL: Confirm inventory deduction if payment succeeded
             if (paymentSuccess) {
-              await confirm(farm.base_url, {
+              await confirm(farmUrl, {
                 order_id: order.master_order_id,
                 payment_id: payment.payment_id
-              });
+              }, sub.farm_id, farm);
             }
           }
         } catch {
@@ -1353,6 +1387,8 @@ router.post('/network/farms', adminAuthMiddleware, async (req, res, next) => {
       api_url: payload.api_url || payload.url || null,
       url: payload.url || payload.api_url || null,
       status: payload.status || 'active',
+      auth_farm_id: payload.auth_farm_id || null,
+      api_key: payload.api_key || null,
       contact: payload.contact || {},
       location: payload.location || {}
     });

@@ -992,10 +992,6 @@ app.get('/api/activity-hub/orders/pending', (_req, res) => {
   return res.json({ ok: true, orders: [] });
 });
 
-app.get('/api/wholesale/orders/pending', (_req, res) => {
-  return res.json({ ok: true, orders: [] });
-});
-
 app.get('/api/inventory/dashboard', async (_req, res) => {
   return res.json({
     ok: true,
@@ -1726,10 +1722,6 @@ app.get('/api/rooms', async (req, res) => {
     logger.warn('[Compat] /api/rooms fallback failed:', error.message);
     return res.json([]);
   }
-});
-
-app.get('/api/wholesale/inventory', (_req, res) => {
-  return res.json({ lots: [] });
 });
 
 // Edge-compatible login: /api/farm/auth/login

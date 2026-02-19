@@ -3,7 +3,7 @@ Production Planning Module - Forecast & Schedule Planting
 AI-driven planning based on sales demand and grow cycles
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -15,6 +15,20 @@ router = APIRouter()
 
 # Node.js server URL for fetching real data
 NODE_API_URL = "http://localhost:8091"
+
+
+async def load_dedicated_crops() -> List[str]:
+    """Load dedicated crop list from the Node.js farm config endpoint.
+    Returns empty list if unavailable (meaning no restriction)."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{NODE_API_URL}/api/farm/dedicated-crops")
+            data = response.json()
+            if data.get("ok") and not data.get("unrestricted"):
+                return [dc["name"] if isinstance(dc, dict) else dc for dc in data.get("dedicated_crops", [])]
+    except Exception as e:
+        print(f"[Planning] Could not load dedicated crops: {e}")
+    return []
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -261,8 +275,19 @@ async def get_demand_forecast(crop: Optional[str] = None, horizon: str = "monthl
     }
 
 @router.post("/api/planning/schedule/generate")
-async def generate_planting_schedule(horizon: str = "monthly"):
-    """Generate recommended planting schedule based on demand"""
+async def generate_planting_schedule(horizon: str = "monthly", crops: Optional[str] = Query(None, description="Comma-separated crop names to filter by")):
+    """Generate recommended planting schedule based on demand.
+    Optional 'crops' param restricts to specific crops (comma-separated).
+    If omitted, uses farm's dedicated crop list when available."""
+    
+    # Resolve crop filter
+    crop_filter = None
+    if crops:
+        crop_filter = set(c.strip() for c in crops.split(",") if c.strip())
+    else:
+        dedicated = await load_dedicated_crops()
+        if dedicated:
+            crop_filter = set(dedicated)
     
     # Get demand forecast
     forecast_response = await get_demand_forecast(horizon=horizon)
@@ -276,6 +301,10 @@ async def generate_planting_schedule(horizon: str = "monthly"):
         demand_kg = forecast["forecasted_demand"]
         
         if crop not in CROP_DATA:
+            continue
+        
+        # Apply dedicated crop filter if set
+        if crop_filter and crop not in crop_filter:
             continue
         
         crop_info = CROP_DATA[crop]
@@ -461,8 +490,19 @@ async def list_production_plans(status: Optional[str] = None):
     }
 
 @router.get("/api/planning/recommendations")
-async def get_planting_recommendations():
-    """Get AI-driven planting recommendations"""
+async def get_planting_recommendations(crops: Optional[str] = Query(None, description="Comma-separated crop names to filter by")):
+    """Get AI-driven planting recommendations.
+    Optional 'crops' param restricts to specific crops (comma-separated).
+    If omitted, uses farm's dedicated crop list when available."""
+    
+    # Resolve crop filter
+    crop_filter = None
+    if crops:
+        crop_filter = set(c.strip() for c in crops.split(",") if c.strip())
+    else:
+        dedicated = await load_dedicated_crops()
+        if dedicated:
+            crop_filter = set(dedicated)
     
     # Load real wholesale order data
     await db.load_real_wholesale_data()
@@ -482,6 +522,10 @@ async def get_planting_recommendations():
         crop = forecast["crop"]
         
         if crop not in CROP_DATA:
+            continue
+        
+        # Apply dedicated crop filter if set
+        if crop_filter and crop not in crop_filter:
             continue
         
         crop_info = CROP_DATA[crop]
@@ -521,9 +565,25 @@ async def get_planting_recommendations():
             "priority": "high" if forecast["trend"] == "growing" else "medium"
         })
     
+    # Market opportunities: crops outside dedicated list with growing demand
+    market_opportunities = []
+    if crop_filter:
+        for forecast in forecasts:
+            crop = forecast["crop"]
+            if crop in CROP_DATA and crop not in crop_filter and forecast.get("trend") == "growing":
+                market_opportunities.append({
+                    "crop": crop,
+                    "daily_demand_kg": forecast["daily_average"],
+                    "trend": forecast["trend"],
+                    "reason": f"Growing market demand ({forecast['daily_average']}kg/day) — consider adding to your dedicated crops"
+                })
+        market_opportunities = market_opportunities[:3]  # Limit to top 3
+    
     return {
         "ok": True,
         "recommendations": recommendations,
+        "market_opportunities": market_opportunities,
+        "dedicated_crop_filter": list(crop_filter) if crop_filter else None,
         "total_space_allocated": round(space_allocated, 0),
         "space_remaining": round(available_space - space_allocated, 0)
     }

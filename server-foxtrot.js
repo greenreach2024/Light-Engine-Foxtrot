@@ -17158,6 +17158,31 @@ app.post('/api/planting/recommendations', asyncHandler(async (req, res) => {
     }
   }
 
+  // Load farm's dedicated crop list and apply soft constraint
+  let dedicatedCropIds = [];
+  let explorationCrops = [];
+  try {
+    const farmDataPath = path.join(PUBLIC_DIR, 'data', 'farm.json');
+    const farmData = JSON.parse(fs.readFileSync(farmDataPath, 'utf8'));
+    dedicatedCropIds = farmData.dedicated_crops || [];
+  } catch (_) { /* no farm.json */ }
+
+  if (dedicatedCropIds.length > 0) {
+    // Primary set: only dedicated crops
+    const dedicatedSet = new Set(dedicatedCropIds);
+    const primaryCrops = cropsToConsider.filter(id => dedicatedSet.has(id));
+    const nonDedicatedCrops = cropsToConsider.filter(id => !dedicatedSet.has(id));
+
+    // Score non-dedicated crops to find top 2-3 exploration candidates
+    // We'll run a quick pre-score pass using the engine on the full set,
+    // then return dedicated + top exploration crops
+    cropsToConsider = primaryCrops;
+
+    // Add up to 3 exploration crops from outside the dedicated list
+    explorationCrops = nonDedicatedCrops.slice(0, 3);
+    cropsToConsider = [...primaryCrops, ...explorationCrops];
+  }
+
   // Generate recommendations
   const recommendations = await generateCropRecommendations({
     groupId,
@@ -17167,6 +17192,22 @@ app.post('/api/planting/recommendations', asyncHandler(async (req, res) => {
     currentInventory,
     zoneConditions
   });
+
+  // Tag exploration crops in the results
+  if (explorationCrops.length > 0) {
+    const explorationSet = new Set(explorationCrops);
+    const tagExploration = (rec) => {
+      if (rec && explorationSet.has(rec.cropId)) {
+        rec.exploration = true;
+        rec.explorationReason = 'Outside your dedicated crops — included for market consideration';
+      }
+    };
+    tagExploration(recommendations.topRecommendation);
+    (recommendations.alternatives || []).forEach(tagExploration);
+    (recommendations.allScored || []).forEach(tagExploration);
+    recommendations.dedicatedCropCount = dedicatedCropIds.length;
+    recommendations.explorationCropCount = explorationCrops.length;
+  }
 
   res.json(recommendations);
 }));
@@ -18010,10 +18051,29 @@ app.get('/api/crops', (req, res) => {
     const registryData = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
     const activeOnly = req.query.active === 'true';
     const categoryFilter = req.query.category || null;
+    const dedicatedOnly = req.query.dedicated === 'true';
+
+    // Load farm's dedicated crop list when requested
+    let dedicatedSet = null;
+    if (dedicatedOnly) {
+      try {
+        const farmData = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'data', 'farm.json'), 'utf8'));
+        const dedicatedIds = farmData.dedicated_crops || [];
+        if (dedicatedIds.length > 0) {
+          dedicatedSet = new Set(dedicatedIds);
+        }
+      } catch (_) { /* no farm.json — skip filter */ }
+    }
 
     const crops = Object.entries(registryData.crops)
       .filter(([, crop]) => !activeOnly || crop.active)
       .filter(([, crop]) => !categoryFilter || crop.category === categoryFilter)
+      .filter(([name, crop]) => {
+        if (!dedicatedSet) return true;
+        // Match by name key or planIds
+        if (dedicatedSet.has(name)) return true;
+        return (crop.planIds || []).some(pid => dedicatedSet.has(pid));
+      })
       .map(([name, crop]) => ({
         name,
         category: crop.category,
@@ -18023,7 +18083,8 @@ app.get('/api/crops', (req, res) => {
         growth: crop.growth,
         pricing: crop.pricing,
         market: crop.market,
-        nutrientProfile: crop.nutrientProfile
+        nutrientProfile: crop.nutrientProfile,
+        dedicated: dedicatedSet ? dedicatedSet.has(name) || (crop.planIds || []).some(pid => dedicatedSet.has(pid)) : undefined
       }));
 
     res.json({ version: registryData.version, crops });
@@ -18366,6 +18427,94 @@ app.get('/api/bus-mappings', asyncHandler(async (req, res) => {
 // ============================================================================
 // Proxy Middleware Setup
 // ============================================================================
+
+// ============================================================================
+// Dedicated Crops Management
+// ============================================================================
+
+/**
+ * GET /api/farm/dedicated-crops
+ * Returns the farm's dedicated crop list with full registry metadata.
+ * An empty array means "no restriction" (all crops available).
+ */
+app.get('/api/farm/dedicated-crops', (req, res) => {
+  try {
+    const farmDataPath = path.join(PUBLIC_DIR, 'data', 'farm.json');
+    const farmData = JSON.parse(fs.readFileSync(farmDataPath, 'utf8'));
+    const dedicatedIds = farmData.dedicated_crops || [];
+
+    // Enrich with registry metadata
+    const registryPath = path.join(PUBLIC_DIR, 'data', 'crop-registry.json');
+    let enriched = dedicatedIds.map(id => ({ id }));
+    try {
+      const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+      enriched = dedicatedIds.map(id => {
+        // id can be a plan-style slug like "crop-bibb-butterhead" OR a display name
+        const entry = registry.crops[id]
+          || Object.entries(registry.crops).find(([, v]) => (v.planIds || []).includes(id))?.[1];
+        return {
+          id,
+          name: entry ? (entry.aliases?.[0] || id) : id,
+          category: entry?.category || 'unknown',
+          nutrientProfile: entry?.nutrientProfile || 'unknown',
+          growth: entry?.growth || {},
+          pricing: entry?.pricing || {}
+        };
+      });
+    } catch (_) { /* registry unavailable — return bare ids */ }
+
+    res.json({ ok: true, dedicated_crops: enriched, unrestricted: dedicatedIds.length === 0 });
+  } catch (err) {
+    console.error('[dedicated-crops] GET error:', err?.message);
+    res.json({ ok: true, dedicated_crops: [], unrestricted: true });
+  }
+});
+
+/**
+ * PUT /api/farm/dedicated-crops
+ * Set or update the farm's dedicated crop list.
+ * Body: { "crops": ["crop-bibb-butterhead", "crop-genovese-basil", ...] }
+ * Send empty array to remove restriction.
+ */
+app.put('/api/farm/dedicated-crops', (req, res) => {
+  try {
+    const { crops } = req.body;
+    if (!Array.isArray(crops)) {
+      return res.status(400).json({ ok: false, error: 'crops must be an array of crop IDs' });
+    }
+
+    // Validate against registry
+    const registryPath = path.join(PUBLIC_DIR, 'data', 'crop-registry.json');
+    let validIds = crops;
+    try {
+      const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+      const allPlanIds = new Set();
+      for (const [, crop] of Object.entries(registry.crops)) {
+        (crop.planIds || []).forEach(pid => allPlanIds.add(pid));
+      }
+      const unknown = crops.filter(id => !registry.crops[id] && !allPlanIds.has(id));
+      if (unknown.length > 0) {
+        return res.status(400).json({
+          ok: false,
+          error: `Unknown crop IDs: ${unknown.join(', ')}`,
+          hint: 'Use GET /api/crops to see valid IDs'
+        });
+      }
+    } catch (_) { /* registry unavailable — accept as-is */ }
+
+    // Persist to farm.json
+    const farmDataPath = path.join(PUBLIC_DIR, 'data', 'farm.json');
+    const farmData = JSON.parse(fs.readFileSync(farmDataPath, 'utf8'));
+    farmData.dedicated_crops = validIds;
+    fs.writeFileSync(farmDataPath, JSON.stringify(farmData, null, 2));
+
+    console.log(`[dedicated-crops] Updated: ${validIds.length} crops — [${validIds.join(', ')}]`);
+    res.json({ ok: true, dedicated_crops: validIds, count: validIds.length });
+  } catch (err) {
+    console.error('[dedicated-crops] PUT error:', err?.message);
+    res.status(500).json({ ok: false, error: 'Failed to update dedicated crops' });
+  }
+});
 
 // DEPRECATED: Charlie backend farm/info endpoint
 app.get('/api/farm/info', (req, res) => {

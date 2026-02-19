@@ -7071,6 +7071,18 @@
           return !(planName.includes('cannabis') || planId.includes('cannabis') || crop.includes('cannabis'));
         });
 
+        // Load farm's dedicated crop list
+        let dedicatedPlanIds = new Set();
+        try {
+          const dcResp = await fetch('/api/farm/dedicated-crops');
+          if (dcResp.ok) {
+            const dcData = await dcResp.json();
+            if (dcData.dedicated_crops && dcData.dedicated_crops.length > 0) {
+              dcData.dedicated_crops.forEach(dc => dedicatedPlanIds.add(dc.id));
+            }
+          }
+        } catch (e) { console.warn('[NewPlanting] Could not load dedicated crops:', e); }
+
         // Load available zones
         const roomMapResponse = await fetch('/data/room-map.json');
         if (roomMapResponse.ok) {
@@ -7078,15 +7090,53 @@
           availableZones = roomMap.zones || [];
         }
 
-        // Populate plan dropdown
+        // Populate plan dropdown — dedicated crops first, then "All Other Crops"
         const planSelect = document.getElementById('cropPlan');
         planSelect.innerHTML = '<option value="">Select a plan...</option>';
-        availablePlans.forEach(plan => {
-          const option = document.createElement('option');
-          option.value = plan.id;
-          option.textContent = `${plan.name}${plan.crop ? ' (' + plan.crop + ')' : ''}`;
-          planSelect.appendChild(option);
-        });
+
+        if (dedicatedPlanIds.size > 0) {
+          // Dedicated crops group
+          const dedicatedGroup = document.createElement('optgroup');
+          dedicatedGroup.label = '★ Your Dedicated Crops';
+          let hasDedicated = false;
+
+          availablePlans.forEach(plan => {
+            const planId = plan.id || '';
+            if (dedicatedPlanIds.has(planId)) {
+              const option = document.createElement('option');
+              option.value = planId;
+              option.textContent = `${plan.name}${plan.crop ? ' (' + plan.crop + ')' : ''}`;
+              dedicatedGroup.appendChild(option);
+              hasDedicated = true;
+            }
+          });
+
+          if (hasDedicated) planSelect.appendChild(dedicatedGroup);
+
+          // Other crops group
+          const otherGroup = document.createElement('optgroup');
+          otherGroup.label = 'All Other Crops';
+
+          availablePlans.forEach(plan => {
+            const planId = plan.id || '';
+            if (!dedicatedPlanIds.has(planId)) {
+              const option = document.createElement('option');
+              option.value = planId;
+              option.textContent = `${plan.name}${plan.crop ? ' (' + plan.crop + ')' : ''}`;
+              otherGroup.appendChild(option);
+            }
+          });
+
+          if (otherGroup.children.length > 0) planSelect.appendChild(otherGroup);
+        } else {
+          // No dedicated crops — show all plans flat
+          availablePlans.forEach(plan => {
+            const option = document.createElement('option');
+            option.value = plan.id;
+            option.textContent = `${plan.name}${plan.crop ? ' (' + plan.crop + ')' : ''}`;
+            planSelect.appendChild(option);
+          });
+        }
 
         // Populate zone dropdown
         const zoneSelect = document.getElementById('zone');

@@ -47,6 +47,11 @@
   "contactName": "John Doe",
   "phone": "",
   "website": "",
+  "dedicated_crops": [
+    "crop-bibb-butterhead",
+    "crop-buttercrunch-lettuce",
+    "crop-genovese-basil"
+  ],
   "metadata": {
     "location": {
       "city": "Kingston",

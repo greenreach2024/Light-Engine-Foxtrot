@@ -248,7 +248,7 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
     }
 
     const farmId = req.farmId;
-    let { farmName, location, farmSize, timezone, cropTypes, business_hours, certifications } = req.body;
+    let { farmName, location, farmSize, timezone, cropTypes, dedicated_crops, business_hours, certifications } = req.body;
 
     // Validate and sanitize inputs
     if (!timezone) {
@@ -293,6 +293,14 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
       updates.push(`crop_types = $${paramCount++}`);
       values.push(JSON.stringify(cropTypes));
     }
+
+    // Store dedicated_crops alongside crop_types in the database
+    if (dedicated_crops && Array.isArray(dedicated_crops)) {
+      updates.push(`crop_types = $${paramCount++}`);
+      values.push(JSON.stringify(dedicated_crops));
+      console.log(`[Setup Wizard] Dedicated crops saved for farm ${farmId}: ${dedicated_crops.length} crops`);
+    }
+
     if (business_hours) {
       updates.push(`business_hours = $${paramCount++}`);
       values.push(JSON.stringify(business_hours));

@@ -30,6 +30,8 @@ async function seedFromDatabase() {
         api_url: apiUrl,
         url: apiUrl,
         status: row.status,
+        auth_farm_id: meta.auth_farm_id || null,
+        api_key: meta.api_key || null,
         contact: meta.contact || {},
         location: meta.location || {},
         updated_at: new Date().toISOString()

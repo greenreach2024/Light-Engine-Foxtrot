@@ -34,7 +34,8 @@ async function fetchFarmInventory(farm) {
     }
     const data = await response.json();
     return {
-      farm_id: data.farm_id || farm.farm_id,
+      farm_id: farm.farm_id,
+      inventory_farm_id: data.farm_id || farm.farm_id,
       farm_name: data.farm_name || farm.name || farm.farm_id,
       lots: Array.isArray(data.lots) ? data.lots : [],
       timestamp: data.inventory_timestamp || new Date().toISOString()

@@ -7,6 +7,12 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import validator from 'validator';
 import bcrypt from 'bcrypt';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -287,6 +293,61 @@ router.post('/complete', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/setup/available-crops
+ * Returns all crops from the registry grouped by nutrient profile,
+ * with compatibility indicators for the setup wizard crop picker.
+ */
+router.get('/available-crops', (req, res) => {
+  try {
+    const registryPath = path.join(__dirname, '..', 'public', 'data', 'crop-registry.json');
+    const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+
+    let profilesData = { profiles: {} };
+    try {
+      const profilesPath = path.join(__dirname, '..', 'public', 'data', 'nutrient-profiles.json');
+      profilesData = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+    } catch (_) { /* nutrient profiles not available */ }
+
+    const byProfile = {};
+
+    for (const [name, crop] of Object.entries(registry.crops || {})) {
+      const profile = crop.nutrientProfile || 'other';
+      if (!byProfile[profile]) {
+        const profileMeta = profilesData.profiles?.[profile];
+        byProfile[profile] = {
+          profile,
+          label: profile.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          ec_target: profileMeta?.ec_target || null,
+          ph_target: profileMeta?.ph_target || null,
+          crops: []
+        };
+      }
+      byProfile[profile].crops.push({
+        id: (crop.planIds || [])[0] || name,
+        name: (crop.aliases || [])[0] || name,
+        category: crop.category,
+        daysToHarvest: crop.growth?.daysToHarvest || null,
+        retailPricePerLb: crop.growth?.retailPricePerLb || null
+      });
+    }
+
+    // Sort crops within each profile alphabetically
+    for (const group of Object.values(byProfile)) {
+      group.crops.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    res.json({
+      ok: true,
+      groups: Object.values(byProfile),
+      compatibility: profilesData.compatibility_matrix || null
+    });
+  } catch (err) {
+    console.error('[Setup Wizard] available-crops error:', err?.message);
+    res.status(500).json({ ok: false, error: 'Failed to load available crops' });
+  }
+});
+
+/**
  * POST /api/setup/farm-profile
  * Update farm profile information during setup
  * 
@@ -307,7 +368,7 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
     }
 
     const farmId = req.farmId;
-    let { farmName, location, farmSize, timezone, cropTypes, business_hours, certifications } = req.body;
+    let { farmName, location, farmSize, timezone, cropTypes, dedicated_crops, business_hours, certifications } = req.body;
 
     // Validate and sanitize inputs
     if (!timezone) {
@@ -352,6 +413,20 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
       updates.push(`crop_types = $${paramCount++}`);
       values.push(JSON.stringify(cropTypes));
     }
+
+    // Persist dedicated_crops to farm.json (edge-local config)
+    if (dedicated_crops && Array.isArray(dedicated_crops)) {
+      try {
+        const farmJsonPath = path.join(__dirname, '..', 'public', 'data', 'farm.json');
+        const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+        farmData.dedicated_crops = dedicated_crops;
+        fs.writeFileSync(farmJsonPath, JSON.stringify(farmData, null, 2));
+        console.log(`[Setup Wizard] Dedicated crops saved: ${dedicated_crops.length} crops`);
+      } catch (dcErr) {
+        console.warn('[Setup Wizard] Could not save dedicated_crops to farm.json:', dcErr?.message);
+      }
+    }
+
     if (business_hours) {
       updates.push(`business_hours = $${paramCount++}`);
       values.push(JSON.stringify(business_hours));
