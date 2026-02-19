@@ -17089,6 +17089,198 @@ app.post('/api/inventory/supplies/:id/usage', (req, res) => {
 });
 
 // =====================================================
+// PLANTING ASSIGNMENTS & PLAN API
+// =====================================================
+
+/**
+ * In-memory planting assignments store (persists to planting-assignments.json)
+ * Used by Planting Scheduler UI for group-level crop planning
+ */
+const PLANTING_ASSIGNMENTS_PATH = path.join(__dirname, 'public', 'data', 'planting-assignments.json');
+
+function loadPlantingAssignments() {
+  try {
+    if (fs.existsSync(PLANTING_ASSIGNMENTS_PATH)) {
+      return JSON.parse(fs.readFileSync(PLANTING_ASSIGNMENTS_PATH, 'utf8'));
+    }
+  } catch (err) {
+    console.warn('[planting] Failed to load assignments:', err.message);
+  }
+  return { assignments: [] };
+}
+
+function savePlantingAssignments(data) {
+  try {
+    fs.writeFileSync(PLANTING_ASSIGNMENTS_PATH, JSON.stringify(data, null, 2) + '\n');
+  } catch (err) {
+    console.error('[planting] Failed to save assignments:', err.message);
+  }
+}
+
+/**
+ * GET /api/planting/assignments
+ * Load saved planting assignments (optionally filtered by farm_id)
+ */
+app.get('/api/planting/assignments', (req, res) => {
+  const store = loadPlantingAssignments();
+  const farmId = req.query.farm_id || req.headers['x-farm-id'] || '';
+  let assignments = store.assignments || [];
+  if (farmId) {
+    assignments = assignments.filter(a => !a.farm_id || a.farm_id === farmId);
+  }
+  res.json({ assignments, count: assignments.length });
+});
+
+/**
+ * POST /api/planting/assignments
+ * Save or update a planting assignment for a group
+ */
+app.post('/api/planting/assignments', (req, res) => {
+  const { group_id, crop_id, crop_name, seed_date, harvest_date, status, notes } = req.body;
+  if (!group_id) return res.status(400).json({ error: 'group_id is required' });
+
+  const store = loadPlantingAssignments();
+  const now = new Date().toISOString();
+  const farmId = req.body.farm_id || req.headers['x-farm-id'] || 'foxtrot';
+
+  // Upsert: replace existing assignment for this group
+  const idx = store.assignments.findIndex(a => a.group_id === group_id);
+  const assignment = {
+    farm_id: farmId,
+    group_id,
+    crop_id: crop_id || '',
+    crop_name: crop_name || '',
+    seed_date: seed_date || null,
+    harvest_date: harvest_date || null,
+    status: status || 'planned',
+    notes: notes || '',
+    updated_at: now
+  };
+
+  if (idx >= 0) {
+    store.assignments[idx] = assignment;
+  } else {
+    store.assignments.push(assignment);
+  }
+
+  savePlantingAssignments(store);
+  console.log(`[planting] Assignment saved: group=${group_id}, crop=${crop_name}`);
+  res.json({ ok: true, assignment });
+});
+
+/**
+ * POST /api/planting/plan
+ * Create a planting plan (manual schedule, AI implementation, or scoped scheduling)
+ * Supports scope: tray, group, zone, room
+ */
+app.post('/api/planting/plan', (req, res) => {
+  const { scope, cadence, cropId, cropName, items, notes } = req.body;
+
+  if (!scope || !cropId) {
+    return res.status(400).json({ error: 'scope and cropId are required' });
+  }
+
+  const now = new Date();
+  const planId = `plan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const itemList = Array.isArray(items) ? items : [];
+  const seedDate = itemList[0]?.seedDate || now.toISOString().slice(0, 10);
+
+  // Calculate expected harvest based on crop database harvestDays
+  // Default to 30 days if unknown
+  let harvestDays = 30;
+  try {
+    const recipesPath = path.join(__dirname, 'public', 'data', 'lighting-recipes.json');
+    if (fs.existsSync(recipesPath)) {
+      const recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+      if (recipes.crops) {
+        for (const [name, days] of Object.entries(recipes.crops)) {
+          const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          if (id === cropId || name === cropName) {
+            harvestDays = Array.isArray(days) ? days.length : 30;
+            break;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[planting] Could not resolve harvest days:', err.message);
+  }
+
+  const harvestDate = new Date(seedDate);
+  harvestDate.setDate(harvestDate.getDate() + harvestDays);
+
+  // Build cadence batches
+  const batches = [];
+  if (cadence === 'one_time' || !cadence) {
+    batches.push({
+      batchNum: 1,
+      seedDate,
+      expectedHarvestDate: harvestDate.toISOString().slice(0, 10),
+      items: itemList
+    });
+  } else {
+    // Succession cadence (weekly, biweekly, monthly)
+    const intervals = { weekly: 7, biweekly: 14, monthly: 30 };
+    const interval = intervals[cadence] || 7;
+    const batchCount = Math.min(4, Math.max(1, Math.ceil(52 / (interval / 7)))); // Up to 4 batches shown
+    for (let i = 0; i < Math.min(batchCount, 4); i++) {
+      const batchSeed = new Date(seedDate);
+      batchSeed.setDate(batchSeed.getDate() + i * interval);
+      const batchHarvest = new Date(batchSeed);
+      batchHarvest.setDate(batchHarvest.getDate() + harvestDays);
+      batches.push({
+        batchNum: i + 1,
+        seedDate: batchSeed.toISOString().slice(0, 10),
+        expectedHarvestDate: batchHarvest.toISOString().slice(0, 10),
+        items: itemList
+      });
+    }
+  }
+
+  // Save assignments for each group referenced
+  const groupIds = [...new Set(itemList.map(it => it.groupId).filter(Boolean))];
+  if (groupIds.length) {
+    const store = loadPlantingAssignments();
+    groupIds.forEach(gid => {
+      const idx = store.assignments.findIndex(a => a.group_id === gid);
+      const assignment = {
+        farm_id: req.headers['x-farm-id'] || 'foxtrot',
+        group_id: gid,
+        crop_id: cropId,
+        crop_name: cropName || '',
+        seed_date: seedDate,
+        harvest_date: harvestDate.toISOString().slice(0, 10),
+        status: 'planned',
+        notes: notes || '',
+        updated_at: now.toISOString()
+      };
+      if (idx >= 0) store.assignments[idx] = assignment;
+      else store.assignments.push(assignment);
+    });
+    savePlantingAssignments(store);
+    console.log(`[planting] Plan ${planId}: saved assignments for ${groupIds.length} groups`);
+  }
+
+  const plan = {
+    id: planId,
+    scope,
+    cadence: cadence || 'one_time',
+    cropId,
+    cropName: cropName || '',
+    seedDate,
+    harvestDate: harvestDate.toISOString().slice(0, 10),
+    harvestDays,
+    itemCount: itemList.length,
+    groupCount: groupIds.length,
+    batches,
+    createdAt: now.toISOString()
+  };
+
+  console.log(`[planting] Plan created: ${planId}, scope=${scope}, crop=${cropName}, ${groupIds.length} groups, ${batches.length} batches`);
+  res.json(plan);
+});
+
+// =====================================================
 // CROP RECOMMENDATION API - Phase 1 (Rules Engine)
 // =====================================================
 

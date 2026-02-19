@@ -1,29 +1,3 @@
 {
-  "schedules": [
-    {
-      "id": "group:GreenReach:ROOM-A-Z1:d",
-      "groupId": "GreenReach:ROOM-A-Z1:d",
-      "name": "d Schedule",
-      "mode": "one",
-      "timezone": "America/Toronto",
-      "photoperiodHours": 12,
-      "ramp": {
-        "up": 10,
-        "down": 10
-      },
-      "cycles": [
-        {
-          "start": "08:00",
-          "off": "20:00",
-          "photo": 12,
-          "ramp": {
-            "up": 10,
-            "down": 10
-          },
-          "spectrum": null
-        }
-      ],
-      "updatedAt": "2025-12-09T18:56:56.715Z"
-    }
-  ]
+  "schedules": []
 }
