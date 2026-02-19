@@ -6,7 +6,6 @@
 const API_BASE = window.location.origin;
 const STORAGE_KEY_SESSION = 'farm_admin_session';
 const STORAGE_KEY_REMEMBER = 'farm_admin_remember';
-const DEFAULT_CONTACT_EMAIL = 'shelbygilbert@rogers.com';
 
 // Debug logger: enable with localStorage.setItem('gr.debug','true') or when running on localhost
 const GR_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -35,26 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
 function initLogin() {
     grLog('🔐 Initializing farm admin login...');
     
-    // Check if user is already logged in
+    // Check if user is already logged in — via farm_admin_session OR dashboard token+farm_id
     const session = getSession();
-    // Also verify token exists in sessionStorage/localStorage to prevent redirect loop
     const hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
-    if (session && session.token && hasToken) {
-        grLog(' Active session found, redirecting to dashboard...');
-        // Track redirect to detect loops
-        const redirectCount = parseInt(sessionStorage.getItem('login_redirect_count') || '0');
-        sessionStorage.setItem('login_redirect_count', String(redirectCount + 1));
-        window.location.href = '/LE-farm-admin.html';
-        return;
-    } else if (session && !hasToken) {
-        // Clear stale session that lacks corresponding token
-        console.warn('⚠️ Clearing stale session without token');
-        localStorage.removeItem(STORAGE_KEY_SESSION);
-        sessionStorage.removeItem(STORAGE_KEY_SESSION);
-    }
-    
-    // Clear any redirect loop trackers
-    if (sessionStorage.getItem('login_redirect_count')) {
+    const hasFarmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') ||
+                      localStorage.getItem('farm_id') || localStorage.getItem('farmId');
+
+    // Redirect to admin panel if already authenticated
+    if ((session && session.token && hasToken) || (hasToken && hasFarmId && hasToken !== 'local-access' && hasFarmId !== 'LOCAL-FARM')) {
+        grLog(' Active session found, redirecting to admin dashboard...');
         const redirectCount = parseInt(sessionStorage.getItem('login_redirect_count') || '0');
         if (redirectCount > 2) {
             console.warn('⚠️ Detected potential redirect loop, clearing all auth data');
@@ -63,6 +51,26 @@ function initLogin() {
             sessionStorage.removeItem(STORAGE_KEY_SESSION);
             sessionStorage.removeItem('token');
             sessionStorage.removeItem('login_redirect_count');
+        } else {
+            sessionStorage.setItem('login_redirect_count', String(redirectCount + 1));
+            window.location.href = '/LE-farm-admin.html';
+            return;
+        }
+    } else if (session && !hasToken) {
+        console.warn('⚠️ Clearing stale session without token');
+        localStorage.removeItem(STORAGE_KEY_SESSION);
+        sessionStorage.removeItem(STORAGE_KEY_SESSION);
+    }
+    
+    // Clear redirect loop trackers on clean page load
+    sessionStorage.removeItem('login_redirect_count');
+    
+    // Hide demo credentials unless in test/demo mode
+    const demoCreds = document.querySelector('.demo-credentials');
+    if (demoCreds) {
+        const isDemo = window.location.search.includes('demo=true') || window.location.search.includes('test=true');
+        if (!isDemo) {
+            demoCreds.style.display = 'none';
         }
     }
     
@@ -71,8 +79,19 @@ function initLogin() {
     if (remembered.farmId) {
         document.getElementById('farmId').value = remembered.farmId;
     }
-    if (remembered.farmId) {
+    if (remembered.email) {
+        document.getElementById('email').value = remembered.email;
         document.getElementById('remember').checked = true;
+    }
+    
+    // Pre-fill farm ID from current session if available
+    const farmIdInput = document.getElementById('farmId');
+    if (farmIdInput && !farmIdInput.value) {
+        const storedFarmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId') ||
+                             sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId');
+        if (storedFarmId && storedFarmId !== 'LOCAL-FARM') {
+            farmIdInput.value = storedFarmId;
+        }
     }
     
     // Setup form handler
@@ -81,42 +100,14 @@ function initLogin() {
         form.addEventListener('submit', handleLogin);
     }
     
-    // Auto-fill removed — live credentials must not be embedded in client code
-}
-
-function resolveMarketDataForCrop(cropName) {
-    if (!cropName) return null;
-
-    const exact = marketDataSources[cropName];
-    if (exact) return exact;
-
-    const normalized = String(cropName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-
-    const aliasChecks = [
-        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
-        { test: ['romaine'], key: 'Romaine Lettuce' },
-        { test: ['red leaf'], key: 'Red Leaf Lettuce' },
-        { test: ['oakleaf', 'oak leaf', 'salad bowl'], key: 'Oak Leaf Lettuce' },
-        { test: ['lettuce', 'salad'], key: 'Lettuce' },
-        { test: ['arugula', 'rocket'], key: 'Arugula' },
-        { test: ['basil', 'genovese', 'thai basil', 'purple basil', 'lemon basil', 'holy basil'], key: 'Basil' },
-        { test: ['kale', 'lacinato', 'dinosaur', 'russian kale'], key: 'Kale' },
-        { test: ['frisee', 'frisée', 'endive'], key: 'Frisée Endive' },
-        { test: ['watercress'], key: 'Watercress' }
-    ];
-
-    for (const alias of aliasChecks) {
-        if (alias.test.some(token => normalized.includes(token))) {
-            return marketDataSources[alias.key] || null;
+    // Auto-fill test credentials only in demo/test mode
+    if (window.location.search.includes('demo=true') || window.location.search.includes('test=true')) {
+        document.getElementById('farmId').value = 'FARM-TEST-WIZARD-001';
+        if (document.getElementById('email')) {
+            document.getElementById('email').value = 'admin@test-farm.com';
         }
+        document.getElementById('password').value = 'Grow123';
     }
-
-    const fuzzyKey = Object.keys(marketDataSources).find((key) => {
-        const keyNormalized = key.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        return normalized.includes(keyNormalized) || keyNormalized.includes(normalized);
-    });
-
-    return fuzzyKey ? marketDataSources[fuzzyKey] : null;
 }
 
 /**
@@ -144,7 +135,7 @@ async function initDashboard() {
                     farmId: payload.farm_id || payload.farmId || existingFarmId,
                     userId: payload.user_id || payload.userId,
                     farmName: localStorage.getItem('farm_name') || payload.name || payload.farmName || 'Light Engine Farm',
-                    email: payload.email || existingEmail || DEFAULT_CONTACT_EMAIL,
+                    email: payload.email || existingEmail || 'admin@farm.com',
                     role: payload.role || 'admin'
                 };
                 grLog(' Using existing session:', currentSession.farmId, currentSession.email);
@@ -156,7 +147,7 @@ async function initDashboard() {
                 token: existingToken,
                 farmId: existingFarmId,
                 farmName: sessionStorage.getItem('farm_name') || localStorage.getItem('farm_name') || 'Light Engine Farm',
-                email: existingEmail || DEFAULT_CONTACT_EMAIL,
+                email: existingEmail || 'admin@farm.com',
                 role: 'admin'
             };
             grLog(' Using existing session (non-JWT):', currentSession.farmId, currentSession.email);
@@ -183,7 +174,7 @@ async function initDashboard() {
             token: 'local-access',
             farmId: 'LOCAL-FARM',
             farmName: 'Light Engine Farm',
-            email: DEFAULT_CONTACT_EMAIL,
+            email: 'admin@local-farm.com',
             role: 'admin'
         };
         
@@ -222,6 +213,8 @@ async function handleLogin(e) {
     e.preventDefault();
     
     const farmId = document.getElementById('farmId').value.trim();
+    const emailInput = document.getElementById('email');
+    const email = emailInput ? emailInput.value.trim() : '';
     const password = document.getElementById('password').value;
     const rememberInput = document.getElementById('remember');
     const remember = rememberInput ? rememberInput.checked : false;
@@ -245,7 +238,7 @@ async function handleLogin(e) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ farmId, password })
+            body: JSON.stringify({ farmId, email, password })
         });
         
         const data = await response.json();
@@ -268,7 +261,7 @@ async function handleLogin(e) {
             sessionStorage.setItem('token', data.token);
             sessionStorage.setItem('farm_id', data.farmId || farmId);
             if (data.farmName) sessionStorage.setItem('farm_name', data.farmName);
-            if (data.email) sessionStorage.setItem('email', data.email);
+            if (data.email || email) sessionStorage.setItem('email', data.email || email);
             
             // ALWAYS save to localStorage as fallback (may be restricted in private mode)
             // This helps with cross-tab access and normal mode persistence
@@ -276,7 +269,7 @@ async function handleLogin(e) {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('farm_id', data.farmId || farmId);
                 if (data.farmName) localStorage.setItem('farm_name', data.farmName);
-                if (data.email) localStorage.setItem('email', data.email);
+                if (data.email || email) localStorage.setItem('email', data.email || email);
             } catch (e) {
                 console.warn('[Login] localStorage blocked (private mode?), using sessionStorage only');
             }
@@ -285,7 +278,8 @@ async function handleLogin(e) {
             if (remember) {
                 try {
                     localStorage.setItem(STORAGE_KEY_REMEMBER, JSON.stringify({
-                        farmId
+                        farmId,
+                        email
                     }));
                 } catch (e) {
                     console.warn('[Login] Cannot save remember-me preference in private mode');
@@ -461,17 +455,8 @@ async function loadDashboardData() {
                 document.getElementById('kpi-devices').textContent = devCount > 0 ? devCount : '0';
                 document.getElementById('kpi-devices-change').textContent = devCount > 0 ? 'Connected' : 'No devices registered';
             } else {
-                const fallbackResp = await fetch(`${API_BASE}/devices`);
-                if (fallbackResp.ok) {
-                    const fallbackData = await fallbackResp.json();
-                    const fallbackDevices = Array.isArray(fallbackData?.devices) ? fallbackData.devices : [];
-                    const fallbackCount = fallbackDevices.length;
-                    document.getElementById('kpi-devices').textContent = fallbackCount > 0 ? fallbackCount : '0';
-                    document.getElementById('kpi-devices-change').textContent = fallbackCount > 0 ? 'Connected' : 'No devices registered';
-                } else {
-                    document.getElementById('kpi-devices').textContent = '0';
-                    document.getElementById('kpi-devices-change').textContent = 'No devices registered';
-                }
+                document.getElementById('kpi-devices').textContent = '0';
+                document.getElementById('kpi-devices-change').textContent = 'No devices registered';
             }
         } catch (devErr) {
             console.warn('Could not fetch device count:', devErr.message);
@@ -512,6 +497,17 @@ function getGroupTotals(groups) {
 }
 
 function getNextHarvestFromGroups(groups) {
+    const VARIETY_GROW_DAYS = {
+        'Mei Qing Pak Choi': 28,
+        'Lacinato Kale': 45,
+        'Bibb Butterhead': 35,
+        'Frisée Endive': 45,
+        'Red Russian Kale': 50,
+        'Buttercrunch Lettuce': 42,
+        'Tatsoi': 28,
+        'Watercress': 21
+    };
+
     let nextHarvest = null;
 
     groups.forEach((group) => {
@@ -522,7 +518,7 @@ function getNextHarvestFromGroups(groups) {
         if (Number.isNaN(seedDate.getTime())) return;
 
         const cropName = group.crop || 'Mixed crops';
-        const growDays = (window.cropUtils && cropUtils.getCropGrowDays(cropName)) || 35;
+        const growDays = VARIETY_GROW_DAYS[cropName] || 35;
 
         const harvestDate = new Date(seedDate);
         harvestDate.setDate(seedDate.getDate() + growDays);
@@ -689,12 +685,12 @@ async function loadRecentActivity() {
 }
 
 /**
- * Render an external page inside the admin iframe
- * Defined at module scope so both setupNavigation() and setupHeaderDropdowns() can use it.
+ * Setup navigation
  */
 function renderEmbeddedView(url, title) {
     title = title || 'Embedded View';
     if (!url) return;
+
     document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
     const iframeSection = document.getElementById('section-iframe-view');
     const iframe = document.getElementById('admin-iframe');
@@ -719,6 +715,7 @@ function renderEmbeddedView(url, title) {
         try {
             const doc = iframe.contentDocument || iframe.contentWindow?.document;
             if (!doc) return;
+
             const selectors = [
                 'header.page-header',
                 '.page-header',
@@ -733,22 +730,20 @@ function renderEmbeddedView(url, title) {
                 '#voiceModal',
                 '#voiceBtn'
             ];
+
             selectors.forEach((selector) => {
                 doc.querySelectorAll(selector).forEach((el) => {
                     el.style.display = 'none';
                 });
             });
-            const body = doc.body;
-            if (body) body.style.paddingTop = '0';
+
+            if (doc.body) doc.body.style.paddingTop = '0';
         } catch (error) {
             console.warn('[Farm Admin] Unable to apply embedded page chrome suppression:', error.message);
         }
     };
 }
 
-/**
- * Setup navigation
- */
 function setupNavigation() {
     // Handle section navigation
     document.querySelectorAll('.nav-item[data-section]').forEach(item => {
@@ -868,26 +863,20 @@ function setupNavigation() {
  * Setup header dropdown menu navigation
  */
 function setupHeaderDropdowns() {
-    function closeAllMenus() {
-        document.querySelectorAll('.dropdown-menu').forEach(menu => {
-            menu.classList.remove('open');
-        });
-    }
-
     // Handle dropdown button clicks
     document.querySelectorAll('.nav-button').forEach(button => {
         button.addEventListener('click', (e) => {
             e.stopPropagation();
             
-            const menu = button.nextElementSibling;
-            const isOpen = menu && menu.classList.contains('open');
-            
-            // Close all menus first
-            closeAllMenus();
+            // Close other menus
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.style.display = 'none';
+            });
             
             // Toggle current menu
-            if (menu && menu.classList.contains('dropdown-menu') && !isOpen) {
-                menu.classList.add('open');
+            const menu = button.nextElementSibling;
+            if (menu && menu.classList.contains('dropdown-menu')) {
+                menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
             }
         });
     });
@@ -895,39 +884,33 @@ function setupHeaderDropdowns() {
     // Handle dropdown item clicks
     document.querySelectorAll('.dropdown-item').forEach(item => {
         item.addEventListener('click', (e) => {
+            e.preventDefault();
+            
             const href = item.getAttribute('href');
             
-            // If it's an embedded /views/ link, prevent default and render in iframe
+            // If it's an external link, navigate
             if (href && href.startsWith('/views/')) {
-                e.preventDefault();
-                renderEmbeddedView(href, item.textContent.trim() || 'Embedded View');
-                document.querySelectorAll('.nav-item').forEach((navItem) => navItem.classList.remove('active'));
-                const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${href}"]`);
-                if (matchNav) matchNav.classList.add('active');
-                closeAllMenus();
+                window.location.href = href;
                 return;
             }
             
-            // If it has target="_blank", let the browser handle it (opens new tab)
+            // If it has target="_blank", open in new tab
             if (item.getAttribute('target') === '_blank') {
-                closeAllMenus();
+                window.open(href);
                 return;
             }
             
-            // For hash links, try internal section navigation
-            if (href && href.startsWith('#')) {
-                e.preventDefault();
-                const section = href.substring(1);
-                const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
-                if (navItem) {
-                    navItem.click();
-                }
-                closeAllMenus();
-                return;
+            // Otherwise treat as internal section navigation
+            const section = href.substring(1); // Remove #
+            const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
+            if (navItem) {
+                navItem.click();
             }
             
-            // All other links: allow normal navigation
-            closeAllMenus();
+            // Close menu after selection
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.style.display = 'none';
+            });
         });
     });
     
@@ -937,7 +920,9 @@ function setupHeaderDropdowns() {
         const isMenu = e.target.closest('.dropdown-menu');
         
         if (!isButton && !isMenu) {
-            closeAllMenus();
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.style.display = 'none';
+            });
         }
     });
 }
@@ -1058,25 +1043,43 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-02-17-v2';
+const PRICING_VERSION = '2025-12-09-v2';
 
-// Build defaultPricing from crop registry (Phase 2b) — falls back to empty if registry unavailable
-const defaultPricing = (function() {
-    const dp = {};
-    if (window.cropUtils) {
-        cropUtils.getAllCrops().forEach(function(item) {
-            if (item.crop.pricing) {
-                dp[item.name] = {
-                    retail: item.crop.pricing.retailPerOz || 0,
-                    ws1: (item.crop.pricing.wholesaleDiscounts && item.crop.pricing.wholesaleDiscounts.tier1) || 15,
-                    ws2: (item.crop.pricing.wholesaleDiscounts && item.crop.pricing.wholesaleDiscounts.tier2) || 25,
-                    ws3: (item.crop.pricing.wholesaleDiscounts && item.crop.pricing.wholesaleDiscounts.tier3) || 35
-                };
-            }
-        });
-    }
-    return dp;
-})();
+// Default pricing (per oz) - Based on organic market research Dec 2025
+// Prices calculated from actual retail packages and converted to per-oz rates
+const defaultPricing = {
+    // Lettuce varieties - Premium butterhead, standard for others
+    'Butterhead Lettuce': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // $5.99/6oz living head
+    'Romaine Lettuce': { retail: 0.41, ws1: 15, ws2: 25, ws3: 35 },     // $5.49/18oz hearts
+    'Red Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
+    'Oak Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
+    'Mixed Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },       // Standard lettuce pricing
+    'Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },             // Generic lettuce
+    
+    // Basil varieties - Premium herb pricing
+    'Genovese Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
+    'Thai Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
+    'Purple Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },        // Same as Genovese
+    'Lemon Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },         // Same as Genovese
+    'Holy Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
+    'Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },               // Generic basil
+    
+    // Arugula varieties - Specialty green pricing
+    'Baby Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
+    'Cultivated Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // Standard arugula
+    'Wild Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // Standard arugula
+    'Wasabi Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },      // Standard arugula
+    'Red Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },         // Standard arugula
+    'Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },             // Generic arugula
+    
+    // Kale varieties - Standard pricing
+    'Curly Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
+    'Lacinato Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Dinosaur kale
+    'Dinosaur Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Same as Lacinato
+    'Baby Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },           // Tender baby leaves
+    'Red Russian Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },    // Standard kale
+    'Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 }                 // Generic kale
+};
 
 /**
  * Load unique crops from groups data
@@ -1702,6 +1705,41 @@ async function fetchExchangeRate() {
     console.log(`💱 Exchange rate updated: 1 USD = ${currentExchangeRate.toFixed(4)} CAD`);
 }
 
+function resolveMarketDataForCrop(cropName) {
+    if (!cropName) return null;
+
+    const exact = marketDataSources[cropName];
+    if (exact) return exact;
+
+    const normalized = String(cropName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const aliasChecks = [
+        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
+        { test: ['romaine'], key: 'Romaine Lettuce' },
+        { test: ['red leaf'], key: 'Red Leaf Lettuce' },
+        { test: ['oakleaf', 'oak leaf', 'salad bowl'], key: 'Oak Leaf Lettuce' },
+        { test: ['lettuce', 'salad'], key: 'Lettuce' },
+        { test: ['arugula', 'rocket'], key: 'Arugula' },
+        { test: ['basil', 'genovese', 'thai basil', 'purple basil', 'lemon basil', 'holy basil'], key: 'Basil' },
+        { test: ['kale', 'lacinato', 'dinosaur', 'russian kale'], key: 'Kale' },
+        { test: ['frisee', 'frisée', 'endive'], key: 'Frisée Endive' },
+        { test: ['watercress'], key: 'Watercress' }
+    ];
+
+    for (const alias of aliasChecks) {
+        if (alias.test.some(token => normalized.includes(token))) {
+            return marketDataSources[alias.key] || null;
+        }
+    }
+
+    const fuzzyKey = Object.keys(marketDataSources).find((key) => {
+        const keyNormalized = key.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        return normalized.includes(keyNormalized) || keyNormalized.includes(normalized);
+    });
+
+    return fuzzyKey ? marketDataSources[fuzzyKey] : null;
+}
+
 /**
  * Generate pricing recommendations based on market data
  */
@@ -2040,22 +2078,47 @@ function checkForScheduledPriceUpdates() {
  * Insurance valuation based on current inventory, growth stages, and retail pricing
  */
 
-// Growth parameters by crop type — built from crop registry (Phase 2b)
-const cropGrowthParams = (function() {
-    const cgp = {};
-    if (window.cropUtils) {
-        cropUtils.getAllCrops().forEach(function(item) {
-            if (item.crop.growth) {
-                cgp[item.name] = {
-                    daysToHarvest: item.crop.growth.daysToHarvest || 35,
-                    retailPricePerLb: item.crop.growth.retailPricePerLb || 5.00,
-                    yieldFactor: item.crop.growth.yieldFactor || 0.90
-                };
-            }
-        });
-    }
-    return cgp;
-})();
+// Growth parameters by crop type (days to harvest and retail price per POUND)
+// Pricing matches crop-pricing.json - weight-based model ($/lb)
+const cropGrowthParams = {
+    // Lettuce varieties - 28-35 day cycle, priced per lb
+    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerLb: 5.00, yieldFactor: 0.90 },
+    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.90 },
+    
+    // Kale varieties - 35-42 day cycle, priced per lb
+    'Lacinato Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
+    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
+    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
+    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 6.50, yieldFactor: 0.92 },
+    'Red Russian Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
+    
+    // Asian Greens - priced per lb
+    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 5.50, yieldFactor: 0.90 },
+    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 6.00, yieldFactor: 0.91 },
+    
+    // Specialty Greens - priced per lb
+    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 8.00, yieldFactor: 0.87 },
+    'Watercress': { daysToHarvest: 25, retailPricePerLb: 7.00, yieldFactor: 0.90 },
+    
+    // Arugula varieties - 21-28 day cycle, priced per lb
+    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.93 },
+    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.91 },
+    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 6.75, yieldFactor: 0.89 },
+    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
+    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
+    
+    // Basil varieties - 21-28 day cycle, priced per lb (~$114/lb for premium herbs)
+    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
+    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
+    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.87 },
+    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 114.72, yieldFactor: 0.87 },
+    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 114.72, yieldFactor: 0.86 }
+};
 
 // Global crop value data
 let cropValueData = null;

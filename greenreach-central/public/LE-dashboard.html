@@ -285,6 +285,7 @@
                     
                     <!-- Farm Admin Button -->
                     <a 
+                      id="farmAdminBtn"
                       href="/farm-admin-login.html" 
                       rel="noopener"
                       class="btn btn--secondary" 
@@ -292,6 +293,17 @@
                       title="Access farm administration portal">
                       Farm Admin
                     </a>
+                    <script>
+                      // Go straight to admin panel if already authenticated
+                      (function() {
+                        var tk = sessionStorage.getItem('token') || localStorage.getItem('token');
+                        var fid = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || localStorage.getItem('farmId');
+                        if (tk && fid && tk !== 'local-access' && fid !== 'LOCAL-FARM') {
+                          var btn = document.getElementById('farmAdminBtn');
+                          if (btn) btn.href = '/LE-farm-admin.html';
+                        }
+                      })();
+                    </script>
                   </div>
                 </div>
               </div>

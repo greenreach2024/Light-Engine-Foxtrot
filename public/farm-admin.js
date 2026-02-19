@@ -34,26 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
 function initLogin() {
     grLog('🔐 Initializing farm admin login...');
     
-    // Check if user is already logged in
+    // Check if user is already logged in — via farm_admin_session OR dashboard token+farm_id
     const session = getSession();
-    // Also verify token exists in sessionStorage/localStorage to prevent redirect loop
     const hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
-    if (session && session.token && hasToken) {
-        grLog(' Active session found, redirecting to dashboard...');
-        // Track redirect to detect loops
-        const redirectCount = parseInt(sessionStorage.getItem('login_redirect_count') || '0');
-        sessionStorage.setItem('login_redirect_count', String(redirectCount + 1));
-        window.location.href = '/LE-farm-admin.html';
-        return;
-    } else if (session && !hasToken) {
-        // Clear stale session that lacks corresponding token
-        console.warn('⚠️ Clearing stale session without token');
-        localStorage.removeItem(STORAGE_KEY_SESSION);
-        sessionStorage.removeItem(STORAGE_KEY_SESSION);
-    }
-    
-    // Clear any redirect loop trackers
-    if (sessionStorage.getItem('login_redirect_count')) {
+    const hasFarmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') ||
+                      localStorage.getItem('farm_id') || localStorage.getItem('farmId');
+
+    // Redirect to admin panel if already authenticated
+    if ((session && session.token && hasToken) || (hasToken && hasFarmId && hasToken !== 'local-access' && hasFarmId !== 'LOCAL-FARM')) {
+        grLog(' Active session found, redirecting to admin dashboard...');
         const redirectCount = parseInt(sessionStorage.getItem('login_redirect_count') || '0');
         if (redirectCount > 2) {
             console.warn('⚠️ Detected potential redirect loop, clearing all auth data');
@@ -62,6 +51,26 @@ function initLogin() {
             sessionStorage.removeItem(STORAGE_KEY_SESSION);
             sessionStorage.removeItem('token');
             sessionStorage.removeItem('login_redirect_count');
+        } else {
+            sessionStorage.setItem('login_redirect_count', String(redirectCount + 1));
+            window.location.href = '/LE-farm-admin.html';
+            return;
+        }
+    } else if (session && !hasToken) {
+        console.warn('⚠️ Clearing stale session without token');
+        localStorage.removeItem(STORAGE_KEY_SESSION);
+        sessionStorage.removeItem(STORAGE_KEY_SESSION);
+    }
+    
+    // Clear redirect loop trackers on clean page load
+    sessionStorage.removeItem('login_redirect_count');
+    
+    // Hide demo credentials unless in test/demo mode
+    const demoCreds = document.querySelector('.demo-credentials');
+    if (demoCreds) {
+        const isDemo = window.location.search.includes('demo=true') || window.location.search.includes('test=true');
+        if (!isDemo) {
+            demoCreds.style.display = 'none';
         }
     }
     
@@ -75,13 +84,23 @@ function initLogin() {
         document.getElementById('remember').checked = true;
     }
     
+    // Pre-fill farm ID from current session if available
+    const farmIdInput = document.getElementById('farmId');
+    if (farmIdInput && !farmIdInput.value) {
+        const storedFarmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId') ||
+                             sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId');
+        if (storedFarmId && storedFarmId !== 'LOCAL-FARM') {
+            farmIdInput.value = storedFarmId;
+        }
+    }
+    
     // Setup form handler
     const form = document.getElementById('loginForm');
     if (form) {
         form.addEventListener('submit', handleLogin);
     }
     
-    // Auto-fill test credentials
+    // Auto-fill test credentials only in demo/test mode
     if (window.location.search.includes('demo=true') || window.location.search.includes('test=true')) {
         document.getElementById('farmId').value = 'FARM-TEST-WIZARD-001';
         if (document.getElementById('email')) {
