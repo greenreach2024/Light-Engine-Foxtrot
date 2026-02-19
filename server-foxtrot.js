@@ -16636,9 +16636,16 @@ app.get('/api/inventory/current', (req, res) => {
     const today = new Date();
 
     // Build detailed tray data from groups
+    // Only count groups that are actively growing (have a crop/plan AND seedDate)
     groups.forEach((group) => {
+      // Skip groups that have no active grow — draft groups without a crop/plan/seedDate
+      const hasCropOrPlan = (group.crop && group.crop !== '') || (group.plan && group.plan !== '');
+      const hasSeedDate = group.planConfig?.anchor?.seedDate;
+      const isActiveGrow = hasCropOrPlan || hasSeedDate || (group.plants > 0 && group.status !== 'draft');
+      if (!isActiveGrow) return; // Skip — no plants growing in this group yet
+
       const trayCount = group.trays || 4;
-      const plantsPerTray = Math.floor((group.plants || 48) / trayCount);
+      const plantsPerTray = Math.floor((group.plants || 0) / trayCount) || 0;
       
       // Calculate days old from seedDate
       let daysOld = 0;
@@ -16742,10 +16749,15 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
       beyond30Days: []
     };
 
-    // Process each group
+    // Process each group — only those with active grows
     groups.forEach((group) => {
+      const hasCropOrPlan = (group.crop && group.crop !== '') || (group.plan && group.plan !== '');
+      const hasSeedDate = group.planConfig?.anchor?.seedDate;
+      const isActiveGrow = hasCropOrPlan || hasSeedDate || (group.plants > 0 && group.status !== 'draft');
+      if (!isActiveGrow) return; // Skip — no plants growing yet
+
       const trayCount = group.trays || 4;
-      const plantsPerTray = Math.floor((group.plants || 48) / trayCount);
+      const plantsPerTray = Math.floor((group.plants || 0) / trayCount) || 0;
       
       // Calculate daysOld from planConfig.anchor.seedDate
       let daysOld = 0;
@@ -16842,8 +16854,15 @@ app.get('/api/inventory/dashboard', (req, res) => {
     const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
     const groupsData = fs.existsSync(groupsPath) ? JSON.parse(fs.readFileSync(groupsPath, 'utf8')) : { groups: [] };
     const groups = groupsData.groups || [];
-    const totalTrays = groups.reduce((sum, g) => sum + (g.trays || 4), 0);
-    const totalPlants = groups.reduce((sum, g) => sum + (g.plants || 48), 0);
+
+    // Only count groups with active grows (have crop/plan assigned or seedDate set)
+    const activeGroups = groups.filter(g => {
+      const hasCropOrPlan = (g.crop && g.crop !== '') || (g.plan && g.plan !== '');
+      const hasSeedDate = g.planConfig?.anchor?.seedDate;
+      return hasCropOrPlan || hasSeedDate || (g.plants > 0 && g.status !== 'draft');
+    });
+    const totalTrays = activeGroups.reduce((sum, g) => sum + (g.trays || 4), 0);
+    const totalPlants = activeGroups.reduce((sum, g) => sum + (g.plants || 0), 0);
     
     res.json({
       ok: true,
@@ -16852,7 +16871,8 @@ app.get('/api/inventory/dashboard', (req, res) => {
       totalNutrients: nutrientsInventory.length,
       totalEquipment: equipmentInventory.length,
       totalSupplies: suppliesInventory.length,
-      activeGroups: groups.length,
+      activeGroups: activeGroups.length,
+      totalGroups: groups.length,
       activeTrays: totalTrays,
       totalPlants: totalPlants
     });

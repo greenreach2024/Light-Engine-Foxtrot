@@ -5787,7 +5787,12 @@
       const schedules = normaliseSchedulesPayload(schedulesPayload);
       const rooms = Array.isArray(envData?.rooms) ? envData.rooms : [];
 
-      const activeGroups = groups.filter((group) => group.enabled && group.planId);
+      const activeGroups = groups.filter((group) => {
+        const hasCrop = group.crop && group.crop !== '';
+        const hasPlan = group.planId || (group.plan && group.plan !== '');
+        const hasSeedDate = group.planConfig?.anchor?.seedDate;
+        return (group.enabled && hasPlan) || hasCrop || hasSeedDate;
+      });
       const preferredGroup = choosePreferredGroup(activeGroups.length ? activeGroups : groups);
 
       let html = `
@@ -5806,7 +5811,7 @@
           </div>
           <div class="info-row" style="margin-top: 1rem;">
             <span class="key">Active Groups:</span>
-            <span class="val">${activeGroups.length || groups.length}</span>
+            <span class="val">${activeGroups.length} / ${groups.length}</span>
           </div>
           <div class="info-row">
             <span class="key">Update Interval:</span>
