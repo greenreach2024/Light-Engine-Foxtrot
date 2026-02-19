@@ -1,2681 +1,6 @@
 {
   "groups": [
     {
-      "id": "Main Grow Room:1:ZipGrow Grou 1",
-      "name": "ZipGrow Grou 1",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 6,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "group:Main Grow Room:1:ZipGrow Grou 1",
-      "planConfig": null,
-      "lastModified": "2026-02-19T20:57:54.661Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 2",
-      "name": "ZipGrow Grou 2",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.596Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 3",
-      "name": "ZipGrow Grou 3",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 4",
-      "name": "ZipGrow Grou 4",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 5",
-      "name": "ZipGrow Grou 5",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 6",
-      "name": "ZipGrow Grou 6",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 7",
-      "name": "ZipGrow Grou 7",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 8",
-      "name": "ZipGrow Grou 8",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 9",
-      "name": "ZipGrow Grou 9",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 10",
-      "name": "ZipGrow Grou 10",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 11",
-      "name": "ZipGrow Grou 11",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 12",
-      "name": "ZipGrow Grou 12",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 13",
-      "name": "ZipGrow Grou 13",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 14",
-      "name": "ZipGrow Grou 14",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 15",
-      "name": "ZipGrow Grou 15",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 16",
-      "name": "ZipGrow Grou 16",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 17",
-      "name": "ZipGrow Grou 17",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 18",
-      "name": "ZipGrow Grou 18",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 19",
-      "name": "ZipGrow Grou 19",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 20",
-      "name": "ZipGrow Grou 20",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 21",
-      "name": "ZipGrow Grou 21",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 22",
-      "name": "ZipGrow Grou 22",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 23",
-      "name": "ZipGrow Grou 23",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 24",
-      "name": "ZipGrow Grou 24",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 25",
-      "name": "ZipGrow Grou 25",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 26",
-      "name": "ZipGrow Grou 26",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 27",
-      "name": "ZipGrow Grou 27",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 28",
-      "name": "ZipGrow Grou 28",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 29",
-      "name": "ZipGrow Grou 29",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 30",
-      "name": "ZipGrow Grou 30",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 31",
-      "name": "ZipGrow Grou 31",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 32",
-      "name": "ZipGrow Grou 32",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 33",
-      "name": "ZipGrow Grou 33",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 34",
-      "name": "ZipGrow Grou 34",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 35",
-      "name": "ZipGrow Grou 35",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 36",
-      "name": "ZipGrow Grou 36",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 37",
-      "name": "ZipGrow Grou 37",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 38",
-      "name": "ZipGrow Grou 38",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 39",
-      "name": "ZipGrow Grou 39",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 40",
-      "name": "ZipGrow Grou 40",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 41",
-      "name": "ZipGrow Grou 41",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 42",
-      "name": "ZipGrow Grou 42",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 43",
-      "name": "ZipGrow Grou 43",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 44",
-      "name": "ZipGrow Grou 44",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 45",
-      "name": "ZipGrow Grou 45",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 46",
-      "name": "ZipGrow Grou 46",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 47",
-      "name": "ZipGrow Grou 47",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 48",
-      "name": "ZipGrow Grou 48",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 49",
-      "name": "ZipGrow Grou 49",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 50",
-      "name": "ZipGrow Grou 50",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 51",
-      "name": "ZipGrow Grou 51",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 52",
-      "name": "ZipGrow Grou 52",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 53",
-      "name": "ZipGrow Grou 53",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 54",
-      "name": "ZipGrow Grou 54",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 55",
-      "name": "ZipGrow Grou 55",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 56",
-      "name": "ZipGrow Grou 56",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 57",
-      "name": "ZipGrow Grou 57",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 58",
-      "name": "ZipGrow Grou 58",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 59",
-      "name": "ZipGrow Grou 59",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 60",
-      "name": "ZipGrow Grou 60",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 61",
-      "name": "ZipGrow Grou 61",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 62",
-      "name": "ZipGrow Grou 62",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 63",
-      "name": "ZipGrow Grou 63",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 64",
-      "name": "ZipGrow Grou 64",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 65",
-      "name": "ZipGrow Grou 65",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 66",
-      "name": "ZipGrow Grou 66",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 67",
-      "name": "ZipGrow Grou 67",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 68",
-      "name": "ZipGrow Grou 68",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 69",
-      "name": "ZipGrow Grou 69",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 70",
-      "name": "ZipGrow Grou 70",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 71",
-      "name": "ZipGrow Grou 71",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 72",
-      "name": "ZipGrow Grou 72",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 73",
-      "name": "ZipGrow Grou 73",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 74",
-      "name": "ZipGrow Grou 74",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 75",
-      "name": "ZipGrow Grou 75",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 76",
-      "name": "ZipGrow Grou 76",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 77",
-      "name": "ZipGrow Grou 77",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Grou 78",
-      "name": "ZipGrow Grou 78",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "roomId": "room-3xxjln",
-      "zoneId": "room-3xxjln-z1",
-      "trays": 15,
-      "plants": 180,
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "active": true,
-      "health": "healthy",
-      "status": "draft",
-      "plan": "",
-      "crop": "",
-      "recipe": "",
-      "schedule": "",
-      "planConfig": null,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
-      "id": "Main Grow Room:1:ZipGrow Group 1",
-      "name": "ZipGrow Group 1",
-      "room": "Main Grow Room",
-      "zone": "1",
-      "schedule": "group:Main Grow Room:1:ZipGrow Group 1",
-      "lights": [
-        {
-          "id": "zipgrow-200w-full-spectrum",
-          "name": "ZipGrow 200W Full Spectrum",
-          "vendor": "ZipGrow",
-          "dynamicSpectrum": false,
-          "tunable": false,
-          "spectrally_tunable": "No",
-          "ppf": 560,
-          "ppfd": 520,
-          "spectrum": "Full Spectrum",
-          "control": "0-10V"
-        }
-      ],
-      "deviceCount": 1,
-      "lastModified": "2026-02-19T21:07:06.601Z"
-    },
-    {
       "id": "Main Grow Room:Zone 1:ZipGrow Standard 1",
       "name": "ZipGrow Standard 1",
       "room": "Main Grow Room",
@@ -2695,7 +20,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -2729,7 +59,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -2763,7 +98,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -2797,7 +137,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -2831,7 +176,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -2865,7 +215,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -2899,7 +254,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -2933,7 +293,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -2967,7 +332,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3001,7 +371,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3035,7 +410,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3069,7 +449,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3103,7 +488,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3137,7 +527,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3171,7 +566,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3205,7 +605,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3239,7 +644,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3273,7 +683,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3307,7 +722,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3341,7 +761,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3375,7 +800,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3409,7 +839,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3443,7 +878,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3477,7 +917,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3511,7 +956,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3545,7 +995,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3579,7 +1034,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3613,7 +1073,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3647,7 +1112,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3681,7 +1151,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3715,7 +1190,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3749,7 +1229,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3783,7 +1268,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3817,7 +1307,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3851,7 +1346,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3885,7 +1385,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3919,7 +1424,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3953,7 +1463,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -3987,7 +1502,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4021,7 +1541,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4055,7 +1580,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4089,7 +1619,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4123,7 +1658,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4157,7 +1697,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4191,7 +1736,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4225,7 +1775,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4259,7 +1814,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4293,7 +1853,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4327,7 +1892,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4361,7 +1931,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4395,7 +1970,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4429,7 +2009,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4463,7 +2048,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4497,7 +2087,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4531,7 +2126,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4565,7 +2165,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4599,7 +2204,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4633,7 +2243,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4667,7 +2282,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4701,7 +2321,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4735,7 +2360,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4769,7 +2399,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4803,7 +2438,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4837,7 +2477,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4871,7 +2516,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4905,7 +2555,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4939,7 +2594,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -4973,7 +2633,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5007,7 +2672,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5041,7 +2711,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5075,7 +2750,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5109,7 +2789,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5143,7 +2828,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5177,7 +2867,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5211,7 +2906,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5245,7 +2945,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5279,7 +2984,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
@@ -5313,7 +3023,12 @@
           "ppf": 560,
           "ppfd": 520,
           "spectrum": "Full Spectrum",
-          "control": "0-10V"
+          "control": "0-10V",
+          "deviceName": "ZipGrow 200W Full Spectrum",
+          "roomId": "",
+          "roomName": "",
+          "room": "",
+          "zone": ""
         }
       ],
       "deviceCount": 1,
