@@ -6678,6 +6678,89 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================================================
 
 /**
+ * Get available light templates from light setups and existing group assignments.
+ * Used to populate the "Standard Light" dropdown in BSG and Bulk Edit modals.
+ * @returns {Array<{id: string, name: string, vendor: string, ppf: number, spectrum: string, control: string}>}
+ */
+function getAvailableLightTemplates() {
+  var templates = [];
+  var seen = {};
+
+  // 1. From STATE.lightSetups fixtures (Light Setup Wizard)
+  if (window.STATE && Array.isArray(window.STATE.lightSetups)) {
+    window.STATE.lightSetups.forEach(function(setup) {
+      if (!setup || !Array.isArray(setup.fixtures)) return;
+      setup.fixtures.forEach(function(fix) {
+        if (!fix) return;
+        var id = fix.id || fix.name || '';
+        if (!id || seen[id]) return;
+        seen[id] = true;
+        templates.push({
+          id: id,
+          name: fix.name || fix.id || '',
+          vendor: fix.vendor || fix.manufacturer || '',
+          ppf: fix.ppf || fix.PPF || 0,
+          ppfd: fix.ppfd || fix.PPFD || 0,
+          spectrum: fix.spectrum || 'Full Spectrum',
+          control: fix.control || '0-10V',
+          dynamicSpectrum: fix.dynamicSpectrum || false,
+          tunable: fix.tunable || false,
+          spectrally_tunable: fix.spectrally_tunable || 'No'
+        });
+      });
+    });
+  }
+
+  // 2. From existing group light assignments (unique lights already in groups)
+  if (window.STATE && Array.isArray(window.STATE.groups)) {
+    window.STATE.groups.forEach(function(g) {
+      if (!g || !Array.isArray(g.lights)) return;
+      g.lights.forEach(function(light) {
+        if (!light) return;
+        var id = light.id || light.name || '';
+        if (!id || seen[id]) return;
+        seen[id] = true;
+        templates.push({
+          id: id,
+          name: light.name || light.id || '',
+          vendor: light.vendor || '',
+          ppf: light.ppf || 0,
+          ppfd: light.ppfd || 0,
+          spectrum: light.spectrum || '',
+          control: light.control || '',
+          dynamicSpectrum: light.dynamicSpectrum || false,
+          tunable: light.tunable || false,
+          spectrally_tunable: light.spectrally_tunable || 'No'
+        });
+      });
+    });
+  }
+
+  return templates;
+}
+
+/**
+ * Populate a Standard Light dropdown with available light templates.
+ * @param {string} selectId  The id of the <select> element
+ * @param {string} emptyLabel  Label for the empty/default option
+ */
+function populateStandardLightDropdown(selectId, emptyLabel) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">' + (emptyLabel || '(none)') + '</option>';
+  var templates = getAvailableLightTemplates();
+  templates.forEach(function(t) {
+    var opt = document.createElement('option');
+    opt.value = t.id;
+    var label = t.name || t.id;
+    if (t.vendor) label += ' (' + t.vendor + ')';
+    if (t.ppf) label += ' — ' + t.ppf + ' PPF';
+    opt.textContent = label;
+    sel.appendChild(opt);
+  });
+}
+
+/**
  * Get list of unassigned lights (not in any group).
  * Reuses the same identifier priority as the main Groups V2 assignment logic.
  * @returns {Array} Array of light objects not assigned to any group
@@ -6724,6 +6807,9 @@ function populateBsgModal() {
 
   // Populate zones for selected room
   populateBsgZones();
+
+  // Populate standard light dropdown
+  populateStandardLightDropdown('bsgStandardLight', '(none \u2014 use auto-assign pool)');
 }
 
 /**
@@ -6777,6 +6863,7 @@ function updateBsgPreview() {
   const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
   const room = document.getElementById('bsgRoom')?.value || '';
   const zone = document.getElementById('bsgZone')?.value || '';
+  const stdLightId = (document.getElementById('bsgStandardLight')?.value || '').trim();
 
   if (!prefix || !count || !room) {
     previewEl.innerHTML = '<span style="color:#94a3b8;">Fill in Room, Prefix, and Count to see preview.</span>';
@@ -6788,7 +6875,13 @@ function updateBsgPreview() {
   const unassigned = getBsgUnassignedLights();
 
   let lightsWarning = '';
-  if (autoAssign && totalLights > unassigned.length) {
+  let lightsInfo = '';
+  if (stdLightId) {
+    // Standard light selected — every group gets this light
+    const tmpl = getAvailableLightTemplates().find(t => t.id === stdLightId);
+    const lightName = tmpl ? (tmpl.name || tmpl.id) : stdLightId;
+    lightsInfo = `<br><span style="color:#059669;">&#10003; Standard light: <strong>${lightName}</strong> — assigned to every group</span>`;
+  } else if (autoAssign && totalLights > unassigned.length) {
     lightsWarning = `<br><span style="color:#dc2626;">&#9888; Only ${unassigned.length} unassigned light${unassigned.length === 1 ? '' : 's'} available — need ${totalLights}. ${totalLights - unassigned.length} group(s) will have no lights assigned.</span>`;
   }
 
@@ -6812,7 +6905,7 @@ function updateBsgPreview() {
     <strong>Will create ${count} group${count > 1 ? 's' : ''}:</strong> ${names.join(', ')}<br>
     Each: ${lightsPerGroup} light${lightsPerGroup > 1 ? 's' : ''}, ${trays} tray${trays > 1 ? 's' : ''}<br>
     <strong>Totals:</strong> ${totalLights} lights, ${totalTrays} trays
-    ${autoAssign ? `<br><span style="color:#0369a1;">Auto-assigning ${Math.min(totalLights, unassigned.length)} of ${unassigned.length} available lights</span>` : ''}
+    ${lightsInfo || (autoAssign ? `<br><span style="color:#0369a1;">Auto-assigning ${Math.min(totalLights, unassigned.length)} of ${unassigned.length} available lights</span>` : '')}
     ${lightsWarning}${conflictWarning}
   `;
 }
@@ -6829,6 +6922,10 @@ async function executeBuildStockGroups() {
   const trays = parseInt(document.getElementById('bsgTrays')?.value) || 4;
   const lightsPerGroup = parseInt(document.getElementById('bsgLightsPerGroup')?.value) || 1;
   const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
+  const standardLightId = (document.getElementById('bsgStandardLight')?.value || '').trim();
+  const standardLightTemplate = standardLightId
+    ? getAvailableLightTemplates().find(t => t.id === standardLightId) || null
+    : null;
 
   // Validation
   const missing = [];
@@ -6867,9 +6964,29 @@ async function executeBuildStockGroups() {
       continue;
     }
 
-    // Assign lights from unassigned pool
+    // Assign lights — standard template takes precedence over pool
     const groupLights = [];
-    if (autoAssign) {
+    if (standardLightTemplate) {
+      // Copy the standard light template to this group (one per lightsPerGroup)
+      for (let l = 0; l < lightsPerGroup; l++) {
+        groupLights.push({
+          id: standardLightTemplate.id,
+          name: standardLightTemplate.name || standardLightTemplate.id,
+          vendor: standardLightTemplate.vendor || '',
+          ppf: standardLightTemplate.ppf || 0,
+          ppfd: standardLightTemplate.ppfd || 0,
+          spectrum: standardLightTemplate.spectrum || 'Full Spectrum',
+          control: standardLightTemplate.control || '0-10V',
+          dynamicSpectrum: standardLightTemplate.dynamicSpectrum || false,
+          tunable: standardLightTemplate.tunable || false,
+          spectrally_tunable: standardLightTemplate.spectrally_tunable || 'No',
+          room: room,
+          zone: zone,
+          roomId: roomId,
+          roomName: room
+        });
+      }
+    } else if (autoAssign) {
       for (let l = 0; l < lightsPerGroup && lightIndex < unassigned.length; l++, lightIndex++) {
         const light = unassigned[lightIndex];
         // Build a light reference object matching canonical group.lights[] format
@@ -7041,6 +7158,9 @@ function populateBulkEditModal() {
   var clearLights = document.getElementById('bulkEditClearLights');
   if (clearLights) clearLights.checked = false;
 
+  // Populate standard light dropdown
+  populateStandardLightDropdown('bulkEditStandardLight', '(unchanged)');
+
   updateBulkEditSummary();
   updateBulkEditPreview();
 }
@@ -7102,13 +7222,18 @@ function updateBulkEditPreview() {
   var renamePrefix = ((document.getElementById('bulkEditRenamePrefix') || {}).value || '').trim();
   var crop = ((document.getElementById('bulkEditCrop') || {}).value || '').trim();
   var clearLights = (document.getElementById('bulkEditClearLights') || {}).checked;
+  var stdLightId = ((document.getElementById('bulkEditStandardLight') || {}).value || '').trim();
 
-  if (trays !== '' && trays !== undefined) changes.push('Trays → ' + trays);
-  if (plants !== '' && plants !== undefined) changes.push('Plants → ' + plants);
-  if (zone) changes.push('Zone → ' + zone);
-  if (status) changes.push('Status → ' + status);
-  if (renamePrefix) changes.push('Rename prefix → "' + renamePrefix + '"');
-  if (crop) changes.push('Crop → ' + crop);
+  if (trays !== '' && trays !== undefined) changes.push('Trays \u2192 ' + trays);
+  if (plants !== '' && plants !== undefined) changes.push('Plants \u2192 ' + plants);
+  if (zone) changes.push('Zone \u2192 ' + zone);
+  if (status) changes.push('Status \u2192 ' + status);
+  if (renamePrefix) changes.push('Rename prefix \u2192 "' + renamePrefix + '"');
+  if (crop) changes.push('Crop \u2192 ' + crop);
+  if (stdLightId) {
+    var tmpl = getAvailableLightTemplates().find(function(t) { return t.id === stdLightId; });
+    changes.push('Assign light: ' + (tmpl ? (tmpl.name || tmpl.id) : stdLightId));
+  }
   if (clearLights) changes.push('Remove all light assignments');
 
   if (!changes.length) {
@@ -7143,6 +7268,10 @@ async function executeBulkEditGroups() {
   var renamePrefix = ((document.getElementById('bulkEditRenamePrefix') || {}).value || '').trim();
   var cropVal    = ((document.getElementById('bulkEditCrop') || {}).value || '').trim();
   var clearLights = (document.getElementById('bulkEditClearLights') || {}).checked;
+  var stdLightId  = ((document.getElementById('bulkEditStandardLight') || {}).value || '').trim();
+  var stdLightTemplate = stdLightId
+    ? getAvailableLightTemplates().find(function(t) { return t.id === stdLightId; }) || null
+    : null;
 
   var trays  = traysVal  !== '' && traysVal  !== undefined ? parseInt(traysVal)  : null;
   var plants = plantsVal !== '' && plantsVal !== undefined ? parseInt(plantsVal) : null;
@@ -7160,6 +7289,28 @@ async function executeBulkEditGroups() {
     if (statusVal)       { group.status = statusVal; changed = true; }
     if (cropVal)         { group.crop   = cropVal; changed = true; }
     if (clearLights)     { group.lights = []; group.deviceCount = 0; changed = true; }
+
+    // Assign standard light (overrides existing lights, takes precedence over clearLights)
+    if (stdLightTemplate) {
+      group.lights = [{
+        id: stdLightTemplate.id,
+        name: stdLightTemplate.name || stdLightTemplate.id,
+        vendor: stdLightTemplate.vendor || '',
+        ppf: stdLightTemplate.ppf || 0,
+        ppfd: stdLightTemplate.ppfd || 0,
+        spectrum: stdLightTemplate.spectrum || 'Full Spectrum',
+        control: stdLightTemplate.control || '0-10V',
+        dynamicSpectrum: stdLightTemplate.dynamicSpectrum || false,
+        tunable: stdLightTemplate.tunable || false,
+        spectrally_tunable: stdLightTemplate.spectrally_tunable || 'No',
+        room: group.room || '',
+        zone: group.zone || '',
+        roomId: group.roomId || '',
+        roomName: group.room || ''
+      }];
+      group.deviceCount = 1;
+      changed = true;
+    }
 
     // Rename prefix — preserve the trailing number
     if (renamePrefix) {
@@ -7211,7 +7362,7 @@ async function executeBulkEditGroups() {
   document.dispatchEvent(new Event('groups-updated'));
   if (typeof renderGroupsV2GroupList === 'function') renderGroupsV2GroupList();
   if (typeof populateGroupsV2LoadGroupDropdown === 'function') populateGroupsV2LoadGroupDropdown();
-  if (clearLights) {
+  if (clearLights || stdLightTemplate) {
     document.dispatchEvent(new Event('lights-updated'));
     if (typeof populateGroupsV2UnassignedLightsDropdown === 'function') populateGroupsV2UnassignedLightsDropdown();
   }
@@ -7254,7 +7405,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   ['bulkEditTrays', 'bulkEditPlants', 'bulkEditZone', 'bulkEditStatus',
-   'bulkEditRenamePrefix', 'bulkEditCrop', 'bulkEditClearLights'].forEach(function(id) {
+   'bulkEditRenamePrefix', 'bulkEditCrop', 'bulkEditClearLights', 'bulkEditStandardLight'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', updateBulkEditPreview);
   });
@@ -7322,7 +7473,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Live preview updates
-  ['bsgRoom', 'bsgZone', 'bsgPrefix', 'bsgCount', 'bsgTrays', 'bsgLightsPerGroup', 'bsgAutoAssign'].forEach(id => {
+  ['bsgRoom', 'bsgZone', 'bsgPrefix', 'bsgCount', 'bsgTrays', 'bsgLightsPerGroup', 'bsgAutoAssign', 'bsgStandardLight'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', updateBsgPreview);
   });

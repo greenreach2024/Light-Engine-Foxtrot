@@ -124,6 +124,56 @@
         }
       ],
       "updatedAt": "2026-02-04T20:33:19.522Z"
+    },
+    {
+      "id": "group:Main Grow Room:1:ZipGrow Grou 1",
+      "groupId": "Main Grow Room:1:ZipGrow Grou 1",
+      "name": "ZipGrow Grou 1 Schedule",
+      "mode": "one",
+      "timezone": "America/Toronto",
+      "photoperiodHours": 12,
+      "ramp": {
+        "up": 10,
+        "down": 10
+      },
+      "cycles": [
+        {
+          "start": "08:00",
+          "off": "20:00",
+          "photo": 12,
+          "ramp": {
+            "up": 10,
+            "down": 10
+          },
+          "spectrum": null
+        }
+      ],
+      "updatedAt": "2026-02-19T20:57:54.679Z"
+    },
+    {
+      "id": "group:Main Grow Room:1:ZipGrow Group 1",
+      "groupId": "Main Grow Room:1:ZipGrow Group 1",
+      "name": "ZipGrow Group 1 Schedule",
+      "mode": "one",
+      "timezone": "America/Toronto",
+      "photoperiodHours": 12,
+      "ramp": {
+        "up": 10,
+        "down": 10
+      },
+      "cycles": [
+        {
+          "start": "08:00",
+          "off": "20:00",
+          "photo": 12,
+          "ramp": {
+            "up": 10,
+            "down": 10
+          },
+          "spectrum": null
+        }
+      ],
+      "updatedAt": "2026-02-19T20:58:23.265Z"
     }
   ]
 }

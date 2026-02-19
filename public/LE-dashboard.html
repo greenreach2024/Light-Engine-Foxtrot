@@ -3134,6 +3134,13 @@
       </label>
     </div>
 
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Assign standard light
+      <select id="bulkEditStandardLight" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+        <option value="">(unchanged)</option>
+      </select>
+    </label>
+
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
       <input id="bulkEditClearLights" type="checkbox">
       <span class="tiny">Remove all light assignments</span>
@@ -3193,6 +3200,13 @@
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
       <input id="bsgAutoAssign" type="checkbox" checked>
       <span class="tiny">Auto-assign unassigned lights sequentially</span>
+    </label>
+
+    <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+      Standard Light <span style="font-weight:400;color:#94a3b8;">(assign same light to every group)</span>
+      <select id="bsgStandardLight" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+        <option value="">(none — use auto-assign pool)</option>
+      </select>
     </label>
 
     <div id="bsgPreview" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;min-height:40px;font-size:0.8rem;color:#0c4a6e;"></div>
