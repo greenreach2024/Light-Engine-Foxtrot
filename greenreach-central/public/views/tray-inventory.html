@@ -1071,8 +1071,6 @@
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
-        <a href="/index.charlie.html" class="nav-link-button">Home</a>
-        <a href="/views/farm-summary.html" class="nav-link-button">Dashboard</a>
         <div class="nav-item inventory">
           <button class="nav-button inventory active">
             Inventory Management
@@ -1084,6 +1082,8 @@
             <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
             <a href="tray-inventory.html" class="dropdown-item active">Activity Hub</a>
             <a href="/LE-farm-admin.html#traceability" class="dropdown-item">Lot Traceability</a>
+            <a href="/views/procurement-portal.html" class="dropdown-item">Procurement Portal</a>
+            <a href="/LE-qr-generator.html" class="dropdown-item" target="_blank">QR Label Generator</a>
           </div>
         </div>
         <div class="nav-item farm-monitoring">
@@ -1115,7 +1115,8 @@
           </button>
           <div class="dropdown-menu dropdown-right">
             <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
-            <a href="/farm-sales-pos.html" class="dropdown-item">POS Sale</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">POS</a>
+            <a href="/LE-wholesale-orders.html" class="dropdown-item">Wholesale Orders</a>
           </div>
         </div>
       </nav>
@@ -3864,126 +3865,35 @@
       if (timeEl) timeEl.textContent = timeStr;
     }
 
-    function buildFarmHeaders() {
-      const headers = {
-        ...getAuthHeaders()
-      };
-      if (farmId) {
-        headers['X-Farm-ID'] = farmId;
-      }
-      return headers;
-    }
-
-    function normalizeInventoryRows(payload) {
-      const rows = payload?.inventory || payload?.byFarm?.[0]?.trays || payload?.trays || [];
-      return rows.map(row => ({
-        trayId: row.trayId || row.tray_id || row.id || 'Unknown Tray',
-        groupId: row.groupId || row.group_id || row.group || 'Unknown Group',
-        cropName: row.crop_name || row.recipe || row.plan || row.groupName || row.currentCrop || 'Unknown Crop',
-        location: row.location || row.roomName || row.room || 'Unknown Room',
-        stage: row.stage || '',
-        plantCount: Number(row.plantCount ?? row.plant_count ?? row.quantity ?? 12) || 0,
-        harvestDate: row.estimatedHarvestDate || row.harvest_date || null,
-        recipe: row.recipe || row.plan || ''
-      }));
-    }
-
-    function normalizeForecastRows(payload) {
-      const rows = payload?.forecast || payload?.next7Days?.trays || [];
-      return rows.map(row => ({
-        trayId: row.trayId || row.tray_id || row.id || 'Unknown Tray',
-        groupId: row.groupId || row.group_id || row.group || 'Unknown Group',
-        cropName: row.crop_name || row.recipe || row.plan || row.groupName || row.currentCrop || 'Unknown Crop',
-        location: row.location || row.roomName || row.room || 'Unknown Room',
-        harvestDate: row.estimatedHarvestDate || row.harvest_date || null,
-        expectedYield: Number(row.expected_yield ?? row.plantCount ?? row.plant_count ?? row.quantity ?? 0) || 0,
-        recipe: row.recipe || row.plan || ''
-      }));
-    }
-
     // Load Dashboard Data
     async function loadDashboardData() {
-      const farmHeaders = buildFarmHeaders();
+      const farmHeaders = farmId ? { 'X-Farm-ID': farmId } : {};
       try {
-        // Load inventory forecast + groups (for CCA awareness)
-        const [forecastRes, groupsRes] = await Promise.all([
-          fetch(`${currentAPI}/api/inventory/forecast`, { headers: farmHeaders }),
-          fetch(`${currentAPI}/data/groups.json`, { headers: farmHeaders }).catch(() => ({ ok: false }))
-        ]);
-        if (!forecastRes.ok) throw new Error(`Forecast request failed: ${forecastRes.status}`);
+        // Load inventory forecast
+        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`, { headers: farmHeaders });
         const forecastData = await forecastRes.json();
-        const forecastRows = normalizeForecastRows(forecastData);
-
-        // Parse groups for CCA harvestCycle lookup
-        let groupsList = [];
-        try {
-          if (groupsRes.ok) {
-            const gd = await groupsRes.json();
-            groupsList = gd.groups || [];
-          }
-        } catch (e) { /* groups not available — not fatal */ }
         
-        // Count ready to harvest (next 7 days)
-        const now = Date.now();
-        const sevenDays = now + (7 * 24 * 60 * 60 * 1000);
-        const readyToHarvest = forecastRows.filter(item => {
-          const harvestTime = item.harvestDate ? new Date(item.harvestDate).getTime() : NaN;
-          return Number.isFinite(harvestTime) && harvestTime <= sevenDays;
-        });
-
-        // Also include CCA groups in regrowth nearing next cut
-        const regrowingGroups = groupsList.filter(g => {
-          const hc = g.planConfig?.harvestCycle;
-          if (!hc || hc.strategy !== 'cut_and_come_again' || g.status !== 'regrowing') return false;
-          if (!hc.regrowthStartDate) return false;
-          const daysSince = Math.floor((now - new Date(hc.regrowthStartDate).getTime()) / 86400000);
-          return daysSince >= (hc.regrowthDays || 14) - 2; // within 2 days of next cut
-        });
-
-        // Build CCA group lookup by groupId
-        const ccaByGroup = {};
-        groupsList.forEach(g => {
-          const hc = g.planConfig?.harvestCycle;
-          if (hc && hc.strategy === 'cut_and_come_again') {
-            ccaByGroup[g.id] = hc;
-          }
-        });
+        // Count ready to harvest (next 7 days bucket)
+        const readyToHarvest = forecastData.next7Days?.trays || forecastData.forecast?.filter(item => 
+          new Date(item.harvest_date || item.estimatedHarvestDate).getTime() <= Date.now() + (2 * 24 * 60 * 60 * 1000)
+        ) || [];
         
-        // Count includes regrowing groups ready for next cut
-        const totalHarvestReady = readyToHarvest.length + regrowingGroups.length;
-        document.getElementById('harvestCount').textContent = totalHarvestReady;
-
-        // Normalize harvest items for display (include CCA info)
-        const normalizedHarvest = readyToHarvest.map(item => {
-          const cca = ccaByGroup[item.groupId] || null;
-          return {
-            tray_id: item.trayId,
-            crop_name: item.cropName,
-            recipe_name: item.recipe || '',
-            harvest_date: item.harvestDate || '',
-            cca: cca
-          };
-        });
-
-        // Add regrowth-ready groups as harvest items
-        regrowingGroups.forEach(g => {
-          const hc = g.planConfig.harvestCycle;
-          normalizedHarvest.push({
-            tray_id: g.id,
-            crop_name: (g.plan || g.name || 'CCA Crop'),
-            recipe_name: `Cut ${(hc.currentHarvest || 0) + 1} of ${hc.maxHarvests}`,
-            harvest_date: new Date().toISOString(),
-            cca: hc
-          });
-        });
-
+        document.getElementById('harvestCount').textContent = readyToHarvest.length;
+        // Normalize harvest items for display
+        const normalizedHarvest = readyToHarvest.map(item => ({
+          tray_id: item.trayId || item.tray_id,
+          crop_name: item.recipe || item.crop_name || item.groupName || 'Unknown Crop',
+          recipe_name: item.recipe || item.recipe_name || '',
+          harvest_date: item.estimatedHarvestDate || item.harvest_date || ''
+        }));
         populateHarvestList(normalizedHarvest);
 
         // Load current inventory
         const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`, { headers: farmHeaders });
-        if (!inventoryRes.ok) throw new Error(`Inventory request failed: ${inventoryRes.status}`);
         const inventoryData = await inventoryRes.json();
-        const trays = normalizeInventoryRows(inventoryData);
+        
+        // Support both API shapes: { inventory: [...] } and { activeTrays, byFarm: [{ trays }] }
+        const trays = inventoryData.inventory || inventoryData.byFarm?.[0]?.trays || [];
         
         // Seedling count: total plants in trays whose grow recipe stage is still 'Seedling'
         // Uses recipe-based stage from server; falls back to summing plants in young trays
@@ -4007,7 +3917,7 @@
         updateChecklistCount();
         
         // Load order pick list
-        loadOrderPickList(farmHeaders);
+        loadOrderPickList();
         
       } catch (error) {
         console.error('Error loading dashboard data:', error);
@@ -4028,23 +3938,18 @@
         return;
       }
 
-      container.innerHTML = items.slice(0, 8).map(item => {
-        const cca = item.cca;
-        const ccaBadge = cca ? `<span style="background:rgba(59,130,246,0.2);color:#60a5fa;padding:2px 6px;border-radius:4px;font-size:0.75rem;font-weight:600;margin-left:4px;">✂️ ${(cca.currentHarvest || 0) + 1}/${cca.maxHarvests}</span>` : '';
-        const ccaDetail = cca ? `<span style="color:#60a5fa;font-size:0.8rem;">Cut & Come Again</span>` : `<span>${new Date(item.harvest_date).toLocaleDateString()}</span>`;
-        return `
+      container.innerHTML = items.slice(0, 8).map(item => `
         <div class="harvest-item" onclick="showHarvestDetails('${item.tray_id}')">
           <div class="harvest-info">
-            <div class="crop-name">${item.crop_name || 'Unknown Crop'}${ccaBadge}</div>
+            <div class="crop-name">${item.crop_name || 'Unknown Crop'}</div>
             <div class="crop-details">
               <span>${item.recipe_name || 'Recipe'}</span>
-              ${ccaDetail}
+              <span>${new Date(item.harvest_date).toLocaleDateString()}</span>
             </div>
           </div>
           <div class="tray-badge">${item.tray_id}</div>
         </div>
-      `;
-      }).join('');
+      `).join('');
     }
 
     // Show Harvest Details
@@ -4055,25 +3960,13 @@
 
     // === ORDER PICK LIST FUNCTIONS ===
     
-    async function loadOrderPickList(headers = buildFarmHeaders()) {
+    async function loadOrderPickList() {
       try {
-        let response = await fetch(`${currentAPI}/api/activity-hub/orders/pending`, {
-          headers
-        });
-
-        if (!response.ok && response.status === 404) {
-          response = await fetch(`${currentAPI}/api/wholesale/orders/pending`, {
-            headers
-          });
-        }
-
-        if (!response.ok) {
-          throw new Error(`Pending orders request failed: ${response.status}`);
-        }
-
+        // Fetch pending wholesale orders
+        const response = await fetch(`${currentAPI}/api/wholesale/orders/pending`);
         const data = await response.json();
         
-        const orders = (data.ok === false) ? [] : (data.orders || []);
+        const orders = data.orders || [];
         populateOrderPickList(orders);
         
       } catch (error) {
@@ -4564,33 +4457,28 @@
     // Load Inventory Data
     async function loadInventoryData() {
       const container = document.getElementById('inventoryContent');
-      const headers = buildFarmHeaders();
       
       try {
         // Fetch current inventory
-        const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`, { headers });
-        if (!inventoryRes.ok) throw new Error(`Inventory request failed: ${inventoryRes.status}`);
+        const inventoryRes = await fetch(`${currentAPI}/api/inventory/current`);
         const inventoryData = await inventoryRes.json();
-        const inventoryRows = normalizeInventoryRows(inventoryData);
         
         // Fetch 48-hour forecast
-        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`, { headers });
-        if (!forecastRes.ok) throw new Error(`Forecast request failed: ${forecastRes.status}`);
+        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`);
         const forecastData = await forecastRes.json();
-        const forecastRows = normalizeForecastRows(forecastData);
         
         // Filter for next 48 hours
         const now = Date.now();
         const fortyEightHours = now + (48 * 60 * 60 * 1000);
-        const upcomingHarvests = forecastRows.filter(item => {
-          const harvestTime = item.harvestDate ? new Date(item.harvestDate).getTime() : NaN;
+        const upcomingHarvests = forecastData.forecast?.filter(item => {
+          const harvestTime = new Date(item.harvest_date).getTime();
           return harvestTime >= now && harvestTime <= fortyEightHours;
-        });
+        }) || [];
         
         // Group current inventory by crop
         const cropGroups = {};
-        inventoryRows.forEach(item => {
-          const cropName = item.cropName || 'Unknown';
+        inventoryData.inventory?.forEach(item => {
+          const cropName = item.crop_name || 'Unknown';
           if (!cropGroups[cropName]) {
             cropGroups[cropName] = {
               name: cropName,
@@ -4599,13 +4487,13 @@
             };
           }
           cropGroups[cropName].trays.push(item);
-          cropGroups[cropName].totalPlants += item.plantCount || 0;
+          cropGroups[cropName].totalPlants += item.plant_count || 0;
         });
         
         // Group upcoming harvests by crop
         const harvestGroups = {};
         upcomingHarvests.forEach(item => {
-          const cropName = item.cropName || 'Unknown';
+          const cropName = item.crop_name || 'Unknown';
           if (!harvestGroups[cropName]) {
             harvestGroups[cropName] = {
               name: cropName,
@@ -4614,7 +4502,7 @@
             };
           }
           harvestGroups[cropName].trays.push(item);
-          harvestGroups[cropName].totalPlants += item.expectedYield || 0;
+          harvestGroups[cropName].totalPlants += item.expected_yield || 0;
         });
         
         // Build HTML
@@ -5609,6 +5497,5 @@
     }
   </script> -->
 
-  <script src="/js/header-dropdown-nav.js?v=20260216"></script>
 </body>
 </html>
