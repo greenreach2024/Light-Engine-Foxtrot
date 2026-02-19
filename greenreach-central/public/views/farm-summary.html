@@ -210,20 +210,20 @@
       position: relative !important;
     }
 
-    .env-card {
+    .card:nth-child(2) {
       grid-column: 1 / 3;
       grid-row: 2;
       overflow: visible;
       z-index: 10;
     }
 
-    .ai-health-card {
+    .card:nth-child(3) {
       grid-column: 1 / 3;
       grid-row: 3;
       z-index: 10;
     }
 
-    .ml-anomaly-card {
+    .card:nth-child(4) {
       grid-column: 1 / 3;
       grid-row: 4;
       z-index: 10;
@@ -235,12 +235,6 @@
       display: flex;
       flex-direction: column;
       gap: 1rem;
-      z-index: 10;
-    }
-
-    .trending-card {
-      grid-column: 1 / 3;
-      grid-row: 6;
       z-index: 10;
     }
 
@@ -1535,35 +1529,29 @@
         grid-template-columns: 1fr;
         grid-template-rows: auto;
         grid-template-areas:
-          "insights"
           "environmental"
-          "health"
-          "anomaly"
           "zones"
+          "schedule"
           "trending";
       }
 
-      .ml-insights-dashboard {
-        grid-area: insights;
+      .schedule-card {
+        grid-row: auto;
       }
-
-      .env-card {
+      
+      .card:nth-child(1) {
         grid-area: environmental;
       }
 
-      .ai-health-card {
-        grid-area: health;
-      }
-
-      .ml-anomaly-card {
-        grid-area: anomaly;
+      .card:nth-child(2) {
+        grid-area: schedule;
       }
 
       #zoneSummariesContainer {
         grid-area: zones;
       }
 
-      .trending-card {
+      .card:nth-child(4) {
         grid-area: trending;
       }
 
@@ -1590,7 +1578,7 @@
     .floating-new-planting-btn {
       position: fixed;
       right: 2rem;
-      top: 11rem;
+      top: 9.5rem;
       background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
       color: white;
       border: 2px solid #4ade80;
@@ -1600,7 +1588,7 @@
       border-radius: 12px;
       cursor: pointer;
       box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4);
-      z-index: 1102;
+      z-index: 1000;
       transition: all 0.3s ease;
     }
 
@@ -1683,8 +1671,6 @@
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
-        <a href="/index.charlie.html" class="nav-link-button">Home</a>
-        <a href="/views/farm-summary.html" class="nav-link-button active">Dashboard</a>
         <div class="nav-item inventory">
           <button class="nav-button inventory">
             Inventory Management
@@ -1820,7 +1806,7 @@
     </div>
 
     <!-- Environmental Conditions -->
-    <div class="card env-card">
+    <div class="card">
       <h2>Environmental Conditions</h2>
       
       <!-- Outdoor Weather Section -->
@@ -1844,7 +1830,7 @@
     </div>
 
     <!-- AI Health Monitor -->
-    <div class="card ai-health-card" id="healthMonitorCard">
+    <div class="card" id="healthMonitorCard">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h2 style="margin: 0;">AI Health Monitor</h2>
         <button class="refresh-btn" id="healthRefreshBtn" onclick="loadHealthStatus()" style="
@@ -1886,7 +1872,7 @@
     <div id="zoneSummariesContainer"></div>
 
     <!-- Trending Data -->
-    <div class="card trending-card">
+    <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h2 id="trendingChartTitle" style="margin: 0;">Environmental Trends - All Zones Average</h2>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -2007,18 +1993,6 @@
   <script>
     console.debug('🔄 FARM SUMMARY - CODE VERSION 2.3 LOADED - Dec 22, 2025 - Local Chart.js');
     console.log('🔄 If you see this message, the updated file is being served!');
-
-    if (typeof window.grLog !== 'function') {
-      window.grLog = (...args) => {
-        const debugEnabled = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true')
-          || window.location.hostname === 'localhost'
-          || window.location.hostname === '127.0.0.1';
-        if (debugEnabled) {
-          console.debug(...args);
-        }
-      };
-    }
-    const grLog = window.grLog;
     
     const queryParams = new URLSearchParams(window.location.search);
     const requestedZoneToken = (queryParams.get('zone') || queryParams.get('scope') || queryParams.get('room') || '').trim();
@@ -2037,9 +2011,6 @@
     let envDataCache = null;
     let envDataCacheTime = 0;
     let envDataInFlight = null;
-    let lightingRecipeCatalog = null;
-    let lightingRecipeCatalogPromise = null;
-    let latestWeatherCurrent = null;
     const ENV_CACHE_TTL_MS = 30000; // 30 seconds cache
     let isCloudMode = false; // Track if this is cloud-only (no sensors)
 
@@ -2116,7 +2087,6 @@
       
       // Load farm name and update header
       await loadFarmNameIntoHeader();
-      syncFloatingPlantingButtonOffset();
       
       // Detect management-only mode (no sensor data available)
       try {
@@ -2150,7 +2120,7 @@
           console.warn('[Farm Summary] Harvest predictions not available:', err.message);
         });
       } else {
-        console.debug('[Farm Summary] HarvestPredictions component unavailable (optional)');
+        console.warn('[Farm Summary] HarvestPredictions component not loaded');
       }
       
       // Initialize Succession Planner AI (P4)
@@ -2158,7 +2128,7 @@
         console.log('[Farm Summary] Initializing Succession Planner AI component...');
         window.successionPlanner = new SuccessionPlanner('');
       } else {
-        console.debug('[Farm Summary] SuccessionPlanner component unavailable (optional)');
+        console.warn('[Farm Summary] SuccessionPlanner component not loaded');
       }
       
       // Wait for Chart.js to load before initializing ML widgets (with timeout)
@@ -2231,17 +2201,6 @@
         });
       }
     });
-
-    function syncFloatingPlantingButtonOffset() {
-      const header = document.querySelector('.header');
-      const button = document.querySelector('.floating-new-planting-btn');
-      if (!header || !button) return;
-
-      const headerHeight = Math.ceil(header.getBoundingClientRect().height);
-      button.style.top = `${headerHeight + 16}px`;
-    }
-
-    window.addEventListener('resize', syncFloatingPlantingButtonOffset);
     
     /**
      * Show management-only mode notice - this farm has no sensors
@@ -2619,26 +2578,22 @@
           const response = await fetch(`/api/weather?lat=${coords.lat}&lng=${coords.lng}`);
           if (!response.ok) {
             console.warn('[Weather] Weather service returned status', response.status);
-            latestWeatherCurrent = null;
             weatherContent.innerHTML = '<span style="color:#f59e0b">Weather unavailable</span>';
             return;
           }
           data = await response.json().catch(() => ({ ok: false, error: 'Invalid JSON' }));
           if (!data.ok) {
             console.warn('[Weather] Weather fetch failed:', data.error || 'unknown');
-            latestWeatherCurrent = null;
             weatherContent.innerHTML = '<span style="color:#f59e0b">Weather unavailable</span>';
             return;
           }
         } catch (err) {
           console.warn('[Weather] Failed to fetch weather:', err?.message || err);
-          latestWeatherCurrent = null;
           weatherContent.innerHTML = '<span style="color:#f59e0b">Weather unavailable</span>';
           return;
         }
         
         const weather = data.current;
-        latestWeatherCurrent = weather || null;
         const tempF = Math.round(weather.temperature_f);
         const tempC = Math.round(weather.temperature_c);
         const humidity = Math.round(weather.humidity || 0);
@@ -2661,7 +2616,6 @@
         
       } catch (error) {
         console.error('Weather loading error:', error);
-        latestWeatherCurrent = null;
         const weatherDiv = document.getElementById('weatherDisplay');
         if (weatherDiv) weatherDiv.style.display = 'none';
       }
@@ -2999,7 +2953,6 @@
         // Load groups data to get harvest countdown info
         let groups = [];
         let plans = [];
-        const recipeCatalog = await ensureLightingRecipeCatalog();
         try {
           const groupsResponse = await fetch('/data/groups.json');
           if (groupsResponse.ok) {
@@ -3106,9 +3059,9 @@
               humidity = zoneSensors.rh?.current;
               vpd = zoneSensors.vpd?.current;
               
-              // Keep sensor setpoints separate; recipe-derived targets drive room summary cards
-              zone.sensorTempSetpoint = zoneSensors.tempC?.setpoint;
-              zone.sensorRhSetpoint = zoneSensors.rh?.setpoint;
+              // Copy setpoints to zone level for rendering
+              zone.tempSetpoint = zoneSensors.tempC?.setpoint;
+              zone.rhSetpoint = zoneSensors.rh?.setpoint;
               
               if (temp != null || humidity != null || vpd != null) {
                 console.log(`[Farm Summary] ${zone.name} using envData from ${envZone.id}: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
@@ -3132,9 +3085,6 @@
             
             return !isCannabis; // Only include non-cannabis crops
           });
-
-          zone.recipeTempSetpoint = getZoneRecipeTempSetpoint(zoneGroups, plans, recipeCatalog);
-          zone.tempSetpoint = getDisplayTempSetpoint(zone);
           
           // Build group cards with harvest countdown
           let groupsHtml = '';
@@ -3189,21 +3139,85 @@
                   currentDay = 1;
                 }
                 
-                // Prefer full crop recipe days for accurate harvest and light recipe details
-                const planDays = extractPlanDays(plan);
-                const recipeDays = getRecipeDaysForGroup(recipeCatalog, group, plan);
-                const activeDays = recipeDays.length > planDays.length ? recipeDays : planDays;
+                // Get plan days from various possible locations
+                const planDays = Array.isArray(plan?.days)
+                  ? plan.days
+                  : (Array.isArray(plan?.light?.days) ? plan.light.days
+                    : (Array.isArray(plan?.env?.days) ? plan.env.days : []));
                 
                 // Always show detailed card if we have plan days
-                if (currentDay != null && activeDays.length > 0) {
-                  const maxDay = getMaxDay(activeDays) || currentDay;
+                if (currentDay != null && planDays.length > 0) {
+                  // Variety-specific grow times (in days) — aligned with crop-registry.json (Phase 2a)
+                  const VARIETY_GROW_DAYS = {
+                    'Butterhead Lettuce': 32,
+                    'Buttercrunch Lettuce': 32,
+                    'Bibb Butterhead': 32,
+                    'Romaine Lettuce': 35,
+                    'Oak Leaf Lettuce': 30,
+                    'Red Leaf Lettuce': 30,
+                    'Salad Bowl Oakleaf': 30,
+                    'Mixed Lettuce': 30,
+                    'Genovese Basil': 25,
+                    'Thai Basil': 25,
+                    'Lemon Basil': 24,
+                    'Purple Basil': 25,
+                    'Holy Basil': 26,
+                    'Astro Arugula': 21,
+                    'Baby Arugula': 21,
+                    'Cultivated Arugula': 24,
+                    'Red Arugula': 24,
+                    'Wild Arugula': 28,
+                    'Wasabi Arugula': 24,
+                    'Curly Kale': 38,
+                    'Lacinato Kale': 40,
+                    'Dinosaur Kale': 40,
+                    'Baby Kale': 28,
+                    'Red Russian Kale': 38,
+                    'Mei Qing Pak Choi': 30,
+                    'Tatsoi': 28,
+                    'Frisée Endive': 35,
+                    'Watercress': 25
+                  };
+                  
+                  // Find the last day in the plan (harvest day)
+                  const dayNumbers = planDays.map(d => d.day || 0).filter(d => d > 0);
+                  const planMaxDay = dayNumbers.length > 0 ? Math.max(...dayNumbers) : currentDay;
+                  
+                  // Use variety-specific grow time if available, otherwise fall back to plan maxDay
+                  const groupCrop = group.crop || '';
+                  const maxDay = VARIETY_GROW_DAYS[groupCrop] || planMaxDay;
                   
                   const daysToHarvest = maxDay - currentDay;
+                  
+                  // Check for cut-and-come-again regrowth status
+                  const harvestCycle = group.planConfig?.harvestCycle;
+                  const isCCA = harvestCycle && harvestCycle.strategy === 'cut_and_come_again';
+                  const isRegrowing = isCCA && harvestCycle.currentHarvest > 0 && harvestCycle.currentHarvest < harvestCycle.maxHarvests;
                   
                   let harvestStatus = '';
                   let harvestColor = '';
                   
-                  if (daysToHarvest > 7) {
+                  if (isRegrowing) {
+                    // Regrowth phase — calculate days since last harvest
+                    const regrowStart = harvestCycle.regrowthStartDate ? new Date(harvestCycle.regrowthStartDate) : new Date();
+                    const now = new Date();
+                    regrowStart.setHours(0,0,0,0);
+                    now.setHours(0,0,0,0);
+                    const regrowthDay = Math.floor((now - regrowStart) / 86400000);
+                    const regrowDaysLeft = Math.max(0, (harvestCycle.regrowthDays || 14) - regrowthDay);
+                    const nextHarvest = harvestCycle.currentHarvest + 1;
+                    
+                    if (regrowDaysLeft <= 0) {
+                      harvestStatus = `🔄 Ready for Cut ${nextHarvest} of ${harvestCycle.maxHarvests}`;
+                      harvestColor = '#ef4444';
+                    } else if (regrowDaysLeft <= 3) {
+                      harvestStatus = `🔄 Regrowth: ${regrowDaysLeft} day${regrowDaysLeft !== 1 ? 's' : ''} to harvest ${nextHarvest}/${harvestCycle.maxHarvests}`;
+                      harvestColor = '#f59e0b';
+                    } else {
+                      harvestStatus = `🔄 Regrowing: ${regrowDaysLeft} day${regrowDaysLeft !== 1 ? 's' : ''} to harvest ${nextHarvest}/${harvestCycle.maxHarvests}`;
+                      harvestColor = '#0369a1';
+                    }
+                  } else if (daysToHarvest > 7) {
                     harvestStatus = `${daysToHarvest} days to harvest`;
                     harvestColor = '#10b981'; // green
                   } else if (daysToHarvest > 0) {
@@ -3219,8 +3233,8 @@
                   
                   // Get current stage
                   let currentStage = '';
-                  for (const day of activeDays) {
-                    if (Number(day.day) <= currentDay) {
+                  for (const day of planDays) {
+                    if (day.day <= currentDay) {
                       currentStage = day.stage || '';
                     }
                   }
@@ -3228,33 +3242,20 @@
                   const seedDateStr = anchor.seedDate ? (new Date(anchor.seedDate)).toISOString().slice(0,10) : 'Not set';
                   
                   // Get today's light recipe details
-                  const todaysDay = getClosestDayEntry(activeDays, currentDay);
+                  const todaysDay = planDays.find(d => d.day === currentDay) || planDays[0];
                   const ppfd = todaysDay?.ppfd || 0;
                   const photoperiod = group.planConfig?.schedule?.photoperiodHours || group.planConfig?.schedule?.totalOnHours || 0;
                   const dli = ppfd && photoperiod ? ((ppfd * photoperiod * 3600) / 1000000).toFixed(1) : 0;
                   
-                  // Get temperature and stage - robust fallback across light/env plan formats
-                  const envDays = Array.isArray(plan?.env?.days) ? plan.env.days : [];
-                  const envDay = envDays.find(d => d.day === currentDay) || envDays[0] || null;
-                  const tempRaw = todaysDay?.tempC
-                    ?? todaysDay?.temperature
-                    ?? todaysDay?.temp_target
-                    ?? todaysDay?.environment?.tempC
-                    ?? todaysDay?.environment?.temperature
-                    ?? envDay?.tempC
-                    ?? envDay?.temperature
-                    ?? envDay?.temp_target
-                    ?? plan?.env?.tempC
-                    ?? plan?.env?.temperature
-                    ?? plan?.environment?.tempC
-                    ?? plan?.environment?.temperature
-                    ?? null;
-                  const temp_target = Number.isFinite(Number(tempRaw))
-                    ? Number(tempRaw).toFixed(1).replace(/\.0$/, '')
-                    : null;
+                  // Get temperature - check light days first, then env days
+                  let temp_target = todaysDay?.tempC || todaysDay?.temperature || 0;
+                  if (!temp_target && plan?.env?.days) {
+                    const envDay = plan.env.days.find(d => d.day === currentDay) || plan.env.days[0];
+                    temp_target = envDay?.tempC || envDay?.temperature || 0;
+                  }
 
                   // Stage and tank selection
-                  const stageName = todaysDay?.stage || envDay?.stage || currentStage || '';
+                  const stageName = todaysDay?.stage || currentStage || '';
                   const tankSelection = (todaysDay?.nutrients?.tank ?? todaysDay?.environment?.nutrients?.tank ?? plan?.env?.nutrients?.tank ?? plan?.environment?.nutrients?.tank ?? plan?.nutrients?.tank) || '';
                   // Map flowering/fruiting stages to Tank 2 by default; otherwise Tank 1
                   const _stageNorm = (stageName || '').trim().toLowerCase();
@@ -3271,15 +3272,15 @@
                   // while device commands use driver channels (CW/WW/BL/RD).
                   // Prefer spectra fields when available; fall back to channels only when spectra are missing.
                   const toNum = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
-                  const blueVal = toNum(mix.bl ?? mix.blue ?? todaysDay?.bl ?? todaysDay?.blue);
+                  const blueVal = toNum(mix.bl ?? todaysDay?.bl ?? todaysDay?.blue);
                   const greenVal = toNum(
                     // Prefer explicit green spectrum from recipe
-                    (mix.gn ?? mix.green ?? todaysDay?.gn ?? todaysDay?.green)
+                    (mix.gn ?? todaysDay?.gn ?? todaysDay?.green)
                     // Fallback: estimate green from white channels only if no green provided
                     ?? ((toNum(mix.cw ?? todaysDay?.cw) + toNum(mix.ww ?? todaysDay?.ww)) || null)
                   );
-                  const redVal = toNum(mix.rd ?? mix.red ?? todaysDay?.rd ?? todaysDay?.red);
-                  const farRedVal = toNum(mix.fr ?? mix.far_red ?? todaysDay?.fr ?? todaysDay?.far_red);
+                  const redVal = toNum(mix.rd ?? todaysDay?.rd ?? todaysDay?.red);
+                  const farRedVal = toNum(mix.fr ?? todaysDay?.fr ?? todaysDay?.far_red);
 
                   bluePct = blueVal;
                   greenPct = greenVal;
@@ -3311,7 +3312,8 @@
                           <div class="harvest-status" style="color: ${harvestColor};">
                             ${harvestStatus}
                           </div>
-                          ${currentStage ? `<div class="harvest-stage">Day ${currentDay} • ${currentStage}</div>` : ''}
+                          ${currentStage ? `<div class="harvest-stage">Day ${currentDay} • ${currentStage}${isRegrowing ? ' (Regrowth)' : ''}</div>` : ''}
+                          ${isCCA ? `<div style="margin-top:4px;font-size:0.8rem;padding:2px 8px;border-radius:4px;background:${isRegrowing ? '#fef3c7' : '#eff6ff'};color:${isRegrowing ? '#92400e' : '#1e40af'};display:inline-block;">🔄 Cut & Come Again ${harvestCycle.currentHarvest}/${harvestCycle.maxHarvests} harvests</div>` : ''}
                           <div id="ai-prediction-${group.id}" style="margin-top: 8px;">
                             <!-- AI Prediction Badge will be inserted here -->
                           </div>
@@ -3319,19 +3321,27 @@
                             <!-- AI Succession Suggestion (P4) will be inserted here -->
                           </div>                        </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;" onclick="event.stopPropagation();">
+                          ${isRegrowing ? `
+                          <button 
+                            class="harvest-button" 
+                            onclick="harvestToday('${group.id}', ${currentDay}, ${maxDay}, '${plan.id}')"
+                            title="Cut harvest — crop will ${(harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? 'be removed after final cut' : 'regrow for next harvest'}">
+                            ${(harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? '🌾 Final Harvest' : '✂️ Cut Harvest'} (${harvestCycle.currentHarvest + 1}/${harvestCycle.maxHarvests})
+                          </button>` : `
                           <button 
                             class="harvest-button ${daysToHarvest < 0 ? 'overdue' : ''}" 
                             onclick="harvestToday('${group.id}', ${currentDay}, ${maxDay}, '${plan.id}')"
                             title="Record harvest and log variance from plan">
-                            Harvest Today
-                          </button>
+                            ${isCCA ? '✂️ Cut Harvest (1/' + harvestCycle.maxHarvests + ')' : 'Harvest Today'}
+                          </button>`}
+                          ${(!isRegrowing || harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? `
                           <button 
                             class="repeat-planting-btn" 
                             onclick="repeatPlanting('${zone.zone}', '${planLookupKey}', '${group.name || 'Group'}')"
                             title="Quick repeat: Create new planting with same plan at DPS +7"
                             style="flex: 1; min-width: 140px;">
                             Repeat Planting (PSD +7)
-                          </button>
+                          </button>` : ''}
                         </div>
                       </div>
                       
@@ -3375,7 +3385,7 @@
                             </div>
                             <div>
                               <div style="font-size: 0.75rem; color: #64748b; font-weight: 500;">Temperature</div>
-                              <div style="color: #166534; font-weight: 700; font-size: 1.1rem;">${temp_target != null ? `${temp_target}°C` : '—'}</div>
+                              <div style="color: #166534; font-weight: 700; font-size: 1.1rem;">${temp_target || '—'}°C</div>
                             </div>
                             <div>
                               <div style="font-size: 0.75rem; color: #64748b; font-weight: 500;">Stage</div>
@@ -3468,19 +3478,20 @@
                 
                 // Get plan days for light recipe display - fallback to preview data if plan missing
                 // Prefer light.days for spectrum/PPFD, but also keep reference to env.days for temperature
-                const planDays = plan ? extractPlanDays(plan) : [];
-                const recipeDays = getRecipeDaysForGroup(recipeCatalog, group, plan);
+                const planDays = plan ? (Array.isArray(plan?.days)
+                  ? plan.days
+                  : (Array.isArray(plan?.light?.days) ? plan.light.days
+                    : (Array.isArray(plan?.env?.days) ? plan.env.days : []))) : [];
                 
                 // Fallback to preview data if plan is missing
                 const previewDays = !plan && group.planConfig?.preview?.days ? group.planConfig.preview.days : [];
-                const activeDays = recipeDays.length > planDays.length
-                  ? recipeDays
-                  : (planDays.length > 0 ? planDays : previewDays);
+                const activeDays = planDays.length > 0 ? planDays : previewDays;
                 
                 let lightRecipeHtml = '';
                 if (currentDay != null && activeDays.length > 0) {
                   // Calculate harvest countdown
-                  const maxDay = getMaxDay(activeDays) || currentDay;
+                  const dayNumbers = activeDays.map(d => d.day || 0).filter(d => d > 0);
+                  const maxDay = dayNumbers.length > 0 ? Math.max(...dayNumbers) : currentDay;
                   const daysToHarvest = maxDay - currentDay;
                   
                   let harvestStatus = '';
@@ -3501,33 +3512,20 @@
                   }
                   
                   // Get today's light recipe details
-                  const todaysDay = getClosestDayEntry(activeDays, currentDay);
+                  const todaysDay = activeDays.find(d => d.day === currentDay) || activeDays[0];
                   const ppfd = todaysDay?.ppfd || 0;
                   const photoperiod = group.planConfig?.schedule?.photoperiodHours || group.planConfig?.schedule?.totalOnHours || 0;
                   const dli = ppfd && photoperiod ? ((ppfd * photoperiod * 3600) / 1000000).toFixed(1) : 0;
                   
-                  // Get temperature and stage - robust fallback across light/env plan formats
-                  const envDays = Array.isArray(plan?.env?.days) ? plan.env.days : [];
-                  const envDay = envDays.find(d => d.day === currentDay) || envDays[0] || null;
-                  const tempRaw = todaysDay?.tempC
-                    ?? todaysDay?.temperature
-                    ?? todaysDay?.temp_target
-                    ?? todaysDay?.environment?.tempC
-                    ?? todaysDay?.environment?.temperature
-                    ?? envDay?.tempC
-                    ?? envDay?.temperature
-                    ?? envDay?.temp_target
-                    ?? plan?.env?.tempC
-                    ?? plan?.env?.temperature
-                    ?? plan?.environment?.tempC
-                    ?? plan?.environment?.temperature
-                    ?? null;
-                  const temp_target = Number.isFinite(Number(tempRaw))
-                    ? Number(tempRaw).toFixed(1).replace(/\.0$/, '')
-                    : null;
+                  // Get temperature - check light days first, then env days
+                  let temp_target = todaysDay?.tempC || todaysDay?.temperature || 0;
+                  if (!temp_target && plan?.env?.days) {
+                    const envDay = plan.env.days.find(d => d.day === currentDay) || plan.env.days[0];
+                    temp_target = envDay?.tempC || envDay?.temperature || 0;
+                  }
 
                   // Stage and tank selection (preview path)
-                  const stageName = todaysDay?.stage || envDay?.stage || stageLabel || '';
+                  const stageName = todaysDay?.stage || stageLabel || '';
                   const tankSelection = (todaysDay?.nutrients?.tank ?? todaysDay?.environment?.nutrients?.tank ?? plan?.env?.nutrients?.tank ?? plan?.environment?.nutrients?.tank ?? plan?.nutrients?.tank) || '';
                   // Map flowering/fruiting stages to Tank 2 by default; otherwise Tank 1
                   const _stageNorm = (stageName || '').trim().toLowerCase();
@@ -3539,15 +3537,13 @@
                   const mix = todaysDay?.mix || {};
                   let bluePct, greenPct, redPct, farRedPct;
                   
-                  // Prefer explicit spectrum fields; only estimate green from white channels when needed
-                  const toNum = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
-                  bluePct = toNum(mix.bl ?? mix.blue ?? todaysDay?.bl ?? todaysDay?.blue);
-                  greenPct = toNum(
-                    (mix.gn ?? mix.green ?? todaysDay?.gn ?? todaysDay?.green)
-                    ?? ((toNum(mix.cw ?? todaysDay?.cw) + toNum(mix.ww ?? todaysDay?.ww)) || null)
-                  );
-                  redPct = toNum(mix.rd ?? mix.red ?? todaysDay?.rd ?? todaysDay?.red);
-                  farRedPct = toNum(mix.fr ?? mix.far_red ?? todaysDay?.fr ?? todaysDay?.far_red);
+                  // Support both formats: recipe plans (mix object) and base plans (direct properties)
+                  // BL channel → Blue spectrum, RD channel → Red spectrum
+                  // CW+WW channels → Green spectrum (white LEDs produce green-heavy output)
+                  bluePct = mix.bl || todaysDay?.bl || 0;
+                  greenPct = (mix.cw || todaysDay?.cw || 0) + (mix.ww || todaysDay?.ww || 0);
+                  redPct = mix.rd || todaysDay?.rd || 0;
+                  farRedPct = mix.fr || todaysDay?.fr || 0;
                   
                   // Calculate total for normalization
                   const spectrumTotal = bluePct + greenPct + redPct + farRedPct;
@@ -3611,7 +3607,7 @@
                           </div>
                           <div>
                             <div style="font-size: 0.75rem; color: #64748b; font-weight: 500;">Temperature</div>
-                            <div style="color: #166534; font-weight: 700; font-size: 1.1rem;">${temp_target != null ? `${temp_target}°C` : '—'}</div>
+                            <div style="color: #166534; font-weight: 700; font-size: 1.1rem;">${temp_target || '—'}°C</div>
                           </div>
                           <div>
                             <div style="font-size: 0.75rem; color: #64748b; font-weight: 500;">Stage</div>
@@ -4103,20 +4099,12 @@
         `;
       }).join('');
 
-      // Add outdoor conditions section from weather API (fallback to outdoor sensor)
+      // Add outdoor conditions section if outdoor sensor found
       let outdoorHtml = '';
-      {
-        const apiOutdoorTemp = Number(latestWeatherCurrent?.temperature_c);
-        const apiOutdoorHumidity = Number(latestWeatherCurrent?.humidity);
-        const outdoorTemp = Number.isFinite(apiOutdoorTemp)
-          ? apiOutdoorTemp
-          : (outdoorZone?.sensors?.tempC?.current ?? null);
-        const outdoorHumidity = Number.isFinite(apiOutdoorHumidity)
-          ? apiOutdoorHumidity
-          : (outdoorZone?.sensors?.rh?.current ?? null);
-        const outdoorName = Number.isFinite(apiOutdoorTemp)
-          ? 'Outdoor Weather'
-          : (outdoorZone?.name || 'Outdoor');
+      if (outdoorZone) {
+        const outdoorTemp = outdoorZone.sensors?.tempC?.current;
+        const outdoorHumidity = outdoorZone.sensors?.rh?.current;
+        const outdoorName = outdoorZone.name || 'Outdoor';
         
         if (Number.isFinite(outdoorTemp) || Number.isFinite(outdoorHumidity)) {
           outdoorHtml = `
@@ -4515,24 +4503,8 @@
         }
         
         if (fetchResult.source === 'api') {
-          const apiData = fetchResult.data || {};
-          const zones = Array.isArray(apiData.zones) ? apiData.zones : [];
-          const summary = apiData.summary || {
-            total_zones: zones.length,
-            excellent: zones.filter(z => Number(z.score) >= 90).length,
-            good: zones.filter(z => Number(z.score) >= 70 && Number(z.score) < 90).length,
-            fair: zones.filter(z => Number(z.score) >= 50 && Number(z.score) < 70).length,
-            poor: zones.filter(z => Number(z.score) < 50).length
-          };
-
-          return {
-            ...apiData,
-            zones,
-            summary,
-            farm_score: Number.isFinite(apiData.farm_score) ? apiData.farm_score : 0,
-            grade: apiData.grade || 'N/A',
-            insights: Array.isArray(apiData.insights) ? apiData.insights : []
-          };
+          // Already in correct format
+          return fetchResult.data;
         }
         
         // Normalize env data to API format
@@ -5253,156 +5225,6 @@
       }) || null;
     }
 
-    function normalizeRecipeKey(value) {
-      return String(value || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-    }
-
-    async function ensureLightingRecipeCatalog() {
-      if (lightingRecipeCatalog) return lightingRecipeCatalog;
-      if (lightingRecipeCatalogPromise) return lightingRecipeCatalogPromise;
-
-      lightingRecipeCatalogPromise = (async () => {
-        try {
-          const response = await fetch('/data/lighting-recipes.json', { cache: 'no-store' });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const data = await response.json();
-          const crops = data?.crops && typeof data.crops === 'object' ? data.crops : {};
-          const catalog = new Map();
-
-          Object.entries(crops).forEach(([name, days]) => {
-            if (!Array.isArray(days) || !days.length) return;
-            catalog.set(normalizeRecipeKey(name), days);
-          });
-
-          lightingRecipeCatalog = catalog;
-          return lightingRecipeCatalog;
-        } catch (error) {
-          console.warn('[Farm Summary] Failed to load lighting recipe catalog:', error.message);
-          lightingRecipeCatalog = new Map();
-          return lightingRecipeCatalog;
-        }
-      })();
-
-      return lightingRecipeCatalogPromise;
-    }
-
-    function extractPlanDays(plan) {
-      if (Array.isArray(plan?.days)) return plan.days;
-      if (Array.isArray(plan?.light?.days)) return plan.light.days;
-      if (Array.isArray(plan?.env?.days)) return plan.env.days;
-      return [];
-    }
-
-    function getClosestDayEntry(days, currentDay) {
-      if (!Array.isArray(days) || !days.length) return null;
-      if (!Number.isFinite(currentDay)) return days[0];
-
-      let exact = days.find(d => Number(d?.day) === Number(currentDay));
-      if (exact) return exact;
-
-      const prior = days
-        .filter(d => Number.isFinite(Number(d?.day)) && Number(d.day) <= Number(currentDay))
-        .sort((a, b) => Number(b.day) - Number(a.day));
-
-      return prior[0] || days[0];
-    }
-
-    function getMaxDay(days) {
-      if (!Array.isArray(days) || !days.length) return null;
-      const values = days.map(d => Number(d?.day)).filter(v => Number.isFinite(v));
-      if (!values.length) return null;
-      return Math.max(...values);
-    }
-
-    function getRecipeDaysForGroup(catalog, group, plan) {
-      if (!catalog || typeof catalog.get !== 'function') return [];
-
-      const candidates = [
-        group?.recipe,
-        group?.crop,
-        plan?.crop,
-        plan?.name,
-        String(group?.plan || '').replace(/^crop-/i, '').replace(/-/g, ' '),
-        String(group?.planId || '').replace(/^crop-/i, '').replace(/-/g, ' ')
-      ].filter(Boolean);
-
-      for (const candidate of candidates) {
-        const key = normalizeRecipeKey(candidate);
-        if (!key) continue;
-        const match = catalog.get(key);
-        if (Array.isArray(match) && match.length) return match;
-      }
-
-      return [];
-    }
-
-    function normalizeSetpointRange(setpoint) {
-      const parsed = parseSetpoint(setpoint);
-      if (!parsed) return null;
-
-      let min;
-      let max;
-      if (parsed.type === 'range') {
-        min = Number(parsed.min);
-        max = Number(parsed.max);
-      } else {
-        min = Number(parsed.value);
-        max = Number(parsed.value);
-      }
-
-      if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
-      if (min === 0 && max === 0) return null;
-      if (max < min) return { min: max, max: min };
-      return { min, max };
-    }
-
-    function getZoneRecipeTempSetpoint(zoneGroups, plans, recipeCatalog) {
-      if (!Array.isArray(zoneGroups) || !zoneGroups.length) return null;
-
-      const temps = [];
-      for (const group of zoneGroups) {
-        const planLookupKey = group.planId || group.plan || group.planKey || group.planConfig?.planId || group.planConfig?.preview?.planId;
-        const plan = findPlanById(plans, planLookupKey);
-        const recipeDays = getRecipeDaysForGroup(recipeCatalog, group, plan);
-        const planDays = extractPlanDays(plan);
-        const activeDays = recipeDays.length > planDays.length ? recipeDays : planDays;
-        if (!activeDays.length) continue;
-
-        const resolvedSeed = planSummaryGetSeedDate(group.planConfig, group);
-        let currentDay = 1;
-        if (resolvedSeed instanceof Date && !Number.isNaN(resolvedSeed.getTime())) {
-          const now = new Date();
-          currentDay = Math.max(1, Math.floor((now - resolvedSeed) / (1000 * 60 * 60 * 24)) + 1);
-        } else if (group.planConfig?.preview?.day != null) {
-          const previewDay = Number(group.planConfig.preview.day);
-          if (Number.isFinite(previewDay)) currentDay = Math.max(1, Math.round(previewDay));
-        }
-
-        const dayEntry = getClosestDayEntry(activeDays, currentDay);
-        const tempValue = Number(
-          dayEntry?.temperature
-          ?? dayEntry?.tempC
-          ?? dayEntry?.temp_target
-          ?? dayEntry?.environment?.temperature
-          ?? dayEntry?.environment?.tempC
-        );
-        if (Number.isFinite(tempValue)) temps.push(tempValue);
-      }
-
-      if (!temps.length) return null;
-      return {
-        min: Math.min(...temps),
-        max: Math.max(...temps)
-      };
-    }
-
-    function getDisplayTempSetpoint(zone) {
-      return normalizeSetpointRange(zone?.recipeTempSetpoint);
-    }
-
     function findScheduleById(schedules, scheduleId) {
       if (!scheduleId) return null;
       const normalized = normalizeToken(scheduleId);
@@ -6010,7 +5832,7 @@
 
       const scheduleInfo = document.getElementById('scheduleInfo');
       if (!scheduleInfo) {
-        console.debug('[Schedule] scheduleInfo container not found; skipping render');
+        console.warn('[Schedule] scheduleInfo container not found; skipping render');
         return;
       }
       scheduleInfo.innerHTML = html;
@@ -6802,10 +6624,81 @@
      */
     async function harvestToday(groupId, currentDay, maxDay, planId) {
       try {
+        // Load group to check harvest cycle strategy
+        let groups = [];
+        try {
+          const resp = await fetch('/data/groups.json');
+          if (resp.ok) {
+            const data = await resp.json();
+            groups = data.groups || [];
+          }
+        } catch (e) { console.warn('Failed to load groups:', e); }
+
+        const group = groups.find(g => g.id === groupId);
+        const harvestCycle = group?.planConfig?.harvestCycle;
+        const isCCA = harvestCycle && harvestCycle.strategy === 'cut_and_come_again';
+        const currentHarvestNum = harvestCycle ? harvestCycle.currentHarvest : 0;
+        const maxHarvests = harvestCycle ? harvestCycle.maxHarvests : 1;
+        const isFinalHarvest = !isCCA || (currentHarvestNum >= maxHarvests - 1);
+
         const variance = currentDay - maxDay;
-        
-        // Confirmation dialog to prevent accidental harvesting
-        let confirmMessage = `Are you sure you want to record harvest for this group?\n\n`;
+
+        if (isCCA && !isFinalHarvest) {
+          // ---- CUT AND COME AGAIN: intermediate harvest ----
+          const nextHarvest = currentHarvestNum + 1;
+          const regrowthDays = harvestCycle.regrowthDays || 14;
+          let confirmMessage = `Cut Harvest ${nextHarvest} of ${maxHarvests} for this group?\n\n`;
+          confirmMessage += `The crop will remain in the tray and regrow for ~${regrowthDays} days.\n`;
+          confirmMessage += `Harvests remaining after this cut: ${maxHarvests - nextHarvest}\n`;
+          confirmMessage += `\nClick OK to record cut harvest.`;
+
+          if (!confirm(confirmMessage)) return;
+
+          // Update group's harvestCycle tracking
+          if (!Array.isArray(harvestCycle.harvestLog)) harvestCycle.harvestLog = [];
+          harvestCycle.currentHarvest = nextHarvest;
+          harvestCycle.regrowthStartDate = new Date().toISOString().split('T')[0];
+          harvestCycle.harvestLog.push({
+            harvestNumber: nextHarvest,
+            date: new Date().toISOString(),
+            dayNumber: currentDay
+          });
+          group.status = 'regrowing';
+
+          // Save updated groups
+          const saveResp = await fetch('/data/groups.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groups })
+          });
+          if (!saveResp.ok) throw new Error('Failed to save groups');
+
+          // Also log to harvest logs
+          const harvestEntry = {
+            id: `harvest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date().toISOString(),
+            groupId, planId,
+            actualDay: currentDay,
+            harvestNumber: nextHarvest,
+            maxHarvests: maxHarvests,
+            type: 'cut_and_come_again',
+            status: 'regrowth'
+          };
+          let harvestLogs = [];
+          try { harvestLogs = JSON.parse(localStorage.getItem('harvestLogs') || '[]'); } catch(e) {}
+          harvestLogs.push(harvestEntry);
+          localStorage.setItem('harvestLogs', JSON.stringify(harvestLogs));
+          try { await fetch('/api/harvest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(harvestEntry) }); } catch(e) {}
+
+          alert(`✂️ Cut Harvest ${nextHarvest} of ${maxHarvests} recorded!\n\nCrop will regrow for ${regrowthDays} days.\nHarvests remaining: ${maxHarvests - nextHarvest}`);
+          location.reload();
+          return;
+        }
+
+        // ---- SINGLE or FINAL CCA HARVEST ----
+        let confirmMessage = isCCA
+          ? `Final Harvest (${maxHarvests} of ${maxHarvests}) — remove crop?\n\n`
+          : `Are you sure you want to record harvest for this group?\n\n`;
         confirmMessage += `Current Day: ${currentDay}\n`;
         confirmMessage += `Planned Harvest: Day ${maxDay}\n`;
         
@@ -6820,7 +6713,7 @@
         confirmMessage += `\nThis will update inventory and cannot be easily undone.\n\nClick OK to proceed or Cancel to abort.`;
         
         if (!confirm(confirmMessage)) {
-          return; // User cancelled
+          return;
         }
         
         // Create harvest log entry
@@ -6834,7 +6727,10 @@
           variance: variance,
           daysEarly: variance < 0 ? Math.abs(variance) : 0,
           daysLate: variance > 0 ? variance : 0,
-          status: variance < 0 ? 'early' : (variance > 0 ? 'late' : 'on-time')
+          status: variance < 0 ? 'early' : (variance > 0 ? 'late' : 'on-time'),
+          type: isCCA ? 'cut_and_come_again_final' : 'single',
+          harvestNumber: isCCA ? maxHarvests : 1,
+          maxHarvests: maxHarvests
         };
         
         // Load existing harvest logs from localStorage
@@ -6868,12 +6764,37 @@
         } catch (serverError) {
           console.warn('Server save failed (using localStorage only):', serverError);
         }
+
+        // For final CCA harvest, update group status
+        if (isCCA && group) {
+          harvestCycle.currentHarvest = maxHarvests;
+          harvestCycle.harvestLog = harvestCycle.harvestLog || [];
+          harvestCycle.harvestLog.push({
+            harvestNumber: maxHarvests,
+            date: new Date().toISOString(),
+            dayNumber: currentDay,
+            final: true
+          });
+          group.status = 'harvested';
+          group.harvestedAt = new Date().toISOString();
+          group.lights = [];
+          try {
+            await fetch('/data/groups.json', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groups })
+            });
+          } catch(e) { console.warn('Failed to save final harvest status:', e); }
+        }
         
         // User feedback
         let message = '';
         let details = '';
         
-        if (variance === 0) {
+        if (isCCA) {
+          message = `🌾 Final harvest (${maxHarvests}/${maxHarvests}) complete!`;
+          details = `Crop cycle finished. Group archived and ready for reseed.`;
+        } else if (variance === 0) {
           message = '🎯 Harvest recorded on schedule!';
           details = 'Perfect timing - no variance from plan.';
         } else if (variance < 0) {
@@ -6949,6 +6870,38 @@
         // Use default 13-hour photoperiod if plan not found
         const photoperiodHours = plan?.photoperiod || 13;
         
+        // Look up harvest strategy from crop registry
+        let harvestCycle = null;
+        try {
+          const regResp = await fetch('/data/crop-registry.json');
+          if (regResp.ok) {
+            const registry = await regResp.json();
+            const crops = registry.crops || {};
+            // Match by plan crop field or plan name
+            const cropKey = Object.keys(crops).find(k => {
+              const c = crops[k];
+              return c.planIds?.includes(planId) ||
+                     (plan && (plan.crop || plan.name || '').toLowerCase().includes(k.toLowerCase()));
+            });
+            if (cropKey) {
+              const growth = crops[cropKey].growth || {};
+              if (growth.harvestStrategy === 'cut_and_come_again') {
+                harvestCycle = {
+                  strategy: 'cut_and_come_again',
+                  currentHarvest: 0,
+                  maxHarvests: growth.maxHarvests || 4,
+                  regrowthDays: growth.regrowthDays || 14,
+                  regrowthYieldFactor: growth.regrowthYieldFactor || 0.85,
+                  harvestLog: [],
+                  regrowthStartDate: null
+                };
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load crop registry for harvest strategy:', e);
+        }
+        
         // Create new group with DPS = 7
         const newGroup = {
           id: `GreenReach:${zoneId}:${newName}`,
@@ -6997,6 +6950,7 @@
               tempC: 0,
               rh: 0
             },
+            ...(harvestCycle ? { harvestCycle } : {}),
             updatedAt: new Date().toISOString()
           }
         };
@@ -7015,7 +6969,8 @@
           throw new Error(`Failed to save: ${saveResponse.statusText}`);
         }
         
-        alert(`SUCCESS: Repeat planting created!\n\nGroup: ${newName}\nZone: ${zoneId}\nPlan: ${planId}\nStarting Day: 7 (PSD +7)\n\nThe new group has been added to your automation schedule.`);
+        const strategyNote = harvestCycle ? `\nHarvest Strategy: Cut & Come Again (${harvestCycle.maxHarvests} harvests)` : '';
+        alert(`SUCCESS: Repeat planting created!\n\nGroup: ${newName}\nZone: ${zoneId}\nPlan: ${planId}\nStarting Day: 7 (PSD +7)${strategyNote}\n\nThe new group has been added to your automation schedule.`);
         
         // Reload to show new group
         location.reload();
@@ -7276,6 +7231,37 @@
           }
         };
 
+        // Look up harvest strategy from crop registry
+        try {
+          const regResp = await fetch('/data/crop-registry.json');
+          if (regResp.ok) {
+            const registry = await regResp.json();
+            const crops = registry.crops || {};
+            const selectedPlan = availablePlans.find(p => p.id === planId);
+            const cropKey = Object.keys(crops).find(k => {
+              const c = crops[k];
+              return c.planIds?.includes(planId) ||
+                     (selectedPlan && (selectedPlan.crop || selectedPlan.name || '').toLowerCase().includes(k.toLowerCase()));
+            });
+            if (cropKey) {
+              const growth = crops[cropKey].growth || {};
+              if (growth.harvestStrategy === 'cut_and_come_again') {
+                newGroup.planConfig.harvestCycle = {
+                  strategy: 'cut_and_come_again',
+                  currentHarvest: 0,
+                  maxHarvests: growth.maxHarvests || 4,
+                  regrowthDays: growth.regrowthDays || 14,
+                  regrowthYieldFactor: growth.regrowthYieldFactor || 0.85,
+                  harvestLog: [],
+                  regrowthStartDate: null
+                };
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load crop registry for harvest strategy:', e);
+        }
+
         // Load existing groups
         const groupsResponse = await fetch('/data/groups.json');
         let groupsData = { groups: [] };
@@ -7299,7 +7285,8 @@
 
         // Success!
         const planName = availablePlans.find(p => p.id === planId)?.name || planId;
-        alert(`SUCCESS: New planting created successfully!\n\nGroup: ${groupName}\nZone: ${zoneName}\nPlan: ${planName}`);
+        const ccaNote = newGroup.planConfig.harvestCycle ? `\nHarvest Strategy: Cut & Come Again (${newGroup.planConfig.harvestCycle.maxHarvests} harvests)` : '';
+        alert(`SUCCESS: New planting created successfully!\n\nGroup: ${groupName}\nZone: ${zoneName}\nPlan: ${planName}${ccaNote}`);
         
         // Close modal and reload page
         closeNewPlantingModal();
@@ -7331,7 +7318,6 @@
       }, 500);
     });
   </script>
-  <script src="/js/header-dropdown-nav.js?v=20260216"></script>
   <script src="/js/farm-assistant.js?v=20260203"></script>
   
   <!-- Harvest Predictions AI Component (P3) - Disabled (requires AI backend) -->

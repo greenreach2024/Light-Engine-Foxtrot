@@ -3042,6 +3042,48 @@
         "0-10v",
         "static"
       ]
+    },
+    {
+      "id": "zipgrow-200w-full-spectrum",
+      "vendor": "ZipGrow",
+      "model": "200W Full Spectrum",
+      "watts": 200,
+      "control": "0-10V",
+      "ppfd": 520,
+      "ppf": 560,
+      "ppe": 2.8,
+      "efficacy_umolPerJ": 2.8,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "tunable": false,
+      "dynamicSpectrum": false,
+      "dimmable": true,
+      "factorySpectrum": {
+        "cw": 35,
+        "ww": 40,
+        "bl": 13,
+        "rd": 12
+      },
+      "colorRange": "400-700nm",
+      "coverage_area_sqft": 16,
+      "input_voltage": "100-277V AC",
+      "lifespan_hours": 50000,
+      "ip_rating": "IP65",
+      "mounting": "Hang / Rack mount",
+      "weight_kg": 3.2,
+      "tags": [
+        "zipgrow",
+        "200w",
+        "full-spectrum",
+        "0-10v",
+        "dimmable",
+        "static",
+        "vertical-farming",
+        "led",
+        "bar",
+        "fixture",
+        "light"
+      ]
     }
   ]
 }

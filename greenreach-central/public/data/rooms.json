@@ -2,13 +2,15 @@
   "rooms": [
     {
       "id": "room-3xxjln",
-      "name": "Your Grow Room",
+      "name": "Main Grow Room",
       "location": "",
       "hardwareCats": [
+        "hvac",
         "dehumidifier",
         "fans"
       ],
       "hardwareOrder": [
+        "hvac",
         "dehumidifier",
         "fans"
       ],
@@ -18,7 +20,10 @@
         "racks": 0,
         "levels": 0
       },
-      "zones": [],
+      "zones": [
+        "Zone 1",
+        "Zone 2"
+      ],
       "fixtures": [],
       "controlMethod": null,
       "devices": [],
@@ -47,58 +52,24 @@
         "scheduleId": ""
       },
       "category": {
+        "hvac": {
+          "count": 2
+        },
         "dehumidifier": {
-          "selectedEquipment": [
-            {
-              "category": "dehumidifier",
-              "vendor": "Quest",
-              "model": "Quest 100",
-              "capacity": "100 PPD",
-              "control": "Manual",
-              "count": 1
-            }
-          ],
+          "selectedEquipment": [],
           "wifi": false,
           "wired": false,
-          "count": 1,
-          "manufacturer": "Quest",
-          "model": "Quest 100"
+          "count": 0
         },
         "fans": {
-          "manufacturer": "No Name",
-          "count": 2,
+          "count": 20,
+          "manufacturer": "",
           "wifi": false,
           "wired": false
         }
       },
-      "_categoryProgress": {
-        "dehumidifier": {
-          "selectedEquipment": [
-            {
-              "category": "dehumidifier",
-              "vendor": "Quest",
-              "model": "Quest 100",
-              "capacity": "100 PPD",
-              "control": "Manual",
-              "count": 1
-            }
-          ]
-        }
-      },
-      "categoryProgress": {
-        "dehumidifier": {
-          "selectedEquipment": [
-            {
-              "category": "dehumidifier",
-              "vendor": "Quest",
-              "model": "Quest 100",
-              "capacity": "100 PPD",
-              "control": "Manual",
-              "count": 1
-            }
-          ]
-        }
-      }
+      "_categoryProgress": {},
+      "categoryProgress": {}
     }
   ]
 }

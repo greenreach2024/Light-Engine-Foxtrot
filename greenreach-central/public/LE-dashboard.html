@@ -634,14 +634,19 @@
               </label>
               <div class="row" style="gap:8px;flex-wrap:wrap;">
                 <button id="groupsV2SaveGroup" type="button" class="primary">Save Group</button>
+                <button id="buildStockGroupsBtn" type="button" class="ghost" style="border:1px dashed #6366f1;color:#6366f1;font-weight:600;" title="Batch-create identical groups with same lights, trays, and layout">Build Stock Groups</button>
                 <label class="tiny" style="display:flex;flex-direction:column;min-width:160px;">
                   Load group
                   <select id="groupsV2LoadGroup" style="margin-top:4px;min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
                     <option value="">(none)</option>
                   </select>
                 </label>
+                <button id="groupsV2SaveAndDeploy" type="button" class="ghost" style="align-self:flex-end;border:1px solid #22c55e;color:#22c55e;font-weight:600;">Deploy Group</button>
+                <button id="groupsV2HarvestBtn" type="button" class="ghost" style="display:none;align-self:flex-end;border:1px solid #f59e0b;color:#f59e0b;font-weight:600;">🌾 Harvest</button>
                 <button id="groupsV2DeleteGroup" type="button" class="ghost" style="align-self:flex-end;">Delete selected group</button>
               </div>
+              <!-- Harvest strategy indicator (shown when plan is assigned) -->
+              <div id="groupsV2HarvestStrategyIndicator" style="display:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;margin-top:4px;"></div>
             </div>
 
             <div class="row row--wrap" style="gap:12px;align-items:flex-start;">
@@ -758,6 +763,25 @@
             </div>
 
             <div id="groupsV2PlanPreview" class="gr-card" style="padding:12px;border:1px dashed #38bdf8;border-radius:10px;background:linear-gradient(120deg,#f0f9ff 0%,#e0f2fe 100%);"></div>
+          </div>
+
+          <!-- Editing Indicator (shown when a group is loaded for editing) -->
+          <div id="groupsV2EditingIndicator" style="display:none;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;background:#eff6ff;border:1px solid #93c5fd;font-size:0.85rem;color:#1e40af;">
+            <span>✏️</span>
+            <strong>Editing:</strong>
+            <span id="groupsV2EditingName"></span>
+            <button type="button" id="groupsV2ClearEditing" style="margin-left:auto;background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;line-height:1;" title="Clear editing">&times;</button>
+          </div>
+
+          <!-- Standard Group List -->
+          <div class="gr-card" id="groupsV2GroupListSection" style="margin-top:8px;padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="margin:0;font-size:14px;font-weight:600;color:#1e293b;">Standard Groups</h3>
+              <span id="groupsV2GroupCount" class="tiny text-muted"></span>
+            </div>
+            <div id="groupsV2GroupListBody" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;max-height:420px;overflow-y:auto;">
+              <!-- Group cards rendered dynamically by renderGroupsV2GroupList() -->
+            </div>
           </div>
 
           <!-- Light Assignment Section (Unassigned Lights) -->
@@ -3047,5 +3071,62 @@
     // Run setup check immediately
     checkSetupStatus();
   </script>
+
+<!-- Build Stock Groups Modal -->
+<dialog id="buildStockGroupModal" style="max-width:540px;width:92vw;border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:0;">
+  <form method="dialog" id="buildStockGroupForm" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;font-size:1.15rem;">Build Stock Groups</h3>
+      <button type="button" id="buildStockGroupClose" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;">&times;</button>
+    </div>
+    <p class="tiny" style="color:#64748b;margin:0;">Batch-create groups that share the same light fixture, tray count, and layout. Each group maintains its own individual control, inventory, and QR codes.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Room
+        <select id="bsgRoom" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;"><option value="">(select room)</option></select>
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Zone
+        <select id="bsgZone" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;"><option value="">(select zone)</option></select>
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Group name prefix
+        <input id="bsgPrefix" type="text" placeholder="e.g. Bench" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;" required>
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Number of groups
+        <input id="bsgCount" type="number" min="1" max="100" value="4" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;" required>
+      </label>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Trays / group
+        <input id="bsgTrays" type="number" min="1" max="200" value="4" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+      <label class="tiny" style="display:flex;flex-direction:column;gap:4px;">
+        Lights / group
+        <input id="bsgLightsPerGroup" type="number" min="1" max="20" value="1" style="min-height:32px;border-radius:6px;border:1px solid #cbd5e1;">
+      </label>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input id="bsgAutoAssign" type="checkbox" checked>
+      <span class="tiny">Auto-assign unassigned lights sequentially</span>
+    </label>
+
+    <div id="bsgPreview" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;min-height:40px;font-size:0.8rem;color:#0c4a6e;"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" id="buildStockGroupCancel" class="ghost">Cancel</button>
+      <button type="button" id="buildStockGroupCreate" class="primary" style="background:linear-gradient(135deg,#6366f1,#4f46e5);min-width:140px;">Create Groups</button>
+    </div>
+  </form>
+</dialog>
+
 </body>
 </html>

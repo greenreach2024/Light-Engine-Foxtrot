@@ -438,10 +438,38 @@ router.post('/:orderId/pick', async (req, res) => {
     const dateStr = now.toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD
     const orderSuffix = orderId.slice(-4); // Last 4 chars of order ID
     
+    // Load groups for CCA harvest cycle tracking
+    let groupsList = [];
+    try {
+      const groupsPath = new URL('../public/data/groups.json', import.meta.url).pathname;
+      const fs = await import('fs');
+      if (fs.existsSync(groupsPath)) {
+        const gd = JSON.parse(fs.readFileSync(groupsPath, 'utf-8'));
+        groupsList = gd.groups || [];
+      }
+    } catch (e) {
+      // Groups not available — non-fatal
+    }
+    
     for (const item of subOrder.items) {
       const cropName = item.product_name.toUpperCase().replace(/\s+/g, '');
       item.lot_code = `A1-${cropName}-${dateStr}-${orderSuffix}`;
       item.harvest_date = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      // CCA: Track which harvest cut this product came from
+      const matchedGroup = groupsList.find(g => {
+        const hc = g.planConfig?.harvestCycle;
+        return hc && hc.strategy === 'cut_and_come_again' &&
+               (g.plan || '').toLowerCase().includes(item.product_name.toLowerCase().split(' ')[0]);
+      });
+      if (matchedGroup) {
+        const hc = matchedGroup.planConfig.harvestCycle;
+        item.harvest_cut = hc.currentHarvest || 1;
+        item.harvest_strategy = 'cut_and_come_again';
+        item.max_harvests = hc.maxHarvests || 4;
+        item.regrowth_yield_factor = Math.pow(hc.regrowthYieldFactor || 0.85, (hc.currentHarvest || 1) - 1);
+        item.lot_code += `-C${hc.currentHarvest || 1}`;
+      }
     }
     
     // Update status

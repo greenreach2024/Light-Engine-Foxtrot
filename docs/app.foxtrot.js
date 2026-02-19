@@ -10404,7 +10404,7 @@ class RoomWizard {
       });
     const selected = Array.isArray(this.data.hardwareCats) ? this.data.hardwareCats.slice() : [];
     // Define which categories have micro-forms; order them after hardware and before fixtures
-  const formCats = selected.filter(c => ['grow-lights','hvac','mini-split','dehumidifier','fans','vents','controllers','other'].includes(c));
+  const formCats = selected.filter(c => ['hvac','mini-split','dehumidifier','fans','vents','controllers','energy-monitor','other'].includes(c));
       console.debug('[RoomWizard] formCats for category-setup:', formCats);
     // Preserve user selection order using hardwareOrder we maintain on toggles
     const chipOrder = (Array.isArray(this.data.hardwareOrder) ? this.data.hardwareOrder : [])

@@ -3905,11 +3905,23 @@
     async function loadDashboardData() {
       const farmHeaders = buildFarmHeaders();
       try {
-        // Load inventory forecast
-        const forecastRes = await fetch(`${currentAPI}/api/inventory/forecast`, { headers: farmHeaders });
+        // Load inventory forecast + groups (for CCA awareness)
+        const [forecastRes, groupsRes] = await Promise.all([
+          fetch(`${currentAPI}/api/inventory/forecast`, { headers: farmHeaders }),
+          fetch(`${currentAPI}/data/groups.json`, { headers: farmHeaders }).catch(() => ({ ok: false }))
+        ]);
         if (!forecastRes.ok) throw new Error(`Forecast request failed: ${forecastRes.status}`);
         const forecastData = await forecastRes.json();
         const forecastRows = normalizeForecastRows(forecastData);
+
+        // Parse groups for CCA harvestCycle lookup
+        let groupsList = [];
+        try {
+          if (groupsRes.ok) {
+            const gd = await groupsRes.json();
+            groupsList = gd.groups || [];
+          }
+        } catch (e) { /* groups not available — not fatal */ }
         
         // Count ready to harvest (next 7 days)
         const now = Date.now();
@@ -3918,15 +3930,53 @@
           const harvestTime = item.harvestDate ? new Date(item.harvestDate).getTime() : NaN;
           return Number.isFinite(harvestTime) && harvestTime <= sevenDays;
         });
+
+        // Also include CCA groups in regrowth nearing next cut
+        const regrowingGroups = groupsList.filter(g => {
+          const hc = g.planConfig?.harvestCycle;
+          if (!hc || hc.strategy !== 'cut_and_come_again' || g.status !== 'regrowing') return false;
+          if (!hc.regrowthStartDate) return false;
+          const daysSince = Math.floor((now - new Date(hc.regrowthStartDate).getTime()) / 86400000);
+          return daysSince >= (hc.regrowthDays || 14) - 2; // within 2 days of next cut
+        });
+
+        // Build CCA group lookup by groupId
+        const ccaByGroup = {};
+        groupsList.forEach(g => {
+          const hc = g.planConfig?.harvestCycle;
+          if (hc && hc.strategy === 'cut_and_come_again') {
+            ccaByGroup[g.id] = hc;
+          }
+        });
         
-        document.getElementById('harvestCount').textContent = readyToHarvest.length;
-        // Normalize harvest items for display
-        const normalizedHarvest = readyToHarvest.map(item => ({
-          tray_id: item.trayId,
-          crop_name: item.cropName,
-          recipe_name: item.recipe || '',
-          harvest_date: item.harvestDate || ''
-        }));
+        // Count includes regrowing groups ready for next cut
+        const totalHarvestReady = readyToHarvest.length + regrowingGroups.length;
+        document.getElementById('harvestCount').textContent = totalHarvestReady;
+
+        // Normalize harvest items for display (include CCA info)
+        const normalizedHarvest = readyToHarvest.map(item => {
+          const cca = ccaByGroup[item.groupId] || null;
+          return {
+            tray_id: item.trayId,
+            crop_name: item.cropName,
+            recipe_name: item.recipe || '',
+            harvest_date: item.harvestDate || '',
+            cca: cca
+          };
+        });
+
+        // Add regrowth-ready groups as harvest items
+        regrowingGroups.forEach(g => {
+          const hc = g.planConfig.harvestCycle;
+          normalizedHarvest.push({
+            tray_id: g.id,
+            crop_name: (g.plan || g.name || 'CCA Crop'),
+            recipe_name: `Cut ${(hc.currentHarvest || 0) + 1} of ${hc.maxHarvests}`,
+            harvest_date: new Date().toISOString(),
+            cca: hc
+          });
+        });
+
         populateHarvestList(normalizedHarvest);
 
         // Load current inventory
@@ -3978,18 +4028,23 @@
         return;
       }
 
-      container.innerHTML = items.slice(0, 8).map(item => `
+      container.innerHTML = items.slice(0, 8).map(item => {
+        const cca = item.cca;
+        const ccaBadge = cca ? `<span style="background:rgba(59,130,246,0.2);color:#60a5fa;padding:2px 6px;border-radius:4px;font-size:0.75rem;font-weight:600;margin-left:4px;">✂️ ${(cca.currentHarvest || 0) + 1}/${cca.maxHarvests}</span>` : '';
+        const ccaDetail = cca ? `<span style="color:#60a5fa;font-size:0.8rem;">Cut & Come Again</span>` : `<span>${new Date(item.harvest_date).toLocaleDateString()}</span>`;
+        return `
         <div class="harvest-item" onclick="showHarvestDetails('${item.tray_id}')">
           <div class="harvest-info">
-            <div class="crop-name">${item.crop_name || 'Unknown Crop'}</div>
+            <div class="crop-name">${item.crop_name || 'Unknown Crop'}${ccaBadge}</div>
             <div class="crop-details">
               <span>${item.recipe_name || 'Recipe'}</span>
-              <span>${new Date(item.harvest_date).toLocaleDateString()}</span>
+              ${ccaDetail}
             </div>
           </div>
           <div class="tray-badge">${item.tray_id}</div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
     // Show Harvest Details

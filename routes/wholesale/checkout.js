@@ -9,6 +9,7 @@ import { allocateOrder, validateCart } from '../../lib/wholesale/order-allocator
 import { createReservations, releaseReservations, confirmReservations } from '../../lib/wholesale/reservation-manager.js';
 import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
 import '../../lib/payment-providers/square.js'; // Ensure Square provider is registered
+import '../../lib/payment-providers/stripe.js'; // Ensure Stripe provider is registered
 import auditLogger from '../../lib/wholesale/audit-logger.js';
 
 const router = express.Router();
@@ -188,16 +189,27 @@ router.post('/execute', async (req, res) => {
         // Generate idempotency key
         const idempotencyKey = `${masterOrderId}_${subOrderId}_${paymentAttempt}`;
 
-        // TODO: Get farm's Square merchant credentials from database
-        // For now, using demo configuration
-        const farmSquareConfig = {
-          squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo-token',
-          environment: 'sandbox',
-          brokerMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID || 'greenreach-merchant-id'
-        };
+        // TODO: Get farm's payment provider credentials from database
+        // Determine payment provider from farm config or request
+        const farmPaymentProvider = req.body.payment_provider || subOrder.payment_provider || 'square';
+        
+        let providerConfig;
+        if (farmPaymentProvider === 'stripe') {
+          providerConfig = {
+            stripeSecretKey: process.env.STRIPE_SECRET_KEY || 'demo-stripe-key',
+            webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+            connectedAccountId: subOrder.stripe_account_id || null
+          };
+        } else {
+          providerConfig = {
+            squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo-token',
+            environment: 'sandbox',
+            brokerMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID || 'greenreach-merchant-id'
+          };
+        }
 
-        // Create Square payment provider
-        const paymentProvider = PaymentProviderFactory.create('square', farmSquareConfig);
+        // Create payment provider
+        const paymentProvider = PaymentProviderFactory.create(farmPaymentProvider, providerConfig);
 
         // Execute payment
         const paymentResult = await paymentProvider.createPayment({

@@ -207,6 +207,7 @@ import wholesaleFarmPerformanceRouter from './routes/wholesale/farm-performance.
 import networkRouter from './routes/network.js';
 import activityHubOrdersRouter from './routes/activity-hub-orders.js';
 import farmSquareSetupRouter from './routes/farm-square-setup.js';
+import farmStripeSetupRouter from './routes/farm-stripe-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
 import emailRouter from './server/routes/email-routes.js';
 import adminFarmManagementRouter from './routes/admin-farm-management.js';
@@ -10244,6 +10245,18 @@ app.use('/api/wholesale/oauth/square', wholesaleSquareOAuthRouter);
  * - POST /api/farm/square/test-payment: Test payment in sandbox mode
  */
 app.use('/api/farm/square', farmSquareSetupRouter);
+
+/**
+ * Farm: Stripe Payment Processing Setup
+ * - GET /api/farm/stripe/status: Check if farm has Stripe connected
+ * - POST /api/farm/stripe/authorize: Generate OAuth URL for farm's Stripe Connect account
+ * - GET /api/farm/stripe/callback: Handle OAuth callback from Stripe
+ * - POST /api/farm/stripe/settings: Save Stripe payment processing settings
+ * - POST /api/farm/stripe/disconnect: Disconnect farm's Stripe account
+ * - POST /api/farm/stripe/test-payment: Test payment processing
+ * - POST /api/farm/stripe/webhook: Handle Stripe webhook events
+ */
+app.use('/api/farm/stripe', farmStripeSetupRouter);
 
 /**
  * Farm: Online Store Setup and Deployment
@@ -20651,6 +20664,10 @@ app.post("/data/:name", (req, res) => {
             try { syncZoneAssignmentsFromRoomMap(); } catch (err) {
               console.warn('[zone-sync] Post-save refresh failed:', err?.message || err);
             }
+            // Sync zone names back to rooms.json so Grow Room Setup page stays current
+            try { syncZonesToRoomsJson(req.body, baseName); } catch (err) {
+              console.warn('[zone-rooms-sync] Post-save refresh failed:', err?.message || err);
+            }
           } catch (sideEffectErr) {
             console.warn('[room-map] Post-save side-effects failed:', sideEffectErr?.message || sideEffectErr);
           }
@@ -24745,6 +24762,47 @@ function initializeZoneSetpointsFromRoomMap() {
     console.log('[setpoint-init] Zone setpoints initialized from room-map.json');
   } catch (error) {
     console.error('[setpoint-init] Error initializing setpoints:', error.message);
+  }
+}
+
+// Sync zone names from a room-map save back to rooms.json so the Grow Room Setup page stays current
+function syncZonesToRoomsJson(roomMapBody, baseName) {
+  try {
+    // Extract roomId from filename: room-map-room-XXXX.json → room-XXXX
+    const roomIdMatch = baseName.match(/^room-map-(.+)\.json$/);
+    const roomId = roomIdMatch ? roomIdMatch[1] : (roomMapBody?.roomId || null);
+    if (!roomId) {
+      // Legacy room-map.json without per-room ID — try body.roomId
+      if (!roomMapBody?.roomId) return;
+    }
+
+    const targetRoomId = roomId || roomMapBody.roomId;
+    const mapZones = Array.isArray(roomMapBody?.zones) ? roomMapBody.zones : [];
+    const zoneNames = mapZones
+      .map(z => z.name || (z.zone != null ? `Zone ${z.zone}` : null))
+      .filter(Boolean);
+
+    const roomsData = readJSON('rooms.json', { rooms: [] });
+    const rooms = Array.isArray(roomsData?.rooms) ? roomsData.rooms : [];
+    const room = rooms.find(r => String(r.id) === String(targetRoomId));
+    if (!room) {
+      console.log(`[zone-rooms-sync] Room ${targetRoomId} not found in rooms.json — skipping`);
+      return;
+    }
+
+    const existingZones = Array.isArray(room.zones) ? room.zones : [];
+    const sortedNew = [...zoneNames].sort();
+    const sortedOld = [...existingZones].sort();
+    if (JSON.stringify(sortedNew) === JSON.stringify(sortedOld)) {
+      return; // No change needed
+    }
+
+    room.zones = zoneNames;
+    const roomsPath = path.join(DATA_DIR, 'rooms.json');
+    fs.writeFileSync(roomsPath, JSON.stringify(roomsData, null, 2));
+    console.log(`[zone-rooms-sync] Updated rooms.json: room ${targetRoomId} now has ${zoneNames.length} zone(s): ${zoneNames.join(', ')}`);
+  } catch (error) {
+    console.error('[zone-rooms-sync] Error syncing zones to rooms.json:', error.message);
   }
 }
 

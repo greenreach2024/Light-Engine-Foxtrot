@@ -3189,10 +3189,35 @@
                   
                   const daysToHarvest = maxDay - currentDay;
                   
+                  // Check for cut-and-come-again regrowth status
+                  const harvestCycle = group.planConfig?.harvestCycle;
+                  const isCCA = harvestCycle && harvestCycle.strategy === 'cut_and_come_again';
+                  const isRegrowing = isCCA && harvestCycle.currentHarvest > 0 && harvestCycle.currentHarvest < harvestCycle.maxHarvests;
+                  
                   let harvestStatus = '';
                   let harvestColor = '';
                   
-                  if (daysToHarvest > 7) {
+                  if (isRegrowing) {
+                    // Regrowth phase — calculate days since last harvest
+                    const regrowStart = harvestCycle.regrowthStartDate ? new Date(harvestCycle.regrowthStartDate) : new Date();
+                    const now = new Date();
+                    regrowStart.setHours(0,0,0,0);
+                    now.setHours(0,0,0,0);
+                    const regrowthDay = Math.floor((now - regrowStart) / 86400000);
+                    const regrowDaysLeft = Math.max(0, (harvestCycle.regrowthDays || 14) - regrowthDay);
+                    const nextHarvest = harvestCycle.currentHarvest + 1;
+                    
+                    if (regrowDaysLeft <= 0) {
+                      harvestStatus = `🔄 Ready for Cut ${nextHarvest} of ${harvestCycle.maxHarvests}`;
+                      harvestColor = '#ef4444';
+                    } else if (regrowDaysLeft <= 3) {
+                      harvestStatus = `🔄 Regrowth: ${regrowDaysLeft} day${regrowDaysLeft !== 1 ? 's' : ''} to harvest ${nextHarvest}/${harvestCycle.maxHarvests}`;
+                      harvestColor = '#f59e0b';
+                    } else {
+                      harvestStatus = `🔄 Regrowing: ${regrowDaysLeft} day${regrowDaysLeft !== 1 ? 's' : ''} to harvest ${nextHarvest}/${harvestCycle.maxHarvests}`;
+                      harvestColor = '#0369a1';
+                    }
+                  } else if (daysToHarvest > 7) {
                     harvestStatus = `${daysToHarvest} days to harvest`;
                     harvestColor = '#10b981'; // green
                   } else if (daysToHarvest > 0) {
@@ -3287,7 +3312,8 @@
                           <div class="harvest-status" style="color: ${harvestColor};">
                             ${harvestStatus}
                           </div>
-                          ${currentStage ? `<div class="harvest-stage">Day ${currentDay} • ${currentStage}</div>` : ''}
+                          ${currentStage ? `<div class="harvest-stage">Day ${currentDay} • ${currentStage}${isRegrowing ? ' (Regrowth)' : ''}</div>` : ''}
+                          ${isCCA ? `<div style="margin-top:4px;font-size:0.8rem;padding:2px 8px;border-radius:4px;background:${isRegrowing ? '#fef3c7' : '#eff6ff'};color:${isRegrowing ? '#92400e' : '#1e40af'};display:inline-block;">🔄 Cut & Come Again ${harvestCycle.currentHarvest}/${harvestCycle.maxHarvests} harvests</div>` : ''}
                           <div id="ai-prediction-${group.id}" style="margin-top: 8px;">
                             <!-- AI Prediction Badge will be inserted here -->
                           </div>
@@ -3295,19 +3321,27 @@
                             <!-- AI Succession Suggestion (P4) will be inserted here -->
                           </div>                        </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;" onclick="event.stopPropagation();">
+                          ${isRegrowing ? `
+                          <button 
+                            class="harvest-button" 
+                            onclick="harvestToday('${group.id}', ${currentDay}, ${maxDay}, '${plan.id}')"
+                            title="Cut harvest — crop will ${(harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? 'be removed after final cut' : 'regrow for next harvest'}">
+                            ${(harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? '🌾 Final Harvest' : '✂️ Cut Harvest'} (${harvestCycle.currentHarvest + 1}/${harvestCycle.maxHarvests})
+                          </button>` : `
                           <button 
                             class="harvest-button ${daysToHarvest < 0 ? 'overdue' : ''}" 
                             onclick="harvestToday('${group.id}', ${currentDay}, ${maxDay}, '${plan.id}')"
                             title="Record harvest and log variance from plan">
-                            Harvest Today
-                          </button>
+                            ${isCCA ? '✂️ Cut Harvest (1/' + harvestCycle.maxHarvests + ')' : 'Harvest Today'}
+                          </button>`}
+                          ${(!isRegrowing || harvestCycle.currentHarvest + 1 >= harvestCycle.maxHarvests) ? `
                           <button 
                             class="repeat-planting-btn" 
                             onclick="repeatPlanting('${zone.zone}', '${planLookupKey}', '${group.name || 'Group'}')"
                             title="Quick repeat: Create new planting with same plan at DPS +7"
                             style="flex: 1; min-width: 140px;">
                             Repeat Planting (PSD +7)
-                          </button>
+                          </button>` : ''}
                         </div>
                       </div>
                       
@@ -6590,10 +6624,81 @@
      */
     async function harvestToday(groupId, currentDay, maxDay, planId) {
       try {
+        // Load group to check harvest cycle strategy
+        let groups = [];
+        try {
+          const resp = await fetch('/data/groups.json');
+          if (resp.ok) {
+            const data = await resp.json();
+            groups = data.groups || [];
+          }
+        } catch (e) { console.warn('Failed to load groups:', e); }
+
+        const group = groups.find(g => g.id === groupId);
+        const harvestCycle = group?.planConfig?.harvestCycle;
+        const isCCA = harvestCycle && harvestCycle.strategy === 'cut_and_come_again';
+        const currentHarvestNum = harvestCycle ? harvestCycle.currentHarvest : 0;
+        const maxHarvests = harvestCycle ? harvestCycle.maxHarvests : 1;
+        const isFinalHarvest = !isCCA || (currentHarvestNum >= maxHarvests - 1);
+
         const variance = currentDay - maxDay;
-        
-        // Confirmation dialog to prevent accidental harvesting
-        let confirmMessage = `Are you sure you want to record harvest for this group?\n\n`;
+
+        if (isCCA && !isFinalHarvest) {
+          // ---- CUT AND COME AGAIN: intermediate harvest ----
+          const nextHarvest = currentHarvestNum + 1;
+          const regrowthDays = harvestCycle.regrowthDays || 14;
+          let confirmMessage = `Cut Harvest ${nextHarvest} of ${maxHarvests} for this group?\n\n`;
+          confirmMessage += `The crop will remain in the tray and regrow for ~${regrowthDays} days.\n`;
+          confirmMessage += `Harvests remaining after this cut: ${maxHarvests - nextHarvest}\n`;
+          confirmMessage += `\nClick OK to record cut harvest.`;
+
+          if (!confirm(confirmMessage)) return;
+
+          // Update group's harvestCycle tracking
+          if (!Array.isArray(harvestCycle.harvestLog)) harvestCycle.harvestLog = [];
+          harvestCycle.currentHarvest = nextHarvest;
+          harvestCycle.regrowthStartDate = new Date().toISOString().split('T')[0];
+          harvestCycle.harvestLog.push({
+            harvestNumber: nextHarvest,
+            date: new Date().toISOString(),
+            dayNumber: currentDay
+          });
+          group.status = 'regrowing';
+
+          // Save updated groups
+          const saveResp = await fetch('/data/groups.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groups })
+          });
+          if (!saveResp.ok) throw new Error('Failed to save groups');
+
+          // Also log to harvest logs
+          const harvestEntry = {
+            id: `harvest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date().toISOString(),
+            groupId, planId,
+            actualDay: currentDay,
+            harvestNumber: nextHarvest,
+            maxHarvests: maxHarvests,
+            type: 'cut_and_come_again',
+            status: 'regrowth'
+          };
+          let harvestLogs = [];
+          try { harvestLogs = JSON.parse(localStorage.getItem('harvestLogs') || '[]'); } catch(e) {}
+          harvestLogs.push(harvestEntry);
+          localStorage.setItem('harvestLogs', JSON.stringify(harvestLogs));
+          try { await fetch('/api/harvest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(harvestEntry) }); } catch(e) {}
+
+          alert(`✂️ Cut Harvest ${nextHarvest} of ${maxHarvests} recorded!\n\nCrop will regrow for ${regrowthDays} days.\nHarvests remaining: ${maxHarvests - nextHarvest}`);
+          location.reload();
+          return;
+        }
+
+        // ---- SINGLE or FINAL CCA HARVEST ----
+        let confirmMessage = isCCA
+          ? `Final Harvest (${maxHarvests} of ${maxHarvests}) — remove crop?\n\n`
+          : `Are you sure you want to record harvest for this group?\n\n`;
         confirmMessage += `Current Day: ${currentDay}\n`;
         confirmMessage += `Planned Harvest: Day ${maxDay}\n`;
         
@@ -6608,7 +6713,7 @@
         confirmMessage += `\nThis will update inventory and cannot be easily undone.\n\nClick OK to proceed or Cancel to abort.`;
         
         if (!confirm(confirmMessage)) {
-          return; // User cancelled
+          return;
         }
         
         // Create harvest log entry
@@ -6622,7 +6727,10 @@
           variance: variance,
           daysEarly: variance < 0 ? Math.abs(variance) : 0,
           daysLate: variance > 0 ? variance : 0,
-          status: variance < 0 ? 'early' : (variance > 0 ? 'late' : 'on-time')
+          status: variance < 0 ? 'early' : (variance > 0 ? 'late' : 'on-time'),
+          type: isCCA ? 'cut_and_come_again_final' : 'single',
+          harvestNumber: isCCA ? maxHarvests : 1,
+          maxHarvests: maxHarvests
         };
         
         // Load existing harvest logs from localStorage
@@ -6656,12 +6764,37 @@
         } catch (serverError) {
           console.warn('Server save failed (using localStorage only):', serverError);
         }
+
+        // For final CCA harvest, update group status
+        if (isCCA && group) {
+          harvestCycle.currentHarvest = maxHarvests;
+          harvestCycle.harvestLog = harvestCycle.harvestLog || [];
+          harvestCycle.harvestLog.push({
+            harvestNumber: maxHarvests,
+            date: new Date().toISOString(),
+            dayNumber: currentDay,
+            final: true
+          });
+          group.status = 'harvested';
+          group.harvestedAt = new Date().toISOString();
+          group.lights = [];
+          try {
+            await fetch('/data/groups.json', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groups })
+            });
+          } catch(e) { console.warn('Failed to save final harvest status:', e); }
+        }
         
         // User feedback
         let message = '';
         let details = '';
         
-        if (variance === 0) {
+        if (isCCA) {
+          message = `🌾 Final harvest (${maxHarvests}/${maxHarvests}) complete!`;
+          details = `Crop cycle finished. Group archived and ready for reseed.`;
+        } else if (variance === 0) {
           message = '🎯 Harvest recorded on schedule!';
           details = 'Perfect timing - no variance from plan.';
         } else if (variance < 0) {
@@ -6737,6 +6870,38 @@
         // Use default 13-hour photoperiod if plan not found
         const photoperiodHours = plan?.photoperiod || 13;
         
+        // Look up harvest strategy from crop registry
+        let harvestCycle = null;
+        try {
+          const regResp = await fetch('/data/crop-registry.json');
+          if (regResp.ok) {
+            const registry = await regResp.json();
+            const crops = registry.crops || {};
+            // Match by plan crop field or plan name
+            const cropKey = Object.keys(crops).find(k => {
+              const c = crops[k];
+              return c.planIds?.includes(planId) ||
+                     (plan && (plan.crop || plan.name || '').toLowerCase().includes(k.toLowerCase()));
+            });
+            if (cropKey) {
+              const growth = crops[cropKey].growth || {};
+              if (growth.harvestStrategy === 'cut_and_come_again') {
+                harvestCycle = {
+                  strategy: 'cut_and_come_again',
+                  currentHarvest: 0,
+                  maxHarvests: growth.maxHarvests || 4,
+                  regrowthDays: growth.regrowthDays || 14,
+                  regrowthYieldFactor: growth.regrowthYieldFactor || 0.85,
+                  harvestLog: [],
+                  regrowthStartDate: null
+                };
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load crop registry for harvest strategy:', e);
+        }
+        
         // Create new group with DPS = 7
         const newGroup = {
           id: `GreenReach:${zoneId}:${newName}`,
@@ -6785,6 +6950,7 @@
               tempC: 0,
               rh: 0
             },
+            ...(harvestCycle ? { harvestCycle } : {}),
             updatedAt: new Date().toISOString()
           }
         };
@@ -6803,7 +6969,8 @@
           throw new Error(`Failed to save: ${saveResponse.statusText}`);
         }
         
-        alert(`SUCCESS: Repeat planting created!\n\nGroup: ${newName}\nZone: ${zoneId}\nPlan: ${planId}\nStarting Day: 7 (PSD +7)\n\nThe new group has been added to your automation schedule.`);
+        const strategyNote = harvestCycle ? `\nHarvest Strategy: Cut & Come Again (${harvestCycle.maxHarvests} harvests)` : '';
+        alert(`SUCCESS: Repeat planting created!\n\nGroup: ${newName}\nZone: ${zoneId}\nPlan: ${planId}\nStarting Day: 7 (PSD +7)${strategyNote}\n\nThe new group has been added to your automation schedule.`);
         
         // Reload to show new group
         location.reload();
@@ -7064,6 +7231,37 @@
           }
         };
 
+        // Look up harvest strategy from crop registry
+        try {
+          const regResp = await fetch('/data/crop-registry.json');
+          if (regResp.ok) {
+            const registry = await regResp.json();
+            const crops = registry.crops || {};
+            const selectedPlan = availablePlans.find(p => p.id === planId);
+            const cropKey = Object.keys(crops).find(k => {
+              const c = crops[k];
+              return c.planIds?.includes(planId) ||
+                     (selectedPlan && (selectedPlan.crop || selectedPlan.name || '').toLowerCase().includes(k.toLowerCase()));
+            });
+            if (cropKey) {
+              const growth = crops[cropKey].growth || {};
+              if (growth.harvestStrategy === 'cut_and_come_again') {
+                newGroup.planConfig.harvestCycle = {
+                  strategy: 'cut_and_come_again',
+                  currentHarvest: 0,
+                  maxHarvests: growth.maxHarvests || 4,
+                  regrowthDays: growth.regrowthDays || 14,
+                  regrowthYieldFactor: growth.regrowthYieldFactor || 0.85,
+                  harvestLog: [],
+                  regrowthStartDate: null
+                };
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load crop registry for harvest strategy:', e);
+        }
+
         // Load existing groups
         const groupsResponse = await fetch('/data/groups.json');
         let groupsData = { groups: [] };
@@ -7087,7 +7285,8 @@
 
         // Success!
         const planName = availablePlans.find(p => p.id === planId)?.name || planId;
-        alert(`SUCCESS: New planting created successfully!\n\nGroup: ${groupName}\nZone: ${zoneName}\nPlan: ${planName}`);
+        const ccaNote = newGroup.planConfig.harvestCycle ? `\nHarvest Strategy: Cut & Come Again (${newGroup.planConfig.harvestCycle.maxHarvests} harvests)` : '';
+        alert(`SUCCESS: New planting created successfully!\n\nGroup: ${groupName}\nZone: ${zoneName}\nPlan: ${planName}${ccaNote}`);
         
         // Close modal and reload page
         closeNewPlantingModal();

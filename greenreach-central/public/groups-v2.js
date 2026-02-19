@@ -132,6 +132,212 @@ function validateSchedule(mode, cycles) {
   return { errors, onTotal, offTotal, overlapTrim };
 }
 
+// ============================================================================
+// CUT AND COME AGAIN — Crop registry cache + harvest cycle helpers
+// ============================================================================
+
+/** Cached crop registry (fetched once from server) */
+let _cropRegistryCache = null;
+
+/**
+ * Fetch crop registry from server (cached after first call)
+ * @returns {Promise<Object>} The crops object keyed by display name
+ */
+async function getCropRegistry() {
+  if (_cropRegistryCache) return _cropRegistryCache;
+  try {
+    const resp = await fetch('/data/crop-registry.json');
+    if (resp.ok) {
+      const data = await resp.json();
+      _cropRegistryCache = data.crops || data;
+    }
+  } catch (e) {
+    console.warn('[Groups V2] Failed to load crop registry:', e);
+  }
+  return _cropRegistryCache || {};
+}
+
+/**
+ * Look up harvest strategy config for a crop/plan from the crop registry
+ * @param {string} planId - Plan ID (e.g. "crop-bibb-butterhead")
+ * @param {string} cropName - Crop display name (fallback)
+ * @returns {Promise<Object>} { strategy, regrowthDays, maxHarvests, regrowthYieldFactor }
+ */
+async function lookupHarvestStrategy(planId, cropName) {
+  const registry = await getCropRegistry();
+  const defaultResult = { strategy: 'single', regrowthDays: 14, maxHarvests: 1, regrowthYieldFactor: 1.0 };
+  if (!registry) return defaultResult;
+
+  // Try to match by planId or cropName
+  for (const [name, crop] of Object.entries(registry)) {
+    const planIds = Array.isArray(crop.planIds) ? crop.planIds : [];
+    const matched = planIds.includes(planId) || name === cropName ||
+      (crop.aliases && crop.aliases.some(a => a === (cropName || '').toLowerCase()));
+    if (matched && crop.growth) {
+      return {
+        strategy: crop.growth.harvestStrategy || 'single',
+        regrowthDays: crop.growth.regrowthDays || 14,
+        maxHarvests: crop.growth.maxHarvests || 1,
+        regrowthYieldFactor: crop.growth.regrowthYieldFactor || 1.0
+      };
+    }
+  }
+  return defaultResult;
+}
+
+/**
+ * Synchronous version using cached registry (returns null if not yet loaded)
+ */
+function lookupHarvestStrategySync(planId, cropName) {
+  if (!_cropRegistryCache) return null;
+  for (const [name, crop] of Object.entries(_cropRegistryCache)) {
+    const planIds = Array.isArray(crop.planIds) ? crop.planIds : [];
+    const matched = planIds.includes(planId) || name === cropName ||
+      (crop.aliases && crop.aliases.some(a => a === (cropName || '').toLowerCase()));
+    if (matched && crop.growth) {
+      return {
+        strategy: crop.growth.harvestStrategy || 'single',
+        regrowthDays: crop.growth.regrowthDays || 14,
+        maxHarvests: crop.growth.maxHarvests || 1,
+        regrowthYieldFactor: crop.growth.regrowthYieldFactor || 1.0
+      };
+    }
+  }
+  return { strategy: 'single', regrowthDays: 14, maxHarvests: 1, regrowthYieldFactor: 1.0 };
+}
+
+/**
+ * Build initial harvestCycle config for a group from crop registry data
+ * @param {Object} strategyInfo - from lookupHarvestStrategy()
+ * @returns {Object} harvestCycle config object
+ */
+function buildHarvestCycleConfig(strategyInfo) {
+  return {
+    strategy: strategyInfo.strategy || 'single',
+    currentHarvest: 0,
+    maxHarvests: strategyInfo.maxHarvests || 1,
+    regrowthDays: strategyInfo.regrowthDays || 14,
+    regrowthYieldFactor: strategyInfo.regrowthYieldFactor || 1.0,
+    harvestLog: [],
+    regrowthStartDate: null
+  };
+}
+
+/**
+ * Get the harvest cycle info from a group's planConfig
+ * @param {Object} group - Group object
+ * @returns {Object|null} harvestCycle config or null
+ */
+function getGroupHarvestCycle(group) {
+  return group?.planConfig?.harvestCycle || null;
+}
+
+/**
+ * Calculate regrowth day number (days since last harvest)
+ * @param {Object} harvestCycle - harvestCycle config object
+ * @returns {number|null} Days into current regrowth, or null if not regrowing
+ */
+function getRegrowthDayNumber(harvestCycle) {
+  if (!harvestCycle || harvestCycle.strategy !== 'cut_and_come_again') return null;
+  if (harvestCycle.currentHarvest < 1 || harvestCycle.currentHarvest >= harvestCycle.maxHarvests) return null;
+  if (!harvestCycle.regrowthStartDate) return null;
+  const start = new Date(harvestCycle.regrowthStartDate);
+  if (isNaN(start.getTime())) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  start.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.floor((now - start) / 86400000));
+}
+
+/**
+ * Get human-readable harvest cycle status
+ * @param {Object} group - Group object with planConfig.harvestCycle
+ * @returns {Object} { label, color, isRegrowing, harvestNumber, maxHarvests, regrowthDay, regrowthDays }
+ */
+function getHarvestCycleStatus(group) {
+  const hc = getGroupHarvestCycle(group);
+  if (!hc || hc.strategy !== 'cut_and_come_again') {
+    return { label: '', color: '', isRegrowing: false, harvestNumber: 0, maxHarvests: 1, regrowthDay: null, regrowthDays: 0 };
+  }
+  const regrowthDay = getRegrowthDayNumber(hc);
+  if (hc.currentHarvest >= hc.maxHarvests) {
+    return { label: `Final harvest complete (${hc.maxHarvests}/${hc.maxHarvests})`, color: '#dc2626', isRegrowing: false, harvestNumber: hc.currentHarvest, maxHarvests: hc.maxHarvests, regrowthDay: null, regrowthDays: hc.regrowthDays };
+  }
+  if (hc.currentHarvest > 0 && regrowthDay !== null) {
+    const daysLeft = Math.max(0, hc.regrowthDays - regrowthDay);
+    return {
+      label: `🔄 Regrowth Day ${regrowthDay} of ${hc.regrowthDays} — Harvest ${hc.currentHarvest + 1} of ${hc.maxHarvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+      color: '#f59e0b',
+      isRegrowing: true,
+      harvestNumber: hc.currentHarvest,
+      maxHarvests: hc.maxHarvests,
+      regrowthDay,
+      regrowthDays: hc.regrowthDays
+    };
+  }
+  return { label: `🌱 Cut & Come Again (${hc.maxHarvests} harvests)`, color: '#0369a1', isRegrowing: false, harvestNumber: 0, maxHarvests: hc.maxHarvests, regrowthDay: null, regrowthDays: hc.regrowthDays };
+}
+
+// Pre-fetch crop registry on load
+document.addEventListener('DOMContentLoaded', () => { getCropRegistry(); });
+
+/**
+ * Update the harvest strategy indicator badge below the plan dropdown
+ * @param {Object} group - Current group object (optional)
+ */
+function updateHarvestStrategyIndicator(group) {
+  const indicator = document.getElementById('groupsV2HarvestStrategyIndicator');
+  if (!indicator) return;
+
+  // Get strategy from group's planConfig or look up from plan selection
+  const hc = group ? getGroupHarvestCycle(group) : null;
+  const plan = getGroupsV2SelectedPlan ? getGroupsV2SelectedPlan() : null;
+  const planId = plan?.id || plan?.key || group?.plan || '';
+  const cropName = group?.crop || '';
+
+  let strategy = null;
+  if (hc) {
+    strategy = hc;
+  } else if (planId || cropName) {
+    const syncLookup = lookupHarvestStrategySync(planId, cropName);
+    if (syncLookup) strategy = syncLookup;
+  }
+
+  if (!strategy || !strategy.strategy || strategy.strategy === 'single') {
+    indicator.style.display = 'none';
+    return;
+  }
+
+  if (strategy.strategy === 'cut_and_come_again') {
+    const harvests = strategy.maxHarvests || 4;
+    const days = strategy.regrowthDays || 14;
+    const currentHarvest = strategy.currentHarvest || 0;
+
+    if (currentHarvest > 0 && currentHarvest < harvests) {
+      // Currently in regrowth
+      const regrowthDay = strategy.regrowthStartDate ? getRegrowthDayNumber(strategy) : null;
+      const daysLeft = regrowthDay !== null ? Math.max(0, days - regrowthDay) : days;
+      indicator.innerHTML = `🔄 Regrowing — Harvest ${currentHarvest + 1} of ${harvests} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+      indicator.style.background = '#fef3c7';
+      indicator.style.color = '#92400e';
+      indicator.style.border = '1px solid #f59e0b';
+    } else if (currentHarvest >= harvests) {
+      indicator.innerHTML = `✅ All ${harvests} harvests complete`;
+      indicator.style.background = '#fef2f2';
+      indicator.style.color = '#991b1b';
+      indicator.style.border = '1px solid #fca5a5';
+    } else {
+      indicator.innerHTML = `🔄 Cut & Come Again — ${harvests} harvests, ${days}-day regrowth`;
+      indicator.style.background = '#eff6ff';
+      indicator.style.color = '#1e40af';
+      indicator.style.border = '1px solid #93c5fd';
+    }
+    indicator.style.display = 'block';
+  } else {
+    indicator.style.display = 'none';
+  }
+}
+
 // Schedule helper: get daily ON time in hours
 function getDailyOnHours(schedule) {
   if (!schedule || typeof schedule !== 'object') return 0;
@@ -2151,43 +2357,117 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Confirm harvest action
-      const confirmed = confirm(`Harvest "${group.name}"?\n\nThis will archive the group and reset it for a new growing cycle.`);
-      if (!confirmed) return;
+      // Check harvest cycle strategy
+      const hc = getGroupHarvestCycle(group);
+      const isCCA = hc && hc.strategy === 'cut_and_come_again';
+      const currentHarvest = hc ? hc.currentHarvest : 0;
+      const maxHarvests = hc ? hc.maxHarvests : 1;
+      const isFinalHarvest = !isCCA || (currentHarvest >= maxHarvests - 1);
 
-      try {
-        // Archive the group (set status to harvested, clear lights)
-        const harvestedGroup = {
-          ...group,
-          status: 'harvested',
-          harvestedAt: new Date().toISOString(),
-          lights: []
-        };
+      if (isCCA && !isFinalHarvest) {
+        // ---- CUT AND COME AGAIN: intermediate harvest ----
+        const nextHarvest = currentHarvest + 1;
+        const confirmed = confirm(
+          `Cut Harvest "${group.name}" (Harvest ${nextHarvest} of ${maxHarvests})?\n\n` +
+          `The crop will remain in the tray and regrow for ~${hc.regrowthDays} days until the next harvest.\n\n` +
+          `Harvests remaining: ${maxHarvests - nextHarvest}`
+        );
+        if (!confirmed) return;
 
-        // Save the harvested group
-        await saveGroupsV2GroupObject(harvestedGroup);
+        try {
+          // Update harvest cycle tracking
+          const updatedHC = { ...hc };
+          updatedHC.currentHarvest = nextHarvest;
+          updatedHC.regrowthStartDate = new Date().toISOString().split('T')[0];
+          if (!Array.isArray(updatedHC.harvestLog)) updatedHC.harvestLog = [];
+          updatedHC.harvestLog.push({
+            harvestNumber: nextHarvest,
+            date: new Date().toISOString(),
+            dayNumber: getGroupsV2DayNumber()
+          });
 
-        if (typeof showToast === 'function') {
-          showToast({ 
-            title: 'Harvest Complete', 
-            msg: `${group.name} has been harvested and archived`, 
-            kind: 'success', 
-            icon: '🌾' 
-          }, 3000);
+          const updatedGroup = {
+            ...group,
+            status: 'regrowing',
+            planConfig: {
+              ...(group.planConfig || {}),
+              harvestCycle: updatedHC
+            }
+          };
+          // Keep lights assigned — crop stays in tray
+
+          await saveGroupsV2GroupObject(updatedGroup);
+
+          if (typeof showToast === 'function') {
+            showToast({ 
+              title: `Cut Harvest ${nextHarvest} of ${maxHarvests}`, 
+              msg: `${group.name} will regrow for ${hc.regrowthDays} days until next harvest`, 
+              kind: 'success', 
+              icon: '✂️' 
+            }, 4000);
+          }
+
+          clearGroupsV2Form();
+          populateGroupsV2LoadDropdown();
+          updateGroupsV2HarvestButtonVisibility();
+
+        } catch (error) {
+          console.error('[Groups V2] Cut harvest failed:', error);
+          if (typeof showToast === 'function') {
+            showToast({ title: 'Harvest Failed', msg: error.message, kind: 'error' });
+          }
         }
 
-        // Clear the form
-        clearGroupsV2Form();
-        populateGroupsV2LoadDropdown();
+      } else {
+        // ---- SINGLE HARVEST or FINAL CCA HARVEST ----
+        const finalLabel = isCCA ? ` (Final harvest ${maxHarvests} of ${maxHarvests})` : '';
+        const confirmed = confirm(
+          `Harvest "${group.name}"${finalLabel}?\n\n` +
+          `This will archive the group and free it for a new planting cycle.`
+        );
+        if (!confirmed) return;
 
-      } catch (error) {
-        console.error('[Groups V2] Harvest failed:', error);
-        if (typeof showToast === 'function') {
-          showToast({ 
-            title: 'Harvest Failed', 
-            msg: `Failed to harvest group: ${error.message}`, 
-            kind: 'error' 
-          });
+        try {
+          const harvestedGroup = {
+            ...group,
+            status: 'harvested',
+            harvestedAt: new Date().toISOString(),
+            lights: []
+          };
+
+          // Log final harvest in cycle
+          if (isCCA && harvestedGroup.planConfig?.harvestCycle) {
+            harvestedGroup.planConfig.harvestCycle.currentHarvest = maxHarvests;
+            if (!Array.isArray(harvestedGroup.planConfig.harvestCycle.harvestLog)) {
+              harvestedGroup.planConfig.harvestCycle.harvestLog = [];
+            }
+            harvestedGroup.planConfig.harvestCycle.harvestLog.push({
+              harvestNumber: maxHarvests,
+              date: new Date().toISOString(),
+              dayNumber: getGroupsV2DayNumber(),
+              final: true
+            });
+          }
+
+          await saveGroupsV2GroupObject(harvestedGroup);
+
+          if (typeof showToast === 'function') {
+            showToast({ 
+              title: isCCA ? 'Final Harvest Complete' : 'Harvest Complete', 
+              msg: `${group.name} has been harvested and archived`, 
+              kind: 'success', 
+              icon: '🌾' 
+            }, 3000);
+          }
+
+          clearGroupsV2Form();
+          populateGroupsV2LoadDropdown();
+
+        } catch (error) {
+          console.error('[Groups V2] Harvest failed:', error);
+          if (typeof showToast === 'function') {
+            showToast({ title: 'Harvest Failed', msg: error.message, kind: 'error' });
+          }
         }
       }
     });
@@ -3373,12 +3653,36 @@ function applyGroupsV2StateToInputs() {
 }
 
 /**
- * Show/hide harvest button based on whether group has reached plan end
+ * Show/hide harvest button based on whether group has reached plan end or is regrowing
+ * Also updates button label for cut-and-come-again strategy
  */
 function updateGroupsV2HarvestButtonVisibility() {
   const harvestBtn = document.getElementById('groupsV2HarvestBtn');
   if (!harvestBtn) return;
   
+  // Check if group is in cut-and-come-again regrowth
+  const group = getGroupsV2ActiveGroup ? getGroupsV2ActiveGroup() : null;
+  const hc = group ? getGroupHarvestCycle(group) : null;
+  const isCCA = hc && hc.strategy === 'cut_and_come_again';
+
+  // If regrowing, show harvest button when regrowth period is complete
+  if (isCCA && hc.currentHarvest > 0 && hc.currentHarvest < hc.maxHarvests) {
+    const regrowthDay = getRegrowthDayNumber(hc);
+    if (regrowthDay !== null && regrowthDay >= hc.regrowthDays) {
+      const nextHarvest = hc.currentHarvest + 1;
+      const isFinal = nextHarvest >= hc.maxHarvests;
+      harvestBtn.textContent = isFinal ? `🌾 Final Harvest (${nextHarvest}/${hc.maxHarvests})` : `✂️ Cut Harvest (${nextHarvest}/${hc.maxHarvests})`;
+      harvestBtn.style.display = 'inline-block';
+      harvestBtn.style.borderColor = isFinal ? '#dc2626' : '#f59e0b';
+      harvestBtn.style.color = isFinal ? '#dc2626' : '#f59e0b';
+      console.log('[Groups V2] Harvest button shown - regrowth day', regrowthDay, 'of', hc.regrowthDays);
+      return;
+    } else {
+      harvestBtn.style.display = 'none';
+      return;
+    }
+  }
+
   // Get current day number
   const dayNumber = getGroupsV2DayNumber();
   if (dayNumber === null) {
@@ -3398,11 +3702,9 @@ function updateGroupsV2HarvestButtonVisibility() {
   let maxDay = null;
   
   if (Array.isArray(derived?.lightDays) && derived.lightDays.length > 0) {
-    // Find highest day number in lightDays
     maxDay = Math.max(...derived.lightDays.map(ld => Number.isFinite(ld.day) ? ld.day : 0));
   }
   
-  // Also check plan.duration if available
   if (plan.duration && Number.isFinite(plan.duration)) {
     const durationDays = plan.duration;
     maxDay = maxDay !== null ? Math.max(maxDay, durationDays) : durationDays;
@@ -3410,11 +3712,23 @@ function updateGroupsV2HarvestButtonVisibility() {
   
   // Show button if we're at or past the plan's end
   if (maxDay !== null && dayNumber >= maxDay) {
+    if (isCCA) {
+      harvestBtn.textContent = `✂️ Cut Harvest (1/${hc.maxHarvests})`;
+      harvestBtn.style.borderColor = '#f59e0b';
+      harvestBtn.style.color = '#f59e0b';
+    } else {
+      harvestBtn.textContent = '🌾 Harvest';
+      harvestBtn.style.borderColor = '#f59e0b';
+      harvestBtn.style.color = '#f59e0b';
+    }
     harvestBtn.style.display = 'inline-block';
     console.log('[Groups V2] Harvest button shown - day', dayNumber, 'of', maxDay);
   } else {
     harvestBtn.style.display = 'none';
   }
+
+  // Update harvest strategy indicator
+  updateHarvestStrategyIndicator(group);
 }
 
 function getGroupsV2DayNumber() {
@@ -3648,6 +3962,13 @@ function buildGroupsV2PlanConfig(planOverride) {
   const targetHumidity = toNumberOrNull(groupsV2FormState.targetHumidity);
   if (targetHumidity != null) {
     config.targetHumidity = targetHumidity;
+  }
+
+  // Add harvest cycle config from crop registry if applicable
+  const planId = plan.id || plan.key || plan.name || '';
+  const syncStrategy = lookupHarvestStrategySync(planId, '');
+  if (syncStrategy && syncStrategy.strategy === 'cut_and_come_again') {
+    config.harvestCycle = buildHarvestCycleConfig(syncStrategy);
   }
   
   if (preview) {
@@ -4007,6 +4328,8 @@ function applyPlanSelectionToCurrentGroup(planOverride) {
     window.showToast({ title: 'Plan Saved', msg: `Applied ${label} to group ${group.name || group.id}`, kind: 'success', icon: '' }, 1500);
   }
   renderGroupsV2LightCard(plan);
+  // Update harvest strategy indicator for the newly applied plan
+  updateHarvestStrategyIndicator(group);
 }
 
 /**
@@ -5730,6 +6053,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const groupId = select.value;
     if (!groupId) {
       updateGroupsV2StatusBadge(null);
+      clearGroupsV2Editing();
       return;
     }
     const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
@@ -5792,6 +6116,10 @@ document.addEventListener('DOMContentLoaded', () => {
     updateGroupsV2AnchorInputs();
     debouncedUpdateGroupsV2Preview();
     renderGroupsV2LightCard(getGroupsV2SelectedPlan());
+
+    // Keep group list highlighting in sync
+    if (group) showGroupsV2EditingIndicator(group.id);
+    renderGroupsV2GroupList();
   });
 });
 // Populate Groups V2 Load Group dropdown with saved groups, format: Room Name:Zone:Name
@@ -5926,6 +6254,239 @@ document.addEventListener('groups-updated', () => {
 document.addEventListener('lights-updated', () => {
   renderGroupsV2LightCard(getGroupsV2SelectedPlan());
 });
+
+// ── Standard Group List ────────────────────────────────────────────────────
+// Renders a card grid of all groups filtered by the current Room / Zone
+// selection.  Each card shows key info and provides Edit / Delete buttons.
+
+/**
+ * Render the standard group list cards into #groupsV2GroupListBody.
+ * Called on groups-updated, room/zone change, and DOMContentLoaded.
+ */
+function renderGroupsV2GroupList() {
+  const container = document.getElementById('groupsV2GroupListBody');
+  const countEl   = document.getElementById('groupsV2GroupCount');
+  if (!container) return;
+
+  const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
+
+  // Filter by currently selected room / zone (same logic as Load dropdown)
+  const selectedRoom = (document.getElementById('groupsV2RoomSelect') || {}).value || '';
+  const selectedZone = (document.getElementById('groupsV2ZoneSelect') || {}).value || '';
+
+  let filtered = groups.filter(g => {
+    const r = g.roomId || g.room || '';
+    const z = g.zone || '';
+    const roomOk = !selectedRoom || r.toLowerCase() === selectedRoom.toLowerCase();
+    const zoneOk = !selectedZone || z.toLowerCase() === selectedZone.toLowerCase();
+    return roomOk && zoneOk;
+  });
+  // Fall back to all groups when room/zone filter yields nothing
+  if (!filtered.length && groups.length) filtered = groups.slice();
+
+  // Sort: deployed first, then alphabetically
+  filtered.sort((a, b) => {
+    if ((a.status === 'deployed') !== (b.status === 'deployed')) {
+      return a.status === 'deployed' ? -1 : 1;
+    }
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  if (countEl) countEl.textContent = `${filtered.length} group${filtered.length !== 1 ? 's' : ''}`;
+
+  if (!filtered.length) {
+    container.innerHTML =
+      '<p class="tiny text-muted" style="text-align:center;padding:20px;">' +
+      'No groups yet. Use <strong>Build Stock Groups</strong> or <strong>Save Group</strong> to create groups.</p>';
+    return;
+  }
+
+  // Determine which group is currently loaded (if any)
+  const loadSelect = document.getElementById('groupsV2LoadGroup');
+  const activeGroupId = loadSelect ? loadSelect.value : '';
+
+  container.innerHTML = filtered.map(group => {
+    const isActive     = group.id === activeGroupId;
+    const deployed     = group.status === 'deployed';
+    const statusColor  = deployed ? '#22c55e' : '#94a3b8';
+    const statusLabel  = deployed ? 'Deployed' : 'Draft';
+    const lightsCount  = Array.isArray(group.lights) ? group.lights.length : 0;
+    const trays        = group.trays || 0;
+    const planName     = group.plan || '—';
+
+    return `<div class="gr-card groupsV2-group-card"
+      data-group-id="${escapeHtml(group.id)}"
+      style="padding:12px;border:2px solid ${isActive ? '#3b82f6' : '#e2e8f0'};border-radius:10px;
+             background:${isActive ? '#eff6ff' : '#fff'};cursor:pointer;transition:border-color .15s,background .15s;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:13px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+               title="${escapeHtml(group.name)}">${escapeHtml(group.name)}</div>
+          <div class="tiny text-muted" style="margin-top:2px;">${escapeHtml(group.zone || '—')}</div>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:11px;
+                     font-weight:600;background:${deployed ? '#dcfce7' : '#f1f5f9'};color:${statusColor};">
+          <span style="width:6px;height:6px;border-radius:50%;background:${statusColor};"></span>
+          ${statusLabel}
+        </span>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:#475569;">
+        <span title="Trays">🧺 ${trays}</span>
+        <span title="Lights">💡 ${lightsCount}</span>
+        <span title="Plan" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📋 ${escapeHtml(String(planName))}</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">
+        <button type="button" class="ghost tiny" data-action="edit"
+          style="padding:4px 10px;font-size:11px;border:1px solid #3b82f6;color:#3b82f6;border-radius:6px;">✏️ Edit</button>
+        <button type="button" class="ghost tiny" data-action="delete"
+          style="padding:4px 10px;font-size:11px;border:1px solid #ef4444;color:#ef4444;border-radius:6px;">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/**
+ * Load a group into the form for editing.  Re-uses the Load Group dropdown
+ * change handler so all field hydration stays in one place.
+ */
+function editStandardGroup(groupId) {
+  if (!groupId) return;
+  const loadSelect = document.getElementById('groupsV2LoadGroup');
+  if (!loadSelect) return;
+
+  // If the group is filtered out of the dropdown, repopulate without filter
+  let opt = Array.from(loadSelect.options).find(o => o.value === groupId);
+  if (!opt) {
+    populateGroupsV2LoadGroupDropdown();
+    opt = Array.from(loadSelect.options).find(o => o.value === groupId);
+  }
+  if (!opt) {
+    console.warn('[Groups V2] editStandardGroup — group not found in dropdown:', groupId);
+    return;
+  }
+
+  // Select the group and trigger the existing change handler
+  loadSelect.value = groupId;
+  loadSelect.dispatchEvent(new Event('change'));
+
+  // Show editing indicator
+  showGroupsV2EditingIndicator(groupId);
+
+  // Scroll the plan form into view
+  const form = document.getElementById('groupsV2PlanForm');
+  if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Refresh group list to highlight the active card
+  renderGroupsV2GroupList();
+}
+
+/**
+ * Delete a group directly from the group list.  Re-uses the existing delete
+ * logic (via the Load Group dropdown + Delete Group button) to avoid
+ * duplicating persistence code.
+ */
+async function deleteStandardGroup(groupId) {
+  if (!groupId) return;
+  const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
+  const group = groups.find(g => g.id === groupId);
+  if (!group) return;
+
+  const confirmMsg = `Delete group "${group.name}"?\n\nRoom: ${group.room}\nZone: ${group.zone}\n\nThis action cannot be undone.`;
+  if (!confirm(confirmMsg)) return;
+
+  // Select the group in the dropdown so the existing delete handler can find it
+  const loadSelect = document.getElementById('groupsV2LoadGroup');
+  if (loadSelect) {
+    let opt = Array.from(loadSelect.options).find(o => o.value === groupId);
+    if (!opt) {
+      populateGroupsV2LoadGroupDropdown();
+      opt = Array.from(loadSelect.options).find(o => o.value === groupId);
+    }
+    if (opt) {
+      loadSelect.value = groupId;
+    }
+  }
+
+  // Click the existing Delete Group button (which has all the persistence logic)
+  const deleteBtn = document.getElementById('groupsV2DeleteGroup');
+  if (deleteBtn) {
+    // The existing handler calls confirm() again — temporarily bypass it
+    const origConfirm = window.confirm;
+    window.confirm = () => true;
+    try {
+      deleteBtn.click();
+    } finally {
+      window.confirm = origConfirm;
+    }
+  }
+}
+
+/**
+ * Show the editing indicator banner above the group list.
+ */
+function showGroupsV2EditingIndicator(groupId) {
+  const indicator = document.getElementById('groupsV2EditingIndicator');
+  const nameSpan  = document.getElementById('groupsV2EditingName');
+  if (!indicator) return;
+
+  const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
+  const group  = groups.find(g => g.id === groupId);
+  if (!group) { indicator.style.display = 'none'; return; }
+
+  if (nameSpan) nameSpan.textContent = group.name;
+  indicator.style.display = 'flex';
+}
+
+/**
+ * Clear the editing indicator and reset the load dropdown.
+ */
+function clearGroupsV2Editing() {
+  const indicator = document.getElementById('groupsV2EditingIndicator');
+  if (indicator) indicator.style.display = 'none';
+
+  const loadSelect = document.getElementById('groupsV2LoadGroup');
+  if (loadSelect && loadSelect.value) {
+    loadSelect.value = '';
+    updateGroupsV2StatusBadge(null);
+  }
+  renderGroupsV2GroupList();
+}
+
+// ── Event delegation for Standard Group List ────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const listBody = document.getElementById('groupsV2GroupListBody');
+  if (listBody) {
+    listBody.addEventListener('click', (e) => {
+      const card = e.target.closest('.groupsV2-group-card');
+      if (!card) return;
+      const groupId = card.dataset.groupId;
+      if (!groupId) return;
+
+      const btn = e.target.closest('button[data-action]');
+      if (btn) {
+        e.stopPropagation();
+        if (btn.dataset.action === 'edit')   return editStandardGroup(groupId);
+        if (btn.dataset.action === 'delete') return deleteStandardGroup(groupId);
+      }
+
+      // Clicking the card itself also triggers edit
+      editStandardGroup(groupId);
+    });
+  }
+
+  // Wire up the "clear editing" button
+  const clearBtn = document.getElementById('groupsV2ClearEditing');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => clearGroupsV2Editing());
+  }
+
+  // Initial render
+  renderGroupsV2GroupList();
+});
+
+// Refresh group list whenever groups, rooms, or zones change
+document.addEventListener('groups-updated', () => renderGroupsV2GroupList());
+document.addEventListener('rooms-updated',  () => renderGroupsV2GroupList());
 // Populate Groups V2 Room dropdown from STATE.rooms only
 function populateGroupsV2RoomDropdown() {
   const select = document.getElementById('groupsV2RoomSelect');
@@ -5961,6 +6522,7 @@ document.addEventListener('DOMContentLoaded', () => {
     roomSelect.addEventListener('change', () => {
       console.log('[Groups V2] Room changed:', roomSelect.value);
       populateGroupsV2LoadGroupDropdown();
+      renderGroupsV2GroupList();
     });
   }
   
@@ -5968,6 +6530,7 @@ document.addEventListener('DOMContentLoaded', () => {
     zoneSelect.addEventListener('change', () => {
       console.log('[Groups V2] Zone changed:', zoneSelect.value);
       populateGroupsV2LoadGroupDropdown();
+      renderGroupsV2GroupList();
     });
   }
 });
@@ -6108,4 +6671,364 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+});
+
+// ============================================================================
+// BUILD STOCK GROUPS — Batch-create identical-hardware groups
+// ============================================================================
+
+/**
+ * Get list of unassigned lights (not in any group).
+ * Reuses the same identifier priority as the main Groups V2 assignment logic.
+ * @returns {Array} Array of light objects not assigned to any group
+ */
+function getBsgUnassignedLights() {
+  const lights = (window.STATE && Array.isArray(window.STATE.lights)) ? window.STATE.lights : [];
+  const assignedIds = getGroupsV2AssignedLightIds();
+  return lights.filter(light => {
+    if (!light) return false;
+    if (light.isPlug === true || light.deviceType === 'plug' || light.deviceType === 'controller') return false;
+    const identifier = light.id || light.serial || light.deviceId || light.name || null;
+    if (!identifier) return false;
+    if (assignedIds.has(String(identifier))) return false;
+    if (light.groupId) return false;
+    return true;
+  });
+}
+
+/**
+ * Populate the Build Stock Group modal dropdowns from STATE
+ */
+function populateBsgModal() {
+  const roomSelect = document.getElementById('bsgRoom');
+  const zoneSelect = document.getElementById('bsgZone');
+  if (!roomSelect || !zoneSelect) return;
+
+  // Populate rooms
+  roomSelect.innerHTML = '<option value="">(select room)</option>';
+  if (window.STATE && Array.isArray(window.STATE.rooms)) {
+    window.STATE.rooms.forEach(room => {
+      if (!room || !room.name) return;
+      const opt = document.createElement('option');
+      opt.value = room.name;
+      opt.textContent = room.name;
+      roomSelect.appendChild(opt);
+    });
+  }
+
+  // Pre-select the room from the main Groups V2 panel if set
+  const mainRoom = document.getElementById('groupsV2RoomSelect');
+  if (mainRoom && mainRoom.value) {
+    roomSelect.value = mainRoom.value;
+  }
+
+  // Populate zones for selected room
+  populateBsgZones();
+}
+
+/**
+ * Populate zone dropdown based on selected room
+ */
+function populateBsgZones() {
+  const roomSelect = document.getElementById('bsgRoom');
+  const zoneSelect = document.getElementById('bsgZone');
+  if (!roomSelect || !zoneSelect) return;
+
+  const roomName = roomSelect.value;
+  zoneSelect.innerHTML = '<option value="">(select zone)</option>';
+
+  if (!roomName || !window.STATE || !Array.isArray(window.STATE.rooms)) return;
+
+  const room = window.STATE.rooms.find(r => r && r.name === roomName);
+  if (!room) return;
+
+  // Zones can come from room.zones array or be numbered 1..N
+  const zones = Array.isArray(room.zones) && room.zones.length > 0
+    ? room.zones
+    : (room.zoneCount ? Array.from({ length: room.zoneCount }, (_, i) => ({ id: String(i + 1), name: `Zone ${i + 1}` })) : [{ id: '1', name: 'Zone 1' }]);
+
+  zones.forEach(z => {
+    const opt = document.createElement('option');
+    const zoneVal = typeof z === 'string' ? z : (z.id || z.name || z);
+    const zoneName = typeof z === 'string' ? z : (z.name || z.id || z);
+    opt.value = zoneVal;
+    opt.textContent = zoneName;
+    zoneSelect.appendChild(opt);
+  });
+
+  // Pre-select zone from main panel
+  const mainZone = document.getElementById('groupsV2ZoneSelect');
+  if (mainZone && mainZone.value) {
+    zoneSelect.value = mainZone.value;
+  }
+}
+
+/**
+ * Generate preview text for the Build Stock Groups modal
+ */
+function updateBsgPreview() {
+  const previewEl = document.getElementById('bsgPreview');
+  if (!previewEl) return;
+
+  const prefix = (document.getElementById('bsgPrefix')?.value || '').trim();
+  const count = parseInt(document.getElementById('bsgCount')?.value) || 0;
+  const trays = parseInt(document.getElementById('bsgTrays')?.value) || 4;
+  const lightsPerGroup = parseInt(document.getElementById('bsgLightsPerGroup')?.value) || 1;
+  const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
+  const room = document.getElementById('bsgRoom')?.value || '';
+  const zone = document.getElementById('bsgZone')?.value || '';
+
+  if (!prefix || !count || !room) {
+    previewEl.innerHTML = '<span style="color:#94a3b8;">Fill in Room, Prefix, and Count to see preview.</span>';
+    return;
+  }
+
+  const totalLights = count * lightsPerGroup;
+  const totalTrays = count * trays;
+  const unassigned = getBsgUnassignedLights();
+
+  let lightsWarning = '';
+  if (autoAssign && totalLights > unassigned.length) {
+    lightsWarning = `<br><span style="color:#dc2626;">&#9888; Only ${unassigned.length} unassigned light${unassigned.length === 1 ? '' : 's'} available — need ${totalLights}. ${totalLights - unassigned.length} group(s) will have no lights assigned.</span>`;
+  }
+
+  const names = [];
+  const showMax = Math.min(count, 5);
+  for (let i = 1; i <= showMax; i++) names.push(`${prefix} ${i}`);
+  if (count > showMax) names.push(`... ${prefix} ${count}`);
+
+  // Check for existing group name conflicts
+  const existingIds = new Set((window.STATE?.groups || []).map(g => g.id));
+  let conflicts = 0;
+  for (let i = 1; i <= count; i++) {
+    const id = `${room}:${zone}:${prefix} ${i}`;
+    if (existingIds.has(id)) conflicts++;
+  }
+  const conflictWarning = conflicts > 0
+    ? `<br><span style="color:#dc2626;">&#9888; ${conflicts} group name(s) already exist and will be skipped.</span>`
+    : '';
+
+  previewEl.innerHTML = `
+    <strong>Will create ${count} group${count > 1 ? 's' : ''}:</strong> ${names.join(', ')}<br>
+    Each: ${lightsPerGroup} light${lightsPerGroup > 1 ? 's' : ''}, ${trays} tray${trays > 1 ? 's' : ''}<br>
+    <strong>Totals:</strong> ${totalLights} lights, ${totalTrays} trays
+    ${autoAssign ? `<br><span style="color:#0369a1;">Auto-assigning ${Math.min(totalLights, unassigned.length)} of ${unassigned.length} available lights</span>` : ''}
+    ${lightsWarning}${conflictWarning}
+  `;
+}
+
+/**
+ * Execute batch creation of stock groups
+ * @returns {Promise<{created: number, skipped: number}>}
+ */
+async function executeBuildStockGroups() {
+  const room = (document.getElementById('bsgRoom')?.value || '').trim();
+  const zone = (document.getElementById('bsgZone')?.value || '').trim();
+  const prefix = (document.getElementById('bsgPrefix')?.value || '').trim();
+  const count = parseInt(document.getElementById('bsgCount')?.value) || 0;
+  const trays = parseInt(document.getElementById('bsgTrays')?.value) || 4;
+  const lightsPerGroup = parseInt(document.getElementById('bsgLightsPerGroup')?.value) || 1;
+  const autoAssign = document.getElementById('bsgAutoAssign')?.checked ?? true;
+
+  // Validation
+  const missing = [];
+  if (!room) missing.push('Room');
+  if (!zone) missing.push('Zone');
+  if (!prefix) missing.push('Group name prefix');
+  if (!count || count < 1) missing.push('Number of groups');
+  if (missing.length) {
+    alert('Please fill in: ' + missing.join(', '));
+    return { created: 0, skipped: 0 };
+  }
+
+  if (!window.STATE) window.STATE = {};
+  if (!Array.isArray(window.STATE.groups)) window.STATE.groups = [];
+
+  const existingIds = new Set(window.STATE.groups.map(g => g.id));
+  const unassigned = autoAssign ? getBsgUnassignedLights() : [];
+  let lightIndex = 0;
+  let created = 0;
+  let skipped = 0;
+  const now = new Date().toISOString();
+
+  // Find roomId from STATE.rooms
+  const roomObj = (window.STATE.rooms || []).find(r => r && r.name === room);
+  const roomId = roomObj?.id || roomObj?.roomId || '';
+  const zoneId = roomId ? `${roomId}-z${zone}` : '';
+
+  for (let i = 1; i <= count; i++) {
+    const groupName = `${prefix} ${i}`;
+    const id = `${room}:${zone}:${groupName}`;
+
+    // Skip if group with this ID already exists
+    if (existingIds.has(id)) {
+      console.log(`[Build Stock] Skipping existing group: ${id}`);
+      skipped++;
+      continue;
+    }
+
+    // Assign lights from unassigned pool
+    const groupLights = [];
+    if (autoAssign) {
+      for (let l = 0; l < lightsPerGroup && lightIndex < unassigned.length; l++, lightIndex++) {
+        const light = unassigned[lightIndex];
+        // Build a light reference object matching canonical group.lights[] format
+        const lightRef = {
+          id: light.id || light.serial || light.deviceId || '',
+          ppf: light.ppf || light.PPF || 0,
+          name: light.name || light.deviceName || light.id || '',
+          room: room,
+          zone: zone,
+          roomId: roomId,
+          vendor: light.vendor || light.manufacturer || '',
+          control: light.control || 'managed-by-le',
+          tunable: light.tunable !== false,
+          deviceId: light.deviceId || light.id || light.serial || '',
+          protocol: light.protocol || '',
+          roomName: room,
+          spectrum: light.spectrum || { bl: 25, cw: 25, rd: 25, ww: 25 },
+          transport: light.transport || 'LAN',
+          deviceName: light.name || light.deviceName || '',
+          controllerId: light.controllerId || null,
+          controllerIp: light.controllerIp || '',
+          spectrumMode: light.spectrumMode || 'dynamic',
+          controllerPort: light.controllerPort || 3000,
+          dynamicSpectrum: light.dynamicSpectrum !== false
+        };
+        groupLights.push(lightRef);
+      }
+    }
+
+    const group = {
+      id,
+      name: groupName,
+      room,
+      zone,
+      roomId,
+      zoneId,
+      trays,
+      plants: 0,
+      lights: groupLights,
+      deviceCount: groupLights.length,
+      active: true,
+      health: 'healthy',
+      status: 'draft',
+      plan: '',
+      crop: '',
+      recipe: '',
+      schedule: '',
+      planConfig: null,
+      lastModified: now
+    };
+
+    window.STATE.groups.push(group);
+    existingIds.add(id);
+    created++;
+  }
+
+  if (created === 0) {
+    if (typeof showToast === 'function') {
+      showToast({ title: 'No Groups Created', msg: `All ${count} group names already exist.`, kind: 'warn', icon: '⚠️' });
+    }
+    return { created: 0, skipped };
+  }
+
+  // Persist all groups to server in one write
+  try {
+    const response = await fetch('/data/groups.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groups: window.STATE.groups })
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Server error ${response.status}: ${errText}`);
+    }
+    console.log(`[Build Stock] Saved ${created} new groups (${skipped} skipped)`);
+  } catch (error) {
+    console.error('[Build Stock] Failed to persist groups:', error);
+    if (typeof showToast === 'function') {
+      showToast({ title: 'Save Failed', msg: `Groups created in memory but failed to save: ${error.message}`, kind: 'error' });
+    }
+    return { created, skipped };
+  }
+
+  // Update UI
+  document.dispatchEvent(new Event('groups-updated'));
+  if (typeof populateGroupsV2LoadGroupDropdown === 'function') {
+    populateGroupsV2LoadGroupDropdown();
+  }
+  if (typeof populateGroupsV2UnassignedLightsDropdown === 'function') {
+    populateGroupsV2UnassignedLightsDropdown();
+  }
+
+  return { created, skipped };
+}
+
+// Wire up Build Stock Groups modal
+document.addEventListener('DOMContentLoaded', () => {
+  const dialog = document.getElementById('buildStockGroupModal');
+  const openBtn = document.getElementById('buildStockGroupsBtn');
+  const closeBtn = document.getElementById('buildStockGroupClose');
+  const cancelBtn = document.getElementById('buildStockGroupCancel');
+  const createBtn = document.getElementById('buildStockGroupCreate');
+
+  if (!dialog || !openBtn) return;
+
+  // Open modal
+  openBtn.addEventListener('click', () => {
+    populateBsgModal();
+    updateBsgPreview();
+    dialog.showModal();
+  });
+
+  // Close modal
+  if (closeBtn) closeBtn.addEventListener('click', () => dialog.close());
+  if (cancelBtn) cancelBtn.addEventListener('click', () => dialog.close());
+
+  // Close on backdrop click
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog.close();
+  });
+
+  // Live preview updates
+  ['bsgRoom', 'bsgZone', 'bsgPrefix', 'bsgCount', 'bsgTrays', 'bsgLightsPerGroup', 'bsgAutoAssign'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', updateBsgPreview);
+  });
+
+  // Room change → refresh zones + preview
+  const bsgRoom = document.getElementById('bsgRoom');
+  if (bsgRoom) {
+    bsgRoom.addEventListener('change', () => {
+      populateBsgZones();
+      updateBsgPreview();
+    });
+  }
+
+  // Create button
+  if (createBtn) {
+    createBtn.addEventListener('click', async () => {
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating...';
+      try {
+        const result = await executeBuildStockGroups();
+        if (result.created > 0) {
+          dialog.close();
+          if (typeof showToast === 'function') {
+            const msg = result.skipped > 0
+              ? `Created ${result.created} groups (${result.skipped} skipped — already exist).`
+              : `Created ${result.created} groups as drafts. Assign crop plans and deploy individually.`;
+            showToast({ title: 'Stock Groups Built', msg, kind: 'success', icon: '🏗️' }, 4000);
+          }
+        }
+      } catch (error) {
+        console.error('[Build Stock] Error:', error);
+        alert('Failed to create groups: ' + error.message);
+      } finally {
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create Groups';
+      }
+    });
+  }
 });

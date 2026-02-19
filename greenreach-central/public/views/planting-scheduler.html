@@ -196,15 +196,11 @@
     .container {
       flex: 1;
       padding: 2rem;
-      padding-top: 12rem; /* Generous space below sticky header — JS adjusts dynamically */
+      padding-top: 8.5rem; /* Extra space below sticky header to prevent overlap */
       display: flex;
       flex-direction: column;
       gap: 2rem;
       overflow-y: auto;
-    }
-
-    .card {
-      scroll-margin-top: 10rem; /* Clear sticky header when scrolled to */
     }
 
     /* Card Styles */
@@ -1161,7 +1157,7 @@
     </div>
     <div class="header-actions">
       <nav class="nav-menu">
-        <a href="/index.charlie.html" class="nav-link-button">Home</a>
+        <a href="/views/farm-summary.html" class="nav-link-button">Home</a>
         <a href="/views/farm-summary.html" class="nav-link-button">Dashboard</a>
         <div class="nav-item inventory">
           <button class="nav-button inventory active">
@@ -1245,80 +1241,6 @@
       </div>
     </div>
 
-    <!-- AI-Powered Crop Recommendations (moved to top of page for visibility) -->
-    <div class="card" id="aiRecommendationsCard" style="border: 2px solid #3b82f6;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-          <h2 style="margin: 0;">AI Crop Recommendations</h2>
-          <span id="aiEngineBadge" style="background: rgba(59, 130, 246, 0.2); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; color: #93c5fd;">
-            Loading...
-          </span>
-        </div>
-        <div id="aiReadinessIndicator" style="display:none; font-size: 0.85rem; color: #94a3b8; text-align: right;">
-          <div id="aiProgressBar" style="width: 150px; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-bottom: 0.25rem;">
-            <div id="aiProgressFill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); width: 0%; transition: width 0.5s;"></div>
-          </div>
-          <span id="aiProgressText">0% Ready</span>
-        </div>
-      </div>
-      <p style="color: #94a3b8; margin-bottom: 1.5rem;">
-        Get intelligent crop recommendations based on nutrient compatibility, <strong>real-time market pricing</strong>, inventory management, harvest timing, and environmental fit.
-      </p>
-      
-      <div class="form-group" style="margin-bottom: 1rem;">
-        <label for="aiGroupSelect">Select Group for Recommendations</label>
-        <select id="aiGroupSelect" style="padding: 0.75rem; border-radius: 8px; border: 2px solid #3b82f6; background: rgba(0,0,0,0.3); color: #e4e4e7; width: 100%;">
-          <option value="">Choose a group to replant...</option>
-        </select>
-      </div>
-
-      <div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
-        <button 
-          type="button" 
-          id="getRecommendationsBtn"
-          class="timeline-btn primary"
-          style="flex: 2;"
-          onclick="getAIRecommendations()"
-        >
-          Get AI Recommendations
-        </button>
-        <button 
-          type="button" 
-          id="remixBtn"
-          class="timeline-btn"
-          style="flex: 1; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc; display: none;"
-          onclick="remixRecommendations()"
-        >
-          🔄 Remix
-        </button>
-      </div>
-
-      <!-- Recommendations Display -->
-      <div id="recommendationsDisplay" style="display: none; max-height: 70vh; overflow-y: auto; padding-right: 0.25rem;">
-        <div style="background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;">
-          <h3 style="color: #60a5fa; margin-bottom: 1rem;">Top Recommendation</h3>
-          <div id="topRecommendation"></div>
-        </div>
-
-        <div style="margin-bottom: 1rem;">
-          <h4 style="color: #94a3b8; margin-bottom: 0.75rem;">Alternative Options</h4>
-          <div id="alternativeRecommendations"></div>
-        </div>
-
-        <div class="form-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap; position: sticky; bottom: 0; background: rgba(15, 23, 42, 0.95); padding: 0.75rem 0; z-index: 5; border-top: 1px solid rgba(59,130,246,0.2);">
-          <button type="button" class="timeline-btn secondary" onclick="hideRecommendations()" style="flex: 1; min-width: 120px;">
-            Cancel
-          </button>
-          <button type="button" class="timeline-btn" onclick="remixRecommendations()" style="flex: 1; min-width: 160px; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc;">
-            🔄 Remix Recommendations
-          </button>
-          <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()" style="flex: 2; min-width: 200px;">
-            Accept & Schedule Top Recommendation
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- Upcoming Seeding Timeline -->
     <div class="card">
       <h2>Upcoming Seeding Timeline</h2>
@@ -1375,6 +1297,69 @@
           <div class="icon">LIGHT</div>
           <h3>No Adjustments Needed</h3>
           <p>All groups are currently optimized for their crop stages</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI-Powered Crop Recommendations -->
+    <div class="card" style="border: 2px solid #3b82f6;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <h2 style="margin: 0;">AI Crop Recommendations</h2>
+          <span id="aiEngineBadge" style="background: rgba(59, 130, 246, 0.2); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; color: #93c5fd;">
+            Loading...
+          </span>
+        </div>
+        <div id="aiReadinessIndicator" style="font-size: 0.85rem; color: #94a3b8; text-align: right;">
+          <div id="aiProgressBar" style="width: 150px; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-bottom: 0.25rem;">
+            <div id="aiProgressFill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); width: 0%; transition: width 0.5s;"></div>
+          </div>
+          <span id="aiProgressText">0% Ready</span>
+        </div>
+      </div>
+      <p style="color: #94a3b8; margin-bottom: 1.5rem;">
+        Get intelligent crop recommendations based on nutrient compatibility, market demand, inventory management, harvest timing, and environmental fit.
+      </p>
+      
+      <div class="form-group" style="margin-bottom: 1rem;">
+        <label for="aiGroupSelect">Select Group for Recommendations</label>
+        <select id="aiGroupSelect" style="padding: 0.75rem; border-radius: 8px; border: 2px solid #3b82f6; background: rgba(0,0,0,0.3); color: #e4e4e7;">
+          <option value="">Choose a group to replant...</option>
+        </select>
+      </div>
+
+      <button 
+        type="button" 
+        id="getRecommendationsBtn"
+        class="timeline-btn primary"
+        style="width: 100%; margin-bottom: 1.5rem;"
+        onclick="getAIRecommendations()"
+      >
+        Get AI Recommendations
+      </button>
+
+      <!-- Recommendations Display -->
+      <div id="recommendationsDisplay" style="display: none; max-height: 70vh; overflow-y: auto; padding-right: 0.25rem;">
+        <div style="background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;">
+          <h3 style="color: #60a5fa; margin-bottom: 1rem;">Top Recommendation</h3>
+          <div id="topRecommendation"></div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <h4 style="color: #94a3b8; margin-bottom: 0.75rem;">Alternative Options</h4>
+          <div id="alternativeRecommendations"></div>
+        </div>
+
+        <div class="form-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap; position: sticky; bottom: 0; background: rgba(15, 23, 42, 0.95); padding: 0.75rem 0; z-index: 5; border-top: 1px solid rgba(59,130,246,0.2);">
+          <button type="button" class="timeline-btn secondary" onclick="hideRecommendations()" style="flex: 1; min-width: 120px;">
+            Cancel
+          </button>
+          <button type="button" class="timeline-btn" onclick="remixRecommendations()" style="flex: 1; min-width: 160px; background: rgba(168,85,247,0.2); border-color: #a855f7; color: #c084fc;">
+            🔄 Remix Recommendations
+          </button>
+          <button type="button" class="timeline-btn primary" onclick="acceptRecommendation()" style="flex: 2; min-width: 200px;">
+            Accept & Schedule Top Recommendation
+          </button>
         </div>
       </div>
     </div>
@@ -1767,10 +1752,6 @@
     // ============================================================================
 
     document.addEventListener('DOMContentLoaded', async () => {
-      // Dynamically adjust container padding to match actual header height
-      adjustContainerPadding();
-      window.addEventListener('resize', adjustContainerPadding);
-
       // Build CROP_DATABASE from 50-recipe lighting-recipes.json before anything uses it
       await buildCropDatabase();
 
@@ -1780,16 +1761,6 @@
       // Set up form submission
       document.getElementById('manualSchedulingForm').addEventListener('submit', handleManualScheduling);
     });
-
-    /** Measure real header height and adjust container padding so nothing is hidden */
-    function adjustContainerPadding() {
-      const header = document.querySelector('.header');
-      const container = document.querySelector('.container');
-      if (header && container) {
-        const headerHeight = header.getBoundingClientRect().height;
-        container.style.paddingTop = Math.max(headerHeight + 32, 160) + 'px';
-      }
-    }
 
     async function initializeManualForm() {
       // Populate crop dropdown from the 50-recipe library
@@ -2416,6 +2387,21 @@
           return;
         }
 
+        // Check if this tray's group is a CCA (Cut and Come Again) crop in regrowth
+        const group = state.groups?.find(g => g.id === tray.groupId);
+        const harvestCycle = group?.planConfig?.harvestCycle;
+        const isCCA = harvestCycle?.strategy === 'cut_and_come_again';
+        const isRegrowing = group?.status === 'regrowing';
+        const currentHarvest = harvestCycle?.currentHarvest || 0;
+        const maxHarvests = harvestCycle?.maxHarvests || 4;
+
+        // For CCA groups in regrowth (not yet at final harvest), skip seeding task —
+        // the slot is occupied by a regrowing crop, not ready for re-seeding
+        if (isCCA && isRegrowing && currentHarvest < maxHarvests) {
+          console.log(`[CCA] Skipping seeding task for ${tray.id}: regrowing (${currentHarvest}/${maxHarvests})`);
+          return;
+        }
+
         // Calculate when slot will be free
         const harvestDate = new Date(tray.expectedHarvest);
         const cleaningBuffer = 1; // days
@@ -2481,7 +2467,10 @@
           expectedNewHarvest: new Date(slotFreeDate.getTime() + harvestDays * 24 * 60 * 60 * 1000),
           quantity: tray.capacity,
           urgency,
-          daysUntil: daysUntilSeeding
+          daysUntil: daysUntilSeeding,
+          // CCA info: if this group is CCA (post-final-harvest), note the strategy
+          harvestStrategy: isCCA ? 'cut_and_come_again' : 'single_harvest',
+          ccaNote: isCCA ? `CCA crop (${maxHarvests} harvests per planting)` : null
         });
       });
 
@@ -2954,14 +2943,7 @@
 
         // CRITICAL FIX: Show current crop vs next recommended crop separately
         const currentCrop = tray ? (tray.currentCrop || 'Empty') : 'Unknown';
-        const recommendedCrop = task.recommendedCropName || group?.nextCrop || 'TBD';
-
-        // Show next plant (transplant) date if available
-        const nextSeedInfo = task.nextPlantDate
-          ? `<div style="font-size: 0.75rem; color: #60a5fa;">Plant: ${task.nextPlantDate}</div>`
-          : task.nextSeedDate 
-            ? `<div style="font-size: 0.75rem; color: #60a5fa;">Seed: ${task.nextSeedDate}</div>`
-            : '';
+        const recommendedCrop = group?.nextCrop || task.cropName;  // Use saved assignment if available
 
         return `
           <tr>
@@ -2970,7 +2952,7 @@
             <td>${currentCrop}</td>
             <td>${harvestStr}</td>
             <td>${seedWindowStr}</td>
-            <td>${recommendedCrop}${nextSeedInfo}</td>
+            <td>${recommendedCrop}</td>
             <td><span class="compat-badge ${task.compatibility.rating}" title="${getCompatibilityTooltip(task.compatibility)}" style="cursor: help;">${task.compatibility.rating.toUpperCase()}</span></td>
             <td>
               <button class="timeline-btn primary" onclick="scheduleTask('${task.id}')" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
@@ -3342,18 +3324,13 @@
           dli_capacity: Number(group?.currentDLI || currentDliFromPpfd || 22)
         };
 
-        // Use task's actual seeding window date instead of today
-        const taskSeedDate = task.targetSeedDate
-          ? (task.targetSeedDate instanceof Date ? task.targetSeedDate : new Date(task.targetSeedDate)).toISOString().split('T')[0]
-          : new Date().toISOString().split('T')[0];
-
         const response = await fetch('/api/planting/recommendations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             groupId: task.groupId,
             currentCrop: group?.plan || group?.crop || group?.recipe || task.cropName || '',
-            targetSeedDate: taskSeedDate,
+            targetSeedDate: new Date().toISOString().split('T')[0],
             zoneConditions
           })
         });
@@ -3389,7 +3366,7 @@
               <div>
                 <div style="font-size:0.7rem;color:#10b981;text-transform:uppercase;font-weight:600;">Recommended</div>
                 <h3 style="color:#34d399;margin:0.25rem 0;">${top.cropName}</h3>
-                <div style="font-size:0.85rem;color:#94a3b8;">${top.category} · ${top.durationDays} days · Seed: ${recommendations.targetSeedDate || '—'} · Harvest: ${top.expectedHarvestDate}</div>
+                <div style="font-size:0.85rem;color:#94a3b8;">${top.category} · ${top.durationDays} days · Harvest ${top.expectedHarvestDate}</div>
               </div>
               <div style="text-align:right;">
                 <div style="font-size:2rem;font-weight:bold;color:#34d399;">${Math.round(top.scores.overall)}</div>
@@ -3400,11 +3377,11 @@
               ${badge('Light', top.scores.light_efficiency)}
               ${badge('Nutrient', top.scores.nutrient_fit)}
               ${badge('Revenue', top.scores.revenue)}
-              ${badge('Off-Season', top.scores.off_season)}
+              ${badge('Seasonal', top.scores.seasonal)}
             </div>
             <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:0.75rem;line-height:1.4;">
               <strong style="color:#cbd5e1;">Revenue score</strong> ranks expected gross return using current market pricing and yield potential.
-              <strong style="color:#cbd5e1;">Off-Season score</strong> boosts crops that are off-season outdoors — less field-farm competition means higher prices for vertical farms.
+              <strong style="color:#cbd5e1;">Seasonal score</strong> ranks how well the crop fits the current time of year and demand pattern.
             </div>
             <div style="font-size:0.8rem;color:#94a3b8;display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;">
               <div>DLI Δ: ${top.deltas.dli} mol/m²/d</div>
@@ -3530,11 +3507,10 @@
       const scopedTrayIds = new Set(scopedTasks.map(t => t.trayId).filter(Boolean));
       const scopedGroupIds = new Set(scopedTasks.map(t => t.groupId).filter(Boolean));
 
-      // Calculate seed date, plant/transplant date, and harvest date from first task
+      // Calculate seed and harvest dates from first task
       const firstTask = scopedTasks[0];
-      const seedDate = firstTask?.targetSeedDate || new Date();
-      const plantDate = firstTask?.targetTransplantDate || seedDate;
-      const harvestDate = new Date(plantDate);
+      const seedDate = firstTask?.targetTransplantDate || new Date();
+      const harvestDate = new Date(seedDate);
       harvestDate.setDate(harvestDate.getDate() + harvestDays);
 
       // CRITICAL FIX: Save assignments to database for each affected group
@@ -3560,37 +3536,39 @@
         // Non-blocking - show warning but continue
       }
 
-      // Update in-memory state — only NEXT crop fields, never current crop/harvest
+      // Update in-memory state (keeping existing behavior for UI updates)
       state.groups = state.groups.map(group => {
         if (!scopedGroupIds.has(group.id)) return group;
         return {
           ...group,
           nextCrop: normalizedCropName,
-          nextCropId: normalizedCropId,
-          nextSeedDate: (seedDate instanceof Date ? seedDate : new Date(seedDate)).toISOString().split('T')[0],
-          nextPlantDate: (plantDate instanceof Date ? plantDate : new Date(plantDate)).toISOString().split('T')[0],
+          nextSeedDate: seedDate.toISOString().split('T')[0],
           nextHarvestDate: harvestDate.toISOString().split('T')[0]
-          // DO NOT update group.plan / group.crop (current crop) — that's separate!
+          // Note: DO NOT update group.plan (current crop) - that's separate!
         };
       });
 
-      // Update seeding tasks with the recommended next crop — preserve original cropId/cropName
       state.seedingTasks = state.seedingTasks.map(task => {
         if (!scopedIds.has(task.id) && !scopedTrayIds.has(task.trayId)) return task;
 
         return {
           ...task,
-          // Keep task.cropId and task.cropName as-is (current crop)
-          recommendedCropId: normalizedCropId,
-          recommendedCropName: normalizedCropName,
-          nextSeedDate: (seedDate instanceof Date ? seedDate : new Date(seedDate)).toISOString().split('T')[0],
-          nextPlantDate: (plantDate instanceof Date ? plantDate : new Date(plantDate)).toISOString().split('T')[0],
+          cropId: normalizedCropId,
+          cropName: normalizedCropName,
           expectedNewHarvest: new Date(task.targetTransplantDate.getTime() + harvestDays * 24 * 60 * 60 * 1000)
         };
       });
 
-      // DO NOT update tray.currentCrop or tray.expectedHarvest — those reflect the ACTIVE grow
-      // Trays keep their current state; only the forecast "Recommended Crop" column changes
+      state.trays = state.trays.map(tray => {
+        if (!scopedTrayIds.has(tray.id)) return tray;
+
+        const task = state.seedingTasks.find(t => t.trayId === tray.id);
+        return {
+          ...tray,
+          currentCrop: normalizedCropName,
+          expectedHarvest: task?.expectedNewHarvest || tray.expectedHarvest
+        };
+      });
 
       state.seedingTasks = state.seedingTasks.map(task => ({
         ...task,
@@ -3726,19 +3704,10 @@
           dli_capacity: Number(group.currentDLI || currentDliFromPpfd || 22)
         };
 
-        // Use the group's actual next seeding window instead of today
-        let bestSeedDate = new Date().toISOString().split('T')[0];
-        if (state.seedingTasks && state.seedingTasks.length) {
-          const groupTask = state.seedingTasks.find(t => t.groupId === groupId);
-          if (groupTask && groupTask.targetSeedDate) {
-            bestSeedDate = groupTask.targetSeedDate.toISOString().split('T')[0];
-          }
-        }
-
         const requestBody = {
           groupId,
           currentCrop: group.plan || group.crop || group.recipe || '',
-          targetSeedDate: bestSeedDate,
+          targetSeedDate: new Date().toISOString().split('T')[0],
           zoneConditions
         };
 
@@ -3804,9 +3773,9 @@
         market_opportunity: { icon: '📈', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
         market_caution:     { icon: '📉', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
         diversity_concern:  { icon: '🌱', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-        rotation_benefit:       { icon: '🔄', color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
-        off_season_advantage:  { icon: '🏆', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
-        in_season_competition: { icon: '⚠️', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' }
+        rotation_benefit:   { icon: '🔄', color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
+        seasonal_advantage: { icon: '☀️', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+        seasonal_caution:   { icon: '❄️', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' }
       };
       return `
         <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
@@ -3831,8 +3800,8 @@
         market_caution: '#f59e0b',
         diversity_concern: '#f59e0b',
         rotation_benefit: '#60a5fa',
-        off_season_advantage: '#22c55e',
-        in_season_competition: '#f59e0b'
+        seasonal_advantage: '#22c55e',
+        seasonal_caution: '#f59e0b'
       };
       const pills = justifications.slice(0, 3).map(j => {
         const color = pillColors[j.type] || '#94a3b8';
@@ -3858,7 +3827,7 @@
               ${topRec.cropName}
             </h3>
             <div style="color: #94a3b8; font-size: 0.9rem;">
-              ${topRec.category || ''} · ${topRec.durationDays} days · Seed: ${recommendations.targetSeedDate || '—'} · Harvest: ${topRec.expectedHarvestDate}
+              ${topRec.category || ''} · ${topRec.durationDays} days · Harvest: ${topRec.expectedHarvestDate}
             </div>
           </div>
           <div style="text-align: right;">
@@ -3872,9 +3841,8 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
           ${renderScoreBadge('Nutrient Fit', topRec.scores.nutrient_fit)}
           ${renderScoreBadge('Light', topRec.scores.light_efficiency)}
-          ${renderScoreBadge('Market', topRec.scores.market || 70)}
           ${renderScoreBadge('Revenue', topRec.scores.revenue || 0)}
-          ${renderScoreBadge('Off-Season', topRec.scores.off_season || 0)}
+          ${renderScoreBadge('Seasonal', topRec.scores.seasonal || 0)}
           ${renderScoreBadge('Stagger', topRec.scores.harvest_stagger)}
           ${renderScoreBadge('VPD', topRec.scores.vpd_fit)}
         </div>
@@ -3883,7 +3851,7 @@
 
         <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 1rem; line-height: 1.4;">
           <strong style="color: #cbd5e1;">Revenue score</strong> estimates crop earning potential from market price and projected output.
-          <strong style="color: #cbd5e1;">Off-Season score</strong> boosts crops that are off-season outdoors — less field-farm competition means higher prices for vertical farms.
+          <strong style="color: #cbd5e1;">Seasonal score</strong> estimates crop fit to current seasonal conditions and demand trends.
         </div>
 
         <details style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem;">
@@ -3918,7 +3886,7 @@
                   ${alt.category || ''} · ${alt.durationDays}d · Harvest: ${alt.expectedHarvestDate}
                 </div>
                 <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
-                  Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Market: ${Math.round(alt.scores.market || 70)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Off-Season: ${Math.round(alt.scores.off_season || 0)}
+                  Score: ${Math.round(alt.scores.overall)} · Light: ${Math.round(alt.scores.light_efficiency)} · Rev: ${Math.round(alt.scores.revenue || 0)} · Seasonal: ${Math.round(alt.scores.seasonal || 0)}
                 </div>
                 ${renderJustificationPills(alt.justifications)}
               </div>
@@ -3946,10 +3914,6 @@
       }
 
       document.getElementById('recommendationsDisplay').style.display = 'block';
-
-      // Show the standalone Remix button now that recommendations are loaded
-      const remixBtn = document.getElementById('remixBtn');
-      if (remixBtn) remixBtn.style.display = '';
     }
 
     function renderScoreBadge(label, score) {
@@ -3985,128 +3949,29 @@
 
     function showAICadenceSelection(cropId, cropName) {
       const modal = document.getElementById('trayDetailsModal');
-      document.getElementById('modalTitle').textContent = 'Schedule AI Recommendation';
+      document.getElementById('modalTitle').textContent = 'Select Scheduling Cadence';
       const modalBody = document.getElementById('modalBody');
-
-      // Get the selected group and its room context
-      const groupId = currentRecommendations?.groupId;
-      const group = state.groups.find(g => g.id === groupId);
-      const ctx = getGroupContextById(groupId);
-      const roomGroups = state.groups.filter(g => getGroupContextById(g.id).room === ctx.room);
-      const roomGroupCount = roomGroups.length;
-
       modalBody.innerHTML = `
-        <div style="display: grid; gap: 1rem;">
-          <p style="color: #94a3b8;">
-            Schedule <strong style="color: #60a5fa;">${cropName}</strong> — choose scope and cadence.
+        <div style="display: grid; gap: 0.75rem;">
+          <p style="color: #94a3b8; margin-bottom: 0.5rem;">
+            How would you like to schedule <strong style="color: #60a5fa;">${cropName}</strong>?
           </p>
-
-          <!-- Scope selection -->
-          <div>
-            <label style="color: #cbd5e1; font-weight: 600; margin-bottom: 0.5rem; display: block;">Scope</label>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-              <button type="button" id="aiScopeGroup" class="timeline-btn primary" style="padding: 0.75rem;"
-                onclick="selectAIScope('group')">
-                🎯 This Group Only
-                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">${group?.name || groupId}</div>
-              </button>
-              <button type="button" id="aiScopeRoom" class="timeline-btn secondary" style="padding: 0.75rem;"
-                onclick="selectAIScope('room')">
-                🏠 Entire Room
-                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">${ctx.room} (${roomGroupCount} groups)</div>
-              </button>
-            </div>
-          </div>
-
-          <!-- Cadence selection -->
-          <div>
-            <label style="color: #cbd5e1; font-weight: 600; margin-bottom: 0.5rem; display: block;">Cadence</label>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-              <button type="button" id="aiCadenceOnce" class="timeline-btn primary" style="padding: 0.75rem;"
-                onclick="selectAICadence('one_time')">
-                ⚡ One-time
-                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">All at once</div>
-              </button>
-              <button type="button" id="aiCadenceWeekly" class="timeline-btn secondary" style="padding: 0.75rem;"
-                onclick="selectAICadence('weekly')">
-                📅 Stage Over 4 Weeks
-                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">One batch per week</div>
-              </button>
-            </div>
-          </div>
-
-          <!-- Summary of what will happen -->
-          <div id="aiImplementSummary" style="padding: 0.75rem; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #94a3b8; font-size: 0.85rem;">
-            <strong style="color: #60a5fa;">Plan:</strong> Plant <strong>${cropName}</strong> in group <em>${group?.name || groupId}</em> as a single seeding.
-          </div>
-
-          <div style="display: flex; gap: 0.75rem;">
-            <button class="timeline-btn secondary" style="flex: 1;" onclick="closeTrayModal()">Back</button>
-            <button class="timeline-btn primary" style="flex: 2;" id="aiImplementBtn"
-              onclick="implementWithCadence('${cropId}','${encodeURIComponent(cropName)}')">
-              Implement Plan
-            </button>
-          </div>
+          <button class="timeline-btn primary" onclick="implementWithCadence('${cropId}','${encodeURIComponent(cropName)}','one_time')">
+            Single Seeding (One-time)
+          </button>
+          <button class="timeline-btn primary" style="background: rgba(34,197,94,0.2); border-color: #22c55e; color: #86efac;" onclick="implementWithCadence('${cropId}','${encodeURIComponent(cropName)}','weekly')">
+            Stagger Over 4 Weeks (Weekly Batches)
+          </button>
+          <button class="timeline-btn secondary" onclick="closeTrayModal()">
+            Back
+          </button>
         </div>
       `;
-
-      // Store selected scope/cadence on the modal for retrieval
-      modal.dataset.aiScope = 'group';
-      modal.dataset.aiCadence = 'one_time';
-      modal.dataset.aiRoom = ctx.room;
       modal.classList.add('show');
     }
 
-    function selectAIScope(scope) {
-      const modal = document.getElementById('trayDetailsModal');
-      modal.dataset.aiScope = scope;
-      // Toggle button styles
-      document.getElementById('aiScopeGroup').className = scope === 'group' ? 'timeline-btn primary' : 'timeline-btn secondary';
-      document.getElementById('aiScopeRoom').className = scope === 'room' ? 'timeline-btn primary' : 'timeline-btn secondary';
-      updateAIImplementSummary();
-    }
-
-    function selectAICadence(cadence) {
-      const modal = document.getElementById('trayDetailsModal');
-      modal.dataset.aiCadence = cadence;
-      document.getElementById('aiCadenceOnce').className = cadence === 'one_time' ? 'timeline-btn primary' : 'timeline-btn secondary';
-      document.getElementById('aiCadenceWeekly').className = cadence === 'weekly' ? 'timeline-btn primary' : 'timeline-btn secondary';
-      updateAIImplementSummary();
-    }
-
-    function updateAIImplementSummary() {
-      const modal = document.getElementById('trayDetailsModal');
-      const scope = modal.dataset.aiScope || 'group';
-      const cadence = modal.dataset.aiCadence || 'one_time';
-      const room = modal.dataset.aiRoom || '';
-      const groupId = currentRecommendations?.groupId;
-      const group = state.groups.find(g => g.id === groupId);
-      const roomGroups = state.groups.filter(g => getGroupContextById(g.id).room === room);
-      const cropName = currentRecommendations?.topRecommendation?.cropName || 'selected crop';
-
-      const summary = document.getElementById('aiImplementSummary');
-      if (!summary) return;
-
-      let text = '';
-      if (scope === 'group' && cadence === 'one_time') {
-        text = `Plant <strong>${cropName}</strong> in group <em>${group?.name || groupId}</em> as a single seeding.`;
-      } else if (scope === 'group' && cadence === 'weekly') {
-        const trayCount = state.trays.filter(t => t.groupId === groupId).length || 1;
-        text = `Plant <strong>${cropName}</strong> in group <em>${group?.name || groupId}</em>, splitting ${trayCount} tray(s) across 4 weekly batches.`;
-      } else if (scope === 'room' && cadence === 'one_time') {
-        text = `Plant <strong>${cropName}</strong> across all ${roomGroups.length} groups in <em>${room}</em> at once.`;
-      } else if (scope === 'room' && cadence === 'weekly') {
-        text = `Stage <strong>${cropName}</strong> across <em>${room}</em> — one group per week over ${Math.min(roomGroups.length, 4)} weeks (${roomGroups.length} groups total).`;
-      }
-      summary.innerHTML = `<strong style="color: #60a5fa;">Plan:</strong> ${text}`;
-    }
-
-    async function implementWithCadence(cropId, encodedCropName) {
-      const modal = document.getElementById('trayDetailsModal');
-      const scope = modal.dataset.aiScope || 'group';
-      const cadence = modal.dataset.aiCadence || 'one_time';
+    async function implementWithCadence(cropId, encodedCropName, cadence) {
       closeTrayModal();
-
       const cropName = decodeURIComponent(encodedCropName);
       if (!currentRecommendations) return;
 
@@ -4114,96 +3979,44 @@
       const group = state.groups.find(g => g.id === groupId);
       if (!group) { alert('Group not found'); return; }
 
-      const ctx = getGroupContextById(groupId);
-      let targetGroupIds = [];
-      let items = [];
-      const baseSeedDate = new Date().toISOString().split('T')[0];
-
-      if (scope === 'room') {
-        // Room scope: gather all groups in the room
-        targetGroupIds = state.groups
-          .filter(g => getGroupContextById(g.id).room === ctx.room)
-          .map(g => g.id);
-      } else {
-        // Group scope: just the selected group
-        targetGroupIds = [groupId];
-      }
-
-      if (scope === 'room' && cadence === 'weekly') {
-        // STAGGER: assign each group to a different week
-        // Sort groups for consistent ordering
-        targetGroupIds.sort();
-        targetGroupIds.forEach((gId, index) => {
-          const weekOffset = index % 4; // weeks 0-3
-          const seedDate = new Date();
-          seedDate.setDate(seedDate.getDate() + weekOffset * 7);
-          const seedDateStr = seedDate.toISOString().split('T')[0];
-
-          const gTrays = state.trays.filter(t => t.groupId === gId);
-          const g = state.groups.find(g => g.id === gId);
-          if (gTrays.length) {
-            gTrays.forEach(t => items.push({
-              trayId: t.id, groupId: gId, location: t.location || '',
-              quantity: t.capacity || g?.plantCount || 48,
-              seedDate: seedDateStr
-            }));
-          } else {
-            items.push({
-              trayId: 'AUTO', groupId: gId, location: '',
-              quantity: g?.plantCount || 48,
-              seedDate: seedDateStr
-            });
-          }
-        });
-      } else {
-        // Non-staggered: all items share the same seed date
-        targetGroupIds.forEach(gId => {
-          const gTrays = state.trays.filter(t => t.groupId === gId);
-          const g = state.groups.find(g => g.id === gId);
-          if (gTrays.length) {
-            gTrays.forEach(t => items.push({
-              trayId: t.id, groupId: gId, location: t.location || '',
-              quantity: t.capacity || g?.plantCount || 48,
-              seedDate: baseSeedDate
-            }));
-          } else {
-            items.push({
-              trayId: 'AUTO', groupId: gId, location: '',
-              quantity: g?.plantCount || 48,
-              seedDate: baseSeedDate
-            });
-          }
-        });
-      }
+      const groupTrays = state.trays.filter(t => t.groupId === groupId);
+      const items = groupTrays.length ? groupTrays.map(t => ({
+        trayId: t.id, groupId: groupId, location: t.location || '',
+        quantity: t.capacity || group.plantCount || 48,
+        seedDate: new Date().toISOString().split('T')[0]
+      })) : [{
+        trayId: 'AUTO', groupId: groupId, location: '',
+        quantity: group.plantCount || 48,
+        seedDate: new Date().toISOString().split('T')[0]
+      }];
 
       try {
         const response = await fetch('/api/planting/plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            scope, cadence, cropId, cropName, items
+            scope: 'group', cadence, cropId, cropName, items
           })
         });
         if (!response.ok) throw new Error(`API ${response.status}`);
         const plan = await response.json();
 
-        // Apply forecast updates for all target groups
-        const scopedTasks = state.seedingTasks.filter(t => targetGroupIds.includes(t.groupId));
+        const scopedTasks = state.seedingTasks.filter(t => t.groupId === groupId);
         applyImplementedCropToForecast(scopedTasks, cropId, cropName);
 
         fetch('/api/planting/feedback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groupId, recommendedCrop: cropId, actualCrop: cropId, action: 'implemented', scope, cadence })
+          body: JSON.stringify({ groupId, recommendedCrop: cropId, actualCrop: cropId, action: 'implemented' })
         }).catch(() => {});
 
         hideRecommendations();
         loadAIStatus();
 
-        const resultModal = document.getElementById('trayDetailsModal');
+        const modal = document.getElementById('trayDetailsModal');
         document.getElementById('modalTitle').textContent = 'Schedule Implemented';
-        renderImplementationResult({cropName, cropId}, items, plan);
-        resultModal.classList.add('show');
+        renderImplementationResult({cropName, cropId}, groupTrays.length ? groupTrays : items, plan);
+        modal.classList.add('show');
       } catch (err) {
         console.error('Implementation failed:', err);
         alert(`Failed to implement: ${err.message}`);
@@ -4211,10 +4024,69 @@
     }
 
     async function implementFromAICard(cropId, encodedCropName) {
-      // Route through scope/cadence selection instead of direct implementation
       const cropName = decodeURIComponent(encodedCropName);
       if (!currentRecommendations) return;
-      showAICadenceSelection(cropId, cropName);
+
+      const groupId = currentRecommendations.groupId;
+      const group = state.groups.find(g => g.id === groupId);
+      if (!group) { alert('Group not found'); return; }
+
+      // Gather trays for this group to build items
+      const groupTrays = state.trays.filter(t => t.groupId === groupId);
+      const items = groupTrays.length ? groupTrays.map(t => ({
+        trayId: t.id, groupId: groupId, location: t.location || '',
+        quantity: t.capacity || group.plantCount || 48,
+        seedDate: new Date().toISOString().split('T')[0]
+      })) : [{
+        trayId: 'AUTO', groupId: groupId, location: '',
+        quantity: group.plantCount || 48,
+        seedDate: new Date().toISOString().split('T')[0]
+      }];
+
+      try {
+        const response = await fetch('/api/planting/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scope: 'group', cadence: 'one_time', cropId, cropName, items
+          })
+        });
+        if (!response.ok) throw new Error(`API ${response.status}`);
+        const plan = await response.json();
+
+        const scopedTasks = state.seedingTasks.filter(t => t.groupId === groupId);
+        applyImplementedCropToForecast(scopedTasks, cropId, cropName);
+
+        // Log feedback for AI training
+        fetch('/api/planting/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            groupId, recommendedCrop: cropId, actualCrop: cropId, action: 'implemented'
+          })
+        }).catch(() => {});
+
+        fetch('/api/ai/record-decision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'implemented', recommendedCrop: cropId, actualCrop: cropId, groupId
+          })
+        }).catch(() => {});
+
+        hideRecommendations();
+        loadAIStatus();
+
+        // Show implementation result in modal
+        const modal = document.getElementById('trayDetailsModal');
+        document.getElementById('modalTitle').textContent = 'Schedule Implemented';
+        renderImplementationResult({cropName, cropId}, groupTrays, plan);
+        modal.classList.add('show');
+
+      } catch (err) {
+        console.error('Implementation failed:', err);
+        alert(`Failed to implement: ${err.message}`);
+      }
     }
 
     function hideRecommendations() {
@@ -4325,7 +4197,6 @@
       }
     })();
   </script>
-  <script src="/js/header-dropdown-nav.js?v=20260216"></script>
   <script src="/js/farm-assistant.js"></script>
 </body>
 </html>

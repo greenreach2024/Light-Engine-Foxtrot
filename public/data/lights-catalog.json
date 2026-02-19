@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-02-19T12:00:00.000Z",
+  "source": "manual",
+  "count": 1,
+  "lights": [
+    {
+      "id": "light_zipgrow_200w",
+      "manufacturer": "ZipGrow",
+      "model": "200W Full Spectrum",
+      "wattage": 200,
+      "ppfd": 520,
+      "ppf": 560,
+      "ppe": 2.8,
+      "efficacy_umolPerJ": 2.8,
+      "spectrum": "Full Spectrum",
+      "spectrally_tunable": "No",
+      "dimmable": true,
+      "dimming_method": "0-10V",
+      "coverage_area_sqft": 16,
+      "input_voltage": "100-277V AC",
+      "lifespan_hours": 50000,
+      "ip_rating": "IP65",
+      "mounting": "Hang / Rack mount",
+      "weight_kg": 3.2,
+      "color_range": "400-700nm",
+      "added_at": "2026-02-19T12:00:00.000Z"
+    }
+  ]
+}

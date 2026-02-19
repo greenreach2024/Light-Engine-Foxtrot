@@ -5191,6 +5191,34 @@ async function loadRoomsFromBackend() {
     console.error('[loadRoomsFromBackend] Failed to load setup data:', e);
     STATE.rooms = [];
   }
+
+  // Enrich rooms with zone data from room-map files (in case rooms.json is stale)
+  await enrichRoomZonesFromMaps();
+}
+
+// Merge zone names from room-map-{roomId}.json into STATE.rooms entries
+// so the Grow Room Setup card always reflects what the Room Mapper has saved.
+async function enrichRoomZonesFromMaps() {
+  try {
+    for (const room of STATE.rooms) {
+      if (!room.id) continue;
+      // Skip if room already has zones populated
+      if (Array.isArray(room.zones) && room.zones.length > 0) continue;
+      try {
+        const resp = await fetch(`/data/room-map-${room.id}.json`, { cache: 'no-store' });
+        if (!resp.ok) continue;
+        const mapData = await resp.json();
+        if (Array.isArray(mapData.zones) && mapData.zones.length > 0) {
+          room.zones = mapData.zones
+            .map(z => z.name || (z.zone != null ? `Zone ${z.zone}` : null))
+            .filter(Boolean);
+          console.log(`[enrichRoomZones] ${room.id}: enriched with ${room.zones.length} zones from room-map`);
+        }
+      } catch (_) { /* room-map file doesn't exist — that's fine */ }
+    }
+  } catch (err) {
+    console.warn('[enrichRoomZones] Error:', err);
+  }
 }
 
 async function safeRoomsSave() {
@@ -6101,6 +6129,48 @@ async function saveJSON(url, data) {
   }
 }
 
+// ── Light Setup Persistence ─────────────────────────────────────
+// Persist STATE.lightSetups to /data/light-setups.json
+async function persistLightSetups() {
+  const setups = Array.isArray(STATE.lightSetups) ? STATE.lightSetups : [];
+  try {
+    await saveJSON('light-setups.json', { lightSetups: setups });
+    console.log('[lightSetups] Persisted', setups.length, 'light setup(s) to disk');
+  } catch (err) {
+    console.warn('[lightSetups] Failed to persist:', err);
+  }
+}
+
+// Load light setups from /data/light-setups.json on page init
+async function loadLightSetups() {
+  try {
+    const resp = await fetch('/data/light-setups.json', { cache: 'no-store' });
+    if (!resp.ok) return; // File doesn't exist yet — that's fine
+    const data = await resp.json();
+    const setups = Array.isArray(data?.lightSetups) ? data.lightSetups : [];
+    if (!setups.length) return;
+    if (!STATE.lightSetups) STATE.lightSetups = [];
+    // Merge: only add setups not already in STATE (by id)
+    const existingIds = new Set(STATE.lightSetups.map(s => s.id));
+    let added = 0;
+    for (const setup of setups) {
+      if (setup.id && !existingIds.has(setup.id)) {
+        STATE.lightSetups.push(setup);
+        existingIds.add(setup.id);
+        added++;
+      }
+    }
+    if (added > 0) {
+      console.log('[lightSetups] Loaded', added, 'light setup(s) from disk');
+      window.dispatchEvent(new CustomEvent('lightSetupsChanged'));
+      if (typeof renderLightSetupSummary === 'function') renderLightSetupSummary();
+    }
+  } catch (err) {
+    // File doesn't exist or parse error — not a problem for new farms
+    console.log('[lightSetups] No persisted light setups found');
+  }
+}
+
 async function fetchPlansDocument() {
   try {
     const resp = await fetch('/plans', { cache: 'no-store' });
@@ -6575,6 +6645,9 @@ document.addEventListener('DOMContentLoaded', async function() {
   // Load rooms data
   console.log('[INIT] Loading rooms...');
   await loadRoomsFromBackend();
+  // Load persisted light setups
+  console.log('[INIT] Loading light setups...');
+  await loadLightSetups();
   // Load saved IoT devices
   console.log('[INIT] Loading saved IoT devices...');
   await loadSavedIoTDevices();
@@ -10676,7 +10749,7 @@ class RoomWizard {
       });
     const selected = Array.isArray(this.data.hardwareCats) ? this.data.hardwareCats.slice() : [];
     // Define which categories have micro-forms; order them after hardware and before fixtures
-  const formCats = selected.filter(c => ['grow-lights','hvac','mini-split','dehumidifier','fans','vents','controllers','other'].includes(c));
+  const formCats = selected.filter(c => ['hvac','mini-split','dehumidifier','fans','vents','controllers','energy-monitor','other'].includes(c));
       console.debug('[RoomWizard] formCats for category-setup:', formCats);
     // Preserve user selection order using hardwareOrder we maintain on toggles
     const chipOrder = (Array.isArray(this.data.hardwareOrder) ? this.data.hardwareOrder : [])
@@ -13473,9 +13546,16 @@ function renderRooms() {
         equipmentSummary = controllerStatus ? `${equipmentList}<br><span style="font-size:10px;">${controllerStatus}</span>` : equipmentList;
       }
       
-      // Zone count (simplified)
-      const zoneCount = Array.isArray(r.zones) ? r.zones.length : 0;
-      const zoneText = zoneCount === 0 ? 'No zones' : `${zoneCount} zone${zoneCount !== 1 ? 's' : ''}`;
+      // Zone display — show names, not just count
+      const zoneList = Array.isArray(r.zones) ? r.zones.filter(Boolean) : [];
+      const zoneCount = zoneList.length;
+      let zoneHtml;
+      if (zoneCount === 0) {
+        zoneHtml = '<span style="color:#94a3b8">No zones — use Room Mapper to add</span>';
+      } else {
+        const chips = zoneList.map(z => `<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:#e0f2fe;color:#0369a1;font-size:11px;font-weight:500;">${escapeHtml(z)}</span>`).join(' ');
+        zoneHtml = chips;
+      }
       
       // Aggregate lights from STATE.lightSetups for this room
       const roomLightSetups = (window.STATE?.lightSetups || []).filter(setup => String(setup.room) === String(r.id) || String(setup.room) === String(r.name));
@@ -13500,7 +13580,7 @@ function renderRooms() {
           <div>
             <h3 style="margin:0">${name}</h3>
             <div class="tiny" style="color:#475569"><b>Equipment:</b> ${equipmentSummary}</div>
-            <div class="tiny" style="color:#64748b">${zoneText}</div>
+            <div class="tiny" style="margin:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><b style="color:#475569">Zones:</b> ${zoneHtml}</div>
             <div class="tiny" style="color:#475569"><b>Plans:</b> ${planSummaryHtml}</div>
             ${numLights > 0 ? `<div class="tiny" style="color:#64748b">Lights: ${numLights} (${lightsList})</div>` : ''}
           </div>
@@ -13761,6 +13841,8 @@ function renderLightSetupSummary() {
       if (STATE.rooms) STATE.rooms = STATE.rooms.filter(r => String(r.id) !== String(id) && String(r.name) !== String(id));
       // Remove from STATE.lightSetups
       if (STATE.lightSetups) STATE.lightSetups = STATE.lightSetups.filter(setup => String(setup.room) !== String(id) && String(setup.room) !== name);
+      // Persist light setups change
+      persistLightSetups();
       // Save and re-render
       await safeRoomsSave();
       window.dispatchEvent(new CustomEvent('lightSetupsChanged'));
@@ -19592,6 +19674,10 @@ class FreshLightWizard {
       createdAt: new Date().toISOString()
     };
     STATE.lightSetups.push(lightSetup);
+    
+    // Persist to disk so light setups survive page reloads
+    persistLightSetups();
+    
     window.dispatchEvent(new CustomEvent('lightSetupsChanged'));
     renderLightSetupSummary();
     renderControllerAssignments();

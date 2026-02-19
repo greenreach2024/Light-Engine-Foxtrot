@@ -2387,6 +2387,21 @@
           return;
         }
 
+        // Check if this tray's group is a CCA (Cut and Come Again) crop in regrowth
+        const group = state.groups?.find(g => g.id === tray.groupId);
+        const harvestCycle = group?.planConfig?.harvestCycle;
+        const isCCA = harvestCycle?.strategy === 'cut_and_come_again';
+        const isRegrowing = group?.status === 'regrowing';
+        const currentHarvest = harvestCycle?.currentHarvest || 0;
+        const maxHarvests = harvestCycle?.maxHarvests || 4;
+
+        // For CCA groups in regrowth (not yet at final harvest), skip seeding task —
+        // the slot is occupied by a regrowing crop, not ready for re-seeding
+        if (isCCA && isRegrowing && currentHarvest < maxHarvests) {
+          console.log(`[CCA] Skipping seeding task for ${tray.id}: regrowing (${currentHarvest}/${maxHarvests})`);
+          return;
+        }
+
         // Calculate when slot will be free
         const harvestDate = new Date(tray.expectedHarvest);
         const cleaningBuffer = 1; // days
@@ -2452,7 +2467,10 @@
           expectedNewHarvest: new Date(slotFreeDate.getTime() + harvestDays * 24 * 60 * 60 * 1000),
           quantity: tray.capacity,
           urgency,
-          daysUntil: daysUntilSeeding
+          daysUntil: daysUntilSeeding,
+          // CCA info: if this group is CCA (post-final-harvest), note the strategy
+          harvestStrategy: isCCA ? 'cut_and_come_again' : 'single_harvest',
+          ccaNote: isCCA ? `CCA crop (${maxHarvests} harvests per planting)` : null
         });
       });
 
