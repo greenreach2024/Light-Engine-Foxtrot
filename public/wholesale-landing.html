@@ -782,8 +782,8 @@
         <li><a href="/greenreach-org.html">Home</a></li>
         <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
         <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
-        <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
-        <li><a href="https://greenreachgreens.com/wholesale-about.html#contact">Contact Us</a></li>
+        <li><a href="https://greenreachgreens.com/wholesale-about.html" rel="noopener noreferrer">About</a></li>
+        <li><a href="https://greenreachgreens.com/wholesale-about.html#contact" rel="noopener noreferrer">Contact Us</a></li>
         <li><a href="/schedule.html">Schedule a Call</a></li>
       </ul>
       <a href="/GR-wholesale.html" class="nav-cta">Sign in/Register</a>
@@ -1030,8 +1030,8 @@
           <li><a href="/greenreach-org.html">Home</a></li>
           <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
           <li><a href="/grow-and-sell.html">Buying/Selling Made Easy</a></li>
-          <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
-          <li><a href="https://greenreachgreens.com/wholesale-about.html#contact">Contact Us</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html" rel="noopener noreferrer">About</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html#contact" rel="noopener noreferrer">Contact Us</a></li>
           <li><a href="/schedule.html">Schedule a Call</a></li>
         </ul>
       </div>
@@ -1055,13 +1055,7 @@
         </ul>
       </div>
 
-      <div class="footer-links">
-        <h4>Admin Access</h4>
-        <ul>
-          <li><a href="/GR-central-admin-login.html">Central Admin Login</a></li>
-          <li><a href="/farm-admin.html">Farm Admin</a></li>
-        </ul>
-      </div>
+
     </div>
 
     <div class="footer-bottom">
@@ -1102,14 +1096,11 @@
       observer.observe(el);
     });
 
-    // Handle signup form
+    // Handle signup form — redirect to wholesale registration
     function handleSignup(e) {
       e.preventDefault();
       const email = e.target.querySelector('input[type="email"]').value;
-      
-      // Store email and redirect to wholesale portal
-      localStorage.setItem('prospectEmail', email);
-      window.location.href = '/greenreach-central/public/wholesale.html?signup=true';
+      window.location.href = '/GR-wholesale.html?signup=true&email=' + encodeURIComponent(email);
     }
 
     // Update stats with animation
