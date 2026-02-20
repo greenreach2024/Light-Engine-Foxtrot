@@ -127,7 +127,14 @@ async function get(farmId, dataType) {
     }
   }
 
-  // 3. Fall back to flat file
+  // 3. If a specific farm is authenticated, return empty defaults instead of
+  //    falling through to flat files (which contain a different farm's data).
+  if (farmId) {
+    logger.debug(`[FarmStore] No data found for ${farmId}/${dataType}, returning default`);
+    return DEFAULTS[dataType] ?? null;
+  }
+
+  // 4. No farm context (edge/dev mode) — fall back to flat file
   return readFile(dataType);
 }
 

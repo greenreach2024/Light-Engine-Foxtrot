@@ -1059,14 +1059,40 @@ app.get('/plans', async (req, res) => {
 app.get('/api/farm/profile', async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
-    const farm = await farmStore.get(fid, 'farm_profile') || {};
-    const farmId = farm.farmId || farm.farm_id || fid || 'FARM-TEST-WIZARD-001';
+    let farm = await farmStore.get(fid, 'farm_profile');
+
+    // If farm_data has no profile for this farm, try the farms table directly
+    if ((!farm || !farm.name) && fid && req.db) {
+      try {
+        const result = await req.db.query(
+          'SELECT farm_id, name, status, slug, plan_type, created_at FROM farms WHERE farm_id = $1 LIMIT 1',
+          [fid]
+        );
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          farm = {
+            farmId: row.farm_id,
+            farm_id: row.farm_id,
+            name: row.name || row.farm_id,
+            status: row.status || 'active',
+            planType: row.plan_type || 'cloud',
+            slug: row.slug,
+            createdAt: row.created_at
+          };
+        }
+      } catch (dbErr) {
+        logger.debug('[farm/profile] farms table lookup failed:', dbErr.message);
+      }
+    }
+
+    farm = farm || {};
+    const farmId = farm.farmId || farm.farm_id || fid || 'LOCAL-FARM';
 
     return res.json({
       status: 'success',
       farm: {
         farmId,
-        name: farm.name || farm.farmName || 'This is Your Farm',
+        name: farm.name || farm.farmName || farmId,
         status: farm.status || 'active',
         metadata: farm,
         rooms: [],
