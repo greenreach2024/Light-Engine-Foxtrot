@@ -63,7 +63,7 @@ function authenticateToken(req, res, next) {
  */
 router.post('/change-password', authenticateToken, async (req, res) => {
   try {
-    const pool = req.app.locals?.db;
+    const pool = req.db;
     if (!pool) {
       return res.status(500).json({ 
         success: false, 
@@ -131,7 +131,7 @@ router.get('/status', authenticateToken, async (req, res) => {
       });
     }
 
-    const pool = req.app.locals?.db;
+    const pool = req.db;
     if (!pool) {
       return res.status(500).json({ 
         success: false, 
@@ -199,7 +199,7 @@ router.get('/status', authenticateToken, async (req, res) => {
  */
 router.post('/complete', authenticateToken, async (req, res) => {
   try {
-    const pool = req.app.locals?.db;
+    const pool = req.db;
     if (!pool) {
       return res.status(500).json({ 
         success: false, 
@@ -242,7 +242,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
  */
 router.post('/farm-profile', authenticateToken, async (req, res) => {
   try {
-    const pool = req.app.locals?.db;
+    const pool = req.db;
     if (!pool) {
       return res.status(500).json({ 
         success: false, 
@@ -361,7 +361,7 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
  */
 router.post('/rooms', authenticateToken, async (req, res) => {
   try {
-    const pool = req.app.locals?.db;
+    const pool = req.db;
     if (!pool) {
       return res.status(500).json({ 
         success: false, 
@@ -448,7 +448,7 @@ router.post('/rooms', authenticateToken, async (req, res) => {
  */
 router.get('/rooms', authenticateToken, async (req, res) => {
   try {
-    const pool = req.app.locals?.db;
+    const pool = req.db;
     if (!pool) {
       return res.status(500).json({ 
         success: false, 
@@ -495,7 +495,7 @@ router.get('/rooms', authenticateToken, async (req, res) => {
  */
 router.post('/zones', authenticateToken, async (req, res) => {
   try {
-    const pool = req.app.locals?.db;
+    const pool = req.db;
     if (!pool) {
       return res.status(500).json({ 
         success: false, 
@@ -576,7 +576,7 @@ router.post('/zones', authenticateToken, async (req, res) => {
  */
 router.post('/complete', authenticateToken, async (req, res) => {
   try {
-    const pool = req.app.locals?.db;
+    const pool = req.db;
     if (!pool) {
       return res.status(500).json({ 
         success: false, 

@@ -32,13 +32,15 @@ const FILE_TO_DATA_TYPE = {
 };
 
 // Default empty responses for each data type (prevent frontend errors)
+// When a farm is authenticated but has no data yet, return these instead of
+// falling through to static files (which contain a different farm's data).
 const EMPTY_DEFAULTS = {
-  'groups.json': [],
+  'groups.json': { groups: [] },
   'rooms.json': { rooms: [] },
   'env.json': { zones: [] },
   'schedules.json': { schedules: [] },
   'iot-devices.json': { devices: [] },
-  'farm.json': null, // fall through to file
+  'farm.json': { farmId: 'pending', name: 'New Farm', status: 'setup' },
   'plans.json': { plans: [] },
 };
 
@@ -165,7 +167,18 @@ export function farmDataMiddleware(inMemoryStore) {
       }
     }
 
-    // 3. Fall through to static file serving (single-farm / no data yet)
+    // 3. Farm context is present but no data found in DB or memory.
+    //    Return empty defaults instead of falling through to static files,
+    //    which contain a different farm's data (cross-tenant leak).
+    const emptyDefault = EMPTY_DEFAULTS[fileName];
+    if (emptyDefault != null) {
+      logger.debug(`[FarmData] No data for ${farmId}/${dataType}, returning empty default`);
+      return res.json(typeof emptyDefault === 'object' && !Array.isArray(emptyDefault)
+        ? { ...emptyDefault }
+        : Array.isArray(emptyDefault) ? { [dataType]: [] } : emptyDefault);
+    }
+
+    // Unmapped or null default (e.g. farm.json) — fall through
     next();
   };
 }

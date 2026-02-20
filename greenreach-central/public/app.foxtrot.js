@@ -6118,9 +6118,16 @@ async function saveJSON(url, data) {
     if (!fileName) throw new Error('Invalid save target');
     console.log(`[saveJSON] Saving to /data/${fileName}`);
     console.log(`[saveJSON] Payload:`, JSON.stringify(data, null, 2));
+    // Auto-inject auth header so writes are scoped to the correct farm
+    const headers = { 'Content-Type': 'application/json' };
+    const token = (typeof localStorage !== 'undefined') &&
+      (localStorage.getItem('token') || sessionStorage.getItem('token'));
+    if (token && token !== 'local-access') {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     const resp = await fetch(`/data/${encodeURIComponent(fileName)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(data)
     });
     console.log(`[saveJSON] Response status:`, resp.status, resp.statusText);
@@ -12585,7 +12592,8 @@ async function loadAllData() {
       loadJSON('./data/equipment.catalog.json', { dehumidifiers: [] }),
       loadJSON('./data/device-manufacturers.json', { manufacturers: [] }),
       // Use /api/farm/profile (authenticated, tenant-scoped) with fallback to static file
-      loadJSON('/api/farm/profile', {}).then(data => data || {}).catch(() => loadJSON('./data/farm.json', {})),
+      // API returns {status,farm} — unwrap to get the raw farm object
+      loadJSON('/api/farm/profile', {}).then(data => data?.farm || data || {}).catch(() => loadJSON('./data/farm.json', {})),
       // Use /api/rooms which reads from database when DB_ENABLED=true, otherwise falls back to rooms.json
       loadJSON('/api/rooms', []).then(data => ({ rooms: Array.isArray(data) ? data : (data?.rooms || []) })),
       loadJSON('./data/switchbot-devices.json', { devices: [], summary: null }),
