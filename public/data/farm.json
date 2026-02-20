@@ -66,5 +66,10 @@
         "lng": -76.486
       }
     }
+  },
+  "tax": {
+    "rate": 0.13,
+    "label": "HST",
+    "business_number": ""
   }
 }

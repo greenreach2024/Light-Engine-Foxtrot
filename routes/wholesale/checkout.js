@@ -5,6 +5,9 @@
 
 import express from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { allocateOrder, validateCart } from '../../lib/wholesale/order-allocator.js';
 import { createReservations, releaseReservations, confirmReservations } from '../../lib/wholesale/reservation-manager.js';
 import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
@@ -12,7 +15,29 @@ import '../../lib/payment-providers/square.js'; // Ensure Square provider is reg
 import '../../lib/payment-providers/stripe.js'; // Ensure Stripe provider is registered
 import auditLogger from '../../lib/wholesale/audit-logger.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const router = express.Router();
+
+/**
+ * Load tax configuration from farm.json
+ * Returns { rate: number, label: string, business_number: string }
+ */
+function loadFarmTaxConfig() {
+  try {
+    const farmJsonPath = path.resolve(__dirname, '../../public/data/farm.json');
+    if (fs.existsSync(farmJsonPath)) {
+      const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+      if (farmData.tax && typeof farmData.tax.rate === 'number') {
+        return farmData.tax;
+      }
+    }
+  } catch (err) {
+    console.error('[Checkout] Failed to load farm tax config:', err.message);
+  }
+  return { rate: 0, label: 'TAX', business_number: '' };
+}
 
 // In-memory order storage (use database in production)
 const orders = new Map();
@@ -55,9 +80,12 @@ router.post('/preview', async (req, res) => {
     const catalog = await catalogResponse.json();
 
     // Allocate order
+    const taxConfig = loadFarmTaxConfig();
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
-      broker_fee_percent: 10.0
+      broker_fee_percent: 10.0,
+      tax_rate: taxConfig.rate,
+      tax_label: taxConfig.label
     });
 
     res.json({
@@ -141,9 +169,12 @@ router.post('/execute', async (req, res) => {
 
     // Step 2: Allocate order
     console.log('[Checkout] Step 2: Allocating order...');
+    const taxConfig = loadFarmTaxConfig();
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
-      broker_fee_percent: 10.0
+      broker_fee_percent: 10.0,
+      tax_rate: taxConfig.rate,
+      tax_label: taxConfig.label
     });
 
     if (!allocation.ok) {

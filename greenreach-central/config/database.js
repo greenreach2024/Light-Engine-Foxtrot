@@ -308,6 +308,42 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_wholesale_orders_created ON wholesale_orders(created_at);
   `);
 
+  // Create payment_records table for persistent payment storage
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS payment_records (
+      id SERIAL PRIMARY KEY,
+      payment_id VARCHAR(64) UNIQUE NOT NULL,
+      order_id VARCHAR(64) NOT NULL,
+      amount NUMERIC(10,2) NOT NULL,
+      currency VARCHAR(3) DEFAULT 'CAD',
+      provider VARCHAR(50),
+      status VARCHAR(30) DEFAULT 'pending',
+      metadata JSONB DEFAULT '{}',
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_payment_records_payment ON payment_records(payment_id);
+    CREATE INDEX IF NOT EXISTS idx_payment_records_order ON payment_records(order_id);
+    CREATE INDEX IF NOT EXISTS idx_payment_records_created ON payment_records(created_at);
+  `);
+
+  // Create audit_log table for persistent audit trail
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id SERIAL PRIMARY KEY,
+      event_type VARCHAR(100) NOT NULL,
+      entity_type VARCHAR(50),
+      entity_id VARCHAR(100),
+      actor VARCHAR(255),
+      details JSONB DEFAULT '{}',
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_event ON audit_log(event_type);
+  `);
+
   // Grant wizard tables (migration 011)
   if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
     try {

@@ -2567,6 +2567,72 @@
                             </button>
                         </div>
                     </div>
+
+                    <!-- Wholesale Order Export -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">🛒 Wholesale Order Export</h2>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Export wholesale B2B orders with line-item detail, tax, and broker fees for CRA filing.</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Start Date</label>
+                                <input type="date" id="wholesaleExportStartDate" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">End Date</label>
+                                <input type="date" id="wholesaleExportEndDate" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+                            </div>
+                            <button onclick="exportWholesaleOrders()" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+                                📥 Download Wholesale Orders CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Payment History Export -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">💳 Payment History Export</h2>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Export payment records including amounts, providers, and statuses.</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Start Date</label>
+                                <input type="date" id="paymentExportStartDate" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">End Date</label>
+                                <input type="date" id="paymentExportEndDate" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+                            </div>
+                            <button onclick="exportPaymentHistory()" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+                                📥 Download Payment History CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tax Summary Export -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">🧾 Tax Summary (CRA-Ready)</h2>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Monthly summary of sales, tax collected, broker fees, and net revenue for tax filing.</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tax Year</label>
+                                <input type="number" id="taxSummaryYear" min="2024" max="2030" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+                            </div>
+                            <div style="background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent-blue);">
+                                <div style="font-weight: 600; margin-bottom: 5px;">Includes:</div>
+                                <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 14px;">
+                                    <li>Monthly sales totals</li>
+                                    <li>HST/GST collected per month</li>
+                                    <li>Broker fees per month</li>
+                                    <li>Net revenue per month</li>
+                                    <li>Annual totals row</li>
+                                </ul>
+                            </div>
+                            <button onclick="exportTaxSummary()" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+                                📥 Download Tax Summary CSV
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Export Tips -->
@@ -5520,6 +5586,56 @@
         showToast('Export failed: ' + error.message, 'error');
       }
     }
+
+    /**
+     * Export wholesale orders as CSV
+     */
+    async function exportWholesaleOrders() {
+      try {
+        const from = document.getElementById('wholesaleExportStartDate')?.value || '';
+        const to = document.getElementById('wholesaleExportEndDate')?.value || '';
+        let url = '/api/wholesale/exports/orders?format=csv';
+        if (from) url += `&from=${from}`;
+        if (to) url += `&to=${to}`;
+        window.location.href = url;
+        showToast('Wholesale orders export started...', 'success');
+      } catch (error) {
+        console.error('Wholesale export error:', error);
+        showToast('Export failed: ' + error.message, 'error');
+      }
+    }
+
+    /**
+     * Export payment history as CSV
+     */
+    async function exportPaymentHistory() {
+      try {
+        const from = document.getElementById('paymentExportStartDate')?.value || '';
+        const to = document.getElementById('paymentExportEndDate')?.value || '';
+        let url = '/api/wholesale/exports/payments?format=csv';
+        if (from) url += `&from=${from}`;
+        if (to) url += `&to=${to}`;
+        window.location.href = url;
+        showToast('Payment history export started...', 'success');
+      } catch (error) {
+        console.error('Payment export error:', error);
+        showToast('Export failed: ' + error.message, 'error');
+      }
+    }
+
+    /**
+     * Export tax summary as CSV (CRA-ready)
+     */
+    async function exportTaxSummary() {
+      try {
+        const year = document.getElementById('taxSummaryYear')?.value || new Date().getFullYear();
+        window.location.href = `/api/wholesale/exports/tax-summary?year=${year}`;
+        showToast('Tax summary export started...', 'success');
+      } catch (error) {
+        console.error('Tax summary export error:', error);
+        showToast('Export failed: ' + error.message, 'error');
+      }
+    }
     
     // Set default dates when exports section is opened
     document.addEventListener('DOMContentLoaded', () => {
@@ -5534,6 +5650,19 @@
       
       if (document.getElementById('quickbooksExportDate')) {
         document.getElementById('quickbooksExportDate').value = today;
+      }
+
+      // Set defaults for wholesale export date pickers
+      if (document.getElementById('wholesaleExportStartDate')) {
+        document.getElementById('wholesaleExportStartDate').value = firstOfMonth;
+        document.getElementById('wholesaleExportEndDate').value = today;
+      }
+      if (document.getElementById('paymentExportStartDate')) {
+        document.getElementById('paymentExportStartDate').value = firstOfMonth;
+        document.getElementById('paymentExportEndDate').value = today;
+      }
+      if (document.getElementById('taxSummaryYear')) {
+        document.getElementById('taxSummaryYear').value = new Date().getFullYear();
       }
     });
   </script>

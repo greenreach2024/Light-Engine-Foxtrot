@@ -67,7 +67,7 @@ export async function createBuyer({ businessName, contactName, email, password, 
   buyersByEmail.set(normalizedEmail, buyer);
   buyersById.set(buyerId, buyer);
 
-  persistBuyer(buyer).catch(() => {});
+  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer save error:', err.message));
 
   return sanitizeBuyer(buyer);
 }
@@ -187,7 +187,7 @@ export async function updateBuyer(buyerId, updates) {
     buyersByEmail.set(newEmail, buyer);
   }
 
-  persistBuyer(buyer).catch(() => {});
+  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer update error:', err.message));
   return sanitizeBuyer(buyer);
 }
 
@@ -195,7 +195,7 @@ export function deactivateBuyer(buyerId) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;
   buyer.status = 'deactivated';
-  persistBuyer(buyer).catch(() => {});
+  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer deactivate error:', err.message));
   return sanitizeBuyer(buyer);
 }
 
@@ -203,7 +203,7 @@ export function reactivateBuyer(buyerId) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;
   buyer.status = 'active';
-  persistBuyer(buyer).catch(() => {});
+  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer reactivate error:', err.message));
   return sanitizeBuyer(buyer);
 }
 
@@ -248,14 +248,14 @@ export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, del
   if (!ordersByBuyerId.has(buyerId)) ordersByBuyerId.set(buyerId, []);
   ordersByBuyerId.get(buyerId).unshift(order);
 
-  persistOrder(order).catch(() => {});
-  runArchiveIfNeeded().catch(() => {});
+  persistOrder(order).catch(err => console.error('[Persist] Order save error:', err.message));
+  runArchiveIfNeeded().catch(err => console.error('[Archive] Archive check error:', err.message));
 
   return order;
 }
 
 export async function listOrdersForBuyer(buyerId, options = {}) {
-  await runArchiveIfNeeded().catch(() => {});
+  await runArchiveIfNeeded().catch(err => console.error('[Archive] Archive check error:', err.message));
   let dbOrders = [];
   if (isDatabaseAvailable()) {
     try {
@@ -264,8 +264,8 @@ export async function listOrdersForBuyer(buyerId, options = {}) {
         [buyerId]
       );
       dbOrders = result.rows.map((row) => row.order_data);
-    } catch {
-      // DB query failed — fall through to memory
+    } catch (err) {
+      console.error('[wholesaleStore] DB query error (listOrdersForBuyer):', err.message);
     }
   }
   // Merge DB results with in-memory (covers orders not yet persisted)
@@ -279,7 +279,7 @@ export async function listOrdersForBuyer(buyerId, options = {}) {
 }
 
 export async function listAllOrders(options = {}) {
-  await runArchiveIfNeeded().catch(() => {});
+  await runArchiveIfNeeded().catch(err => console.error('[Archive] Archive check error:', err.message));
   let dbOrders = [];
   if (isDatabaseAvailable()) {
     try {
@@ -287,8 +287,8 @@ export async function listAllOrders(options = {}) {
         'SELECT order_data FROM wholesale_orders ORDER BY created_at DESC'
       );
       dbOrders = result.rows.map((row) => row.order_data);
-    } catch {
-      // DB query failed — fall through to memory
+    } catch (err) {
+      console.error('[wholesaleStore] DB query error (listAllOrders):', err.message);
     }
   }
   const memOrders = Array.from(ordersById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -316,7 +316,7 @@ export async function updateFarmSubOrder({ orderId, farmId, updates }) {
     if (idx >= 0) buyerOrders[idx] = order;
   }
 
-  await persistOrder(order).catch(() => {});
+  await persistOrder(order).catch(err => console.error('[Persist] Order update error:', err.message));
 
   return subOrder;
 }
@@ -330,13 +330,65 @@ export function createPayment({ orderId, provider, split, totals }) {
     provider: provider || 'demo',
     status: 'created',
     amount: totals.grand_total,
+    currency: 'CAD',
     broker_fee_amount: totals.broker_fee_total,
     net_to_farms_total: totals.net_to_farms_total,
     split,
     created_at: new Date().toISOString()
   };
   paymentsById.set(paymentId, payment);
+  persistPayment(payment).catch(err => console.error('[Persist] Payment save error:', err.message));
   return payment;
+}
+
+async function persistPayment(payment) {
+  if (!isDatabaseAvailable()) return;
+  try {
+    await query(
+      `INSERT INTO payment_records
+        (payment_id, order_id, amount, currency, provider, status, metadata, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+       ON CONFLICT (payment_id) DO UPDATE
+       SET status = EXCLUDED.status,
+           metadata = EXCLUDED.metadata`,
+      [payment.payment_id, payment.order_id, payment.amount, payment.currency || 'CAD',
+       payment.provider, payment.status,
+       JSON.stringify({ split: payment.split, broker_fee_amount: payment.broker_fee_amount, net_to_farms_total: payment.net_to_farms_total }),
+       payment.created_at]
+    );
+  } catch (err) {
+    console.error('[Persist] Payment DB error:', err.message);
+  }
+}
+
+export async function loadPaymentsFromDb() {
+  if (!isDatabaseAvailable()) return;
+  try {
+    const result = await query('SELECT * FROM payment_records ORDER BY created_at ASC');
+    for (const row of result.rows) {
+      const payment = {
+        id: row.payment_id,
+        payment_id: row.payment_id,
+        order_id: row.order_id,
+        amount: Number(row.amount),
+        currency: row.currency || 'CAD',
+        provider: row.provider,
+        status: row.status,
+        broker_fee_amount: row.metadata?.broker_fee_amount || 0,
+        net_to_farms_total: row.metadata?.net_to_farms_total || 0,
+        split: row.metadata?.split || null,
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
+      };
+      if (!paymentsById.has(payment.payment_id)) {
+        paymentsById.set(payment.payment_id, payment);
+      }
+    }
+    console.log(`[PaymentPersist] Loaded ${result.rows.length} payments from DB`);
+  } catch (err) {
+    if (!String(err?.message || '').includes('relation')) {
+      console.warn('[PaymentPersist] Load failed:', err.message);
+    }
+  }
 }
 
 export function listPayments() {
@@ -369,7 +421,26 @@ export function createRefund({ orderId, amount, reason, adminId }) {
     created_at: new Date().toISOString()
   };
   refundsById.set(refundId, refund);
+  persistRefund(refund).catch(err => console.error('[Persist] Refund save error:', err.message));
   return refund;
+}
+
+async function persistRefund(refund) {
+  if (!isDatabaseAvailable()) return;
+  try {
+    await query(
+      `INSERT INTO payment_records
+        (payment_id, order_id, amount, currency, provider, status, metadata, created_at)
+       VALUES ($1, $2, $3, 'CAD', 'refund', $4, $5::jsonb, $6)
+       ON CONFLICT (payment_id) DO UPDATE
+       SET status = EXCLUDED.status`,
+      [refund.id, refund.order_id, -Math.abs(refund.amount), refund.status,
+       JSON.stringify({ reason: refund.reason, admin_id: refund.admin_id, type: 'refund' }),
+       refund.created_at]
+    );
+  } catch (err) {
+    console.error('[Persist] Refund DB error:', err.message);
+  }
 }
 
 export function listRefundsForOrder(orderId) {
@@ -423,7 +494,7 @@ export async function updateBuyerPassword(buyerId, newPassword) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;
   buyer.passwordHash = await bcrypt.hash(String(newPassword || ''), 10);
-  persistBuyer(buyer).catch(() => {});
+  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer password update error:', err.message));
   return sanitizeBuyer(buyer);
 }
 
@@ -466,10 +537,46 @@ export function logOrderEvent(orderId, action, details = {}) {
   // Keep last 10 000 events in memory
   if (orderAuditLog.length > 10000) orderAuditLog.splice(0, orderAuditLog.length - 10000);
   console.log(`[Audit] ${orderId} → ${action}`, JSON.stringify(details));
+
+  // Persist to audit_log DB table (fire-and-forget with error logging)
+  persistAuditEntry(event).catch(err => console.error('[Persist] Audit log error:', err.message));
+
   return event;
 }
 
-export function getOrderAuditLog(orderId) {
+async function persistAuditEntry(event) {
+  if (!isDatabaseAvailable()) return;
+  await query(
+    `INSERT INTO audit_log (event_type, entity_type, entity_id, actor, details, created_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+    [event.action, 'order', event.order_id, event.details?.actor || null,
+     JSON.stringify(event.details), event.timestamp]
+  );
+}
+
+export async function getOrderAuditLog(orderId) {
+  // Try DB first for complete history
+  if (isDatabaseAvailable()) {
+    try {
+      const params = orderId ? [orderId] : [];
+      const where = orderId ? 'WHERE entity_id = $1' : '';
+      const result = await query(
+        `SELECT event_type, entity_type, entity_id, actor, details, created_at FROM audit_log ${where} ORDER BY created_at DESC LIMIT 1000`,
+        params
+      );
+      if (result.rows.length > 0) {
+        return result.rows.map(row => ({
+          order_id: row.entity_id,
+          action: row.event_type,
+          details: row.details || {},
+          timestamp: new Date(row.created_at).toISOString()
+        }));
+      }
+    } catch (err) {
+      console.error('[Audit] DB query error:', err.message);
+    }
+  }
+  // Fallback to in-memory
   if (orderId) return orderAuditLog.filter(e => e.order_id === orderId);
   return [...orderAuditLog];
 }
@@ -480,8 +587,8 @@ export async function getOrderById(orderId, options = {}) {
       const result = await query('SELECT order_data FROM wholesale_orders WHERE master_order_id = $1', [orderId]);
       const row = result.rows[0];
       if (row) return row.order_data;
-    } catch {
-      // DB query failed — fall through to memory
+    } catch (err) {
+      console.error('[wholesaleStore] DB query error (getOrderById):', err.message);
     }
   }
   // Always check in-memory as fallback
@@ -552,7 +659,7 @@ async function appendArchiveRows(rows) {
   let hasFile = true;
   try {
     await fs.access(ARCHIVE_PATH);
-  } catch {
+  } catch (_) {
     hasFile = false;
   }
 
@@ -589,7 +696,7 @@ async function loadArchivedOrders(filters = {}) {
   let content = '';
   try {
     content = await fs.readFile(ARCHIVE_PATH, 'utf8');
-  } catch {
+  } catch (_) {
     return [];
   }
 
@@ -645,7 +752,7 @@ function parseCsvLine(line) {
 function safeJsonParse(value) {
   try {
     return JSON.parse(value);
-  } catch {
+  } catch (_) {
     return null;
   }
 }

@@ -44,6 +44,7 @@ import farmUsersRouter, { userRouter, deviceTokenRouter } from './routes/farm-us
 import farmSalesRouter from './routes/farm-sales.js';
 import networkGrowersRouter from './routes/network-growers.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
+import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
@@ -434,6 +435,76 @@ function resolveEdgeUrl() {
   } catch { return null; }
 }
 
+/**
+ * Sync farm identity from edge device to the farms DB row.
+ * Does NOT write to the local farm.json file — only updates the database.
+ * Called alongside syncFarmData() on the same interval.
+ */
+async function syncFarmIdentity(edgeUrl) {
+  if (!edgeUrl) edgeUrl = resolveEdgeUrl();
+  if (!edgeUrl) return { ok: false, reason: 'no_edge_url' };
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(`${edgeUrl}/data/farm.json`, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      logger.warn(`[SyncIdentity] Failed to fetch farm.json from ${edgeUrl}: ${response.status}`);
+      return { ok: false, reason: 'fetch_failed' };
+    }
+
+    const farmData = await response.json();
+    const farmId = farmData.farmId;
+    if (!farmId) {
+      logger.warn('[SyncIdentity] Edge farm.json has no farmId');
+      return { ok: false, reason: 'no_farm_id' };
+    }
+
+    const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
+    if (!await isDatabaseAvailable()) {
+      return { ok: false, reason: 'db_unavailable' };
+    }
+
+    // Update farms DB row with current identity from edge
+    const farmMeta = {
+      contact: farmData.contact || {},
+      location: farmData.location || '',
+      address: farmData.address || '',
+      city: farmData.city || '',
+      state: farmData.state || '',
+      postalCode: farmData.postalCode || '',
+      region: farmData.region || '',
+      coordinates: farmData.coordinates || {},
+      website: farmData.contact?.website || farmData.website || '',
+      phone: farmData.contact?.phone || farmData.phone || '',
+      contactName: farmData.contact?.name || farmData.contactName || '',
+      roomsList: farmData.rooms || [],
+      tax: farmData.tax || null
+    };
+
+    await dbQuery(
+      `INSERT INTO farms (farm_id, name, email, api_url, metadata, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, 'active', NOW(), NOW())
+       ON CONFLICT (farm_id) DO UPDATE SET
+         name = COALESCE(NULLIF($2, ''), farms.name),
+         email = COALESCE(NULLIF($3, ''), farms.email),
+         api_url = COALESCE(NULLIF($4, ''), farms.api_url),
+         metadata = COALESCE(farms.metadata, '{}'::jsonb) || $5::jsonb,
+         updated_at = NOW()`,
+      [farmId, farmData.name || '', farmData.contact?.email || farmData.email || '',
+       edgeUrl, JSON.stringify(farmMeta)]
+    );
+
+    logger.info(`[SyncIdentity] Updated farm identity for ${farmId}: "${farmData.name}"`);
+    return { ok: true, farmId, name: farmData.name };
+  } catch (err) {
+    logger.error('[SyncIdentity] Error:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
 async function syncFarmData(options = {}) {
   const { isDaily = false, manual = false } = options;
   const syncLabel = isDaily ? 'DailySync' : manual ? 'ManualSync' : 'FarmSync';
@@ -657,8 +728,8 @@ function scheduleDailySync() {
 }
 
 // Run initial sync after 10 seconds, then at configured interval + daily schedule
-setTimeout(() => syncFarmData(), 10000);
-setInterval(() => syncFarmData(), FARM_SYNC_INTERVAL);
+setTimeout(() => { syncFarmData(); syncFarmIdentity(); }, 10000);
+setInterval(() => { syncFarmData(); syncFarmIdentity(); }, FARM_SYNC_INTERVAL);
 scheduleDailySync();
 
 logger.info(`[FarmSync] Sync interval: ${FARM_SYNC_INTERVAL / 1000}s, Daily sync hour: ${DAILY_SYNC_HOUR}:00`);
@@ -2119,6 +2190,7 @@ app.use('/api/auth', deviceTokenRouter);                     // /api/auth/genera
 app.use('/api', farmSalesRouter);                            // /api/config/app, /api/farm-sales/*, /api/farm-auth/*, /api/demo/*
 app.use('/api', networkGrowersRouter);                       // /api/network/*, /api/growers/*, /api/contracts/*, /api/farms/list
 app.use('/api/wholesale', wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events
+app.use('/api/wholesale/exports', wholesaleExportsRouter);   // /api/wholesale/exports/orders, payments, tax-summary
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 
 // --- Crop Registry API (Phase 2a — single source of truth) ---
@@ -2307,12 +2379,13 @@ async function startServer() {
     // Wholesale network sync (DB optional)
     startWholesaleNetworkSync(app);
 
-    // Load persisted buyers into memory on startup
+    // Load persisted buyers and payments into memory on startup
     try {
-      const { loadBuyersFromDb } = await import('./services/wholesaleMemoryStore.js');
+      const { loadBuyersFromDb, loadPaymentsFromDb } = await import('./services/wholesaleMemoryStore.js');
       await loadBuyersFromDb();
+      await loadPaymentsFromDb();
     } catch (e) {
-      logger.warn('Buyer DB load skipped:', e.message);
+      logger.warn('Buyer/Payment DB load skipped:', e.message);
     }
 
     // Graceful shutdown

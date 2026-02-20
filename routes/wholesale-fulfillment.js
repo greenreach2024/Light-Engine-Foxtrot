@@ -34,7 +34,7 @@ const VALID_TRANSITIONS = {
 };
 
 // GreenReach webhook endpoint (configured per environment)
-const GREENREACH_WEBHOOK_URL = process.env.GREENREACH_WEBHOOK_URL || 'http://localhost:8091/api/wholesale/webhooks/fulfillment';
+const GREENREACH_WEBHOOK_URL = process.env.GREENREACH_WEBHOOK_URL || 'http://localhost:3100/api/wholesale/webhooks/fulfillment';
 
 /**
  * POST /api/wholesale/fulfillment/status
