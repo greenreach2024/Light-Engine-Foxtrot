@@ -133,18 +133,34 @@ router.get('/status', authenticateToken, async (req, res) => {
 
     const pool = req.db;
     if (!pool) {
-      // No DB mode (e.g. EB without RDS) — return sensible defaults
+      // No DB mode — check farmStore for setup_completed flag
+      let setupCompleted = false;
+      let farmName = 'Farm';
+      let roomCount = 0;
+      if (req.farmStore) {
+        try {
+          const profile = await req.farmStore.get(farmId, 'farm_profile');
+          if (profile && profile.setup_completed) {
+            setupCompleted = true;
+            farmName = profile.farmName || profile.name || 'Farm';
+          }
+          const rooms = await req.farmStore.get(farmId, 'rooms');
+          if (Array.isArray(rooms)) roomCount = rooms.length;
+        } catch (e) {
+          console.warn('[Setup Wizard] farmStore read error:', e.message);
+        }
+      }
       return res.json({
         success: true,
-        setupCompleted: false,
+        setupCompleted,
         farm: {
           farmId,
-          name: 'Farm',
+          name: farmName,
           planType: 'cloud',
           timezone: 'America/New_York',
           hasBusinessHours: false
         },
-        roomCount: 0
+        roomCount
       });
     }
 
@@ -525,10 +541,19 @@ router.get('/rooms', authenticateToken, async (req, res) => {
   try {
     const pool = req.db;
     if (!pool) {
-      // No DB mode — return empty rooms list instead of 500
+      // No DB mode — read rooms from farmStore
+      let rooms = [];
+      if (req.farmStore) {
+        try {
+          const stored = await req.farmStore.get(req.farmId, 'rooms');
+          if (Array.isArray(stored)) rooms = stored;
+        } catch (e) {
+          console.warn('[Setup Wizard] farmStore rooms read error:', e.message);
+        }
+      }
       return res.json({
         success: true,
-        rooms: []
+        rooms
       });
     }
 

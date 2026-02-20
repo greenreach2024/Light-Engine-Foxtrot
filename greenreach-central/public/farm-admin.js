@@ -4365,8 +4365,8 @@ function closePairingQR() {
 // FIRST-TIME SETUP FUNCTIONS
 // ============================================================================
 
-let currentSetupStep = 1;
-const totalSetupSteps = 8;
+let currentSetupStep = 2;
+const totalSetupSteps = 5;
 let setupData = {
     rooms: [],
     trayFormats: []
@@ -4730,9 +4730,9 @@ async function showFirstTimeSetup() {
             // Continue with wizard even if pre-fill fails
         }
         
-        // Start at Step 2 for Cloud customers (skip activation code)
-        currentSetupStep = isCloudPlan ? 2 : 1;
-        console.log(`[Setup] Starting wizard at step ${currentSetupStep} (Cloud: ${isCloudPlan})`);
+        // Always start at Step 2 (activation codes are no longer used)
+        currentSetupStep = 2;
+        console.log(`[Setup] Starting wizard at step ${currentSetupStep}`);
         
         updateSetupStepDisplay();
     }
@@ -4747,20 +4747,7 @@ async function setupNextStep() {
         return;
     }
     
-    // If step 1, verify activation code
-    if (currentSetupStep === 1) {
-        const activationCode = document.getElementById('setup-activation-code').value.trim();
-        if (!activationCode || activationCode.length !== 8) {
-            showSetupError('Please enter a valid 8-character activation code');
-            return;
-        }
-        
-        // Call activation API
-        const activated = await activateDevice(activationCode);
-        if (!activated) {
-            return; // Error already shown
-        }
-    }
+    // Step 1 (activation code) is no longer used — wizard starts at Step 2
     
     // Move to next step
     if (currentSetupStep < totalSetupSteps) {
@@ -4787,7 +4774,7 @@ async function setupNextStep() {
  * Navigate to previous setup step
  */
 function setupPreviousStep() {
-    if (currentSetupStep > 1) {
+    if (currentSetupStep > 2) {
         currentSetupStep--;
         updateSetupStepDisplay();
     }
@@ -4821,7 +4808,7 @@ function updateSetupStepDisplay() {
     const nextBtn = document.getElementById('setup-next-btn');
     const completeBtn = document.getElementById('setup-complete-btn');
     
-    if (backBtn) backBtn.style.display = currentSetupStep > 1 ? 'block' : 'none';
+    if (backBtn) backBtn.style.display = currentSetupStep > 2 ? 'block' : 'none';
     if (nextBtn) nextBtn.style.display = currentSetupStep < totalSetupSteps ? 'block' : 'none';
     if (completeBtn) completeBtn.style.display = currentSetupStep === totalSetupSteps ? 'block' : 'none';
 }
