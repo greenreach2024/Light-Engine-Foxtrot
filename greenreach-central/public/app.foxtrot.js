@@ -9659,6 +9659,15 @@ class RoomWizard {
           // validate returns boolean; do NOT mutate currentStep here
           const ok = await this.validateCurrentStep();
           if (!ok) return;
+          // If on category-setup and more categories remain, advance within categories
+          const stepKey = this.steps[this.currentStep];
+          if (stepKey === 'category-setup' && this.categoryQueue.length > 0 && this.categoryIndex < this.categoryQueue.length - 1) {
+            this.captureCurrentCategoryForm();
+            this.categoryIndex++;
+            this.renderCurrentCategoryForm();
+            this.updateCategoryNav();
+            return; // stay on category-setup step
+          }
           const nextIdx = Math.min(this.currentStep + 1, this.steps.length - 1);
           if (nextIdx !== this.currentStep) {
             this.currentStep = nextIdx;
@@ -12410,6 +12419,15 @@ class RoomWizard {
   }
 
   prevStep() {
+    // If on category-setup and not on the first category, go to previous category
+    const stepKey = this.steps[this.currentStep];
+    if (stepKey === 'category-setup' && this.categoryIndex > 0) {
+      this.captureCurrentCategoryForm();
+      this.categoryIndex--;
+      this.renderCurrentCategoryForm();
+      this.updateCategoryNav();
+      return; // stay on category-setup step
+    }
     this.currentStep = Math.max(0, this.currentStep - 1);
     this.showStep(this.currentStep);
   }
