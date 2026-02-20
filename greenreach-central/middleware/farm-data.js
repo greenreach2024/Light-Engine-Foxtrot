@@ -168,15 +168,9 @@ export function farmDataMiddleware(inMemoryStore) {
     }
 
     // 3. Farm context is present but no data found in DB or memory.
-    //    In single-tenant mode (no DB), try flat file before returning empty defaults.
-    //    In multi-tenant mode (DB available), skip file to prevent cross-tenant leaks.
-    if (!isDatabaseAvailable()) {
-      // Single-tenant / no-DB mode: fall through to static file serving
-      logger.debug(`[FarmData] No DB, falling through to file for ${farmId}/${dataType}`);
-      return next();
-    }
-
-    // Multi-tenant mode: return empty defaults to prevent cross-tenant data leaks
+    //    Return empty defaults so the authenticated farm gets a clean slate
+    //    instead of stale data from the static file (which belongs to a
+    //    different farm). This applies in both DB and no-DB modes.
     const emptyDefault = EMPTY_DEFAULTS[fileName];
     if (emptyDefault != null) {
       logger.debug(`[FarmData] No data for ${farmId}/${dataType}, returning empty default`);
@@ -185,7 +179,7 @@ export function farmDataMiddleware(inMemoryStore) {
         : Array.isArray(emptyDefault) ? { [dataType]: [] } : emptyDefault);
     }
 
-    // Unmapped or null default (e.g. farm.json) — fall through
+    // Unmapped or null default — fall through to static file
     next();
   };
 }
