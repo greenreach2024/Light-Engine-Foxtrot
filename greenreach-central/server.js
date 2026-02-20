@@ -113,6 +113,19 @@ const WS_PORT = process.env.WS_PORT || 3001;
 app.set('trust proxy', 1);
 app.locals.databaseReady = false;
 
+// ── Phase 5: HTTPS redirect behind ALB (production cloud mode) ──
+// ALB terminates SSL and sends x-forwarded-proto header.
+// Redirect HTTP → HTTPS for all requests except health checks.
+const DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'dev';
+if (DEPLOYMENT_MODE === 'cloud' || process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] === 'http' && req.path !== '/health' && req.path !== '/healthz') {
+      return res.redirect(301, `https://${req.headers.host}${req.url}`);
+    }
+    next();
+  });
+}
+
 // Security middleware
 // Note: the current standalone UI pages include inline <script> and inline event handlers.
 // Configure CSP to allow inline scripts for public pages while maintaining security.

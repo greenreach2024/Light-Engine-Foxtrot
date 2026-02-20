@@ -202,12 +202,14 @@ Farm B: [Pi]       → server-foxtrot.js → 51 JSON files → browser UI
 
 ---
 
-### Phase 5: Deployment & DNS (Est. 1 day)
+### Phase 5: Deployment & DNS (Est. 1 day) ✅ COMPLETE
+
+**Commit:** (pending — Phase 5 artifacts ready)
 
 **Goal:** Foxtrot runs on AWS alongside Central, accessible via subdomains.
 
 **Infrastructure:**
-- Single Elastic Beanstalk environment (or separate one for Foxtrot)
+- Single Elastic Beanstalk environment (`greenreach-central-prod-v4`)
 - RDS PostgreSQL (already exists for Central)
 - S3 bucket for per-tenant file uploads
 - Route 53 wildcard DNS: `*.greenreachgreens.com → EB load balancer`
@@ -217,6 +219,41 @@ Farm B: [Pi]       → server-foxtrot.js → 51 JSON files → browser UI
 ```
 git push main → CodePipeline → Build → Deploy to EB → All farms updated
 ```
+
+**What was built:**
+
+1. **HTTPS redirect middleware** (`greenreach-central/server.js`)
+   - Redirects HTTP→HTTPS behind ALB via `x-forwarded-proto` header
+   - Only active in cloud/production mode; skips `/health` and `/healthz`
+
+2. **EB environment config** (`greenreach-central/.ebextensions/nodecommand.config`)
+   - Added `DEPLOYMENT_MODE: cloud` env var for cloud-mode feature flags
+
+3. **Wildcard subdomain routing** (`greenreach-central/.ebextensions/wildcard-routing.config`)
+   - Nginx proxy config with sticky sessions (86400s) for WebSocket support
+   - Prerequisites documented: Route 53 A record, ACM wildcard cert
+
+4. **Build pipeline** (`buildspec.yml`)
+   - Updated Node 18 → 20 to match EB platform
+   - Installs `greenreach-central/` dependencies
+   - Verifies critical files: `server.js`, `lib/farm-data-store.js`, `public/js/api-config.js`
+   - Excludes archives, test artifacts, deploy scripts from bundle
+
+5. **Production env template** (`greenreach-central/.env.cloud.example`)
+   - Complete template: DATABASE_URL, JWT_SECRET, feature flags, AWS services
+   - Documents all required/optional env vars for cloud deployment
+
+6. **Deployment script** (`scripts/deploy-cloud.sh`)
+   - `setup` — One-time: requests ACM wildcard cert, configures Route 53 DNS
+   - `deploy` — Deploys code to EB environment
+   - `status` / `logs` — Monitor environment health
+
+**Manual steps remaining before first production deploy:**
+- [ ] Request wildcard ACM cert: `./scripts/deploy-cloud.sh setup`
+- [ ] Validate DNS records in Route 53
+- [ ] Set production env vars in EB console (DATABASE_URL, JWT_SECRET, etc.)
+- [ ] Deploy: `./scripts/deploy-cloud.sh deploy`
+- [ ] Verify: `https://greenreachgreens.com/health`
 
 ---
 

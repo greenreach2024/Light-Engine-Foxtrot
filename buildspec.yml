@@ -1,9 +1,13 @@
 version: 0.2
 
+# Cloud SaaS deployment — build Central + Foxtrot frontend
+# The Procfile starts: cd greenreach-central && npm start
+# Central server.js serves both API routes and public/ HTML pages
+
 phases:
   install:
     runtime-versions:
-      nodejs: 18
+      nodejs: 20
     commands:
       - echo "Installing dependencies..."
       - node --version
@@ -12,20 +16,21 @@ phases:
   pre_build:
     commands:
       - echo "Running pre-build checks..."
-      - npm ci --production
-      - echo "Verifying demo data exists..."
-      - ls -la data/demo/demo-farm-complete.json || echo "WARNING: Demo data not found!"
+      - cd greenreach-central && npm ci --production
+      - cd ..
+      - echo "Verifying critical files..."
+      - ls -la greenreach-central/server.js
+      - ls -la greenreach-central/lib/farm-data-store.js
+      - ls -la public/js/api-config.js
   
   build:
     commands:
-      - echo "Build phase - no build step needed for Node.js"
-      - echo "Files to be deployed:"
-      - ls -la
+      - echo "Build phase — no transpile step needed for Node.js"
+      - echo "Deployment mode: cloud (multi-tenant SaaS)"
   
   post_build:
     commands:
-      - echo "Post-build - preparing deployment package"
-      - echo "Demo mode will be enabled via .ebextensions/nodejs.config"
+      - echo "Post-build — deployment package ready"
 
 artifacts:
   files:
@@ -39,3 +44,8 @@ artifacts:
     - '*.md'
     - .env*
     - '*.log'
+    - light-engine.ARCHIVE-*/**/*
+    - aws-testing/**/*
+    - aws-infrastructure/**/*
+    - scripts/deploy-*.sh
+    - '*.har'
