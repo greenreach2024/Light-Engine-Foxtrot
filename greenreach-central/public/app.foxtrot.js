@@ -6764,8 +6764,16 @@ class FarmWizard {
     this.progressEl = $('#farmModalProgress');
     this.titleEl = $('#farmModalTitle');
     this.currentStep = 0;
-    // 1. Remove 'spaces' from FarmWizard baseSteps
-        this.baseSteps = ['connection-choice', 'wifi-select', 'wifi-password', 'wifi-test', 'location', 'contact', 'review'];
+    // Auto-detect deployment mode: edge devices need Wi-Fi/Ethernet setup,
+    // cloud deployments (EB, hosted) are already online — skip connectivity steps.
+    this.isEdgeMode = this.detectEdgeMode();
+    if (this.isEdgeMode) {
+      this.baseSteps = ['connection-choice', 'wifi-select', 'wifi-password', 'wifi-test', 'location', 'contact', 'review'];
+    } else {
+      // Cloud mode: device is already online, skip connectivity steps entirely
+      this.baseSteps = ['location', 'contact', 'review'];
+      console.debug('[FarmWizard] Cloud mode detected — skipping connectivity steps');
+    }
   this.wifiNetworks = [];
   this.hasScannedWifi = false;
     this.data = this.defaultData();
@@ -6941,7 +6949,30 @@ class FarmWizard {
     }
   }
 
+  /**
+   * Detect whether we're running on an edge device (reTerminal, Raspberry Pi)
+   * or in a cloud/hosted environment (EB, remote server).
+   * Edge = localhost, 127.0.0.1, or .local hostnames (mDNS).
+   * Cloud = everything else (elasticbeanstalk, custom domains, public IPs).
+   */
+  detectEdgeMode() {
+    try {
+      const host = window.location.hostname || '';
+      const isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
+      // Also check for Tailscale IPs (100.x.x.x) used to reach edge devices remotely
+      const isTailscale = /^100\.\d+\.\d+\.\d+$/.test(host);
+      const edge = isLocal || isTailscale;
+      console.debug('[FarmWizard] detectEdgeMode:', { host, isLocal, isTailscale, edge });
+      return edge;
+    } catch {
+      return false; // Default to cloud if detection fails
+    }
+  }
+
   getVisibleSteps() {
+    // In cloud mode, connectivity steps are already excluded from baseSteps
+    if (!this.isEdgeMode) return this.baseSteps.slice();
+    // In edge mode, filter Wi-Fi steps if Ethernet is selected
     if (this.data.connection.type === 'wifi') return this.baseSteps.slice();
     return this.baseSteps.filter(step => !step.startsWith('wifi-'));
   }
