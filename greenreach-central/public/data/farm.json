@@ -18,7 +18,8 @@
   "rooms": [
     {
       "id": "room-3xxjln",
-      "name": "Your Grow Room"
+      "name": "Main Grow Room",
+      "zones": ["Zone 1", "Zone 2"]
     }
   ]
 }

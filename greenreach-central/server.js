@@ -1973,24 +1973,37 @@ app.patch('/devices/:deviceId', async (req, res) => {
   }
 });
 
-// Compatibility endpoints expected by legacy farm/admin pages
+// Groups endpoint — returns full canonical records so all pages see identical data
+// Keeps: lights[], room, zone, status, schedule, plan, planConfig
+// Drops deprecated: crop, recipe, roomId, zoneId (per DATA_FORMAT_STANDARDS)
 app.get('/api/groups', async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const groups = await farmStore.get(fid, 'groups') || [];
 
-    const formatted = groups.map((group) => ({
-      id: group.id || group.name,
-      name: group.name,
-      zone: group.zone,
-      crop: group.crop || group.recipe,
-      plan: group.plan,
-      trays: Number(group.trays || 0),
-      plants: Number(group.plants || 0),
-      devices: Array.isArray(group.devices) ? group.devices.length : 0
-    }));
+    const canonical = groups.map(g => {
+      const record = {
+        id: g.id || g.name,
+        name: g.name,
+        room: g.room || '',
+        zone: g.zone || '',
+        plan: g.plan || '',
+        schedule: g.schedule || '',
+        status: g.status || 'draft',
+        trays: Number(g.trays || 0),
+        plants: Number(g.plants || 0),
+        lights: Array.isArray(g.lights) ? g.lights : [],
+        active: g.active !== false,
+        health: g.health || 'unknown',
+        planConfig: g.planConfig || null,
+        lastModified: g.lastModified || null
+      };
+      if (g.controller) record.controller = g.controller;
+      if (g.iotDevice) record.iotDevice = g.iotDevice;
+      return record;
+    });
 
-    return res.json(formatted);
+    return res.json(canonical);
   } catch (error) {
     logger.warn('[Compat] /api/groups fallback failed:', error.message);
     return res.json([]);
