@@ -1169,9 +1169,19 @@ app.get('/api/farm/profile', async (req, res) => {
       farm: {
         farmId,
         name: farm.name || farm.farmName || farmId,
+        farmName: farm.farmName || farm.name || farmId,
         status: farm.status || 'active',
+        contact: farm.contact || {},
+        email: farm.email || farm.contact?.email || null,
+        phone: farm.phone || farm.contact?.phone || null,
+        address: farm.address || null,
+        city: farm.city || null,
+        state: farm.state || null,
+        location: farm.location || null,
+        timezone: farm.timezone || null,
+        coordinates: farm.coordinates || null,
         metadata: farm,
-        rooms: [],
+        rooms: Array.isArray(farm.rooms) ? farm.rooms : [],
         groups: []
       }
     });
