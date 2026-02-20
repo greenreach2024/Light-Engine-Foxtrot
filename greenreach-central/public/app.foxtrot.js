@@ -6092,9 +6092,18 @@ function cloneFallback(value) {
 }
 
 // Global JSON loader with graceful fallback
-async function loadJSON(url, fallbackValue = null) {
+async function loadJSON(url, fallbackValue = null, opts = {}) {
   try {
-    const resp = await fetch(url, { cache: 'no-store' });
+    const fetchOpts = { cache: 'no-store', ...opts };
+    // Auto-inject auth header for API requests when token exists
+    if (url.startsWith('/api/') || url.startsWith('/data/') || url.startsWith('./data/')) {
+      const token = (typeof localStorage !== 'undefined') &&
+        (localStorage.getItem('token') || sessionStorage.getItem('token'));
+      if (token && token !== 'local-access') {
+        fetchOpts.headers = { ...fetchOpts.headers, 'Authorization': `Bearer ${token}` };
+      }
+    }
+    const resp = await fetch(url, fetchOpts);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return await resp.json();
   } catch (error) {
@@ -6262,6 +6271,12 @@ async function publishSchedulesDocument(doc) {
 // Light Engine Charlie - Comprehensive Dashboard Application
 // Global API fetch helper
 async function api(url, opts = {}) {
+  // Auto-inject auth header when token exists
+  const token = (typeof localStorage !== 'undefined') &&
+    (localStorage.getItem('token') || sessionStorage.getItem('token'));
+  if (token && token !== 'local-access' && !opts.headers?.Authorization) {
+    opts.headers = { ...opts.headers, 'Authorization': `Bearer ${token}` };
+  }
   const resp = await fetch(url, opts);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -12555,9 +12570,10 @@ async function loadAllData() {
       return copy;
     });
     
-    // Load static data files
+    // Load static data files — use authenticated API endpoints for tenant-scoped data
      const [groups, schedules, plans, environment, calibrations, spdLibrary, deviceMeta, deviceKB, equipmentKB, equipmentCatalog, deviceManufacturers, farm, rooms, switchbotDevices, storedIotDevices, equipmentMetadata] = await Promise.all([
-      loadJSON('/data/groups.json', { groups: [] }),
+      // Use /api/groups (authenticated, tenant-scoped) with fallback to static file
+      loadJSON('/api/groups', []).then(data => ({ groups: Array.isArray(data) ? data : (data?.groups || []) })),
       fetchSchedulesDocument(),
       fetchPlansDocument(),
       safeApi('/env', { zones: [] }),
@@ -12568,7 +12584,8 @@ async function loadAllData() {
       loadJSON('./data/equipment-kb.json', { equipment: [] }),
       loadJSON('./data/equipment.catalog.json', { dehumidifiers: [] }),
       loadJSON('./data/device-manufacturers.json', { manufacturers: [] }),
-      loadJSON('./data/farm.json', {}),
+      // Use /api/farm/profile (authenticated, tenant-scoped) with fallback to static file
+      loadJSON('/api/farm/profile', {}).then(data => data || {}).catch(() => loadJSON('./data/farm.json', {})),
       // Use /api/rooms which reads from database when DB_ENABLED=true, otherwise falls back to rooms.json
       loadJSON('/api/rooms', []).then(data => ({ rooms: Array.isArray(data) ? data : (data?.rooms || []) })),
       loadJSON('./data/switchbot-devices.json', { devices: [], summary: null }),

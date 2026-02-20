@@ -35,11 +35,14 @@ function authenticateToken(req, res, next) {
   }
 
   try {
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
-    const decoded = jwt.verify(token, jwtSecret);
+    const jwtSecret = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+    const decoded = jwt.verify(token, jwtSecret, {
+      issuer: 'greenreach-central',
+      audience: 'greenreach-farms'
+    });
     
-    req.farmId = decoded.farmId;
-    req.userId = decoded.userId;
+    req.farmId = decoded.farm_id || decoded.farmId;
+    req.userId = decoded.user_id || decoded.userId;
     req.userEmail = decoded.email;
     req.userRole = decoded.role || 'admin';
     

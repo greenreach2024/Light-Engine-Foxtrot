@@ -469,8 +469,17 @@ async function initializeGroupsV2State() {
     let source = '';
 
     try {
-      g2debug('[Groups V2] Loading groups from /data/groups.json...');
-      const response = await fetch('/data/groups.json', { cache: 'no-store' });
+      // Build auth headers for tenant-scoped requests
+      const token = (typeof localStorage !== 'undefined') &&
+        (localStorage.getItem('token') || sessionStorage.getItem('token'));
+      const fetchOpts = { cache: 'no-store' };
+      if (token && token !== 'local-access') {
+        fetchOpts.headers = { 'Authorization': `Bearer ${token}` };
+      }
+
+      // Try authenticated /api/groups first (tenant-scoped), then fall back to static file
+      g2debug('[Groups V2] Loading groups from /api/groups...');
+      const response = await fetch('/api/groups', fetchOpts);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
       if (Array.isArray(payload)) {
@@ -478,20 +487,21 @@ async function initializeGroupsV2State() {
       } else if (payload && Array.isArray(payload.groups)) {
         groups = payload.groups;
       }
-      source = '/data/groups.json';
+      source = '/api/groups';
     } catch (error) {
-      console.warn('[Groups V2] Failed to load /data/groups.json:', error);
+      console.warn('[Groups V2] Failed to load /api/groups:', error);
     }
 
     if (!groups.length) {
-      g2debug('[Groups V2] Falling back to /api/groups...');
-      const response = await fetch('/api/groups');
+      g2debug('[Groups V2] Falling back to /data/groups.json...');
+      const response = await fetch('/data/groups.json', { cache: 'no-store' });
       if (!response.ok) {
-        console.warn('[Groups V2] Failed to load groups from /api/groups:', response.status);
+        console.warn('[Groups V2] Failed to load groups from /data/groups.json:', response.status);
         return;
       }
-      groups = await response.json();
-      source = '/api/groups';
+      const payload = await response.json();
+      groups = Array.isArray(payload) ? payload : (payload?.groups || []);
+      source = '/data/groups.json';
     }
 
     g2debug('[Groups V2] Loaded', groups.length, 'groups from', source);
