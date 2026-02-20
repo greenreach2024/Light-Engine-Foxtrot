@@ -931,9 +931,9 @@
         <div class="header-actions">
             <a href="/LE-dashboard.html" class="nav-btn">Dashboard</a>
             <a href="/farm-vitality.html" class="nav-btn" style="background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #67e8f9;">Vitality</a>
-            <a href="/views/farm-summary.html" class="nav-btn farm-summary" data-section="iframe-view" data-url="/views/farm-summary.html">Farm Summary</a>
-            <a href="/views/farm-inventory.html" class="nav-btn inventory" data-section="iframe-view" data-url="/views/farm-inventory.html">Farm Inventory</a>
-            <a href="/views/nutrient-management.html" class="nav-btn nutrient" data-section="iframe-view" data-url="/views/nutrient-management.html">Nutrient Management</a>
+            <a href="/views/farm-summary.html" class="nav-btn farm-summary">Farm Summary</a>
+            <a href="/views/farm-inventory.html" class="nav-btn inventory">Farm Inventory</a>
+            <a href="/views/nutrient-management.html" class="nav-btn nutrient">Nutrient Management</a>
         </div>
     </header>
 
@@ -951,11 +951,11 @@
                         <span class="nav-item-icon">■</span>
                         Dashboard
                     </a>
-                    <a href="/views/farm-summary.html" class="nav-item" data-section="iframe-view" data-url="/views/farm-summary.html">
+                    <a href="/views/farm-summary.html" class="nav-item">
                         <span class="nav-item-icon">■</span>
                         Farm Summary
                     </a>
-                    <a href="/views/farm-inventory.html" class="nav-item" data-section="iframe-view" data-url="/views/farm-inventory.html">
+                    <a href="/views/farm-inventory.html" class="nav-item">
                         <span class="nav-item-icon">■</span>
                         Inventory
                     </a>
@@ -2912,16 +2912,6 @@
                 </div>
                 <p>Documentation coming soon...</p>
             </div>
-
-            <div id="section-iframe-view" class="content-section" style="display: none;">
-                <div class="header">
-                    <h1 id="iframeSectionTitle">Embedded View</h1>
-                    <p class="header-subtitle">Loaded inside Farm Admin workspace</p>
-                </div>
-                <div style="border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; min-height: 70vh;">
-                    <iframe id="admin-iframe" title="Admin Embedded Page" style="width: 100%; height: 72vh; border: 0; background: #fff;" loading="lazy"></iframe>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -4020,7 +4010,7 @@
         // SUSTAINABILITY DASHBOARD FUNCTIONS
         // ===================================================================
         
-        const SUSTAINABILITY_API = 'http://localhost:8000/api/sustainability';
+        const SUSTAINABILITY_API = (window.API_BASE || window.location.origin) + '/api/sustainability';
         let energyChart, waterChart, carbonChart, wasteChart;
 
         async function loadSustainabilityDashboard() {

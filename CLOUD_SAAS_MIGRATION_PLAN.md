@@ -153,20 +153,52 @@ Farm B: [Pi]       → server-foxtrot.js → 51 JSON files → browser UI
 
 ---
 
-### Phase 4: Frontend Adaptation (Est. 1-2 days)
+### Phase 4: Frontend Adaptation ✅ COMPLETE
 
 **Goal:** All HTML pages work from the cloud URL instead of `localhost:8091`.
 
-**What changes:**
-- API base URL: Replace hardcoded `localhost:8091` / relative URLs with `API_BASE` config
-- Login: Redirect to `{farm-slug}.greenreachgreens.com/login`
-- Farm context: Subdomain determines which farm's data loads
-- No new UI pages needed — same HTML/CSS/JS files
+**Completed:** 2026-02-20
 
-**What doesn't change:**
-- All existing pages (farm-summary, farm-admin, activity-hub, etc.) stay the same
-- CSS, icons, layout — identical
-- The user experience is identical, just served from a different URL
+**What was built:**
+
+1. **`public/js/api-config.js`** — Universal frontend config module
+   - Auto-detects cloud vs local from hostname (`*.greenreachgreens.com`)
+   - Sets `window.API_BASE`, `window.FARM_SLUG`, `window.IS_CLOUD`, `window.EDGE_URL`
+   - Loaded by server-side HTML injection — no manual `<script>` tags needed
+
+2. **Enhanced `auth-guard.js`** — Fetch wrapper upgraded
+   - Prepends `API_BASE` to relative URLs (future-proofs for cross-origin scenarios)
+   - Injects `X-Farm-Slug` header on cloud API calls for tenant routing
+   - Cloud-aware login redirect
+
+3. **Server-side HTML injection middleware** (`server.js`)
+   - Intercepts all `.html` requests before `express.static`
+   - Auto-injects `api-config.js` + `auth-guard.js` into `<head>` of every page
+   - Skips pages that already include them (no double-loading)
+   - All 162 HTML pages now get config automatically
+
+4. **Subdomain → farm_id resolution** (`server.js`)
+   - `_extractSlug(host)`: Parses subdomain from Host header
+   - `_resolveSlug(slug)`: DB lookup with in-memory cache (`slug → farm_id`)
+   - Works via Host header (cloud mode) or `X-Farm-Slug` header (fetch wrapper)
+   - Added `slug VARCHAR(100) UNIQUE` column to `farms` table with auto-migration
+   - Auto-generates slugs from farm names on first run
+
+5. **Slug management API**
+   - `GET /api/admin/farms/:farmId/slug` — read current slug
+   - `PUT /api/admin/farms/:farmId/slug` — set/update slug with validation + uniqueness check
+   - Returns cloud URL: `https://{slug}.greenreachgreens.com`
+
+6. **Hardcoded localhost URLs fixed** (7 occurrences across 6 files)
+   - `views/tray-inventory.html`: `EDGE_API` → `window.EDGE_URL || window.location.origin`
+   - `farm-admin.js`: Central URL fallbacks → `window.API_BASE || window.location.origin`
+   - `LE-farm-admin.html`, `farm-admin.html`: Sustainability API → dynamic
+   - `LE-dashboard.html`: Store link → dynamic
+   - `app.foxtrot.js`: Last-resort fallback → empty string (uses location.origin)
+
+**Key insight:** In cloud mode, frontend and API share the same origin (e.g., `notable-sprout.greenreachgreens.com`), so 301 bare-relative fetch calls (`fetch('/api/...')`) work without modification. Only hardcoded localhost URLs and cross-origin calls needed fixing.
+
+**CORS:** Added `X-Farm-Slug` to allowed headers.
 
 ---
 

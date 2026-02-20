@@ -2794,7 +2794,7 @@ async function notifyCentralOfStatusChange(orderId, newStatus) {
     try {
         // Get farm info to determine Central URL
         const farmPath = `${API_BASE}/api/data/farm.json`;
-        let centralUrl = 'http://localhost:3000'; // Default for dev
+        let centralUrl = window.API_BASE || window.location.origin; // Cloud or same-origin
         let farmId = 'light-engine-demo'; // Default farm ID
         
         try {
@@ -2920,7 +2920,7 @@ async function notifyCentralOfTrackingNumber(orderId, trackingNumber) {
     try {
         // Get farm info to determine Central URL
         const farmPath = `${API_BASE}/api/data/farm.json`;
-        let centralUrl = 'http://localhost:3000'; // Default for dev
+        let centralUrl = window.API_BASE || window.location.origin; // Cloud or same-origin
         let farmId = 'light-engine-demo';
         
         try {

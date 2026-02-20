@@ -5231,7 +5231,7 @@
         // SUSTAINABILITY DASHBOARD FUNCTIONS
         // ===================================================================
         
-        const SUSTAINABILITY_API = 'http://localhost:8000/api/sustainability';
+        const SUSTAINABILITY_API = (window.API_BASE || window.location.origin) + '/api/sustainability';
         let energyChart, waterChart, carbonChart, wasteChart;
 
         async function loadSustainabilityDashboard() {

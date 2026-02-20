@@ -111,10 +111,12 @@
     return false;
   }
 
-  // Redirect to login page
+  // Redirect to login page (cloud-aware)
   function redirectToLogin() {
     const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/farm-admin-login.html?return=${returnUrl}`;
+    // In cloud mode, login page is on the same subdomain
+    const loginBase = window.IS_CLOUD ? window.location.origin : '';
+    window.location.href = `${loginBase}/farm-admin-login.html?return=${returnUrl}`;
   }
 
   // Main authentication check
@@ -127,15 +129,31 @@
   // Run auth check immediately
   checkAuth();
 
-  // Also add token to API requests
+  // Also add token to API requests + prepend API_BASE for relative URLs
   const originalFetch = window.fetch;
   window.fetch = function(url, options = {}) {
     const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    if (token && url.includes('/api/')) {
+
+    // Resolve relative URLs against API_BASE when set and non-empty
+    let resolvedUrl = url;
+    if (typeof url === 'string' && url.startsWith('/') && window.API_BASE) {
+      // API_BASE is the origin (e.g., 'https://notable-sprout.greenreachgreens.com')
+      // For same-origin calls, API_BASE === location.origin, so prepending is safe
+      resolvedUrl = window.API_BASE + url;
+    }
+
+    if (token && (typeof resolvedUrl === 'string' && resolvedUrl.includes('/api/'))) {
       options.headers = options.headers || {};
       options.headers['Authorization'] = `Bearer ${token}`;
     }
-    return originalFetch(url, options);
+
+    // Inject farm slug header in cloud mode for tenant routing
+    if (window.FARM_SLUG && typeof resolvedUrl === 'string' && resolvedUrl.includes('/api/')) {
+      options.headers = options.headers || {};
+      options.headers['X-Farm-Slug'] = window.FARM_SLUG;
+    }
+
+    return originalFetch(resolvedUrl, options);
   };
 
 })();

@@ -1,5 +1,5 @@
 // API Base URL - uses window.API_BASE set in index.charlie.html
-const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : (typeof location !== 'undefined' ? location.origin : 'http://localhost:8091');
+const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : (typeof location !== 'undefined' ? location.origin : '');
 
 // Global: silence common console.log noise in production unless explicitly enabled
 (function() {

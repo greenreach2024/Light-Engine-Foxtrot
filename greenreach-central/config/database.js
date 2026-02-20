@@ -128,6 +128,29 @@ async function runMigrations(client) {
     logger.warn('Could not add contact_name column (may already exist):', err.message);
   }
 
+  // Phase 4: Add slug column for subdomain routing (cloud SaaS)
+  try {
+    await client.query(`
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS slug VARCHAR(100);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_farms_slug ON farms(slug) WHERE slug IS NOT NULL;
+    `);
+    logger.info('Added slug column to farms table (subdomain routing)');
+  } catch (err) {
+    logger.warn('Could not add slug column (may already exist):', err.message);
+  }
+
+  // Auto-generate slugs for farms that lack one (name → lowercase-dashed)
+  try {
+    await client.query(`
+      UPDATE farms
+         SET slug = LOWER(REGEXP_REPLACE(REGEXP_REPLACE(TRIM(name), '[^a-zA-Z0-9]+', '-', 'g'), '(^-|-$)', '', 'g'))
+       WHERE slug IS NULL AND name IS NOT NULL AND TRIM(name) <> '';
+    `);
+    logger.info('Auto-generated slugs for existing farms');
+  } catch (err) {
+    logger.warn('Could not auto-generate slugs:', err.message);
+  }
+
   // Create farm_backups table for farm server recovery (Phase 2)
   await client.query(`
     CREATE TABLE IF NOT EXISTS farm_backups (

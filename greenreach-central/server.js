@@ -149,7 +149,48 @@ app.use(farmDataMiddleware(_inMemoryStore));       // GET /data/*.json → DB
 // Inject farmStore into every request for route files
 app.use((req, _res, next) => { req.farmStore = farmStore; next(); });
 
-// Static UI (Wholesale portal + Central Admin UI)
+// ── Phase 4: Auto-inject api-config.js + auth-guard.js into all HTML responses ──
+// Serves HTML pages with injected config/auth scripts so every page gets
+// environment detection + the enhanced fetch wrapper without editing 160+ files.
+// Non-HTML requests fall through to express.static below.
+const _CONFIG_TAG = '<script src="/js/api-config.js"></script>';
+const _GUARD_TAG  = '<script src="/auth-guard.js"></script>';
+const _INJECT_MARK = '<!-- api-config-injected -->';
+const _htmlDirs = [
+  path.join(__dirname, 'public'),
+  path.join(__dirname, '..', 'public')
+];
+
+app.use((req, res, next) => {
+  // Only intercept .html requests (skip API routes, data files, JS/CSS/images)
+  const reqPath = req.path;
+  if (!reqPath.endsWith('.html')) return next();
+
+  // Find the HTML file in our static directories
+  for (const dir of _htmlDirs) {
+    const filePath = path.join(dir, reqPath);
+    // Security: prevent path traversal
+    if (!filePath.startsWith(dir)) continue;
+    if (!fs.existsSync(filePath)) continue;
+
+    let html = fs.readFileSync(filePath, 'utf8');
+    // Don't double-inject
+    if (!html.includes(_INJECT_MARK) && html.includes('<head')) {
+      // Skip injection if page already has both scripts
+      const hasConfig = html.includes('api-config.js');
+      const hasGuard  = html.includes('auth-guard.js');
+      const inject = _INJECT_MARK + '\n  ' +
+        (hasConfig ? '' : _CONFIG_TAG + '\n  ') +
+        (hasGuard  ? '' : _GUARD_TAG);
+      html = html.replace(/(<head[^>]*>)/i, `$1\n  ${inject}`);
+    }
+    res.type('html').send(html);
+    return;
+  }
+  next();
+});
+
+// Static UI — non-HTML assets (JS, CSS, images, JSON, fonts)
 app.use(express.static(path.join(__dirname, 'public')));
 // Fallback to root public directory for shared assets
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -660,7 +701,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Farm-ID', 'X-API-Key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Farm-ID', 'X-API-Key', 'X-Farm-Slug']
 };
 app.use(cors(corsOptions));
 
@@ -684,12 +725,47 @@ app.use((req, res, next) => {
 });
 
 // Farm context extractor — lightweight middleware that attaches farmId
-// to every request from JWT token, API key header, or env default.
+// to every request from JWT token, API key header, subdomain, or env default.
 // This enables all compatibility routes to use req.farmId for scoped queries.
 import _jwtLib from 'jsonwebtoken';
 const _JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
 
-app.use((req, res, next) => {
+// Cache: slug → farm_id (populated lazily, cleared on farm upsert)
+const _slugCache = new Map();
+
+/** Resolve a subdomain slug to a farm_id via DB lookup (cached). */
+async function _resolveSlug(slug) {
+  if (!slug) return null;
+  if (_slugCache.has(slug)) return _slugCache.get(slug);
+  try {
+    if (!(await isDatabaseAvailable())) return null;
+    const { rows } = await query(
+      'SELECT farm_id FROM farms WHERE slug = $1 LIMIT 1', [slug]
+    );
+    if (rows.length) {
+      _slugCache.set(slug, rows[0].farm_id);
+      return rows[0].farm_id;
+    }
+  } catch (_) { /* DB not available — fall through */ }
+  return null;
+}
+
+/** Extract subdomain slug from Host header. Returns null for bare/apex domains. */
+function _extractSlug(host) {
+  if (!host) return null;
+  // Strip port
+  const hostname = host.split(':')[0];
+  // Must be *.greenreachgreens.com (not the apex itself)
+  if (!hostname.endsWith('.greenreachgreens.com')) return null;
+  const parts = hostname.split('.');
+  // parts: ['notable-sprout', 'greenreachgreens', 'com']
+  if (parts.length !== 3) return null;
+  const slug = parts[0];
+  if (!slug || slug === 'www' || slug === 'api') return null;
+  return slug;
+}
+
+app.use(async (req, res, next) => {
   // 1. JWT token
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -711,7 +787,19 @@ app.use((req, res, next) => {
     return next();
   }
 
-  // 3. Env default (single-farm mode)
+  // 3. Subdomain slug (cloud SaaS mode)
+  const slug = req.headers['x-farm-slug'] || _extractSlug(req.headers.host);
+  if (slug) {
+    const farmId = await _resolveSlug(slug);
+    if (farmId) {
+      req.farmId = farmId;
+      req.farmSlug = slug;
+      req.farmAuth = { method: 'subdomain' };
+      return next();
+    }
+  }
+
+  // 4. Env default (single-farm mode)
   req.farmId = process.env.FARM_ID || null;
   req.farmAuth = { method: 'default' };
   next();
@@ -772,6 +860,7 @@ app.get('/api/saas/status', async (req, res) => {
     mode: 'multi-tenant',
     databaseReady: Boolean(req.app.locals.databaseReady),
     requestFarmId: req.farmId || null,
+    requestFarmSlug: req.farmSlug || null,
     requestAuthMethod: req.farmAuth?.method || null,
     inMemoryFarmCount: farmCount,
     activeFarms: farmIds,
@@ -784,6 +873,38 @@ app.get('/api/saas/status', async (req, res) => {
     },
     timestamp: new Date().toISOString()
   });
+});
+
+// ── Farm slug management (Phase 4: Cloud SaaS subdomain routing) ─────────
+// GET  /api/admin/farms/:farmId/slug — read current slug
+// PUT  /api/admin/farms/:farmId/slug — set/update slug (body: { slug })
+app.get('/api/admin/farms/:farmId/slug', async (req, res) => {
+  try {
+    if (!(await isDatabaseAvailable())) return res.status(503).json({ error: 'Database unavailable' });
+    const { rows } = await query('SELECT slug FROM farms WHERE farm_id = $1', [req.params.farmId]);
+    if (!rows.length) return res.status(404).json({ error: 'Farm not found' });
+    res.json({ farm_id: req.params.farmId, slug: rows[0].slug });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/admin/farms/:farmId/slug', async (req, res) => {
+  try {
+    if (!(await isDatabaseAvailable())) return res.status(503).json({ error: 'Database unavailable' });
+    const rawSlug = (req.body?.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/(^-|-$)/g, '');
+    if (!rawSlug || rawSlug.length < 3) return res.status(400).json({ error: 'Slug must be at least 3 chars (a-z, 0-9, hyphens)' });
+    // Check uniqueness
+    const { rows: existing } = await query('SELECT farm_id FROM farms WHERE slug = $1 AND farm_id != $2', [rawSlug, req.params.farmId]);
+    if (existing.length) return res.status(409).json({ error: `Slug "${rawSlug}" already in use by farm ${existing[0].farm_id}` });
+    await query('UPDATE farms SET slug = $1, updated_at = NOW() WHERE farm_id = $2', [rawSlug, req.params.farmId]);
+    // Clear slug cache so the subdomain middleware picks up the change
+    _slugCache.delete(rawSlug);
+    _slugCache.forEach((fid, key) => { if (fid === req.params.farmId) _slugCache.delete(key); });
+    res.json({ farm_id: req.params.farmId, slug: rawSlug, url: `https://${rawSlug}.greenreachgreens.com` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Debug tracking endpoint - receives client-side debug events for server logging

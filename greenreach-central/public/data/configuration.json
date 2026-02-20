@@ -1,0 +1,6 @@
+{
+  "testKey": "phase3",
+  "network": {
+    "httpPort": "9090"
+  }
+}

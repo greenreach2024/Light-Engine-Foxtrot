@@ -2020,8 +2020,8 @@
     // === FARM SERVER / CENTRAL SYNC DETECTION ===
     
     // API Endpoint Configuration
-    const EDGE_API = 'http://localhost:8091';  // Local farm server
-    const CLOUD_API = window.location.origin;   // Cloud platform
+    const EDGE_API = window.EDGE_URL || window.location.origin;  // Edge device or same-origin
+    const CLOUD_API = window.API_BASE || window.location.origin;  // Cloud platform
     const IS_LOCAL_HOST = window.location.hostname === 'localhost' ||
                 window.location.hostname === '127.0.0.1' ||
                 window.location.hostname.startsWith('192.168.') ||
