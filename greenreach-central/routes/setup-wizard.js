@@ -254,6 +254,13 @@ router.post('/complete', authenticateToken, async (req, res) => {
       await req.farmStore.set(farmId, 'rooms', rooms);
     }
 
+    // Save groups via farmStore if provided (preserves grow data across rebuilds)
+    const { groups } = req.body;
+    if (groups && Array.isArray(groups) && groups.length > 0 && req.farmStore) {
+      await req.farmStore.set(farmId, 'groups', groups);
+      console.log(`[Setup Wizard] Saved ${groups.length} groups for farm ${farmId}`);
+    }
+
     // Also update farms table if DB available (keeps setup_completed flag in sync)
     const pool = req.db;
     if (pool) {

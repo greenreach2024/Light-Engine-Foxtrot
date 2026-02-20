@@ -7045,7 +7045,7 @@
         // Load farm's dedicated crop list
         let dedicatedPlanIds = new Set();
         try {
-          const dcResp = await fetch('/api/farm/dedicated-crops');
+          const dcResp = await fetch('/api/dedicated-crops');
           if (dcResp.ok) {
             const dcData = await dcResp.json();
             if (dcData.dedicated_crops && dcData.dedicated_crops.length > 0) {

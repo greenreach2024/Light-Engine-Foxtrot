@@ -4,7 +4,7 @@
  */
 
 export function getJwtSecret() {
-  return process.env.JWT_SECRET || 'dev-secret-key-change-in-production';
+  return process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
 }
 
 export function getDbPassword() {
