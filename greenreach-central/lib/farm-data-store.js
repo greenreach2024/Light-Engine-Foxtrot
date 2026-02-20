@@ -97,15 +97,17 @@ export function initFarmStore(memoryStore) {
 /**
  * Get farm-scoped data by type.
  *
- * Resolution: DB → in-memory → flat file → default
+ * Resolution: DB → in-memory → flat file (no-DB) → default
  *
  * @param {string|null} farmId - Farm identifier (null = file fallback only)
  * @param {string} dataType - Logical data type (e.g., 'groups', 'rooms')
  * @returns {Promise<any>} Data payload
  */
 async function get(farmId, dataType) {
-  // 1. Try DB if farmId provided
-  if (farmId && await isDatabaseAvailable()) {
+  const dbUp = await isDatabaseAvailable();
+
+  // 1. Try DB if farmId provided and DB is up
+  if (farmId && dbUp) {
     try {
       const result = await query(
         'SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2 LIMIT 1',
@@ -127,14 +129,15 @@ async function get(farmId, dataType) {
     }
   }
 
-  // 3. If a specific farm is authenticated, return empty defaults instead of
-  //    falling through to flat files (which contain a different farm's data).
-  if (farmId) {
-    logger.debug(`[FarmStore] No data found for ${farmId}/${dataType}, returning default`);
+  // 3. Multi-tenant (DB available): return defaults to prevent cross-farm leakage.
+  //    Single-tenant (no DB): fall through to flat files — they ARE this farm's data
+  //    and are the only persistence layer that survives restarts.
+  if (farmId && dbUp) {
+    logger.debug(`[FarmStore] No DB data for ${farmId}/${dataType}, returning default`);
     return DEFAULTS[dataType] ?? null;
   }
 
-  // 4. No farm context (edge/dev mode) — fall back to flat file
+  // 4. Flat file fallback (edge/dev mode OR single-tenant no-DB cloud)
   return readFile(dataType);
 }
 
@@ -189,9 +192,10 @@ async function set(farmId, dataType, data) {
   }
 
   const wrapped = wrap(dataType, data);
+  const dbUp = await isDatabaseAvailable();
 
   // 1. Write to DB
-  if (await isDatabaseAvailable()) {
+  if (dbUp) {
     try {
       await query(
         `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
@@ -210,6 +214,15 @@ async function set(farmId, dataType, data) {
       _memoryStore[dataType] = new Map();
     }
     _memoryStore[dataType].set(farmId, wrapped);
+  }
+
+  // 3. In no-DB mode, also persist to flat files so data survives restarts/deploys
+  if (!dbUp) {
+    try {
+      await writeFile(dataType, data);
+    } catch (err) {
+      logger.warn(`[FarmStore] Flat-file write failed (${dataType}/${farmId}):`, err.message);
+    }
   }
 }
 
