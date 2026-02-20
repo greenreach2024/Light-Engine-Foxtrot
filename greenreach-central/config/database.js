@@ -585,6 +585,33 @@ async function runMigrations(client) {
     } catch (err) {
       logger.warn('Grant verification migration warning:', err.message);
     }
+
+    // Migration 017: Farm users table for multi-tenant authentication
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS farm_users (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+          email VARCHAR(255) NOT NULL,
+          first_name VARCHAR(255),
+          last_name VARCHAR(255),
+          role VARCHAR(50) DEFAULT 'operator',
+          password_hash VARCHAR(255) NOT NULL,
+          status VARCHAR(50) DEFAULT 'active',
+          last_login TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(farm_id, email)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_farm_users_farm_id ON farm_users(farm_id);
+        CREATE INDEX IF NOT EXISTS idx_farm_users_email ON farm_users(email);
+        CREATE INDEX IF NOT EXISTS idx_farm_users_status ON farm_users(status);
+      `);
+      logger.info('Farm users table ready (migration 017)');
+    } catch (err) {
+      logger.warn('Farm users migration warning:', err.message);
+    }
   }
 
   logger.info('Database migrations completed');
