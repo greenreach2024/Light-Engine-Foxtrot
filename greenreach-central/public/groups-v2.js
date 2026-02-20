@@ -482,15 +482,15 @@ async function initializeGroupsV2State() {
     let groups = [];
     let source = '';
 
-    try {
-      // Build auth headers for tenant-scoped requests
-      const token = (typeof localStorage !== 'undefined') &&
-        (localStorage.getItem('token') || sessionStorage.getItem('token'));
-      const fetchOpts = { cache: 'no-store' };
-      if (token && token !== 'local-access') {
-        fetchOpts.headers = { 'Authorization': `Bearer ${token}` };
-      }
+    // Build auth headers for tenant-scoped requests (outside try so it's accessible in fallback)
+    const token = (typeof localStorage !== 'undefined') &&
+      (localStorage.getItem('token') || sessionStorage.getItem('token'));
+    const fetchOpts = { cache: 'no-store' };
+    if (token && token !== 'local-access') {
+      fetchOpts.headers = { 'Authorization': `Bearer ${token}` };
+    }
 
+    try {
       // Try authenticated /api/groups first (tenant-scoped), then fall back to static file
       g2debug('[Groups V2] Loading groups from /api/groups...');
       const response = await fetch('/api/groups', fetchOpts);

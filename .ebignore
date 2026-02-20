@@ -46,7 +46,7 @@ hq-app/
 edge-app/
 esp32/
 examples/
-data/
+/data/
 data.aws-backup/
 lib.aws-backup/
 server.aws-backup/

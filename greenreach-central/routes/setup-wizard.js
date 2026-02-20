@@ -133,9 +133,18 @@ router.get('/status', authenticateToken, async (req, res) => {
 
     const pool = req.db;
     if (!pool) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Database not configured' 
+      // No DB mode (e.g. EB without RDS) — return sensible defaults
+      return res.json({
+        success: true,
+        setupCompleted: false,
+        farm: {
+          farmId,
+          name: 'Farm',
+          planType: 'cloud',
+          timezone: 'America/New_York',
+          hasBusinessHours: false
+        },
+        roomCount: 0
       });
     }
 
@@ -450,9 +459,10 @@ router.get('/rooms', authenticateToken, async (req, res) => {
   try {
     const pool = req.db;
     if (!pool) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Database not configured' 
+      // No DB mode — return empty rooms list instead of 500
+      return res.json({
+        success: true,
+        rooms: []
       });
     }
 
