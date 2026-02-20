@@ -1,27 +1,81 @@
 {
   "schemaVersion": "1.0.0",
-  "farmId": "FARM-TEST-WIZARD-001",
-  "name": "This is Your Farm",
+  "farmId": "FARM-MLTP9LVH-B0B85039",
+  "name": "The Notable Sprout",
+  "farmName": "The Notable Sprout",
   "status": "online",
+  "email": "admin@thenotablesprout.com",
+  "location": "Kingston, ON",
+  "address": "800 Inovation Drive, Unit 8",
+  "city": "Kingston",
+  "state": "Ontario",
+  "postalCode": "",
+  "timezone": "America/Toronto",
   "region": "Ontario, Canada",
   "url": "http://100.65.187.59:8091",
-  "contact": {
-    "name": "John Doe",
-    "email": "Johndoe@thisisyourfarm.com",
-    "phone": ""
-  },
+  "mode": "edge",
   "coordinates": {
-    "lat": 44.2312,
-    "lng": -76.486
+    "lat": 44.258779425589154,
+    "lng": -76.37291520309648
   },
-  "location": "Kingston, ON",
-  "setup_completed": true,
-  "setup_completed_at": "2026-01-15T00:00:00.000Z",
+  "contact": {
+    "name": "Alex Shaw",
+    "email": "alex@bpegroup.ca",
+    "phone": "705-817-4464",
+    "website": ""
+  },
+  "connection": {
+    "type": "ethernet",
+    "wifi": {
+      "ssid": "",
+      "reuseDiscovery": true,
+      "tested": false,
+      "testResult": null
+    }
+  },
+  "discovery": {
+    "subnet": "",
+    "gateway": "",
+    "reuseNetwork": true,
+    "ssid": ""
+  },
   "rooms": [
     {
       "id": "room-3xxjln",
       "name": "Main Grow Room",
       "zones": ["Zone 1", "Zone 2"]
     }
-  ]
+  ],
+  "locations": [
+    "Main Grow Room"
+  ],
+  "registered": "2026-02-04T13:42:02.654Z",
+  "created": "2026-02-19T12:00:00Z",
+  "setup_completed": true,
+  "setup_completed_at": "2026-01-15T00:00:00.000Z",
+  "contactName": "",
+  "phone": "",
+  "website": "",
+  "dedicated_crops": [
+    "crop-bibb-butterhead",
+    "crop-buttercrunch-lettuce",
+    "crop-genovese-basil"
+  ],
+  "metadata": {
+    "location": {
+      "city": "Kingston",
+      "state": "ON",
+      "zip": "K7K",
+      "country": "CA",
+      "coordinates": {
+        "lat": 44.2312,
+        "lng": -76.486
+      }
+    }
+  },
+  "tax": {
+    "rate": 0.13,
+    "label": "HST",
+    "business_number": ""
+  }
 }

@@ -1,8 +1,8 @@
 # Light Engine Foxtrot: AI Agent Skills Framework
 
-**Version**: 1.2.0  
-**Date**: January 31, 2026  
-**Last Updated**: January 31, 2026 (Critical update: Investigation-First enforcement)  
+**Version**: 1.3.0  
+**Date**: February 20, 2026  
+**Last Updated**: February 20, 2026 (Critical update: Farm identity verification, EB entry point, post-deploy audit)  
 **Purpose**: Strategic guidance for AI agents contributing to Light Engine development  
 **Authority**: This document supersedes generic coding advice when conflicts arise
 
@@ -160,6 +160,53 @@ Agent implemented missing `/api/auth` routes for production login WITHOUT invest
 - **Resolution**: Password corrected to "ReTerminal2026!" and redeployed
 - **Framework Lesson**: Never fabricate authentication data. When required information is missing, investigation → user consultation → implementation. Making assumptions about security-critical data bypasses verification and deploys incorrect/insecure systems.
 
+**Real Incident #6 (February 20, 2026 - Farm Identity Crisis):**
+Multiple agents edited `greenreach-central/public/data/farm.json` across 3 commits WITHOUT noticing that the file contained the WRONG FARM. Result:
+- User's production farm: `FARM-MLTP9LVH-B0B85039` / "The Notable Sprout"
+- Flat file on EB: `FARM-TEST-WIZARD-001` / "This is Your Farm" (placeholder from initial wizard build)
+- **Header showed wrong farm name**, setup/update page showed wrong farm ID, all farmStore reads returned wrong farm's data
+- **3 commits touched the file** (room name fix, setup_completed flag, farmStore persistence fix) — every time, agents read the file, saw `farmId: FARM-TEST-WIZARD-001` on line 3, and ignored it
+- User had to discover the problem themselves after deployment
+- **Cost**: Multiple deploy cycles, hours of debugging, user trust severely damaged
+- **Root Cause: Tunnel-vision debugging**
+  - Each agent investigated a specific symptom (wrong room name, wizard re-showing, groups format)
+  - Agents read only the fields relevant to their symptom, ignoring surrounding context
+  - Nobody performed a **full-file identity audit** before editing
+  - The `farmId` field was visible on line 3 of every file read — in plain text, every time
+  - Two copies of farm.json existed (`public/data/` vs `greenreach-central/public/data/`) with different farmIds — agents checked the wrong copy or assumed they matched
+- **Compounding Failures:**
+  1. **Commit c4e1c7e**: Fixed room name "Your Grow Room" → "Main Grow Room" in `greenreach-central/public/data/farm.json`. Did NOT notice `farmId: FARM-TEST-WIZARD-001` on line 3.
+  2. **Commit 94e7284**: Added `setup_completed: true` to same file. Read entire file, saw wrong farmId AGAIN, ignored it.
+  3. **farmStore fix**: Made farmStore fall through to flat files when DB unavailable. Correctly solved the wizard problem — but now correctly served the WRONG FARM's data from flat files.
+  4. **No post-deploy identity check**: After each deploy, agents verified the specific symptom was fixed (`setupCompleted: true`, groups format) but never checked `farmId` in the response.
+- **Why Existing Framework Didn't Catch It:**
+  - Investigation-First checklist says "Checked public/data/*.json for related data structures" — agents DID read the files, they just didn't read ALL fields
+  - Data Format Governance focuses on schema shape (field names, types) not data identity (which farm)
+  - No rule existed requiring identity verification after editing data files
+  - No rule existed requiring post-deploy full-response audit (not just the fixed field)
+- **How To Avoid:**
+  1. **Identity-First Audit**: Before editing ANY data file, verify `farmId`/`name` match the production farm
+  2. **Full-file read, not field-scan**: When reading a file to edit one field, CHECK ALL IDENTITY FIELDS (farmId, name, status, schemaVersion)
+  3. **Cross-copy sync check**: If a file exists in both `public/data/` and `greenreach-central/public/data/`, verify they serve the same farm
+  4. **Post-deploy response audit**: After deploying, check `/api/farm/profile` returns the CORRECT farmId — not just that the endpoint responds
+  5. **Mental checkpoint**: "Does the file I'm editing belong to the farm I'm debugging?"
+- **New Mandatory Checklist Item (added to Pre-Proposal Investigation Checklist):**
+  ```
+  - [ ] Verified farmId/name in ALL data files match production farm
+  - [ ] Cross-checked greenreach-central/public/data/ vs public/data/ for identity consistency
+  - [ ] Post-deploy: verified /api/farm/profile returns correct farmId and name
+  ```
+- **What Should Have Happened:**
+  ```
+  Agent reads greenreach-central/public/data/farm.json to fix room name
+  Agent sees line 3: "farmId": "FARM-TEST-WIZARD-001"
+  Agent STOPS: "This farmId doesn't match FARM-MLTP9LVH-B0B85039 — wrong farm file"
+  Agent reports identity mismatch BEFORE making any other edits
+  Fix farmId FIRST, then fix room names
+  ```
+- **Resolution**: Identified in diagnostic report. Action plan created. Awaiting implementation approval.
+- **Framework Lesson**: Reading a file is not the same as understanding it. Agents must verify the IDENTITY of data files (who does this data belong to?) before editing PROPERTIES of data files (what values need changing?). Symptom-focused debugging that ignores surrounding context will compound errors across multiple commits.
+
 ### The Iron Law
 
 **BEFORE proposing ANY solution, you MUST:**
@@ -247,7 +294,10 @@ Agent implemented missing `/api/auth` routes for production login WITHOUT invest
 - [ ] Searched codebase for existing implementations
 - [ ] Read (not just scanned) relevant source files
 - [ ] Checked public/data/*.json for related data structures
+- [ ] **Verified farmId/name in ALL data files match production farm (FARM-MLTP9LVH-B0B85039)**
+- [ ] **Cross-checked greenreach-central/public/data/ vs public/data/ for identity consistency**
 - [ ] Grepped server-foxtrot.js for related API endpoints
+- [ ] **Grepped greenreach-central/server.js for the SAME endpoints (EB runs Central, not Foxtrot)**
 - [ ] Reviewed automation/ directory for control logic
 - [ ] Listed what EXISTS (with file paths and line numbers)
 - [ ] Listed what's MISSING (actual gaps)
@@ -342,6 +392,31 @@ Light Engine is a SINGLE unified platform. There is NO separate "edge" vs "cloud
 deployment. The codebase runs one server (server-foxtrot.js) that serves all farm
 functionality, with GreenReach Central (greenreach-central/server.js) providing
 the multi-farm marketplace and admin aggregation layer.
+
+**⚠️ CRITICAL: Elastic Beanstalk Entry Point**
+
+The Procfile specifies: `web: cd greenreach-central && npm start`
+
+This means **EB production runs `greenreach-central/server.js`, NOT `server-foxtrot.js`.**
+- Code fixes targeting `server-foxtrot.js` will NOT take effect on production
+- Route changes MUST be applied to `greenreach-central/server.js`
+- Data files read on production come from `greenreach-central/public/data/`, NOT `public/data/`
+
+**⚠️ CRITICAL: Two Data Directories**
+
+Two copies of flat data files exist. They are NOT automatically synced:
+
+| Directory | Used By | Deployed On |
+|---|---|---|
+| `public/data/` | `server-foxtrot.js` (local dev) | Local only |
+| `greenreach-central/public/data/` | `greenreach-central/server.js` (EB) | AWS EB production |
+
+**Agent Rule: When editing ANY file in `public/data/`, check if a corresponding file exists in `greenreach-central/public/data/` and verify BOTH contain the same farm identity (`farmId`, `name`).**
+
+**Production Farm Identity (source of truth):**
+- Farm ID: `FARM-MLTP9LVH-B0B85039`
+- Farm Name: "The Notable Sprout"
+- Login: `FARM-MLTP9LVH-B0B85039` / `admin123`
 
 All farm data flows to GreenReach Central. Controller restrictions prevent
 remote laptops from issuing farm-critical device commands (lights, HVAC, plugs)
@@ -794,11 +869,13 @@ Light-Engine-Foxtrot/
 ```
 
 **Agent Rule:**
-- **Farm code** (server-foxtrot.js, routes/) = per-farm functionality
-- **Central code** (greenreach-central/) = multi-tenant aggregation
+- **Farm code** (server-foxtrot.js, routes/) = per-farm functionality (LOCAL DEV ONLY)
+- **Central code** (greenreach-central/) = multi-tenant aggregation (**RUNS ON EB PRODUCTION**)
 - **Shared libraries** (lib/) = used by both farm and Central
 - All farm data flows to GreenReach Central
 - Do NOT refer to "edge" and "cloud" as separate platforms
+- **EB production serves `greenreach-central/server.js`** — fixes to `server-foxtrot.js` alone will NOT deploy
+- **Data files on EB come from `greenreach-central/public/data/`** — NOT from `public/data/`
 
 ### Testing Requirements
 
@@ -815,6 +892,30 @@ npm run test
 
 # 4. Farm server acceptance test (if available)
 npm run test:farm
+```
+
+**After Deploying to EB (MANDATORY):**
+```bash
+BASE=http://light-engine-foxtrot-test-recovery.us-east-1.elasticbeanstalk.com
+TOKEN=$(curl -sS -X POST "$BASE/api/auth/login" \
+  -H 'content-type: application/json' \
+  -d '{"farmId":"FARM-MLTP9LVH-B0B85039","password":"admin123"}' \
+  | node -p 'JSON.parse(require("fs").readFileSync("/dev/stdin","utf8")).token')
+
+# 1. IDENTITY CHECK (catches wrong-farm data files)
+curl -sS "$BASE/api/farm/profile" -H "Authorization: Bearer $TOKEN" \
+  | jq '{farmId: .farm.farmId, name: .farm.name}'
+# MUST return: farmId=FARM-MLTP9LVH-B0B85039, name="The Notable Sprout"
+
+# 2. Static file identity check
+curl -sS "$BASE/data/farm.json" | jq '{farmId, name}'
+# MUST match production farm identity
+
+# 3. Health check
+curl -sS "$BASE/health" | jq '{status, databaseReady}'
+
+# 4. Verify the specific fix that was deployed
+# (varies per deployment)
 ```
 
 **Agent Checklist:**
