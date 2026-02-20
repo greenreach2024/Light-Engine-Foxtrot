@@ -25,7 +25,12 @@
       return false;
     }
     
-    // Landing page and farm admin interfaces require auth
+    // Login pages never require auth (prevents redirect loop)
+    if (currentPath.includes('login')) {
+      return false;
+    }
+
+    // Farm admin interfaces require auth
     if (currentPath.includes('farm-admin') || 
         currentPath.includes('farm-sales-pos')) {
       return true;
