@@ -202,39 +202,69 @@ router.get('/status', authenticateToken, async (req, res) => {
 });
 
 /**
- * POST /api/setup-wizard/complete
- * Mark farm setup as completed (bypass wizard)
- * Use this for farms already configured before setup_completed flag existed
+ * POST /api/setup-wizard/complete  (also /api/setup/complete via legacy alias)
+ * Complete farm setup — saves all wizard data via farmStore
+ * Works in both DB and no-DB modes
+ *
+ * Body: { farmId, farmName, contact, location, rooms, certifications, credentials, endpoints }
  */
 router.post('/complete', authenticateToken, async (req, res) => {
   try {
-    const pool = req.db;
-    if (!pool) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Database not configured' 
-      });
+    const farmId = req.farmId;
+    const { farmName, contact, location, rooms, certifications, credentials, endpoints } = req.body;
+
+    // Build farm profile from submitted data
+    const farmProfile = {
+      farmId,
+      name: farmName || 'New Farm',
+      farmName: farmName || 'New Farm',
+      contact: contact || {},
+      location: location || {},
+      certifications: certifications || {},
+      credentials: credentials || {},
+      endpoints: endpoints || {},
+      status: 'active',
+      setup_completed: true,
+      setup_completed_at: new Date().toISOString()
+    };
+
+    // Save farm profile via farmStore (works in both DB and no-DB modes)
+    if (req.farmStore) {
+      await req.farmStore.set(farmId, 'farm_profile', farmProfile);
     }
 
-    const farmId = req.farmId;
+    // Save rooms via farmStore if provided
+    if (rooms && Array.isArray(rooms) && rooms.length > 0 && req.farmStore) {
+      await req.farmStore.set(farmId, 'rooms', rooms);
+    }
 
-    await pool.query(
-      'UPDATE farms SET setup_completed = true, setup_completed_at = NOW() WHERE farm_id = $1',
-      [farmId]
-    );
+    // Also update farms table if DB available (keeps setup_completed flag in sync)
+    const pool = req.db;
+    if (pool) {
+      try {
+        await pool.query(
+          'UPDATE farms SET setup_completed = true, setup_completed_at = NOW(), name = COALESCE($2, name) WHERE farm_id = $1',
+          [farmId, farmName || null]
+        );
+      } catch (dbErr) {
+        console.warn('[Setup Wizard] DB update failed (non-fatal):', dbErr.message);
+      }
+    }
 
-    console.log(`[Setup Wizard] Marked farm ${farmId} as setup completed`);
+    console.log(`[Setup Wizard] Setup completed for farm ${farmId} (rooms: ${rooms?.length || 0})`);
 
     res.json({
       success: true,
-      message: 'Farm setup marked as complete'
+      message: 'Setup wizard completed successfully',
+      farmId,
+      roomCount: rooms?.length || 0
     });
 
   } catch (error) {
     console.error('[Setup Wizard] Complete error:', error);
     res.status(500).json({ 
       success: false,
-      error: 'Failed to mark setup as complete' 
+      error: 'Failed to complete setup' 
     });
   }
 });
@@ -253,9 +283,26 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
   try {
     const pool = req.db;
     if (!pool) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Database not configured' 
+      // No DB mode — save via farmStore (in-memory + flat file)
+      const farmId = req.farmId;
+      const profileData = {
+        farmId,
+        name: req.body.farmName,
+        timezone: req.body.timezone,
+        location: req.body.location,
+        farmSize: req.body.farmSize,
+        cropTypes: req.body.cropTypes,
+        business_hours: req.body.business_hours,
+        certifications: req.body.certifications
+      };
+      if (req.farmStore) {
+        await req.farmStore.set(farmId, 'farm_profile', profileData);
+      }
+      console.log('[Setup Wizard] Farm profile saved (no-DB mode):', farmId);
+      return res.json({
+        success: true,
+        message: 'Farm profile saved (no-DB mode)',
+        farm: profileData
       });
     }
 
@@ -372,9 +419,28 @@ router.post('/rooms', authenticateToken, async (req, res) => {
   try {
     const pool = req.db;
     if (!pool) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Database not configured' 
+      // No DB mode — save rooms via farmStore
+      const farmId = req.farmId;
+      let { rooms } = req.body;
+      if (!rooms || !Array.isArray(rooms) || rooms.length === 0) {
+        return res.status(400).json({ success: false, error: 'At least one room is required' });
+      }
+      const savedRooms = rooms.map((r, i) => ({
+        room_id: `room-${Date.now()}-${i}`,
+        farm_id: farmId,
+        name: r.name,
+        type: r.type || 'grow',
+        capacity: r.capacity || null,
+        description: r.description || null
+      }));
+      if (req.farmStore) {
+        await req.farmStore.set(farmId, 'rooms', savedRooms);
+      }
+      console.log('[Setup Wizard] Rooms saved (no-DB mode):', farmId, savedRooms.length);
+      return res.json({
+        success: true,
+        message: `${savedRooms.length} room(s) saved (no-DB mode)`,
+        rooms: savedRooms
       });
     }
 
@@ -579,60 +645,8 @@ router.post('/zones', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * POST /api/setup/complete
- * Mark setup wizard as complete
- * This is called after all steps are finished
- */
-router.post('/complete', authenticateToken, async (req, res) => {
-  try {
-    const pool = req.db;
-    if (!pool) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Database not configured' 
-      });
-    }
-
-    const farmId = req.farmId;
-
-    // Verify setup is actually complete (has at least one room)
-    const roomsResult = await pool.query(
-      'SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1',
-      [farmId]
-    );
-
-    const roomCount = parseInt(roomsResult.rows[0]?.count);
-
-    if (roomCount === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Cannot complete setup without creating at least one room' 
-      });
-    }
-
-    // Update farm status (could add a setup_completed flag if needed)
-    await pool.query(
-      'UPDATE farms SET updated_at = CURRENT_TIMESTAMP WHERE farm_id = $1',
-      [farmId]
-    );
-
-    console.log('[Setup Wizard] Setup completed for farm:', farmId);
-
-    res.json({
-      success: true,
-      message: 'Setup wizard completed successfully',
-      farmId,
-      roomCount
-    });
-
-  } catch (error) {
-    console.error('[Setup Wizard] Complete setup error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to complete setup' 
-    });
-  }
-});
+// NOTE: Duplicate POST /complete handler was removed (dead code — Express uses
+// the first matching handler registered above at line ~209). The first handler
+// now saves all body data via farmStore and works in both DB and no-DB modes.
 
 export default router;
