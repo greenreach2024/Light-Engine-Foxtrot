@@ -21,7 +21,8 @@ import syncRoutes from './routes/sync.js';
 import { hydrateFromDatabase, getInMemoryStore } from './routes/sync.js';
 import wholesaleRoutes from './routes/wholesale.js';
 import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
-import farmStripeSetupRoutes from '../routes/farm-stripe-setup.js';
+// NOTE: farm-stripe-setup.js lives at root level and can't resolve express
+// from greenreach-central/node_modules. Stripe setup should proxy to farm server.
 import adminRoutes from './routes/admin.js';
 import adminRecipesRoutes from './routes/admin-recipes.js';
 import reportsRoutes from './routes/reports.js';
@@ -1999,7 +2000,7 @@ app.use('/api/farm-settings', farmSettingsRoutes); // Cloud-to-edge settings syn
 app.use('/api/recipes', recipesRoutes); // Public recipes API
 app.use('/api/wholesale', wholesaleRoutes); // Re-enabled with stubbed Square service
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
-app.use('/api/farm/stripe', farmStripeSetupRoutes); // Stripe Connect payment setup for farms
+// Stripe setup proxied to farm server (root-level routes can't resolve express from central node_modules)
 app.use('/api/admin', adminRoutes); // Admin dashboard API
 app.use('/api/admin/recipes', adminRecipesRoutes); // Admin recipes management
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
