@@ -190,6 +190,176 @@ router.post('/suppliers', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
+// ORDER MANAGEMENT (farm-facing)
+// ═══════════════════════════════════════════════════════
+
+/**
+ * GET /orders — List procurement orders
+ */
+router.get('/orders', (req, res) => {
+  try {
+    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    let orders = ordersData.orders || [];
+    const { status, farm_id } = req.query;
+    if (status) orders = orders.filter(o => o.status === status);
+    if (farm_id) orders = orders.filter(o => o.farmId === farm_id);
+    res.json({ ok: true, orders, total: orders.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'orders_list_error' });
+  }
+});
+
+/**
+ * GET /orders/:orderId — Get single order
+ */
+router.get('/orders/:orderId', (req, res) => {
+  try {
+    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const order = (ordersData.orders || []).find(o => o.id === req.params.orderId);
+    if (!order) return res.status(404).json({ ok: false, error: 'order_not_found' });
+    res.json({ ok: true, order });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'order_get_error' });
+  }
+});
+
+/**
+ * POST /orders — Create a new procurement order
+ */
+router.post('/orders', (req, res) => {
+  try {
+    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const { items, supplierId, notes, farmId } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ ok: false, error: 'items required' });
+    }
+    const catalog = readJSON(CATALOG_FILE) || { products: [] };
+    const products = catalog.products || [];
+
+    // Build supplier orders
+    const supplierOrders = [];
+    let subtotal = 0;
+    const orderItems = items.map(item => {
+      const product = products.find(p => p.sku === item.sku);
+      const price = product ? (product.price || 0) : (item.price || 0);
+      const lineTotal = price * (item.quantity || 1);
+      subtotal += lineTotal;
+      return {
+        sku: item.sku,
+        name: product ? product.name : item.name || item.sku,
+        quantity: item.quantity || 1,
+        price,
+        total: Math.round(lineTotal * 100) / 100,
+      };
+    });
+
+    if (supplierId) {
+      supplierOrders.push({
+        supplierId,
+        items: orderItems,
+        subtotal: Math.round(subtotal * 100) / 100,
+        commission: Math.round(subtotal * 0.05 * 100) / 100, // 5% default commission
+      });
+    }
+
+    const order = {
+      id: `PO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      farmId: farmId || 'unknown',
+      items: orderItems,
+      supplierOrders,
+      subtotal: Math.round(subtotal * 100) / 100,
+      status: 'pending',
+      notes: notes || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    ordersData.orders = ordersData.orders || [];
+    ordersData.orders.push(order);
+    writeJSON(ORDERS_FILE, ordersData);
+
+    res.json({ ok: true, order });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'order_create_error' });
+  }
+});
+
+/**
+ * POST /orders/:orderId/receive — Mark order as received
+ */
+router.post('/orders/:orderId/receive', (req, res) => {
+  try {
+    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const idx = (ordersData.orders || []).findIndex(o => o.id === req.params.orderId);
+    if (idx === -1) return res.status(404).json({ ok: false, error: 'order_not_found' });
+
+    ordersData.orders[idx].status = 'received';
+    ordersData.orders[idx].receivedAt = new Date().toISOString();
+    ordersData.orders[idx].updatedAt = new Date().toISOString();
+    writeJSON(ORDERS_FILE, ordersData);
+
+    res.json({ ok: true, order: ordersData.orders[idx] });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'order_receive_error' });
+  }
+});
+
+/**
+ * GET /inventory — Procurement supply inventory (aggregated from received orders)
+ */
+router.get('/inventory', (req, res) => {
+  try {
+    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const received = (ordersData.orders || []).filter(o => o.status === 'received');
+
+    // Aggregate received items as current inventory
+    const inventory = {};
+    for (const order of received) {
+      for (const item of (order.items || [])) {
+        if (!inventory[item.sku]) {
+          inventory[item.sku] = { sku: item.sku, name: item.name, quantity: 0, lastReceived: null };
+        }
+        inventory[item.sku].quantity += item.quantity || 0;
+        inventory[item.sku].lastReceived = order.receivedAt || order.createdAt;
+      }
+    }
+
+    res.json({ ok: true, inventory: Object.values(inventory), total: Object.keys(inventory).length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'inventory_error' });
+  }
+});
+
+/**
+ * GET /commission-report — Commission summary for reporting dashboard
+ */
+router.get('/commission-report', (req, res) => {
+  try {
+    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const orders = ordersData.orders || [];
+
+    let totalCommission = 0;
+    let totalRevenue = 0;
+    for (const order of orders) {
+      for (const so of (order.supplierOrders || [])) {
+        totalRevenue += so.subtotal || 0;
+        totalCommission += so.commission || 0;
+      }
+    }
+
+    res.json({
+      ok: true,
+      totalOrders: orders.length,
+      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      totalCommission: Math.round(totalCommission * 100) / 100,
+      avgCommissionRate: totalRevenue > 0 ? Math.round((totalCommission / totalRevenue) * 10000) / 100 : 0,
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'commission_report_error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
 // PROCUREMENT REVENUE/COMMISSION REPORTING
 // ═══════════════════════════════════════════════════════
 

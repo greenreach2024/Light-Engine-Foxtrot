@@ -37,6 +37,13 @@ import planningRoutes from './routes/planning.js';
 import marketIntelligenceRoutes from './routes/market-intelligence.js';
 import cropPricingRoutes from './routes/crop-pricing.js';
 
+// Phase 2 — Cloud SaaS API gap routes
+import farmUsersRouter, { userRouter, deviceTokenRouter } from './routes/farm-users.js';
+import farmSalesRouter from './routes/farm-sales.js';
+import networkGrowersRouter from './routes/network-growers.js';
+import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
+import miscStubsRouter from './routes/misc-stubs.js';
+
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
 if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
@@ -1903,6 +1910,10 @@ app.use('/api/farm', farmRoutes); // Singular route for profile endpoint
 app.use('/api/setup-wizard', setupWizardRoutes); // First-time farm setup wizard
 app.use('/api/setup', setupWizardRoutes); // Legacy setup API alias used by dashboard/app.foxtrot
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
+
+// Path alias: frontend calls /api/inventory/tray-formats but handler is at /api/tray-formats
+app.get('/api/inventory/tray-formats', (req, res) => { res.redirect(307, '/api/tray-formats'); });
+
 app.use('/api/inventory', authMiddleware, inventoryRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
@@ -1924,6 +1935,15 @@ app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler 
 app.use('/api/planning', planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', cropPricingRoutes); // Farm-specific crop pricing
+
+// Phase 2 — Cloud SaaS API gap routes
+app.use('/api/users', authMiddleware, farmUsersRouter);     // Farm-scoped user CRUD
+app.use('/api/user', authMiddleware, userRouter);            // /api/user/change-password
+app.use('/api/auth', deviceTokenRouter);                     // /api/auth/generate-device-token
+app.use('/api', farmSalesRouter);                            // /api/config/app, /api/farm-sales/*, /api/farm-auth/*, /api/demo/*
+app.use('/api', networkGrowersRouter);                       // /api/network/*, /api/growers/*, /api/contracts/*, /api/farms/list
+app.use('/api/wholesale', wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events
+app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 
 // --- Crop Registry API (Phase 2a — single source of truth) ---
 app.get('/api/crops', (req, res) => {
