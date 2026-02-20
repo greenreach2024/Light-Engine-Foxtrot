@@ -5081,19 +5081,30 @@ if (typeof window.applyTheme !== 'function') {
 }
 
 // Utility: Save farm to backend or localStorage fallback
+// Uses canonical /data/farm.json endpoint (standard data flow)
 async function safeFarmSave(payload) {
+  // Normalize to canonical format before saving
+  const canonical = normalizeFarmDoc(payload);
   try {
-    const resp = await fetch('/farm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (resp.ok) return true;
-    throw new Error('HTTP ' + resp.status);
+    // Primary: save to /data/farm.json (standard data flow endpoint)
+    const ok = await saveJSON('farm.json', canonical);
+    if (ok) return true;
+    throw new Error('saveJSON returned false');
   } catch (err) {
-    // Fallback: save to localStorage
+    // Secondary: try legacy /farm endpoint
     try {
-      localStorage.setItem('gr.farm', JSON.stringify(payload));
+      const resp = await fetch('/farm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(canonical)
+      });
+      if (resp.ok) return true;
+    } catch (e2) {
+      console.warn('[safeFarmSave] Legacy /farm also failed:', e2);
+    }
+    // Last resort: save to localStorage
+    try {
+      localStorage.setItem('gr.farm', JSON.stringify(canonical));
       console.warn('[safeFarmSave] Backend failed, saved to localStorage:', err);
       return true;
     } catch (e) {
@@ -6079,8 +6090,55 @@ if (typeof window !== 'undefined') {
 
 // Global farm normalization stub
 function normalizeFarmDoc(farm) {
-  // TODO: Replace with real normalization logic if needed
-  return farm;
+  if (!farm || typeof farm !== 'object') return farm;
+  // Normalize wizard output to canonical farm.json format
+  // Canonical: { farmId, name, status, region, location, contact: {name,email,phone,website,address}, coordinates, rooms }
+  const normalized = { ...farm };
+
+  // farmName → name (canonical key)
+  if (farm.farmName && !farm.name) {
+    normalized.name = farm.farmName;
+  }
+  // Ensure name is always set
+  normalized.name = normalized.name || normalized.farmName || 'Your Farm';
+  delete normalized.farmName;
+
+  // Flatten address fields into contact.address and location
+  if (farm.address || farm.city || farm.state || farm.postalCode) {
+    const parts = [farm.address, farm.city, farm.state, farm.postalCode].filter(Boolean);
+    const fullAddress = parts.join(', ');
+    normalized.location = normalized.location || fullAddress;
+    if (!normalized.contact) normalized.contact = {};
+    normalized.contact.address = fullAddress;
+    // Clean up flat fields
+    delete normalized.address;
+    delete normalized.city;
+    delete normalized.state;
+    delete normalized.postalCode;
+  }
+
+  // Ensure contact object has canonical fields
+  if (normalized.contact) {
+    normalized.contact.name = normalized.contact.name || '';
+    normalized.contact.email = normalized.contact.email || '';
+    normalized.contact.phone = normalized.contact.phone || '';
+  }
+
+  // Ensure rooms array uses canonical zone format: [{id,name}] not plain strings
+  if (Array.isArray(normalized.rooms)) {
+    normalized.rooms = normalized.rooms.map(room => {
+      if (!room || typeof room !== 'object') return room;
+      if (Array.isArray(room.zones)) {
+        room.zones = room.zones.map((z, i) => {
+          if (typeof z === 'string') return { id: `${room.id}-z${i+1}`, name: z };
+          return z;
+        });
+      }
+      return room;
+    });
+  }
+
+  return normalized;
 }
 function cloneFallback(value) {
   if (typeof value === 'function') {
@@ -7845,14 +7903,28 @@ class FarmWizard {
       if (!saved) throw new Error('Failed to save farm.');
       STATE.farm = this.normalizeFarm({
         ...payload,
-        // Mirror name key for header branding components
         name: payload.farmName || payload.name || 'Your Farm'
       });
+
+      // ✅ DATA FLOW: Save rooms separately and dispatch rooms-updated
+      if (Array.isArray(this.data.rooms) && this.data.rooms.length > 0) {
+        STATE.rooms = this.data.rooms.map(room => ({
+          id: room.id || `room-${Math.random().toString(36).slice(2,8)}`,
+          name: room.name,
+          zones: Array.isArray(room.zones) ? room.zones.slice() : []
+        }));
+        const roomsSaved = await safeRoomsSave();
+        if (roomsSaved) {
+          console.log('[FarmWizard] Rooms saved separately, dispatching rooms-updated');
+          try { document.dispatchEvent(new Event('rooms-updated')); } catch {}
+        }
+      }
+
       this.updateFarmDisplay();
       try { this.updateFarmHeaderDisplay(); } catch {}
       showToast({ title: 'Farm saved', msg: 'We stored the farm profile and updated discovery defaults.', kind: 'success', icon: '' });
-      // Notify listeners (e.g., Groups card) that farm data changed
-      window.dispatchEvent(new CustomEvent('farmDataChanged'));
+      // ✅ DATA FLOW: Dispatch farmDataChanged WITH detail (standard pattern)
+      window.dispatchEvent(new CustomEvent('farmDataChanged', { detail: STATE.farm }));
     } catch (err) {
       showToast({ title: 'Save failed', msg: err?.message || String(err), kind: 'warn', icon: '' });
     }
